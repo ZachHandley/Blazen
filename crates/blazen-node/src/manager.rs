@@ -9,6 +9,8 @@ use std::sync::Arc;
 
 use blazen_llm::{AdapterHandle, AdapterMountStrategy, BlazenError, Device, LocalModel, Pool};
 use blazen_manager::ModelManager;
+#[cfg(feature = "hf-loader")]
+use blazen_manager::hf_loader::{BackendHint, HfLoadOptions};
 
 use crate::providers::completion_model::JsCompletionModel;
 
@@ -168,6 +170,80 @@ pub struct JsAdapterStatus {
     /// Bytes the adapter occupies on top of the base model.
     #[napi(js_name = "memoryBytes")]
     pub memory_bytes: BigInt,
+}
+
+/// Local-inference backend identifier returned by
+/// [`JsModelManager::load_from_hf`] and accepted as a forced override on
+/// [`JsHfLoadOptions::backend_hint`].
+#[cfg(feature = "hf-loader")]
+#[napi(string_enum)]
+pub enum JsBackendHint {
+    /// `mistral.rs` — broad architecture coverage, handles both safetensors
+    /// and GGUF, supports vision/multimodal models.
+    #[allow(non_camel_case_types)]
+    mistralrs,
+    /// `candle` — pure-Rust, supports safetensors and GGUF for the subset of
+    /// architectures candle ships.
+    #[allow(non_camel_case_types)]
+    candle,
+    /// `llama.cpp` — GGUF only, best CPU performance and lowest memory.
+    #[allow(non_camel_case_types)]
+    llamacpp,
+}
+
+#[cfg(feature = "hf-loader")]
+impl From<JsBackendHint> for BackendHint {
+    fn from(h: JsBackendHint) -> Self {
+        match h {
+            JsBackendHint::mistralrs => Self::Mistralrs,
+            JsBackendHint::candle => Self::Candle,
+            JsBackendHint::llamacpp => Self::Llamacpp,
+        }
+    }
+}
+
+#[cfg(feature = "hf-loader")]
+impl From<BackendHint> for JsBackendHint {
+    fn from(h: BackendHint) -> Self {
+        match h {
+            BackendHint::Mistralrs => Self::mistralrs,
+            BackendHint::Candle => Self::candle,
+            BackendHint::Llamacpp => Self::llamacpp,
+        }
+    }
+}
+
+/// Caller-supplied options for [`JsModelManager::load_from_hf`].
+///
+/// Mirrors [`blazen_manager::HfLoadOptions`]; every field is optional.
+#[cfg(feature = "hf-loader")]
+#[napi(object)]
+pub struct JsHfLoadOptions {
+    /// Force a specific backend; skips engine inference but still probes
+    /// the repo for memory sizing.
+    #[napi(js_name = "backendHint")]
+    pub backend_hint: Option<JsBackendHint>,
+    /// Git revision (branch, tag, or commit sha). Defaults to the repo's
+    /// default branch.
+    pub revision: Option<String>,
+    /// Hugging Face access token. When omitted, falls back to the
+    /// `HF_TOKEN` environment variable, then to anonymous access.
+    #[napi(js_name = "hfToken")]
+    pub hf_token: Option<String>,
+    /// Override the on-disk cache directory used by `hf-hub`.
+    #[napi(js_name = "cacheDir")]
+    pub cache_dir: Option<String>,
+    /// Device specifier forwarded to the chosen provider (`"cpu"`,
+    /// `"cuda:0"`, `"metal"`, …).
+    pub device: Option<String>,
+    /// Explicit GGUF filename for repos that ship multiple quantizations.
+    #[napi(js_name = "ggufFile")]
+    pub gguf_file: Option<String>,
+    /// Override the auto-derived memory estimate, in bytes.
+    #[napi(js_name = "memoryEstimateBytes")]
+    pub memory_estimate_bytes: Option<BigInt>,
+    /// Pool label (`"cpu"`, `"gpu"`, `"gpu:N"`). Defaults to `"cpu"`.
+    pub pool: Option<String>,
 }
 
 fn mount_strategy_label(strategy: AdapterMountStrategy) -> &'static str {
@@ -454,6 +530,63 @@ impl JsModelManager {
                 pool: format!("{}", s.pool),
             })
             .collect()
+    }
+
+    /// Auto-detect the right local-inference backend for a Hugging Face
+    /// repo, then register and budget the model with this manager.
+    ///
+    /// Performs a single metadata request against the Hub to enumerate
+    /// the repo's siblings, picks a backend (mistral.rs / candle /
+    /// llama.cpp) per the rules documented on
+    /// [`blazen_manager::hf_loader::choose_backend`], computes a memory
+    /// estimate from the sibling sizes, and registers the model under
+    /// `id`. The model starts unloaded — call [`Self::load`] or
+    /// [`Self::ensure_loaded`] to materialize it.
+    ///
+    /// Returns the chosen backend as a lower-case string
+    /// (`"mistralrs"` / `"candle"` / `"llamacpp"`).
+    ///
+    /// Throws on empty repo id, gated/missing repo, PEFT-adapter-only
+    /// repo (use [`Self::load_adapter`] instead), missing backend
+    /// feature, or any provider construction failure.
+    #[cfg(feature = "hf-loader")]
+    #[napi(js_name = "loadFromHf")]
+    pub async fn load_from_hf(
+        &self,
+        id: String,
+        repo: String,
+        options: Option<JsHfLoadOptions>,
+    ) -> napi::Result<String> {
+        let opts = options.unwrap_or(JsHfLoadOptions {
+            backend_hint: None,
+            revision: None,
+            hf_token: None,
+            cache_dir: None,
+            device: None,
+            gguf_file: None,
+            memory_estimate_bytes: None,
+            pool: None,
+        });
+        let pool = match opts.pool.as_deref() {
+            Some(label) => Some(parse_pool_label(label)?),
+            None => None,
+        };
+        let rust_opts = HfLoadOptions {
+            backend_hint: opts.backend_hint.map(BackendHint::from),
+            revision: opts.revision,
+            hf_token: opts.hf_token,
+            cache_dir: opts.cache_dir.map(std::path::PathBuf::from),
+            device: opts.device,
+            gguf_file: opts.gguf_file,
+            memory_estimate_bytes: opts.memory_estimate_bytes.map(|b| b.get_u64().1),
+            pool,
+        };
+        let backend = self
+            .inner
+            .load_from_hf(id, &repo, rust_opts)
+            .await
+            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        Ok(backend.as_str().to_string())
     }
 
     /// Mount a PEFT-format `LoRA` adapter onto a registered model.

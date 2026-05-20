@@ -105,6 +105,46 @@ class ModelManagerTest {
     }
 
     @Test
+    fun `loadFromHf throws on nonexistent repo`() {
+        ModelManager().use { mgr ->
+            val ex = assertThrows(UniffiBlazenException::class.java) {
+                runBlocking {
+                    mgr.loadFromHf(
+                        id = "ghost",
+                        repo = "this-org-does-not-exist/this-repo-also-does-not-exist",
+                    )
+                }
+            }
+            assertNotNull(ex.message)
+            assertTrue(ex.message!!.isNotEmpty(), "exception message must be non-empty")
+        }
+    }
+
+    @Test
+    fun `loadFromHf with default options does not crash`() {
+        // Why: a default-constructed HfLoadOptions must round-trip through
+        // the FFI without panicking on the all-null record. We expect a
+        // BlazenException (empty repo id), but never a JVM crash or a
+        // NullPointerException from the converter — that is the bug we
+        // are guarding against.
+        ModelManager().use { mgr ->
+            val ex = assertThrows(UniffiBlazenException::class.java) {
+                runBlocking {
+                    mgr.loadFromHf(id = "empty", repo = "")
+                }
+            }
+            assertNotNull(ex.message)
+        }
+    }
+
+    @Test
+    fun `BackendHint values map to stable lower-case wire strings`() {
+        assertEquals("mistralrs", BackendHint.MISTRALRS.value)
+        assertEquals("candle", BackendHint.CANDLE.value)
+        assertEquals("llamacpp", BackendHint.LLAMACPP.value)
+    }
+
+    @Test
     fun `ForeignLocalModel interface is implementable from Kotlin`() {
         // Why: the interface must be openly implementable (not sealed, not
         // requiring internal types) — exercise that by constructing an

@@ -471,6 +471,102 @@ func (m *ModelManager) AvailableBytes(ctx context.Context, pool string) (uint64,
 	}
 }
 
+// BackendHint identifies a local-inference backend. It is returned by
+// [ModelManager.LoadFromHf] and may be passed via [HfLoadOptions.BackendHint]
+// to force a specific provider instead of letting the loader infer one.
+type BackendHint string
+
+const (
+	// BackendHintMistralrs selects `mistral.rs` — broad architecture
+	// coverage, safetensors + GGUF, vision/multimodal.
+	BackendHintMistralrs BackendHint = "mistralrs"
+	// BackendHintCandle selects pure-Rust `candle` — safetensors + GGUF
+	// for the architectures candle ships.
+	BackendHintCandle BackendHint = "candle"
+	// BackendHintLlamacpp selects `llama.cpp` — GGUF only, best CPU
+	// performance and lowest memory.
+	BackendHintLlamacpp BackendHint = "llamacpp"
+)
+
+func (h BackendHint) toFFI() uniffiblazen.BackendHintEnum {
+	switch h {
+	case BackendHintCandle:
+		return uniffiblazen.BackendHintEnumCandle
+	case BackendHintLlamacpp:
+		return uniffiblazen.BackendHintEnumLlamacpp
+	default:
+		return uniffiblazen.BackendHintEnumMistralrs
+	}
+}
+
+// HfLoadOptions controls how [ModelManager.LoadFromHf] probes a Hugging
+// Face repo and builds the local-inference provider. Every field is
+// optional; a zero-value struct accepts loader defaults.
+//
+// Pool is a label ("cpu", "gpu", "gpu:N"); it defaults to "cpu" when nil.
+type HfLoadOptions struct {
+	BackendHint         *BackendHint
+	Revision            *string
+	HfToken             *string
+	CacheDir            *string
+	Device              *string
+	GgufFile            *string
+	MemoryEstimateBytes *uint64
+	Pool                *string
+}
+
+func (o HfLoadOptions) toFFI() uniffiblazen.HfLoadOptionsRecord {
+	rec := uniffiblazen.HfLoadOptionsRecord{
+		Revision:            o.Revision,
+		HfToken:             o.HfToken,
+		CacheDir:            o.CacheDir,
+		Device:              o.Device,
+		GgufFile:            o.GgufFile,
+		MemoryEstimateBytes: o.MemoryEstimateBytes,
+		Pool:                o.Pool,
+	}
+	if o.BackendHint != nil {
+		hint := o.BackendHint.toFFI()
+		rec.BackendHint = &hint
+	}
+	return rec
+}
+
+// LoadFromHf probes a Hugging Face repo, picks a local-inference backend,
+// builds the provider, and registers it under id. The returned
+// [BackendHint] identifies which backend was selected (or the forced
+// override when opts.BackendHint was non-nil).
+//
+// The model starts unloaded — call [ModelManager.Load] or
+// [ModelManager.EnsureLoaded] to materialize it.
+//
+// Errors on empty repo id, gated/missing repo, PEFT-adapter-only repo
+// (use [ModelManager.LoadAdapter] instead), missing backend feature, or
+// any provider construction failure.
+func (m *ModelManager) LoadFromHf(ctx context.Context, id, repo string, opts HfLoadOptions) (BackendHint, error) {
+	if m.inner == nil {
+		return "", &ValidationError{Message: "model manager has been closed"}
+	}
+	type result struct {
+		backend string
+		err     error
+	}
+	done := make(chan result, 1)
+	go func() {
+		b, err := m.inner.LoadFromHf(id, repo, opts.toFFI())
+		done <- result{backend: b, err: err}
+	}()
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case r := <-done:
+		if r.err != nil {
+			return "", wrapErr(r.err)
+		}
+		return BackendHint(r.backend), nil
+	}
+}
+
 // LoadAdapter mounts a PEFT-format LoRA adapter on the model and
 // returns the adapter id assigned by the backend.
 func (m *ModelManager) LoadAdapter(ctx context.Context, modelID, adapterDir string, opts AdapterOptions) (string, error) {

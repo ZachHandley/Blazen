@@ -292,6 +292,8 @@ module Blazen
                     [:pointer, :pointer, :pointer], :int32
     attach_function :blazen_future_take_unit,
                     [:pointer, :pointer], :int32
+    attach_function :blazen_future_take_string,
+                    [:pointer, :pointer, :pointer], :int32
     attach_function :blazen_future_take_workflow_checkpoint_option,
                     [:pointer, :pointer, :pointer, :pointer], :int32
     attach_function :blazen_future_take_workflow_checkpoint_list,
@@ -1297,6 +1299,30 @@ module Blazen
                     [:pointer, :pointer, :pointer], :pointer, blocking: true
     attach_function :blazen_model_manager_list_adapters,
                     [:pointer, :pointer], :pointer
+
+    BLAZEN_BACKEND_HINT_MISTRALRS = 0
+    BLAZEN_BACKEND_HINT_CANDLE    = 1
+    BLAZEN_BACKEND_HINT_LLAMACPP  = 2
+    BLAZEN_BACKEND_HINT_NONE      = -1
+
+    # Mirror of `BlazenHfLoadOptions` in blazen.h (cabi/manager.rs). All
+    # pointer fields are nullable; `memory_estimate_bytes == 0` means unset.
+    class BlazenHfLoadOptions < ::FFI::Struct
+      layout :backend_hint,           :int32,
+             :revision,               :pointer,
+             :hf_token,               :pointer,
+             :cache_dir,              :pointer,
+             :device,                 :pointer,
+             :gguf_file,              :pointer,
+             :memory_estimate_bytes,  :uint64,
+             :pool,                   :pointer
+    end
+
+    attach_function :blazen_model_manager_load_from_hf_blocking,
+                    [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer],
+                    :int32, blocking: true
+    attach_function :blazen_model_manager_load_from_hf,
+                    [:pointer, :pointer, :pointer, :pointer], :pointer
 
     # -------------------------------------------------------------------
     # ModelManager — record accessors (cabi/manager_records.rs)

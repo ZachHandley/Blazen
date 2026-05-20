@@ -164,6 +164,96 @@ func TestModelManagerPoolBytes(t *testing.T) {
 	}
 }
 
+func TestModelManager_LoadFromHf_NoNetwork(t *testing.T) {
+	mm, ctx, cancel := newTestManagerCtx(t)
+	defer cancel()
+
+	// Why: an obviously-invalid repo slug must fail with a typed Blazen
+	// error rather than panic. Either the loader rejects validation
+	// up-front or the HF probe surfaces a network/404 error — both
+	// outcomes are acceptable as long as the call returns cleanly.
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("LoadFromHf panicked on invalid repo: %v", r)
+		}
+	}()
+
+	backend, err := mm.LoadFromHf(ctx, "test-id", "nonexistent/repo-abc123-xyz", HfLoadOptions{})
+	if err == nil {
+		t.Fatalf("expected error loading nonexistent repo, got backend=%q", backend)
+	}
+	var be Error
+	if !errors.As(err, &be) {
+		t.Fatalf("expected typed blazen.Error, got %T: %v", err, err)
+	}
+}
+
+func TestModelManager_LoadFromHf_NilOptions_DoesntPanic(t *testing.T) {
+	mm, ctx, cancel := newTestManagerCtx(t)
+	defer cancel()
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("LoadFromHf panicked on zero-value HfLoadOptions: %v", r)
+		}
+	}()
+
+	_, err := mm.LoadFromHf(ctx, "test-id-empty-opts", "nonexistent/repo-abc123-xyz", HfLoadOptions{})
+	// Why: success would be unexpected for a fake repo, but we accept it
+	// — the contract is "no panic". Any error path is also fine.
+	_ = err
+}
+
+func TestModelManager_LoadFromHf_AllOptionsPlumbed(t *testing.T) {
+	mm, ctx, cancel := newTestManagerCtx(t)
+	defer cancel()
+
+	hint := BackendHintLlamacpp
+	rev := "main"
+	token := "hf_dummy"
+	cache := "/tmp/blazen-hf-cache-test"
+	device := "cpu"
+	gguf := "model-q4.gguf"
+	var mem uint64 = 1 << 30
+	pool := "cpu"
+	opts := HfLoadOptions{
+		BackendHint:         &hint,
+		Revision:            &rev,
+		HfToken:             &token,
+		CacheDir:            &cache,
+		Device:              &device,
+		GgufFile:            &gguf,
+		MemoryEstimateBytes: &mem,
+		Pool:                &pool,
+	}
+
+	defer func() {
+		if r := recover(); r != nil {
+			t.Fatalf("LoadFromHf panicked with all options set: %v", r)
+		}
+	}()
+	if _, err := mm.LoadFromHf(ctx, "test-id-all-opts", "nonexistent/repo-abc123-xyz", opts); err == nil {
+		t.Fatal("expected error loading nonexistent repo")
+	}
+}
+
+func TestModelManager_LoadFromHf_AfterClose(t *testing.T) {
+	mm := NewModelManager()
+	mm.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
+	_, err := mm.LoadFromHf(ctx, "id", "owner/repo", HfLoadOptions{})
+	if err == nil {
+		t.Fatal("expected error from LoadFromHf after Close")
+	}
+	var ve *ValidationError
+	if !errors.As(err, &ve) {
+		t.Fatalf("expected *ValidationError after Close, got %T: %v", err, err)
+	}
+}
+
 func TestModelManagerCloseIsIdempotent(t *testing.T) {
 	mm := NewModelManager()
 	mm.Close()

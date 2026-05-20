@@ -13,6 +13,8 @@
 //! workload-choice question that this manager intentionally does not
 //! answer. It only prevents OOM.
 
+pub mod hf_loader;
+
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -20,6 +22,9 @@ use std::time::Instant;
 
 use blazen_llm::{AdapterHandle, AdapterOptions, AdapterStatus, BlazenError, LocalModel, Pool};
 use tokio::sync::Mutex;
+
+#[cfg(feature = "hf-loader")]
+use crate::hf_loader::{BackendHint, HfLoadOptions};
 
 /// Status of a registered model.
 #[derive(Debug, Clone)]
@@ -381,6 +386,66 @@ impl ModelManager {
         Ok(())
     }
 
+    /// Auto-detect the right local-inference backend for the Hugging Face
+    /// repo at `repo` and register a fresh provider under `id`.
+    ///
+    /// Hides backend choice from casual users; advanced users still
+    /// construct providers directly and call [`Self::register`]. The chosen
+    /// backend is returned so the caller can inspect or log it.
+    ///
+    /// See [`hf_loader::choose_backend`] for the selection rules. The repo
+    /// metadata is probed once via [`hf_loader::detect_layout`] (one HTTP
+    /// `GET /api/models/{repo}` — no weight downloads); selection plus
+    /// memory estimation are then pure.
+    ///
+    /// # Errors
+    ///
+    /// - [`BlazenError::Unsupported`] when the backend the loader picked
+    ///   is not compiled in (feature gate `mistralrs-provider`,
+    ///   `candle-provider`, or `llamacpp-provider` — `live-models`
+    ///   activates all three).
+    /// - [`BlazenError::Validation`] when the repo has no recognisable
+    ///   model weights, is PEFT-adapter-only (use [`Self::load_adapter`]
+    ///   instead), or is otherwise unloadable as a base model.
+    /// - Any error from [`hf_loader::detect_layout`] (network / parse) or
+    ///   the chosen provider's own construction.
+    #[cfg(feature = "hf-loader")]
+    pub async fn load_from_hf(
+        &self,
+        id: String,
+        repo: &str,
+        options: HfLoadOptions,
+    ) -> Result<BackendHint, BlazenError> {
+        let layout = hf_loader::detect_layout(repo, &options).await?;
+        let backend =
+            hf_loader::choose_backend(&layout, options.backend_hint, options.gguf_file.as_deref())?;
+
+        // Why: layout-derived sizes are only available when the Hub returned
+        // them. The user override always wins; otherwise fall back to summing
+        // siblings, then to layout.total_weight_bytes (rounded), then bail.
+        let memory_bytes = options
+            .memory_estimate_bytes
+            .or_else(|| {
+                hf_loader::estimate_backend_bytes(
+                    backend,
+                    &layout,
+                    &layout.file_sizes,
+                    options.gguf_file.as_deref(),
+                )
+            })
+            .or_else(|| layout.total_weight_bytes.map(hf_loader::round_up_to_mb))
+            .ok_or_else(|| {
+                BlazenError::validation(format!(
+                    "could not determine memory footprint for repo '{repo}'; \
+                     pass HfLoadOptions::memory_estimate_bytes explicitly"
+                ))
+            })?;
+
+        let model = build_provider(backend, repo, &options, &layout).await?;
+        self.register(&id, model, memory_bytes).await;
+        Ok(backend)
+    }
+
     /// List adapters mounted on a registered model.
     ///
     /// # Errors
@@ -391,6 +456,119 @@ impl ModelManager {
             BlazenError::validation(format!("model '{model_id}' is not registered"))
         })?;
         Ok(entry.adapters.values().cloned().collect())
+    }
+}
+
+/// Construct an `Arc<dyn LocalModel>` for the chosen backend, mapping
+/// [`HfLoadOptions`] onto the backend's own options struct.
+///
+/// Each backend is independently feature-gated; calling [`ModelManager::load_from_hf`]
+/// for a backend whose feature is off returns [`BlazenError::unsupported`]
+/// naming the missing feature.
+#[cfg(feature = "hf-loader")]
+#[allow(unused_variables)] // Why: `layout` is consumed only by the candle/llamacpp arms.
+#[allow(clippy::unused_async)] // Why: only the llamacpp arm awaits; the other arms are sync or disabled-feature error branches.
+async fn build_provider(
+    backend: BackendHint,
+    repo: &str,
+    options: &HfLoadOptions,
+    layout: &hf_loader::DetectedLayout,
+) -> Result<Arc<dyn LocalModel>, BlazenError> {
+    match backend {
+        BackendHint::Mistralrs => {
+            #[cfg(feature = "mistralrs-provider")]
+            {
+                let mr_opts = blazen_llm_mistralrs::MistralRsOptions {
+                    model_id: repo.to_string(),
+                    quantization: None,
+                    device: options.device.clone(),
+                    context_length: None,
+                    max_batch_size: None,
+                    chat_template: None,
+                    cache_dir: options.cache_dir.clone(),
+                    vision: false,
+                    initial_adapters: Vec::new(),
+                };
+                let p = blazen_llm_mistralrs::MistralRsProvider::from_options(mr_opts)
+                    .map_err(|e| BlazenError::internal(format!("mistralrs build: {e}")))?;
+                Ok(Arc::new(p))
+            }
+            #[cfg(not(feature = "mistralrs-provider"))]
+            {
+                Err(BlazenError::unsupported(
+                    "load_from_hf chose the mistralrs backend but the \
+                     `mistralrs-provider` feature is not enabled on blazen-manager",
+                ))
+            }
+        }
+        BackendHint::Candle => {
+            #[cfg(feature = "candle-provider")]
+            {
+                let force_st =
+                    !layout.gguf_files.is_empty() && !layout.safetensors_files.is_empty();
+                let c_opts = blazen_llm_candle::CandleLlmOptions {
+                    model_id: Some(repo.to_string()),
+                    device: options.device.clone(),
+                    quantization: None,
+                    revision: options.revision.clone(),
+                    context_length: None,
+                    cache_dir: options.cache_dir.clone(),
+                    initial_adapters: Vec::new(),
+                    force_safetensors: force_st,
+                };
+                let p = blazen_llm_candle::CandleLlmProvider::from_options(c_opts)
+                    .map_err(|e| BlazenError::internal(format!("candle build: {e}")))?;
+                Ok(Arc::new(p))
+            }
+            #[cfg(not(feature = "candle-provider"))]
+            {
+                Err(BlazenError::unsupported(
+                    "load_from_hf chose the candle backend but the \
+                     `candle-provider` feature is not enabled on blazen-manager",
+                ))
+            }
+        }
+        BackendHint::Llamacpp => {
+            #[cfg(feature = "llamacpp-provider")]
+            {
+                // Why: llama.cpp's LlamaCppOptions::model_path accepts either a
+                // local path or the HF triple "org/repo/file.gguf". We must
+                // pick a specific GGUF — either the caller-supplied gguf_file
+                // or the first one in the repo — because the provider rejects
+                // bare "org/repo" without a filename.
+                let gguf = options
+                    .gguf_file
+                    .clone()
+                    .or_else(|| layout.gguf_files.first().cloned())
+                    .ok_or_else(|| {
+                        BlazenError::validation(format!(
+                            "llamacpp backend requires a *.gguf file but repo '{repo}' \
+                             has none; pass HfLoadOptions::gguf_file or use a different backend"
+                        ))
+                    })?;
+                let model_path = format!("{repo}/{gguf}");
+                let l_opts = blazen_llm_llamacpp::LlamaCppOptions {
+                    model_path: Some(model_path),
+                    device: options.device.clone(),
+                    quantization: None,
+                    context_length: None,
+                    n_gpu_layers: None,
+                    cache_dir: options.cache_dir.clone(),
+                    initial_adapters: Vec::new(),
+                };
+                let p = blazen_llm_llamacpp::LlamaCppProvider::from_options(l_opts)
+                    .await
+                    .map_err(|e| BlazenError::internal(format!("llamacpp build: {e}")))?;
+                Ok(Arc::new(p))
+            }
+            #[cfg(not(feature = "llamacpp-provider"))]
+            {
+                Err(BlazenError::unsupported(
+                    "load_from_hf chose the llamacpp backend but the \
+                     `llamacpp-provider` feature is not enabled on blazen-manager",
+                ))
+            }
+        }
     }
 }
 

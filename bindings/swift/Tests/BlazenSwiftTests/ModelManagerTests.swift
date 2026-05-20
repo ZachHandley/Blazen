@@ -97,6 +97,86 @@ final class ModelManagerTests: XCTestCase {
         }
     }
 
+    /// `loadFromHf` must surface a `BlazenError` for repos that don't
+    /// exist on the Hugging Face Hub. We use a deterministically-bogus
+    /// repo id so this test stays offline-safe: even with network access,
+    /// the registry rejects it before any download starts.
+    func testLoadFromHfNonexistentRepoThrows() async {
+        let manager = ModelManager()
+        do {
+            _ = try await manager.loadFromHf(
+                id: "swift-test-bogus",
+                repo: "blazen-nonexistent-org/blazen-nonexistent-repo-xyz123",
+                options: HfLoadOptions()
+            )
+            XCTFail("expected loadFromHf() to throw")
+        } catch is BlazenError {
+            // expected: any BlazenError variant (Validation, Network,
+            // Internal, …) is fine; we only assert the FFI didn't crash.
+        } catch {
+            XCTFail("expected BlazenError, got \(type(of: error)): \(error)")
+        }
+    }
+
+    /// The default `HfLoadOptions()` must round-trip through the FFI
+    /// without panicking, even when the target repo can't be resolved.
+    /// Confirms the optional-field encoding for every nil case.
+    func testLoadFromHfDefaultOptionsDontCrash() async {
+        let manager = ModelManager()
+        do {
+            _ = try await manager.loadFromHf(
+                id: "swift-test-defaults",
+                repo: "blazen-nonexistent-org/blazen-nonexistent-repo-defaults"
+            )
+        } catch is BlazenError {
+            // expected
+        } catch {
+            XCTFail("expected BlazenError or success, got \(type(of: error)): \(error)")
+        }
+    }
+
+    /// `BackendHint` raw values must match the lower-case strings the
+    /// underlying Rust `BackendHint::as_str()` emits — drift here would
+    /// break the post-FFI parse in `ModelManager.loadFromHf`.
+    func testBackendHintRawValuesMatchRust() {
+        XCTAssertEqual(BackendHint.mistralrs.rawValue, "mistralrs")
+        XCTAssertEqual(BackendHint.candle.rawValue, "candle")
+        XCTAssertEqual(BackendHint.llamacpp.rawValue, "llamacpp")
+    }
+
+    /// `HfLoadOptions()` exposes all-nil defaults and round-trips every
+    /// field through its public initializer.
+    func testHfLoadOptionsDefaults() {
+        let opts = HfLoadOptions()
+        XCTAssertNil(opts.backendHint)
+        XCTAssertNil(opts.revision)
+        XCTAssertNil(opts.hfToken)
+        XCTAssertNil(opts.cacheDir)
+        XCTAssertNil(opts.device)
+        XCTAssertNil(opts.ggufFile)
+        XCTAssertNil(opts.memoryEstimateBytes)
+        XCTAssertNil(opts.pool)
+
+        let custom = HfLoadOptions(
+            backendHint: .candle,
+            revision: "main",
+            hfToken: "tok",
+            cacheDir: "/tmp/cache",
+            device: "cpu",
+            ggufFile: "model.Q4_K_M.gguf",
+            memoryEstimateBytes: 1_024,
+            pool: "gpu:0"
+        )
+        XCTAssertEqual(custom.backendHint, .candle)
+        XCTAssertEqual(custom.revision, "main")
+        XCTAssertEqual(custom.hfToken, "tok")
+        XCTAssertEqual(custom.cacheDir, "/tmp/cache")
+        XCTAssertEqual(custom.device, "cpu")
+        XCTAssertEqual(custom.ggufFile, "model.Q4_K_M.gguf")
+        XCTAssertEqual(custom.memoryEstimateBytes, 1_024)
+        XCTAssertEqual(custom.pool, "gpu:0")
+    }
+
     /// `AdapterOptions` has documented default values that produce the
     /// expected wire form when narrowed to `Float`.
     func testAdapterOptionsDefaults() {

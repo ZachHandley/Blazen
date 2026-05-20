@@ -407,6 +407,49 @@ pub unsafe extern "C" fn blazen_future_take_bool(
     }
 }
 
+/// Pops a `Result<String, _>` future, writing a caller-owned NUL-terminated
+/// UTF-8 C string into `*out` (free with
+/// [`crate::string::blazen_string_free`]). Returns `0` on success or `-1`
+/// on failure (writes `*err`).
+///
+/// Used by verbs whose async result is a single string identifier — for
+/// example
+/// [`crate::manager::blazen_model_manager_load_from_hf`] returns the chosen
+/// backend's stable label (`"mistralrs"` / `"candle"` / `"llamacpp"`).
+///
+/// # Safety
+///
+/// `fut` is null OR a live cabi-produced future whose `Ok` type is `String`.
+/// `out` and `err` are each null OR a single-writer destination.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_future_take_string(
+    fut: *mut BlazenFuture,
+    out: *mut *mut std::ffi::c_char,
+    err: *mut *mut crate::error::BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the future-pointer contract.
+    match unsafe { BlazenFuture::take_typed::<String>(fut) } {
+        Ok(s) => {
+            if !out.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *out = crate::string::alloc_cstring(&s);
+                }
+            }
+            0
+        }
+        Err(e) => {
+            if !err.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *err = crate::error::BlazenError::from(e).into_ptr();
+                }
+            }
+            -1
+        }
+    }
+}
+
 /// Pops a `Result<Vec<blazen_manager::ModelStatus>, _>` future, writing a
 /// caller-owned `BlazenModelStatusList*` into `*out` (free with
 /// [`crate::manager_records::blazen_model_status_list_free`]). Returns `0` on

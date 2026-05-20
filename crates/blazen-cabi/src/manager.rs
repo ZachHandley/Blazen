@@ -42,6 +42,11 @@ use blazen_uniffi::errors::BlazenError as InnerError;
 
 use crate::error::BlazenError;
 use crate::future::BlazenFuture;
+#[cfg(feature = "hf-loader")]
+use crate::manager_records::{
+    BLAZEN_BACKEND_HINT_CANDLE, BLAZEN_BACKEND_HINT_LLAMACPP, BLAZEN_BACKEND_HINT_MISTRALRS,
+    BLAZEN_BACKEND_HINT_NONE, BlazenHfLoadOptions,
+};
 use crate::manager_records::{
     BlazenAdapterHandleInfo, BlazenAdapterStatusList, BlazenModelStatusList, BlazenPoolStatus,
     BlazenPoolStatusList,
@@ -760,4 +765,234 @@ pub unsafe extern "C" fn blazen_model_manager_list_adapters(
     let mgr = unsafe { &*mgr };
     let inner = Arc::clone(&mgr.0);
     BlazenFuture::spawn(async move { inner.list_adapters(&id).await.map_err(into_inner_error) })
+}
+
+// ---------------------------------------------------------------------------
+// load_from_hf
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "hf-loader")]
+#[allow(clippy::result_large_err)] // Why: InnerError is large but funnels into Box<BlazenError> at the FFI boundary; matches the take_typed convention.
+fn parse_pool_label(s: &str) -> Result<blazen_llm::Pool, InnerError> {
+    use blazen_llm::Pool;
+    let trimmed = s.trim();
+    let lower = trimmed.to_ascii_lowercase();
+    if let Some((name, idx)) = lower.split_once(':') {
+        if name == "gpu" {
+            let index = idx.parse::<usize>().map_err(|_| InnerError::Validation {
+                message: format!(
+                    "invalid pool label {trimmed:?}: expected 'cpu', 'gpu', or 'gpu:N' where N is a non-negative integer"
+                ),
+            })?;
+            return Ok(Pool::Gpu(index));
+        }
+        return Err(InnerError::Validation {
+            message: format!(
+                "invalid pool label {trimmed:?}: expected 'cpu', 'gpu', or 'gpu:N' where N is a non-negative integer"
+            ),
+        });
+    }
+    match lower.as_str() {
+        "cpu" => Ok(Pool::Cpu),
+        "gpu" => Ok(Pool::Gpu(0)),
+        _ => Err(InnerError::Validation {
+            message: format!(
+                "invalid pool label {trimmed:?}: expected 'cpu', 'gpu', or 'gpu:N' where N is a non-negative integer"
+            ),
+        }),
+    }
+}
+
+#[cfg(feature = "hf-loader")]
+#[allow(clippy::result_large_err)] // Why: see parse_pool_label.
+fn backend_hint_from_tag(
+    tag: i32,
+) -> Result<Option<blazen_manager::hf_loader::BackendHint>, InnerError> {
+    use blazen_manager::hf_loader::BackendHint;
+    match tag {
+        BLAZEN_BACKEND_HINT_NONE => Ok(None),
+        BLAZEN_BACKEND_HINT_MISTRALRS => Ok(Some(BackendHint::Mistralrs)),
+        BLAZEN_BACKEND_HINT_CANDLE => Ok(Some(BackendHint::Candle)),
+        BLAZEN_BACKEND_HINT_LLAMACPP => Ok(Some(BackendHint::Llamacpp)),
+        other => Err(InnerError::Validation {
+            message: format!(
+                "invalid backend_hint {other}: expected -1 (none), 0 (mistralrs), 1 (candle), or 2 (llamacpp)"
+            ),
+        }),
+    }
+}
+
+/// Translate the C-side `BlazenHfLoadOptions` into the Rust-side
+/// `HfLoadOptions`. Strings are copied (the C caller is free to drop the
+/// source buffers after the conversion runs).
+///
+/// # Safety
+///
+/// `opts` must be null OR a pointer to a `BlazenHfLoadOptions` whose pointer
+/// fields are each null OR NUL-terminated UTF-8 buffers valid for the
+/// duration of this call.
+#[cfg(feature = "hf-loader")]
+#[allow(clippy::result_large_err)] // Why: see parse_pool_label.
+unsafe fn convert_hf_options(
+    opts: *const BlazenHfLoadOptions,
+) -> Result<blazen_manager::hf_loader::HfLoadOptions, InnerError> {
+    use blazen_manager::hf_loader::HfLoadOptions;
+
+    let Some(opts) = (unsafe { opts.as_ref() }) else {
+        return Ok(HfLoadOptions::default());
+    };
+
+    let backend_hint = backend_hint_from_tag(opts.backend_hint)?;
+    // SAFETY: caller upholds the NUL + lifetime contract on each pointer
+    // field per the function-level docs.
+    let revision = unsafe { crate::string::cstr_to_opt_string(opts.revision) };
+    let hf_token = unsafe { crate::string::cstr_to_opt_string(opts.hf_token) };
+    let cache_dir = unsafe { crate::string::cstr_to_opt_string(opts.cache_dir) }.map(PathBuf::from);
+    let device = unsafe { crate::string::cstr_to_opt_string(opts.device) };
+    let gguf_file = unsafe { crate::string::cstr_to_opt_string(opts.gguf_file) };
+    let pool_label = unsafe { crate::string::cstr_to_opt_string(opts.pool) };
+    let pool = match pool_label {
+        Some(label) => Some(parse_pool_label(&label)?),
+        None => None,
+    };
+
+    Ok(HfLoadOptions {
+        backend_hint,
+        revision,
+        hf_token,
+        cache_dir,
+        device,
+        gguf_file,
+        memory_estimate_bytes: if opts.memory_estimate_bytes == 0 {
+            None
+        } else {
+            Some(opts.memory_estimate_bytes)
+        },
+        pool,
+    })
+}
+
+/// Synchronously detects the right backend for a Hugging Face repo, downloads
+/// it via the chosen backend, and registers it as `id`. Writes the chosen
+/// backend's stable string (`"mistralrs"` / `"candle"` / `"llamacpp"`) into
+/// `*out_chosen_backend` (caller-owned, free via
+/// [`crate::string::blazen_string_free`]). Returns `0` on success or `-1` on
+/// failure (writes `*out_err`).
+///
+/// `options` may be null, in which case
+/// [`blazen_manager::hf_loader::HfLoadOptions::default`] applies (auto-detect
+/// backend, no token, default cache dir, `Pool::Cpu`).
+///
+/// # Safety
+///
+/// `mgr` must be null OR a live [`BlazenModelManager`]. `id` and `repo` must
+/// each be NUL-terminated UTF-8 buffers valid for the duration of the call.
+/// `options` is null OR a `BlazenHfLoadOptions` whose pointer fields each
+/// follow the same null-OR-NUL-terminated contract. `out_chosen_backend` and
+/// `out_err` are each null OR a single-writer destination.
+#[cfg(feature = "hf-loader")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_load_from_hf_blocking(
+    mgr: *const BlazenModelManager,
+    id: *const c_char,
+    repo: *const c_char,
+    options: *const BlazenHfLoadOptions,
+    out_chosen_backend: *mut *mut c_char,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if mgr.is_null() {
+        // SAFETY: out_err contract per the per-fn doc.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_load_from_hf_blocking: null manager",
+            )
+        };
+    }
+    // SAFETY: caller upholds the NUL + lifetime contract on `id`.
+    let Some(id) = (unsafe { cstr_to_str(id) }).map(str::to_owned) else {
+        // SAFETY: out_err contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_load_from_hf_blocking: null or non-UTF-8 id",
+            )
+        };
+    };
+    // SAFETY: caller upholds the NUL + lifetime contract on `repo`.
+    let Some(repo) = (unsafe { cstr_to_str(repo) }).map(str::to_owned) else {
+        // SAFETY: out_err contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_load_from_hf_blocking: null or non-UTF-8 repo",
+            )
+        };
+    };
+    // SAFETY: caller upholds the per-field contracts on `options`.
+    let opts = match unsafe { convert_hf_options(options) } {
+        Ok(o) => o,
+        // SAFETY: out_err contract.
+        Err(e) => return unsafe { write_error(out_err, e) },
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    match runtime().block_on(async move { inner.load_from_hf(id, &repo, opts).await }) {
+        Ok(backend) => {
+            if !out_chosen_backend.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *out_chosen_backend = crate::string::alloc_cstring(backend.as_str());
+                }
+            }
+            0
+        }
+        // SAFETY: out_err contract per the per-fn doc.
+        Err(e) => unsafe { write_error(out_err, into_inner_error(e)) },
+    }
+}
+
+/// Spawns a `load_from_hf` onto the cabi tokio runtime; pop the result with
+/// [`crate::future::blazen_future_take_string`] (yields the chosen backend's
+/// stable label). Returns null on argument-shape failure (null manager / null
+/// or non-UTF-8 string args / invalid options).
+///
+/// # Safety
+///
+/// Same as [`blazen_model_manager_load_from_hf_blocking`] (minus the two
+/// out-param pointers). String + option buffers are copied before this
+/// function returns.
+#[cfg(feature = "hf-loader")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_load_from_hf(
+    mgr: *const BlazenModelManager,
+    id: *const c_char,
+    repo: *const c_char,
+    options: *const BlazenHfLoadOptions,
+) -> *mut BlazenFuture {
+    if mgr.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the NUL + lifetime contracts on `id` / `repo`.
+    let (Some(id), Some(repo)) = (
+        unsafe { cstr_to_str(id) }.map(str::to_owned),
+        unsafe { cstr_to_str(repo) }.map(str::to_owned),
+    ) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller upholds the per-field contracts on `options`.
+    let Ok(opts) = (unsafe { convert_hf_options(options) }) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    BlazenFuture::spawn(async move {
+        inner
+            .load_from_hf(id, &repo, opts)
+            .await
+            .map(|b| b.as_str().to_owned())
+            .map_err(into_inner_error)
+    })
 }

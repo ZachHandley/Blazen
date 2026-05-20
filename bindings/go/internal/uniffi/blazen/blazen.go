@@ -1267,6 +1267,15 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_from_hf()
+		})
+		if checksum != 38990 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_from_hf: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_pools()
 		})
 		if checksum != 34891 {
@@ -10399,6 +10408,17 @@ type UniffiModelManagerInterface interface {
 	// Synchronous variant of [`Self::load`] — blocks the current thread on
 	// the shared Tokio runtime.
 	LoadBlocking(modelId string) error
+	// Probe a Hugging Face repo, pick a local-inference backend, build the
+	// provider, and register it under `id`.
+	//
+	// Returns the chosen backend as a lower-case stable string
+	// (`"mistralrs"` / `"candle"` / `"llamacpp"`). The model starts unloaded
+	// — call [`Self::load`] or [`Self::ensure_loaded`] to materialize it.
+	//
+	// Errors on empty repo id, gated/missing repo, PEFT-adapter-only repo
+	// (use [`Self::load_adapter`] instead), missing backend feature, or any
+	// provider construction failure.
+	LoadFromHf(id string, repo string, options HfLoadOptionsRecord) (string, error)
 	// List configured pools and their budgets in bytes.
 	Pools() []PoolStatusRecord
 	// Register a foreign-implemented [`ForeignLocalModel`] under `id`.
@@ -10671,6 +10691,51 @@ func (_self *UniffiModelManager) LoadBlocking(modelId string) error {
 		return false
 	})
 	return _uniffiErr.AsError()
+}
+
+// Probe a Hugging Face repo, pick a local-inference backend, build the
+// provider, and register it under `id`.
+//
+// Returns the chosen backend as a lower-case stable string
+// (`"mistralrs"` / `"candle"` / `"llamacpp"`). The model starts unloaded
+// — call [`Self::load`] or [`Self::ensure_loaded`] to materialize it.
+//
+// Errors on empty repo id, gated/missing repo, PEFT-adapter-only repo
+// (use [`Self::load_adapter`] instead), missing backend feature, or any
+// provider construction failure.
+func (_self *UniffiModelManager) LoadFromHf(id string, repo string, options HfLoadOptionsRecord) (string, error) {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) string {
+			return FfiConverterStringINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_load_from_hf(
+			_pointer, FfiConverterStringINSTANCE.Lower(id), FfiConverterStringINSTANCE.Lower(repo), FfiConverterHfLoadOptionsRecordINSTANCE.Lower(options)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
 }
 
 // List configured pools and their budgets in bytes.
@@ -12776,6 +12841,91 @@ func (c FfiConverterGeneratedVideo) Write(writer io.Writer, value GeneratedVideo
 type FfiDestroyerGeneratedVideo struct{}
 
 func (_ FfiDestroyerGeneratedVideo) Destroy(value GeneratedVideo) {
+	value.Destroy()
+}
+
+// Caller-supplied options for [`UniffiModelManager::load_from_hf`].
+//
+// Mirrors [`blazen_manager::hf_loader::HfLoadOptions`]; every field is
+// optional. `pool` is a label (`"cpu"`, `"gpu"`, `"gpu:N"`) and is parsed
+// by `parse_pool_label`.
+type HfLoadOptionsRecord struct {
+	// Force a specific backend; skips engine inference but still probes
+	// the repo for memory sizing.
+	BackendHint *BackendHintEnum
+	// Git revision (branch, tag, or commit sha). Defaults to the repo's
+	// default branch.
+	Revision *string
+	// Hugging Face access token. When omitted, falls back to the
+	// `HF_TOKEN` environment variable, then to anonymous access.
+	HfToken *string
+	// Override the on-disk cache directory used by `hf-hub`.
+	CacheDir *string
+	// Device specifier forwarded to the chosen provider (`"cpu"`,
+	// `"cuda:0"`, `"metal"`, …).
+	Device *string
+	// Explicit GGUF filename for repos that ship multiple quantizations.
+	GgufFile *string
+	// Override the auto-derived memory estimate, in bytes.
+	MemoryEstimateBytes *uint64
+	// Pool label (`"cpu"`, `"gpu"`, `"gpu:N"`). Defaults to `"cpu"`.
+	Pool *string
+}
+
+func (r *HfLoadOptionsRecord) Destroy() {
+	FfiDestroyerOptionalBackendHintEnum{}.Destroy(r.BackendHint)
+	FfiDestroyerOptionalString{}.Destroy(r.Revision)
+	FfiDestroyerOptionalString{}.Destroy(r.HfToken)
+	FfiDestroyerOptionalString{}.Destroy(r.CacheDir)
+	FfiDestroyerOptionalString{}.Destroy(r.Device)
+	FfiDestroyerOptionalString{}.Destroy(r.GgufFile)
+	FfiDestroyerOptionalUint64{}.Destroy(r.MemoryEstimateBytes)
+	FfiDestroyerOptionalString{}.Destroy(r.Pool)
+}
+
+type FfiConverterHfLoadOptionsRecord struct{}
+
+var FfiConverterHfLoadOptionsRecordINSTANCE = FfiConverterHfLoadOptionsRecord{}
+
+func (c FfiConverterHfLoadOptionsRecord) Lift(rb RustBufferI) HfLoadOptionsRecord {
+	return LiftFromRustBuffer[HfLoadOptionsRecord](c, rb)
+}
+
+func (c FfiConverterHfLoadOptionsRecord) Read(reader io.Reader) HfLoadOptionsRecord {
+	return HfLoadOptionsRecord{
+		FfiConverterOptionalBackendHintEnumINSTANCE.Read(reader),
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+		FfiConverterOptionalUint64INSTANCE.Read(reader),
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterHfLoadOptionsRecord) Lower(value HfLoadOptionsRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[HfLoadOptionsRecord](c, value)
+}
+
+func (c FfiConverterHfLoadOptionsRecord) LowerExternal(value HfLoadOptionsRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[HfLoadOptionsRecord](c, value))
+}
+
+func (c FfiConverterHfLoadOptionsRecord) Write(writer io.Writer, value HfLoadOptionsRecord) {
+	FfiConverterOptionalBackendHintEnumINSTANCE.Write(writer, value.BackendHint)
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.Revision)
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.HfToken)
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.CacheDir)
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.Device)
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.GgufFile)
+	FfiConverterOptionalUint64INSTANCE.Write(writer, value.MemoryEstimateBytes)
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.Pool)
+}
+
+type FfiDestroyerHfLoadOptionsRecord struct{}
+
+func (_ FfiDestroyerHfLoadOptionsRecord) Destroy(value HfLoadOptionsRecord) {
 	value.Destroy()
 }
 
@@ -15112,6 +15262,53 @@ func (_ FfiDestroyerAuthMethod) Destroy(value AuthMethod) {
 	value.Destroy()
 }
 
+// Local-inference backend identifier returned by
+// [`UniffiModelManager::load_from_hf`] and accepted as a forced override on
+// [`HfLoadOptionsRecord::backend_hint`].
+//
+// Mirrors [`blazen_manager::hf_loader::BackendHint`] as a UniFFI Enum.
+type BackendHintEnum uint
+
+const (
+	// `mistral.rs` — broad architecture coverage, handles both safetensors
+	// and GGUF, supports vision/multimodal models.
+	BackendHintEnumMistralrs BackendHintEnum = 1
+	// `candle` — pure-Rust, supports safetensors and GGUF for the subset of
+	// architectures candle ships.
+	BackendHintEnumCandle BackendHintEnum = 2
+	// `llama.cpp` — GGUF only, best CPU performance and lowest memory.
+	BackendHintEnumLlamacpp BackendHintEnum = 3
+)
+
+type FfiConverterBackendHintEnum struct{}
+
+var FfiConverterBackendHintEnumINSTANCE = FfiConverterBackendHintEnum{}
+
+func (c FfiConverterBackendHintEnum) Lift(rb RustBufferI) BackendHintEnum {
+	return LiftFromRustBuffer[BackendHintEnum](c, rb)
+}
+
+func (c FfiConverterBackendHintEnum) Lower(value BackendHintEnum) C.RustBuffer {
+	return LowerIntoRustBuffer[BackendHintEnum](c, value)
+}
+
+func (c FfiConverterBackendHintEnum) LowerExternal(value BackendHintEnum) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[BackendHintEnum](c, value))
+}
+func (FfiConverterBackendHintEnum) Read(reader io.Reader) BackendHintEnum {
+	id := readInt32(reader)
+	return BackendHintEnum(id)
+}
+
+func (FfiConverterBackendHintEnum) Write(writer io.Writer, value BackendHintEnum) {
+	writeInt32(writer, int32(value))
+}
+
+type FfiDestroyerBackendHintEnum struct{}
+
+func (_ FfiDestroyerBackendHintEnum) Destroy(value BackendHintEnum) {
+}
+
 // Per-request outcome within a [`BatchResult`].
 //
 // Slot `i` of [`BatchResult::responses`] corresponds to input request `i`.
@@ -16782,6 +16979,47 @@ type FfiDestroyerOptionalWorkflowCheckpoint struct{}
 func (_ FfiDestroyerOptionalWorkflowCheckpoint) Destroy(value *WorkflowCheckpoint) {
 	if value != nil {
 		FfiDestroyerWorkflowCheckpoint{}.Destroy(*value)
+	}
+}
+
+type FfiConverterOptionalBackendHintEnum struct{}
+
+var FfiConverterOptionalBackendHintEnumINSTANCE = FfiConverterOptionalBackendHintEnum{}
+
+func (c FfiConverterOptionalBackendHintEnum) Lift(rb RustBufferI) *BackendHintEnum {
+	return LiftFromRustBuffer[*BackendHintEnum](c, rb)
+}
+
+func (_ FfiConverterOptionalBackendHintEnum) Read(reader io.Reader) *BackendHintEnum {
+	if readInt8(reader) == 0 {
+		return nil
+	}
+	temp := FfiConverterBackendHintEnumINSTANCE.Read(reader)
+	return &temp
+}
+
+func (c FfiConverterOptionalBackendHintEnum) Lower(value *BackendHintEnum) C.RustBuffer {
+	return LowerIntoRustBuffer[*BackendHintEnum](c, value)
+}
+
+func (c FfiConverterOptionalBackendHintEnum) LowerExternal(value *BackendHintEnum) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[*BackendHintEnum](c, value))
+}
+
+func (_ FfiConverterOptionalBackendHintEnum) Write(writer io.Writer, value *BackendHintEnum) {
+	if value == nil {
+		writeInt8(writer, 0)
+	} else {
+		writeInt8(writer, 1)
+		FfiConverterBackendHintEnumINSTANCE.Write(writer, *value)
+	}
+}
+
+type FfiDestroyerOptionalBackendHintEnum struct{}
+
+func (_ FfiDestroyerOptionalBackendHintEnum) Destroy(value *BackendHintEnum) {
+	if value != nil {
+		FfiDestroyerBackendHintEnum{}.Destroy(*value)
 	}
 }
 

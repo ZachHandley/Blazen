@@ -26,6 +26,7 @@ __all__ = [
     "AuthMethod",
     "AzureOpenAiProvider",
     "AzureOptions",
+    "BackendHint",
     "BackgroundRemovalProvider",
     "BackgroundRemovalProviderDefaults",
     "BackgroundRemovalRequest",
@@ -110,6 +111,7 @@ __all__ = [
     "FireworksProvider",
     "GeminiProvider",
     "GroqProvider",
+    "HfLoadOptions",
     "HistoryEvent",
     "HistoryEventKind",
     "HttpClient",
@@ -4960,6 +4962,29 @@ class GroqProvider:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class HfLoadOptions:
+    r"""
+    Options for :meth:`ModelManager.load_from_hf`.
+    """
+    def __new__(cls, *, backend_hint: typing.Optional[BackendHint] = None, revision: typing.Optional[builtins.str] = None, hf_token: typing.Optional[builtins.str] = None, cache_dir: typing.Optional[builtins.str] = None, device: typing.Optional[builtins.str] = None, gguf_file: typing.Optional[builtins.str] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None, pool: typing.Optional[builtins.str] = None) -> HfLoadOptions:
+        r"""
+        Build an options bag for :meth:`ModelManager.load_from_hf`.
+        
+        Args:
+            backend_hint: Force a specific backend, skipping auto-detection.
+            revision: Git revision (branch / tag / commit sha).
+            hf_token: HF access token; falls back to ``$HF_TOKEN`` then
+                anonymous access when ``None``.
+            cache_dir: On-disk cache directory; defaults to ``$HF_HOME`` /
+                ``~/.cache/huggingface/``.
+            device: Device string (``"cpu"``, ``"cuda:0"``, ``"metal"``, ...).
+            gguf_file: Explicit GGUF filename for repos with multiple
+                quantizations.
+            memory_estimate_bytes: Override the auto-summed memory estimate.
+            pool: Target pool label (``"cpu"``, ``"gpu"``, or ``"gpu:N"``).
+        """
+
+@typing.final
 class HistoryEvent:
     r"""
     A single timestamped event in a workflow's history.
@@ -7247,6 +7272,28 @@ class ModelManager:
     async def list_adapters(self, model_id: builtins.str) -> list[AdapterStatus]:
         r"""
         List adapters currently mounted on a registered model.
+        """
+    async def load_from_hf(self, id: builtins.str, repo: builtins.str, options: typing.Optional[HfLoadOptions] = None) -> str:
+        r"""
+        Auto-detect the right local-inference backend for a Hugging Face repo
+        and register the resulting model under ``id``.
+        
+        Probes ``GET /api/models/{repo}`` once for metadata, picks a backend
+        per the rules documented on
+        :func:`blazen_manager.hf_loader.choose_backend`, and computes a memory
+        estimate by summing the chosen backend's weight files. Pass an explicit
+        ``options.memory_estimate_bytes`` to override the estimate.
+        
+        Args:
+            id: A unique identifier for the registered model.
+            repo: Hugging Face repo id (``"meta-llama/Llama-3.2-1B-Instruct"``).
+            options: Optional :class:`HfLoadOptions` controlling backend
+                selection, revision, token, cache dir, device, GGUF override,
+                memory estimate, and target pool.
+        
+        Returns:
+            The chosen backend as a string (``"mistralrs"`` / ``"candle"`` /
+            ``"llamacpp"``).
         """
 
 @typing.final
@@ -12668,6 +12715,23 @@ class AuthMethod(enum.Enum):
     ApiKeyHeader = ...
     AzureApiKey = ...
     KeyPrefix = ...
+
+@typing.final
+class BackendHint(enum.Enum):
+    r"""
+    Local inference backend identifier returned by
+    :meth:`ModelManager.load_from_hf` and accepted as
+    :attr:`HfLoadOptions.backend_hint`.
+    
+    Variants:
+        * ``BackendHint.MISTRALRS`` -- mistral.rs (broad arch coverage,
+          safetensors + GGUF, vision support).
+        * ``BackendHint.CANDLE`` -- pure-Rust candle.
+        * ``BackendHint.LLAMACPP`` -- llama.cpp (GGUF only, best CPU perf).
+    """
+    MISTRALRS = ...
+    CANDLE = ...
+    LLAMACPP = ...
 
 @typing.final
 class CacheStrategy(enum.Enum):

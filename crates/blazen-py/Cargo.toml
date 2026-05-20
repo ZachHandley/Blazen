@@ -26,7 +26,7 @@ blazen-core.workspace = true
 blazen-embed-tract = { workspace = true, optional = true }
 blazen-events.workspace = true
 blazen-llm = { workspace = true, features = ["reqwest", "pyo3-serde"] }
-blazen-manager.workspace = true
+blazen-manager = { workspace = true, features = ["hf-loader"] }
 blazen-memory.workspace = true
 blazen-memory-valkey = { workspace = true, features = ["redis-tcp", "upstash"] }
 blazen-model-cache.workspace = true

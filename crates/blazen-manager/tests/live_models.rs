@@ -51,6 +51,7 @@ use blazen_llm_mistralrs::{
     MistralRsProvider,
 };
 use blazen_manager::ModelManager;
+use blazen_manager::hf_loader::{BackendHint, HfLoadOptions};
 use blazen_model_cache::ModelCache;
 
 const QWEN_REPO: &str = "Qwen/Qwen2.5-0.5B-Instruct-GGUF";
@@ -697,4 +698,123 @@ async fn live_candle_load_adapter_inference_delta() {
         "LoRA delta must change greedy-decoded output; identical text means the adapter \
          weights never reached the forward pass (baseline={baseline_text:?}, with={with_text:?})",
     );
+}
+
+// ---------------------------------------------------------------------------
+// PR4 Wave 3: ModelManager::load_from_hf auto-detect + hint-override coverage.
+//
+// These tests hit the HF metadata endpoint (no weight download) to confirm
+// the auto-detection rules in `hf_loader::choose_backend` line up with the
+// real shape of canonical Qwen2.5-0.5B repos. Each one builds a fresh
+// `ModelManager`, calls `load_from_hf`, and skips gracefully when the HF
+// metadata fetch fails for reasons unrelated to the assertion (DNS, rate
+// limit, timeout, gateway error, …).
+// ---------------------------------------------------------------------------
+
+/// Why: distinguish HF-network failures (which should skip) from genuine
+/// regressions (which should fail). The substrings cover the surface that
+/// `hf-hub`/`reqwest` and the manager's own wrappers stamp into the error
+/// chain for transport problems, gateway errors, and HF rate-limiting.
+fn is_network_failure(err: &blazen_llm::BlazenError) -> bool {
+    let msg = err.to_string().to_ascii_lowercase();
+    [
+        "dns",
+        "timed out",
+        "timeout",
+        "connection",
+        "connect error",
+        "network",
+        "unreachable",
+        "tls",
+        "handshake",
+        "rate limit",
+        "too many requests",
+        "429",
+        "502",
+        "503",
+        "504",
+    ]
+    .iter()
+    .any(|needle| msg.contains(needle))
+}
+
+#[tokio::test]
+#[ignore = "live-models: hits huggingface.co metadata API to auto-detect a GGUF repo"]
+async fn live_load_from_hf_autodetect_gguf() {
+    let mgr = ModelManager::with_budgets_gb(8.0, 0.0);
+    let res = mgr
+        .load_from_hf(
+            "test".into(),
+            "Qwen/Qwen2.5-0.5B-Instruct-GGUF",
+            HfLoadOptions::default(),
+        )
+        .await;
+    match res {
+        Ok(backend) => assert_eq!(
+            backend,
+            BackendHint::Llamacpp,
+            "GGUF-only repo must auto-detect llamacpp; got {backend:?}",
+        ),
+        Err(e) if is_network_failure(&e) => {
+            eprintln!(
+                "[skip] live_load_from_hf_autodetect_gguf requires network access to huggingface.co: {e}",
+            );
+        }
+        Err(e) => panic!("load_from_hf failed for a non-network reason: {e}"),
+    }
+}
+
+#[tokio::test]
+#[ignore = "live-models: hits huggingface.co metadata API to auto-detect a safetensors repo"]
+async fn live_load_from_hf_autodetect_safetensors() {
+    let mgr = ModelManager::with_budgets_gb(8.0, 0.0);
+    let res = mgr
+        .load_from_hf(
+            "test".into(),
+            "Qwen/Qwen2.5-0.5B-Instruct",
+            HfLoadOptions::default(),
+        )
+        .await;
+    match res {
+        Ok(backend) => assert_eq!(
+            backend,
+            BackendHint::Mistralrs,
+            "safetensors-only repo must auto-detect mistralrs; got {backend:?}",
+        ),
+        Err(e) if is_network_failure(&e) => {
+            eprintln!(
+                "[skip] live_load_from_hf_autodetect_safetensors requires network access to huggingface.co: {e}",
+            );
+        }
+        Err(e) => panic!("load_from_hf failed for a non-network reason: {e}"),
+    }
+}
+
+#[tokio::test]
+#[ignore = "live-models: hits huggingface.co metadata API and forces a backend via hint"]
+async fn live_load_from_hf_backend_hint_overrides() {
+    let mgr = ModelManager::with_budgets_gb(8.0, 0.0);
+    let res = mgr
+        .load_from_hf(
+            "test".into(),
+            "Qwen/Qwen2.5-0.5B-Instruct",
+            HfLoadOptions {
+                backend_hint: Some(BackendHint::Candle),
+                ..HfLoadOptions::default()
+            },
+        )
+        .await;
+    match res {
+        Ok(backend) => assert_eq!(
+            backend,
+            BackendHint::Candle,
+            "explicit backend_hint must override auto-detection; got {backend:?}",
+        ),
+        Err(e) if is_network_failure(&e) => {
+            eprintln!(
+                "[skip] live_load_from_hf_backend_hint_overrides requires network access to huggingface.co: {e}",
+            );
+        }
+        Err(e) => panic!("load_from_hf failed for a non-network reason: {e}"),
+    }
 }

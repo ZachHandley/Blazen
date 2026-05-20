@@ -69,6 +69,10 @@ tract = ["dep:blazen-embed-tract"]
 # ships prebuilts; target-gated optional dep so musl builds skip it).
 fastembed = ["blazen-llm/embed", "dep:blazen-embed-fastembed"]
 
+# Hugging Face metadata-backed loader powering `UniffiModelManager::load_from_hf`.
+# Forwards to `blazen-manager/hf-loader`.
+hf-loader = ["blazen-manager/hf-loader"]
+
 local-all = [
     "embed",
     "fastembed",
@@ -85,6 +89,7 @@ local-all = [
     "otlp",
     "prometheus",
     "langfuse",
+    "hf-loader",
 ]
 
 # Telemetry exporters

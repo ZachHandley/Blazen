@@ -22,6 +22,60 @@ use blazen_manager::ModelStatus as InnerModelStatus;
 
 use crate::string::alloc_cstring;
 
+/// Backend tag for [`BlazenHfLoadOptions::backend_hint`] — mistral.rs
+/// (broad architecture coverage, safetensors + GGUF, multimodal).
+pub const BLAZEN_BACKEND_HINT_MISTRALRS: i32 = 0;
+/// Backend tag for [`BlazenHfLoadOptions::backend_hint`] — pure-Rust candle.
+pub const BLAZEN_BACKEND_HINT_CANDLE: i32 = 1;
+/// Backend tag for [`BlazenHfLoadOptions::backend_hint`] — llama.cpp
+/// (GGUF only, best CPU performance).
+pub const BLAZEN_BACKEND_HINT_LLAMACPP: i32 = 2;
+/// Sentinel for [`BlazenHfLoadOptions::backend_hint`] meaning "no hint —
+/// auto-detect from the repo layout".
+pub const BLAZEN_BACKEND_HINT_NONE: i32 = -1;
+
+/// `#[repr(C)]` mirror of [`blazen_manager::hf_loader::HfLoadOptions`] for the
+/// C ABI. Every pointer field is nullable; integer/byte fields use sentinel
+/// values to mean "unset" (see per-field docs).
+///
+/// Construct in C as a stack value, populate the fields you care about, then
+/// pass the address to [`crate::manager::blazen_model_manager_load_from_hf`]
+/// or [`crate::manager::blazen_model_manager_load_from_hf_blocking`]. The
+/// strings are copied during the call — the caller may free them as soon as
+/// the function returns (sync) or as soon as `BlazenFuture*` has been spawned
+/// (async). The struct itself is borrowed; do not keep it alive beyond the
+/// call boundary.
+#[repr(C)]
+pub struct BlazenHfLoadOptions {
+    /// One of `BLAZEN_BACKEND_HINT_*`. Use [`BLAZEN_BACKEND_HINT_NONE`] (-1)
+    /// to let the loader auto-detect from the repo's file layout.
+    pub backend_hint: i32,
+    /// Git revision (branch, tag, or commit sha). Null = default branch.
+    pub revision: *const c_char,
+    /// Hugging Face access token. Null falls back to `$HF_TOKEN`, then
+    /// anonymous.
+    pub hf_token: *const c_char,
+    /// Override the on-disk cache directory used by `hf-hub`. Null uses the
+    /// upstream default (`$HF_HOME` or `~/.cache/huggingface/`).
+    pub cache_dir: *const c_char,
+    /// Device specifier forwarded to the chosen provider (`"cpu"`,
+    /// `"cuda:0"`, `"metal"`, …). Null uses the provider default.
+    pub device: *const c_char,
+    /// Explicit GGUF filename for repos that ship multiple quantizations.
+    /// Required when [`choose_backend`](blazen_manager::hf_loader::choose_backend)
+    /// would otherwise pick `Llamacpp` from a repo with multiple `*.gguf`
+    /// siblings.
+    pub gguf_file: *const c_char,
+    /// Override the manager's memory budgeting estimate, in bytes. `0` =
+    /// unset (manager sums the chosen backend's weight files from repo
+    /// metadata).
+    pub memory_estimate_bytes: u64,
+    /// Target pool label (`"cpu"` / `"gpu"` / `"gpu:N"`). Null defaults to
+    /// `Pool::Cpu`. An unparseable label surfaces as a validation error on
+    /// the call that consumes the options struct.
+    pub pool: *const c_char,
+}
+
 /// Tag for [`AdapterMountStrategy::Attached`].
 pub const BLAZEN_ADAPTER_MOUNT_STRATEGY_ATTACHED: u32 = 1;
 /// Tag for [`AdapterMountStrategy::Rebuilt`].

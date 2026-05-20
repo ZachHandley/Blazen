@@ -1583,6 +1583,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_blocking(): Short
 
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_from_hf(): Short
+
     external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_pools(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_register_local(): Short
@@ -2242,6 +2244,13 @@ internal object UniffiLib {
         `modelId`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_load_from_hf(
+        `ptr`: Long,
+        `id`: RustBuffer.ByValue,
+        `repo`: RustBuffer.ByValue,
+        `options`: RustBuffer.ByValue,
+    ): Long
 
     external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_pools(
         `ptr`: Long,
@@ -3724,6 +3733,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_blocking() != 10510.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_from_hf() != 38990.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_pools() != 34891.toShort()) {
@@ -15586,6 +15598,24 @@ public interface UniffiModelManagerInterface {
     fun `loadBlocking`(`modelId`: kotlin.String)
 
     /**
+     * Probe a Hugging Face repo, pick a local-inference backend, build the
+     * provider, and register it under `id`.
+     *
+     * Returns the chosen backend as a lower-case stable string
+     * (`"mistralrs"` / `"candle"` / `"llamacpp"`). The model starts unloaded
+     * — call [`Self::load`] or [`Self::ensure_loaded`] to materialize it.
+     *
+     * Errors on empty repo id, gated/missing repo, PEFT-adapter-only repo
+     * (use [`Self::load_adapter`] instead), missing backend feature, or any
+     * provider construction failure.
+     */
+    suspend fun `loadFromHf`(
+        `id`: kotlin.String,
+        `repo`: kotlin.String,
+        `options`: HfLoadOptionsRecord,
+    ): kotlin.String
+
+    /**
      * List configured pools and their budgets in bytes.
      */
     fun `pools`(): List<PoolStatusRecord>
@@ -15884,6 +15914,43 @@ open class UniffiModelManager :
                 )
             }
         }
+
+    /**
+     * Probe a Hugging Face repo, pick a local-inference backend, build the
+     * provider, and register it under `id`.
+     *
+     * Returns the chosen backend as a lower-case stable string
+     * (`"mistralrs"` / `"candle"` / `"llamacpp"`). The model starts unloaded
+     * — call [`Self::load`] or [`Self::ensure_loaded`] to materialize it.
+     *
+     * Errors on empty repo id, gated/missing repo, PEFT-adapter-only repo
+     * (use [`Self::load_adapter`] instead), missing backend feature, or any
+     * provider construction failure.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `loadFromHf`(
+        `id`: kotlin.String,
+        `repo`: kotlin.String,
+        `options`: HfLoadOptionsRecord,
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_load_from_hf(
+                    uniffiHandle,
+                    FfiConverterString.lower(`id`),
+                    FfiConverterString.lower(`repo`),
+                    FfiConverterTypeHfLoadOptionsRecord.lower(`options`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
 
     /**
      * List configured pools and their budgets in bytes.
@@ -18048,6 +18115,97 @@ public object FfiConverterTypeGeneratedVideo : FfiConverterRustBuffer<GeneratedV
 }
 
 /**
+ * Caller-supplied options for [`UniffiModelManager::load_from_hf`].
+ *
+ * Mirrors [`blazen_manager::hf_loader::HfLoadOptions`]; every field is
+ * optional. `pool` is a label (`"cpu"`, `"gpu"`, `"gpu:N"`) and is parsed
+ * by `parse_pool_label`.
+ */
+data class HfLoadOptionsRecord(
+    /**
+     * Force a specific backend; skips engine inference but still probes
+     * the repo for memory sizing.
+     */
+    var `backendHint`: BackendHintEnum?,
+    /**
+     * Git revision (branch, tag, or commit sha). Defaults to the repo's
+     * default branch.
+     */
+    var `revision`: kotlin.String?,
+    /**
+     * Hugging Face access token. When omitted, falls back to the
+     * `HF_TOKEN` environment variable, then to anonymous access.
+     */
+    var `hfToken`: kotlin.String?,
+    /**
+     * Override the on-disk cache directory used by `hf-hub`.
+     */
+    var `cacheDir`: kotlin.String?,
+    /**
+     * Device specifier forwarded to the chosen provider (`"cpu"`,
+     * `"cuda:0"`, `"metal"`, …).
+     */
+    var `device`: kotlin.String?,
+    /**
+     * Explicit GGUF filename for repos that ship multiple quantizations.
+     */
+    var `ggufFile`: kotlin.String?,
+    /**
+     * Override the auto-derived memory estimate, in bytes.
+     */
+    var `memoryEstimateBytes`: kotlin.ULong?,
+    /**
+     * Pool label (`"cpu"`, `"gpu"`, `"gpu:N"`). Defaults to `"cpu"`.
+     */
+    var `pool`: kotlin.String?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeHfLoadOptionsRecord : FfiConverterRustBuffer<HfLoadOptionsRecord> {
+    override fun read(buf: ByteBuffer): HfLoadOptionsRecord =
+        HfLoadOptionsRecord(
+            FfiConverterOptionalTypeBackendHintEnum.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalULong.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+
+    override fun allocationSize(value: HfLoadOptionsRecord) =
+        (
+            FfiConverterOptionalTypeBackendHintEnum.allocationSize(value.`backendHint`) +
+                FfiConverterOptionalString.allocationSize(value.`revision`) +
+                FfiConverterOptionalString.allocationSize(value.`hfToken`) +
+                FfiConverterOptionalString.allocationSize(value.`cacheDir`) +
+                FfiConverterOptionalString.allocationSize(value.`device`) +
+                FfiConverterOptionalString.allocationSize(value.`ggufFile`) +
+                FfiConverterOptionalULong.allocationSize(value.`memoryEstimateBytes`) +
+                FfiConverterOptionalString.allocationSize(value.`pool`)
+        )
+
+    override fun write(
+        value: HfLoadOptionsRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalTypeBackendHintEnum.write(value.`backendHint`, buf)
+        FfiConverterOptionalString.write(value.`revision`, buf)
+        FfiConverterOptionalString.write(value.`hfToken`, buf)
+        FfiConverterOptionalString.write(value.`cacheDir`, buf)
+        FfiConverterOptionalString.write(value.`device`, buf)
+        FfiConverterOptionalString.write(value.`ggufFile`, buf)
+        FfiConverterOptionalULong.write(value.`memoryEstimateBytes`, buf)
+        FfiConverterOptionalString.write(value.`pool`, buf)
+    }
+}
+
+/**
  * The result of an image-generation call.
  *
  * `images[i].kind` is always `"image"`. `data_base64` contains either the
@@ -20103,6 +20261,58 @@ public object FfiConverterTypeAuthMethod : FfiConverterRustBuffer<AuthMethod> {
 }
 
 /**
+ * Local-inference backend identifier returned by
+ * [`UniffiModelManager::load_from_hf`] and accepted as a forced override on
+ * [`HfLoadOptionsRecord::backend_hint`].
+ *
+ * Mirrors [`blazen_manager::hf_loader::BackendHint`] as a UniFFI Enum.
+ */
+
+enum class BackendHintEnum {
+    /**
+     * `mistral.rs` — broad architecture coverage, handles both safetensors
+     * and GGUF, supports vision/multimodal models.
+     */
+    MISTRALRS,
+
+    /**
+     * `candle` — pure-Rust, supports safetensors and GGUF for the subset of
+     * architectures candle ships.
+     */
+    CANDLE,
+
+    /**
+     * `llama.cpp` — GGUF only, best CPU performance and lowest memory.
+     */
+    LLAMACPP,
+
+    ;
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeBackendHintEnum : FfiConverterRustBuffer<BackendHintEnum> {
+    override fun read(buf: ByteBuffer) =
+        try {
+            BackendHintEnum.values()[buf.getInt() - 1]
+        } catch (e: IndexOutOfBoundsException) {
+            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+        }
+
+    override fun allocationSize(value: BackendHintEnum) = 4UL
+
+    override fun write(
+        value: BackendHintEnum,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
+/**
  * Per-request outcome within a [`BatchResult`].
  *
  * Slot `i` of [`BatchResult::responses`] corresponds to input request `i`.
@@ -21302,6 +21512,38 @@ public object FfiConverterOptionalTypeWorkflowCheckpoint : FfiConverterRustBuffe
         } else {
             buf.put(1)
             FfiConverterTypeWorkflowCheckpoint.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypeBackendHintEnum : FfiConverterRustBuffer<BackendHintEnum?> {
+    override fun read(buf: ByteBuffer): BackendHintEnum? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeBackendHintEnum.read(buf)
+    }
+
+    override fun allocationSize(value: BackendHintEnum?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeBackendHintEnum.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: BackendHintEnum?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeBackendHintEnum.write(value, buf)
         }
     }
 }

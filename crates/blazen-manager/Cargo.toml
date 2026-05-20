@@ -17,6 +17,9 @@ blazen-llm-mistralrs = { workspace = true, optional = true }
 blazen-llm-candle = { workspace = true, optional = true }
 blazen-llm-llamacpp = { workspace = true, optional = true }
 blazen-model-cache = { workspace = true, optional = true }
+hf-hub = { workspace = true, features = ["tokio"], optional = true }
+serde_json = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"], optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", default-features = false, features = ["rt", "rt-multi-thread"] }
@@ -46,6 +49,32 @@ live-models = [
     # cfg-gated out and the trait impl is missing.
     "blazen-llm/mistralrs",
     "blazen-llm/candle-llm",
+    "blazen-llm/llamacpp",
+    "hf-loader",
+]
+# Top-level `ModelManager::load_from_hf` convenience verb plus the
+# `hf_loader::detect_layout` helper. Enabling it activates the
+# hf-hub-backed siblings probe and the serde glue that parses the HF
+# `/api/models/{repo}` JSON. Backend providers are pulled in by their
+# individual `*-provider` features (or transitively via `live-models`);
+# without any provider feature `load_from_hf` returns
+# `BlazenError::Unsupported` naming the missing feature.
+hf-loader = ["dep:hf-hub", "dep:serde_json", "dep:serde"]
+# Individual backend toggles so callers that only want one engine
+# (e.g. mistralrs-only Cloudflare deployment) don't drag the others in.
+mistralrs-provider = [
+    "dep:blazen-llm-mistralrs",
+    "blazen-llm-mistralrs/engine",
+    "blazen-llm/mistralrs",
+]
+candle-provider = [
+    "dep:blazen-llm-candle",
+    "blazen-llm-candle/engine",
+    "blazen-llm/candle-llm",
+]
+llamacpp-provider = [
+    "dep:blazen-llm-llamacpp",
+    "blazen-llm-llamacpp/engine",
     "blazen-llm/llamacpp",
 ]
 

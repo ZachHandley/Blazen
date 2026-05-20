@@ -53,6 +53,9 @@ candle-llm = ["blazen-llm/candle-llm"]
 diffusion = ["blazen-llm/diffusion"]
 whispercpp = ["blazen-llm/whispercpp"]
 piper = ["blazen-llm/piper"]
+# `ModelManager.loadFromHf` auto-backend selection via the Hugging Face Hub
+# metadata probe. Forwards to `blazen-manager/hf-loader`.
+hf-loader = ["blazen-manager/hf-loader"]
 # Wasi feature alias for Cloudflare Workers / Deno / Node-fallback (wasm32-
 # wasip1* via napi-rs wasi runtime). Pulls everything the wasi target
 # supports: tiktoken token counting, distributed peer (HTTP/JSON client),
@@ -65,7 +68,7 @@ piper = ["blazen-llm/piper"]
 # unconditionally pulls in `blazen-embed-fastembed` (and ort-sys C++ runtime)
 # on non-musl targets.
 wasi = ["tiktoken", "distributed-http", "otlp-http", "langfuse"]
-local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "piper", "tiktoken", "distributed", "otlp", "prometheus", "langfuse"]
+local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "piper", "tiktoken", "distributed", "otlp", "prometheus", "langfuse", "hf-loader"]
 # Distributed peer-to-peer execution (cross-node sub-workflow invocation).
 # Native: gRPC client+server via tonic.
 distributed = ["blazen-core/distributed", "blazen-peer/server", "blazen-peer/client"]

@@ -1,6 +1,65 @@
 # frozen_string_literal: true
 
 module Blazen
+  # Stable string labels for the backend hints accepted by
+  # {ModelManager#load_from_hf}. Pass one of these (or +nil+ for auto-detect)
+  # as `HfLoadOptions#backend_hint`.
+  module BackendHint
+    MISTRALRS = "mistralrs"
+    CANDLE    = "candle"
+    LLAMACPP  = "llamacpp"
+
+    # @api private
+    # Maps the public string label to the cabi's int32 sentinel. Returns the
+    # `BLAZEN_BACKEND_HINT_NONE` sentinel (-1) for +nil+ / unknown labels so
+    # the loader falls back to auto-detect.
+    def self.to_cabi(label)
+      case label
+      when MISTRALRS then Blazen::FFI::BLAZEN_BACKEND_HINT_MISTRALRS
+      when CANDLE    then Blazen::FFI::BLAZEN_BACKEND_HINT_CANDLE
+      when LLAMACPP  then Blazen::FFI::BLAZEN_BACKEND_HINT_LLAMACPP
+      else Blazen::FFI::BLAZEN_BACKEND_HINT_NONE
+      end
+    end
+  end
+
+  # Options bag for {ModelManager#load_from_hf}. All fields are optional; the
+  # loader auto-detects backend, uses `$HF_TOKEN`/anonymous auth, the default
+  # `hf-hub` cache dir, and `Pool::Cpu` when their respective fields are nil.
+  class HfLoadOptions
+    # @return [String, nil] one of {BackendHint::MISTRALRS} /
+    #   {BackendHint::CANDLE} / {BackendHint::LLAMACPP} or +nil+ for
+    #   auto-detect.
+    attr_reader :backend_hint
+    # @return [String, nil] git revision (branch, tag, or commit sha)
+    attr_reader :revision
+    # @return [String, nil] Hugging Face access token; falls back to `$HF_TOKEN`
+    attr_reader :hf_token
+    # @return [String, nil] override for the on-disk `hf-hub` cache dir
+    attr_reader :cache_dir
+    # @return [String, nil] device specifier (`"cpu"`, `"cuda:0"`, `"metal"`)
+    attr_reader :device
+    # @return [String, nil] explicit GGUF filename for multi-quant repos
+    attr_reader :gguf_file
+    # @return [Integer, nil] override the manager's memory-budget estimate, in
+    #   bytes. nil = let the manager sum the chosen backend's weight files.
+    attr_reader :memory_estimate_bytes
+    # @return [String, nil] target pool label (`"cpu"` / `"gpu"` / `"gpu:N"`)
+    attr_reader :pool
+
+    def initialize(backend_hint: nil, revision: nil, hf_token: nil, cache_dir: nil,
+                   device: nil, gguf_file: nil, memory_estimate_bytes: nil, pool: nil)
+      @backend_hint = backend_hint
+      @revision = revision
+      @hf_token = hf_token
+      @cache_dir = cache_dir
+      @device = device
+      @gguf_file = gguf_file
+      @memory_estimate_bytes = memory_estimate_bytes
+      @pool = pool
+    end
+  end
+
   # Knobs controlling how a `LoRA` adapter is mounted onto a base model.
   #
   # Today only the `scale` (delta-weight multiplier) is exposed across the
@@ -220,6 +279,40 @@ module Blazen
       diff.negative? ? 0 : diff
     end
 
+    # Downloads (or hits the `hf-hub` cache for) a model from Hugging Face,
+    # picks an appropriate local backend (mistral.rs / candle / llama.cpp)
+    # via `choose_backend`, registers it with the manager under `id`, and
+    # eagerly loads it.
+    #
+    # Composes with `Fiber.scheduler` when one is active; otherwise blocks
+    # the calling thread on the cabi-side wait.
+    #
+    # @param id [String] the manager-side handle to register the model under
+    # @param repo [String] HF repo id (e.g. `"meta-llama/Llama-3.2-1B"`)
+    # @param options [Blazen::HfLoadOptions]
+    # @return [String] the stable label of the chosen backend
+    #   (one of {BackendHint::MISTRALRS} / {BackendHint::CANDLE} /
+    #   {BackendHint::LLAMACPP})
+    def load_from_hf(id, repo, options = HfLoadOptions.new)
+      with_hf_load_options(options) do |opts_struct|
+        Blazen::FFI.with_cstring(id) do |id_ptr|
+          Blazen::FFI.with_cstring(repo) do |repo_ptr|
+            opts_ptr = opts_struct ? opts_struct.pointer : nil
+            fut = Blazen::FFI.blazen_model_manager_load_from_hf(
+              @ptr, id_ptr, repo_ptr, opts_ptr,
+            )
+            Blazen::FFI.await_future(fut) do |f|
+              out = ::FFI::MemoryPointer.new(:pointer)
+              out_err = ::FFI::MemoryPointer.new(:pointer)
+              Blazen::FFI.blazen_future_take_string(f, out, out_err)
+              Blazen::FFI.check_error!(out_err)
+              Blazen::FFI.consume_cstring(out.read_pointer)
+            end
+          end
+        end
+      end
+    end
+
     # Mounts a PEFT-format `LoRA` adapter. The base model is loaded
     # automatically if not already in residence.
     #
@@ -289,6 +382,39 @@ module Blazen
     end
 
     private
+
+    # Why: the cabi reads C-string fields of `BlazenHfLoadOptions` during the
+    # call but copies them before returning, so the MemoryPointer buffers
+    # only need to outlive the yield. We hold strong refs in a local array
+    # so GC can't reclaim them mid-call.
+    def with_hf_load_options(options)
+      return yield(nil) if options.nil?
+
+      keepalive = []
+      to_cstr = lambda do |s|
+        next nil if s.nil?
+
+        mp = ::FFI::MemoryPointer.from_string(s.to_s)
+        keepalive << mp
+        mp
+      end
+
+      struct = Blazen::FFI::BlazenHfLoadOptions.new
+      struct[:backend_hint] = Blazen::BackendHint.to_cabi(options.backend_hint)
+      struct[:revision]  = to_cstr.call(options.revision)
+      struct[:hf_token]  = to_cstr.call(options.hf_token)
+      struct[:cache_dir] = to_cstr.call(options.cache_dir)
+      struct[:device]    = to_cstr.call(options.device)
+      struct[:gguf_file] = to_cstr.call(options.gguf_file)
+      struct[:memory_estimate_bytes] = (options.memory_estimate_bytes || 0).to_i
+      struct[:pool]      = to_cstr.call(options.pool)
+
+      begin
+        yield struct
+      ensure
+        keepalive.clear
+      end
+    end
 
     def install_handle!(raw_ptr)
       if raw_ptr.nil? || raw_ptr.null?

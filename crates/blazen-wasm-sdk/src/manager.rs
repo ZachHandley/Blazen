@@ -723,6 +723,29 @@ impl WasmModelManager {
         }))
     }
 
+    /// Auto-detect-and-register a Hugging Face repo. NOT SUPPORTED in the
+    /// WASM SDK — the browser sandbox cannot reach `~/.cache/huggingface/`
+    /// and cannot stream weight files into the in-WASM provider backends.
+    ///
+    /// The returned promise rejects immediately with a diagnostic message.
+    /// Callers must download the weights out-of-band and feed them to the
+    /// model via `lifecycle.load` at register time.
+    ///
+    /// @param _id      - Unused; accepted for signature parity with native.
+    /// @param _repo    - Unused; accepted for signature parity with native.
+    /// @param _options - Unused; accepted for signature parity with native.
+    #[wasm_bindgen(js_name = "loadFromHf")]
+    pub fn load_from_hf(
+        &self,
+        _id: String,
+        _repo: String,
+        _options: Option<JsValue>,
+    ) -> Promise {
+        Promise::reject(&JsValue::from_str(
+            "WASM SDK does not download HF models in-browser; provide bytes via lifecycle.load",
+        ))
+    }
+
     /// Load a model, evicting LRU models in the same pool if needed.
     ///
     /// Returns a `Promise<void>` that resolves when the model is loaded.

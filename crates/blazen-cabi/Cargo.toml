@@ -75,11 +75,16 @@ local-all = [
     "otlp",
     "prometheus",
     "langfuse",
+    "hf-loader",
 ]
 
 otlp = ["blazen-uniffi/otlp"]
 prometheus = ["blazen-uniffi/prometheus"]
 langfuse = ["blazen-uniffi/langfuse"]
+# Hugging Face metadata probe used by ModelManager::load_from_hf. Forwards to
+# `blazen-manager/hf-loader` (also pulled in transitively via the matching
+# `blazen-uniffi/hf-loader` flag).
+hf-loader = ["blazen-manager/hf-loader", "blazen-uniffi/hf-loader"]
 
 distributed = [
     "blazen-uniffi/distributed",

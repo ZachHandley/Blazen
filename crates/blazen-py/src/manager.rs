@@ -2,13 +2,14 @@
 
 use pyo3::prelude::*;
 use pyo3::types::PyDict;
-use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyclass_enum, gen_stub_pymethods};
 use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::error::BlazenPyError;
 use blazen_llm::Pool;
 use blazen_manager::ModelManager;
+use blazen_manager::hf_loader::{BackendHint, HfLoadOptions};
 
 // ---------------------------------------------------------------------------
 // Pool label parsing
@@ -967,5 +968,173 @@ impl PyModelManager {
                 .map(PyAdapterStatus::from)
                 .collect::<Vec<_>>())
         })
+    }
+
+    /// Auto-detect the right local-inference backend for a Hugging Face repo
+    /// and register the resulting model under ``id``.
+    ///
+    /// Probes ``GET /api/models/{repo}`` once for metadata, picks a backend
+    /// per the rules documented on
+    /// :func:`blazen_manager.hf_loader.choose_backend`, and computes a memory
+    /// estimate by summing the chosen backend's weight files. Pass an explicit
+    /// ``options.memory_estimate_bytes`` to override the estimate.
+    ///
+    /// Args:
+    ///     id: A unique identifier for the registered model.
+    ///     repo: Hugging Face repo id (``"meta-llama/Llama-3.2-1B-Instruct"``).
+    ///     options: Optional :class:`HfLoadOptions` controlling backend
+    ///         selection, revision, token, cache dir, device, GGUF override,
+    ///         memory estimate, and target pool.
+    ///
+    /// Returns:
+    ///     The chosen backend as a string (``"mistralrs"`` / ``"candle"`` /
+    ///     ``"llamacpp"``).
+    #[gen_stub(override_return_type(
+        type_repr = "typing.Coroutine[typing.Any, typing.Any, str]",
+        imports = ("typing",)
+    ))]
+    #[pyo3(signature = (id, repo, options=None))]
+    fn load_from_hf<'py>(
+        &self,
+        py: Python<'py>,
+        id: String,
+        repo: String,
+        options: Option<PyHfLoadOptions>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let opts: HfLoadOptions = options.map(HfLoadOptions::from).unwrap_or_default();
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let backend = inner
+                .load_from_hf(id, &repo, opts)
+                .await
+                .map_err(BlazenPyError::from)?;
+            Ok(backend.as_str().to_string())
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PyBackendHint -- frozen enum mirror of blazen_manager::hf_loader::BackendHint
+// ---------------------------------------------------------------------------
+
+/// Local inference backend identifier returned by
+/// :meth:`ModelManager.load_from_hf` and accepted as
+/// :attr:`HfLoadOptions.backend_hint`.
+///
+/// Variants:
+///     * ``BackendHint.MISTRALRS`` -- mistral.rs (broad arch coverage,
+///       safetensors + GGUF, vision support).
+///     * ``BackendHint.CANDLE`` -- pure-Rust candle.
+///     * ``BackendHint.LLAMACPP`` -- llama.cpp (GGUF only, best CPU perf).
+#[gen_stub_pyclass_enum]
+#[pyclass(name = "BackendHint", eq, eq_int, frozen, from_py_object)]
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum PyBackendHint {
+    MISTRALRS,
+    CANDLE,
+    LLAMACPP,
+}
+
+impl From<PyBackendHint> for BackendHint {
+    fn from(h: PyBackendHint) -> Self {
+        match h {
+            PyBackendHint::MISTRALRS => Self::Mistralrs,
+            PyBackendHint::CANDLE => Self::Candle,
+            PyBackendHint::LLAMACPP => Self::Llamacpp,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// PyHfLoadOptions -- mirror of blazen_manager::hf_loader::HfLoadOptions
+// ---------------------------------------------------------------------------
+
+/// Options for :meth:`ModelManager.load_from_hf`.
+#[gen_stub_pyclass]
+#[pyclass(name = "HfLoadOptions", from_py_object)]
+#[derive(Clone, Default)]
+pub struct PyHfLoadOptions {
+    backend_hint: Option<PyBackendHint>,
+    revision: Option<String>,
+    hf_token: Option<String>,
+    cache_dir: Option<String>,
+    device: Option<String>,
+    gguf_file: Option<String>,
+    memory_estimate_bytes: Option<u64>,
+    pool: Option<String>,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyHfLoadOptions {
+    /// Build an options bag for :meth:`ModelManager.load_from_hf`.
+    ///
+    /// Args:
+    ///     backend_hint: Force a specific backend, skipping auto-detection.
+    ///     revision: Git revision (branch / tag / commit sha).
+    ///     hf_token: HF access token; falls back to ``$HF_TOKEN`` then
+    ///         anonymous access when ``None``.
+    ///     cache_dir: On-disk cache directory; defaults to ``$HF_HOME`` /
+    ///         ``~/.cache/huggingface/``.
+    ///     device: Device string (``"cpu"``, ``"cuda:0"``, ``"metal"``, ...).
+    ///     gguf_file: Explicit GGUF filename for repos with multiple
+    ///         quantizations.
+    ///     memory_estimate_bytes: Override the auto-summed memory estimate.
+    ///     pool: Target pool label (``"cpu"``, ``"gpu"``, or ``"gpu:N"``).
+    #[new]
+    #[pyo3(signature = (
+        *,
+        backend_hint = None,
+        revision = None,
+        hf_token = None,
+        cache_dir = None,
+        device = None,
+        gguf_file = None,
+        memory_estimate_bytes = None,
+        pool = None,
+    ))]
+    #[allow(clippy::too_many_arguments)]
+    fn new(
+        backend_hint: Option<PyBackendHint>,
+        revision: Option<String>,
+        hf_token: Option<String>,
+        cache_dir: Option<String>,
+        device: Option<String>,
+        gguf_file: Option<String>,
+        memory_estimate_bytes: Option<u64>,
+        pool: Option<String>,
+    ) -> PyResult<Self> {
+        if let Some(ref label) = pool {
+            parse_pool_label(label)?;
+        }
+        Ok(Self {
+            backend_hint,
+            revision,
+            hf_token,
+            cache_dir,
+            device,
+            gguf_file,
+            memory_estimate_bytes,
+            pool,
+        })
+    }
+}
+
+impl From<PyHfLoadOptions> for HfLoadOptions {
+    fn from(o: PyHfLoadOptions) -> Self {
+        Self {
+            backend_hint: o.backend_hint.map(BackendHint::from),
+            revision: o.revision,
+            hf_token: o.hf_token,
+            cache_dir: o.cache_dir.map(std::path::PathBuf::from),
+            device: o.device,
+            gguf_file: o.gguf_file,
+            memory_estimate_bytes: o.memory_estimate_bytes,
+            // Why: pool labels are validated in `PyHfLoadOptions::new`, so any
+            // string surviving to here parses cleanly; default to CPU as a
+            // belt-and-suspenders fallback if the option somehow re-enters
+            // From with an invalid label (cannot happen via the pyclass ctor).
+            pool: o.pool.as_deref().and_then(|s| parse_pool_label(s).ok()),
+        }
     }
 }

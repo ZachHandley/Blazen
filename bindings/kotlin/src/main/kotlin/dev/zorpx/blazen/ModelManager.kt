@@ -3,6 +3,8 @@ package dev.zorpx.blazen
 import dev.zorpx.blazen.uniffi.AdapterHandleRecord
 import dev.zorpx.blazen.uniffi.AdapterOptionsRecord
 import dev.zorpx.blazen.uniffi.AdapterStatusRecord
+import dev.zorpx.blazen.uniffi.BackendHintEnum
+import dev.zorpx.blazen.uniffi.HfLoadOptionsRecord
 import dev.zorpx.blazen.uniffi.ModelStatusRecord
 import dev.zorpx.blazen.uniffi.PoolStatusRecord
 import dev.zorpx.blazen.uniffi.UniffiModelManager
@@ -77,6 +79,22 @@ public class ModelManager : AutoCloseable {
     public suspend fun load(modelId: String) {
         inner.load(modelId)
     }
+
+    /**
+     * Probe a Hugging Face repo, pick a local-inference backend, build the
+     * provider, and register it under [id]. Returns the chosen
+     * [BackendHint]. The model starts unloaded — call [load] or
+     * [ensureLoaded] to materialize it.
+     *
+     * Errors on empty repo id, gated/missing repo, PEFT-adapter-only repo
+     * (use [loadAdapter] instead), missing backend feature, or any provider
+     * construction failure.
+     */
+    public suspend fun loadFromHf(
+        id: String,
+        repo: String,
+        options: HfLoadOptions = HfLoadOptions(),
+    ): BackendHint = BackendHint.fromWire(inner.loadFromHf(id, repo, options.toRecord()))
 
     public suspend fun unload(modelId: String) {
         inner.unload(modelId)
@@ -199,6 +217,63 @@ public interface ForeignLocalModel {
 
     public suspend fun listAdapters(): List<AdapterStatus>
 }
+
+/**
+ * Local-inference backend identifier returned by [ModelManager.loadFromHf]
+ * and accepted as a forced override on [HfLoadOptions.backendHint].
+ *
+ * [value] is the lower-case stable string the Rust runtime emits and
+ * parses (`"mistralrs"` / `"candle"` / `"llamacpp"`) — kept on the enum so
+ * callers can round-trip to logs/config without re-implementing the table.
+ */
+public enum class BackendHint(public val value: String) {
+    MISTRALRS("mistralrs"),
+    CANDLE("candle"),
+    LLAMACPP("llamacpp"),
+    ;
+
+    internal fun toEnum(): BackendHintEnum =
+        when (this) {
+            MISTRALRS -> BackendHintEnum.MISTRALRS
+            CANDLE -> BackendHintEnum.CANDLE
+            LLAMACPP -> BackendHintEnum.LLAMACPP
+        }
+
+    public companion object {
+        internal fun fromWire(s: String): BackendHint =
+            values().firstOrNull { it.value == s }
+                ?: throw IllegalStateException("unknown backend hint from native side: '$s'")
+    }
+}
+
+/**
+ * Options for [ModelManager.loadFromHf]. Every field is optional and
+ * mirrors `blazen_manager::hf_loader::HfLoadOptions`. [pool] is a label
+ * (`"cpu"`, `"gpu"`, `"gpu:N"`) and defaults to `"cpu"` on the Rust side
+ * when left null.
+ */
+public data class HfLoadOptions(
+    val backendHint: BackendHint? = null,
+    val revision: String? = null,
+    val hfToken: String? = null,
+    val cacheDir: String? = null,
+    val device: String? = null,
+    val ggufFile: String? = null,
+    val memoryEstimateBytes: ULong? = null,
+    val pool: String? = null,
+)
+
+private fun HfLoadOptions.toRecord(): HfLoadOptionsRecord =
+    HfLoadOptionsRecord(
+        backendHint = backendHint?.toEnum(),
+        revision = revision,
+        hfToken = hfToken,
+        cacheDir = cacheDir,
+        device = device,
+        ggufFile = ggufFile,
+        memoryEstimateBytes = memoryEstimateBytes,
+        pool = pool,
+    )
 
 private fun AdapterOptions.toRecord(): AdapterOptionsRecord =
     AdapterOptionsRecord(adapterId = adapterId, scale = scale.toFloat())

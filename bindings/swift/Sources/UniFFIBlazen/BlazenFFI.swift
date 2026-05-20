@@ -8442,6 +8442,20 @@ public protocol UniffiModelManagerProtocol: AnyObject, Sendable {
     func loadBlocking(modelId: String) throws 
     
     /**
+     * Probe a Hugging Face repo, pick a local-inference backend, build the
+     * provider, and register it under `id`.
+     *
+     * Returns the chosen backend as a lower-case stable string
+     * (`"mistralrs"` / `"candle"` / `"llamacpp"`). The model starts unloaded
+     * — call [`Self::load`] or [`Self::ensure_loaded`] to materialize it.
+     *
+     * Errors on empty repo id, gated/missing repo, PEFT-adapter-only repo
+     * (use [`Self::load_adapter`] instead), missing backend feature, or any
+     * provider construction failure.
+     */
+    func loadFromHf(id: String, repo: String, options: HfLoadOptionsRecord) async throws  -> String
+    
+    /**
      * List configured pools and their budgets in bytes.
      */
     func pools()  -> [PoolStatusRecord]
@@ -8692,6 +8706,35 @@ open func loadBlocking(modelId: String)throws   {try rustCallWithError(FfiConver
         FfiConverterString.lower(modelId),$0
     )
 }
+}
+    
+    /**
+     * Probe a Hugging Face repo, pick a local-inference backend, build the
+     * provider, and register it under `id`.
+     *
+     * Returns the chosen backend as a lower-case stable string
+     * (`"mistralrs"` / `"candle"` / `"llamacpp"`). The model starts unloaded
+     * — call [`Self::load`] or [`Self::ensure_loaded`] to materialize it.
+     *
+     * Errors on empty repo id, gated/missing repo, PEFT-adapter-only repo
+     * (use [`Self::load_adapter`] instead), missing backend feature, or any
+     * provider construction failure.
+     */
+open func loadFromHf(id: String, repo: String, options: HfLoadOptionsRecord)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_load_from_hf(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(id),FfiConverterString.lower(repo),FfiConverterTypeHfLoadOptionsRecord_lower(options)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
 }
     
     /**
@@ -11215,6 +11258,147 @@ public func FfiConverterTypeGeneratedVideo_lift(_ buf: RustBuffer) throws -> Gen
 #endif
 public func FfiConverterTypeGeneratedVideo_lower(_ value: GeneratedVideo) -> RustBuffer {
     return FfiConverterTypeGeneratedVideo.lower(value)
+}
+
+
+/**
+ * Caller-supplied options for [`UniffiModelManager::load_from_hf`].
+ *
+ * Mirrors [`blazen_manager::hf_loader::HfLoadOptions`]; every field is
+ * optional. `pool` is a label (`"cpu"`, `"gpu"`, `"gpu:N"`) and is parsed
+ * by `parse_pool_label`.
+ */
+public struct HfLoadOptionsRecord: Equatable, Hashable {
+    /**
+     * Force a specific backend; skips engine inference but still probes
+     * the repo for memory sizing.
+     */
+    public var backendHint: BackendHintEnum?
+    /**
+     * Git revision (branch, tag, or commit sha). Defaults to the repo's
+     * default branch.
+     */
+    public var revision: String?
+    /**
+     * Hugging Face access token. When omitted, falls back to the
+     * `HF_TOKEN` environment variable, then to anonymous access.
+     */
+    public var hfToken: String?
+    /**
+     * Override the on-disk cache directory used by `hf-hub`.
+     */
+    public var cacheDir: String?
+    /**
+     * Device specifier forwarded to the chosen provider (`"cpu"`,
+     * `"cuda:0"`, `"metal"`, …).
+     */
+    public var device: String?
+    /**
+     * Explicit GGUF filename for repos that ship multiple quantizations.
+     */
+    public var ggufFile: String?
+    /**
+     * Override the auto-derived memory estimate, in bytes.
+     */
+    public var memoryEstimateBytes: UInt64?
+    /**
+     * Pool label (`"cpu"`, `"gpu"`, `"gpu:N"`). Defaults to `"cpu"`.
+     */
+    public var pool: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Force a specific backend; skips engine inference but still probes
+         * the repo for memory sizing.
+         */backendHint: BackendHintEnum?, 
+        /**
+         * Git revision (branch, tag, or commit sha). Defaults to the repo's
+         * default branch.
+         */revision: String?, 
+        /**
+         * Hugging Face access token. When omitted, falls back to the
+         * `HF_TOKEN` environment variable, then to anonymous access.
+         */hfToken: String?, 
+        /**
+         * Override the on-disk cache directory used by `hf-hub`.
+         */cacheDir: String?, 
+        /**
+         * Device specifier forwarded to the chosen provider (`"cpu"`,
+         * `"cuda:0"`, `"metal"`, …).
+         */device: String?, 
+        /**
+         * Explicit GGUF filename for repos that ship multiple quantizations.
+         */ggufFile: String?, 
+        /**
+         * Override the auto-derived memory estimate, in bytes.
+         */memoryEstimateBytes: UInt64?, 
+        /**
+         * Pool label (`"cpu"`, `"gpu"`, `"gpu:N"`). Defaults to `"cpu"`.
+         */pool: String?) {
+        self.backendHint = backendHint
+        self.revision = revision
+        self.hfToken = hfToken
+        self.cacheDir = cacheDir
+        self.device = device
+        self.ggufFile = ggufFile
+        self.memoryEstimateBytes = memoryEstimateBytes
+        self.pool = pool
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension HfLoadOptionsRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHfLoadOptionsRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HfLoadOptionsRecord {
+        return
+            try HfLoadOptionsRecord(
+                backendHint: FfiConverterOptionTypeBackendHintEnum.read(from: &buf), 
+                revision: FfiConverterOptionString.read(from: &buf), 
+                hfToken: FfiConverterOptionString.read(from: &buf), 
+                cacheDir: FfiConverterOptionString.read(from: &buf), 
+                device: FfiConverterOptionString.read(from: &buf), 
+                ggufFile: FfiConverterOptionString.read(from: &buf), 
+                memoryEstimateBytes: FfiConverterOptionUInt64.read(from: &buf), 
+                pool: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: HfLoadOptionsRecord, into buf: inout [UInt8]) {
+        FfiConverterOptionTypeBackendHintEnum.write(value.backendHint, into: &buf)
+        FfiConverterOptionString.write(value.revision, into: &buf)
+        FfiConverterOptionString.write(value.hfToken, into: &buf)
+        FfiConverterOptionString.write(value.cacheDir, into: &buf)
+        FfiConverterOptionString.write(value.device, into: &buf)
+        FfiConverterOptionString.write(value.ggufFile, into: &buf)
+        FfiConverterOptionUInt64.write(value.memoryEstimateBytes, into: &buf)
+        FfiConverterOptionString.write(value.pool, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHfLoadOptionsRecord_lift(_ buf: RustBuffer) throws -> HfLoadOptionsRecord {
+    return try FfiConverterTypeHfLoadOptionsRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHfLoadOptionsRecord_lower(_ value: HfLoadOptionsRecord) -> RustBuffer {
+    return FfiConverterTypeHfLoadOptionsRecord.lower(value)
 }
 
 
@@ -14215,6 +14399,98 @@ public func FfiConverterTypeAuthMethod_lower(_ value: AuthMethod) -> RustBuffer 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
+ * Local-inference backend identifier returned by
+ * [`UniffiModelManager::load_from_hf`] and accepted as a forced override on
+ * [`HfLoadOptionsRecord::backend_hint`].
+ *
+ * Mirrors [`blazen_manager::hf_loader::BackendHint`] as a UniFFI Enum.
+ */
+
+public enum BackendHintEnum: Equatable, Hashable {
+    
+    /**
+     * `mistral.rs` — broad architecture coverage, handles both safetensors
+     * and GGUF, supports vision/multimodal models.
+     */
+    case mistralrs
+    /**
+     * `candle` — pure-Rust, supports safetensors and GGUF for the subset of
+     * architectures candle ships.
+     */
+    case candle
+    /**
+     * `llama.cpp` — GGUF only, best CPU performance and lowest memory.
+     */
+    case llamacpp
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension BackendHintEnum: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBackendHintEnum: FfiConverterRustBuffer {
+    typealias SwiftType = BackendHintEnum
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BackendHintEnum {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .mistralrs
+        
+        case 2: return .candle
+        
+        case 3: return .llamacpp
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: BackendHintEnum, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .mistralrs:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .candle:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .llamacpp:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackendHintEnum_lift(_ buf: RustBuffer) throws -> BackendHintEnum {
+    return try FfiConverterTypeBackendHintEnum.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBackendHintEnum_lower(_ value: BackendHintEnum) -> RustBuffer {
+    return FfiConverterTypeBackendHintEnum.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
  * Per-request outcome within a [`BatchResult`].
  *
  * Slot `i` of [`BatchResult::responses`] corresponds to input request `i`.
@@ -15182,6 +15458,30 @@ fileprivate struct FfiConverterOptionTypeWorkflowCheckpoint: FfiConverterRustBuf
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeWorkflowCheckpoint.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeBackendHintEnum: FfiConverterRustBuffer {
+    typealias SwiftType = BackendHintEnum?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeBackendHintEnum.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeBackendHintEnum.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -17269,6 +17569,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_blocking() != 10510) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_load_from_hf() != 38990) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_pools() != 34891) {

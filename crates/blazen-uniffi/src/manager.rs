@@ -15,14 +15,15 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use blazen_llm::Pool;
-use blazen_manager::ModelManager;
-
 use crate::errors::{BlazenError, BlazenResult};
 use crate::local_model::{
     AdapterOptionsRecord, AdapterStatusRecord, ForeignLocalModel, ForeignLocalModelAdapter,
 };
 use crate::runtime::runtime;
+use blazen_llm::Pool;
+use blazen_manager::ModelManager;
+#[cfg(feature = "hf-loader")]
+use blazen_manager::hf_loader::{BackendHint, HfLoadOptions};
 
 /// Per-model state snapshot returned by [`UniffiModelManager::status`].
 #[derive(Debug, Clone, uniffi::Record)]
@@ -41,6 +42,76 @@ pub struct PoolStatusRecord {
     /// Pool label (`"cpu"` or `"gpu:N"`).
     pub pool: String,
     pub budget_bytes: u64,
+}
+
+/// Local-inference backend identifier returned by
+/// [`UniffiModelManager::load_from_hf`] and accepted as a forced override on
+/// [`HfLoadOptionsRecord::backend_hint`].
+///
+/// Mirrors [`blazen_manager::hf_loader::BackendHint`] as a UniFFI Enum.
+#[cfg(feature = "hf-loader")]
+#[derive(Debug, Clone, Copy, uniffi::Enum)]
+pub enum BackendHintEnum {
+    /// `mistral.rs` — broad architecture coverage, handles both safetensors
+    /// and GGUF, supports vision/multimodal models.
+    Mistralrs,
+    /// `candle` — pure-Rust, supports safetensors and GGUF for the subset of
+    /// architectures candle ships.
+    Candle,
+    /// `llama.cpp` — GGUF only, best CPU performance and lowest memory.
+    Llamacpp,
+}
+
+#[cfg(feature = "hf-loader")]
+impl From<BackendHintEnum> for BackendHint {
+    fn from(h: BackendHintEnum) -> Self {
+        match h {
+            BackendHintEnum::Mistralrs => Self::Mistralrs,
+            BackendHintEnum::Candle => Self::Candle,
+            BackendHintEnum::Llamacpp => Self::Llamacpp,
+        }
+    }
+}
+
+#[cfg(feature = "hf-loader")]
+impl From<BackendHint> for BackendHintEnum {
+    fn from(h: BackendHint) -> Self {
+        match h {
+            BackendHint::Mistralrs => Self::Mistralrs,
+            BackendHint::Candle => Self::Candle,
+            BackendHint::Llamacpp => Self::Llamacpp,
+        }
+    }
+}
+
+/// Caller-supplied options for [`UniffiModelManager::load_from_hf`].
+///
+/// Mirrors [`blazen_manager::hf_loader::HfLoadOptions`]; every field is
+/// optional. `pool` is a label (`"cpu"`, `"gpu"`, `"gpu:N"`) and is parsed
+/// by `parse_pool_label`.
+#[cfg(feature = "hf-loader")]
+#[derive(Debug, Clone, Default, uniffi::Record)]
+pub struct HfLoadOptionsRecord {
+    /// Force a specific backend; skips engine inference but still probes
+    /// the repo for memory sizing.
+    pub backend_hint: Option<BackendHintEnum>,
+    /// Git revision (branch, tag, or commit sha). Defaults to the repo's
+    /// default branch.
+    pub revision: Option<String>,
+    /// Hugging Face access token. When omitted, falls back to the
+    /// `HF_TOKEN` environment variable, then to anonymous access.
+    pub hf_token: Option<String>,
+    /// Override the on-disk cache directory used by `hf-hub`.
+    pub cache_dir: Option<String>,
+    /// Device specifier forwarded to the chosen provider (`"cpu"`,
+    /// `"cuda:0"`, `"metal"`, …).
+    pub device: Option<String>,
+    /// Explicit GGUF filename for repos that ship multiple quantizations.
+    pub gguf_file: Option<String>,
+    /// Override the auto-derived memory estimate, in bytes.
+    pub memory_estimate_bytes: Option<u64>,
+    /// Pool label (`"cpu"`, `"gpu"`, `"gpu:N"`). Defaults to `"cpu"`.
+    pub pool: Option<String>,
 }
 
 /// Parse a pool label (`"cpu"`, `"gpu"`, `"gpu:N"`) into a [`Pool`].
@@ -264,6 +335,45 @@ impl UniffiModelManager {
             .into_iter()
             .map(AdapterStatusRecord::from)
             .collect())
+    }
+
+    /// Probe a Hugging Face repo, pick a local-inference backend, build the
+    /// provider, and register it under `id`.
+    ///
+    /// Returns the chosen backend as a lower-case stable string
+    /// (`"mistralrs"` / `"candle"` / `"llamacpp"`). The model starts unloaded
+    /// — call [`Self::load`] or [`Self::ensure_loaded`] to materialize it.
+    ///
+    /// Errors on empty repo id, gated/missing repo, PEFT-adapter-only repo
+    /// (use [`Self::load_adapter`] instead), missing backend feature, or any
+    /// provider construction failure.
+    #[cfg(feature = "hf-loader")]
+    pub async fn load_from_hf(
+        self: Arc<Self>,
+        id: String,
+        repo: String,
+        options: HfLoadOptionsRecord,
+    ) -> BlazenResult<String> {
+        let pool = match options.pool.as_deref() {
+            Some(label) => Some(parse_pool_label(label)?),
+            None => None,
+        };
+        let rust_opts = HfLoadOptions {
+            backend_hint: options.backend_hint.map(BackendHint::from),
+            revision: options.revision,
+            hf_token: options.hf_token,
+            cache_dir: options.cache_dir.map(PathBuf::from),
+            device: options.device,
+            gguf_file: options.gguf_file,
+            memory_estimate_bytes: options.memory_estimate_bytes,
+            pool,
+        };
+        let backend = self
+            .inner
+            .load_from_hf(id, &repo, rust_opts)
+            .await
+            .map_err(BlazenError::from)?;
+        Ok(backend.as_str().to_owned())
     }
 }
 

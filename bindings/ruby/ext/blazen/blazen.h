@@ -150,6 +150,29 @@
 #define BLAZEN_ERROR_KIND_CALLER 19
 
 /**
+ * Backend tag for [`BlazenHfLoadOptions::backend_hint`] — mistral.rs
+ * (broad architecture coverage, safetensors + GGUF, multimodal).
+ */
+#define BLAZEN_BACKEND_HINT_MISTRALRS 0
+
+/**
+ * Backend tag for [`BlazenHfLoadOptions::backend_hint`] — pure-Rust candle.
+ */
+#define BLAZEN_BACKEND_HINT_CANDLE 1
+
+/**
+ * Backend tag for [`BlazenHfLoadOptions::backend_hint`] — llama.cpp
+ * (GGUF only, best CPU performance).
+ */
+#define BLAZEN_BACKEND_HINT_LLAMACPP 2
+
+/**
+ * Sentinel for [`BlazenHfLoadOptions::backend_hint`] meaning "no hint —
+ * auto-detect from the repo layout".
+ */
+#define BLAZEN_BACKEND_HINT_NONE -1
+
+/**
  * Tag for [`AdapterMountStrategy::Attached`].
  */
 #define BLAZEN_ADAPTER_MOUNT_STRATEGY_ATTACHED 1
@@ -849,6 +872,65 @@ typedef struct {
      */
     void (*on_error)(void *user_data, const char *error);
 } BlazenRunEventSinkVTable;
+
+/**
+ * `#[repr(C)]` mirror of [`blazen_manager::hf_loader::HfLoadOptions`] for the
+ * C ABI. Every pointer field is nullable; integer/byte fields use sentinel
+ * values to mean "unset" (see per-field docs).
+ *
+ * Construct in C as a stack value, populate the fields you care about, then
+ * pass the address to [`crate::manager::blazen_model_manager_load_from_hf`]
+ * or [`crate::manager::blazen_model_manager_load_from_hf_blocking`]. The
+ * strings are copied during the call — the caller may free them as soon as
+ * the function returns (sync) or as soon as `BlazenFuture*` has been spawned
+ * (async). The struct itself is borrowed; do not keep it alive beyond the
+ * call boundary.
+ */
+typedef struct {
+    /**
+     * One of `BLAZEN_BACKEND_HINT_*`. Use [`BLAZEN_BACKEND_HINT_NONE`] (-1)
+     * to let the loader auto-detect from the repo's file layout.
+     */
+    int32_t backend_hint;
+    /**
+     * Git revision (branch, tag, or commit sha). Null = default branch.
+     */
+    const char *revision;
+    /**
+     * Hugging Face access token. Null falls back to `$HF_TOKEN`, then
+     * anonymous.
+     */
+    const char *hf_token;
+    /**
+     * Override the on-disk cache directory used by `hf-hub`. Null uses the
+     * upstream default (`$HF_HOME` or `~/.cache/huggingface/`).
+     */
+    const char *cache_dir;
+    /**
+     * Device specifier forwarded to the chosen provider (`"cpu"`,
+     * `"cuda:0"`, `"metal"`, …). Null uses the provider default.
+     */
+    const char *device;
+    /**
+     * Explicit GGUF filename for repos that ship multiple quantizations.
+     * Required when [`choose_backend`](blazen_manager::hf_loader::choose_backend)
+     * would otherwise pick `Llamacpp` from a repo with multiple `*.gguf`
+     * siblings.
+     */
+    const char *gguf_file;
+    /**
+     * Override the manager's memory budgeting estimate, in bytes. `0` =
+     * unset (manager sums the chosen backend's weight files from repo
+     * metadata).
+     */
+    uint64_t memory_estimate_bytes;
+    /**
+     * Target pool label (`"cpu"` / `"gpu"` / `"gpu:N"`). Null defaults to
+     * `Pool::Cpu`. An unparseable label surfaces as a validation error on
+     * the call that consumes the options struct.
+     */
+    const char *pool;
+} BlazenHfLoadOptions;
 
 /**
  * Opaque wrapper around [`blazen_llm::providers::openai_compat::OpenAiCompatConfig`].
@@ -4805,6 +4887,24 @@ int32_t blazen_run_state_snapshot_last_event_at_ms(const BlazenRunStateSnapshot 
  int32_t blazen_future_take_bool(BlazenFuture *fut, bool *out, BlazenError **err);
 
 /**
+ * Pops a `Result<String, _>` future, writing a caller-owned NUL-terminated
+ * UTF-8 C string into `*out` (free with
+ * [`crate::string::blazen_string_free`]). Returns `0` on success or `-1`
+ * on failure (writes `*err`).
+ *
+ * Used by verbs whose async result is a single string identifier — for
+ * example
+ * [`crate::manager::blazen_model_manager_load_from_hf`] returns the chosen
+ * backend's stable label (`"mistralrs"` / `"candle"` / `"llamacpp"`).
+ *
+ * # Safety
+ *
+ * `fut` is null OR a live cabi-produced future whose `Ok` type is `String`.
+ * `out` and `err` are each null OR a single-writer destination.
+ */
+ int32_t blazen_future_take_string(BlazenFuture *fut, char **out, BlazenError **err);
+
+/**
  * Pops a `Result<Vec<blazen_manager::ModelStatus>, _>` future, writing a
  * caller-owned `BlazenModelStatusList*` into `*out` (free with
  * [`crate::manager_records::blazen_model_status_list_free`]). Returns `0` on
@@ -6028,6 +6128,52 @@ BlazenAdapterStatusList *blazen_model_manager_list_adapters_blocking(const Blaze
 
 BlazenFuture *blazen_model_manager_list_adapters(const BlazenModelManager *mgr,
                                                  const char *model_id);
+
+/**
+ * Synchronously detects the right backend for a Hugging Face repo, downloads
+ * it via the chosen backend, and registers it as `id`. Writes the chosen
+ * backend's stable string (`"mistralrs"` / `"candle"` / `"llamacpp"`) into
+ * `*out_chosen_backend` (caller-owned, free via
+ * [`crate::string::blazen_string_free`]). Returns `0` on success or `-1` on
+ * failure (writes `*out_err`).
+ *
+ * `options` may be null, in which case
+ * [`blazen_manager::hf_loader::HfLoadOptions::default`] applies (auto-detect
+ * backend, no token, default cache dir, `Pool::Cpu`).
+ *
+ * # Safety
+ *
+ * `mgr` must be null OR a live [`BlazenModelManager`]. `id` and `repo` must
+ * each be NUL-terminated UTF-8 buffers valid for the duration of the call.
+ * `options` is null OR a `BlazenHfLoadOptions` whose pointer fields each
+ * follow the same null-OR-NUL-terminated contract. `out_chosen_backend` and
+ * `out_err` are each null OR a single-writer destination.
+ */
+
+int32_t blazen_model_manager_load_from_hf_blocking(const BlazenModelManager *mgr,
+                                                   const char *id,
+                                                   const char *repo,
+                                                   const BlazenHfLoadOptions *options,
+                                                   char **out_chosen_backend,
+                                                   BlazenError **out_err);
+
+/**
+ * Spawns a `load_from_hf` onto the cabi tokio runtime; pop the result with
+ * [`crate::future::blazen_future_take_string`] (yields the chosen backend's
+ * stable label). Returns null on argument-shape failure (null manager / null
+ * or non-UTF-8 string args / invalid options).
+ *
+ * # Safety
+ *
+ * Same as [`blazen_model_manager_load_from_hf_blocking`] (minus the two
+ * out-param pointers). String + option buffers are copied before this
+ * function returns.
+ */
+
+BlazenFuture *blazen_model_manager_load_from_hf(const BlazenModelManager *mgr,
+                                                const char *id,
+                                                const char *repo,
+                                                const BlazenHfLoadOptions *options);
 
 /**
  * Returns the adapter id as a caller-owned C string. Null on a null handle.

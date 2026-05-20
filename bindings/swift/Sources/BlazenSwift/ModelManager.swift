@@ -28,6 +28,84 @@ public typealias AdapterHandle = UniFFIBlazen.AdapterHandleRecord
 /// verbs.
 public typealias ForeignLocalModel = UniFFIBlazen.ForeignLocalModel
 
+/// Local-inference backend identifier returned by
+/// `ModelManager.loadFromHf(id:repo:options:)` and accepted as a forced
+/// override on `HfLoadOptions.backendHint`.
+///
+/// `rawValue` matches the stable lower-case form emitted by the underlying
+/// Rust `BackendHint::as_str()` so callers can round-trip through string
+/// configs (env vars, JSON) without bespoke parsing.
+public enum BackendHint: String, Sendable, Equatable, Hashable, CaseIterable {
+    case mistralrs
+    case candle
+    case llamacpp
+
+    fileprivate var ffi: BackendHintEnum {
+        switch self {
+        case .mistralrs: return .mistralrs
+        case .candle: return .candle
+        case .llamacpp: return .llamacpp
+        }
+    }
+
+    fileprivate init(ffi: BackendHintEnum) {
+        switch ffi {
+        case .mistralrs: self = .mistralrs
+        case .candle: self = .candle
+        case .llamacpp: self = .llamacpp
+        }
+    }
+}
+
+/// Caller-supplied options for `ModelManager.loadFromHf(id:repo:options:)`.
+///
+/// Mirrors `UniFFIBlazen.HfLoadOptionsRecord` with every field optional and
+/// defaulting to `nil`, so `HfLoadOptions()` selects the same behaviour as
+/// the Rust `HfLoadOptions::default()`.
+public struct HfLoadOptions: Sendable, Equatable, Hashable {
+    public let backendHint: BackendHint?
+    public let revision: String?
+    public let hfToken: String?
+    public let cacheDir: String?
+    public let device: String?
+    public let ggufFile: String?
+    public let memoryEstimateBytes: UInt64?
+    public let pool: String?
+
+    public init(
+        backendHint: BackendHint? = nil,
+        revision: String? = nil,
+        hfToken: String? = nil,
+        cacheDir: String? = nil,
+        device: String? = nil,
+        ggufFile: String? = nil,
+        memoryEstimateBytes: UInt64? = nil,
+        pool: String? = nil
+    ) {
+        self.backendHint = backendHint
+        self.revision = revision
+        self.hfToken = hfToken
+        self.cacheDir = cacheDir
+        self.device = device
+        self.ggufFile = ggufFile
+        self.memoryEstimateBytes = memoryEstimateBytes
+        self.pool = pool
+    }
+
+    fileprivate var record: HfLoadOptionsRecord {
+        HfLoadOptionsRecord(
+            backendHint: backendHint?.ffi,
+            revision: revision,
+            hfToken: hfToken,
+            cacheDir: cacheDir,
+            device: device,
+            ggufFile: ggufFile,
+            memoryEstimateBytes: memoryEstimateBytes,
+            pool: pool
+        )
+    }
+}
+
 /// Adapter mount options for `ModelManager.loadAdapter(modelID:adapterDir:options:)`.
 ///
 /// `adapterId` defaults to `""` which lets the backend auto-assign an id;
@@ -144,5 +222,31 @@ public final class ModelManager: @unchecked Sendable {
 
     public func listAdapters(_ modelID: String) async throws -> [AdapterStatus] {
         try await inner.listAdapters(modelId: modelID)
+    }
+
+    /// Resolve a Hugging Face repo, pick a backend (or honour
+    /// `options.backendHint`), register it under `id`, and load it through
+    /// the per-pool budget tracker. Returns the backend that was actually
+    /// selected.
+    public func loadFromHf(
+        id: String,
+        repo: String,
+        options: HfLoadOptions = HfLoadOptions()
+    ) async throws -> BackendHint {
+        let raw = try await inner.loadFromHf(
+            id: id,
+            repo: repo,
+            options: options.record
+        )
+        // Why: UniFFI returns the backend as the lower-case stable string
+        // (`BackendHint::as_str()`) rather than the enum itself, so we
+        // parse here. An unknown value indicates a Rust/Swift drift bug
+        // and is surfaced as `BlazenError.Internal` rather than crashing.
+        guard let hint = BackendHint(rawValue: raw) else {
+            throw BlazenError.Internal(
+                message: "unknown BackendHint string returned by load_from_hf: \(raw)"
+            )
+        }
+        return hint
     }
 }

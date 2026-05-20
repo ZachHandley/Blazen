@@ -88,6 +88,80 @@ RSpec.describe Blazen::ModelManager do
     end
   end
 
+  describe "#load_from_hf" do
+    it "raises a Blazen::Error subclass for a nonexistent repo" do
+      mgr = described_class.new
+      expect {
+        mgr.load_from_hf(
+          "ghost",
+          "blazen-test/does-not-exist-#{Process.pid}-#{rand(1 << 32)}",
+        )
+      }.to raise_error(Blazen::Error)
+    end
+
+    it "accepts default HfLoadOptions without crashing the FFI layer" do
+      mgr = described_class.new
+      expect {
+        mgr.load_from_hf(
+          "ghost2",
+          "blazen-test/also-missing-#{Process.pid}-#{rand(1 << 32)}",
+          Blazen::HfLoadOptions.new,
+        )
+      }.to raise_error(Blazen::Error)
+    end
+  end
+
+  describe Blazen::BackendHint do
+    it "exposes stable string labels" do
+      expect(described_class::MISTRALRS).to eq("mistralrs")
+      expect(described_class::CANDLE).to eq("candle")
+      expect(described_class::LLAMACPP).to eq("llamacpp")
+    end
+
+    it "maps labels to the cabi int32 sentinels" do
+      expect(described_class.to_cabi("mistralrs")).to eq(Blazen::FFI::BLAZEN_BACKEND_HINT_MISTRALRS)
+      expect(described_class.to_cabi("candle")).to eq(Blazen::FFI::BLAZEN_BACKEND_HINT_CANDLE)
+      expect(described_class.to_cabi("llamacpp")).to eq(Blazen::FFI::BLAZEN_BACKEND_HINT_LLAMACPP)
+      expect(described_class.to_cabi(nil)).to eq(Blazen::FFI::BLAZEN_BACKEND_HINT_NONE)
+      expect(described_class.to_cabi("garbage")).to eq(Blazen::FFI::BLAZEN_BACKEND_HINT_NONE)
+    end
+  end
+
+  describe Blazen::HfLoadOptions do
+    it "defaults every field to nil" do
+      opts = described_class.new
+      expect(opts.backend_hint).to be_nil
+      expect(opts.revision).to be_nil
+      expect(opts.hf_token).to be_nil
+      expect(opts.cache_dir).to be_nil
+      expect(opts.device).to be_nil
+      expect(opts.gguf_file).to be_nil
+      expect(opts.memory_estimate_bytes).to be_nil
+      expect(opts.pool).to be_nil
+    end
+
+    it "round-trips every keyword arg" do
+      opts = described_class.new(
+        backend_hint: Blazen::BackendHint::CANDLE,
+        revision: "main",
+        hf_token: "hf_xxx",
+        cache_dir: "/tmp/hf-cache",
+        device: "cpu",
+        gguf_file: "model.Q4_K_M.gguf",
+        memory_estimate_bytes: 8_000_000_000,
+        pool: "cpu",
+      )
+      expect(opts.backend_hint).to eq("candle")
+      expect(opts.revision).to eq("main")
+      expect(opts.hf_token).to eq("hf_xxx")
+      expect(opts.cache_dir).to eq("/tmp/hf-cache")
+      expect(opts.device).to eq("cpu")
+      expect(opts.gguf_file).to eq("model.Q4_K_M.gguf")
+      expect(opts.memory_estimate_bytes).to eq(8_000_000_000)
+      expect(opts.pool).to eq("cpu")
+    end
+  end
+
   describe "#register_local" do
     it "raises Blazen::UnsupportedError with the documented message" do
       mgr = described_class.new

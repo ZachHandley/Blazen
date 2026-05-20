@@ -3429,6 +3429,26 @@ export declare class ModelManager {
   /** Status of all registered models. */
   status(): Promise<Array<JsModelStatus>>
   /**
+   * Auto-detect the right local-inference backend for a Hugging Face
+   * repo, then register and budget the model with this manager.
+   *
+   * Performs a single metadata request against the Hub to enumerate
+   * the repo's siblings, picks a backend (mistral.rs / candle /
+   * llama.cpp) per the rules documented on
+   * [`blazen_manager::hf_loader::choose_backend`], computes a memory
+   * estimate from the sibling sizes, and registers the model under
+   * `id`. The model starts unloaded — call [`Self::load`] or
+   * [`Self::ensure_loaded`] to materialize it.
+   *
+   * Returns the chosen backend as a lower-case string
+   * (`"mistralrs"` / `"candle"` / `"llamacpp"`).
+   *
+   * Throws on empty repo id, gated/missing repo, PEFT-adapter-only
+   * repo (use [`Self::load_adapter`] instead), missing backend
+   * feature, or any provider construction failure.
+   */
+  loadFromHf(id: string, repo: string, options?: JsHfLoadOptions | undefined | null): Promise<string>
+  /**
    * Mount a PEFT-format `LoRA` adapter onto a registered model.
    *
    * `adapterDir` must contain the canonical PEFT layout
@@ -6944,6 +6964,26 @@ export interface JsAzureOptions {
   apiVersion?: string
 }
 
+/**
+ * Local-inference backend identifier returned by
+ * [`JsModelManager::load_from_hf`] and accepted as a forced override on
+ * [`JsHfLoadOptions::backend_hint`].
+ */
+export declare const enum JsBackendHint {
+  /**
+   * `mistral.rs` — broad architecture coverage, handles both safetensors
+   * and GGUF, supports vision/multimodal models.
+   */
+  mistralrs = 'mistralrs',
+  /**
+   * `candle` — pure-Rust, supports safetensors and GGUF for the subset of
+   * architectures candle ships.
+   */
+  candle = 'candle',
+  /** `llama.cpp` — GGUF only, best CPU performance and lowest memory. */
+  llamacpp = 'llamacpp'
+}
+
 export interface JsBackgroundRemovalRequest {
   imageUrl: string
   model?: string
@@ -7391,6 +7431,42 @@ export interface JsGeneratedVideo {
   height?: number
   durationSeconds?: number
   fps?: number
+}
+
+/**
+ * Caller-supplied options for [`JsModelManager::load_from_hf`].
+ *
+ * Mirrors [`blazen_manager::HfLoadOptions`]; every field is optional.
+ */
+export interface JsHfLoadOptions {
+  /**
+   * Force a specific backend; skips engine inference but still probes
+   * the repo for memory sizing.
+   */
+  backendHint?: JsBackendHint
+  /**
+   * Git revision (branch, tag, or commit sha). Defaults to the repo's
+   * default branch.
+   */
+  revision?: string
+  /**
+   * Hugging Face access token. When omitted, falls back to the
+   * `HF_TOKEN` environment variable, then to anonymous access.
+   */
+  hfToken?: string
+  /** Override the on-disk cache directory used by `hf-hub`. */
+  cacheDir?: string
+  /**
+   * Device specifier forwarded to the chosen provider (`"cpu"`,
+   * `"cuda:0"`, `"metal"`, …).
+   */
+  device?: string
+  /** Explicit GGUF filename for repos that ship multiple quantizations. */
+  ggufFile?: string
+  /** Override the auto-derived memory estimate, in bytes. */
+  memoryEstimateBytes?: bigint
+  /** Pool label (`"cpu"`, `"gpu"`, `"gpu:N"`). Defaults to `"cpu"`. */
+  pool?: string
 }
 
 /** An outgoing HTTP request, as seen by a JavaScript [`HttpClient`] subclass. */
