@@ -268,6 +268,89 @@ public final class ModelManager: @unchecked Sendable {
         )
         return TrainedAdapter(record: record)
     }
+
+    /// Run a DPO (Direct Preference Optimization) fine-tune over a
+    /// preference-pair dataset. `onEvent` mirrors `trainLora`. Returns
+    /// the on-disk descriptor of the resulting LoRA adapter.
+    public func trainDpo(
+        config: DpoConfig,
+        dataset: PreferenceJsonlDataset,
+        onEvent: (@Sendable (TrainingEvent) -> Void)? = nil
+    ) async throws -> TrainedAdapter {
+        let progress: ForeignTrainingProgress? = onEvent.map { TrainingProgressSink(callback: $0) }
+        let record = try await inner.trainDpo(
+            config: config.record,
+            dataset: dataset.inner,
+            progress: progress
+        )
+        return TrainedAdapter(record: record)
+    }
+
+    /// Run an ORPO (Odds-Ratio Preference Optimization) fine-tune over a
+    /// preference-pair dataset. ORPO needs no reference model so the
+    /// config is simpler than DPO.
+    public func trainOrpo(
+        config: OrpoConfig,
+        dataset: PreferenceJsonlDataset,
+        onEvent: (@Sendable (TrainingEvent) -> Void)? = nil
+    ) async throws -> TrainedAdapter {
+        let progress: ForeignTrainingProgress? = onEvent.map { TrainingProgressSink(callback: $0) }
+        let record = try await inner.trainOrpo(
+            config: config.record,
+            dataset: dataset.inner,
+            progress: progress
+        )
+        return TrainedAdapter(record: record)
+    }
+
+    /// Run a SimPO (Simple Preference Optimization) fine-tune over a
+    /// preference-pair dataset. Like ORPO, no reference model is needed.
+    public func trainSimpo(
+        config: SimpoConfig,
+        dataset: PreferenceJsonlDataset,
+        onEvent: (@Sendable (TrainingEvent) -> Void)? = nil
+    ) async throws -> TrainedAdapter {
+        let progress: ForeignTrainingProgress? = onEvent.map { TrainingProgressSink(callback: $0) }
+        let record = try await inner.trainSimpo(
+            config: config.record,
+            dataset: dataset.inner,
+            progress: progress
+        )
+        return TrainedAdapter(record: record)
+    }
+
+    /// Run a KTO (Kahneman-Tversky Optimization) fine-tune over a rated
+    /// single-completion dataset (binary thumbs-up / thumbs-down labels).
+    public func trainKto(
+        config: KtoConfig,
+        dataset: RatedJsonlDataset,
+        onEvent: (@Sendable (TrainingEvent) -> Void)? = nil
+    ) async throws -> TrainedAdapter {
+        let progress: ForeignTrainingProgress? = onEvent.map { TrainingProgressSink(callback: $0) }
+        let record = try await inner.trainKto(
+            config: config.record,
+            dataset: dataset.inner,
+            progress: progress
+        )
+        return TrainedAdapter(record: record)
+    }
+
+    /// Run a full (non-LoRA) supervised fine-tune. Writes the entire
+    /// model's weights to `config.core.outputDir` rather than emitting a
+    /// PEFT adapter — hence the distinct `FullFineTuneResult` return type.
+    public func fineTune(
+        config: FullFineTuneConfig,
+        dataset: JsonlDataset,
+        onEvent: (@Sendable (TrainingEvent) -> Void)? = nil
+    ) async throws -> FullFineTuneResult {
+        let progress: ForeignTrainingProgress? = onEvent.map { TrainingProgressSink(callback: $0) }
+        let record = try await inner.fineTune(
+            config: config.record,
+            dataset: dataset.inner,
+            progress: progress
+        )
+        return FullFineTuneResult(record: record)
+    }
 }
 
 // MARK: - Training types
@@ -557,5 +640,352 @@ private final class TrainingProgressSink: ForeignTrainingProgress, @unchecked Se
 
     func onEvent(event: TrainingEventEnum) throws {
         callback(TrainingEvent(ffi: event))
+    }
+}
+
+// MARK: - Preference / full-fine-tune training types
+
+/// Shared training-run descriptor used by every preference-optimization
+/// objective (`DpoConfig`, `OrpoConfig`, `SimpoConfig`, `KtoConfig`) and
+/// by `FullFineTuneConfig`. Mirrors `UniFFIBlazen.TrainCoreConfigRecord`.
+///
+/// `evalSteps` / `saveSteps` of `nil` disable evaluation and intermediate
+/// checkpoint emission respectively. `device` of `nil` defers to the
+/// trainer's default device selection. `baseModelRevision` of `nil` pins
+/// to the repo's default branch.
+public struct TrainCoreConfig: Sendable, Equatable, Hashable {
+    public let baseModelRepo: String
+    public let baseModelRevision: String?
+    public let outputDir: String
+    public let optim: OptimConfig
+    public let scheduler: SchedulerConfig
+    public let maxSteps: UInt32
+    public let batchSize: UInt32
+    public let gradientAccumulationSteps: UInt32
+    public let maxSeqLen: UInt32
+    public let evalSteps: UInt32?
+    public let saveSteps: UInt32?
+    public let seed: UInt64
+    public let mixedPrecision: MixedPrecision
+    public let device: String?
+
+    public init(
+        baseModelRepo: String,
+        baseModelRevision: String? = nil,
+        outputDir: String,
+        optim: OptimConfig = OptimConfig(),
+        scheduler: SchedulerConfig = SchedulerConfig(),
+        maxSteps: UInt32 = 1_000,
+        batchSize: UInt32 = 1,
+        gradientAccumulationSteps: UInt32 = 8,
+        maxSeqLen: UInt32 = 1_024,
+        evalSteps: UInt32? = nil,
+        saveSteps: UInt32? = nil,
+        seed: UInt64 = 42,
+        mixedPrecision: MixedPrecision = .none,
+        device: String? = nil
+    ) {
+        self.baseModelRepo = baseModelRepo
+        self.baseModelRevision = baseModelRevision
+        self.outputDir = outputDir
+        self.optim = optim
+        self.scheduler = scheduler
+        self.maxSteps = maxSteps
+        self.batchSize = batchSize
+        self.gradientAccumulationSteps = gradientAccumulationSteps
+        self.maxSeqLen = maxSeqLen
+        self.evalSteps = evalSteps
+        self.saveSteps = saveSteps
+        self.seed = seed
+        self.mixedPrecision = mixedPrecision
+        self.device = device
+    }
+
+    fileprivate var record: TrainCoreConfigRecord {
+        TrainCoreConfigRecord(
+            baseModelRepo: baseModelRepo,
+            baseModelRevision: baseModelRevision,
+            outputDir: outputDir,
+            maxSteps: maxSteps,
+            batchSize: batchSize,
+            gradientAccumulationSteps: gradientAccumulationSteps,
+            maxSeqLen: maxSeqLen,
+            evalSteps: evalSteps,
+            saveSteps: saveSteps,
+            seed: seed,
+            mixedPrecision: mixedPrecision.ffi,
+            device: device,
+            optim: optim.record,
+            scheduler: scheduler.record
+        )
+    }
+}
+
+/// DPO (Direct Preference Optimization) run descriptor passed to
+/// `ModelManager.trainDpo(config:dataset:onEvent:)`.
+///
+/// `referenceModelRepo` of `nil` reuses `core.baseModelRepo` as the
+/// frozen reference model (the standard DPO setup).
+public struct DpoConfig: Sendable, Equatable, Hashable {
+    public let core: TrainCoreConfig
+    public let lora: LoraConfig
+    public let beta: Float
+    public let labelSmoothing: Float
+    public let referenceModelRepo: String?
+    public let referenceModelRevision: String?
+
+    public init(
+        core: TrainCoreConfig,
+        lora: LoraConfig = LoraConfig(),
+        beta: Float = 0.1,
+        labelSmoothing: Float = 0.0,
+        referenceModelRepo: String? = nil,
+        referenceModelRevision: String? = nil
+    ) {
+        self.core = core
+        self.lora = lora
+        self.beta = beta
+        self.labelSmoothing = labelSmoothing
+        self.referenceModelRepo = referenceModelRepo
+        self.referenceModelRevision = referenceModelRevision
+    }
+
+    fileprivate var record: DpoConfigRecord {
+        DpoConfigRecord(
+            core: core.record,
+            lora: lora.record,
+            beta: beta,
+            labelSmoothing: labelSmoothing,
+            referenceModelRepo: referenceModelRepo,
+            referenceModelRevision: referenceModelRevision
+        )
+    }
+}
+
+/// ORPO (Odds-Ratio Preference Optimization) run descriptor passed to
+/// `ModelManager.trainOrpo(config:dataset:onEvent:)`. ORPO does not need
+/// a reference model — `lambda` controls the strength of the odds-ratio
+/// penalty mixed into the SFT loss.
+public struct OrpoConfig: Sendable, Equatable, Hashable {
+    public let core: TrainCoreConfig
+    public let lora: LoraConfig
+    public let lambda: Float
+
+    public init(
+        core: TrainCoreConfig,
+        lora: LoraConfig = LoraConfig(),
+        lambda: Float = 0.1
+    ) {
+        self.core = core
+        self.lora = lora
+        self.lambda = lambda
+    }
+
+    fileprivate var record: OrpoConfigRecord {
+        OrpoConfigRecord(
+            core: core.record,
+            lora: lora.record,
+            lambda: lambda
+        )
+    }
+}
+
+/// SimPO (Simple Preference Optimization) run descriptor passed to
+/// `ModelManager.trainSimpo(config:dataset:onEvent:)`. Like ORPO, no
+/// reference model is required; `gamma` is the target-margin term and
+/// `beta` is the length-normalisation strength.
+public struct SimpoConfig: Sendable, Equatable, Hashable {
+    public let core: TrainCoreConfig
+    public let lora: LoraConfig
+    public let beta: Float
+    public let gamma: Float
+
+    public init(
+        core: TrainCoreConfig,
+        lora: LoraConfig = LoraConfig(),
+        beta: Float = 2.0,
+        gamma: Float = 1.0
+    ) {
+        self.core = core
+        self.lora = lora
+        self.beta = beta
+        self.gamma = gamma
+    }
+
+    fileprivate var record: SimpoConfigRecord {
+        SimpoConfigRecord(
+            core: core.record,
+            lora: lora.record,
+            beta: beta,
+            gamma: gamma
+        )
+    }
+}
+
+/// KTO (Kahneman-Tversky Optimization) run descriptor passed to
+/// `ModelManager.trainKto(config:dataset:onEvent:)`. `lambdaD` /
+/// `lambdaU` weight the desirable/undesirable example losses
+/// asymmetrically; `referenceModelRepo` of `nil` reuses `core.baseModelRepo`.
+public struct KtoConfig: Sendable, Equatable, Hashable {
+    public let core: TrainCoreConfig
+    public let lora: LoraConfig
+    public let beta: Float
+    public let lambdaD: Float
+    public let lambdaU: Float
+    public let referenceModelRepo: String?
+    public let referenceModelRevision: String?
+
+    public init(
+        core: TrainCoreConfig,
+        lora: LoraConfig = LoraConfig(),
+        beta: Float = 0.1,
+        lambdaD: Float = 1.0,
+        lambdaU: Float = 1.0,
+        referenceModelRepo: String? = nil,
+        referenceModelRevision: String? = nil
+    ) {
+        self.core = core
+        self.lora = lora
+        self.beta = beta
+        self.lambdaD = lambdaD
+        self.lambdaU = lambdaU
+        self.referenceModelRepo = referenceModelRepo
+        self.referenceModelRevision = referenceModelRevision
+    }
+
+    fileprivate var record: KtoConfigRecord {
+        KtoConfigRecord(
+            core: core.record,
+            lora: lora.record,
+            beta: beta,
+            lambdaD: lambdaD,
+            lambdaU: lambdaU,
+            referenceModelRepo: referenceModelRepo,
+            referenceModelRevision: referenceModelRevision
+        )
+    }
+}
+
+/// Full (non-LoRA) supervised fine-tune run descriptor passed to
+/// `ModelManager.fineTune(config:dataset:onEvent:)`. Enable
+/// `gradientCheckpointing` to trade compute for activation memory.
+public struct FullFineTuneConfig: Sendable, Equatable, Hashable {
+    public let core: TrainCoreConfig
+    public let gradientCheckpointing: Bool
+
+    public init(
+        core: TrainCoreConfig,
+        gradientCheckpointing: Bool = false
+    ) {
+        self.core = core
+        self.gradientCheckpointing = gradientCheckpointing
+    }
+
+    fileprivate var record: FullFineTuneConfigRecord {
+        FullFineTuneConfigRecord(
+            core: core.record,
+            gradientCheckpointing: gradientCheckpointing
+        )
+    }
+}
+
+/// On-disk descriptor of a completed full fine-tune, returned by
+/// `ModelManager.fineTune(config:dataset:onEvent:)`. Unlike
+/// `TrainedAdapter`, no PEFT adapter is written — the entire model's
+/// weights live under `outputDir`.
+public struct FullFineTuneResult: Sendable, Equatable, Hashable {
+    public let outputDir: String
+    public let finalLoss: Float
+    public let stepsCompleted: UInt64
+
+    public init(outputDir: String, finalLoss: Float, stepsCompleted: UInt64) {
+        self.outputDir = outputDir
+        self.finalLoss = finalLoss
+        self.stepsCompleted = stepsCompleted
+    }
+
+    fileprivate init(record: FullFineTuneResultRecord) {
+        self.outputDir = record.outputDir
+        self.finalLoss = record.finalLoss
+        self.stepsCompleted = record.stepsCompleted
+    }
+}
+
+/// JSONL-backed preference-pair training dataset for DPO / ORPO / SimPO.
+///
+/// Each line of the input file must deserialize to either
+/// `{"prompt": "...", "chosen": "...", "rejected": "..."}` or
+/// `{"messages": [...], "chosen": "...", "rejected": "..."}` (the
+/// latter requires `chatTemplate`). The underlying handle is
+/// reference-counted on the Rust side so the same dataset can be passed
+/// to multiple training calls.
+public final class PreferenceJsonlDataset: @unchecked Sendable {
+    // Why: `UniffiPreferenceJsonlDataset` is `@unchecked Sendable` upstream
+    // and holds an `Arc`-shared dataset; the Swift wrapper adds no
+    // mutable state so the same contract carries over.
+    fileprivate let inner: UniffiPreferenceJsonlDataset
+
+    public init(
+        path: String,
+        tokenizerPath: String,
+        chatTemplate: String? = nil,
+        maxSeqLen: UInt32 = 2048,
+        device: String? = nil,
+        padTokenId: UInt32 = 0
+    ) throws {
+        self.inner = try UniffiPreferenceJsonlDataset.fromPath(
+            path: path,
+            tokenizerPath: tokenizerPath,
+            chatTemplate: chatTemplate,
+            maxSeqLen: maxSeqLen,
+            device: device,
+            padTokenId: padTokenId
+        )
+    }
+
+    public func isEmpty() -> Bool {
+        inner.isEmpty()
+    }
+
+    public func count() -> UInt64 {
+        inner.len()
+    }
+}
+
+/// JSONL-backed rated single-completion training dataset for KTO.
+///
+/// Each line of the input file must deserialize to either
+/// `{"prompt": "...", "completion": "...", "label": true|false}` or
+/// `{"messages": [...], "completion": "...", "label": ...}` (the
+/// latter requires `chatTemplate`).
+public final class RatedJsonlDataset: @unchecked Sendable {
+    // Why: same reasoning as `PreferenceJsonlDataset` — upstream is
+    // `@unchecked Sendable` and Arc-shared.
+    fileprivate let inner: UniffiRatedJsonlDataset
+
+    public init(
+        path: String,
+        tokenizerPath: String,
+        chatTemplate: String? = nil,
+        maxSeqLen: UInt32 = 2048,
+        device: String? = nil,
+        padTokenId: UInt32 = 0
+    ) throws {
+        self.inner = try UniffiRatedJsonlDataset.fromPath(
+            path: path,
+            tokenizerPath: tokenizerPath,
+            chatTemplate: chatTemplate,
+            maxSeqLen: maxSeqLen,
+            device: device,
+            padTokenId: padTokenId
+        )
+    }
+
+    public func isEmpty() -> Bool {
+        inner.isEmpty()
+    }
+
+    public func count() -> UInt64 {
+        inner.len()
     }
 }

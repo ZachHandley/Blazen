@@ -1453,6 +1453,127 @@ module Blazen
     attach_function :blazen_trained_adapter_free, [:pointer], :void
 
     # -------------------------------------------------------------------
+    # PR8 — preference / KTO / full-fine-tune configs and entry points
+    # -------------------------------------------------------------------
+
+    # Mirror of `BlazenTrainCoreConfig` in blazen.h. Shared across
+    # `BlazenDpoConfig`, `BlazenOrpoConfig`, `BlazenSimpoConfig`,
+    # `BlazenKtoConfig`, and `BlazenFullFineTuneConfig` as their `core` slot.
+    class BlazenTrainCoreConfig < ::FFI::Struct
+      layout :base_model_repo,             :pointer,
+             :base_model_revision,         :pointer,
+             :output_dir,                  :pointer,
+             :optim,                       BlazenOptimConfig,
+             :scheduler,                   BlazenSchedulerConfig,
+             :max_steps,                   :uint32,
+             :batch_size,                  :uint32,
+             :gradient_accumulation_steps, :uint32,
+             :max_seq_len,                 :uint32,
+             :has_eval_steps,              :int32,
+             :eval_steps,                  :uint32,
+             :has_save_steps,              :int32,
+             :save_steps,                  :uint32,
+             :seed,                        :uint64,
+             :mixed_precision,             :int32,
+             :device,                      :pointer
+    end
+
+    # Mirror of `BlazenDpoConfig` in blazen.h.
+    class BlazenDpoConfig < ::FFI::Struct
+      layout :core,                       BlazenTrainCoreConfig,
+             :lora,                       BlazenLoraConfig,
+             :beta,                       :float,
+             :label_smoothing,            :float,
+             :reference_model_repo,       :pointer,
+             :reference_model_revision,   :pointer
+    end
+
+    # Mirror of `BlazenOrpoConfig` in blazen.h. Reference-free.
+    class BlazenOrpoConfig < ::FFI::Struct
+      layout :core,   BlazenTrainCoreConfig,
+             :lora,   BlazenLoraConfig,
+             :lambda, :float
+    end
+
+    # Mirror of `BlazenSimpoConfig` in blazen.h. Reference-free.
+    class BlazenSimpoConfig < ::FFI::Struct
+      layout :core,  BlazenTrainCoreConfig,
+             :lora,  BlazenLoraConfig,
+             :beta,  :float,
+             :gamma, :float
+    end
+
+    # Mirror of `BlazenKtoConfig` in blazen.h.
+    class BlazenKtoConfig < ::FFI::Struct
+      layout :core,                       BlazenTrainCoreConfig,
+             :lora,                       BlazenLoraConfig,
+             :beta,                       :float,
+             :lambda_d,                   :float,
+             :lambda_u,                   :float,
+             :reference_model_repo,       :pointer,
+             :reference_model_revision,   :pointer
+    end
+
+    # Mirror of `BlazenFullFineTuneConfig` in blazen.h.
+    class BlazenFullFineTuneConfig < ::FFI::Struct
+      layout :core,                   BlazenTrainCoreConfig,
+             :gradient_checkpointing, :int32
+    end
+
+    # Mirror of `BlazenFullFineTuneResult` in blazen.h. Inner `output_dir`
+    # is a caller-owned heap C string freed by
+    # `blazen_full_finetune_result_free`.
+    class BlazenFullFineTuneResult < ::FFI::Struct
+      layout :output_dir,      :pointer,
+             :final_loss,      :float,
+             :steps_completed, :uint64
+    end
+
+    attach_function :blazen_preference_jsonl_dataset_from_path,
+                    [:pointer, :pointer, :pointer, :uint32, :pointer, :uint32, :pointer],
+                    :pointer
+    attach_function :blazen_preference_jsonl_dataset_free, [:pointer], :void
+
+    attach_function :blazen_rated_jsonl_dataset_from_path,
+                    [:pointer, :pointer, :pointer, :uint32, :pointer, :uint32, :pointer],
+                    :pointer
+    attach_function :blazen_rated_jsonl_dataset_free, [:pointer], :void
+
+    attach_function :blazen_model_manager_train_dpo_blocking,
+                    [:pointer, :pointer, :pointer, :pointer, :pointer],
+                    :int32, blocking: true
+    attach_function :blazen_model_manager_train_dpo,
+                    [:pointer, :pointer, :pointer], :pointer
+
+    attach_function :blazen_model_manager_train_orpo_blocking,
+                    [:pointer, :pointer, :pointer, :pointer, :pointer],
+                    :int32, blocking: true
+    attach_function :blazen_model_manager_train_orpo,
+                    [:pointer, :pointer, :pointer], :pointer
+
+    attach_function :blazen_model_manager_train_simpo_blocking,
+                    [:pointer, :pointer, :pointer, :pointer, :pointer],
+                    :int32, blocking: true
+    attach_function :blazen_model_manager_train_simpo,
+                    [:pointer, :pointer, :pointer], :pointer
+
+    attach_function :blazen_model_manager_train_kto_blocking,
+                    [:pointer, :pointer, :pointer, :pointer, :pointer],
+                    :int32, blocking: true
+    attach_function :blazen_model_manager_train_kto,
+                    [:pointer, :pointer, :pointer], :pointer
+
+    attach_function :blazen_model_manager_fine_tune_blocking,
+                    [:pointer, :pointer, :pointer, :pointer, :pointer],
+                    :int32, blocking: true
+    attach_function :blazen_model_manager_fine_tune,
+                    [:pointer, :pointer, :pointer], :pointer
+
+    attach_function :blazen_future_take_full_finetune_result,
+                    [:pointer, :pointer, :pointer], :int32
+    attach_function :blazen_full_finetune_result_free, [:pointer], :void
+
+    # -------------------------------------------------------------------
     # Ruby-side helpers
     # -------------------------------------------------------------------
 

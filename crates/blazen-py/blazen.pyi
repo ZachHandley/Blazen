@@ -91,6 +91,7 @@ __all__ = [
     "DiffusionOptions",
     "DiffusionProvider",
     "DiffusionScheduler",
+    "DpoConfig",
     "DynamicEvent",
     "EmbedOptions",
     "EmbeddingModel",
@@ -110,6 +111,8 @@ __all__ = [
     "FileContent",
     "FinishReason",
     "FireworksProvider",
+    "FullFineTuneConfig",
+    "FullFineTuneResult",
     "GeminiProvider",
     "Generated3DModel",
     "GeneratedAudio",
@@ -146,6 +149,7 @@ __all__ = [
     "JoinStrategy",
     "JsonlBackend",
     "JsonlDataset",
+    "KtoConfig",
     "LangfuseConfig",
     "LlamaCppChatMessageInput",
     "LlamaCppChatRole",
@@ -194,6 +198,7 @@ __all__ = [
     "OpenAiProvider",
     "OpenRouterProvider",
     "OptimConfig",
+    "OrpoConfig",
     "OtlpConfig",
     "ParallelStage",
     "ParallelSubWorkflowsStep",
@@ -212,6 +217,7 @@ __all__ = [
     "PiperError",
     "PiperOptions",
     "PiperProvider",
+    "PreferenceJsonlDataset",
     "PricingEntry",
     "ProgressCallback",
     "ProgressEvent",
@@ -228,6 +234,7 @@ __all__ = [
     "ProviderOptions",
     "Quantization",
     "RateLimitError",
+    "RatedJsonlDataset",
     "ReasoningTrace",
     "RedbCheckpointStore",
     "RefLifetime",
@@ -255,6 +262,7 @@ __all__ = [
     "SessionNamespace",
     "SessionPausePolicy",
     "SessionRefRegistry",
+    "SimpoConfig",
     "SpeechRequest",
     "Stage",
     "StageKind",
@@ -296,6 +304,7 @@ __all__ = [
     "TractOptions",
     "TractResponse",
     "TrainConfig",
+    "TrainCoreConfig",
     "TrainedAdapter",
     "TrainingEvent",
     "Transcription",
@@ -4049,6 +4058,40 @@ class DiffusionProvider:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class DpoConfig:
+    r"""
+    Direct Preference Optimization (DPO) configuration.
+    """
+    @property
+    def core(self) -> TrainCoreConfig: ...
+    @core.setter
+    def core(self, value: TrainCoreConfig) -> None: ...
+    @property
+    def lora(self) -> LoraConfig: ...
+    @lora.setter
+    def lora(self, value: LoraConfig) -> None: ...
+    @property
+    def beta(self) -> builtins.float: ...
+    @beta.setter
+    def beta(self, value: builtins.float) -> None: ...
+    @property
+    def label_smoothing(self) -> builtins.float: ...
+    @label_smoothing.setter
+    def label_smoothing(self, value: builtins.float) -> None: ...
+    @property
+    def reference_model_repo(self) -> typing.Optional[builtins.str]: ...
+    @reference_model_repo.setter
+    def reference_model_repo(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def reference_model_revision(self) -> typing.Optional[builtins.str]: ...
+    @reference_model_revision.setter
+    def reference_model_revision(self, value: typing.Optional[builtins.str]) -> None: ...
+    def __new__(cls, *, core: TrainCoreConfig, lora: typing.Optional[LoraConfig] = None, beta: builtins.float = 0.10000000149011612, label_smoothing: builtins.float = 0.0, reference_model_repo: typing.Optional[builtins.str] = None, reference_model_revision: typing.Optional[builtins.str] = None) -> DpoConfig:
+        r"""
+        Build a DpoConfig.
+        """
+
+@typing.final
 class DynamicEvent:
     r"""
     A type-erased event carrying its type name and JSON payload.
@@ -4937,6 +4980,42 @@ class FireworksProvider:
         r"""
         Return an opaque handle to the underlying HTTP client.
         """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class FullFineTuneConfig:
+    r"""
+    Full fine-tune configuration (every parameter trains).
+    
+    ``gradient_checkpointing = True`` is accepted for forward
+    compatibility but the trainer currently rejects it with
+    ``ValueError`` at init time because candle 0.10.2 has no
+    activation-checkpointing primitive.
+    """
+    @property
+    def core(self) -> TrainCoreConfig: ...
+    @core.setter
+    def core(self, value: TrainCoreConfig) -> None: ...
+    @property
+    def gradient_checkpointing(self) -> builtins.bool: ...
+    @gradient_checkpointing.setter
+    def gradient_checkpointing(self, value: builtins.bool) -> None: ...
+    def __new__(cls, *, core: TrainCoreConfig, gradient_checkpointing: builtins.bool = False) -> FullFineTuneConfig:
+        r"""
+        Build a FullFineTuneConfig.
+        """
+
+@typing.final
+class FullFineTuneResult:
+    r"""
+    Result of a completed full fine-tune run.
+    """
+    @property
+    def output_dir(self) -> builtins.str: ...
+    @property
+    def final_loss(self) -> builtins.float: ...
+    @property
+    def steps_completed(self) -> builtins.int: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -6068,6 +6147,44 @@ class JsonlDataset:
     def __len__(self) -> builtins.int:
         r"""
         Number of examples in the dataset.
+        """
+
+@typing.final
+class KtoConfig:
+    r"""
+    Kahneman-Tversky Optimization (KTO) configuration.
+    """
+    @property
+    def core(self) -> TrainCoreConfig: ...
+    @core.setter
+    def core(self, value: TrainCoreConfig) -> None: ...
+    @property
+    def lora(self) -> LoraConfig: ...
+    @lora.setter
+    def lora(self, value: LoraConfig) -> None: ...
+    @property
+    def beta(self) -> builtins.float: ...
+    @beta.setter
+    def beta(self, value: builtins.float) -> None: ...
+    @property
+    def lambda_d(self) -> builtins.float: ...
+    @lambda_d.setter
+    def lambda_d(self, value: builtins.float) -> None: ...
+    @property
+    def lambda_u(self) -> builtins.float: ...
+    @lambda_u.setter
+    def lambda_u(self, value: builtins.float) -> None: ...
+    @property
+    def reference_model_repo(self) -> typing.Optional[builtins.str]: ...
+    @reference_model_repo.setter
+    def reference_model_repo(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def reference_model_revision(self) -> typing.Optional[builtins.str]: ...
+    @reference_model_revision.setter
+    def reference_model_revision(self, value: typing.Optional[builtins.str]) -> None: ...
+    def __new__(cls, *, core: TrainCoreConfig, lora: typing.Optional[LoraConfig] = None, beta: builtins.float = 0.10000000149011612, lambda_d: builtins.float = 1.0, lambda_u: builtins.float = 1.0, reference_model_repo: typing.Optional[builtins.str] = None, reference_model_revision: typing.Optional[builtins.str] = None) -> KtoConfig:
+        r"""
+        Build a KtoConfig.
         """
 
 @typing.final
@@ -7548,6 +7665,58 @@ class ModelManager:
         Returns:
             A :class:`TrainedAdapter` describing the on-disk adapter.
         """
+    async def train_dpo(self, config: DpoConfig, dataset: PreferenceJsonlDataset, progress: typing.Optional[typing.Any] = None) -> TrainedAdapter:
+        r"""
+        Train a LoRA adapter via Direct Preference Optimization (DPO).
+        
+        Args:
+            config: A :class:`DpoConfig`.
+            dataset: A :class:`PreferenceJsonlDataset` providing
+                ``(prompt, chosen, rejected)`` triples.
+            progress: Optional callable invoked with one
+                :class:`TrainingEvent` per transition.
+        
+        Returns:
+            A :class:`TrainedAdapter` describing the on-disk PEFT
+            adapter.
+        """
+    async def train_orpo(self, config: OrpoConfig, dataset: PreferenceJsonlDataset, progress: typing.Optional[typing.Any] = None) -> TrainedAdapter:
+        r"""
+        Train a LoRA adapter via Odds Ratio Preference Optimization
+        (ORPO).
+        
+        Reference-free. Combines an SFT loss on chosen completions with
+        an odds-ratio preference term weighted by ``config.lambda``.
+        """
+    async def train_simpo(self, config: SimpoConfig, dataset: PreferenceJsonlDataset, progress: typing.Optional[typing.Any] = None) -> TrainedAdapter:
+        r"""
+        Train a LoRA adapter via Simple Preference Optimization
+        (SimPO).
+        
+        Reference-free and length-normalized.
+        """
+    async def train_kto(self, config: KtoConfig, dataset: RatedJsonlDataset, progress: typing.Optional[typing.Any] = None) -> TrainedAdapter:
+        r"""
+        Train a LoRA adapter via Kahneman-Tversky Optimization (KTO).
+        
+        Args:
+            config: A :class:`KtoConfig`.
+            dataset: A :class:`RatedJsonlDataset` providing
+                ``(prompt, completion, desirable)`` triples.
+        """
+    async def fine_tune(self, config: FullFineTuneConfig, dataset: JsonlDataset, progress: typing.Optional[typing.Any] = None) -> FullFineTuneResult:
+        r"""
+        Run a full fine-tune (every parameter trainable; no LoRA
+        adapter).
+        
+        Returns :class:`FullFineTuneResult` — not :class:`TrainedAdapter`
+        — because the output is a complete set of model weights in
+        ``config.core.output_dir`` rather than a mountable PEFT delta.
+        
+        Setting ``config.gradient_checkpointing = True`` raises
+        ``ValueError`` at init time because candle 0.10.2 has no
+        activation-checkpointing primitive.
+        """
 
 @typing.final
 class ModelPricing:
@@ -7960,6 +8129,28 @@ class OptimConfig:
     def __new__(cls, *, learning_rate: builtins.float = 0.0002, beta1: builtins.float = 0.9, beta2: builtins.float = 0.999, epsilon: builtins.float = 1e-08, weight_decay: builtins.float = 0.0, gradient_clip: typing.Optional[builtins.float] = 1.0) -> OptimConfig:
         r"""
         Build an AdamW hyperparameter bag.
+        """
+
+@typing.final
+class OrpoConfig:
+    r"""
+    Odds Ratio Preference Optimization (ORPO) configuration.
+    """
+    @property
+    def core(self) -> TrainCoreConfig: ...
+    @core.setter
+    def core(self, value: TrainCoreConfig) -> None: ...
+    @property
+    def lora(self) -> LoraConfig: ...
+    @lora.setter
+    def lora(self, value: LoraConfig) -> None: ...
+    @property
+    def lambda(self) -> builtins.float: ...
+    @lambda.setter
+    def lambda(self, value: builtins.float) -> None: ...
+    def __new__(cls, *, core: TrainCoreConfig, lora: typing.Optional[LoraConfig] = None, lambda: builtins.float = 0.10000000149011612) -> OrpoConfig:
+        r"""
+        Build an OrpoConfig.
         """
 
 @typing.final
@@ -8626,6 +8817,29 @@ class PiperProvider:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class PreferenceJsonlDataset:
+    r"""
+    JSONL-backed preference-pair dataset for DPO / ORPO / SimPO.
+    
+    Each line of the input file must deserialize to either
+    ``{"prompt": "...", "chosen": "...", "rejected": "..."}`` or
+    ``{"messages": [{"role": ..., "content": ...}, ...], "chosen": "...",
+    "rejected": "..."}`` (the latter requires ``chat_template``).
+    """
+    @staticmethod
+    def from_path(path: builtins.str, tokenizer_path: builtins.str, chat_template: typing.Optional[builtins.str] = None, max_seq_len: builtins.int = 2048, device: builtins.str = 'cpu', pad_token_id: builtins.int = 0) -> PreferenceJsonlDataset:
+        r"""
+        Load a preference-pair JSONL file using the tokenizer at
+        ``tokenizer_path``.
+        
+        Args mirror :meth:`JsonlDataset.from_path`.
+        """
+    def __len__(self) -> builtins.int:
+        r"""
+        Number of preference examples in the dataset.
+        """
+
+@typing.final
 class PricingEntry:
     r"""
     A pricing entry for the global pricing registry.
@@ -9079,6 +9293,28 @@ class ProviderOptions:
             base_url: Override the provider's base URL.
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class RatedJsonlDataset:
+    r"""
+    JSONL-backed rated single-completion dataset for KTO.
+    
+    Each line of the input file must deserialize to either
+    ``{"prompt": "...", "completion": "...", "label": true|false}`` or
+    ``{"messages": [...], "completion": "...", "label": ...}`` (the
+    latter requires ``chat_template``).
+    """
+    @staticmethod
+    def from_path(path: builtins.str, tokenizer_path: builtins.str, chat_template: typing.Optional[builtins.str] = None, max_seq_len: builtins.int = 2048, device: builtins.str = 'cpu', pad_token_id: builtins.int = 0) -> RatedJsonlDataset:
+        r"""
+        Load a rated JSONL file using the tokenizer at ``tokenizer_path``.
+        
+        Args mirror :meth:`JsonlDataset.from_path`.
+        """
+    def __len__(self) -> builtins.int:
+        r"""
+        Number of rated examples in the dataset.
+        """
 
 @typing.final
 class ReasoningTrace:
@@ -9808,6 +10044,32 @@ class SessionRefRegistry:
                 means the calling `Context` owns this registry.
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class SimpoConfig:
+    r"""
+    Simple Preference Optimization (SimPO) configuration.
+    """
+    @property
+    def core(self) -> TrainCoreConfig: ...
+    @core.setter
+    def core(self, value: TrainCoreConfig) -> None: ...
+    @property
+    def lora(self) -> LoraConfig: ...
+    @lora.setter
+    def lora(self, value: LoraConfig) -> None: ...
+    @property
+    def beta(self) -> builtins.float: ...
+    @beta.setter
+    def beta(self, value: builtins.float) -> None: ...
+    @property
+    def gamma(self) -> builtins.float: ...
+    @gamma.setter
+    def gamma(self, value: builtins.float) -> None: ...
+    def __new__(cls, *, core: TrainCoreConfig, lora: typing.Optional[LoraConfig] = None, beta: builtins.float = 2.0, gamma: builtins.float = 1.0) -> SimpoConfig:
+        r"""
+        Build a SimpoConfig.
+        """
 
 @typing.final
 class SpeechRequest:
@@ -11164,6 +11426,77 @@ class TrainConfig:
     def __new__(cls, *, base_model_repo: builtins.str, output_dir: builtins.str, lora: typing.Optional[LoraConfig] = None, optim: typing.Optional[OptimConfig] = None, scheduler: typing.Optional[SchedulerConfig] = None, max_steps: builtins.int = 1000, batch_size: builtins.int = 4, gradient_accumulation_steps: builtins.int = 1, max_seq_len: builtins.int = 2048, eval_steps: typing.Optional[builtins.int] = None, save_steps: typing.Optional[builtins.int] = None, seed: builtins.int = 42, mixed_precision: MixedPrecision = MixedPrecision.BF16, device: typing.Optional[builtins.str] = None) -> TrainConfig:
         r"""
         Build a TrainConfig.
+        
+        Raises ``ValueError`` if ``max_steps == 0``, ``batch_size == 0``,
+        ``gradient_accumulation_steps == 0``, or ``max_seq_len == 0``.
+        """
+
+@typing.final
+class TrainCoreConfig:
+    r"""
+    Shared training hyperparameters used by DPO / ORPO / SimPO / KTO /
+    full fine-tune. Mirrors the legacy :class:`TrainConfig` minus the
+    PEFT-specific :class:`LoraConfig`.
+    """
+    @property
+    def base_model_repo(self) -> builtins.str: ...
+    @base_model_repo.setter
+    def base_model_repo(self, value: builtins.str) -> None: ...
+    @property
+    def base_model_revision(self) -> typing.Optional[builtins.str]: ...
+    @base_model_revision.setter
+    def base_model_revision(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def output_dir(self) -> builtins.str: ...
+    @output_dir.setter
+    def output_dir(self, value: builtins.str) -> None: ...
+    @property
+    def max_steps(self) -> builtins.int: ...
+    @max_steps.setter
+    def max_steps(self, value: builtins.int) -> None: ...
+    @property
+    def batch_size(self) -> builtins.int: ...
+    @batch_size.setter
+    def batch_size(self, value: builtins.int) -> None: ...
+    @property
+    def gradient_accumulation_steps(self) -> builtins.int: ...
+    @gradient_accumulation_steps.setter
+    def gradient_accumulation_steps(self, value: builtins.int) -> None: ...
+    @property
+    def max_seq_len(self) -> builtins.int: ...
+    @max_seq_len.setter
+    def max_seq_len(self, value: builtins.int) -> None: ...
+    @property
+    def eval_steps(self) -> typing.Optional[builtins.int]: ...
+    @eval_steps.setter
+    def eval_steps(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def save_steps(self) -> typing.Optional[builtins.int]: ...
+    @save_steps.setter
+    def save_steps(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def seed(self) -> builtins.int: ...
+    @seed.setter
+    def seed(self, value: builtins.int) -> None: ...
+    @property
+    def mixed_precision(self) -> MixedPrecision: ...
+    @mixed_precision.setter
+    def mixed_precision(self, value: MixedPrecision) -> None: ...
+    @property
+    def device(self) -> typing.Optional[builtins.str]: ...
+    @device.setter
+    def device(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def optim(self) -> OptimConfig: ...
+    @optim.setter
+    def optim(self, value: OptimConfig) -> None: ...
+    @property
+    def scheduler(self) -> SchedulerConfig: ...
+    @scheduler.setter
+    def scheduler(self, value: SchedulerConfig) -> None: ...
+    def __new__(cls, *, base_model_repo: builtins.str, output_dir: builtins.str, base_model_revision: typing.Optional[builtins.str] = None, max_steps: builtins.int = 1000, batch_size: builtins.int = 1, gradient_accumulation_steps: builtins.int = 8, max_seq_len: builtins.int = 1024, eval_steps: typing.Optional[builtins.int] = None, save_steps: typing.Optional[builtins.int] = None, seed: builtins.int = 42, mixed_precision: MixedPrecision = MixedPrecision.BF16, device: typing.Optional[builtins.str] = None, optim: typing.Optional[OptimConfig] = None, scheduler: typing.Optional[SchedulerConfig] = None) -> TrainCoreConfig:
+        r"""
+        Build a TrainCoreConfig.
         
         Raises ``ValueError`` if ``max_steps == 0``, ``batch_size == 0``,
         ``gradient_accumulation_steps == 0``, or ``max_seq_len == 0``.

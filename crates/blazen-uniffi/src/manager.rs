@@ -412,9 +412,11 @@ impl UniffiModelManager {
 
 #[cfg(feature = "training")]
 pub use training::{
-    ForeignTrainingProgress, LoraConfigRecord, MixedPrecisionEnum, OptimConfigRecord,
-    SchedulerConfigRecord, SchedulerKindEnum, TrainConfigRecord, TrainedAdapterRecord,
-    TrainingEventEnum, UniffiJsonlDataset,
+    DpoConfigRecord, ForeignTrainingProgress, FullFineTuneConfigRecord, FullFineTuneResultRecord,
+    KtoConfigRecord, LoraConfigRecord, MixedPrecisionEnum, OptimConfigRecord, OrpoConfigRecord,
+    SchedulerConfigRecord, SchedulerKindEnum, SimpoConfigRecord, TrainConfigRecord,
+    TrainCoreConfigRecord, TrainedAdapterRecord, TrainingEventEnum, UniffiJsonlDataset,
+    UniffiPreferenceJsonlDataset, UniffiRatedJsonlDataset,
 };
 
 #[cfg(feature = "training")]
@@ -424,11 +426,12 @@ mod training {
 
     use async_trait::async_trait;
 
-    use blazen_train::dataset::JsonlDataset;
+    use blazen_train::dataset::{JsonlDataset, PreferenceJsonlDataset, RatedJsonlDataset};
     use blazen_train::{
-        BlazenTrainError, LoraConfig, MixedPrecision, OptimConfig, SchedulerConfig, SchedulerKind,
-        TrainConfig, TrainedAdapter, TrainingBatch, TrainingDataset, TrainingEvent,
-        TrainingProgress,
+        BlazenTrainError, DpoConfig, FullFineTuneConfig, FullFineTuneResult, KtoConfig, LoraConfig,
+        MixedPrecision, OptimConfig, OrpoConfig, PreferenceDataset, RatedDataset, SchedulerConfig,
+        SchedulerKind, SimpoConfig, TrainConfig, TrainCoreConfig, TrainedAdapter, TrainingBatch,
+        TrainingDataset, TrainingEvent, TrainingProgress,
     };
     use tokenizers::Tokenizer;
 
@@ -909,6 +912,498 @@ mod training {
                 .await
                 .map_err(BlazenError::from)?;
             Ok(TrainedAdapterRecord::from(adapter))
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // PR8 Wave 14 — DPO / ORPO / SimPO / KTO / full fine-tune
+    //
+    // `TrainCoreConfig` is the SFT-free hyperparameter bundle shared by all
+    // four preference-optimization verbs plus full fine-tune. Defaults track
+    // upstream `blazen_train::config::TrainCoreConfig::default`.
+    // -----------------------------------------------------------------------
+
+    /// Shared training hyperparameters used by DPO / ORPO / SimPO / KTO /
+    /// full fine-tune. Mirrors [`TrainCoreConfig`] (`TrainConfig` minus the
+    /// PEFT-specific [`LoraConfigRecord`]).
+    #[derive(Debug, Clone, uniffi::Record)]
+    pub struct TrainCoreConfigRecord {
+        pub base_model_repo: String,
+        #[uniffi(default = None)]
+        pub base_model_revision: Option<String>,
+        pub output_dir: String,
+        #[uniffi(default = 1000)]
+        pub max_steps: u32,
+        #[uniffi(default = 1)]
+        pub batch_size: u32,
+        #[uniffi(default = 8)]
+        pub gradient_accumulation_steps: u32,
+        #[uniffi(default = 1024)]
+        pub max_seq_len: u32,
+        #[uniffi(default = None)]
+        pub eval_steps: Option<u32>,
+        #[uniffi(default = None)]
+        pub save_steps: Option<u32>,
+        #[uniffi(default = 42)]
+        pub seed: u64,
+        pub mixed_precision: MixedPrecisionEnum,
+        #[uniffi(default = None)]
+        pub device: Option<String>,
+        pub optim: OptimConfigRecord,
+        pub scheduler: SchedulerConfigRecord,
+    }
+
+    impl From<TrainCoreConfigRecord> for TrainCoreConfig {
+        fn from(c: TrainCoreConfigRecord) -> Self {
+            Self {
+                base_model_repo: c.base_model_repo,
+                base_model_revision: c.base_model_revision,
+                output_dir: PathBuf::from(c.output_dir),
+                max_steps: c.max_steps as usize,
+                batch_size: c.batch_size as usize,
+                gradient_accumulation_steps: c.gradient_accumulation_steps as usize,
+                max_seq_len: c.max_seq_len as usize,
+                eval_steps: c.eval_steps.map(|v| v as usize),
+                save_steps: c.save_steps.map(|v| v as usize),
+                seed: c.seed,
+                mixed_precision: c.mixed_precision.into(),
+                device: c.device,
+                optim: c.optim.into(),
+                scheduler: c.scheduler.into(),
+            }
+        }
+    }
+
+    impl From<TrainCoreConfig> for TrainCoreConfigRecord {
+        fn from(c: TrainCoreConfig) -> Self {
+            Self {
+                base_model_repo: c.base_model_repo,
+                base_model_revision: c.base_model_revision,
+                output_dir: c.output_dir.display().to_string(),
+                max_steps: u32::try_from(c.max_steps).unwrap_or(u32::MAX),
+                batch_size: u32::try_from(c.batch_size).unwrap_or(u32::MAX),
+                gradient_accumulation_steps: u32::try_from(c.gradient_accumulation_steps)
+                    .unwrap_or(u32::MAX),
+                max_seq_len: u32::try_from(c.max_seq_len).unwrap_or(u32::MAX),
+                eval_steps: c.eval_steps.map(|v| u32::try_from(v).unwrap_or(u32::MAX)),
+                save_steps: c.save_steps.map(|v| u32::try_from(v).unwrap_or(u32::MAX)),
+                seed: c.seed,
+                mixed_precision: c.mixed_precision.into(),
+                device: c.device,
+                optim: c.optim.into(),
+                scheduler: c.scheduler.into(),
+            }
+        }
+    }
+
+    /// Direct Preference Optimization (DPO) configuration.
+    ///
+    /// Requires a frozen reference model. If `reference_model_repo` is
+    /// `None`, the trainer reuses `core.base_model_repo`.
+    #[derive(Debug, Clone, uniffi::Record)]
+    pub struct DpoConfigRecord {
+        pub core: TrainCoreConfigRecord,
+        pub lora: LoraConfigRecord,
+        #[uniffi(default = 0.1)]
+        pub beta: f32,
+        #[uniffi(default = 0.0)]
+        pub label_smoothing: f32,
+        #[uniffi(default = None)]
+        pub reference_model_repo: Option<String>,
+        #[uniffi(default = None)]
+        pub reference_model_revision: Option<String>,
+    }
+
+    impl From<DpoConfigRecord> for DpoConfig {
+        fn from(c: DpoConfigRecord) -> Self {
+            Self {
+                core: c.core.into(),
+                lora: c.lora.into(),
+                beta: c.beta,
+                reference_model_repo: c.reference_model_repo,
+                reference_model_revision: c.reference_model_revision,
+                label_smoothing: c.label_smoothing,
+            }
+        }
+    }
+
+    /// Odds Ratio Preference Optimization (ORPO) configuration.
+    ///
+    /// Reference-free — combines an SFT loss on chosen responses with an
+    /// odds-ratio loss term weighted by `lambda`.
+    #[derive(Debug, Clone, uniffi::Record)]
+    pub struct OrpoConfigRecord {
+        pub core: TrainCoreConfigRecord,
+        pub lora: LoraConfigRecord,
+        #[uniffi(default = 0.1)]
+        pub lambda: f32,
+    }
+
+    impl From<OrpoConfigRecord> for OrpoConfig {
+        fn from(c: OrpoConfigRecord) -> Self {
+            Self {
+                core: c.core.into(),
+                lora: c.lora.into(),
+                lambda: c.lambda,
+            }
+        }
+    }
+
+    /// Simple Preference Optimization (`SimPO`) configuration.
+    ///
+    /// Reference-free, length-normalized. Defaults follow TRL `main`
+    /// (`beta = 2.0`, `gamma = 1.0`).
+    #[derive(Debug, Clone, uniffi::Record)]
+    pub struct SimpoConfigRecord {
+        pub core: TrainCoreConfigRecord,
+        pub lora: LoraConfigRecord,
+        #[uniffi(default = 2.0)]
+        pub beta: f32,
+        #[uniffi(default = 1.0)]
+        pub gamma: f32,
+    }
+
+    impl From<SimpoConfigRecord> for SimpoConfig {
+        fn from(c: SimpoConfigRecord) -> Self {
+            Self {
+                core: c.core.into(),
+                lora: c.lora.into(),
+                beta: c.beta,
+                gamma: c.gamma,
+            }
+        }
+    }
+
+    /// Kahneman-Tversky Optimization (KTO) configuration.
+    ///
+    /// Like DPO, KTO requires a frozen reference model (defaults to
+    /// `core.base_model_repo`) — but the dataset schema differs:
+    /// each row is a `(prompt, completion, desirable)` triple
+    /// ([`UniffiRatedJsonlDataset`]), not a chosen/rejected pair.
+    #[derive(Debug, Clone, uniffi::Record)]
+    pub struct KtoConfigRecord {
+        pub core: TrainCoreConfigRecord,
+        pub lora: LoraConfigRecord,
+        #[uniffi(default = 0.1)]
+        pub beta: f32,
+        #[uniffi(default = 1.0)]
+        pub lambda_d: f32,
+        #[uniffi(default = 1.0)]
+        pub lambda_u: f32,
+        #[uniffi(default = None)]
+        pub reference_model_repo: Option<String>,
+        #[uniffi(default = None)]
+        pub reference_model_revision: Option<String>,
+    }
+
+    impl From<KtoConfigRecord> for KtoConfig {
+        fn from(c: KtoConfigRecord) -> Self {
+            Self {
+                core: c.core.into(),
+                lora: c.lora.into(),
+                beta: c.beta,
+                lambda_d: c.lambda_d,
+                lambda_u: c.lambda_u,
+                reference_model_repo: c.reference_model_repo,
+                reference_model_revision: c.reference_model_revision,
+            }
+        }
+    }
+
+    /// Full fine-tune configuration (no LoRA — every parameter trains).
+    ///
+    /// `gradient_checkpointing = true` is accepted for forward compatibility
+    /// but the trainer rejects it at init time with
+    /// [`BlazenError::Validation`] — candle 0.10.2 has no activation-
+    /// checkpointing primitive.
+    #[derive(Debug, Clone, uniffi::Record)]
+    pub struct FullFineTuneConfigRecord {
+        pub core: TrainCoreConfigRecord,
+        #[uniffi(default = false)]
+        pub gradient_checkpointing: bool,
+    }
+
+    impl From<FullFineTuneConfigRecord> for FullFineTuneConfig {
+        fn from(c: FullFineTuneConfigRecord) -> Self {
+            Self {
+                core: c.core.into(),
+                gradient_checkpointing: c.gradient_checkpointing,
+            }
+        }
+    }
+
+    /// On-disk descriptor returned by [`UniffiModelManager::fine_tune`].
+    ///
+    /// Unlike [`TrainedAdapterRecord`], no PEFT adapter is written — the
+    /// entire model's weights are saved to `output_dir` directly.
+    #[derive(Debug, Clone, uniffi::Record)]
+    pub struct FullFineTuneResultRecord {
+        pub output_dir: String,
+        pub final_loss: f32,
+        pub steps_completed: u64,
+    }
+
+    impl From<FullFineTuneResult> for FullFineTuneResultRecord {
+        fn from(r: FullFineTuneResult) -> Self {
+            Self {
+                output_dir: r.output_dir.display().to_string(),
+                final_loss: r.final_loss,
+                steps_completed: r.steps_completed as u64,
+            }
+        }
+    }
+
+    /// JSONL-backed preference-pair dataset opaque handle for DPO / ORPO /
+    /// `SimPO`.
+    ///
+    /// Each line of the input file must deserialize to either
+    /// `{"prompt": "...", "chosen": "...", "rejected": "..."}` or
+    /// `{"messages": [...], "chosen": "...", "rejected": "..."}` (the
+    /// latter requires `chat_template`).
+    #[derive(uniffi::Object)]
+    pub struct UniffiPreferenceJsonlDataset {
+        inner: Arc<PreferenceJsonlDataset>,
+    }
+
+    #[uniffi::export]
+    impl UniffiPreferenceJsonlDataset {
+        /// Load a preference-pair JSONL file using the tokenizer at
+        /// `tokenizer_path`. Args mirror [`UniffiJsonlDataset::from_path`].
+        #[uniffi::constructor]
+        pub fn from_path(
+            path: String,
+            tokenizer_path: String,
+            chat_template: Option<String>,
+            max_seq_len: u32,
+            device: Option<String>,
+            pad_token_id: u32,
+        ) -> BlazenResult<Arc<Self>> {
+            if max_seq_len == 0 {
+                return Err(BlazenError::Validation {
+                    message: "PreferenceJsonlDataset.max_seq_len must be > 0".into(),
+                });
+            }
+            let tokenizer =
+                Tokenizer::from_file(&tokenizer_path).map_err(|e| BlazenError::Validation {
+                    message: format!("failed to load tokenizer from {tokenizer_path:?}: {e}"),
+                })?;
+            let device_str = device.as_deref().unwrap_or("cpu");
+            let cdev = parse_train_device(device_str)?;
+            let ds = PreferenceJsonlDataset::from_path(
+                std::path::Path::new(&path),
+                Arc::new(tokenizer),
+                chat_template.as_deref(),
+                max_seq_len as usize,
+                cdev,
+                pad_token_id,
+            )
+            .map_err(|e| BlazenError::Validation {
+                message: format!("PreferenceJsonlDataset load failed: {e}"),
+            })?;
+            Ok(Arc::new(Self {
+                inner: Arc::new(ds),
+            }))
+        }
+
+        /// Number of preference examples in the dataset.
+        pub fn len(&self) -> u64 {
+            self.inner.len() as u64
+        }
+
+        pub fn is_empty(&self) -> bool {
+            self.inner.is_empty()
+        }
+    }
+
+    /// JSONL-backed rated single-completion dataset opaque handle for KTO.
+    ///
+    /// Each line of the input file must deserialize to either
+    /// `{"prompt": "...", "completion": "...", "label": true|false}` or
+    /// `{"messages": [...], "completion": "...", "label": ...}` (the
+    /// latter requires `chat_template`).
+    #[derive(uniffi::Object)]
+    pub struct UniffiRatedJsonlDataset {
+        inner: Arc<RatedJsonlDataset>,
+    }
+
+    #[uniffi::export]
+    impl UniffiRatedJsonlDataset {
+        /// Load a rated JSONL file using the tokenizer at `tokenizer_path`.
+        /// Args mirror [`UniffiJsonlDataset::from_path`].
+        #[uniffi::constructor]
+        pub fn from_path(
+            path: String,
+            tokenizer_path: String,
+            chat_template: Option<String>,
+            max_seq_len: u32,
+            device: Option<String>,
+            pad_token_id: u32,
+        ) -> BlazenResult<Arc<Self>> {
+            if max_seq_len == 0 {
+                return Err(BlazenError::Validation {
+                    message: "RatedJsonlDataset.max_seq_len must be > 0".into(),
+                });
+            }
+            let tokenizer =
+                Tokenizer::from_file(&tokenizer_path).map_err(|e| BlazenError::Validation {
+                    message: format!("failed to load tokenizer from {tokenizer_path:?}: {e}"),
+                })?;
+            let device_str = device.as_deref().unwrap_or("cpu");
+            let cdev = parse_train_device(device_str)?;
+            let ds = RatedJsonlDataset::from_path(
+                std::path::Path::new(&path),
+                Arc::new(tokenizer),
+                chat_template.as_deref(),
+                max_seq_len as usize,
+                cdev,
+                pad_token_id,
+            )
+            .map_err(|e| BlazenError::Validation {
+                message: format!("RatedJsonlDataset load failed: {e}"),
+            })?;
+            Ok(Arc::new(Self {
+                inner: Arc::new(ds),
+            }))
+        }
+
+        /// Number of rated examples in the dataset.
+        pub fn len(&self) -> u64 {
+            self.inner.len() as u64
+        }
+
+        pub fn is_empty(&self) -> bool {
+            self.inner.is_empty()
+        }
+    }
+
+    #[uniffi::export(async_runtime = "tokio")]
+    impl UniffiModelManager {
+        /// Train a `LoRA` adapter via Direct Preference Optimization (DPO).
+        ///
+        /// Downloads the base model from `HuggingFace` (cached) plus the
+        /// reference model (defaults to `config.core.base_model_repo`),
+        /// runs the DPO training loop driven by `dataset`, and writes the
+        /// resulting PEFT-format adapter to `config.core.output_dir`.
+        ///
+        /// If `progress` is provided, its `on_event` is called for each
+        /// transition. Returning `Err(_)` from the callback cancels the run
+        /// with [`BlazenError::Cancelled`].
+        pub async fn train_dpo(
+            self: Arc<Self>,
+            config: DpoConfigRecord,
+            dataset: Arc<UniffiPreferenceJsonlDataset>,
+            progress: Option<Arc<dyn ForeignTrainingProgress>>,
+        ) -> BlazenResult<TrainedAdapterRecord> {
+            let rust_cfg: DpoConfig = config.into();
+            let sink: Option<Arc<dyn TrainingProgress>> = progress.map(|p| {
+                Arc::new(ForeignProgressAdapter { inner: p }) as Arc<dyn TrainingProgress>
+            });
+            let ds: Arc<dyn PreferenceDataset> = dataset.inner.clone();
+            let adapter = self
+                .inner
+                .train_dpo(rust_cfg, ds, sink)
+                .await
+                .map_err(BlazenError::from)?;
+            Ok(TrainedAdapterRecord::from(adapter))
+        }
+
+        /// Train a `LoRA` adapter via Odds Ratio Preference Optimization
+        /// (ORPO). Reference-free — combines an SFT loss on chosen
+        /// completions with an odds-ratio preference term.
+        pub async fn train_orpo(
+            self: Arc<Self>,
+            config: OrpoConfigRecord,
+            dataset: Arc<UniffiPreferenceJsonlDataset>,
+            progress: Option<Arc<dyn ForeignTrainingProgress>>,
+        ) -> BlazenResult<TrainedAdapterRecord> {
+            let rust_cfg: OrpoConfig = config.into();
+            let sink: Option<Arc<dyn TrainingProgress>> = progress.map(|p| {
+                Arc::new(ForeignProgressAdapter { inner: p }) as Arc<dyn TrainingProgress>
+            });
+            let ds: Arc<dyn PreferenceDataset> = dataset.inner.clone();
+            let adapter = self
+                .inner
+                .train_orpo(rust_cfg, ds, sink)
+                .await
+                .map_err(BlazenError::from)?;
+            Ok(TrainedAdapterRecord::from(adapter))
+        }
+
+        /// Train a `LoRA` adapter via Simple Preference Optimization
+        /// (`SimPO`). Reference-free and length-normalized.
+        pub async fn train_simpo(
+            self: Arc<Self>,
+            config: SimpoConfigRecord,
+            dataset: Arc<UniffiPreferenceJsonlDataset>,
+            progress: Option<Arc<dyn ForeignTrainingProgress>>,
+        ) -> BlazenResult<TrainedAdapterRecord> {
+            let rust_cfg: SimpoConfig = config.into();
+            let sink: Option<Arc<dyn TrainingProgress>> = progress.map(|p| {
+                Arc::new(ForeignProgressAdapter { inner: p }) as Arc<dyn TrainingProgress>
+            });
+            let ds: Arc<dyn PreferenceDataset> = dataset.inner.clone();
+            let adapter = self
+                .inner
+                .train_simpo(rust_cfg, ds, sink)
+                .await
+                .map_err(BlazenError::from)?;
+            Ok(TrainedAdapterRecord::from(adapter))
+        }
+
+        /// Train a `LoRA` adapter via Kahneman-Tversky Optimization (KTO).
+        ///
+        /// Like DPO, KTO requires a frozen reference model; the dataset
+        /// schema differs: each row is a `(prompt, completion, desirable)`
+        /// triple.
+        pub async fn train_kto(
+            self: Arc<Self>,
+            config: KtoConfigRecord,
+            dataset: Arc<UniffiRatedJsonlDataset>,
+            progress: Option<Arc<dyn ForeignTrainingProgress>>,
+        ) -> BlazenResult<TrainedAdapterRecord> {
+            let rust_cfg: KtoConfig = config.into();
+            let sink: Option<Arc<dyn TrainingProgress>> = progress.map(|p| {
+                Arc::new(ForeignProgressAdapter { inner: p }) as Arc<dyn TrainingProgress>
+            });
+            let ds: Arc<dyn RatedDataset> = dataset.inner.clone();
+            let adapter = self
+                .inner
+                .train_kto(rust_cfg, ds, sink)
+                .await
+                .map_err(BlazenError::from)?;
+            Ok(TrainedAdapterRecord::from(adapter))
+        }
+
+        /// Run a full fine-tune (every parameter trainable; no `LoRA`
+        /// adapter).
+        ///
+        /// Returns [`FullFineTuneResultRecord`] rather than
+        /// [`TrainedAdapterRecord`] because the output is a complete set
+        /// of model weights in `config.core.output_dir`, not a mountable
+        /// PEFT delta. Setting `config.gradient_checkpointing = true` is
+        /// rejected up-front because candle 0.10.2 has no activation-
+        /// checkpointing primitive.
+        pub async fn fine_tune(
+            self: Arc<Self>,
+            config: FullFineTuneConfigRecord,
+            dataset: Arc<UniffiJsonlDataset>,
+            progress: Option<Arc<dyn ForeignTrainingProgress>>,
+        ) -> BlazenResult<FullFineTuneResultRecord> {
+            let rust_cfg: FullFineTuneConfig = config.into();
+            let sink: Option<Arc<dyn TrainingProgress>> = progress.map(|p| {
+                Arc::new(ForeignProgressAdapter { inner: p }) as Arc<dyn TrainingProgress>
+            });
+            // `JsonlDataset` impls `TrainingDataset` directly, so the
+            // `Arc<JsonlDataset>` unsized-coerces to `Arc<dyn TrainingDataset>`
+            // without needing the `ArcDataset` wrapper used by `train_lora`
+            // (which takes `Box<dyn TrainingDataset>`).
+            let ds: Arc<dyn TrainingDataset> = dataset.inner.clone();
+            let result = self
+                .inner
+                .fine_tune(rust_cfg, ds, sink)
+                .await
+                .map_err(BlazenError::from)?;
+            Ok(FullFineTuneResultRecord::from(result))
         }
     }
 

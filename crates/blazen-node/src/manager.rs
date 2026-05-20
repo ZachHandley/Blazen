@@ -856,8 +856,10 @@ impl LocalModel for JsLocalModelAdapter {
 
 #[cfg(feature = "training")]
 pub use training::{
-    JsJsonlDataset, JsLoraConfig, JsMixedPrecision, JsOptimConfig, JsSchedulerConfig,
-    JsSchedulerKind, JsTrainConfig, JsTrainedAdapter, JsTrainingEvent,
+    JsDpoConfig, JsFullFineTuneConfig, JsFullFineTuneResult, JsJsonlDataset, JsKtoConfig,
+    JsLoraConfig, JsMixedPrecision, JsOptimConfig, JsOrpoConfig, JsPreferenceJsonlDataset,
+    JsRatedJsonlDataset, JsSchedulerConfig, JsSchedulerKind, JsSimpoConfig, JsTrainConfig,
+    JsTrainCoreConfig, JsTrainedAdapter, JsTrainingEvent,
 };
 
 #[cfg(feature = "training")]
@@ -876,11 +878,12 @@ mod training {
     use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
     use napi_derive::napi;
 
-    use blazen_train::dataset::JsonlDataset;
+    use blazen_train::dataset::{JsonlDataset, PreferenceJsonlDataset, RatedJsonlDataset};
     use blazen_train::{
-        BlazenTrainError, LoraConfig, MixedPrecision, OptimConfig, SchedulerConfig, SchedulerKind,
-        TrainConfig, TrainedAdapter, TrainingBatch, TrainingDataset, TrainingEvent,
-        TrainingProgress,
+        BlazenTrainError, DpoConfig, FullFineTuneConfig, FullFineTuneResult, KtoConfig, LoraConfig,
+        MixedPrecision, OptimConfig, OrpoConfig, PreferenceDataset, RatedDataset, SchedulerConfig,
+        SchedulerKind, SimpoConfig, TrainConfig, TrainCoreConfig, TrainedAdapter, TrainingBatch,
+        TrainingDataset, TrainingEvent, TrainingProgress,
     };
     use tokenizers::Tokenizer;
 
@@ -1484,6 +1487,528 @@ mod training {
     }
 
     // -----------------------------------------------------------------------
+    // JsPreferenceJsonlDataset / JsRatedJsonlDataset (opaque)
+    // -----------------------------------------------------------------------
+
+    /// Preference-pair JSONL dataset for DPO / ORPO / SimPO.
+    ///
+    /// Each line of the input file must deserialize to either
+    /// `{"prompt": "...", "chosen": "...", "rejected": "..."}` or
+    /// `{"messages": [...], "chosen": "...", "rejected": "..."}` (chat shape).
+    #[napi(js_name = "PreferenceJsonlDataset")]
+    pub struct JsPreferenceJsonlDataset {
+        pub(super) inner: Arc<PreferenceJsonlDataset>,
+    }
+
+    #[napi]
+    impl JsPreferenceJsonlDataset {
+        /// Load a preference JSONL file using the tokenizer at
+        /// `tokenizerPath`.
+        ///
+        /// # Errors
+        ///
+        /// Throws if the tokenizer cannot be loaded, the device string is
+        /// invalid, or the JSONL file fails to parse.
+        #[napi(factory, js_name = "fromPath")]
+        pub fn from_path(
+            path: String,
+            tokenizer_path: String,
+            opts: Option<JsJsonlDatasetOptions>,
+        ) -> napi::Result<Self> {
+            let opts = opts.unwrap_or(JsJsonlDatasetOptions {
+                chat_template: None,
+                max_seq_len: None,
+                device: None,
+                pad_token_id: None,
+            });
+            let max_seq_len = opts.max_seq_len.unwrap_or(2048) as usize;
+            if max_seq_len == 0 {
+                return Err(napi::Error::from_reason(
+                    "PreferenceJsonlDataset.maxSeqLen must be > 0",
+                ));
+            }
+            let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
+                napi::Error::from_reason(format!(
+                    "failed to load tokenizer from {tokenizer_path:?}: {e}"
+                ))
+            })?;
+            let device_str = opts.device.unwrap_or_else(|| String::from("cpu"));
+            let cdev = parse_train_device_node(&device_str)?;
+            let ds = PreferenceJsonlDataset::from_path(
+                std::path::Path::new(&path),
+                Arc::new(tokenizer),
+                opts.chat_template.as_deref(),
+                max_seq_len,
+                cdev,
+                opts.pad_token_id.unwrap_or(0),
+            )
+            .map_err(|e| {
+                napi::Error::from_reason(format!("PreferenceJsonlDataset load failed: {e}"))
+            })?;
+            Ok(Self {
+                inner: Arc::new(ds),
+            })
+        }
+    }
+
+    /// Rated JSONL dataset for KTO.
+    ///
+    /// Each line of the input file must deserialize to
+    /// `{"prompt"|"messages": ..., "completion": "...", "label": true|false}`.
+    #[napi(js_name = "RatedJsonlDataset")]
+    pub struct JsRatedJsonlDataset {
+        pub(super) inner: Arc<RatedJsonlDataset>,
+    }
+
+    #[napi]
+    impl JsRatedJsonlDataset {
+        /// Load a rated JSONL file using the tokenizer at `tokenizerPath`.
+        ///
+        /// # Errors
+        ///
+        /// Throws if the tokenizer cannot be loaded, the device string is
+        /// invalid, or the JSONL file fails to parse.
+        #[napi(factory, js_name = "fromPath")]
+        pub fn from_path(
+            path: String,
+            tokenizer_path: String,
+            opts: Option<JsJsonlDatasetOptions>,
+        ) -> napi::Result<Self> {
+            let opts = opts.unwrap_or(JsJsonlDatasetOptions {
+                chat_template: None,
+                max_seq_len: None,
+                device: None,
+                pad_token_id: None,
+            });
+            let max_seq_len = opts.max_seq_len.unwrap_or(2048) as usize;
+            if max_seq_len == 0 {
+                return Err(napi::Error::from_reason(
+                    "RatedJsonlDataset.maxSeqLen must be > 0",
+                ));
+            }
+            let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
+                napi::Error::from_reason(format!(
+                    "failed to load tokenizer from {tokenizer_path:?}: {e}"
+                ))
+            })?;
+            let device_str = opts.device.unwrap_or_else(|| String::from("cpu"));
+            let cdev = parse_train_device_node(&device_str)?;
+            let ds = RatedJsonlDataset::from_path(
+                std::path::Path::new(&path),
+                Arc::new(tokenizer),
+                opts.chat_template.as_deref(),
+                max_seq_len,
+                cdev,
+                opts.pad_token_id.unwrap_or(0),
+            )
+            .map_err(|e| napi::Error::from_reason(format!("RatedJsonlDataset load failed: {e}")))?;
+            Ok(Self {
+                inner: Arc::new(ds),
+            })
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // JsTrainCoreConfig + preference / fine-tune config structs
+    // -----------------------------------------------------------------------
+
+    /// Shared training hyperparameters for DPO/ORPO/SimPO/KTO and full
+    /// fine-tune. Mirrors [`blazen_train::TrainCoreConfig`].
+    #[napi(object)]
+    pub struct JsTrainCoreConfig {
+        /// HuggingFace repo id of the base model.
+        #[napi(js_name = "baseModelRepo")]
+        pub base_model_repo: String,
+        /// Optional revision (branch / tag / commit) for the base model.
+        #[napi(js_name = "baseModelRevision")]
+        pub base_model_revision: Option<String>,
+        /// Filesystem directory for trained weights and checkpoints.
+        #[napi(js_name = "outputDir")]
+        pub output_dir: String,
+        /// Total optimizer steps to run. Default `1000`.
+        #[napi(js_name = "maxSteps")]
+        pub max_steps: Option<u32>,
+        /// Micro-batch size (per forward pass). Default `1`.
+        #[napi(js_name = "batchSize")]
+        pub batch_size: Option<u32>,
+        /// Micro-batches accumulated before each optimizer step. Default `8`.
+        #[napi(js_name = "gradientAccumulationSteps")]
+        pub gradient_accumulation_steps: Option<u32>,
+        /// Maximum tokenized sequence length per example. Default `1024`.
+        #[napi(js_name = "maxSeqLen")]
+        pub max_seq_len: Option<u32>,
+        /// Run evaluation every N steps when set.
+        #[napi(js_name = "evalSteps")]
+        pub eval_steps: Option<u32>,
+        /// Write a checkpoint every N steps when set.
+        #[napi(js_name = "saveSteps")]
+        pub save_steps: Option<u32>,
+        /// RNG seed. Default `42`.
+        pub seed: Option<BigInt>,
+        /// Mixed-precision mode for forward / backward. Default `Bf16`.
+        #[napi(js_name = "mixedPrecision")]
+        pub mixed_precision: Option<JsMixedPrecision>,
+        /// Device string forwarded to the trainer (`"cpu"`, `"cuda:0"`, `"metal"`).
+        pub device: Option<String>,
+        /// Optimizer hyperparameters (AdamW).
+        pub optim: Option<JsOptimConfig>,
+        /// Learning-rate schedule.
+        pub scheduler: Option<JsSchedulerConfig>,
+    }
+
+    impl TryFrom<JsTrainCoreConfig> for TrainCoreConfig {
+        type Error = napi::Error;
+
+        fn try_from(c: JsTrainCoreConfig) -> Result<Self, Self::Error> {
+            if c.base_model_repo.trim().is_empty() {
+                return Err(napi::Error::from_reason(
+                    "TrainCoreConfig.baseModelRepo must be non-empty",
+                ));
+            }
+            if c.output_dir.trim().is_empty() {
+                return Err(napi::Error::from_reason(
+                    "TrainCoreConfig.outputDir must be non-empty",
+                ));
+            }
+            let max_steps = c.max_steps.unwrap_or(1000) as usize;
+            if max_steps == 0 {
+                return Err(napi::Error::from_reason(
+                    "TrainCoreConfig.maxSteps must be > 0",
+                ));
+            }
+            let batch_size = c.batch_size.unwrap_or(1) as usize;
+            if batch_size == 0 {
+                return Err(napi::Error::from_reason(
+                    "TrainCoreConfig.batchSize must be > 0",
+                ));
+            }
+            let gradient_accumulation_steps = c.gradient_accumulation_steps.unwrap_or(8) as usize;
+            if gradient_accumulation_steps == 0 {
+                return Err(napi::Error::from_reason(
+                    "TrainCoreConfig.gradientAccumulationSteps must be > 0",
+                ));
+            }
+            let max_seq_len = c.max_seq_len.unwrap_or(1024) as usize;
+            if max_seq_len == 0 {
+                return Err(napi::Error::from_reason(
+                    "TrainCoreConfig.maxSeqLen must be > 0",
+                ));
+            }
+            let optim = c
+                .optim
+                .map(OptimConfig::try_from)
+                .transpose()?
+                .unwrap_or(OptimConfig {
+                    learning_rate: 2e-4,
+                    beta1: 0.9,
+                    beta2: 0.999,
+                    epsilon: 1e-8,
+                    weight_decay: 0.0,
+                    gradient_clip: Some(1.0),
+                });
+            let scheduler = c.scheduler.map_or(
+                SchedulerConfig {
+                    kind: SchedulerKind::Cosine,
+                    warmup_steps: 0,
+                },
+                SchedulerConfig::from,
+            );
+            Ok(Self {
+                base_model_repo: c.base_model_repo,
+                base_model_revision: c.base_model_revision,
+                output_dir: PathBuf::from(c.output_dir),
+                max_steps,
+                batch_size,
+                gradient_accumulation_steps,
+                max_seq_len,
+                eval_steps: c.eval_steps.map(|v| v as usize),
+                save_steps: c.save_steps.map(|v| v as usize),
+                seed: c.seed.map_or(42, |b| b.get_u64().1),
+                mixed_precision: c.mixed_precision.map_or(MixedPrecision::Bf16, Into::into),
+                device: c.device,
+                optim,
+                scheduler,
+            })
+        }
+    }
+
+    /// Direct Preference Optimization (DPO) configuration.
+    #[napi(object)]
+    pub struct JsDpoConfig {
+        /// Shared training hyperparameters.
+        pub core: JsTrainCoreConfig,
+        /// LoRA hyperparameters applied to the policy model.
+        pub lora: Option<JsLoraConfig>,
+        /// KL-regularization strength. Default `0.1`.
+        pub beta: Option<f64>,
+        /// Conservative DPO label smoothing (cDPO). Default `0.0`.
+        #[napi(js_name = "labelSmoothing")]
+        pub label_smoothing: Option<f64>,
+        /// Reference model repo. `null` reuses `core.baseModelRepo`.
+        #[napi(js_name = "referenceModelRepo")]
+        pub reference_model_repo: Option<String>,
+        /// Optional revision for the reference model.
+        #[napi(js_name = "referenceModelRevision")]
+        pub reference_model_revision: Option<String>,
+    }
+
+    impl TryFrom<JsDpoConfig> for DpoConfig {
+        type Error = napi::Error;
+
+        fn try_from(c: JsDpoConfig) -> Result<Self, Self::Error> {
+            let beta = c.beta.unwrap_or(0.1);
+            if !beta.is_finite() || beta <= 0.0 {
+                return Err(napi::Error::from_reason("DpoConfig.beta must be > 0"));
+            }
+            let label_smoothing = c.label_smoothing.unwrap_or(0.0);
+            if !label_smoothing.is_finite() || !(0.0..=0.5).contains(&label_smoothing) {
+                return Err(napi::Error::from_reason(
+                    "DpoConfig.labelSmoothing must be in [0.0, 0.5]",
+                ));
+            }
+            let core: TrainCoreConfig = c.core.try_into()?;
+            let lora = c
+                .lora
+                .map(LoraConfig::try_from)
+                .transpose()?
+                .unwrap_or_else(|| LoraConfig {
+                    rank: 16,
+                    alpha: 32.0,
+                    dropout: 0.0,
+                    target_modules: default_target_modules(),
+                });
+            Ok(Self {
+                core,
+                lora,
+                beta: beta as f32,
+                reference_model_repo: c.reference_model_repo,
+                reference_model_revision: c.reference_model_revision,
+                label_smoothing: label_smoothing as f32,
+            })
+        }
+    }
+
+    /// Odds Ratio Preference Optimization (ORPO) configuration.
+    #[napi(object)]
+    pub struct JsOrpoConfig {
+        /// Shared training hyperparameters.
+        pub core: JsTrainCoreConfig,
+        /// LoRA hyperparameters.
+        pub lora: Option<JsLoraConfig>,
+        /// Weight of the odds-ratio term relative to the SFT term. Default `0.1`.
+        pub lambda: Option<f64>,
+    }
+
+    impl TryFrom<JsOrpoConfig> for OrpoConfig {
+        type Error = napi::Error;
+
+        fn try_from(c: JsOrpoConfig) -> Result<Self, Self::Error> {
+            let lambda = c.lambda.unwrap_or(0.1);
+            if !lambda.is_finite() || lambda < 0.0 {
+                return Err(napi::Error::from_reason("OrpoConfig.lambda must be >= 0"));
+            }
+            let core: TrainCoreConfig = c.core.try_into()?;
+            let lora = c
+                .lora
+                .map(LoraConfig::try_from)
+                .transpose()?
+                .unwrap_or_else(|| LoraConfig {
+                    rank: 16,
+                    alpha: 32.0,
+                    dropout: 0.0,
+                    target_modules: default_target_modules(),
+                });
+            Ok(Self {
+                core,
+                lora,
+                lambda: lambda as f32,
+            })
+        }
+    }
+
+    /// Simple Preference Optimization (`SimPO`) configuration.
+    #[napi(object)]
+    pub struct JsSimpoConfig {
+        /// Shared training hyperparameters.
+        pub core: JsTrainCoreConfig,
+        /// LoRA hyperparameters.
+        pub lora: Option<JsLoraConfig>,
+        /// Logit scaling for the length-normalized preference margin. Default `2.0`.
+        pub beta: Option<f64>,
+        /// Target reward margin between chosen and rejected. Default `1.0`.
+        pub gamma: Option<f64>,
+    }
+
+    impl TryFrom<JsSimpoConfig> for SimpoConfig {
+        type Error = napi::Error;
+
+        fn try_from(c: JsSimpoConfig) -> Result<Self, Self::Error> {
+            let beta = c.beta.unwrap_or(2.0);
+            if !beta.is_finite() || beta <= 0.0 {
+                return Err(napi::Error::from_reason("SimpoConfig.beta must be > 0"));
+            }
+            let gamma = c.gamma.unwrap_or(1.0);
+            if !gamma.is_finite() || gamma < 0.0 {
+                return Err(napi::Error::from_reason("SimpoConfig.gamma must be >= 0"));
+            }
+            let core: TrainCoreConfig = c.core.try_into()?;
+            let lora = c
+                .lora
+                .map(LoraConfig::try_from)
+                .transpose()?
+                .unwrap_or_else(|| LoraConfig {
+                    rank: 16,
+                    alpha: 32.0,
+                    dropout: 0.0,
+                    target_modules: default_target_modules(),
+                });
+            Ok(Self {
+                core,
+                lora,
+                beta: beta as f32,
+                gamma: gamma as f32,
+            })
+        }
+    }
+
+    /// Kahneman-Tversky Optimization (KTO) configuration.
+    #[napi(object)]
+    pub struct JsKtoConfig {
+        /// Shared training hyperparameters.
+        pub core: JsTrainCoreConfig,
+        /// LoRA hyperparameters applied to the policy model.
+        pub lora: Option<JsLoraConfig>,
+        /// KL-regularization strength. Default `0.1`.
+        pub beta: Option<f64>,
+        /// Loss weight applied to desirable examples. Default `1.0`.
+        #[napi(js_name = "lambdaD")]
+        pub lambda_d: Option<f64>,
+        /// Loss weight applied to undesirable examples. Default `1.0`.
+        #[napi(js_name = "lambdaU")]
+        pub lambda_u: Option<f64>,
+        /// Reference model repo. `null` reuses `core.baseModelRepo`.
+        #[napi(js_name = "referenceModelRepo")]
+        pub reference_model_repo: Option<String>,
+        /// Optional revision for the reference model.
+        #[napi(js_name = "referenceModelRevision")]
+        pub reference_model_revision: Option<String>,
+    }
+
+    impl TryFrom<JsKtoConfig> for KtoConfig {
+        type Error = napi::Error;
+
+        fn try_from(c: JsKtoConfig) -> Result<Self, Self::Error> {
+            let beta = c.beta.unwrap_or(0.1);
+            if !beta.is_finite() || beta <= 0.0 {
+                return Err(napi::Error::from_reason("KtoConfig.beta must be > 0"));
+            }
+            let lambda_d = c.lambda_d.unwrap_or(1.0);
+            if !lambda_d.is_finite() || lambda_d < 0.0 {
+                return Err(napi::Error::from_reason("KtoConfig.lambdaD must be >= 0"));
+            }
+            let lambda_u = c.lambda_u.unwrap_or(1.0);
+            if !lambda_u.is_finite() || lambda_u < 0.0 {
+                return Err(napi::Error::from_reason("KtoConfig.lambdaU must be >= 0"));
+            }
+            let core: TrainCoreConfig = c.core.try_into()?;
+            let lora = c
+                .lora
+                .map(LoraConfig::try_from)
+                .transpose()?
+                .unwrap_or_else(|| LoraConfig {
+                    rank: 16,
+                    alpha: 32.0,
+                    dropout: 0.0,
+                    target_modules: default_target_modules(),
+                });
+            Ok(Self {
+                core,
+                lora,
+                beta: beta as f32,
+                lambda_d: lambda_d as f32,
+                lambda_u: lambda_u as f32,
+                reference_model_repo: c.reference_model_repo,
+                reference_model_revision: c.reference_model_revision,
+            })
+        }
+    }
+
+    /// Full fine-tune configuration (every parameter trains; no LoRA adapter).
+    ///
+    /// `gradientCheckpointing = true` is accepted for forward compatibility
+    /// but the trainer currently rejects it at init time because candle
+    /// 0.10.2 has no activation-checkpointing primitive.
+    #[napi(object)]
+    pub struct JsFullFineTuneConfig {
+        /// Shared training hyperparameters.
+        pub core: JsTrainCoreConfig,
+        /// Activation checkpointing (currently unsupported in the trainer).
+        #[napi(js_name = "gradientCheckpointing")]
+        pub gradient_checkpointing: Option<bool>,
+    }
+
+    impl TryFrom<JsFullFineTuneConfig> for FullFineTuneConfig {
+        type Error = napi::Error;
+
+        fn try_from(c: JsFullFineTuneConfig) -> Result<Self, Self::Error> {
+            Ok(Self {
+                core: c.core.try_into()?,
+                gradient_checkpointing: c.gradient_checkpointing.unwrap_or(false),
+            })
+        }
+    }
+
+    /// Result of a completed full fine-tune run.
+    #[napi(object)]
+    pub struct JsFullFineTuneResult {
+        /// Directory the trained model weights were written to.
+        #[napi(js_name = "outputDir")]
+        pub output_dir: String,
+        /// Final training loss.
+        #[napi(js_name = "finalLoss")]
+        pub final_loss: f64,
+        /// Total optimizer steps executed.
+        #[napi(js_name = "stepsCompleted")]
+        pub steps_completed: u32,
+    }
+
+    impl From<FullFineTuneResult> for JsFullFineTuneResult {
+        fn from(r: FullFineTuneResult) -> Self {
+            Self {
+                output_dir: r.output_dir.display().to_string(),
+                final_loss: f64::from(r.final_loss),
+                steps_completed: r.steps_completed as u32,
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Bridge for fine_tune: wrap Arc<JsonlDataset> as Arc<dyn TrainingDataset>
+    // -----------------------------------------------------------------------
+
+    /// Why: `train_lora` consumes `Box<dyn TrainingDataset>` (and we already
+    /// have the local [`ArcDataset`] wrapper above), but `fine_tune` wants
+    /// `Arc<dyn TrainingDataset>`. The blanket impl `impl TrainingDataset for
+    /// JsonlDataset` is for the bare struct, not `Arc<JsonlDataset>`, so we
+    /// need an Arc-aware wrapper that forwards to the underlying impl.
+    struct ArcDatasetForFineTune(Arc<JsonlDataset>);
+
+    #[async_trait]
+    impl TrainingDataset for ArcDatasetForFineTune {
+        fn len(&self) -> usize {
+            self.0.len()
+        }
+
+        async fn batch(
+            &self,
+            batch_size: usize,
+            idx: usize,
+        ) -> Result<TrainingBatch, BlazenTrainError> {
+            self.0.batch(batch_size, idx).await
+        }
+    }
+
+    // -----------------------------------------------------------------------
     // JsModelManager::train_lora
     // -----------------------------------------------------------------------
 
@@ -1532,6 +2057,179 @@ mod training {
                 .await
                 .map_err(|e| napi::Error::from_reason(e.to_string()))?;
             Ok(JsTrainedAdapter::from(adapter))
+        }
+
+        /// Train a `LoRA` adapter via Direct Preference Optimization (DPO).
+        ///
+        /// Like [`Self::train_lora`] but consumes a preference-pair dataset
+        /// of `(prompt, chosen, rejected)` triples and requires a frozen
+        /// reference model (defaults to `config.core.baseModelRepo` when
+        /// `config.referenceModelRepo` is `null`).
+        ///
+        /// # Errors
+        ///
+        /// Throws on invalid config, unrecognised device, HF download
+        /// failure, dataset I/O failure, trainer failure, or queueing
+        /// failure on the progress callback.
+        #[napi(js_name = "trainDpo", ts_return_type = "Promise<TrainedAdapter>")]
+        pub async fn train_dpo(
+            &self,
+            config: JsDpoConfig,
+            dataset: &JsPreferenceJsonlDataset,
+            progress: Option<ProgressTsfn>,
+        ) -> napi::Result<JsTrainedAdapter> {
+            let rust_cfg: DpoConfig = config.try_into()?;
+            let ds_arc: Arc<dyn PreferenceDataset> = dataset.inner.clone();
+            let sink: Option<Arc<dyn TrainingProgress>> = progress.map(|cb| {
+                let bridge = NodeTrainingProgressBridge {
+                    callback: Arc::new(cb),
+                };
+                Arc::new(bridge) as Arc<dyn TrainingProgress>
+            });
+            let adapter = self
+                .inner
+                .train_dpo(rust_cfg, ds_arc, sink)
+                .await
+                .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+            Ok(JsTrainedAdapter::from(adapter))
+        }
+
+        /// Train a `LoRA` adapter via Odds Ratio Preference Optimization (ORPO).
+        ///
+        /// Reference-free; combines a standard SFT loss on chosen
+        /// completions with an odds-ratio preference term weighted by
+        /// `config.lambda`.
+        ///
+        /// # Errors
+        ///
+        /// Same surface as [`Self::train_dpo`].
+        #[napi(js_name = "trainOrpo", ts_return_type = "Promise<TrainedAdapter>")]
+        pub async fn train_orpo(
+            &self,
+            config: JsOrpoConfig,
+            dataset: &JsPreferenceJsonlDataset,
+            progress: Option<ProgressTsfn>,
+        ) -> napi::Result<JsTrainedAdapter> {
+            let rust_cfg: OrpoConfig = config.try_into()?;
+            let ds_arc: Arc<dyn PreferenceDataset> = dataset.inner.clone();
+            let sink: Option<Arc<dyn TrainingProgress>> = progress.map(|cb| {
+                let bridge = NodeTrainingProgressBridge {
+                    callback: Arc::new(cb),
+                };
+                Arc::new(bridge) as Arc<dyn TrainingProgress>
+            });
+            let adapter = self
+                .inner
+                .train_orpo(rust_cfg, ds_arc, sink)
+                .await
+                .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+            Ok(JsTrainedAdapter::from(adapter))
+        }
+
+        /// Train a `LoRA` adapter via Simple Preference Optimization (`SimPO`).
+        ///
+        /// Reference-free and length-normalized. `config.beta` scales the
+        /// preference logits and `config.gamma` sets the target reward
+        /// margin.
+        ///
+        /// # Errors
+        ///
+        /// Same surface as [`Self::train_dpo`].
+        #[napi(js_name = "trainSimpo", ts_return_type = "Promise<TrainedAdapter>")]
+        pub async fn train_simpo(
+            &self,
+            config: JsSimpoConfig,
+            dataset: &JsPreferenceJsonlDataset,
+            progress: Option<ProgressTsfn>,
+        ) -> napi::Result<JsTrainedAdapter> {
+            let rust_cfg: SimpoConfig = config.try_into()?;
+            let ds_arc: Arc<dyn PreferenceDataset> = dataset.inner.clone();
+            let sink: Option<Arc<dyn TrainingProgress>> = progress.map(|cb| {
+                let bridge = NodeTrainingProgressBridge {
+                    callback: Arc::new(cb),
+                };
+                Arc::new(bridge) as Arc<dyn TrainingProgress>
+            });
+            let adapter = self
+                .inner
+                .train_simpo(rust_cfg, ds_arc, sink)
+                .await
+                .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+            Ok(JsTrainedAdapter::from(adapter))
+        }
+
+        /// Train a `LoRA` adapter via Kahneman-Tversky Optimization (KTO).
+        ///
+        /// Like DPO, KTO requires a frozen reference model — but the
+        /// dataset schema differs: each row is a
+        /// `(prompt, completion, desirable)` triple
+        /// ([`JsRatedJsonlDataset`]), not a chosen/rejected pair.
+        ///
+        /// # Errors
+        ///
+        /// Same surface as [`Self::train_dpo`].
+        #[napi(js_name = "trainKto", ts_return_type = "Promise<TrainedAdapter>")]
+        pub async fn train_kto(
+            &self,
+            config: JsKtoConfig,
+            dataset: &JsRatedJsonlDataset,
+            progress: Option<ProgressTsfn>,
+        ) -> napi::Result<JsTrainedAdapter> {
+            let rust_cfg: KtoConfig = config.try_into()?;
+            let ds_arc: Arc<dyn RatedDataset> = dataset.inner.clone();
+            let sink: Option<Arc<dyn TrainingProgress>> = progress.map(|cb| {
+                let bridge = NodeTrainingProgressBridge {
+                    callback: Arc::new(cb),
+                };
+                Arc::new(bridge) as Arc<dyn TrainingProgress>
+            });
+            let adapter = self
+                .inner
+                .train_kto(rust_cfg, ds_arc, sink)
+                .await
+                .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+            Ok(JsTrainedAdapter::from(adapter))
+        }
+
+        /// Run a full fine-tune (every parameter trainable; no `LoRA`
+        /// adapter).
+        ///
+        /// Returns [`JsFullFineTuneResult`] — not [`JsTrainedAdapter`] —
+        /// because the output is a complete set of model weights in
+        /// `config.core.outputDir` rather than a mountable PEFT delta.
+        ///
+        /// Setting `config.gradientCheckpointing = true` is rejected at
+        /// init time because candle 0.10.2 has no activation-checkpointing
+        /// primitive.
+        ///
+        /// # Errors
+        ///
+        /// Throws on invalid config, unrecognised device,
+        /// `gradientCheckpointing = true`, HF download failure, dataset
+        /// I/O failure, trainer failure, or queueing failure on the
+        /// progress callback.
+        #[napi(js_name = "fineTune", ts_return_type = "Promise<FullFineTuneResult>")]
+        pub async fn fine_tune(
+            &self,
+            config: JsFullFineTuneConfig,
+            dataset: &JsJsonlDataset,
+            progress: Option<ProgressTsfn>,
+        ) -> napi::Result<JsFullFineTuneResult> {
+            let rust_cfg: FullFineTuneConfig = config.try_into()?;
+            let ds_arc: Arc<dyn TrainingDataset> =
+                Arc::new(ArcDatasetForFineTune(dataset.inner.clone()));
+            let sink: Option<Arc<dyn TrainingProgress>> = progress.map(|cb| {
+                let bridge = NodeTrainingProgressBridge {
+                    callback: Arc::new(cb),
+                };
+                Arc::new(bridge) as Arc<dyn TrainingProgress>
+            });
+            let result = self
+                .inner
+                .fine_tune(rust_cfg, ds_arc, sink)
+                .await
+                .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+            Ok(JsFullFineTuneResult::from(result))
         }
     }
 }

@@ -506,6 +506,23 @@ typedef struct BlazenPoolStatus BlazenPoolStatus;
 typedef struct BlazenPoolStatusList BlazenPoolStatusList;
 
 /**
+ * Opaque handle wrapping `Arc<blazen_train::dataset::PreferenceJsonlDataset>`.
+ * Constructed via [`blazen_preference_jsonl_dataset_from_path`] and freed via
+ * [`blazen_preference_jsonl_dataset_free`]. The `Arc` lets a single dataset
+ * be reused across multiple `train_dpo` / `train_orpo` / `train_simpo`
+ * invocations without re-tokenizing.
+ */
+typedef struct BlazenPreferenceJsonlDataset BlazenPreferenceJsonlDataset;
+
+/**
+ * Opaque handle wrapping `Arc<blazen_train::dataset::RatedJsonlDataset>`.
+ * Constructed via [`blazen_rated_jsonl_dataset_from_path`] and freed via
+ * [`blazen_rated_jsonl_dataset_free`]. Consumed by
+ * [`crate::manager::blazen_model_manager_train_kto`].
+ */
+typedef struct BlazenRatedJsonlDataset BlazenRatedJsonlDataset;
+
+/**
  * Opaque wrapper around a [`blazen_core::distributed::RunEvent`].
  *
  * The subscription dispatcher in [`crate::controlplane`] decodes each
@@ -930,6 +947,31 @@ typedef struct {
 } BlazenTrainedAdapter;
 
 /**
+ * `#[repr(C)]` flat record returned by-value from
+ * [`crate::manager::blazen_model_manager_fine_tune_blocking`] (via an
+ * out-param) and from
+ * [`crate::future::blazen_future_take_full_finetune_result`].
+ *
+ * `output_dir` is a caller-owned heap C string — release the whole record
+ * (which frees the string too) with [`blazen_full_finetune_result_free`].
+ */
+typedef struct {
+    /**
+     * Directory the full-model weights were written to (caller-owned C
+     * string). Free via [`blazen_full_finetune_result_free`].
+     */
+    char *output_dir;
+    /**
+     * Final training loss reported by the trainer.
+     */
+    float final_loss;
+    /**
+     * Total optimizer steps actually executed.
+     */
+    uint64_t steps_completed;
+} BlazenFullFineTuneResult;
+
+/**
  * `#[repr(C)]` mirror of [`blazen_manager::hf_loader::HfLoadOptions`] for the
  * C ABI. Every pointer field is nullable; integer/byte fields use sentinel
  * values to mean "unset" (see per-field docs).
@@ -1146,6 +1188,214 @@ typedef struct {
      */
     const char *device;
 } BlazenTrainConfig;
+
+/**
+ * `#[repr(C)]` mirror of [`blazen_train::TrainCoreConfig`]. Composed by the
+ * preference / KTO / full-fine-tune config records as their `core` slot;
+ * the SFT-only [`BlazenTrainConfig`] above stays flat for backward
+ * compatibility with PR7 consumers.
+ *
+ * String pointers (`base_model_repo`, `base_model_revision`, `output_dir`,
+ * `device`) are borrowed only for the call. Nullable scalar slots
+ * (`has_eval_steps`, `has_save_steps`) and nullable strings
+ * (`base_model_revision = NULL`, `device = NULL`) use the conventions
+ * established by [`BlazenTrainConfig`].
+ */
+typedef struct {
+    /**
+     * Hugging Face repo id of the base model. Required (non-null).
+     */
+    const char *base_model_repo;
+    /**
+     * Optional revision (branch / tag / commit) for the base model. Null for
+     * "default" (the HF-Hub default branch).
+     */
+    const char *base_model_revision;
+    /**
+     * Filesystem directory for trained weights and checkpoints. Required.
+     */
+    const char *output_dir;
+    /**
+     * `AdamW` hyperparameters.
+     */
+    BlazenOptimConfig optim;
+    /**
+     * LR-schedule configuration.
+     */
+    BlazenSchedulerConfig scheduler;
+    /**
+     * Total optimizer steps to run. Must be > 0.
+     */
+    uint32_t max_steps;
+    /**
+     * Micro-batch size per forward pass. Must be > 0.
+     */
+    uint32_t batch_size;
+    /**
+     * Micro-batches to accumulate before each optimizer step. Must be > 0.
+     */
+    uint32_t gradient_accumulation_steps;
+    /**
+     * Max tokenized sequence length per example. Must be > 0.
+     */
+    uint32_t max_seq_len;
+    /**
+     * 0 = `None`, 1 = `Some(eval_steps)`.
+     */
+    int32_t has_eval_steps;
+    /**
+     * Run evaluation every N steps when `has_eval_steps == 1`.
+     */
+    uint32_t eval_steps;
+    /**
+     * 0 = `None`, 1 = `Some(save_steps)`.
+     */
+    int32_t has_save_steps;
+    /**
+     * Write a checkpoint every N steps when `has_save_steps == 1`.
+     */
+    uint32_t save_steps;
+    /**
+     * RNG seed.
+     */
+    uint64_t seed;
+    /**
+     * One of `BLAZEN_MIXED_PRECISION_*`.
+     */
+    int32_t mixed_precision;
+    /**
+     * Device specifier (`"cpu"`, `"cuda:0"`, `"metal"`). Null = `"cpu"`.
+     */
+    const char *device;
+} BlazenTrainCoreConfig;
+
+/**
+ * `#[repr(C)]` mirror of [`blazen_train::DpoConfig`].
+ *
+ * `reference_model_repo` / `reference_model_revision` are nullable — passing
+ * `NULL` makes the trainer use `core.base_model_repo` as the reference. The
+ * LoRA-A init seed is taken from `core.seed`.
+ */
+typedef struct {
+    /**
+     * Shared training hyperparameters.
+     */
+    BlazenTrainCoreConfig core;
+    /**
+     * `LoRA` hyperparameters applied to the policy model.
+     */
+    BlazenLoraConfig lora;
+    /**
+     * KL-regularization strength (TRL default 0.1).
+     */
+    float beta;
+    /**
+     * Conservative DPO label smoothing (cDPO). 0.0 disables.
+     */
+    float label_smoothing;
+    /**
+     * Reference model repo. Null = reuse `core.base_model_repo`.
+     */
+    const char *reference_model_repo;
+    /**
+     * Optional revision for the reference model.
+     */
+    const char *reference_model_revision;
+} BlazenDpoConfig;
+
+/**
+ * `#[repr(C)]` mirror of [`blazen_train::OrpoConfig`]. Reference-free.
+ */
+typedef struct {
+    /**
+     * Shared training hyperparameters.
+     */
+    BlazenTrainCoreConfig core;
+    /**
+     * `LoRA` hyperparameters.
+     */
+    BlazenLoraConfig lora;
+    /**
+     * Weight of the odds-ratio term relative to the SFT term.
+     */
+    float lambda;
+} BlazenOrpoConfig;
+
+/**
+ * `#[repr(C)]` mirror of [`blazen_train::SimpoConfig`]. Reference-free.
+ */
+typedef struct {
+    /**
+     * Shared training hyperparameters.
+     */
+    BlazenTrainCoreConfig core;
+    /**
+     * `LoRA` hyperparameters.
+     */
+    BlazenLoraConfig lora;
+    /**
+     * Logit scaling for the length-normalized preference margin.
+     */
+    float beta;
+    /**
+     * Target reward margin between chosen and rejected.
+     */
+    float gamma;
+} BlazenSimpoConfig;
+
+/**
+ * `#[repr(C)]` mirror of [`blazen_train::KtoConfig`]. Requires a frozen
+ * reference model — pass `NULL` for `reference_model_repo` to reuse
+ * `core.base_model_repo`.
+ */
+typedef struct {
+    /**
+     * Shared training hyperparameters.
+     */
+    BlazenTrainCoreConfig core;
+    /**
+     * `LoRA` hyperparameters applied to the policy model.
+     */
+    BlazenLoraConfig lora;
+    /**
+     * KL-regularization strength.
+     */
+    float beta;
+    /**
+     * Loss weight applied to desirable examples.
+     */
+    float lambda_d;
+    /**
+     * Loss weight applied to undesirable examples.
+     */
+    float lambda_u;
+    /**
+     * Reference model repo. Null = reuse `core.base_model_repo`.
+     */
+    const char *reference_model_repo;
+    /**
+     * Optional revision for the reference model.
+     */
+    const char *reference_model_revision;
+} BlazenKtoConfig;
+
+/**
+ * `#[repr(C)]` mirror of [`blazen_train::FullFineTuneConfig`] — every
+ * parameter is trainable, no `LoRA` wrapping. Currently the trainer rejects
+ * `gradient_checkpointing = 1` because candle 0.10.2 has no checkpointing
+ * primitive; the field is exposed for forward compatibility.
+ */
+typedef struct {
+    /**
+     * Shared training hyperparameters.
+     */
+    BlazenTrainCoreConfig core;
+    /**
+     * Activation checkpointing flag. 0 = disabled (the only currently
+     * supported value); 1 will surface `Unsupported` at trainer init.
+     */
+    int32_t gradient_checkpointing;
+} BlazenFullFineTuneConfig;
 
 /**
  * Opaque wrapper around [`blazen_llm::providers::openai_compat::OpenAiCompatConfig`].
@@ -5188,6 +5438,24 @@ int32_t blazen_future_take_trained_adapter(BlazenFuture *fut,
                                            BlazenError **err);
 
 /**
+ * Pops a `Result<blazen_train::FullFineTuneResult, _>` future, writing the
+ * flat-record into `*out_result`. Returns `0` on success or `-1` on failure
+ * (writes `*err`). Release the inner `output_dir` string with
+ * [`crate::training_records::blazen_full_finetune_result_free`] after
+ * consuming.
+ *
+ * # Safety
+ *
+ * `fut` is null OR a future produced by
+ * [`crate::manager::blazen_model_manager_fine_tune`]. `out_result` and `err`
+ * follow the usual single-writer contract.
+ */
+
+int32_t blazen_future_take_full_finetune_result(BlazenFuture *fut,
+                                                BlazenFullFineTuneResult *out_result,
+                                                BlazenError **err);
+
+/**
  * Frees the future handle. If the typed result was never consumed by a
  * `blazen_future_take_*`, the boxed value (or the unread `BlazenError`) is
  * dropped here. No-op on a null pointer.
@@ -6452,6 +6720,174 @@ int32_t blazen_model_manager_train_lora_blocking(const BlazenModelManager *mgr,
 BlazenFuture *blazen_model_manager_train_lora(const BlazenModelManager *mgr,
                                               const BlazenTrainConfig *config,
                                               BlazenJsonlDataset *dataset);
+
+/**
+ * Synchronously trains a `LoRA` adapter end-to-end via Direct Preference
+ * Optimization (DPO). Writes the resulting adapter handle into `*out_adapter`
+ * on success; returns `0` on success or `-1` on failure (writes `*out_err`).
+ *
+ * `dataset` is consumed by the training run — the cabi clones the inner
+ * `Arc` before the call, so the caller MUST still free the dataset handle
+ * with [`crate::training_records::blazen_preference_jsonl_dataset_free`]
+ * after this returns.
+ *
+ * # Safety
+ *
+ * `mgr` must be null OR a live [`BlazenModelManager`]. `config` must point to
+ * a fully-populated [`BlazenDpoConfig`] (see per-field docs). `dataset` must
+ * be null OR a pointer produced by
+ * [`crate::training_records::blazen_preference_jsonl_dataset_from_path`].
+ * `out_adapter` and `out_err` are each null OR a single-writer destination.
+ */
+
+int32_t blazen_model_manager_train_dpo_blocking(const BlazenModelManager *mgr,
+                                                const BlazenDpoConfig *config,
+                                                BlazenPreferenceJsonlDataset *dataset,
+                                                BlazenTrainedAdapter *out_adapter,
+                                                BlazenError **out_err);
+
+/**
+ * Spawns a `train_dpo` onto the cabi tokio runtime; pop the result with
+ * [`crate::future::blazen_future_take_trained_adapter`]. Returns null on
+ * argument-shape failure.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_model_manager_train_dpo_blocking`] (minus the two out-
+ * param pointers).
+ */
+
+BlazenFuture *blazen_model_manager_train_dpo(const BlazenModelManager *mgr,
+                                             const BlazenDpoConfig *config,
+                                             BlazenPreferenceJsonlDataset *dataset);
+
+/**
+ * Synchronously trains a `LoRA` adapter via Odds Ratio Preference
+ * Optimization (ORPO). Same surface as
+ * [`blazen_model_manager_train_dpo_blocking`].
+ *
+ * # Safety
+ *
+ * Same as [`blazen_model_manager_train_dpo_blocking`].
+ */
+
+int32_t blazen_model_manager_train_orpo_blocking(const BlazenModelManager *mgr,
+                                                 const BlazenOrpoConfig *config,
+                                                 BlazenPreferenceJsonlDataset *dataset,
+                                                 BlazenTrainedAdapter *out_adapter,
+                                                 BlazenError **out_err);
+
+/**
+ * Spawns a `train_orpo` onto the cabi tokio runtime. Same surface as
+ * [`blazen_model_manager_train_dpo`].
+ *
+ * # Safety
+ *
+ * Same as [`blazen_model_manager_train_orpo_blocking`].
+ */
+
+BlazenFuture *blazen_model_manager_train_orpo(const BlazenModelManager *mgr,
+                                              const BlazenOrpoConfig *config,
+                                              BlazenPreferenceJsonlDataset *dataset);
+
+/**
+ * Synchronously trains a `LoRA` adapter via Simple Preference Optimization
+ * (`SimPO`). Same surface as [`blazen_model_manager_train_dpo_blocking`].
+ *
+ * # Safety
+ *
+ * Same as [`blazen_model_manager_train_dpo_blocking`].
+ */
+
+int32_t blazen_model_manager_train_simpo_blocking(const BlazenModelManager *mgr,
+                                                  const BlazenSimpoConfig *config,
+                                                  BlazenPreferenceJsonlDataset *dataset,
+                                                  BlazenTrainedAdapter *out_adapter,
+                                                  BlazenError **out_err);
+
+/**
+ * Spawns a `train_simpo` onto the cabi tokio runtime. Same surface as
+ * [`blazen_model_manager_train_dpo`].
+ *
+ * # Safety
+ *
+ * Same as [`blazen_model_manager_train_simpo_blocking`].
+ */
+
+BlazenFuture *blazen_model_manager_train_simpo(const BlazenModelManager *mgr,
+                                               const BlazenSimpoConfig *config,
+                                               BlazenPreferenceJsonlDataset *dataset);
+
+/**
+ * Synchronously trains a `LoRA` adapter via Kahneman-Tversky Optimization
+ * (KTO). Consumes a [`BlazenRatedJsonlDataset`] (single-completion plus a
+ * desirability flag per row) rather than the chosen/rejected pairs of DPO.
+ *
+ * # Safety
+ *
+ * `mgr` must be null OR a live [`BlazenModelManager`]. `config` must point to
+ * a fully-populated [`BlazenKtoConfig`]. `dataset` must be null OR a pointer
+ * produced by [`crate::training_records::blazen_rated_jsonl_dataset_from_path`].
+ * `out_adapter` and `out_err` are each null OR a single-writer destination.
+ */
+
+int32_t blazen_model_manager_train_kto_blocking(const BlazenModelManager *mgr,
+                                                const BlazenKtoConfig *config,
+                                                BlazenRatedJsonlDataset *dataset,
+                                                BlazenTrainedAdapter *out_adapter,
+                                                BlazenError **out_err);
+
+/**
+ * Spawns a `train_kto` onto the cabi tokio runtime. Same surface as
+ * [`blazen_model_manager_train_dpo`] but consumes a `RatedJsonlDataset`.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_model_manager_train_kto_blocking`].
+ */
+
+BlazenFuture *blazen_model_manager_train_kto(const BlazenModelManager *mgr,
+                                             const BlazenKtoConfig *config,
+                                             BlazenRatedJsonlDataset *dataset);
+
+/**
+ * Synchronously runs a full fine-tune (every parameter trains; no `LoRA`
+ * adapter). Writes the [`BlazenFullFineTuneResult`] into `*out_result` on
+ * success (caller releases the inner `output_dir` string with
+ * [`crate::training_records::blazen_full_finetune_result_free`]). Returns
+ * `0` on success or `-1` on failure (writes `*out_err`).
+ *
+ * Setting `config.gradient_checkpointing = 1` is rejected at trainer init
+ * because candle 0.10.2 has no activation-checkpointing primitive.
+ *
+ * # Safety
+ *
+ * `mgr` must be null OR a live [`BlazenModelManager`]. `config` must point to
+ * a fully-populated [`BlazenFullFineTuneConfig`]. `dataset` must be null OR
+ * a pointer produced by
+ * [`crate::training_records::blazen_jsonl_dataset_from_path`]. `out_result`
+ * and `out_err` are each null OR a single-writer destination.
+ */
+
+int32_t blazen_model_manager_fine_tune_blocking(const BlazenModelManager *mgr,
+                                                const BlazenFullFineTuneConfig *config,
+                                                BlazenJsonlDataset *dataset,
+                                                BlazenFullFineTuneResult *out_result,
+                                                BlazenError **out_err);
+
+/**
+ * Spawns a `fine_tune` onto the cabi tokio runtime; pop the result with
+ * [`crate::future::blazen_future_take_full_finetune_result`].
+ *
+ * # Safety
+ *
+ * Same as [`blazen_model_manager_fine_tune_blocking`] (minus the two
+ * out-param pointers).
+ */
+
+BlazenFuture *blazen_model_manager_fine_tune(const BlazenModelManager *mgr,
+                                             const BlazenFullFineTuneConfig *config,
+                                             BlazenJsonlDataset *dataset);
 
 /**
  * Returns the adapter id as a caller-owned C string. Null on a null handle.
@@ -10418,6 +10854,85 @@ BlazenJsonlDataset *blazen_jsonl_dataset_from_path(const char *path,
  * [`blazen_jsonl_dataset_from_path`]. Double-free is undefined behavior.
  */
  void blazen_jsonl_dataset_free(BlazenJsonlDataset *dataset);
+
+/**
+ * Releases the heap C string carried by `result`. Defensive on a null pointer
+ * AND on a record whose `output_dir` slot is already null (so callers can
+ * safely free a partially-initialized stack value after an error).
+ *
+ * # Safety
+ *
+ * `result` must be null OR a pointer to a valid [`BlazenFullFineTuneResult`]
+ * whose `output_dir` field is null OR was previously produced by the cabi
+ * surface. Double-free on the same `output_dir` is undefined behavior.
+ */
+ void blazen_full_finetune_result_free(BlazenFullFineTuneResult *result);
+
+/**
+ * Loads a preference-pair JSONL file at `path` with the tokenizer at
+ * `tokenizer_path` and returns a caller-owned
+ * [`BlazenPreferenceJsonlDataset`]. Free with
+ * [`blazen_preference_jsonl_dataset_free`].
+ *
+ * Returns null on failure and writes `*out_err` (validation / tokenizer-load
+ * / dataset-parse errors).
+ *
+ * # Safety
+ *
+ * `path` and `tokenizer_path` must be NUL-terminated UTF-8 buffers valid for
+ * the call. `chat_template` and `device` are null OR same contract.
+ * `out_err` is null OR a single-writer destination.
+ */
+
+BlazenPreferenceJsonlDataset *blazen_preference_jsonl_dataset_from_path(const char *path,
+                                                                        const char *tokenizer_path,
+                                                                        const char *chat_template,
+                                                                        uint32_t max_seq_len,
+                                                                        const char *device,
+                                                                        uint32_t pad_token_id,
+                                                                        BlazenError **out_err);
+
+/**
+ * Frees a [`BlazenPreferenceJsonlDataset`] handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `dataset` must be null OR a pointer previously produced by
+ * [`blazen_preference_jsonl_dataset_from_path`]. Double-free is undefined
+ * behavior.
+ */
+ void blazen_preference_jsonl_dataset_free(BlazenPreferenceJsonlDataset *dataset);
+
+/**
+ * Loads a rated JSONL file (KTO format) at `path` with the tokenizer at
+ * `tokenizer_path` and returns a caller-owned [`BlazenRatedJsonlDataset`].
+ * Free with [`blazen_rated_jsonl_dataset_free`].
+ *
+ * Returns null on failure and writes `*out_err`.
+ *
+ * # Safety
+ *
+ * Same contract as [`blazen_preference_jsonl_dataset_from_path`].
+ */
+
+BlazenRatedJsonlDataset *blazen_rated_jsonl_dataset_from_path(const char *path,
+                                                              const char *tokenizer_path,
+                                                              const char *chat_template,
+                                                              uint32_t max_seq_len,
+                                                              const char *device,
+                                                              uint32_t pad_token_id,
+                                                              BlazenError **out_err);
+
+/**
+ * Frees a [`BlazenRatedJsonlDataset`] handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `dataset` must be null OR a pointer previously produced by
+ * [`blazen_rated_jsonl_dataset_from_path`]. Double-free is undefined
+ * behavior.
+ */
+ void blazen_rated_jsonl_dataset_free(BlazenRatedJsonlDataset *dataset);
 
 /**
  * Construct a new builder with the given UTF-8 `name`. Returns null on a

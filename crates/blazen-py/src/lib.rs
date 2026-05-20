@@ -581,11 +581,13 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<manager::PyBackendHint>()?;
     m.add_class::<manager::PyHfLoadOptions>()?;
 
-    // Training surface (ModelManager.train_lora + supporting config/event
-    // types). Gated on the `training` feature.
+    // Training surface (ModelManager.train_lora + DPO/ORPO/SimPO/KTO +
+    // full fine-tune + supporting config/event types). Gated on the
+    // `training` feature.
     #[cfg(feature = "training")]
     {
         m.add_class::<manager::PyTrainConfig>()?;
+        m.add_class::<manager::PyTrainCoreConfig>()?;
         m.add_class::<manager::PyLoraConfig>()?;
         m.add_class::<manager::PyOptimConfig>()?;
         m.add_class::<manager::PySchedulerConfig>()?;
@@ -594,6 +596,14 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<manager::PyTrainedAdapter>()?;
         m.add_class::<manager::PyTrainingEvent>()?;
         m.add_class::<manager::PyJsonlDataset>()?;
+        m.add_class::<manager::PyPreferenceJsonlDataset>()?;
+        m.add_class::<manager::PyRatedJsonlDataset>()?;
+        m.add_class::<manager::PyDpoConfig>()?;
+        m.add_class::<manager::PyOrpoConfig>()?;
+        m.add_class::<manager::PySimpoConfig>()?;
+        m.add_class::<manager::PyKtoConfig>()?;
+        m.add_class::<manager::PyFullFineTuneConfig>()?;
+        m.add_class::<manager::PyFullFineTuneResult>()?;
     }
 
     // Model cache (HuggingFace Hub downloader / on-disk cache)

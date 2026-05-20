@@ -29,12 +29,14 @@
 
 pub use candle_transformers::models::mistral::Config;
 
+use std::collections::HashSet;
 use std::sync::Arc;
 
 use candle_core::{D, DType, Device, Module, Result, Tensor};
-use candle_nn::{Embedding, Linear, RmsNorm, VarBuilder};
+use candle_nn::{Embedding, Linear, RmsNorm, VarBuilder, VarMap};
 use candle_transformers::utils::repeat_kv;
 
+use crate::arch::{BaseLoader, TrainMode, build_embedding, build_rms_norm};
 use crate::config::LoraConfig;
 use crate::lora::LoraLinear;
 
@@ -54,28 +56,36 @@ impl Module for MaybeLora {
     }
 }
 
-fn load_linear_no_bias(in_dim: usize, out_dim: usize, vb: VarBuilder) -> Result<Linear> {
-    let ws = vb.get((out_dim, in_dim), "weight")?;
-    Ok(Linear::new(ws, None))
-}
-
+// Why: every argument is load-bearing — module name + LoRA target set,
+// LoRA cfg (rank/alpha), two VarBuilders (frozen vs trainable scopes),
+// mode-aware loader, and the absolute key prefix for FFT varmap
+// insertion. Mirrors `maybe_lora_linear` in `llama.rs`.
+#[allow(clippy::too_many_arguments)]
 fn maybe_lora(
     in_dim: usize,
     out_dim: usize,
     suffix: &str,
-    base_vb: VarBuilder,
-    lora_vb: VarBuilder,
+    targets: &HashSet<String>,
+    base_vb: &VarBuilder,
+    lora_vb: &VarBuilder,
     lora_cfg: &LoraConfig,
+    loader: &BaseLoader<'_>,
+    abs_path: &str,
 ) -> Result<MaybeLora> {
-    let base = load_linear_no_bias(in_dim, out_dim, base_vb)?;
-    if lora_cfg.target_modules.iter().any(|name| name == suffix) {
+    let base = loader.linear_no_bias(
+        in_dim,
+        out_dim,
+        base_vb.pp(suffix),
+        &format!("{abs_path}.{suffix}"),
+    )?;
+    if targets.contains(suffix) {
         let wrapped = LoraLinear::wrap(
             base,
             in_dim,
             out_dim,
             lora_cfg.rank,
             lora_cfg.alpha,
-            lora_vb,
+            lora_vb.pp(suffix),
         )?;
         Ok(MaybeLora::Lora(wrapped))
     } else {
@@ -143,12 +153,16 @@ struct Attention {
 }
 
 impl Attention {
+    #[allow(clippy::needless_pass_by_value, clippy::too_many_arguments)]
     fn load(
         rotary: Arc<RotaryEmbedding>,
         cfg: &Config,
         base_vb: VarBuilder,
         lora_vb: VarBuilder,
         lora_cfg: &LoraConfig,
+        targets: &HashSet<String>,
+        loader: &BaseLoader<'_>,
+        abs_path: &str,
     ) -> Result<Self> {
         let hidden = cfg.hidden_size;
         let num_heads = cfg.num_attention_heads;
@@ -159,33 +173,45 @@ impl Attention {
             hidden,
             num_heads * d_head,
             "q_proj",
-            base_vb.pp("q_proj"),
-            lora_vb.pp("q_proj"),
+            targets,
+            &base_vb,
+            &lora_vb,
             lora_cfg,
+            loader,
+            abs_path,
         )?;
         let k_proj = maybe_lora(
             hidden,
             num_kv_heads * d_head,
             "k_proj",
-            base_vb.pp("k_proj"),
-            lora_vb.pp("k_proj"),
+            targets,
+            &base_vb,
+            &lora_vb,
             lora_cfg,
+            loader,
+            abs_path,
         )?;
         let v_proj = maybe_lora(
             hidden,
             num_kv_heads * d_head,
             "v_proj",
-            base_vb.pp("v_proj"),
-            lora_vb.pp("v_proj"),
+            targets,
+            &base_vb,
+            &lora_vb,
             lora_cfg,
+            loader,
+            abs_path,
         )?;
         let o_proj = maybe_lora(
             num_heads * d_head,
             hidden,
             "o_proj",
-            base_vb.pp("o_proj"),
-            lora_vb.pp("o_proj"),
+            targets,
+            &base_vb,
+            &lora_vb,
             lora_cfg,
+            loader,
+            abs_path,
         )?;
         Ok(Self {
             q_proj,
@@ -252,11 +278,15 @@ struct Mlp {
 }
 
 impl Mlp {
+    #[allow(clippy::needless_pass_by_value, clippy::too_many_arguments)]
     fn load(
         cfg: &Config,
         base_vb: VarBuilder,
         lora_vb: VarBuilder,
         lora_cfg: &LoraConfig,
+        targets: &HashSet<String>,
+        loader: &BaseLoader<'_>,
+        abs_path: &str,
     ) -> Result<Self> {
         let hidden = cfg.hidden_size;
         let inter = cfg.intermediate_size;
@@ -264,25 +294,26 @@ impl Mlp {
             hidden,
             inter,
             "gate_proj",
-            base_vb.pp("gate_proj"),
-            lora_vb.pp("gate_proj"),
+            targets,
+            &base_vb,
+            &lora_vb,
             lora_cfg,
+            loader,
+            abs_path,
         )?;
         let up_proj = maybe_lora(
-            hidden,
-            inter,
-            "up_proj",
-            base_vb.pp("up_proj"),
-            lora_vb.pp("up_proj"),
-            lora_cfg,
+            hidden, inter, "up_proj", targets, &base_vb, &lora_vb, lora_cfg, loader, abs_path,
         )?;
         let down_proj = maybe_lora(
             inter,
             hidden,
             "down_proj",
-            base_vb.pp("down_proj"),
-            lora_vb.pp("down_proj"),
+            targets,
+            &base_vb,
+            &lora_vb,
             lora_cfg,
+            loader,
+            abs_path,
         )?;
         Ok(Self {
             gate_proj,
@@ -309,12 +340,16 @@ struct DecoderLayer {
 }
 
 impl DecoderLayer {
+    #[allow(clippy::needless_pass_by_value, clippy::too_many_arguments)]
     fn load(
         rotary: Arc<RotaryEmbedding>,
         cfg: &Config,
         base_vb: VarBuilder,
         lora_vb: VarBuilder,
         lora_cfg: &LoraConfig,
+        targets: &HashSet<String>,
+        loader: &BaseLoader<'_>,
+        abs_path: &str,
     ) -> Result<Self> {
         let self_attn = Attention::load(
             rotary,
@@ -322,17 +357,32 @@ impl DecoderLayer {
             base_vb.pp("self_attn"),
             lora_vb.pp("self_attn"),
             lora_cfg,
+            targets,
+            loader,
+            &format!("{abs_path}.self_attn"),
         )?;
-        let mlp = Mlp::load(cfg, base_vb.pp("mlp"), lora_vb.pp("mlp"), lora_cfg)?;
-        let input_layernorm = candle_nn::rms_norm(
+        let mlp = Mlp::load(
+            cfg,
+            base_vb.pp("mlp"),
+            lora_vb.pp("mlp"),
+            lora_cfg,
+            targets,
+            loader,
+            &format!("{abs_path}.mlp"),
+        )?;
+        let input_layernorm = build_rms_norm(
             cfg.hidden_size,
             cfg.rms_norm_eps,
             base_vb.pp("input_layernorm"),
+            loader,
+            &format!("{abs_path}.input_layernorm"),
         )?;
-        let post_attention_layernorm = candle_nn::rms_norm(
+        let post_attention_layernorm = build_rms_norm(
             cfg.hidden_size,
             cfg.rms_norm_eps,
             base_vb.pp("post_attention_layernorm"),
+            loader,
+            &format!("{abs_path}.post_attention_layernorm"),
         )?;
         Ok(Self {
             self_attn,
@@ -397,14 +447,79 @@ impl TrainableMistral {
         cfg: &Config,
         lora_cfg: &LoraConfig,
     ) -> Result<Self> {
+        Self::load_with_mode(base_vb, lora_vb, None, cfg, lora_cfg, TrainMode::LoraOnly)
+    }
+
+    /// Build the trainable Mistral wrapper with an explicit [`TrainMode`].
+    ///
+    /// In [`TrainMode::LoraOnly`] this is identical to [`Self::load`]:
+    /// base weights are read frozen from `base_vb` and only LoRA params
+    /// land in the varmap behind `lora_vb`.
+    ///
+    /// In [`TrainMode::FullFineTune`] every linear's base weight is read
+    /// from `base_vb` and copied into `train_varmap` as a trainable [`Var`]
+    /// (under safetensors-canonical keys like
+    /// `model.layers.0.self_attn.q_proj.weight`). `lora_cfg.target_modules`
+    /// is ignored — no LoRA layers are constructed. `lora_vb` is unused
+    /// but kept in the signature so callers can pass the same builder
+    /// they would use for LoRA without conditional plumbing.
+    ///
+    /// `train_varmap` is required in `FullFineTune` mode and may be
+    /// `None` in `LoraOnly` mode. Passing `None` in `FullFineTune` mode
+    /// panics — the caller must always be able to provide it because
+    /// the trainer owns the varmap that will receive AdamW updates.
+    ///
+    /// Mistral has NO `tie_word_embeddings` field in its upstream
+    /// `Config` — `lm_head` is always a separately-registered linear
+    /// loaded from `lm_head.weight`, so FFT mode always emits a distinct
+    /// `lm_head.weight` `Var` (independent from `model.embed_tokens.weight`).
+    ///
+    /// # Errors
+    ///
+    /// Forwards candle/varbuilder errors from any underlying load.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `mode == TrainMode::FullFineTune` and `train_varmap` is
+    /// `None`. This is a programming error, not a runtime input failure.
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn load_with_mode(
+        base_vb: VarBuilder,
+        lora_vb: VarBuilder,
+        train_varmap: Option<&VarMap>,
+        cfg: &Config,
+        lora_cfg: &LoraConfig,
+        mode: TrainMode,
+    ) -> Result<Self> {
         let dtype = base_vb.dtype();
         let device = base_vb.device().clone();
+
+        // Why: FullFineTune ignores LoRA targets entirely — no adapters
+        // are constructed. LoraOnly honors the user's target list.
+        let targets: HashSet<String> = match mode {
+            TrainMode::LoraOnly => lora_cfg.target_modules.iter().cloned().collect(),
+            TrainMode::FullFineTune => HashSet::new(),
+        };
+
+        if mode == TrainMode::FullFineTune {
+            assert!(
+                train_varmap.is_some(),
+                "FullFineTune requires train_varmap; got None",
+            );
+        }
+
+        let loader = BaseLoader { mode, train_varmap };
 
         let base_m = base_vb.pp("model");
         let lora_m = lora_vb.pp("model");
 
-        let embed_tokens =
-            candle_nn::embedding(cfg.vocab_size, cfg.hidden_size, base_m.pp("embed_tokens"))?;
+        let embed_tokens = build_embedding(
+            cfg.vocab_size,
+            cfg.hidden_size,
+            base_m.pp("embed_tokens"),
+            &loader,
+            "model.embed_tokens",
+        )?;
         let rotary = Arc::new(RotaryEmbedding::new(dtype, cfg, &device)?);
 
         let base_layers = base_m.pp("layers");
@@ -417,10 +532,28 @@ impl TrainableMistral {
                 base_layers.pp(i),
                 lora_layers.pp(i),
                 lora_cfg,
+                &targets,
+                &loader,
+                &format!("model.layers.{i}"),
             )?);
         }
-        let norm = candle_nn::rms_norm(cfg.hidden_size, cfg.rms_norm_eps, base_m.pp("norm"))?;
-        let lm_head = load_linear_no_bias(cfg.hidden_size, cfg.vocab_size, base_vb.pp("lm_head"))?;
+        let norm = build_rms_norm(
+            cfg.hidden_size,
+            cfg.rms_norm_eps,
+            base_m.pp("norm"),
+            &loader,
+            "model.norm",
+        )?;
+        // Why: Mistral does NOT tie embeddings — `lm_head` is always its
+        // own untied linear loaded from `lm_head.weight`. In FFT mode this
+        // means the train varmap gets a distinct `lm_head.weight` Var
+        // (independent from `model.embed_tokens.weight`).
+        let lm_head = loader.linear_no_bias(
+            cfg.hidden_size,
+            cfg.vocab_size,
+            base_vb.pp("lm_head"),
+            "lm_head",
+        )?;
 
         Ok(Self {
             embed_tokens,
@@ -690,5 +823,212 @@ mod tests {
         // Diagonal and near-diagonal within the window must be zero.
         assert!((m[1][1] - 0.0).abs() < 1e-6, "self-attention masked");
         assert!((m[5][4] - 0.0).abs() < 1e-6, "in-window past masked");
+    }
+
+    // -----------------------------------------------------------------
+    // FullFineTune mode tests (Wave 8c)
+    // -----------------------------------------------------------------
+
+    /// Build a Mistral in `FullFineTune` mode, returning the train VarMap
+    /// that received every base weight as a fresh `Var`.
+    ///
+    /// `base_map` is provided by the caller so two builds can share a
+    /// source-of-truth set of base weights (used by the
+    /// `forward_shape_matches_lora_mode` test).
+    fn build_full_finetune(
+        base_map: &VarMap,
+        cfg: &Config,
+    ) -> (TrainableMistral, VarMap, VarMap, Device) {
+        let device = Device::Cpu;
+        let lora_map = VarMap::new();
+        let train_map = VarMap::new();
+        let base_vb = VarBuilder::from_varmap(base_map, DType::F32, &device);
+        let lora_vb = VarBuilder::from_varmap(&lora_map, DType::F32, &device);
+
+        let model = TrainableMistral::load_with_mode(
+            base_vb,
+            lora_vb,
+            Some(&train_map),
+            cfg,
+            &lora_cfg(&[]),
+            TrainMode::FullFineTune,
+        )
+        .expect("full-FT model loads");
+
+        (model, lora_map, train_map, device)
+    }
+
+    /// Expected absolute key list (every trainable `.weight`) for the
+    /// `tiny_mistral_config()` model. Mirrors the safetensors naming
+    /// convention so `VarMap::save` output round-trips through the
+    /// inference-side loader.
+    ///
+    /// Mistral has NO biases on q/k/v/o or MLP projections (like Llama,
+    /// unlike Qwen2). `lm_head.weight` is always present because Mistral
+    /// does NOT tie embeddings.
+    fn expected_full_finetune_keys(cfg: &Config) -> Vec<String> {
+        let mut keys = Vec::new();
+        keys.push("model.embed_tokens.weight".to_string());
+        for li in 0..cfg.num_hidden_layers {
+            for proj in ["q_proj", "k_proj", "v_proj", "o_proj"] {
+                keys.push(format!("model.layers.{li}.self_attn.{proj}.weight"));
+            }
+            for proj in ["gate_proj", "up_proj", "down_proj"] {
+                keys.push(format!("model.layers.{li}.mlp.{proj}.weight"));
+            }
+            keys.push(format!("model.layers.{li}.input_layernorm.weight"));
+            keys.push(format!("model.layers.{li}.post_attention_layernorm.weight"));
+        }
+        keys.push("model.norm.weight".to_string());
+        keys.push("lm_head.weight".to_string());
+        keys
+    }
+
+    #[test]
+    fn mistral_full_finetune_loads_base_into_varmap() {
+        let cfg = tiny_mistral_config();
+        let base_map = VarMap::new();
+        let (_model, _lora, train_map, _dev) = build_full_finetune(&base_map, &cfg);
+
+        let guard = train_map
+            .data()
+            .lock()
+            .expect("train varmap mutex poisoned by another thread");
+        let keys: std::collections::HashSet<String> = guard.keys().cloned().collect();
+        drop(guard);
+
+        // Minimal sanity probe: at least one well-known weight is present.
+        assert!(
+            keys.contains("model.layers.0.self_attn.q_proj.weight"),
+            "FullFineTune train varmap missing q_proj.weight; have: {keys:?}",
+        );
+        // FullFineTune ignores LoRA targets, so NO lora_A/lora_B should be
+        // present in the train varmap. (The separate LoRA varmap stays
+        // empty because the wrapper never constructs LoraLinear in FFT.)
+        for k in &keys {
+            assert!(
+                !k.contains("lora_A") && !k.contains("lora_B"),
+                "FullFineTune train varmap unexpectedly has LoRA key: {k}",
+            );
+        }
+    }
+
+    #[test]
+    fn mistral_full_finetune_forward_shape_matches_lora_mode() {
+        let device = Device::Cpu;
+        let cfg = tiny_mistral_config();
+
+        // Build the LoraOnly reference with NO LoRA targets so it's a
+        // base-only forward — values will match FullFineTune at step 0
+        // because the FFT path copies the same base weights into Vars
+        // without modifying them.
+        let base_map = VarMap::new();
+        let lora_map_ref = VarMap::new();
+        let base_vb_ref = VarBuilder::from_varmap(&base_map, DType::F32, &device);
+        let lora_vb_ref = VarBuilder::from_varmap(&lora_map_ref, DType::F32, &device);
+        let lora_only = TrainableMistral::load(base_vb_ref, lora_vb_ref, &cfg, &lora_cfg(&[]))
+            .expect("lora load");
+
+        // Reuse the same base_map for FullFineTune so the source weights
+        // are bit-identical between the two models.
+        let (full_ft, _lora_map, _train_map, _dev) = build_full_finetune(&base_map, &cfg);
+
+        let input =
+            Tensor::from_vec(vec![1u32, 2, 3, 4, 5, 6, 7, 8], (1, 8), &device).expect("input ids");
+
+        let out_lora = lora_only.forward(&input).expect("lora forward");
+        let out_ft = full_ft.forward(&input).expect("ft forward");
+
+        // Why: shapes must match exactly — same arch wraps the same cfg.
+        assert_eq!(out_ft.dims(), out_lora.dims());
+        assert_eq!(out_ft.dims(), &[1, 8, cfg.vocab_size]);
+
+        // Bonus: at step 0 (no weight updates yet), the FFT path is just
+        // copy-in-place of the same base weights, so logits should match
+        // numerically.
+        let diff = (&out_ft - &out_lora).expect("diff");
+        let max_abs = diff
+            .abs()
+            .expect("abs")
+            .flatten_all()
+            .expect("flatten")
+            .max(0)
+            .expect("max")
+            .to_scalar::<f32>()
+            .expect("scalar");
+        assert!(
+            max_abs < 1e-5,
+            "FullFineTune at step 0 should match LoraOnly base-only forward; got max-abs delta {max_abs}",
+        );
+    }
+
+    #[test]
+    fn mistral_full_finetune_every_linear_has_var() {
+        let cfg = tiny_mistral_config();
+        let base_map = VarMap::new();
+        let (_model, _lora, train_map, _dev) = build_full_finetune(&base_map, &cfg);
+
+        let guard = train_map
+            .data()
+            .lock()
+            .expect("train varmap mutex poisoned by another thread");
+        let actual: std::collections::HashSet<String> = guard.keys().cloned().collect();
+        drop(guard);
+
+        let expected = expected_full_finetune_keys(&cfg);
+        for key in &expected {
+            assert!(
+                actual.contains(key),
+                "FullFineTune train varmap missing expected key {key}; have: {actual:?}",
+            );
+        }
+
+        // Why: also assert no surprise extras — every key in the varmap
+        // must appear in our expected list. This catches accidental
+        // double-registration or stale prefix bugs.
+        let expected_set: std::collections::HashSet<&String> = expected.iter().collect();
+        for key in &actual {
+            assert!(
+                expected_set.contains(key),
+                "FullFineTune train varmap has unexpected key {key}; expected one of: {expected:?}",
+            );
+        }
+    }
+
+    #[test]
+    fn mistral_full_finetune_lm_head_is_independent_var() {
+        // Why: Mistral's upstream Config has no `tie_word_embeddings`
+        // field — `lm_head` is always loaded independently from
+        // `lm_head.weight`. In FFT mode the train varmap must contain
+        // BOTH `model.embed_tokens.weight` AND `lm_head.weight` as
+        // distinct entries, and the underlying tensors must NOT share
+        // autograd identity (otherwise tying would silently appear).
+        let cfg = tiny_mistral_config();
+        let base_map = VarMap::new();
+        let (_model, _lora, train_map, _dev) = build_full_finetune(&base_map, &cfg);
+
+        let guard = train_map
+            .data()
+            .lock()
+            .expect("train varmap mutex poisoned by another thread");
+
+        let embed = guard
+            .get("model.embed_tokens.weight")
+            .expect("embed_tokens Var registered")
+            .clone();
+        let lm_head = guard
+            .get("lm_head.weight")
+            .expect("lm_head Var registered (Mistral does not tie)")
+            .clone();
+        drop(guard);
+
+        // Why: `Var::as_tensor().id()` is the autograd identity used by
+        // candle's backward pass. Two independent Vars must have distinct
+        // IDs; a tied setup would reuse the same id.
+        assert_ne!(
+            embed.as_tensor().id(),
+            lm_head.as_tensor().id(),
+            "Mistral FFT must keep lm_head independent from embed_tokens (got same Var id)",
+        );
     }
 }

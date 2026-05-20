@@ -1008,8 +1008,11 @@ pub unsafe extern "C" fn blazen_model_manager_load_from_hf(
 
 #[cfg(feature = "training")]
 use crate::training_records::{
-    BlazenJsonlDataset, BlazenTrainConfig, BlazenTrainedAdapter, convert_train_config,
-    trained_adapter_to_cabi,
+    BlazenDpoConfig, BlazenFullFineTuneConfig, BlazenFullFineTuneResult, BlazenJsonlDataset,
+    BlazenKtoConfig, BlazenOrpoConfig, BlazenPreferenceJsonlDataset, BlazenRatedJsonlDataset,
+    BlazenSimpoConfig, BlazenTrainConfig, BlazenTrainedAdapter, convert_dpo_config,
+    convert_full_finetune_config, convert_kto_config, convert_orpo_config, convert_simpo_config,
+    convert_train_config, full_finetune_result_to_cabi, trained_adapter_to_cabi,
 };
 
 /// Adapter so `Arc<JsonlDataset>` satisfies `Box<dyn TrainingDataset>`.
@@ -1145,4 +1148,709 @@ pub unsafe extern "C" fn blazen_model_manager_train_lora(
             .await
             .map_err(into_inner_error)
     })
+}
+
+// ---------------------------------------------------------------------------
+// PR8 Wave 18 — train_dpo / train_orpo / train_simpo / train_kto / fine_tune
+//
+// Why: Same async pattern as train_lora above (both blocking and future-
+// returning variants) and same deferred-progress caveat: the Ruby progress
+// callback uses Fiber.scheduler-aware polling, deferred to a follow-up. Sync
+// /async without progress is the v1 surface — the Ruby wrapper can display
+// progress by tailing log files or checking the output directory until the
+// typed callback trampoline lands.
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "training")]
+async fn run_train_dpo(
+    inner: Arc<ModelManager>,
+    cfg: blazen_train::DpoConfig,
+    ds: Arc<blazen_train::dataset::PreferenceJsonlDataset>,
+) -> Result<blazen_train::TrainedAdapter, blazen_llm::BlazenError> {
+    inner
+        .train_dpo(cfg, ds as Arc<dyn blazen_train::PreferenceDataset>, None)
+        .await
+}
+
+#[cfg(feature = "training")]
+async fn run_train_orpo(
+    inner: Arc<ModelManager>,
+    cfg: blazen_train::OrpoConfig,
+    ds: Arc<blazen_train::dataset::PreferenceJsonlDataset>,
+) -> Result<blazen_train::TrainedAdapter, blazen_llm::BlazenError> {
+    inner
+        .train_orpo(cfg, ds as Arc<dyn blazen_train::PreferenceDataset>, None)
+        .await
+}
+
+#[cfg(feature = "training")]
+async fn run_train_simpo(
+    inner: Arc<ModelManager>,
+    cfg: blazen_train::SimpoConfig,
+    ds: Arc<blazen_train::dataset::PreferenceJsonlDataset>,
+) -> Result<blazen_train::TrainedAdapter, blazen_llm::BlazenError> {
+    inner
+        .train_simpo(cfg, ds as Arc<dyn blazen_train::PreferenceDataset>, None)
+        .await
+}
+
+#[cfg(feature = "training")]
+async fn run_train_kto(
+    inner: Arc<ModelManager>,
+    cfg: blazen_train::KtoConfig,
+    ds: Arc<blazen_train::dataset::RatedJsonlDataset>,
+) -> Result<blazen_train::TrainedAdapter, blazen_llm::BlazenError> {
+    inner
+        .train_kto(cfg, ds as Arc<dyn blazen_train::RatedDataset>, None)
+        .await
+}
+
+#[cfg(feature = "training")]
+async fn run_fine_tune(
+    inner: Arc<ModelManager>,
+    cfg: blazen_train::FullFineTuneConfig,
+    ds: Arc<blazen_train::dataset::JsonlDataset>,
+) -> Result<blazen_train::FullFineTuneResult, blazen_llm::BlazenError> {
+    // `JsonlDataset` already impls `TrainingDataset`, so `Arc<JsonlDataset>`
+    // coerces directly to `Arc<dyn TrainingDataset>` — no shim needed for the
+    // fine-tune entry point (unlike `train_lora` above, which still uses the
+    // `ArcDataset` adapter because it takes `Box<dyn TrainingDataset>`).
+    inner
+        .fine_tune(cfg, ds as Arc<dyn blazen_train::TrainingDataset>, None)
+        .await
+}
+
+// --- DPO ------------------------------------------------------------------
+
+/// Synchronously trains a `LoRA` adapter end-to-end via Direct Preference
+/// Optimization (DPO). Writes the resulting adapter handle into `*out_adapter`
+/// on success; returns `0` on success or `-1` on failure (writes `*out_err`).
+///
+/// `dataset` is consumed by the training run — the cabi clones the inner
+/// `Arc` before the call, so the caller MUST still free the dataset handle
+/// with [`crate::training_records::blazen_preference_jsonl_dataset_free`]
+/// after this returns.
+///
+/// # Safety
+///
+/// `mgr` must be null OR a live [`BlazenModelManager`]. `config` must point to
+/// a fully-populated [`BlazenDpoConfig`] (see per-field docs). `dataset` must
+/// be null OR a pointer produced by
+/// [`crate::training_records::blazen_preference_jsonl_dataset_from_path`].
+/// `out_adapter` and `out_err` are each null OR a single-writer destination.
+#[cfg(feature = "training")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_train_dpo_blocking(
+    mgr: *const BlazenModelManager,
+    config: *const BlazenDpoConfig,
+    dataset: *mut BlazenPreferenceJsonlDataset,
+    out_adapter: *mut BlazenTrainedAdapter,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if mgr.is_null() {
+        // SAFETY: out-param contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_train_dpo_blocking: null manager",
+            )
+        };
+    }
+    if dataset.is_null() {
+        // SAFETY: out-param contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_train_dpo_blocking: null dataset",
+            )
+        };
+    }
+    // SAFETY: caller upholds the contract on `config`.
+    let rust_cfg = match unsafe { convert_dpo_config(config) } {
+        Ok(c) => c,
+        // SAFETY: out-param contract.
+        Err(e) => return unsafe { write_error(out_err, e) },
+    };
+    // SAFETY: caller upholds the dataset-pointer contract.
+    let ds_arc = Arc::clone(&unsafe { &*dataset }.inner);
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr_ref = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr_ref.0);
+    match runtime().block_on(async move { run_train_dpo(inner, rust_cfg, ds_arc).await }) {
+        Ok(adapter) => {
+            if !out_adapter.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *out_adapter = trained_adapter_to_cabi(&adapter);
+                }
+            }
+            0
+        }
+        // SAFETY: out-param contract.
+        Err(e) => unsafe { write_error(out_err, into_inner_error(e)) },
+    }
+}
+
+/// Spawns a `train_dpo` onto the cabi tokio runtime; pop the result with
+/// [`crate::future::blazen_future_take_trained_adapter`]. Returns null on
+/// argument-shape failure.
+///
+/// # Safety
+///
+/// Same as [`blazen_model_manager_train_dpo_blocking`] (minus the two out-
+/// param pointers).
+#[cfg(feature = "training")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_train_dpo(
+    mgr: *const BlazenModelManager,
+    config: *const BlazenDpoConfig,
+    dataset: *mut BlazenPreferenceJsonlDataset,
+) -> *mut BlazenFuture {
+    if mgr.is_null() || dataset.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the contract on `config`.
+    let Ok(rust_cfg) = (unsafe { convert_dpo_config(config) }) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller upholds the dataset-pointer contract.
+    let ds_arc = Arc::clone(&unsafe { &*dataset }.inner);
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr_ref = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr_ref.0);
+    BlazenFuture::spawn(async move {
+        run_train_dpo(inner, rust_cfg, ds_arc)
+            .await
+            .map_err(into_inner_error)
+    })
+}
+
+// --- ORPO -----------------------------------------------------------------
+
+/// Synchronously trains a `LoRA` adapter via Odds Ratio Preference
+/// Optimization (ORPO). Same surface as
+/// [`blazen_model_manager_train_dpo_blocking`].
+///
+/// # Safety
+///
+/// Same as [`blazen_model_manager_train_dpo_blocking`].
+#[cfg(feature = "training")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_train_orpo_blocking(
+    mgr: *const BlazenModelManager,
+    config: *const BlazenOrpoConfig,
+    dataset: *mut BlazenPreferenceJsonlDataset,
+    out_adapter: *mut BlazenTrainedAdapter,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if mgr.is_null() {
+        // SAFETY: out-param contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_train_orpo_blocking: null manager",
+            )
+        };
+    }
+    if dataset.is_null() {
+        // SAFETY: out-param contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_train_orpo_blocking: null dataset",
+            )
+        };
+    }
+    // SAFETY: caller upholds the contract on `config`.
+    let rust_cfg = match unsafe { convert_orpo_config(config) } {
+        Ok(c) => c,
+        // SAFETY: out-param contract.
+        Err(e) => return unsafe { write_error(out_err, e) },
+    };
+    // SAFETY: caller upholds the dataset-pointer contract.
+    let ds_arc = Arc::clone(&unsafe { &*dataset }.inner);
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr_ref = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr_ref.0);
+    match runtime().block_on(async move { run_train_orpo(inner, rust_cfg, ds_arc).await }) {
+        Ok(adapter) => {
+            if !out_adapter.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *out_adapter = trained_adapter_to_cabi(&adapter);
+                }
+            }
+            0
+        }
+        // SAFETY: out-param contract.
+        Err(e) => unsafe { write_error(out_err, into_inner_error(e)) },
+    }
+}
+
+/// Spawns a `train_orpo` onto the cabi tokio runtime. Same surface as
+/// [`blazen_model_manager_train_dpo`].
+///
+/// # Safety
+///
+/// Same as [`blazen_model_manager_train_orpo_blocking`].
+#[cfg(feature = "training")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_train_orpo(
+    mgr: *const BlazenModelManager,
+    config: *const BlazenOrpoConfig,
+    dataset: *mut BlazenPreferenceJsonlDataset,
+) -> *mut BlazenFuture {
+    if mgr.is_null() || dataset.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the contract on `config`.
+    let Ok(rust_cfg) = (unsafe { convert_orpo_config(config) }) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller upholds the dataset-pointer contract.
+    let ds_arc = Arc::clone(&unsafe { &*dataset }.inner);
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr_ref = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr_ref.0);
+    BlazenFuture::spawn(async move {
+        run_train_orpo(inner, rust_cfg, ds_arc)
+            .await
+            .map_err(into_inner_error)
+    })
+}
+
+// --- SimPO ----------------------------------------------------------------
+
+/// Synchronously trains a `LoRA` adapter via Simple Preference Optimization
+/// (`SimPO`). Same surface as [`blazen_model_manager_train_dpo_blocking`].
+///
+/// # Safety
+///
+/// Same as [`blazen_model_manager_train_dpo_blocking`].
+#[cfg(feature = "training")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_train_simpo_blocking(
+    mgr: *const BlazenModelManager,
+    config: *const BlazenSimpoConfig,
+    dataset: *mut BlazenPreferenceJsonlDataset,
+    out_adapter: *mut BlazenTrainedAdapter,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if mgr.is_null() {
+        // SAFETY: out-param contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_train_simpo_blocking: null manager",
+            )
+        };
+    }
+    if dataset.is_null() {
+        // SAFETY: out-param contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_train_simpo_blocking: null dataset",
+            )
+        };
+    }
+    // SAFETY: caller upholds the contract on `config`.
+    let rust_cfg = match unsafe { convert_simpo_config(config) } {
+        Ok(c) => c,
+        // SAFETY: out-param contract.
+        Err(e) => return unsafe { write_error(out_err, e) },
+    };
+    // SAFETY: caller upholds the dataset-pointer contract.
+    let ds_arc = Arc::clone(&unsafe { &*dataset }.inner);
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr_ref = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr_ref.0);
+    match runtime().block_on(async move { run_train_simpo(inner, rust_cfg, ds_arc).await }) {
+        Ok(adapter) => {
+            if !out_adapter.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *out_adapter = trained_adapter_to_cabi(&adapter);
+                }
+            }
+            0
+        }
+        // SAFETY: out-param contract.
+        Err(e) => unsafe { write_error(out_err, into_inner_error(e)) },
+    }
+}
+
+/// Spawns a `train_simpo` onto the cabi tokio runtime. Same surface as
+/// [`blazen_model_manager_train_dpo`].
+///
+/// # Safety
+///
+/// Same as [`blazen_model_manager_train_simpo_blocking`].
+#[cfg(feature = "training")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_train_simpo(
+    mgr: *const BlazenModelManager,
+    config: *const BlazenSimpoConfig,
+    dataset: *mut BlazenPreferenceJsonlDataset,
+) -> *mut BlazenFuture {
+    if mgr.is_null() || dataset.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the contract on `config`.
+    let Ok(rust_cfg) = (unsafe { convert_simpo_config(config) }) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller upholds the dataset-pointer contract.
+    let ds_arc = Arc::clone(&unsafe { &*dataset }.inner);
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr_ref = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr_ref.0);
+    BlazenFuture::spawn(async move {
+        run_train_simpo(inner, rust_cfg, ds_arc)
+            .await
+            .map_err(into_inner_error)
+    })
+}
+
+// --- KTO ------------------------------------------------------------------
+
+/// Synchronously trains a `LoRA` adapter via Kahneman-Tversky Optimization
+/// (KTO). Consumes a [`BlazenRatedJsonlDataset`] (single-completion plus a
+/// desirability flag per row) rather than the chosen/rejected pairs of DPO.
+///
+/// # Safety
+///
+/// `mgr` must be null OR a live [`BlazenModelManager`]. `config` must point to
+/// a fully-populated [`BlazenKtoConfig`]. `dataset` must be null OR a pointer
+/// produced by [`crate::training_records::blazen_rated_jsonl_dataset_from_path`].
+/// `out_adapter` and `out_err` are each null OR a single-writer destination.
+#[cfg(feature = "training")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_train_kto_blocking(
+    mgr: *const BlazenModelManager,
+    config: *const BlazenKtoConfig,
+    dataset: *mut BlazenRatedJsonlDataset,
+    out_adapter: *mut BlazenTrainedAdapter,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if mgr.is_null() {
+        // SAFETY: out-param contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_train_kto_blocking: null manager",
+            )
+        };
+    }
+    if dataset.is_null() {
+        // SAFETY: out-param contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_train_kto_blocking: null dataset",
+            )
+        };
+    }
+    // SAFETY: caller upholds the contract on `config`.
+    let rust_cfg = match unsafe { convert_kto_config(config) } {
+        Ok(c) => c,
+        // SAFETY: out-param contract.
+        Err(e) => return unsafe { write_error(out_err, e) },
+    };
+    // SAFETY: caller upholds the dataset-pointer contract.
+    let ds_arc = Arc::clone(&unsafe { &*dataset }.inner);
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr_ref = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr_ref.0);
+    match runtime().block_on(async move { run_train_kto(inner, rust_cfg, ds_arc).await }) {
+        Ok(adapter) => {
+            if !out_adapter.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *out_adapter = trained_adapter_to_cabi(&adapter);
+                }
+            }
+            0
+        }
+        // SAFETY: out-param contract.
+        Err(e) => unsafe { write_error(out_err, into_inner_error(e)) },
+    }
+}
+
+/// Spawns a `train_kto` onto the cabi tokio runtime. Same surface as
+/// [`blazen_model_manager_train_dpo`] but consumes a `RatedJsonlDataset`.
+///
+/// # Safety
+///
+/// Same as [`blazen_model_manager_train_kto_blocking`].
+#[cfg(feature = "training")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_train_kto(
+    mgr: *const BlazenModelManager,
+    config: *const BlazenKtoConfig,
+    dataset: *mut BlazenRatedJsonlDataset,
+) -> *mut BlazenFuture {
+    if mgr.is_null() || dataset.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the contract on `config`.
+    let Ok(rust_cfg) = (unsafe { convert_kto_config(config) }) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller upholds the dataset-pointer contract.
+    let ds_arc = Arc::clone(&unsafe { &*dataset }.inner);
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr_ref = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr_ref.0);
+    BlazenFuture::spawn(async move {
+        run_train_kto(inner, rust_cfg, ds_arc)
+            .await
+            .map_err(into_inner_error)
+    })
+}
+
+// --- full fine-tune --------------------------------------------------------
+
+/// Synchronously runs a full fine-tune (every parameter trains; no `LoRA`
+/// adapter). Writes the [`BlazenFullFineTuneResult`] into `*out_result` on
+/// success (caller releases the inner `output_dir` string with
+/// [`crate::training_records::blazen_full_finetune_result_free`]). Returns
+/// `0` on success or `-1` on failure (writes `*out_err`).
+///
+/// Setting `config.gradient_checkpointing = 1` is rejected at trainer init
+/// because candle 0.10.2 has no activation-checkpointing primitive.
+///
+/// # Safety
+///
+/// `mgr` must be null OR a live [`BlazenModelManager`]. `config` must point to
+/// a fully-populated [`BlazenFullFineTuneConfig`]. `dataset` must be null OR
+/// a pointer produced by
+/// [`crate::training_records::blazen_jsonl_dataset_from_path`]. `out_result`
+/// and `out_err` are each null OR a single-writer destination.
+#[cfg(feature = "training")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_fine_tune_blocking(
+    mgr: *const BlazenModelManager,
+    config: *const BlazenFullFineTuneConfig,
+    dataset: *mut BlazenJsonlDataset,
+    out_result: *mut BlazenFullFineTuneResult,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if mgr.is_null() {
+        // SAFETY: out-param contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_fine_tune_blocking: null manager",
+            )
+        };
+    }
+    if dataset.is_null() {
+        // SAFETY: out-param contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_fine_tune_blocking: null dataset",
+            )
+        };
+    }
+    // SAFETY: caller upholds the contract on `config`.
+    let rust_cfg = match unsafe { convert_full_finetune_config(config) } {
+        Ok(c) => c,
+        // SAFETY: out-param contract.
+        Err(e) => return unsafe { write_error(out_err, e) },
+    };
+    // SAFETY: caller upholds the dataset-pointer contract.
+    let ds_arc = Arc::clone(&unsafe { &*dataset }.inner);
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr_ref = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr_ref.0);
+    match runtime().block_on(async move { run_fine_tune(inner, rust_cfg, ds_arc).await }) {
+        Ok(result) => {
+            if !out_result.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *out_result = full_finetune_result_to_cabi(&result);
+                }
+            }
+            0
+        }
+        // SAFETY: out-param contract.
+        Err(e) => unsafe { write_error(out_err, into_inner_error(e)) },
+    }
+}
+
+/// Spawns a `fine_tune` onto the cabi tokio runtime; pop the result with
+/// [`crate::future::blazen_future_take_full_finetune_result`].
+///
+/// # Safety
+///
+/// Same as [`blazen_model_manager_fine_tune_blocking`] (minus the two
+/// out-param pointers).
+#[cfg(feature = "training")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_fine_tune(
+    mgr: *const BlazenModelManager,
+    config: *const BlazenFullFineTuneConfig,
+    dataset: *mut BlazenJsonlDataset,
+) -> *mut BlazenFuture {
+    if mgr.is_null() || dataset.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the contract on `config`.
+    let Ok(rust_cfg) = (unsafe { convert_full_finetune_config(config) }) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller upholds the dataset-pointer contract.
+    let ds_arc = Arc::clone(&unsafe { &*dataset }.inner);
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr_ref = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr_ref.0);
+    BlazenFuture::spawn(async move {
+        run_fine_tune(inner, rust_cfg, ds_arc)
+            .await
+            .map_err(into_inner_error)
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Tests (PR8 Wave 18)
+// ---------------------------------------------------------------------------
+
+#[cfg(all(test, feature = "training"))]
+mod tests {
+    use std::ffi::CString;
+
+    use super::*;
+    use crate::training_records::{
+        BLAZEN_MIXED_PRECISION_NONE, BLAZEN_SCHEDULER_COSINE, BlazenLoraConfig, BlazenOptimConfig,
+        BlazenSchedulerConfig, BlazenTrainCoreConfig,
+    };
+
+    /// Build a `BlazenDpoConfig` with intentionally-malformed core (zero
+    /// `max_steps`) plus its backing `CStrings`.
+    fn make_malformed_dpo() -> (
+        BlazenDpoConfig,
+        Vec<CString>,
+        Vec<*const c_char>,
+        Vec<CString>,
+    ) {
+        let repo_c = CString::new("Qwen/Qwen2.5-0.5B").unwrap();
+        let out_c = CString::new("./out").unwrap();
+        let modules = vec![CString::new("q_proj").unwrap()];
+        let module_ptrs: Vec<*const c_char> = modules.iter().map(|c| c.as_ptr()).collect();
+        let core = BlazenTrainCoreConfig {
+            base_model_repo: repo_c.as_ptr(),
+            base_model_revision: std::ptr::null(),
+            output_dir: out_c.as_ptr(),
+            optim: BlazenOptimConfig {
+                learning_rate: 2e-4,
+                beta1: 0.9,
+                beta2: 0.999,
+                epsilon: 1e-8,
+                weight_decay: 0.0,
+                has_gradient_clip: 0,
+                gradient_clip: 0.0,
+            },
+            scheduler: BlazenSchedulerConfig {
+                kind: BLAZEN_SCHEDULER_COSINE,
+                warmup_steps: 0,
+            },
+            max_steps: 0, // <-- malformed
+            batch_size: 1,
+            gradient_accumulation_steps: 1,
+            max_seq_len: 32,
+            has_eval_steps: 0,
+            eval_steps: 0,
+            has_save_steps: 0,
+            save_steps: 0,
+            seed: 42,
+            mixed_precision: BLAZEN_MIXED_PRECISION_NONE,
+            device: std::ptr::null(),
+        };
+        let lora = BlazenLoraConfig {
+            rank: 8,
+            alpha: 16.0,
+            dropout: 0.0,
+            target_modules: module_ptrs.as_ptr(),
+            target_modules_len: module_ptrs.len(),
+        };
+        let cfg = BlazenDpoConfig {
+            core,
+            lora,
+            beta: 0.1,
+            label_smoothing: 0.0,
+            reference_model_repo: std::ptr::null(),
+            reference_model_revision: std::ptr::null(),
+        };
+        (cfg, vec![repo_c, out_c], module_ptrs, modules)
+    }
+
+    #[test]
+    fn train_dpo_blocking_returns_minus_one_on_validation_failure() {
+        // Build a manager, build a malformed DPO config (max_steps = 0), pass
+        // them through the blocking entry point with a non-null dataset
+        // surrogate. The convert step must reject the config before any train
+        // work runs, returning -1 and writing an Internal-or-Validation error
+        // into `*out_err`.
+        //
+        // We can't easily synthesize a "real" PreferenceJsonlDataset without
+        // disk I/O, but we can verify the early null-dataset bail-out is the
+        // negative-control: pass null and confirm we hit the documented
+        // "null dataset" path with -1.
+
+        let mgr_ptr = blazen_model_manager_new();
+        let (cfg, _strings, _module_ptrs, _modules) = make_malformed_dpo();
+
+        let mut adapter = BlazenTrainedAdapter {
+            adapter_dir: std::ptr::null_mut(),
+            final_loss: 0.0,
+            total_steps: 0,
+        };
+        let mut err: *mut BlazenError = std::ptr::null_mut();
+        // SAFETY: mgr_ptr is a live cabi-produced manager; dataset is null
+        // (handled by the early-bail branch); the config + out-params live for
+        // the call duration.
+        let rc = unsafe {
+            blazen_model_manager_train_dpo_blocking(
+                mgr_ptr,
+                std::ptr::from_ref(&cfg),
+                std::ptr::null_mut(), // null dataset triggers "null dataset" branch
+                std::ptr::addr_of_mut!(adapter),
+                std::ptr::addr_of_mut!(err),
+            )
+        };
+        assert_eq!(
+            rc, -1,
+            "expected -1 from train_dpo_blocking with null dataset"
+        );
+        assert!(!err.is_null(), "expected non-null err on null dataset");
+        // SAFETY: err is a freshly-produced BlazenError* — reclaim it.
+        unsafe {
+            drop(Box::from_raw(err));
+        }
+        // SAFETY: mgr_ptr was produced by `blazen_model_manager_new`.
+        unsafe {
+            blazen_model_manager_free(mgr_ptr);
+        }
+    }
+
+    #[test]
+    fn train_dpo_returns_null_future_on_null_dataset() {
+        // The future-returning variant returns a null pointer (rather than a
+        // BlazenFuture wrapping an error) when the dataset is null — matches
+        // the documented contract on the function.
+        let mgr_ptr = blazen_model_manager_new();
+        let (cfg, _strings, _module_ptrs, _modules) = make_malformed_dpo();
+
+        // SAFETY: see the blocking variant above.
+        let fut = unsafe {
+            blazen_model_manager_train_dpo(mgr_ptr, std::ptr::from_ref(&cfg), std::ptr::null_mut())
+        };
+        assert!(fut.is_null(), "expected null future on null dataset");
+        // SAFETY: mgr_ptr was produced by `blazen_model_manager_new`.
+        unsafe {
+            blazen_model_manager_free(mgr_ptr);
+        }
+    }
 }

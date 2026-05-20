@@ -24,10 +24,9 @@ use std::collections::HashSet;
 use std::sync::Arc;
 
 use candle_core::{DType, Device, IndexOp, Module, Result, Tensor};
-use candle_nn::{
-    Embedding, Linear, RmsNorm, VarBuilder, embedding, linear, linear_no_bias, rms_norm,
-};
+use candle_nn::{Embedding, Linear, RmsNorm, VarBuilder, VarMap};
 
+use crate::arch::{BaseLoader, TrainMode, build_embedding, build_rms_norm};
 use crate::config::LoraConfig;
 use crate::lora::LoraLinear;
 
@@ -141,6 +140,12 @@ struct Attention {
 }
 
 impl Attention {
+    // Why: every argument is load-bearing — rotary table, arch cfg, LoRA
+    // cfg + target set, two VarBuilders (frozen vs trainable scopes),
+    // mode-aware loader, and the absolute key prefix for FFT varmap
+    // insertion. Bundling into a single struct would just move the line
+    // count without clarifying anything.
+    #[allow(clippy::too_many_arguments)]
     fn new(
         rotary_emb: Arc<RotaryEmbedding>,
         cfg: &Config,
@@ -148,6 +153,8 @@ impl Attention {
         targets: &HashSet<String>,
         base_vb: VarBuilder,
         lora_vb: VarBuilder,
+        loader: &BaseLoader<'_>,
+        abs_path: &str,
     ) -> Result<Self> {
         let hidden_sz = cfg.hidden_size;
         let num_heads = cfg.num_attention_heads;
@@ -158,10 +165,30 @@ impl Attention {
         let q_dim = num_heads * head_dim;
         let kv_dim = num_kv_heads * head_dim;
 
-        let q_base = linear(hidden_sz, q_dim, base_vb.pp("q_proj"))?;
-        let k_base = linear(hidden_sz, kv_dim, base_vb.pp("k_proj"))?;
-        let v_base = linear(hidden_sz, kv_dim, base_vb.pp("v_proj"))?;
-        let o_base = linear_no_bias(q_dim, hidden_sz, base_vb.pp("o_proj"))?;
+        let q_base = loader.linear(
+            hidden_sz,
+            q_dim,
+            base_vb.pp("q_proj"),
+            &format!("{abs_path}.q_proj"),
+        )?;
+        let k_base = loader.linear(
+            hidden_sz,
+            kv_dim,
+            base_vb.pp("k_proj"),
+            &format!("{abs_path}.k_proj"),
+        )?;
+        let v_base = loader.linear(
+            hidden_sz,
+            kv_dim,
+            base_vb.pp("v_proj"),
+            &format!("{abs_path}.v_proj"),
+        )?;
+        let o_base = loader.linear_no_bias(
+            q_dim,
+            hidden_sz,
+            base_vb.pp("o_proj"),
+            &format!("{abs_path}.o_proj"),
+        )?;
 
         let q_proj = MaybeLora::build(
             "q_proj",
@@ -270,13 +297,30 @@ impl Mlp {
         targets: &HashSet<String>,
         base_vb: VarBuilder,
         lora_vb: VarBuilder,
+        loader: &BaseLoader<'_>,
+        abs_path: &str,
     ) -> Result<Self> {
         let hidden_sz = cfg.hidden_size;
         let intermediate_sz = cfg.intermediate_size;
 
-        let gate_base = linear_no_bias(hidden_sz, intermediate_sz, base_vb.pp("gate_proj"))?;
-        let up_base = linear_no_bias(hidden_sz, intermediate_sz, base_vb.pp("up_proj"))?;
-        let down_base = linear_no_bias(intermediate_sz, hidden_sz, base_vb.pp("down_proj"))?;
+        let gate_base = loader.linear_no_bias(
+            hidden_sz,
+            intermediate_sz,
+            base_vb.pp("gate_proj"),
+            &format!("{abs_path}.gate_proj"),
+        )?;
+        let up_base = loader.linear_no_bias(
+            hidden_sz,
+            intermediate_sz,
+            base_vb.pp("up_proj"),
+            &format!("{abs_path}.up_proj"),
+        )?;
+        let down_base = loader.linear_no_bias(
+            intermediate_sz,
+            hidden_sz,
+            base_vb.pp("down_proj"),
+            &format!("{abs_path}.down_proj"),
+        )?;
 
         let gate_proj = MaybeLora::build(
             "gate_proj",
@@ -331,6 +375,10 @@ struct DecoderLayer {
 }
 
 impl DecoderLayer {
+    // Why: see Attention::new — same argument set composes the per-layer
+    // building blocks (attn + mlp + 2 layernorms) and there's no natural
+    // smaller grouping.
+    #[allow(clippy::too_many_arguments)]
     fn new(
         rotary_emb: Arc<RotaryEmbedding>,
         cfg: &Config,
@@ -338,6 +386,8 @@ impl DecoderLayer {
         targets: &HashSet<String>,
         base_vb: VarBuilder,
         lora_vb: VarBuilder,
+        loader: &BaseLoader<'_>,
+        abs_path: &str,
     ) -> Result<Self> {
         let self_attn = Attention::new(
             rotary_emb,
@@ -346,17 +396,31 @@ impl DecoderLayer {
             targets,
             base_vb.pp("self_attn"),
             lora_vb.pp("self_attn"),
+            loader,
+            &format!("{abs_path}.self_attn"),
         )?;
-        let mlp = Mlp::new(cfg, lora_cfg, targets, base_vb.pp("mlp"), lora_vb.pp("mlp"))?;
-        let input_layernorm = rms_norm(
+        let mlp = Mlp::new(
+            cfg,
+            lora_cfg,
+            targets,
+            base_vb.pp("mlp"),
+            lora_vb.pp("mlp"),
+            loader,
+            &format!("{abs_path}.mlp"),
+        )?;
+        let input_layernorm = build_rms_norm(
             cfg.hidden_size,
             cfg.rms_norm_eps,
             base_vb.pp("input_layernorm"),
+            loader,
+            &format!("{abs_path}.input_layernorm"),
         )?;
-        let post_attention_layernorm = rms_norm(
+        let post_attention_layernorm = build_rms_norm(
             cfg.hidden_size,
             cfg.rms_norm_eps,
             base_vb.pp("post_attention_layernorm"),
+            loader,
+            &format!("{abs_path}.post_attention_layernorm"),
         )?;
         Ok(Self {
             self_attn,
@@ -416,18 +480,79 @@ impl TrainableQwen2 {
         cfg: &Config,
         lora_cfg: &LoraConfig,
     ) -> Result<Self> {
-        let targets: HashSet<String> = lora_cfg.target_modules.iter().cloned().collect();
+        Self::load_with_mode(base_vb, lora_vb, None, cfg, lora_cfg, TrainMode::LoraOnly)
+    }
+
+    /// Build the trainable Qwen2 wrapper with an explicit [`TrainMode`].
+    ///
+    /// In [`TrainMode::LoraOnly`] this is identical to [`Self::load`]:
+    /// base weights are read frozen from `base_vb` and only LoRA params
+    /// land in the varmap behind `lora_vb`.
+    ///
+    /// In [`TrainMode::FullFineTune`] every linear's base weight is read
+    /// from `base_vb` and copied into `train_varmap` as a trainable [`Var`]
+    /// (under safetensors-canonical keys like
+    /// `model.layers.0.self_attn.q_proj.weight`). `lora_cfg.target_modules`
+    /// is ignored — no LoRA layers are constructed. `lora_vb` is unused
+    /// but kept in the signature so callers can pass the same builder
+    /// they would use for LoRA without conditional plumbing.
+    ///
+    /// `train_varmap` is required in `FullFineTune` mode and may be
+    /// `None` in `LoraOnly` mode. Passing `None` in `FullFineTune` mode
+    /// panics — the caller must always be able to provide it because
+    /// the trainer owns the varmap that will receive AdamW updates.
+    ///
+    /// # Errors
+    ///
+    /// Propagates any `candle` error from weight loading or tensor
+    /// construction.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `mode == TrainMode::FullFineTune` and `train_varmap` is
+    /// `None`. This is a programming error, not a runtime input failure.
+    pub fn load_with_mode(
+        base_vb: VarBuilder,
+        lora_vb: VarBuilder,
+        train_varmap: Option<&VarMap>,
+        cfg: &Config,
+        lora_cfg: &LoraConfig,
+        mode: TrainMode,
+    ) -> Result<Self> {
+        // Why: FullFineTune ignores LoRA targets entirely — no adapters
+        // are constructed. LoraOnly honors the user's target list.
+        let targets: HashSet<String> = match mode {
+            TrainMode::LoraOnly => lora_cfg.target_modules.iter().cloned().collect(),
+            TrainMode::FullFineTune => HashSet::new(),
+        };
+
+        if mode == TrainMode::FullFineTune {
+            assert!(
+                train_varmap.is_some(),
+                "FullFineTune requires train_varmap; got None",
+            );
+        }
+
+        let loader = BaseLoader { mode, train_varmap };
 
         let device = base_vb.device().clone();
         let dtype = base_vb.dtype();
 
         let vb_m = base_vb.pp("model");
-        let embed_tokens = embedding(cfg.vocab_size, cfg.hidden_size, vb_m.pp("embed_tokens"))?;
+        let embed_tokens = build_embedding(
+            cfg.vocab_size,
+            cfg.hidden_size,
+            vb_m.pp("embed_tokens"),
+            &loader,
+            "model.embed_tokens",
+        )?;
 
         let rotary_emb = Arc::new(RotaryEmbedding::new(dtype, cfg, &device)?);
 
         // Why: the LoRA varmap must mirror PEFT's `base_model.model.` wrapping
         // so trained tensors round-trip through `LoadedAdapter::from_dir`.
+        // In FullFineTune the LoRA varmap goes unused but we keep the
+        // pp chain to avoid divergent control flow.
         let lora_vb_m = lora_vb.pp("base_model").pp("model").pp("model");
 
         let mut layers = Vec::with_capacity(cfg.num_hidden_layers);
@@ -441,16 +566,29 @@ impl TrainableQwen2 {
                 &targets,
                 vb_l.pp(layer_idx),
                 lora_vb_l.pp(layer_idx),
+                &loader,
+                &format!("model.layers.{layer_idx}"),
             )?;
             layers.push(layer);
         }
 
-        let norm = rms_norm(cfg.hidden_size, cfg.rms_norm_eps, vb_m.pp("norm"))?;
+        let norm = build_rms_norm(
+            cfg.hidden_size,
+            cfg.rms_norm_eps,
+            vb_m.pp("norm"),
+            &loader,
+            "model.norm",
+        )?;
 
         let lm_head = if cfg.tie_word_embeddings {
             Linear::new(embed_tokens.embeddings().clone(), None)
         } else {
-            linear_no_bias(cfg.hidden_size, cfg.vocab_size, base_vb.pp("lm_head"))?
+            loader.linear_no_bias(
+                cfg.hidden_size,
+                cfg.vocab_size,
+                base_vb.pp("lm_head"),
+                "lm_head",
+            )?
         };
 
         Ok(Self {
@@ -738,5 +876,189 @@ mod tests {
 
         let last = model.last_token_logits(&input_ids).expect("last");
         assert_eq!(last.dims(), &[batch, cfg.vocab_size]);
+    }
+
+    /// Build a Qwen2 in `FullFineTune` mode, returning the train VarMap
+    /// that received every base weight as a fresh `Var`.
+    ///
+    /// `base_map` is provided by the caller so two builds can share a
+    /// source-of-truth set of base weights (used by the
+    /// `shape_matches_lora_mode` test).
+    fn build_full_finetune(
+        base_map: &VarMap,
+        cfg: &Config,
+    ) -> (TrainableQwen2, VarMap, VarMap, Device) {
+        let device = Device::Cpu;
+        let lora_cfg = LoraConfig {
+            rank: 0,
+            alpha: 0.0,
+            dropout: 0.0,
+            target_modules: vec![],
+        };
+        let lora_map = VarMap::new();
+        let train_map = VarMap::new();
+        let base_vb = VarBuilder::from_varmap(base_map, DType::F32, &device);
+        let lora_vb = VarBuilder::from_varmap(&lora_map, DType::F32, &device);
+
+        let model = TrainableQwen2::load_with_mode(
+            base_vb,
+            lora_vb,
+            Some(&train_map),
+            cfg,
+            &lora_cfg,
+            TrainMode::FullFineTune,
+        )
+        .expect("full-FT model loads");
+
+        (model, lora_map, train_map, device)
+    }
+
+    /// Expected absolute key list (every trainable `.weight` / `.bias`)
+    /// for the `tiny_qwen2_config()` model. Mirrors the safetensors
+    /// naming convention so `VarMap::save` output round-trips through
+    /// the inference-side loader.
+    fn expected_full_finetune_keys(cfg: &Config) -> Vec<String> {
+        let mut keys = Vec::new();
+        keys.push("model.embed_tokens.weight".to_string());
+        for li in 0..cfg.num_hidden_layers {
+            for proj in ["q_proj", "k_proj", "v_proj"] {
+                keys.push(format!("model.layers.{li}.self_attn.{proj}.weight"));
+                keys.push(format!("model.layers.{li}.self_attn.{proj}.bias"));
+            }
+            keys.push(format!("model.layers.{li}.self_attn.o_proj.weight"));
+            for proj in ["gate_proj", "up_proj", "down_proj"] {
+                keys.push(format!("model.layers.{li}.mlp.{proj}.weight"));
+            }
+            keys.push(format!("model.layers.{li}.input_layernorm.weight"));
+            keys.push(format!("model.layers.{li}.post_attention_layernorm.weight"));
+        }
+        keys.push("model.norm.weight".to_string());
+        if !cfg.tie_word_embeddings {
+            keys.push("lm_head.weight".to_string());
+        }
+        keys
+    }
+
+    #[test]
+    fn qwen2_full_finetune_loads_base_into_varmap() {
+        let cfg = tiny_qwen2_config();
+        let base_map = VarMap::new();
+        let (_model, _lora, train_map, _dev) = build_full_finetune(&base_map, &cfg);
+
+        let guard = train_map
+            .data()
+            .lock()
+            .expect("train varmap mutex poisoned by another thread");
+        let keys: std::collections::HashSet<String> = guard.keys().cloned().collect();
+        drop(guard);
+
+        // Minimal sanity probe: at least one well-known weight is present.
+        assert!(
+            keys.contains("model.layers.0.self_attn.q_proj.weight"),
+            "FullFineTune train varmap missing q_proj.weight; have: {keys:?}",
+        );
+        // FullFineTune ignores LoRA targets, so NO lora_A/lora_B should be
+        // present in the train varmap. (The separate LoRA varmap stays
+        // empty because the wrapper never constructs LoraLinear in FFT.)
+        for k in &keys {
+            assert!(
+                !k.contains("lora_A") && !k.contains("lora_B"),
+                "FullFineTune train varmap unexpectedly has LoRA key: {k}",
+            );
+        }
+    }
+
+    #[test]
+    fn qwen2_full_finetune_forward_shape_matches_lora_mode() {
+        let device = Device::Cpu;
+        let cfg = tiny_qwen2_config();
+
+        // Build the LoraOnly reference with NO LoRA targets so it's a
+        // base-only forward — values will match FullFineTune at step 0
+        // because the FFT path copies the same base weights into Vars
+        // without modifying them.
+        let no_lora_cfg = LoraConfig {
+            rank: 4,
+            alpha: 8.0,
+            dropout: 0.0,
+            target_modules: vec![],
+        };
+        let base_map = VarMap::new();
+        let lora_map_ref = VarMap::new();
+        let base_vb_ref = VarBuilder::from_varmap(&base_map, DType::F32, &device);
+        let lora_vb_ref = VarBuilder::from_varmap(&lora_map_ref, DType::F32, &device);
+        let lora_only =
+            TrainableQwen2::load(base_vb_ref, lora_vb_ref, &cfg, &no_lora_cfg).expect("lora load");
+
+        // Reuse the same base_map for FullFineTune so the source weights
+        // are bit-identical between the two models.
+        let (full_ft, _lora_map, _train_map, _dev) = build_full_finetune(&base_map, &cfg);
+
+        let batch = 1;
+        let seq_len = 8;
+        let input_ids = Tensor::from_vec(
+            (0u32..u32::try_from(seq_len).unwrap()).collect::<Vec<u32>>(),
+            (batch, seq_len),
+            &device,
+        )
+        .expect("ids");
+
+        let out_lora = lora_only.forward(&input_ids).expect("lora forward");
+        let out_ft = full_ft.forward(&input_ids).expect("ft forward");
+
+        // Why: shapes must match exactly — same arch wraps the same cfg.
+        assert_eq!(out_ft.dims(), out_lora.dims());
+        assert_eq!(out_ft.dims(), &[batch, seq_len, cfg.vocab_size]);
+
+        // Bonus: at step 0 (no weight updates yet), the FFT path is just
+        // copy-in-place of the same base weights, so logits should match
+        // numerically.
+        let diff = (&out_ft - &out_lora).expect("diff");
+        let max_abs = diff
+            .abs()
+            .expect("abs")
+            .flatten_all()
+            .expect("flatten")
+            .max(0)
+            .expect("max")
+            .to_scalar::<f32>()
+            .expect("scalar");
+        assert!(
+            max_abs < 1e-5,
+            "FullFineTune at step 0 should match LoraOnly base-only forward; got max-abs delta {max_abs}",
+        );
+    }
+
+    #[test]
+    fn qwen2_full_finetune_every_linear_has_var() {
+        let cfg = tiny_qwen2_config();
+        let base_map = VarMap::new();
+        let (_model, _lora, train_map, _dev) = build_full_finetune(&base_map, &cfg);
+
+        let guard = train_map
+            .data()
+            .lock()
+            .expect("train varmap mutex poisoned by another thread");
+        let actual: std::collections::HashSet<String> = guard.keys().cloned().collect();
+        drop(guard);
+
+        let expected = expected_full_finetune_keys(&cfg);
+        for key in &expected {
+            assert!(
+                actual.contains(key),
+                "FullFineTune train varmap missing expected key {key}; have: {actual:?}",
+            );
+        }
+
+        // Why: also assert no surprise extras — every key in the varmap
+        // must appear in our expected list. This catches accidental
+        // double-registration or stale prefix bugs.
+        let expected_set: std::collections::HashSet<&String> = expected.iter().collect();
+        for key in &actual {
+            assert!(
+                expected_set.contains(key),
+                "FullFineTune train varmap has unexpected key {key}; expected one of: {expected:?}",
+            );
+        }
     }
 }

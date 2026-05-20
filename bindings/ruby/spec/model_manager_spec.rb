@@ -270,4 +270,214 @@ RSpec.describe Blazen::ModelManager do
       expect { mgr.train_lora(cfg, fake_dataset) }.to raise_error(Blazen::ValidationError)
     end
   end
+
+  describe Blazen::TrainCoreConfig do
+    it "has reasonable defaults for optional fields" do
+      core = described_class.new(
+        base_model_repo: "blazen-test/base",
+        output_dir: "/tmp/blazen-out",
+      )
+      expect(core.base_model_repo).to eq("blazen-test/base")
+      expect(core.base_model_revision).to be_nil
+      expect(core.output_dir).to eq("/tmp/blazen-out")
+      expect(core.max_steps).to eq(100)
+      expect(core.batch_size).to eq(1)
+      expect(core.gradient_accumulation_steps).to eq(1)
+      expect(core.max_seq_len).to eq(2048)
+      expect(core.eval_steps).to be_nil
+      expect(core.save_steps).to be_nil
+      expect(core.seed).to eq(42)
+      expect(core.mixed_precision).to eq(Blazen::MixedPrecision::NONE)
+      expect(core.device).to be_nil
+      expect(core.optim).to be_a(Blazen::OptimConfig)
+      expect(core.scheduler).to be_a(Blazen::SchedulerConfig)
+    end
+  end
+
+  describe Blazen::DpoConfig do
+    let(:core) do
+      Blazen::TrainCoreConfig.new(
+        base_model_repo: "blazen-test/base",
+        output_dir: "/tmp/blazen-dpo-out",
+      )
+    end
+
+    it "defaults beta=0.1, label_smoothing=0.0, reference_model_*=nil" do
+      cfg = described_class.new(core: core)
+      expect(cfg.beta).to eq(0.1)
+      expect(cfg.label_smoothing).to eq(0.0)
+      expect(cfg.reference_model_repo).to be_nil
+      expect(cfg.reference_model_revision).to be_nil
+      expect(cfg.lora).to be_a(Blazen::LoraConfig)
+      expect(cfg.core).to equal(core)
+    end
+
+    it "accepts a custom reference model repo + revision" do
+      cfg = described_class.new(
+        core: core,
+        reference_model_repo: "blazen-test/ref",
+        reference_model_revision: "main",
+      )
+      expect(cfg.reference_model_repo).to eq("blazen-test/ref")
+      expect(cfg.reference_model_revision).to eq("main")
+    end
+  end
+
+  describe Blazen::OrpoConfig do
+    it "defaults lambda to 0.1" do
+      core = Blazen::TrainCoreConfig.new(
+        base_model_repo: "blazen-test/base",
+        output_dir: "/tmp/blazen-orpo-out",
+      )
+      cfg = described_class.new(core: core)
+      expect(cfg.lambda).to eq(0.1)
+      expect(cfg.lora).to be_a(Blazen::LoraConfig)
+    end
+  end
+
+  describe Blazen::SimpoConfig do
+    it "defaults beta=2.0, gamma=1.0" do
+      core = Blazen::TrainCoreConfig.new(
+        base_model_repo: "blazen-test/base",
+        output_dir: "/tmp/blazen-simpo-out",
+      )
+      cfg = described_class.new(core: core)
+      expect(cfg.beta).to eq(2.0)
+      expect(cfg.gamma).to eq(1.0)
+      expect(cfg.lora).to be_a(Blazen::LoraConfig)
+    end
+  end
+
+  describe Blazen::KtoConfig do
+    it "defaults beta=0.1, lambda_d=1.0, lambda_u=1.0, reference_model_*=nil" do
+      core = Blazen::TrainCoreConfig.new(
+        base_model_repo: "blazen-test/base",
+        output_dir: "/tmp/blazen-kto-out",
+      )
+      cfg = described_class.new(core: core)
+      expect(cfg.beta).to eq(0.1)
+      expect(cfg.lambda_d).to eq(1.0)
+      expect(cfg.lambda_u).to eq(1.0)
+      expect(cfg.reference_model_repo).to be_nil
+      expect(cfg.reference_model_revision).to be_nil
+      expect(cfg.lora).to be_a(Blazen::LoraConfig)
+    end
+  end
+
+  describe Blazen::FullFineTuneConfig do
+    it "defaults gradient_checkpointing to false" do
+      core = Blazen::TrainCoreConfig.new(
+        base_model_repo: "blazen-test/base",
+        output_dir: "/tmp/blazen-ft-out",
+      )
+      cfg = described_class.new(core: core)
+      expect(cfg.gradient_checkpointing).to eq(false)
+      expect(cfg.core).to equal(core)
+    end
+
+    it "coerces gradient_checkpointing to a strict bool" do
+      core = Blazen::TrainCoreConfig.new(
+        base_model_repo: "blazen-test/base",
+        output_dir: "/tmp/blazen-ft-out",
+      )
+      cfg = described_class.new(core: core, gradient_checkpointing: "yes")
+      expect(cfg.gradient_checkpointing).to eq(true)
+    end
+  end
+
+  describe Blazen::PreferenceJsonlDataset do
+    describe ".from_path" do
+      it "raises a Blazen::Error subclass on a nonexistent file" do
+        expect {
+          described_class.from_path(
+            "/nonexistent/blazen-pref-#{Process.pid}-#{rand(1 << 32)}.jsonl",
+            tokenizer_path: "/nonexistent/tokenizer.json",
+          )
+        }.to raise_error(Blazen::Error)
+      end
+    end
+  end
+
+  describe Blazen::RatedJsonlDataset do
+    describe ".from_path" do
+      it "raises a Blazen::Error subclass on a nonexistent file" do
+        expect {
+          described_class.from_path(
+            "/nonexistent/blazen-rated-#{Process.pid}-#{rand(1 << 32)}.jsonl",
+            tokenizer_path: "/nonexistent/tokenizer.json",
+          )
+        }.to raise_error(Blazen::Error)
+      end
+    end
+  end
+
+  describe Blazen::FullFineTuneResult do
+    it "exposes output_dir / final_loss / steps_completed as keyword fields" do
+      res = described_class.new(
+        output_dir: "/tmp/blazen-ft-result",
+        final_loss: 0.5,
+        steps_completed: 100,
+      )
+      expect(res.output_dir).to eq("/tmp/blazen-ft-result")
+      expect(res.final_loss).to eq(0.5)
+      expect(res.steps_completed).to eq(100)
+    end
+  end
+
+  describe "#train_dpo" do
+    it "is defined and accepts (config, dataset)" do
+      expect(described_class.instance_method(:train_dpo).arity).to eq(2)
+    end
+
+    it "raises Blazen::ValidationError when config isn't a DpoConfig" do
+      mgr = described_class.new
+      fake_dataset = Blazen::PreferenceJsonlDataset.allocate
+      fake_dataset.instance_variable_set(:@ptr, ::FFI::Pointer::NULL)
+      expect {
+        mgr.train_dpo(Object.new, fake_dataset)
+      }.to raise_error(Blazen::ValidationError)
+    end
+  end
+
+  describe "#train_orpo" do
+    it "is defined and accepts (config, dataset)" do
+      expect(described_class.instance_method(:train_orpo).arity).to eq(2)
+    end
+  end
+
+  describe "#train_simpo" do
+    it "is defined and accepts (config, dataset)" do
+      expect(described_class.instance_method(:train_simpo).arity).to eq(2)
+    end
+  end
+
+  describe "#train_kto" do
+    it "is defined and accepts (config, dataset)" do
+      expect(described_class.instance_method(:train_kto).arity).to eq(2)
+    end
+
+    it "raises Blazen::ValidationError when config isn't a KtoConfig" do
+      mgr = described_class.new
+      fake_dataset = Blazen::RatedJsonlDataset.allocate
+      fake_dataset.instance_variable_set(:@ptr, ::FFI::Pointer::NULL)
+      expect {
+        mgr.train_kto(Object.new, fake_dataset)
+      }.to raise_error(Blazen::ValidationError)
+    end
+  end
+
+  describe "#fine_tune" do
+    it "is defined and accepts (config, dataset)" do
+      expect(described_class.instance_method(:fine_tune).arity).to eq(2)
+    end
+
+    it "raises Blazen::ValidationError when config isn't a FullFineTuneConfig" do
+      mgr = described_class.new
+      fake_dataset = Blazen::JsonlDataset.allocate
+      fake_dataset.instance_variable_set(:@ptr, ::FFI::Pointer::NULL)
+      expect {
+        mgr.fine_tune(Object.new, fake_dataset)
+      }.to raise_error(Blazen::ValidationError)
+    end
+  end
 end

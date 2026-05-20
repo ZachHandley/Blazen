@@ -41,6 +41,13 @@ pub enum BlazenTrainError {
     #[error("training cancelled by progress callback")]
     Cancelled,
 
+    /// A feature was requested that this release does not implement yet.
+    /// Used for honest, documented deferrals (e.g. activation
+    /// checkpointing, multi-shard safetensors, full fine-tunes of
+    /// models above the safe-on-consumer-GPU param count).
+    #[error("unsupported: {0}")]
+    Unsupported(String),
+
     /// Forwarded from candle-core (tensor op, dtype/shape mismatch, etc.).
     #[cfg(feature = "engine")]
     #[error("candle error: {0}")]
@@ -67,7 +74,9 @@ impl From<BlazenTrainError> for blazen_llm::BlazenError {
     fn from(e: BlazenTrainError) -> Self {
         match e {
             BlazenTrainError::Cancelled => Self::cancelled(),
-            BlazenTrainError::InvalidConfig(msg) => Self::validation(format!("training: {msg}")),
+            BlazenTrainError::InvalidConfig(msg) | BlazenTrainError::Unsupported(msg) => {
+                Self::validation(format!("training: {msg}"))
+            }
             other => Self::internal(format!("training error: {other}")),
         }
     }

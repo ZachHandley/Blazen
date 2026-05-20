@@ -1,9 +1,14 @@
-//! PEFT-canonical adapter export.
+//! PEFT-canonical adapter export and full fine-tune safetensors export.
 //!
-//! Output round-trips through
-//! [`blazen_llm_candle::lora::LoadedAdapter::from_dir`]: writes
-//! `adapter_config.json` plus `adapter_model.safetensors` with keys shaped
-//! `base_model.model.<module_path>.lora_{A,B}.weight`.
+//! [`save_peft_adapter`] writes a PEFT-format adapter directory
+//! ([`blazen_llm_candle::lora::LoadedAdapter::from_dir`]-compatible).
+//!
+//! [`save_full_safetensors`] writes a full model checkpoint
+//! (`model.safetensors`, plus an optional `config.json`) for the
+//! [`crate::arch::TrainMode::FullFineTune`] training path. v1 only emits
+//! a single shard — anything above 2GB returns
+//! [`BlazenTrainError::Unsupported`]. Use LoRA training when a model
+//! would exceed the cap.
 
 use std::collections::HashMap;
 use std::path::Path;
@@ -114,6 +119,105 @@ pub fn save_peft_adapter(
     Ok(())
 }
 
+/// Maximum total payload (sum of tensor byte sizes) the v1 single-shard
+/// `save_full_safetensors` will write.
+///
+/// safetensors has no hard upper bound, but transformers-style sharded
+/// layouts (`model-00001-of-NNNN.safetensors` + `model.safetensors.index.json`)
+/// are how the ecosystem ships multi-GB checkpoints. Writing one giant
+/// shard hits `mmap`-on-load size limits on common deploy targets, so
+/// this exporter caps single-shard output at 2GB and returns
+/// [`BlazenTrainError::Unsupported`] for anything larger. Use LoRA
+/// training in that regime.
+///
+/// Lowered to a small value under `#[cfg(test)]` so unit tests can drive
+/// the cap-rejection path without allocating a multi-GB tensor.
+#[cfg(not(test))]
+const FULL_SAFETENSORS_MAX_BYTES: usize = 2_000_000_000;
+
+#[cfg(test)]
+const FULL_SAFETENSORS_MAX_BYTES: usize = 500_000;
+
+/// Serialize every [`candle_nn::Var`] in `varmap` to a single
+/// `model.safetensors` under `output_dir`.
+///
+/// Optionally writes `output_dir/config.json` if `model_config` is
+/// provided (pretty-printed JSON, matching the conventions of the HF
+/// `transformers` `PreTrainedModel.save_pretrained` layout).
+///
+/// `output_dir` is created (recursively) if it does not already exist.
+///
+/// # Errors
+///
+/// Returns [`BlazenTrainError::Unsupported`] if the total tensor byte
+/// payload exceeds [`FULL_SAFETENSORS_MAX_BYTES`] (single-shard
+/// limit — multi-shard support is intentionally deferred; use LoRA
+/// training for larger models).
+///
+/// Returns [`BlazenTrainError::Export`] on filesystem / safetensors
+/// serialization failures, [`BlazenTrainError::Io`] on directory
+/// creation failures, and [`BlazenTrainError::Serde`] on JSON failures
+/// while writing `config.json`.
+pub fn save_full_safetensors(
+    varmap: &candle_nn::VarMap,
+    output_dir: &Path,
+    model_config: Option<&serde_json::Value>,
+) -> Result<std::path::PathBuf, BlazenTrainError> {
+    std::fs::create_dir_all(output_dir).map_err(|e| {
+        BlazenTrainError::Export(format!(
+            "failed to create output dir {}: {e}",
+            output_dir.display()
+        ))
+    })?;
+
+    let guard = varmap
+        .data()
+        .lock()
+        .map_err(|e| BlazenTrainError::Export(format!("varmap mutex poisoned: {e}")))?;
+
+    let mut tensors: HashMap<String, candle_core::Tensor> = HashMap::with_capacity(guard.len());
+    let mut total_bytes: usize = 0;
+    for (name, var) in guard.iter() {
+        let t = var.as_tensor();
+        total_bytes = total_bytes.saturating_add(t.elem_count() * t.dtype().size_in_bytes());
+        tensors.insert(name.clone(), t.clone());
+    }
+    drop(guard);
+
+    if total_bytes > FULL_SAFETENSORS_MAX_BYTES {
+        return Err(BlazenTrainError::Unsupported(format!(
+            "model >{FULL_SAFETENSORS_MAX_BYTES} bytes ({total_bytes} bytes); sharding not yet implemented — use LoRA training instead"
+        )));
+    }
+
+    if tensors.is_empty() {
+        return Err(BlazenTrainError::Export(
+            "varmap is empty — nothing to save".to_string(),
+        ));
+    }
+
+    let weights_path = output_dir.join("model.safetensors");
+    safetensors::tensor::serialize_to_file(tensors.iter(), None, &weights_path).map_err(|e| {
+        BlazenTrainError::Export(format!(
+            "safetensors serialize failed at {}: {e}",
+            weights_path.display()
+        ))
+    })?;
+
+    if let Some(cfg) = model_config {
+        let cfg_bytes = serde_json::to_vec_pretty(cfg)?;
+        let cfg_path = output_dir.join("config.json");
+        std::fs::write(&cfg_path, &cfg_bytes).map_err(|e| {
+            BlazenTrainError::Export(format!(
+                "failed to write config.json at {}: {e}",
+                cfg_path.display()
+            ))
+        })?;
+    }
+
+    Ok(output_dir.to_path_buf())
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -177,6 +281,95 @@ mod tests {
             target_modules: vec!["q_proj".into()],
         };
         let err = save_peft_adapter(&varmap, tmp.path(), &cfg, "test/base").unwrap_err();
+        assert!(matches!(err, BlazenTrainError::Export(_)));
+    }
+
+    #[test]
+    fn save_full_safetensors_writes_model_safetensors() {
+        let tmp = TempDir::new().unwrap();
+        let device = Device::Cpu;
+        let varmap = VarMap::new();
+        // Why: register two trainable weights via VarMap::get so they land
+        // as Vars under known names, mirroring how the FFT arch path
+        // populates the trainer's varmap.
+        let _ = varmap
+            .get((4, 4), "w1.weight", Init::Const(0.5), DType::F32, &device)
+            .unwrap();
+        let _ = varmap
+            .get((2,), "w1.bias", Init::Const(0.0), DType::F32, &device)
+            .unwrap();
+
+        let returned =
+            save_full_safetensors(&varmap, tmp.path(), None).expect("save_full_safetensors");
+        assert_eq!(returned, tmp.path());
+        let weights = tmp.path().join("model.safetensors");
+        assert!(weights.exists(), "model.safetensors should exist");
+        let meta = std::fs::metadata(&weights).expect("stat model.safetensors");
+        assert!(meta.len() > 0, "model.safetensors should be non-empty");
+        // config.json must NOT exist when model_config is None.
+        assert!(
+            !tmp.path().join("config.json").exists(),
+            "config.json should be absent when model_config = None"
+        );
+    }
+
+    #[test]
+    fn save_full_safetensors_writes_config_when_provided() {
+        let tmp = TempDir::new().unwrap();
+        let device = Device::Cpu;
+        let varmap = VarMap::new();
+        let _ = varmap
+            .get((4, 4), "w1.weight", Init::Const(0.0), DType::F32, &device)
+            .unwrap();
+
+        let cfg = serde_json::json!({ "hidden_size": 16, "model_type": "qwen2" });
+        save_full_safetensors(&varmap, tmp.path(), Some(&cfg)).expect("save with config");
+
+        let cfg_path = tmp.path().join("config.json");
+        assert!(cfg_path.exists(), "config.json should exist");
+        let cfg_bytes = std::fs::read(&cfg_path).expect("read config.json");
+        let parsed: serde_json::Value =
+            serde_json::from_slice(&cfg_bytes).expect("parse config.json");
+        assert_eq!(parsed["hidden_size"], 16);
+        assert_eq!(parsed["model_type"], "qwen2");
+    }
+
+    #[test]
+    fn save_full_safetensors_rejects_oversized_models() {
+        // The #[cfg(test)] limit is 500KB; (512, 512) f32 = 512*512*4 = ~1MB,
+        // which exceeds the cap and forces the Unsupported branch.
+        let tmp = TempDir::new().unwrap();
+        let device = Device::Cpu;
+        let varmap = VarMap::new();
+        let _ = varmap
+            .get(
+                (512, 512),
+                "huge.weight",
+                Init::Const(0.0),
+                DType::F32,
+                &device,
+            )
+            .unwrap();
+
+        let err = save_full_safetensors(&varmap, tmp.path(), None)
+            .expect_err("oversized varmap should be rejected");
+        match err {
+            BlazenTrainError::Unsupported(msg) => {
+                assert!(
+                    msg.contains("sharding"),
+                    "unexpected Unsupported message: {msg}"
+                );
+            }
+            other => panic!("expected Unsupported, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn save_full_safetensors_rejects_empty_varmap() {
+        let tmp = TempDir::new().unwrap();
+        let varmap = VarMap::new();
+        let err = save_full_safetensors(&varmap, tmp.path(), None)
+            .expect_err("empty varmap should be rejected");
         assert!(matches!(err, BlazenTrainError::Export(_)));
     }
 

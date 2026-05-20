@@ -8864,6 +8864,42 @@ public protocol UniffiModelManagerProtocol: AnyObject, Sendable {
     func usedBytes(pool: String) async throws  -> UInt64
     
     /**
+     * Run a full fine-tune (every parameter trainable; no `LoRA`
+     * adapter).
+     *
+     * Returns [`FullFineTuneResultRecord`] rather than
+     * [`TrainedAdapterRecord`] because the output is a complete set
+     * of model weights in `config.core.output_dir`, not a mountable
+     * PEFT delta. Setting `config.gradient_checkpointing = true` is
+     * rejected up-front because candle 0.10.2 has no activation-
+     * checkpointing primitive.
+     */
+    func fineTune(config: FullFineTuneConfigRecord, dataset: UniffiJsonlDataset, progress: ForeignTrainingProgress?) async throws  -> FullFineTuneResultRecord
+    
+    /**
+     * Train a `LoRA` adapter via Direct Preference Optimization (DPO).
+     *
+     * Downloads the base model from `HuggingFace` (cached) plus the
+     * reference model (defaults to `config.core.base_model_repo`),
+     * runs the DPO training loop driven by `dataset`, and writes the
+     * resulting PEFT-format adapter to `config.core.output_dir`.
+     *
+     * If `progress` is provided, its `on_event` is called for each
+     * transition. Returning `Err(_)` from the callback cancels the run
+     * with [`BlazenError::Cancelled`].
+     */
+    func trainDpo(config: DpoConfigRecord, dataset: UniffiPreferenceJsonlDataset, progress: ForeignTrainingProgress?) async throws  -> TrainedAdapterRecord
+    
+    /**
+     * Train a `LoRA` adapter via Kahneman-Tversky Optimization (KTO).
+     *
+     * Like DPO, KTO requires a frozen reference model; the dataset
+     * schema differs: each row is a `(prompt, completion, desirable)`
+     * triple.
+     */
+    func trainKto(config: KtoConfigRecord, dataset: UniffiRatedJsonlDataset, progress: ForeignTrainingProgress?) async throws  -> TrainedAdapterRecord
+    
+    /**
      * Train a LoRA adapter end-to-end on the configured base model.
      *
      * Downloads the base model from HuggingFace (cached), runs the
@@ -8879,6 +8915,19 @@ public protocol UniffiModelManagerProtocol: AnyObject, Sendable {
      * the callback cancels the run with [`BlazenError::Cancelled`].
      */
     func trainLora(config: TrainConfigRecord, dataset: UniffiJsonlDataset, progress: ForeignTrainingProgress?) async throws  -> TrainedAdapterRecord
+    
+    /**
+     * Train a `LoRA` adapter via Odds Ratio Preference Optimization
+     * (ORPO). Reference-free — combines an SFT loss on chosen
+     * completions with an odds-ratio preference term.
+     */
+    func trainOrpo(config: OrpoConfigRecord, dataset: UniffiPreferenceJsonlDataset, progress: ForeignTrainingProgress?) async throws  -> TrainedAdapterRecord
+    
+    /**
+     * Train a `LoRA` adapter via Simple Preference Optimization
+     * (`SimPO`). Reference-free and length-normalized.
+     */
+    func trainSimpo(config: SimpoConfigRecord, dataset: UniffiPreferenceJsonlDataset, progress: ForeignTrainingProgress?) async throws  -> TrainedAdapterRecord
     
 }
 /**
@@ -9251,6 +9300,87 @@ open func usedBytes(pool: String)async throws  -> UInt64  {
 }
     
     /**
+     * Run a full fine-tune (every parameter trainable; no `LoRA`
+     * adapter).
+     *
+     * Returns [`FullFineTuneResultRecord`] rather than
+     * [`TrainedAdapterRecord`] because the output is a complete set
+     * of model weights in `config.core.output_dir`, not a mountable
+     * PEFT delta. Setting `config.gradient_checkpointing = true` is
+     * rejected up-front because candle 0.10.2 has no activation-
+     * checkpointing primitive.
+     */
+open func fineTune(config: FullFineTuneConfigRecord, dataset: UniffiJsonlDataset, progress: ForeignTrainingProgress?)async throws  -> FullFineTuneResultRecord  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_fine_tune(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeFullFineTuneConfigRecord_lower(config),FfiConverterTypeUniffiJsonlDataset_lower(dataset),FfiConverterOptionTypeForeignTrainingProgress.lower(progress)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeFullFineTuneResultRecord_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Train a `LoRA` adapter via Direct Preference Optimization (DPO).
+     *
+     * Downloads the base model from `HuggingFace` (cached) plus the
+     * reference model (defaults to `config.core.base_model_repo`),
+     * runs the DPO training loop driven by `dataset`, and writes the
+     * resulting PEFT-format adapter to `config.core.output_dir`.
+     *
+     * If `progress` is provided, its `on_event` is called for each
+     * transition. Returning `Err(_)` from the callback cancels the run
+     * with [`BlazenError::Cancelled`].
+     */
+open func trainDpo(config: DpoConfigRecord, dataset: UniffiPreferenceJsonlDataset, progress: ForeignTrainingProgress?)async throws  -> TrainedAdapterRecord  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_train_dpo(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeDpoConfigRecord_lower(config),FfiConverterTypeUniffiPreferenceJsonlDataset_lower(dataset),FfiConverterOptionTypeForeignTrainingProgress.lower(progress)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTrainedAdapterRecord_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Train a `LoRA` adapter via Kahneman-Tversky Optimization (KTO).
+     *
+     * Like DPO, KTO requires a frozen reference model; the dataset
+     * schema differs: each row is a `(prompt, completion, desirable)`
+     * triple.
+     */
+open func trainKto(config: KtoConfigRecord, dataset: UniffiRatedJsonlDataset, progress: ForeignTrainingProgress?)async throws  -> TrainedAdapterRecord  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_train_kto(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeKtoConfigRecord_lower(config),FfiConverterTypeUniffiRatedJsonlDataset_lower(dataset),FfiConverterOptionTypeForeignTrainingProgress.lower(progress)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTrainedAdapterRecord_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
      * Train a LoRA adapter end-to-end on the configured base model.
      *
      * Downloads the base model from HuggingFace (cached), runs the
@@ -9272,6 +9402,49 @@ open func trainLora(config: TrainConfigRecord, dataset: UniffiJsonlDataset, prog
                 uniffi_blazen_uniffi_fn_method_uniffimodelmanager_train_lora(
                     self.uniffiCloneHandle(),
                     FfiConverterTypeTrainConfigRecord_lower(config),FfiConverterTypeUniffiJsonlDataset_lower(dataset),FfiConverterOptionTypeForeignTrainingProgress.lower(progress)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTrainedAdapterRecord_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Train a `LoRA` adapter via Odds Ratio Preference Optimization
+     * (ORPO). Reference-free — combines an SFT loss on chosen
+     * completions with an odds-ratio preference term.
+     */
+open func trainOrpo(config: OrpoConfigRecord, dataset: UniffiPreferenceJsonlDataset, progress: ForeignTrainingProgress?)async throws  -> TrainedAdapterRecord  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_train_orpo(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeOrpoConfigRecord_lower(config),FfiConverterTypeUniffiPreferenceJsonlDataset_lower(dataset),FfiConverterOptionTypeForeignTrainingProgress.lower(progress)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTrainedAdapterRecord_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Train a `LoRA` adapter via Simple Preference Optimization
+     * (`SimPO`). Reference-free and length-normalized.
+     */
+open func trainSimpo(config: SimpoConfigRecord, dataset: UniffiPreferenceJsonlDataset, progress: ForeignTrainingProgress?)async throws  -> TrainedAdapterRecord  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_train_simpo(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeSimpoConfigRecord_lower(config),FfiConverterTypeUniffiPreferenceJsonlDataset_lower(dataset),FfiConverterOptionTypeForeignTrainingProgress.lower(progress)
                 )
             },
             pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
@@ -9325,6 +9498,338 @@ public func FfiConverterTypeUniffiModelManager_lift(_ handle: UInt64) throws -> 
 #endif
 public func FfiConverterTypeUniffiModelManager_lower(_ value: UniffiModelManager) -> UInt64 {
     return FfiConverterTypeUniffiModelManager.lower(value)
+}
+
+
+
+
+
+
+/**
+ * JSONL-backed preference-pair dataset opaque handle for DPO / ORPO /
+ * `SimPO`.
+ *
+ * Each line of the input file must deserialize to either
+ * `{"prompt": "...", "chosen": "...", "rejected": "..."}` or
+ * `{"messages": [...], "chosen": "...", "rejected": "..."}` (the
+ * latter requires `chat_template`).
+ */
+public protocol UniffiPreferenceJsonlDatasetProtocol: AnyObject, Sendable {
+    
+    func isEmpty()  -> Bool
+    
+    /**
+     * Number of preference examples in the dataset.
+     */
+    func len()  -> UInt64
+    
+}
+/**
+ * JSONL-backed preference-pair dataset opaque handle for DPO / ORPO /
+ * `SimPO`.
+ *
+ * Each line of the input file must deserialize to either
+ * `{"prompt": "...", "chosen": "...", "rejected": "..."}` or
+ * `{"messages": [...], "chosen": "...", "rejected": "..."}` (the
+ * latter requires `chat_template`).
+ */
+open class UniffiPreferenceJsonlDataset: UniffiPreferenceJsonlDatasetProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_uniffipreferencejsonldataset(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_uniffipreferencejsonldataset(handle, $0) }
+    }
+
+    
+    /**
+     * Load a preference-pair JSONL file using the tokenizer at
+     * `tokenizer_path`. Args mirror [`UniffiJsonlDataset::from_path`].
+     */
+public static func fromPath(path: String, tokenizerPath: String, chatTemplate: String?, maxSeqLen: UInt32, device: String?, padTokenId: UInt32)throws  -> UniffiPreferenceJsonlDataset  {
+    return try  FfiConverterTypeUniffiPreferenceJsonlDataset_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_constructor_uniffipreferencejsonldataset_from_path(
+        FfiConverterString.lower(path),
+        FfiConverterString.lower(tokenizerPath),
+        FfiConverterOptionString.lower(chatTemplate),
+        FfiConverterUInt32.lower(maxSeqLen),
+        FfiConverterOptionString.lower(device),
+        FfiConverterUInt32.lower(padTokenId),$0
+    )
+})
+}
+    
+
+    
+open func isEmpty() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_uniffipreferencejsonldataset_is_empty(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Number of preference examples in the dataset.
+     */
+open func len() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_uniffipreferencejsonldataset_len(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeUniffiPreferenceJsonlDataset: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = UniffiPreferenceJsonlDataset
+
+    public static func lift(_ handle: UInt64) throws -> UniffiPreferenceJsonlDataset {
+        return UniffiPreferenceJsonlDataset(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: UniffiPreferenceJsonlDataset) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UniffiPreferenceJsonlDataset {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: UniffiPreferenceJsonlDataset, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUniffiPreferenceJsonlDataset_lift(_ handle: UInt64) throws -> UniffiPreferenceJsonlDataset {
+    return try FfiConverterTypeUniffiPreferenceJsonlDataset.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUniffiPreferenceJsonlDataset_lower(_ value: UniffiPreferenceJsonlDataset) -> UInt64 {
+    return FfiConverterTypeUniffiPreferenceJsonlDataset.lower(value)
+}
+
+
+
+
+
+
+/**
+ * JSONL-backed rated single-completion dataset opaque handle for KTO.
+ *
+ * Each line of the input file must deserialize to either
+ * `{"prompt": "...", "completion": "...", "label": true|false}` or
+ * `{"messages": [...], "completion": "...", "label": ...}` (the
+ * latter requires `chat_template`).
+ */
+public protocol UniffiRatedJsonlDatasetProtocol: AnyObject, Sendable {
+    
+    func isEmpty()  -> Bool
+    
+    /**
+     * Number of rated examples in the dataset.
+     */
+    func len()  -> UInt64
+    
+}
+/**
+ * JSONL-backed rated single-completion dataset opaque handle for KTO.
+ *
+ * Each line of the input file must deserialize to either
+ * `{"prompt": "...", "completion": "...", "label": true|false}` or
+ * `{"messages": [...], "completion": "...", "label": ...}` (the
+ * latter requires `chat_template`).
+ */
+open class UniffiRatedJsonlDataset: UniffiRatedJsonlDatasetProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_uniffiratedjsonldataset(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_uniffiratedjsonldataset(handle, $0) }
+    }
+
+    
+    /**
+     * Load a rated JSONL file using the tokenizer at `tokenizer_path`.
+     * Args mirror [`UniffiJsonlDataset::from_path`].
+     */
+public static func fromPath(path: String, tokenizerPath: String, chatTemplate: String?, maxSeqLen: UInt32, device: String?, padTokenId: UInt32)throws  -> UniffiRatedJsonlDataset  {
+    return try  FfiConverterTypeUniffiRatedJsonlDataset_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_constructor_uniffiratedjsonldataset_from_path(
+        FfiConverterString.lower(path),
+        FfiConverterString.lower(tokenizerPath),
+        FfiConverterOptionString.lower(chatTemplate),
+        FfiConverterUInt32.lower(maxSeqLen),
+        FfiConverterOptionString.lower(device),
+        FfiConverterUInt32.lower(padTokenId),$0
+    )
+})
+}
+    
+
+    
+open func isEmpty() -> Bool  {
+    return try!  FfiConverterBool.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_uniffiratedjsonldataset_is_empty(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Number of rated examples in the dataset.
+     */
+open func len() -> UInt64  {
+    return try!  FfiConverterUInt64.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_uniffiratedjsonldataset_len(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeUniffiRatedJsonlDataset: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = UniffiRatedJsonlDataset
+
+    public static func lift(_ handle: UInt64) throws -> UniffiRatedJsonlDataset {
+        return UniffiRatedJsonlDataset(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: UniffiRatedJsonlDataset) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UniffiRatedJsonlDataset {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: UniffiRatedJsonlDataset, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUniffiRatedJsonlDataset_lift(_ handle: UInt64) throws -> UniffiRatedJsonlDataset {
+    return try FfiConverterTypeUniffiRatedJsonlDataset.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUniffiRatedJsonlDataset_lower(_ value: UniffiRatedJsonlDataset) -> UInt64 {
+    return FfiConverterTypeUniffiRatedJsonlDataset.lower(value)
 }
 
 
@@ -11239,6 +11744,82 @@ public func FfiConverterTypeControlPlaneWorkerInfo_lower(_ value: ControlPlaneWo
 
 
 /**
+ * Direct Preference Optimization (DPO) configuration.
+ *
+ * Requires a frozen reference model. If `reference_model_repo` is
+ * `None`, the trainer reuses `core.base_model_repo`.
+ */
+public struct DpoConfigRecord: Equatable, Hashable {
+    public var core: TrainCoreConfigRecord
+    public var lora: LoraConfigRecord
+    public var beta: Float
+    public var labelSmoothing: Float
+    public var referenceModelRepo: String?
+    public var referenceModelRevision: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(core: TrainCoreConfigRecord, lora: LoraConfigRecord, beta: Float = Float(0.1), labelSmoothing: Float = Float(0.0), referenceModelRepo: String? = nil, referenceModelRevision: String? = nil) {
+        self.core = core
+        self.lora = lora
+        self.beta = beta
+        self.labelSmoothing = labelSmoothing
+        self.referenceModelRepo = referenceModelRepo
+        self.referenceModelRevision = referenceModelRevision
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension DpoConfigRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDpoConfigRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DpoConfigRecord {
+        return
+            try DpoConfigRecord(
+                core: FfiConverterTypeTrainCoreConfigRecord.read(from: &buf), 
+                lora: FfiConverterTypeLoraConfigRecord.read(from: &buf), 
+                beta: FfiConverterFloat.read(from: &buf), 
+                labelSmoothing: FfiConverterFloat.read(from: &buf), 
+                referenceModelRepo: FfiConverterOptionString.read(from: &buf), 
+                referenceModelRevision: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DpoConfigRecord, into buf: inout [UInt8]) {
+        FfiConverterTypeTrainCoreConfigRecord.write(value.core, into: &buf)
+        FfiConverterTypeLoraConfigRecord.write(value.lora, into: &buf)
+        FfiConverterFloat.write(value.beta, into: &buf)
+        FfiConverterFloat.write(value.labelSmoothing, into: &buf)
+        FfiConverterOptionString.write(value.referenceModelRepo, into: &buf)
+        FfiConverterOptionString.write(value.referenceModelRevision, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDpoConfigRecord_lift(_ buf: RustBuffer) throws -> DpoConfigRecord {
+    return try FfiConverterTypeDpoConfigRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDpoConfigRecord_lower(_ value: DpoConfigRecord) -> RustBuffer {
+    return FfiConverterTypeDpoConfigRecord.lower(value)
+}
+
+
+/**
  * Embedding-role defaults. V1 composes only `base`.
  */
 public struct EmbeddingProviderDefaults: Equatable, Hashable {
@@ -11416,6 +11997,132 @@ public func FfiConverterTypeEvent_lift(_ buf: RustBuffer) throws -> Event {
 #endif
 public func FfiConverterTypeEvent_lower(_ value: Event) -> RustBuffer {
     return FfiConverterTypeEvent.lower(value)
+}
+
+
+/**
+ * Full fine-tune configuration (no LoRA — every parameter trains).
+ *
+ * `gradient_checkpointing = true` is accepted for forward compatibility
+ * but the trainer rejects it at init time with
+ * [`BlazenError::Validation`] — candle 0.10.2 has no activation-
+ * checkpointing primitive.
+ */
+public struct FullFineTuneConfigRecord: Equatable, Hashable {
+    public var core: TrainCoreConfigRecord
+    public var gradientCheckpointing: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(core: TrainCoreConfigRecord, gradientCheckpointing: Bool = false) {
+        self.core = core
+        self.gradientCheckpointing = gradientCheckpointing
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension FullFineTuneConfigRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFullFineTuneConfigRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FullFineTuneConfigRecord {
+        return
+            try FullFineTuneConfigRecord(
+                core: FfiConverterTypeTrainCoreConfigRecord.read(from: &buf), 
+                gradientCheckpointing: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: FullFineTuneConfigRecord, into buf: inout [UInt8]) {
+        FfiConverterTypeTrainCoreConfigRecord.write(value.core, into: &buf)
+        FfiConverterBool.write(value.gradientCheckpointing, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFullFineTuneConfigRecord_lift(_ buf: RustBuffer) throws -> FullFineTuneConfigRecord {
+    return try FfiConverterTypeFullFineTuneConfigRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFullFineTuneConfigRecord_lower(_ value: FullFineTuneConfigRecord) -> RustBuffer {
+    return FfiConverterTypeFullFineTuneConfigRecord.lower(value)
+}
+
+
+/**
+ * On-disk descriptor returned by [`UniffiModelManager::fine_tune`].
+ *
+ * Unlike [`TrainedAdapterRecord`], no PEFT adapter is written — the
+ * entire model's weights are saved to `output_dir` directly.
+ */
+public struct FullFineTuneResultRecord: Equatable, Hashable {
+    public var outputDir: String
+    public var finalLoss: Float
+    public var stepsCompleted: UInt64
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(outputDir: String, finalLoss: Float, stepsCompleted: UInt64) {
+        self.outputDir = outputDir
+        self.finalLoss = finalLoss
+        self.stepsCompleted = stepsCompleted
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension FullFineTuneResultRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFullFineTuneResultRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FullFineTuneResultRecord {
+        return
+            try FullFineTuneResultRecord(
+                outputDir: FfiConverterString.read(from: &buf), 
+                finalLoss: FfiConverterFloat.read(from: &buf), 
+                stepsCompleted: FfiConverterUInt64.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: FullFineTuneResultRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.outputDir, into: &buf)
+        FfiConverterFloat.write(value.finalLoss, into: &buf)
+        FfiConverterUInt64.write(value.stepsCompleted, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFullFineTuneResultRecord_lift(_ buf: RustBuffer) throws -> FullFineTuneResultRecord {
+    return try FfiConverterTypeFullFineTuneResultRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFullFineTuneResultRecord_lower(_ value: FullFineTuneResultRecord) -> RustBuffer {
+    return FfiConverterTypeFullFineTuneResultRecord.lower(value)
 }
 
 
@@ -12207,6 +12914,88 @@ public func FfiConverterTypeKeyValue_lower(_ value: KeyValue) -> RustBuffer {
 
 
 /**
+ * Kahneman-Tversky Optimization (KTO) configuration.
+ *
+ * Like DPO, KTO requires a frozen reference model (defaults to
+ * `core.base_model_repo`) — but the dataset schema differs:
+ * each row is a `(prompt, completion, desirable)` triple
+ * ([`UniffiRatedJsonlDataset`]), not a chosen/rejected pair.
+ */
+public struct KtoConfigRecord: Equatable, Hashable {
+    public var core: TrainCoreConfigRecord
+    public var lora: LoraConfigRecord
+    public var beta: Float
+    public var lambdaD: Float
+    public var lambdaU: Float
+    public var referenceModelRepo: String?
+    public var referenceModelRevision: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(core: TrainCoreConfigRecord, lora: LoraConfigRecord, beta: Float = Float(0.1), lambdaD: Float = Float(1.0), lambdaU: Float = Float(1.0), referenceModelRepo: String? = nil, referenceModelRevision: String? = nil) {
+        self.core = core
+        self.lora = lora
+        self.beta = beta
+        self.lambdaD = lambdaD
+        self.lambdaU = lambdaU
+        self.referenceModelRepo = referenceModelRepo
+        self.referenceModelRevision = referenceModelRevision
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension KtoConfigRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeKtoConfigRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KtoConfigRecord {
+        return
+            try KtoConfigRecord(
+                core: FfiConverterTypeTrainCoreConfigRecord.read(from: &buf), 
+                lora: FfiConverterTypeLoraConfigRecord.read(from: &buf), 
+                beta: FfiConverterFloat.read(from: &buf), 
+                lambdaD: FfiConverterFloat.read(from: &buf), 
+                lambdaU: FfiConverterFloat.read(from: &buf), 
+                referenceModelRepo: FfiConverterOptionString.read(from: &buf), 
+                referenceModelRevision: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: KtoConfigRecord, into buf: inout [UInt8]) {
+        FfiConverterTypeTrainCoreConfigRecord.write(value.core, into: &buf)
+        FfiConverterTypeLoraConfigRecord.write(value.lora, into: &buf)
+        FfiConverterFloat.write(value.beta, into: &buf)
+        FfiConverterFloat.write(value.lambdaD, into: &buf)
+        FfiConverterFloat.write(value.lambdaU, into: &buf)
+        FfiConverterOptionString.write(value.referenceModelRepo, into: &buf)
+        FfiConverterOptionString.write(value.referenceModelRevision, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKtoConfigRecord_lift(_ buf: RustBuffer) throws -> KtoConfigRecord {
+    return try FfiConverterTypeKtoConfigRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKtoConfigRecord_lower(_ value: KtoConfigRecord) -> RustBuffer {
+    return FfiConverterTypeKtoConfigRecord.lower(value)
+}
+
+
+/**
  * LoRA hyperparameters.
  */
 public struct LoraConfigRecord: Equatable, Hashable {
@@ -12778,6 +13567,70 @@ public func FfiConverterTypeOptimConfigRecord_lower(_ value: OptimConfigRecord) 
 
 
 /**
+ * Odds Ratio Preference Optimization (ORPO) configuration.
+ *
+ * Reference-free — combines an SFT loss on chosen responses with an
+ * odds-ratio loss term weighted by `lambda`.
+ */
+public struct OrpoConfigRecord: Equatable, Hashable {
+    public var core: TrainCoreConfigRecord
+    public var lora: LoraConfigRecord
+    public var lambda: Float
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(core: TrainCoreConfigRecord, lora: LoraConfigRecord, lambda: Float = Float(0.1)) {
+        self.core = core
+        self.lora = lora
+        self.lambda = lambda
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension OrpoConfigRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOrpoConfigRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OrpoConfigRecord {
+        return
+            try OrpoConfigRecord(
+                core: FfiConverterTypeTrainCoreConfigRecord.read(from: &buf), 
+                lora: FfiConverterTypeLoraConfigRecord.read(from: &buf), 
+                lambda: FfiConverterFloat.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: OrpoConfigRecord, into buf: inout [UInt8]) {
+        FfiConverterTypeTrainCoreConfigRecord.write(value.core, into: &buf)
+        FfiConverterTypeLoraConfigRecord.write(value.lora, into: &buf)
+        FfiConverterFloat.write(value.lambda, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOrpoConfigRecord_lift(_ buf: RustBuffer) throws -> OrpoConfigRecord {
+    return try FfiConverterTypeOrpoConfigRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOrpoConfigRecord_lower(_ value: OrpoConfigRecord) -> RustBuffer {
+    return FfiConverterTypeOrpoConfigRecord.lower(value)
+}
+
+
+/**
  * A serialized representation of a queued event captured in a checkpoint.
  *
  * Mirrors [`blazen_persist::SerializedEvent`]. The `data_json` field is
@@ -13034,6 +13887,74 @@ public func FfiConverterTypeSchedulerConfigRecord_lift(_ buf: RustBuffer) throws
 #endif
 public func FfiConverterTypeSchedulerConfigRecord_lower(_ value: SchedulerConfigRecord) -> RustBuffer {
     return FfiConverterTypeSchedulerConfigRecord.lower(value)
+}
+
+
+/**
+ * Simple Preference Optimization (`SimPO`) configuration.
+ *
+ * Reference-free, length-normalized. Defaults follow TRL `main`
+ * (`beta = 2.0`, `gamma = 1.0`).
+ */
+public struct SimpoConfigRecord: Equatable, Hashable {
+    public var core: TrainCoreConfigRecord
+    public var lora: LoraConfigRecord
+    public var beta: Float
+    public var gamma: Float
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(core: TrainCoreConfigRecord, lora: LoraConfigRecord, beta: Float = Float(2.0), gamma: Float = Float(1.0)) {
+        self.core = core
+        self.lora = lora
+        self.beta = beta
+        self.gamma = gamma
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension SimpoConfigRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSimpoConfigRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SimpoConfigRecord {
+        return
+            try SimpoConfigRecord(
+                core: FfiConverterTypeTrainCoreConfigRecord.read(from: &buf), 
+                lora: FfiConverterTypeLoraConfigRecord.read(from: &buf), 
+                beta: FfiConverterFloat.read(from: &buf), 
+                gamma: FfiConverterFloat.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: SimpoConfigRecord, into buf: inout [UInt8]) {
+        FfiConverterTypeTrainCoreConfigRecord.write(value.core, into: &buf)
+        FfiConverterTypeLoraConfigRecord.write(value.lora, into: &buf)
+        FfiConverterFloat.write(value.beta, into: &buf)
+        FfiConverterFloat.write(value.gamma, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSimpoConfigRecord_lift(_ buf: RustBuffer) throws -> SimpoConfigRecord {
+    return try FfiConverterTypeSimpoConfigRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSimpoConfigRecord_lower(_ value: SimpoConfigRecord) -> RustBuffer {
+    return FfiConverterTypeSimpoConfigRecord.lower(value)
 }
 
 
@@ -13781,6 +14702,113 @@ public func FfiConverterTypeTrainConfigRecord_lift(_ buf: RustBuffer) throws -> 
 #endif
 public func FfiConverterTypeTrainConfigRecord_lower(_ value: TrainConfigRecord) -> RustBuffer {
     return FfiConverterTypeTrainConfigRecord.lower(value)
+}
+
+
+/**
+ * Shared training hyperparameters used by DPO / ORPO / SimPO / KTO /
+ * full fine-tune. Mirrors [`TrainCoreConfig`] (`TrainConfig` minus the
+ * PEFT-specific [`LoraConfigRecord`]).
+ */
+public struct TrainCoreConfigRecord: Equatable, Hashable {
+    public var baseModelRepo: String
+    public var baseModelRevision: String?
+    public var outputDir: String
+    public var maxSteps: UInt32
+    public var batchSize: UInt32
+    public var gradientAccumulationSteps: UInt32
+    public var maxSeqLen: UInt32
+    public var evalSteps: UInt32?
+    public var saveSteps: UInt32?
+    public var seed: UInt64
+    public var mixedPrecision: MixedPrecisionEnum
+    public var device: String?
+    public var optim: OptimConfigRecord
+    public var scheduler: SchedulerConfigRecord
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(baseModelRepo: String, baseModelRevision: String? = nil, outputDir: String, maxSteps: UInt32 = UInt32(1000), batchSize: UInt32 = UInt32(1), gradientAccumulationSteps: UInt32 = UInt32(8), maxSeqLen: UInt32 = UInt32(1024), evalSteps: UInt32? = nil, saveSteps: UInt32? = nil, seed: UInt64 = UInt64(42), mixedPrecision: MixedPrecisionEnum, device: String? = nil, optim: OptimConfigRecord, scheduler: SchedulerConfigRecord) {
+        self.baseModelRepo = baseModelRepo
+        self.baseModelRevision = baseModelRevision
+        self.outputDir = outputDir
+        self.maxSteps = maxSteps
+        self.batchSize = batchSize
+        self.gradientAccumulationSteps = gradientAccumulationSteps
+        self.maxSeqLen = maxSeqLen
+        self.evalSteps = evalSteps
+        self.saveSteps = saveSteps
+        self.seed = seed
+        self.mixedPrecision = mixedPrecision
+        self.device = device
+        self.optim = optim
+        self.scheduler = scheduler
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension TrainCoreConfigRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTrainCoreConfigRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TrainCoreConfigRecord {
+        return
+            try TrainCoreConfigRecord(
+                baseModelRepo: FfiConverterString.read(from: &buf), 
+                baseModelRevision: FfiConverterOptionString.read(from: &buf), 
+                outputDir: FfiConverterString.read(from: &buf), 
+                maxSteps: FfiConverterUInt32.read(from: &buf), 
+                batchSize: FfiConverterUInt32.read(from: &buf), 
+                gradientAccumulationSteps: FfiConverterUInt32.read(from: &buf), 
+                maxSeqLen: FfiConverterUInt32.read(from: &buf), 
+                evalSteps: FfiConverterOptionUInt32.read(from: &buf), 
+                saveSteps: FfiConverterOptionUInt32.read(from: &buf), 
+                seed: FfiConverterUInt64.read(from: &buf), 
+                mixedPrecision: FfiConverterTypeMixedPrecisionEnum.read(from: &buf), 
+                device: FfiConverterOptionString.read(from: &buf), 
+                optim: FfiConverterTypeOptimConfigRecord.read(from: &buf), 
+                scheduler: FfiConverterTypeSchedulerConfigRecord.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TrainCoreConfigRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.baseModelRepo, into: &buf)
+        FfiConverterOptionString.write(value.baseModelRevision, into: &buf)
+        FfiConverterString.write(value.outputDir, into: &buf)
+        FfiConverterUInt32.write(value.maxSteps, into: &buf)
+        FfiConverterUInt32.write(value.batchSize, into: &buf)
+        FfiConverterUInt32.write(value.gradientAccumulationSteps, into: &buf)
+        FfiConverterUInt32.write(value.maxSeqLen, into: &buf)
+        FfiConverterOptionUInt32.write(value.evalSteps, into: &buf)
+        FfiConverterOptionUInt32.write(value.saveSteps, into: &buf)
+        FfiConverterUInt64.write(value.seed, into: &buf)
+        FfiConverterTypeMixedPrecisionEnum.write(value.mixedPrecision, into: &buf)
+        FfiConverterOptionString.write(value.device, into: &buf)
+        FfiConverterTypeOptimConfigRecord.write(value.optim, into: &buf)
+        FfiConverterTypeSchedulerConfigRecord.write(value.scheduler, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTrainCoreConfigRecord_lift(_ buf: RustBuffer) throws -> TrainCoreConfigRecord {
+    return try FfiConverterTypeTrainCoreConfigRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTrainCoreConfigRecord_lower(_ value: TrainCoreConfigRecord) -> RustBuffer {
+    return FfiConverterTypeTrainCoreConfigRecord.lower(value)
 }
 
 
@@ -18674,7 +19702,22 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_used_bytes() != 51636) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_fine_tune() != 37026) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_dpo() != 58114) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_kto() != 61821) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_lora() != 22343) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_orpo() != 40322) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_simpo() != 57801) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_foreigntrainingprogress_on_event() != 34103) {
@@ -18684,6 +19727,18 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_uniffijsonldataset_len() != 23707) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffipreferencejsonldataset_is_empty() != 24611) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffipreferencejsonldataset_len() != 52745) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffiratedjsonldataset_is_empty() != 34789) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffiratedjsonldataset_len() != 48605) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_peerclient_node_id() != 16043) {
@@ -18951,6 +20006,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_constructor_uniffijsonldataset_from_path() != 8101) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_uniffipreferencejsonldataset_from_path() != 2096) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_uniffiratedjsonldataset_from_path() != 20887) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_constructor_peerclient_connect() != 36996) {

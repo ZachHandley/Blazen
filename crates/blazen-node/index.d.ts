@@ -3520,6 +3520,78 @@ export declare class ModelManager {
    * failure on the progress callback.
    */
   trainLora(config: JsTrainConfig, dataset: JsonlDataset, progress?: ProgressTsfn | undefined | null): Promise<TrainedAdapter>
+  /**
+   * Train a `LoRA` adapter via Direct Preference Optimization (DPO).
+   *
+   * Like [`Self::train_lora`] but consumes a preference-pair dataset
+   * of `(prompt, chosen, rejected)` triples and requires a frozen
+   * reference model (defaults to `config.core.baseModelRepo` when
+   * `config.referenceModelRepo` is `null`).
+   *
+   * # Errors
+   *
+   * Throws on invalid config, unrecognised device, HF download
+   * failure, dataset I/O failure, trainer failure, or queueing
+   * failure on the progress callback.
+   */
+  trainDpo(config: JsDpoConfig, dataset: PreferenceJsonlDataset, progress?: ProgressTsfn | undefined | null): Promise<TrainedAdapter>
+  /**
+   * Train a `LoRA` adapter via Odds Ratio Preference Optimization (ORPO).
+   *
+   * Reference-free; combines a standard SFT loss on chosen
+   * completions with an odds-ratio preference term weighted by
+   * `config.lambda`.
+   *
+   * # Errors
+   *
+   * Same surface as [`Self::train_dpo`].
+   */
+  trainOrpo(config: JsOrpoConfig, dataset: PreferenceJsonlDataset, progress?: ProgressTsfn | undefined | null): Promise<TrainedAdapter>
+  /**
+   * Train a `LoRA` adapter via Simple Preference Optimization (`SimPO`).
+   *
+   * Reference-free and length-normalized. `config.beta` scales the
+   * preference logits and `config.gamma` sets the target reward
+   * margin.
+   *
+   * # Errors
+   *
+   * Same surface as [`Self::train_dpo`].
+   */
+  trainSimpo(config: JsSimpoConfig, dataset: PreferenceJsonlDataset, progress?: ProgressTsfn | undefined | null): Promise<TrainedAdapter>
+  /**
+   * Train a `LoRA` adapter via Kahneman-Tversky Optimization (KTO).
+   *
+   * Like DPO, KTO requires a frozen reference model — but the
+   * dataset schema differs: each row is a
+   * `(prompt, completion, desirable)` triple
+   * ([`JsRatedJsonlDataset`]), not a chosen/rejected pair.
+   *
+   * # Errors
+   *
+   * Same surface as [`Self::train_dpo`].
+   */
+  trainKto(config: JsKtoConfig, dataset: RatedJsonlDataset, progress?: ProgressTsfn | undefined | null): Promise<TrainedAdapter>
+  /**
+   * Run a full fine-tune (every parameter trainable; no `LoRA`
+   * adapter).
+   *
+   * Returns [`JsFullFineTuneResult`] — not [`JsTrainedAdapter`] —
+   * because the output is a complete set of model weights in
+   * `config.core.outputDir` rather than a mountable PEFT delta.
+   *
+   * Setting `config.gradientCheckpointing = true` is rejected at
+   * init time because candle 0.10.2 has no activation-checkpointing
+   * primitive.
+   *
+   * # Errors
+   *
+   * Throws on invalid config, unrecognised device,
+   * `gradientCheckpointing = true`, HF download failure, dataset
+   * I/O failure, trainer failure, or queueing failure on the
+   * progress callback.
+   */
+  fineTune(config: JsFullFineTuneConfig, dataset: JsonlDataset, progress?: ProgressTsfn | undefined | null): Promise<FullFineTuneResult>
 }
 export type JsModelManager = ModelManager
 
@@ -4009,6 +4081,27 @@ export declare class PiperProvider {
 export type JsPiperProvider = PiperProvider
 
 /**
+ * Preference-pair JSONL dataset for DPO / ORPO / SimPO.
+ *
+ * Each line of the input file must deserialize to either
+ * `{"prompt": "...", "chosen": "...", "rejected": "..."}` or
+ * `{"messages": [...], "chosen": "...", "rejected": "..."}` (chat shape).
+ */
+export declare class PreferenceJsonlDataset {
+  /**
+   * Load a preference JSONL file using the tokenizer at
+   * `tokenizerPath`.
+   *
+   * # Errors
+   *
+   * Throws if the tokenizer cannot be loaded, the device string is
+   * invalid, or the JSONL file fails to parse.
+   */
+  static fromPath(path: string, tokenizerPath: string, opts?: JsJsonlDatasetOptions | undefined | null): PreferenceJsonlDataset
+}
+export type JsPreferenceJsonlDataset = PreferenceJsonlDataset
+
+/**
  * Subclassable base for download progress callbacks.
  *
  * Extend this class and override `onProgress(downloaded, total)` to receive
@@ -4204,6 +4297,25 @@ export declare class PromptTemplate {
   render(variables: Record<string, string>): ChatMessage
 }
 export type JsPromptTemplate = PromptTemplate
+
+/**
+ * Rated JSONL dataset for KTO.
+ *
+ * Each line of the input file must deserialize to
+ * `{"prompt"|"messages": ..., "completion": "...", "label": true|false}`.
+ */
+export declare class RatedJsonlDataset {
+  /**
+   * Load a rated JSONL file using the tokenizer at `tokenizerPath`.
+   *
+   * # Errors
+   *
+   * Throws if the tokenizer cannot be loaded, the device string is
+   * invalid, or the JSONL file fails to parse.
+   */
+  static fromPath(path: string, tokenizerPath: string, opts?: JsJsonlDatasetOptions | undefined | null): RatedJsonlDataset
+}
+export type JsRatedJsonlDataset = RatedJsonlDataset
 
 /**
  * Class wrapper around [`ReasoningTrace`].
@@ -7322,6 +7434,22 @@ export declare const enum JsDiffusionScheduler {
   Ddim = 'ddim'
 }
 
+/** Direct Preference Optimization (DPO) configuration. */
+export interface JsDpoConfig {
+  /** Shared training hyperparameters. */
+  core: JsTrainCoreConfig
+  /** LoRA hyperparameters applied to the policy model. */
+  lora?: JsLoraConfig
+  /** KL-regularization strength. Default `0.1`. */
+  beta?: number
+  /** Conservative DPO label smoothing (cDPO). Default `0.0`. */
+  labelSmoothing?: number
+  /** Reference model repo. `null` reuses `core.baseModelRepo`. */
+  referenceModelRepo?: string
+  /** Optional revision for the reference model. */
+  referenceModelRevision?: string
+}
+
 /** The result of an embedding operation. */
 export interface JsEmbeddingResponse {
   /** The embedding vectors (one per input text). */
@@ -7446,6 +7574,30 @@ export interface JsFinishReason {
    * it preserves the original string.
    */
   value: string
+}
+
+/**
+ * Full fine-tune configuration (every parameter trains; no LoRA adapter).
+ *
+ * `gradientCheckpointing = true` is accepted for forward compatibility
+ * but the trainer currently rejects it at init time because candle
+ * 0.10.2 has no activation-checkpointing primitive.
+ */
+export interface JsFullFineTuneConfig {
+  /** Shared training hyperparameters. */
+  core: JsTrainCoreConfig
+  /** Activation checkpointing (currently unsupported in the trainer). */
+  gradientCheckpointing?: boolean
+}
+
+/** Result of a completed full fine-tune run. */
+export interface JsFullFineTuneResult {
+  /** Directory the trained model weights were written to. */
+  outputDir: string
+  /** Final training loss. */
+  finalLoss: number
+  /** Total optimizer steps executed. */
+  stepsCompleted: number
 }
 
 export interface JsGenerated3DModel {
@@ -7628,6 +7780,24 @@ export interface JsJsonlDatasetOptions {
   device?: string
   /** Token id to write into padded positions. Default `0`. */
   padTokenId?: number
+}
+
+/** Kahneman-Tversky Optimization (KTO) configuration. */
+export interface JsKtoConfig {
+  /** Shared training hyperparameters. */
+  core: JsTrainCoreConfig
+  /** LoRA hyperparameters applied to the policy model. */
+  lora?: JsLoraConfig
+  /** KL-regularization strength. Default `0.1`. */
+  beta?: number
+  /** Loss weight applied to desirable examples. Default `1.0`. */
+  lambdaD?: number
+  /** Loss weight applied to undesirable examples. Default `1.0`. */
+  lambdaU?: number
+  /** Reference model repo. `null` reuses `core.baseModelRepo`. */
+  referenceModelRepo?: string
+  /** Optional revision for the reference model. */
+  referenceModelRevision?: string
 }
 
 /**
@@ -7851,6 +8021,16 @@ export interface JsOptimConfig {
   weightDecay?: number
   /** Global gradient L2-norm clip; `null` disables clipping. Default `1.0`. */
   gradientClip?: number
+}
+
+/** Odds Ratio Preference Optimization (ORPO) configuration. */
+export interface JsOrpoConfig {
+  /** Shared training hyperparameters. */
+  core: JsTrainCoreConfig
+  /** LoRA hyperparameters. */
+  lora?: JsLoraConfig
+  /** Weight of the odds-ratio term relative to the SFT term. Default `0.1`. */
+  lambda?: number
 }
 
 /**
@@ -8098,6 +8278,18 @@ export declare const enum JsSchedulerKind {
   Constant = 'constant',
   Linear = 'linear',
   Cosine = 'cosine'
+}
+
+/** Simple Preference Optimization (`SimPO`) configuration. */
+export interface JsSimpoConfig {
+  /** Shared training hyperparameters. */
+  core: JsTrainCoreConfig
+  /** LoRA hyperparameters. */
+  lora?: JsLoraConfig
+  /** Logit scaling for the length-normalized preference margin. Default `2.0`. */
+  beta?: number
+  /** Target reward margin between chosen and rejected. Default `1.0`. */
+  gamma?: number
 }
 
 export interface JsSpeechRequest {
@@ -8383,6 +8575,41 @@ export interface JsTrainConfig {
   mixedPrecision?: JsMixedPrecision
   /** Device string forwarded to the trainer (`"cpu"`, `"cuda:0"`, `"metal"`). */
   device?: string
+}
+
+/**
+ * Shared training hyperparameters for DPO/ORPO/SimPO/KTO and full
+ * fine-tune. Mirrors [`blazen_train::TrainCoreConfig`].
+ */
+export interface JsTrainCoreConfig {
+  /** HuggingFace repo id of the base model. */
+  baseModelRepo: string
+  /** Optional revision (branch / tag / commit) for the base model. */
+  baseModelRevision?: string
+  /** Filesystem directory for trained weights and checkpoints. */
+  outputDir: string
+  /** Total optimizer steps to run. Default `1000`. */
+  maxSteps?: number
+  /** Micro-batch size (per forward pass). Default `1`. */
+  batchSize?: number
+  /** Micro-batches accumulated before each optimizer step. Default `8`. */
+  gradientAccumulationSteps?: number
+  /** Maximum tokenized sequence length per example. Default `1024`. */
+  maxSeqLen?: number
+  /** Run evaluation every N steps when set. */
+  evalSteps?: number
+  /** Write a checkpoint every N steps when set. */
+  saveSteps?: number
+  /** RNG seed. Default `42`. */
+  seed?: bigint
+  /** Mixed-precision mode for forward / backward. Default `Bf16`. */
+  mixedPrecision?: JsMixedPrecision
+  /** Device string forwarded to the trainer (`"cpu"`, `"cuda:0"`, `"metal"`). */
+  device?: string
+  /** Optimizer hyperparameters (AdamW). */
+  optim?: JsOptimConfig
+  /** Learning-rate schedule. */
+  scheduler?: JsSchedulerConfig
 }
 
 /** Result of a completed training run. */

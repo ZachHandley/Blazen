@@ -753,6 +753,46 @@ impl WasmModelManager {
         Promise::reject(&js_sys::Error::new(msg).into())
     }
 
+    #[wasm_bindgen(js_name = "trainDpo")]
+    pub fn train_dpo(&self, _config: JsValue, _dataset: JsValue, _progress: JsValue) -> Promise {
+        // Why: DPO needs the policy + a frozen reference model in memory simultaneously, plus
+        // gradient state across all trainable params -- multi-GB working set, hours of compute.
+        let msg = "WASM SDK does not train models in-browser; preference training requires multi-GB weights, reference-model loading, and hours of compute. Use the Python/Node binding on a server.";
+        Promise::reject(&js_sys::Error::new(msg).into())
+    }
+
+    #[wasm_bindgen(js_name = "trainOrpo")]
+    pub fn train_orpo(&self, _config: JsValue, _dataset: JsValue, _progress: JsValue) -> Promise {
+        // Why: ORPO fuses SFT + odds-ratio preference loss on the policy model; still needs full
+        // gradient state and multi-GB weights -- infeasible in a browser tab.
+        let msg = "WASM SDK does not train models in-browser; preference training requires multi-GB weights, reference-model loading, and hours of compute. Use the Python/Node binding on a server.";
+        Promise::reject(&js_sys::Error::new(msg).into())
+    }
+
+    #[wasm_bindgen(js_name = "trainSimpo")]
+    pub fn train_simpo(&self, _config: JsValue, _dataset: JsValue, _progress: JsValue) -> Promise {
+        // Why: SimPO is reference-free, so it skips the reference model -- but it still needs the
+        // full policy weights + gradient state in memory, which is multi-GB and hours of compute.
+        let msg = "WASM SDK does not train models in-browser; reference-free preference training (SimPO) still requires multi-GB policy weights and hours of compute. Use the Python/Node binding on a server.";
+        Promise::reject(&js_sys::Error::new(msg).into())
+    }
+
+    #[wasm_bindgen(js_name = "trainKto")]
+    pub fn train_kto(&self, _config: JsValue, _dataset: JsValue, _progress: JsValue) -> Promise {
+        // Why: KTO uses unpaired desirable/undesirable signals but still trains against a reference
+        // model and full policy gradients -- multi-GB state, hours of compute.
+        let msg = "WASM SDK does not train models in-browser; preference training requires multi-GB weights, reference-model loading, and hours of compute. Use the Python/Node binding on a server.";
+        Promise::reject(&js_sys::Error::new(msg).into())
+    }
+
+    #[wasm_bindgen(js_name = "fineTune")]
+    pub fn fine_tune(&self, _config: JsValue, _dataset: JsValue, _progress: JsValue) -> Promise {
+        // Why: full fine-tuning updates every parameter, so optimizer state alone is ~2-3x the
+        // model size on top of the weights themselves -- many GB, infeasible in a browser tab.
+        let msg = "WASM SDK does not perform full fine-tuning; this requires gradient computation across all model parameters (several GB of state) and hours of compute. Use the Python/Node binding on a server.";
+        Promise::reject(&js_sys::Error::new(msg).into())
+    }
+
     /// Load a model, evicting LRU models in the same pool if needed.
     ///
     /// Returns a `Promise<void>` that resolves when the model is loaded.

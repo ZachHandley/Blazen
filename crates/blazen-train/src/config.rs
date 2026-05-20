@@ -162,6 +162,204 @@ impl Default for SchedulerConfig {
     }
 }
 
+/// Common training hyperparameters shared by every training mode
+/// (SFT, DPO, ORPO, `SimPO`, KTO, full fine-tune).
+///
+/// New preference / full-finetune configs compose this as their `core`
+/// field rather than duplicating the same dozen fields. [`TrainConfig`]
+/// stays flat for backward compatibility with PR7 users.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TrainCoreConfig {
+    /// HuggingFace repo id of the base model.
+    pub base_model_repo: String,
+    /// Optional revision (branch / tag / commit) for the base model.
+    #[serde(default)]
+    pub base_model_revision: Option<String>,
+    /// Filesystem directory for trained weights and checkpoints.
+    pub output_dir: PathBuf,
+    /// Total optimizer steps to run.
+    pub max_steps: usize,
+    /// Micro-batch size (per forward pass).
+    pub batch_size: usize,
+    /// Number of micro-batches to accumulate before each optimizer step.
+    pub gradient_accumulation_steps: usize,
+    /// Maximum tokenized sequence length per example.
+    pub max_seq_len: usize,
+    /// If `Some`, run evaluation every N steps.
+    pub eval_steps: Option<usize>,
+    /// If `Some`, write a checkpoint every N steps.
+    pub save_steps: Option<usize>,
+    /// RNG seed.
+    pub seed: u64,
+    /// Mixed-precision mode for forward / backward.
+    pub mixed_precision: MixedPrecision,
+    /// Device name (`"cpu"`, `"cuda:0"`, `"metal"`); `None` defers to caller.
+    #[serde(default)]
+    pub device: Option<String>,
+    /// Optimizer hyperparameters (AdamW).
+    pub optim: OptimConfig,
+    /// Learning-rate schedule.
+    pub scheduler: SchedulerConfig,
+}
+
+impl Default for TrainCoreConfig {
+    fn default() -> Self {
+        Self {
+            base_model_repo: "Qwen/Qwen2.5-0.5B".to_string(),
+            base_model_revision: None,
+            output_dir: PathBuf::from("./train_output"),
+            max_steps: 1000,
+            batch_size: 1,
+            gradient_accumulation_steps: 8,
+            max_seq_len: 1024,
+            eval_steps: None,
+            save_steps: None,
+            seed: 42,
+            mixed_precision: MixedPrecision::Bf16,
+            device: None,
+            optim: OptimConfig::default(),
+            scheduler: SchedulerConfig::default(),
+        }
+    }
+}
+
+/// Direct Preference Optimization (DPO) configuration.
+///
+/// DPO requires a frozen reference model. If `reference_model_repo` is
+/// `None`, the trainer uses `core.base_model_repo` as the reference.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DpoConfig {
+    /// Shared training hyperparameters.
+    pub core: TrainCoreConfig,
+    /// LoRA hyperparameters applied to the policy model.
+    pub lora: LoraConfig,
+    /// KL-regularization strength (TRL default 0.1).
+    pub beta: f32,
+    /// Reference model repo. `None` reuses `core.base_model_repo`.
+    #[serde(default)]
+    pub reference_model_repo: Option<String>,
+    /// Optional revision for the reference model.
+    #[serde(default)]
+    pub reference_model_revision: Option<String>,
+    /// Conservative DPO label smoothing (cDPO). 0.0 disables.
+    pub label_smoothing: f32,
+}
+
+impl Default for DpoConfig {
+    fn default() -> Self {
+        Self {
+            core: TrainCoreConfig::default(),
+            lora: LoraConfig::default(),
+            beta: 0.1,
+            reference_model_repo: None,
+            reference_model_revision: None,
+            label_smoothing: 0.0,
+        }
+    }
+}
+
+/// Odds Ratio Preference Optimization (ORPO) configuration.
+///
+/// Reference-free — combines an SFT loss on chosen responses with an
+/// odds-ratio loss term weighted by `lambda`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OrpoConfig {
+    /// Shared training hyperparameters.
+    pub core: TrainCoreConfig,
+    /// LoRA hyperparameters.
+    pub lora: LoraConfig,
+    /// Weight of the odds-ratio term relative to the SFT term.
+    pub lambda: f32,
+}
+
+impl Default for OrpoConfig {
+    fn default() -> Self {
+        Self {
+            core: TrainCoreConfig::default(),
+            lora: LoraConfig::default(),
+            lambda: 0.1,
+        }
+    }
+}
+
+/// Simple Preference Optimization (`SimPO`) configuration.
+///
+/// Reference-free, length-normalized. Defaults follow TRL `main`
+/// (beta=2.0, gamma=1.0), not the older TRL release (0.1 / 0.5).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimpoConfig {
+    /// Shared training hyperparameters.
+    pub core: TrainCoreConfig,
+    /// LoRA hyperparameters.
+    pub lora: LoraConfig,
+    /// Logit scaling for the length-normalized preference margin.
+    pub beta: f32,
+    /// Target reward margin between chosen and rejected.
+    pub gamma: f32,
+}
+
+impl Default for SimpoConfig {
+    fn default() -> Self {
+        Self {
+            core: TrainCoreConfig::default(),
+            lora: LoraConfig::default(),
+            beta: 2.0,
+            gamma: 1.0,
+        }
+    }
+}
+
+/// Kahneman-Tversky Optimization (KTO) configuration.
+///
+/// Requires a frozen reference model. Unlike DPO, KTO consumes a
+/// `(prompt, completion, desirable)` triple rather than chosen/rejected pairs.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KtoConfig {
+    /// Shared training hyperparameters.
+    pub core: TrainCoreConfig,
+    /// LoRA hyperparameters applied to the policy model.
+    pub lora: LoraConfig,
+    /// KL-regularization strength.
+    pub beta: f32,
+    /// Loss weight applied to desirable examples.
+    pub lambda_d: f32,
+    /// Loss weight applied to undesirable examples.
+    pub lambda_u: f32,
+    /// Reference model repo. `None` reuses `core.base_model_repo`.
+    #[serde(default)]
+    pub reference_model_repo: Option<String>,
+    /// Optional revision for the reference model.
+    #[serde(default)]
+    pub reference_model_revision: Option<String>,
+}
+
+impl Default for KtoConfig {
+    fn default() -> Self {
+        Self {
+            core: TrainCoreConfig::default(),
+            lora: LoraConfig::default(),
+            beta: 0.1,
+            lambda_d: 1.0,
+            lambda_u: 1.0,
+            reference_model_repo: None,
+            reference_model_revision: None,
+        }
+    }
+}
+
+/// Full fine-tune configuration (no LoRA — every parameter trains).
+///
+/// `gradient_checkpointing = true` is accepted for forward compatibility
+/// but candle 0.10.2 has no checkpointing primitive, so the trainer will
+/// return `Unsupported` at init time when this is set.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct FullFineTuneConfig {
+    /// Shared training hyperparameters.
+    pub core: TrainCoreConfig,
+    /// Activation checkpointing (currently unsupported in the trainer).
+    pub gradient_checkpointing: bool,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -185,5 +383,150 @@ mod tests {
         );
         assert_eq!(parsed.max_steps, original.max_steps);
         assert_eq!(parsed.mixed_precision, original.mixed_precision);
+    }
+
+    fn assert_core_eq(a: &TrainCoreConfig, b: &TrainCoreConfig) {
+        assert_eq!(a.base_model_repo, b.base_model_repo);
+        assert_eq!(a.base_model_revision, b.base_model_revision);
+        assert_eq!(a.output_dir, b.output_dir);
+        assert_eq!(a.max_steps, b.max_steps);
+        assert_eq!(a.batch_size, b.batch_size);
+        assert_eq!(a.gradient_accumulation_steps, b.gradient_accumulation_steps);
+        assert_eq!(a.max_seq_len, b.max_seq_len);
+        assert_eq!(a.eval_steps, b.eval_steps);
+        assert_eq!(a.save_steps, b.save_steps);
+        assert_eq!(a.seed, b.seed);
+        assert_eq!(a.mixed_precision, b.mixed_precision);
+        assert_eq!(a.device, b.device);
+        assert!((a.optim.learning_rate - b.optim.learning_rate).abs() < f64::EPSILON);
+        assert_eq!(a.scheduler.kind, b.scheduler.kind);
+        assert_eq!(a.scheduler.warmup_steps, b.scheduler.warmup_steps);
+    }
+
+    fn assert_lora_eq(a: &LoraConfig, b: &LoraConfig) {
+        assert_eq!(a.rank, b.rank);
+        assert!((a.alpha - b.alpha).abs() < f32::EPSILON);
+        assert!((a.dropout - b.dropout).abs() < f32::EPSILON);
+        assert_eq!(a.target_modules, b.target_modules);
+    }
+
+    #[test]
+    fn train_core_config_default_has_reasonable_values() {
+        let cfg = TrainCoreConfig::default();
+        assert!(cfg.max_steps > 0);
+        assert!(cfg.batch_size > 0);
+        assert!(cfg.gradient_accumulation_steps > 0);
+        assert!(cfg.max_seq_len > 0);
+        assert_ne!(cfg.seed, 0);
+        assert!(!cfg.base_model_repo.is_empty());
+    }
+
+    #[test]
+    fn dpo_config_default_beta_is_0_1() {
+        let cfg = DpoConfig::default();
+        assert!((cfg.beta - 0.1).abs() < f32::EPSILON);
+        assert!(cfg.reference_model_repo.is_none());
+        assert!((cfg.label_smoothing - 0.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn dpo_config_serde_roundtrip() {
+        let original = DpoConfig::default();
+        let json = serde_json::to_string(&original).expect("serialize");
+        let parsed: DpoConfig = serde_json::from_str(&json).expect("deserialize");
+        assert_core_eq(&parsed.core, &original.core);
+        assert_lora_eq(&parsed.lora, &original.lora);
+        assert!((parsed.beta - original.beta).abs() < f32::EPSILON);
+        assert_eq!(parsed.reference_model_repo, original.reference_model_repo);
+        assert_eq!(
+            parsed.reference_model_revision,
+            original.reference_model_revision
+        );
+        assert!((parsed.label_smoothing - original.label_smoothing).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn orpo_config_default_lambda_is_0_1() {
+        let cfg = OrpoConfig::default();
+        assert!((cfg.lambda - 0.1).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn orpo_config_serde_roundtrip() {
+        let original = OrpoConfig::default();
+        let json = serde_json::to_string(&original).expect("serialize");
+        let parsed: OrpoConfig = serde_json::from_str(&json).expect("deserialize");
+        assert_core_eq(&parsed.core, &original.core);
+        assert_lora_eq(&parsed.lora, &original.lora);
+        assert!((parsed.lambda - original.lambda).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn simpo_config_default_beta_2_0_gamma_1_0() {
+        let cfg = SimpoConfig::default();
+        assert!((cfg.beta - 2.0).abs() < f32::EPSILON);
+        assert!((cfg.gamma - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn simpo_config_serde_roundtrip() {
+        let original = SimpoConfig::default();
+        let json = serde_json::to_string(&original).expect("serialize");
+        let parsed: SimpoConfig = serde_json::from_str(&json).expect("deserialize");
+        assert_core_eq(&parsed.core, &original.core);
+        assert_lora_eq(&parsed.lora, &original.lora);
+        assert!((parsed.beta - original.beta).abs() < f32::EPSILON);
+        assert!((parsed.gamma - original.gamma).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn kto_config_default_lambdas_both_1_0() {
+        let cfg = KtoConfig::default();
+        assert!((cfg.lambda_d - 1.0).abs() < f32::EPSILON);
+        assert!((cfg.lambda_u - 1.0).abs() < f32::EPSILON);
+        assert!((cfg.beta - 0.1).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn kto_config_serde_roundtrip() {
+        let original = KtoConfig::default();
+        let json = serde_json::to_string(&original).expect("serialize");
+        let parsed: KtoConfig = serde_json::from_str(&json).expect("deserialize");
+        assert_core_eq(&parsed.core, &original.core);
+        assert_lora_eq(&parsed.lora, &original.lora);
+        assert!((parsed.beta - original.beta).abs() < f32::EPSILON);
+        assert!((parsed.lambda_d - original.lambda_d).abs() < f32::EPSILON);
+        assert!((parsed.lambda_u - original.lambda_u).abs() < f32::EPSILON);
+        assert_eq!(parsed.reference_model_repo, original.reference_model_repo);
+        assert_eq!(
+            parsed.reference_model_revision,
+            original.reference_model_revision
+        );
+    }
+
+    #[test]
+    fn full_finetune_config_default_grad_checkpointing_disabled() {
+        let cfg = FullFineTuneConfig::default();
+        assert!(!cfg.gradient_checkpointing);
+    }
+
+    #[test]
+    fn full_finetune_config_serde_roundtrip() {
+        let original = FullFineTuneConfig::default();
+        let json = serde_json::to_string(&original).expect("serialize");
+        let parsed: FullFineTuneConfig = serde_json::from_str(&json).expect("deserialize");
+        assert_core_eq(&parsed.core, &original.core);
+        assert_eq!(
+            parsed.gradient_checkpointing,
+            original.gradient_checkpointing
+        );
+    }
+
+    #[test]
+    fn train_core_config_serde_roundtrip() {
+        let original = TrainCoreConfig::default();
+        let json = serde_json::to_string(&original).expect("serialize");
+        let parsed: TrainCoreConfig = serde_json::from_str(&json).expect("deserialize");
+        assert_core_eq(&parsed, &original);
     }
 }

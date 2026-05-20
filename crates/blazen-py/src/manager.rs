@@ -1145,8 +1145,10 @@ impl From<PyHfLoadOptions> for HfLoadOptions {
 
 #[cfg(feature = "training")]
 pub use training::{
-    PyJsonlDataset, PyLoraConfig, PyMixedPrecision, PyOptimConfig, PySchedulerConfig,
-    PySchedulerKind, PyTrainConfig, PyTrainedAdapter, PyTrainingEvent,
+    PyDpoConfig, PyFullFineTuneConfig, PyFullFineTuneResult, PyJsonlDataset, PyKtoConfig,
+    PyLoraConfig, PyMixedPrecision, PyOptimConfig, PyOrpoConfig, PyPreferenceJsonlDataset,
+    PyRatedJsonlDataset, PySchedulerConfig, PySchedulerKind, PySimpoConfig, PyTrainConfig,
+    PyTrainCoreConfig, PyTrainedAdapter, PyTrainingEvent,
 };
 
 #[cfg(feature = "training")]
@@ -1159,11 +1161,12 @@ mod training {
     use pyo3::prelude::*;
     use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyclass_enum, gen_stub_pymethods};
 
-    use blazen_train::dataset::JsonlDataset;
+    use blazen_train::dataset::{JsonlDataset, PreferenceJsonlDataset, RatedJsonlDataset};
     use blazen_train::{
-        BlazenTrainError, LoraConfig, MixedPrecision, OptimConfig, SchedulerConfig, SchedulerKind,
-        TrainConfig, TrainedAdapter, TrainingBatch, TrainingDataset, TrainingEvent,
-        TrainingProgress,
+        BlazenTrainError, DpoConfig, FullFineTuneConfig, FullFineTuneResult, KtoConfig, LoraConfig,
+        MixedPrecision, OptimConfig, OrpoConfig, PreferenceDataset, RatedDataset, SchedulerConfig,
+        SchedulerKind, SimpoConfig, TrainConfig, TrainCoreConfig, TrainedAdapter, TrainingBatch,
+        TrainingDataset, TrainingEvent, TrainingProgress,
     };
     use tokenizers::Tokenizer;
 
@@ -1946,6 +1949,848 @@ mod training {
                 Ok(PyTrainedAdapter::from(adapter))
             })
         }
+    }
+
+    // -----------------------------------------------------------------------
+    // PyTrainCoreConfig — shared hyperparameters for the preference / full
+    // fine-tune verbs introduced in PR8. Mirrors `TrainCoreConfig` from
+    // `blazen_train::config`.
+    // -----------------------------------------------------------------------
+
+    /// Shared training hyperparameters used by DPO / ORPO / SimPO / KTO /
+    /// full fine-tune. Mirrors the legacy :class:`TrainConfig` minus the
+    /// PEFT-specific :class:`LoraConfig`.
+    #[gen_stub_pyclass]
+    #[pyclass(name = "TrainCoreConfig", from_py_object)]
+    #[derive(Clone)]
+    pub struct PyTrainCoreConfig {
+        #[pyo3(get, set)]
+        pub base_model_repo: String,
+        #[pyo3(get, set)]
+        pub base_model_revision: Option<String>,
+        #[pyo3(get, set)]
+        pub output_dir: String,
+        #[pyo3(get, set)]
+        pub max_steps: usize,
+        #[pyo3(get, set)]
+        pub batch_size: usize,
+        #[pyo3(get, set)]
+        pub gradient_accumulation_steps: usize,
+        #[pyo3(get, set)]
+        pub max_seq_len: usize,
+        #[pyo3(get, set)]
+        pub eval_steps: Option<usize>,
+        #[pyo3(get, set)]
+        pub save_steps: Option<usize>,
+        #[pyo3(get, set)]
+        pub seed: u64,
+        #[pyo3(get, set)]
+        pub mixed_precision: PyMixedPrecision,
+        #[pyo3(get, set)]
+        pub device: Option<String>,
+        #[pyo3(get, set)]
+        pub optim: PyOptimConfig,
+        #[pyo3(get, set)]
+        pub scheduler: PySchedulerConfig,
+    }
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PyTrainCoreConfig {
+        /// Build a TrainCoreConfig.
+        ///
+        /// Raises ``ValueError`` if ``max_steps == 0``, ``batch_size == 0``,
+        /// ``gradient_accumulation_steps == 0``, or ``max_seq_len == 0``.
+        #[new]
+        #[pyo3(signature = (
+            *,
+            base_model_repo,
+            output_dir,
+            base_model_revision = None,
+            max_steps = 1000,
+            batch_size = 1,
+            gradient_accumulation_steps = 8,
+            max_seq_len = 1024,
+            eval_steps = None,
+            save_steps = None,
+            seed = 42,
+            mixed_precision = PyMixedPrecision::BF16,
+            device = None,
+            optim = None,
+            scheduler = None,
+        ))]
+        #[allow(clippy::too_many_arguments)]
+        fn new(
+            base_model_repo: String,
+            output_dir: String,
+            base_model_revision: Option<String>,
+            max_steps: usize,
+            batch_size: usize,
+            gradient_accumulation_steps: usize,
+            max_seq_len: usize,
+            eval_steps: Option<usize>,
+            save_steps: Option<usize>,
+            seed: u64,
+            mixed_precision: PyMixedPrecision,
+            device: Option<String>,
+            optim: Option<PyOptimConfig>,
+            scheduler: Option<PySchedulerConfig>,
+        ) -> PyResult<Self> {
+            if base_model_repo.trim().is_empty() {
+                return Err(PyValueError::new_err(
+                    "TrainCoreConfig.base_model_repo must be non-empty",
+                ));
+            }
+            if output_dir.trim().is_empty() {
+                return Err(PyValueError::new_err(
+                    "TrainCoreConfig.output_dir must be non-empty",
+                ));
+            }
+            if max_steps == 0 {
+                return Err(PyValueError::new_err(
+                    "TrainCoreConfig.max_steps must be > 0",
+                ));
+            }
+            if batch_size == 0 {
+                return Err(PyValueError::new_err(
+                    "TrainCoreConfig.batch_size must be > 0",
+                ));
+            }
+            if gradient_accumulation_steps == 0 {
+                return Err(PyValueError::new_err(
+                    "TrainCoreConfig.gradient_accumulation_steps must be > 0",
+                ));
+            }
+            if max_seq_len == 0 {
+                return Err(PyValueError::new_err(
+                    "TrainCoreConfig.max_seq_len must be > 0",
+                ));
+            }
+            Ok(Self {
+                base_model_repo,
+                base_model_revision,
+                output_dir,
+                max_steps,
+                batch_size,
+                gradient_accumulation_steps,
+                max_seq_len,
+                eval_steps,
+                save_steps,
+                seed,
+                mixed_precision,
+                device,
+                optim: optim.unwrap_or_default(),
+                scheduler: scheduler.unwrap_or_default(),
+            })
+        }
+    }
+
+    impl From<PyTrainCoreConfig> for TrainCoreConfig {
+        fn from(c: PyTrainCoreConfig) -> Self {
+            Self {
+                base_model_repo: c.base_model_repo,
+                base_model_revision: c.base_model_revision,
+                output_dir: PathBuf::from(c.output_dir),
+                max_steps: c.max_steps,
+                batch_size: c.batch_size,
+                gradient_accumulation_steps: c.gradient_accumulation_steps,
+                max_seq_len: c.max_seq_len,
+                eval_steps: c.eval_steps,
+                save_steps: c.save_steps,
+                seed: c.seed,
+                mixed_precision: c.mixed_precision.into(),
+                device: c.device,
+                optim: c.optim.into(),
+                scheduler: c.scheduler.into(),
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // PyDpoConfig
+    // -----------------------------------------------------------------------
+
+    /// Direct Preference Optimization (DPO) configuration.
+    #[gen_stub_pyclass]
+    #[pyclass(name = "DpoConfig", from_py_object)]
+    #[derive(Clone)]
+    pub struct PyDpoConfig {
+        #[pyo3(get, set)]
+        pub core: PyTrainCoreConfig,
+        #[pyo3(get, set)]
+        pub lora: PyLoraConfig,
+        #[pyo3(get, set)]
+        pub beta: f32,
+        #[pyo3(get, set)]
+        pub label_smoothing: f32,
+        #[pyo3(get, set)]
+        pub reference_model_repo: Option<String>,
+        #[pyo3(get, set)]
+        pub reference_model_revision: Option<String>,
+    }
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PyDpoConfig {
+        /// Build a DpoConfig.
+        #[new]
+        #[pyo3(signature = (
+            *,
+            core,
+            lora = None,
+            beta = 0.1,
+            label_smoothing = 0.0,
+            reference_model_repo = None,
+            reference_model_revision = None,
+        ))]
+        fn new(
+            core: PyTrainCoreConfig,
+            lora: Option<PyLoraConfig>,
+            beta: f32,
+            label_smoothing: f32,
+            reference_model_repo: Option<String>,
+            reference_model_revision: Option<String>,
+        ) -> PyResult<Self> {
+            if !beta.is_finite() || beta <= 0.0 {
+                return Err(PyValueError::new_err("DpoConfig.beta must be > 0"));
+            }
+            if !label_smoothing.is_finite() || !(0.0..=0.5).contains(&label_smoothing) {
+                return Err(PyValueError::new_err(
+                    "DpoConfig.label_smoothing must be in [0.0, 0.5]",
+                ));
+            }
+            Ok(Self {
+                core,
+                lora: lora.unwrap_or_default(),
+                beta,
+                label_smoothing,
+                reference_model_repo,
+                reference_model_revision,
+            })
+        }
+    }
+
+    impl From<PyDpoConfig> for DpoConfig {
+        fn from(c: PyDpoConfig) -> Self {
+            Self {
+                core: c.core.into(),
+                lora: c.lora.into(),
+                beta: c.beta,
+                reference_model_repo: c.reference_model_repo,
+                reference_model_revision: c.reference_model_revision,
+                label_smoothing: c.label_smoothing,
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // PyOrpoConfig
+    // -----------------------------------------------------------------------
+
+    /// Odds Ratio Preference Optimization (ORPO) configuration.
+    #[gen_stub_pyclass]
+    #[pyclass(name = "OrpoConfig", from_py_object)]
+    #[derive(Clone)]
+    pub struct PyOrpoConfig {
+        #[pyo3(get, set)]
+        pub core: PyTrainCoreConfig,
+        #[pyo3(get, set)]
+        pub lora: PyLoraConfig,
+        #[pyo3(get, set)]
+        pub lambda: f32,
+    }
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PyOrpoConfig {
+        /// Build an OrpoConfig.
+        #[new]
+        #[pyo3(signature = (*, core, lora = None, lambda = 0.1))]
+        fn new(core: PyTrainCoreConfig, lora: Option<PyLoraConfig>, lambda: f32) -> PyResult<Self> {
+            if !lambda.is_finite() || lambda < 0.0 {
+                return Err(PyValueError::new_err("OrpoConfig.lambda must be >= 0"));
+            }
+            Ok(Self {
+                core,
+                lora: lora.unwrap_or_default(),
+                lambda,
+            })
+        }
+    }
+
+    impl From<PyOrpoConfig> for OrpoConfig {
+        fn from(c: PyOrpoConfig) -> Self {
+            Self {
+                core: c.core.into(),
+                lora: c.lora.into(),
+                lambda: c.lambda,
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // PySimpoConfig
+    // -----------------------------------------------------------------------
+
+    /// Simple Preference Optimization (SimPO) configuration.
+    #[gen_stub_pyclass]
+    #[pyclass(name = "SimpoConfig", from_py_object)]
+    #[derive(Clone)]
+    pub struct PySimpoConfig {
+        #[pyo3(get, set)]
+        pub core: PyTrainCoreConfig,
+        #[pyo3(get, set)]
+        pub lora: PyLoraConfig,
+        #[pyo3(get, set)]
+        pub beta: f32,
+        #[pyo3(get, set)]
+        pub gamma: f32,
+    }
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PySimpoConfig {
+        /// Build a SimpoConfig.
+        #[new]
+        #[pyo3(signature = (*, core, lora = None, beta = 2.0, gamma = 1.0))]
+        fn new(
+            core: PyTrainCoreConfig,
+            lora: Option<PyLoraConfig>,
+            beta: f32,
+            gamma: f32,
+        ) -> PyResult<Self> {
+            if !beta.is_finite() || beta <= 0.0 {
+                return Err(PyValueError::new_err("SimpoConfig.beta must be > 0"));
+            }
+            if !gamma.is_finite() || gamma < 0.0 {
+                return Err(PyValueError::new_err("SimpoConfig.gamma must be >= 0"));
+            }
+            Ok(Self {
+                core,
+                lora: lora.unwrap_or_default(),
+                beta,
+                gamma,
+            })
+        }
+    }
+
+    impl From<PySimpoConfig> for SimpoConfig {
+        fn from(c: PySimpoConfig) -> Self {
+            Self {
+                core: c.core.into(),
+                lora: c.lora.into(),
+                beta: c.beta,
+                gamma: c.gamma,
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // PyKtoConfig
+    // -----------------------------------------------------------------------
+
+    /// Kahneman-Tversky Optimization (KTO) configuration.
+    #[gen_stub_pyclass]
+    #[pyclass(name = "KtoConfig", from_py_object)]
+    #[derive(Clone)]
+    pub struct PyKtoConfig {
+        #[pyo3(get, set)]
+        pub core: PyTrainCoreConfig,
+        #[pyo3(get, set)]
+        pub lora: PyLoraConfig,
+        #[pyo3(get, set)]
+        pub beta: f32,
+        #[pyo3(get, set)]
+        pub lambda_d: f32,
+        #[pyo3(get, set)]
+        pub lambda_u: f32,
+        #[pyo3(get, set)]
+        pub reference_model_repo: Option<String>,
+        #[pyo3(get, set)]
+        pub reference_model_revision: Option<String>,
+    }
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PyKtoConfig {
+        /// Build a KtoConfig.
+        #[new]
+        #[pyo3(signature = (
+            *,
+            core,
+            lora = None,
+            beta = 0.1,
+            lambda_d = 1.0,
+            lambda_u = 1.0,
+            reference_model_repo = None,
+            reference_model_revision = None,
+        ))]
+        #[allow(clippy::too_many_arguments)]
+        fn new(
+            core: PyTrainCoreConfig,
+            lora: Option<PyLoraConfig>,
+            beta: f32,
+            lambda_d: f32,
+            lambda_u: f32,
+            reference_model_repo: Option<String>,
+            reference_model_revision: Option<String>,
+        ) -> PyResult<Self> {
+            if !beta.is_finite() || beta <= 0.0 {
+                return Err(PyValueError::new_err("KtoConfig.beta must be > 0"));
+            }
+            if !lambda_d.is_finite() || lambda_d < 0.0 {
+                return Err(PyValueError::new_err("KtoConfig.lambda_d must be >= 0"));
+            }
+            if !lambda_u.is_finite() || lambda_u < 0.0 {
+                return Err(PyValueError::new_err("KtoConfig.lambda_u must be >= 0"));
+            }
+            Ok(Self {
+                core,
+                lora: lora.unwrap_or_default(),
+                beta,
+                lambda_d,
+                lambda_u,
+                reference_model_repo,
+                reference_model_revision,
+            })
+        }
+    }
+
+    impl From<PyKtoConfig> for KtoConfig {
+        fn from(c: PyKtoConfig) -> Self {
+            Self {
+                core: c.core.into(),
+                lora: c.lora.into(),
+                beta: c.beta,
+                lambda_d: c.lambda_d,
+                lambda_u: c.lambda_u,
+                reference_model_repo: c.reference_model_repo,
+                reference_model_revision: c.reference_model_revision,
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // PyFullFineTuneConfig
+    // -----------------------------------------------------------------------
+
+    /// Full fine-tune configuration (every parameter trains).
+    ///
+    /// ``gradient_checkpointing = True`` is accepted for forward
+    /// compatibility but the trainer currently rejects it with
+    /// ``ValueError`` at init time because candle 0.10.2 has no
+    /// activation-checkpointing primitive.
+    #[gen_stub_pyclass]
+    #[pyclass(name = "FullFineTuneConfig", from_py_object)]
+    #[derive(Clone)]
+    pub struct PyFullFineTuneConfig {
+        #[pyo3(get, set)]
+        pub core: PyTrainCoreConfig,
+        #[pyo3(get, set)]
+        pub gradient_checkpointing: bool,
+    }
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PyFullFineTuneConfig {
+        /// Build a FullFineTuneConfig.
+        #[new]
+        #[pyo3(signature = (*, core, gradient_checkpointing = false))]
+        fn new(core: PyTrainCoreConfig, gradient_checkpointing: bool) -> Self {
+            Self {
+                core,
+                gradient_checkpointing,
+            }
+        }
+    }
+
+    impl From<PyFullFineTuneConfig> for FullFineTuneConfig {
+        fn from(c: PyFullFineTuneConfig) -> Self {
+            Self {
+                core: c.core.into(),
+                gradient_checkpointing: c.gradient_checkpointing,
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // PyFullFineTuneResult
+    // -----------------------------------------------------------------------
+
+    /// Result of a completed full fine-tune run.
+    #[gen_stub_pyclass]
+    #[pyclass(name = "FullFineTuneResult", frozen)]
+    pub struct PyFullFineTuneResult {
+        #[pyo3(get)]
+        pub output_dir: String,
+        #[pyo3(get)]
+        pub final_loss: f32,
+        #[pyo3(get)]
+        pub steps_completed: usize,
+    }
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PyFullFineTuneResult {
+        fn __repr__(&self) -> String {
+            format!(
+                "FullFineTuneResult(output_dir={:?}, final_loss={}, steps_completed={})",
+                self.output_dir, self.final_loss, self.steps_completed
+            )
+        }
+    }
+
+    impl From<FullFineTuneResult> for PyFullFineTuneResult {
+        fn from(r: FullFineTuneResult) -> Self {
+            Self {
+                output_dir: r.output_dir.display().to_string(),
+                final_loss: r.final_loss,
+                steps_completed: r.steps_completed,
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // PyPreferenceJsonlDataset
+    // -----------------------------------------------------------------------
+
+    /// JSONL-backed preference-pair dataset for DPO / ORPO / SimPO.
+    ///
+    /// Each line of the input file must deserialize to either
+    /// ``{"prompt": "...", "chosen": "...", "rejected": "..."}`` or
+    /// ``{"messages": [{"role": ..., "content": ...}, ...], "chosen": "...",
+    /// "rejected": "..."}`` (the latter requires ``chat_template``).
+    #[gen_stub_pyclass]
+    #[pyclass(name = "PreferenceJsonlDataset", frozen)]
+    pub struct PyPreferenceJsonlDataset {
+        inner: Arc<PreferenceJsonlDataset>,
+    }
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PyPreferenceJsonlDataset {
+        /// Load a preference-pair JSONL file using the tokenizer at
+        /// ``tokenizer_path``.
+        ///
+        /// Args mirror :meth:`JsonlDataset.from_path`.
+        #[staticmethod]
+        #[pyo3(signature = (
+            path,
+            tokenizer_path,
+            chat_template = None,
+            max_seq_len = 2048,
+            device = "cpu".to_string(),
+            pad_token_id = 0,
+        ))]
+        fn from_path(
+            path: String,
+            tokenizer_path: String,
+            chat_template: Option<String>,
+            max_seq_len: usize,
+            device: String,
+            pad_token_id: u32,
+        ) -> PyResult<Self> {
+            if max_seq_len == 0 {
+                return Err(PyValueError::new_err(
+                    "PreferenceJsonlDataset.max_seq_len must be > 0",
+                ));
+            }
+            let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
+                PyValueError::new_err(format!(
+                    "failed to load tokenizer from {tokenizer_path:?}: {e}"
+                ))
+            })?;
+            let cdev = super::parse_train_device_py(&device)?;
+            let ds = PreferenceJsonlDataset::from_path(
+                std::path::Path::new(&path),
+                Arc::new(tokenizer),
+                chat_template.as_deref(),
+                max_seq_len,
+                cdev,
+                pad_token_id,
+            )
+            .map_err(|e| {
+                PyValueError::new_err(format!("PreferenceJsonlDataset load failed: {e}"))
+            })?;
+            Ok(Self {
+                inner: Arc::new(ds),
+            })
+        }
+
+        /// Number of preference examples in the dataset.
+        fn __len__(&self) -> usize {
+            self.inner.len()
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // PyRatedJsonlDataset
+    // -----------------------------------------------------------------------
+
+    /// JSONL-backed rated single-completion dataset for KTO.
+    ///
+    /// Each line of the input file must deserialize to either
+    /// ``{"prompt": "...", "completion": "...", "label": true|false}`` or
+    /// ``{"messages": [...], "completion": "...", "label": ...}`` (the
+    /// latter requires ``chat_template``).
+    #[gen_stub_pyclass]
+    #[pyclass(name = "RatedJsonlDataset", frozen)]
+    pub struct PyRatedJsonlDataset {
+        inner: Arc<RatedJsonlDataset>,
+    }
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PyRatedJsonlDataset {
+        /// Load a rated JSONL file using the tokenizer at ``tokenizer_path``.
+        ///
+        /// Args mirror :meth:`JsonlDataset.from_path`.
+        #[staticmethod]
+        #[pyo3(signature = (
+            path,
+            tokenizer_path,
+            chat_template = None,
+            max_seq_len = 2048,
+            device = "cpu".to_string(),
+            pad_token_id = 0,
+        ))]
+        fn from_path(
+            path: String,
+            tokenizer_path: String,
+            chat_template: Option<String>,
+            max_seq_len: usize,
+            device: String,
+            pad_token_id: u32,
+        ) -> PyResult<Self> {
+            if max_seq_len == 0 {
+                return Err(PyValueError::new_err(
+                    "RatedJsonlDataset.max_seq_len must be > 0",
+                ));
+            }
+            let tokenizer = Tokenizer::from_file(&tokenizer_path).map_err(|e| {
+                PyValueError::new_err(format!(
+                    "failed to load tokenizer from {tokenizer_path:?}: {e}"
+                ))
+            })?;
+            let cdev = super::parse_train_device_py(&device)?;
+            let ds = RatedJsonlDataset::from_path(
+                std::path::Path::new(&path),
+                Arc::new(tokenizer),
+                chat_template.as_deref(),
+                max_seq_len,
+                cdev,
+                pad_token_id,
+            )
+            .map_err(|e| PyValueError::new_err(format!("RatedJsonlDataset load failed: {e}")))?;
+            Ok(Self {
+                inner: Arc::new(ds),
+            })
+        }
+
+        /// Number of rated examples in the dataset.
+        fn __len__(&self) -> usize {
+            self.inner.len()
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // ModelManager.train_dpo / train_orpo / train_simpo / train_kto / fine_tune
+    // -----------------------------------------------------------------------
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PyModelManager {
+        /// Train a LoRA adapter via Direct Preference Optimization (DPO).
+        ///
+        /// Args:
+        ///     config: A :class:`DpoConfig`.
+        ///     dataset: A :class:`PreferenceJsonlDataset` providing
+        ///         ``(prompt, chosen, rejected)`` triples.
+        ///     progress: Optional callable invoked with one
+        ///         :class:`TrainingEvent` per transition.
+        ///
+        /// Returns:
+        ///     A :class:`TrainedAdapter` describing the on-disk PEFT
+        ///     adapter.
+        #[gen_stub(override_return_type(
+            type_repr = "typing.Coroutine[typing.Any, typing.Any, TrainedAdapter]",
+            imports = ("typing",)
+        ))]
+        #[pyo3(signature = (config, dataset, progress = None))]
+        fn train_dpo<'py>(
+            &self,
+            py: Python<'py>,
+            config: PyDpoConfig,
+            dataset: Py<PyPreferenceJsonlDataset>,
+            progress: Option<Py<PyAny>>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let inner = self.inner.clone();
+            let rust_cfg: DpoConfig = config.into();
+            let ds_arc: Arc<dyn PreferenceDataset> = {
+                let borrowed = dataset.bind(py).borrow();
+                borrowed.inner.clone()
+            };
+            let sink = py_progress_sink(progress);
+
+            pyo3_async_runtimes::tokio::future_into_py(py, async move {
+                let adapter = inner
+                    .train_dpo(rust_cfg, ds_arc, sink)
+                    .await
+                    .map_err(BlazenPyError::from)?;
+                Ok(PyTrainedAdapter::from(adapter))
+            })
+        }
+
+        /// Train a LoRA adapter via Odds Ratio Preference Optimization
+        /// (ORPO).
+        ///
+        /// Reference-free. Combines an SFT loss on chosen completions with
+        /// an odds-ratio preference term weighted by ``config.lambda``.
+        #[gen_stub(override_return_type(
+            type_repr = "typing.Coroutine[typing.Any, typing.Any, TrainedAdapter]",
+            imports = ("typing",)
+        ))]
+        #[pyo3(signature = (config, dataset, progress = None))]
+        fn train_orpo<'py>(
+            &self,
+            py: Python<'py>,
+            config: PyOrpoConfig,
+            dataset: Py<PyPreferenceJsonlDataset>,
+            progress: Option<Py<PyAny>>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let inner = self.inner.clone();
+            let rust_cfg: OrpoConfig = config.into();
+            let ds_arc: Arc<dyn PreferenceDataset> = {
+                let borrowed = dataset.bind(py).borrow();
+                borrowed.inner.clone()
+            };
+            let sink = py_progress_sink(progress);
+
+            pyo3_async_runtimes::tokio::future_into_py(py, async move {
+                let adapter = inner
+                    .train_orpo(rust_cfg, ds_arc, sink)
+                    .await
+                    .map_err(BlazenPyError::from)?;
+                Ok(PyTrainedAdapter::from(adapter))
+            })
+        }
+
+        /// Train a LoRA adapter via Simple Preference Optimization
+        /// (SimPO).
+        ///
+        /// Reference-free and length-normalized.
+        #[gen_stub(override_return_type(
+            type_repr = "typing.Coroutine[typing.Any, typing.Any, TrainedAdapter]",
+            imports = ("typing",)
+        ))]
+        #[pyo3(signature = (config, dataset, progress = None))]
+        fn train_simpo<'py>(
+            &self,
+            py: Python<'py>,
+            config: PySimpoConfig,
+            dataset: Py<PyPreferenceJsonlDataset>,
+            progress: Option<Py<PyAny>>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let inner = self.inner.clone();
+            let rust_cfg: SimpoConfig = config.into();
+            let ds_arc: Arc<dyn PreferenceDataset> = {
+                let borrowed = dataset.bind(py).borrow();
+                borrowed.inner.clone()
+            };
+            let sink = py_progress_sink(progress);
+
+            pyo3_async_runtimes::tokio::future_into_py(py, async move {
+                let adapter = inner
+                    .train_simpo(rust_cfg, ds_arc, sink)
+                    .await
+                    .map_err(BlazenPyError::from)?;
+                Ok(PyTrainedAdapter::from(adapter))
+            })
+        }
+
+        /// Train a LoRA adapter via Kahneman-Tversky Optimization (KTO).
+        ///
+        /// Args:
+        ///     config: A :class:`KtoConfig`.
+        ///     dataset: A :class:`RatedJsonlDataset` providing
+        ///         ``(prompt, completion, desirable)`` triples.
+        #[gen_stub(override_return_type(
+            type_repr = "typing.Coroutine[typing.Any, typing.Any, TrainedAdapter]",
+            imports = ("typing",)
+        ))]
+        #[pyo3(signature = (config, dataset, progress = None))]
+        fn train_kto<'py>(
+            &self,
+            py: Python<'py>,
+            config: PyKtoConfig,
+            dataset: Py<PyRatedJsonlDataset>,
+            progress: Option<Py<PyAny>>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let inner = self.inner.clone();
+            let rust_cfg: KtoConfig = config.into();
+            let ds_arc: Arc<dyn RatedDataset> = {
+                let borrowed = dataset.bind(py).borrow();
+                borrowed.inner.clone()
+            };
+            let sink = py_progress_sink(progress);
+
+            pyo3_async_runtimes::tokio::future_into_py(py, async move {
+                let adapter = inner
+                    .train_kto(rust_cfg, ds_arc, sink)
+                    .await
+                    .map_err(BlazenPyError::from)?;
+                Ok(PyTrainedAdapter::from(adapter))
+            })
+        }
+
+        /// Run a full fine-tune (every parameter trainable; no LoRA
+        /// adapter).
+        ///
+        /// Returns :class:`FullFineTuneResult` — not :class:`TrainedAdapter`
+        /// — because the output is a complete set of model weights in
+        /// ``config.core.output_dir`` rather than a mountable PEFT delta.
+        ///
+        /// Setting ``config.gradient_checkpointing = True`` raises
+        /// ``ValueError`` at init time because candle 0.10.2 has no
+        /// activation-checkpointing primitive.
+        #[gen_stub(override_return_type(
+            type_repr = "typing.Coroutine[typing.Any, typing.Any, FullFineTuneResult]",
+            imports = ("typing",)
+        ))]
+        #[pyo3(signature = (config, dataset, progress = None))]
+        fn fine_tune<'py>(
+            &self,
+            py: Python<'py>,
+            config: PyFullFineTuneConfig,
+            dataset: Py<PyJsonlDataset>,
+            progress: Option<Py<PyAny>>,
+        ) -> PyResult<Bound<'py, PyAny>> {
+            let inner = self.inner.clone();
+            let rust_cfg: FullFineTuneConfig = config.into();
+            let ds_arc: Arc<dyn TrainingDataset> = {
+                let borrowed = dataset.bind(py).borrow();
+                Arc::new(ArcDataset(borrowed.inner.clone()))
+            };
+            let sink = py_progress_sink(progress);
+
+            pyo3_async_runtimes::tokio::future_into_py(py, async move {
+                let result = inner
+                    .fine_tune(rust_cfg, ds_arc, sink)
+                    .await
+                    .map_err(BlazenPyError::from)?;
+                Ok(PyFullFineTuneResult::from(result))
+            })
+        }
+    }
+
+    /// Shared helper: wrap a Python callable in a [`TrainingProgress`] sink.
+    fn py_progress_sink(progress: Option<Py<PyAny>>) -> Option<Arc<dyn TrainingProgress>> {
+        progress.map(|cb| {
+            let bridge = PyTrainingProgressBridge {
+                callback: Arc::new(cb),
+            };
+            Arc::new(bridge) as Arc<dyn TrainingProgress>
+        })
     }
 }
 

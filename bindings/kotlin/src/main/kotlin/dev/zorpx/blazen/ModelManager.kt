@@ -4,19 +4,28 @@ import dev.zorpx.blazen.uniffi.AdapterHandleRecord
 import dev.zorpx.blazen.uniffi.AdapterOptionsRecord
 import dev.zorpx.blazen.uniffi.AdapterStatusRecord
 import dev.zorpx.blazen.uniffi.BackendHintEnum
+import dev.zorpx.blazen.uniffi.DpoConfigRecord
+import dev.zorpx.blazen.uniffi.FullFineTuneConfigRecord
+import dev.zorpx.blazen.uniffi.FullFineTuneResultRecord
 import dev.zorpx.blazen.uniffi.HfLoadOptionsRecord
+import dev.zorpx.blazen.uniffi.KtoConfigRecord
 import dev.zorpx.blazen.uniffi.LoraConfigRecord
 import dev.zorpx.blazen.uniffi.MixedPrecisionEnum
 import dev.zorpx.blazen.uniffi.ModelStatusRecord
 import dev.zorpx.blazen.uniffi.OptimConfigRecord
+import dev.zorpx.blazen.uniffi.OrpoConfigRecord
 import dev.zorpx.blazen.uniffi.PoolStatusRecord
 import dev.zorpx.blazen.uniffi.SchedulerConfigRecord
 import dev.zorpx.blazen.uniffi.SchedulerKindEnum
+import dev.zorpx.blazen.uniffi.SimpoConfigRecord
 import dev.zorpx.blazen.uniffi.TrainConfigRecord
+import dev.zorpx.blazen.uniffi.TrainCoreConfigRecord
 import dev.zorpx.blazen.uniffi.TrainedAdapterRecord
 import dev.zorpx.blazen.uniffi.TrainingEventEnum
 import dev.zorpx.blazen.uniffi.UniffiJsonlDataset
 import dev.zorpx.blazen.uniffi.UniffiModelManager
+import dev.zorpx.blazen.uniffi.UniffiPreferenceJsonlDataset
+import dev.zorpx.blazen.uniffi.UniffiRatedJsonlDataset
 import java.util.UUID
 import dev.zorpx.blazen.uniffi.ForeignLocalModel as UniffiForeignLocalModel
 import dev.zorpx.blazen.uniffi.ForeignTrainingProgress as UniffiForeignTrainingProgress
@@ -165,6 +174,92 @@ public class ModelManager : AutoCloseable {
     ): TrainedAdapter {
         val progress = onEvent?.let { TrainingProgressBridge(it) }
         return inner.trainLora(config.toRecord(), dataset.inner, progress).toDomain()
+    }
+
+    /**
+     * Train a LoRA adapter with Direct Preference Optimization (DPO).
+     *
+     * Requires a frozen reference model — see [DpoConfig.referenceModelRepo].
+     * The PEFT-format adapter is written to `config.core.outputDir` and the
+     * returned [TrainedAdapter] descriptor is immediately mountable via
+     * [loadAdapter].
+     *
+     * If [onEvent] is provided it is invoked synchronously for each
+     * training-loop transition; throwing from the callback cancels the run.
+     */
+    public suspend fun trainDpo(
+        config: DpoConfig,
+        dataset: PreferenceJsonlDataset,
+        onEvent: ((TrainingEvent) -> Unit)? = null,
+    ): TrainedAdapter {
+        val progress = onEvent?.let { TrainingProgressBridge(it) }
+        return inner.trainDpo(config.toRecord(), dataset.inner, progress).toDomain()
+    }
+
+    /**
+     * Train a LoRA adapter with Odds-Ratio Preference Optimization (ORPO).
+     *
+     * Reference-free; combines an SFT loss on chosen responses with an
+     * odds-ratio penalty weighted by [OrpoConfig.lambda].
+     */
+    public suspend fun trainOrpo(
+        config: OrpoConfig,
+        dataset: PreferenceJsonlDataset,
+        onEvent: ((TrainingEvent) -> Unit)? = null,
+    ): TrainedAdapter {
+        val progress = onEvent?.let { TrainingProgressBridge(it) }
+        return inner.trainOrpo(config.toRecord(), dataset.inner, progress).toDomain()
+    }
+
+    /**
+     * Train a LoRA adapter with Simple Preference Optimization (SimPO).
+     *
+     * Reference-free, length-normalized. Defaults follow TRL `main`
+     * (`beta = 2.0`, `gamma = 1.0`).
+     */
+    public suspend fun trainSimpo(
+        config: SimpoConfig,
+        dataset: PreferenceJsonlDataset,
+        onEvent: ((TrainingEvent) -> Unit)? = null,
+    ): TrainedAdapter {
+        val progress = onEvent?.let { TrainingProgressBridge(it) }
+        return inner.trainSimpo(config.toRecord(), dataset.inner, progress).toDomain()
+    }
+
+    /**
+     * Train a LoRA adapter with Kahneman-Tversky Optimization (KTO).
+     *
+     * Like DPO, KTO needs a frozen reference model; unlike DPO the dataset
+     * is a [RatedJsonlDataset] of `(prompt, completion, desirable)` triples
+     * rather than chosen/rejected pairs.
+     */
+    public suspend fun trainKto(
+        config: KtoConfig,
+        dataset: RatedJsonlDataset,
+        onEvent: ((TrainingEvent) -> Unit)? = null,
+    ): TrainedAdapter {
+        val progress = onEvent?.let { TrainingProgressBridge(it) }
+        return inner.trainKto(config.toRecord(), dataset.inner, progress).toDomain()
+    }
+
+    /**
+     * Full fine-tune (no PEFT adapter — every parameter trains).
+     *
+     * Writes the entire model's weights to [FullFineTuneConfig.core]'s
+     * `outputDir` and returns a [FullFineTuneResult] descriptor pointing at
+     * the resulting directory.
+     *
+     * `gradient_checkpointing = true` is accepted for forward compatibility
+     * but rejected at init time with a `BlazenException.Validation` —
+     * candle 0.10.2 has no activation-checkpointing primitive.
+     */
+    public suspend fun fineTune(
+        config: FullFineTuneConfig,
+        dataset: JsonlDataset,
+        onEvent: ((TrainingEvent) -> Unit)? = null,
+    ): FullFineTuneResult {
+        val progress = onEvent?.let { TrainingProgressBridge(it) }
+        return inner.fineTune(config.toRecord(), dataset.inner, progress).toDomain()
     }
 
     override fun close() {
@@ -422,11 +517,122 @@ public data class TrainConfig(
     val device: String? = null,
 )
 
+/**
+ * Shared training hyperparameters used by every non-SFT trainer (DPO /
+ * ORPO / SimPO / KTO / full fine-tune). Mirrors the upstream
+ * `TrainCoreConfig` (= [TrainConfig] minus the PEFT-specific [LoraConfig]).
+ *
+ * Defaults match the upstream Rust struct: smaller per-step batches and
+ * larger accumulation than [TrainConfig] because the preference trainers
+ * carry two forward passes (chosen + rejected) through the model.
+ */
+public data class TrainCoreConfig(
+    val baseModelRepo: String,
+    val outputDir: String,
+    val baseModelRevision: String? = null,
+    val maxSteps: UInt = 1000u,
+    val batchSize: UInt = 1u,
+    val gradientAccumulationSteps: UInt = 8u,
+    val maxSeqLen: UInt = 1024u,
+    val evalSteps: UInt? = null,
+    val saveSteps: UInt? = null,
+    val seed: ULong = 42uL,
+    val mixedPrecision: MixedPrecision = MixedPrecision.BF16,
+    val device: String? = null,
+    val optim: OptimConfig = OptimConfig(),
+    val scheduler: SchedulerConfig = SchedulerConfig(),
+)
+
+/**
+ * Direct Preference Optimization configuration.
+ *
+ * Requires a frozen reference model; when [referenceModelRepo] is `null`
+ * the trainer reuses `core.baseModelRepo`.
+ */
+public data class DpoConfig(
+    val core: TrainCoreConfig,
+    val lora: LoraConfig = LoraConfig(),
+    val beta: Float = 0.1f,
+    val labelSmoothing: Float = 0.0f,
+    val referenceModelRepo: String? = null,
+    val referenceModelRevision: String? = null,
+)
+
+/**
+ * Odds-Ratio Preference Optimization configuration.
+ *
+ * Reference-free; combines an SFT loss on chosen responses with an
+ * odds-ratio penalty weighted by [lambda].
+ */
+public data class OrpoConfig(
+    val core: TrainCoreConfig,
+    val lora: LoraConfig = LoraConfig(),
+    val lambda: Float = 0.1f,
+)
+
+/**
+ * Simple Preference Optimization (SimPO) configuration.
+ *
+ * Reference-free, length-normalized. Defaults follow TRL `main`
+ * (`beta = 2.0`, `gamma = 1.0`).
+ */
+public data class SimpoConfig(
+    val core: TrainCoreConfig,
+    val lora: LoraConfig = LoraConfig(),
+    val beta: Float = 2.0f,
+    val gamma: Float = 1.0f,
+)
+
+/**
+ * Kahneman-Tversky Optimization configuration.
+ *
+ * Like DPO, KTO needs a frozen reference model (defaults to
+ * `core.baseModelRepo`); unlike DPO the dataset schema is a
+ * `(prompt, completion, desirable)` triple held in a [RatedJsonlDataset].
+ *
+ * [lambdaD] and [lambdaU] are the per-sign loss weights — desirable and
+ * undesirable rows respectively. The upstream defaults (both `1.0`)
+ * weight the two signs equally.
+ */
+public data class KtoConfig(
+    val core: TrainCoreConfig,
+    val lora: LoraConfig = LoraConfig(),
+    val beta: Float = 0.1f,
+    val lambdaD: Float = 1.0f,
+    val lambdaU: Float = 1.0f,
+    val referenceModelRepo: String? = null,
+    val referenceModelRevision: String? = null,
+)
+
+/**
+ * Full fine-tune configuration (no LoRA — every parameter trains).
+ *
+ * [gradientCheckpointing] is accepted for forward compatibility but the
+ * trainer rejects it at init time with `BlazenException.Validation` —
+ * candle 0.10.2 has no activation-checkpointing primitive.
+ */
+public data class FullFineTuneConfig(
+    val core: TrainCoreConfig,
+    val gradientCheckpointing: Boolean = false,
+)
+
 /** On-disk descriptor returned by [ModelManager.trainLora]. */
 public data class TrainedAdapter(
     val adapterDir: String,
     val finalLoss: Float,
     val totalSteps: ULong,
+)
+
+/**
+ * On-disk descriptor returned by [ModelManager.fineTune].
+ *
+ * Unlike [TrainedAdapter], no PEFT adapter is written — the entire
+ * model's weights are saved to [outputDir] directly.
+ */
+public data class FullFineTuneResult(
+    val outputDir: String,
+    val finalLoss: Float,
+    val stepsCompleted: ULong,
 )
 
 /**
@@ -499,6 +705,91 @@ public class JsonlDataset internal constructor(
     }
 }
 
+/**
+ * Tokenized JSONL preference-pair corpus handed to [ModelManager.trainDpo],
+ * [ModelManager.trainOrpo], and [ModelManager.trainSimpo].
+ *
+ * Each row of the input file must deserialize to one of:
+ *   * `{"prompt": "...", "chosen": "...", "rejected": "..."}`
+ *   * `{"messages": [...], "chosen": "...", "rejected": "..."}` —
+ *     requires [chatTemplate].
+ *
+ * Construct via [PreferenceJsonlDataset.fromPath]; the underlying native
+ * handle is owned by the Rust runtime and freed when this wrapper is
+ * garbage collected (UniFFI-managed lifecycle).
+ */
+public class PreferenceJsonlDataset internal constructor(
+    internal val inner: UniffiPreferenceJsonlDataset,
+) {
+    public companion object {
+        /**
+         * Load a preference-pair JSONL file. Argument shape mirrors
+         * [JsonlDataset.fromPath].
+         */
+        public fun fromPath(
+            path: String,
+            tokenizerPath: String,
+            chatTemplate: String? = null,
+            maxSeqLen: UInt = 2048u,
+            device: String? = null,
+            padTokenId: UInt = 0u,
+        ): PreferenceJsonlDataset =
+            PreferenceJsonlDataset(
+                UniffiPreferenceJsonlDataset.fromPath(
+                    path = path,
+                    tokenizerPath = tokenizerPath,
+                    chatTemplate = chatTemplate,
+                    maxSeqLen = maxSeqLen,
+                    device = device,
+                    padTokenId = padTokenId,
+                ),
+            )
+    }
+}
+
+/**
+ * Tokenized JSONL rated single-completion corpus handed to
+ * [ModelManager.trainKto].
+ *
+ * Each row of the input file must deserialize to one of:
+ *   * `{"prompt": "...", "completion": "...", "label": true|false}`
+ *   * `{"messages": [...], "completion": "...", "label": ...}` —
+ *     requires [chatTemplate].
+ *
+ * The `label` discriminator is the desirability flag KTO requires; rows
+ * with `label = true` are "desirable" and contribute to the
+ * [KtoConfig.lambdaD]-weighted term, rows with `label = false` to the
+ * [KtoConfig.lambdaU]-weighted term.
+ */
+public class RatedJsonlDataset internal constructor(
+    internal val inner: UniffiRatedJsonlDataset,
+) {
+    public companion object {
+        /**
+         * Load a rated JSONL file. Argument shape mirrors
+         * [JsonlDataset.fromPath].
+         */
+        public fun fromPath(
+            path: String,
+            tokenizerPath: String,
+            chatTemplate: String? = null,
+            maxSeqLen: UInt = 2048u,
+            device: String? = null,
+            padTokenId: UInt = 0u,
+        ): RatedJsonlDataset =
+            RatedJsonlDataset(
+                UniffiRatedJsonlDataset.fromPath(
+                    path = path,
+                    tokenizerPath = tokenizerPath,
+                    chatTemplate = chatTemplate,
+                    maxSeqLen = maxSeqLen,
+                    device = device,
+                    padTokenId = padTokenId,
+                ),
+            )
+    }
+}
+
 private fun LoraConfig.toRecord(): LoraConfigRecord =
     LoraConfigRecord(
         rank = rank,
@@ -536,6 +827,73 @@ private fun TrainConfig.toRecord(): TrainConfigRecord =
         seed = seed,
         mixedPrecision = mixedPrecision.toEnum(),
         device = device,
+    )
+
+private fun TrainCoreConfig.toRecord(): TrainCoreConfigRecord =
+    TrainCoreConfigRecord(
+        baseModelRepo = baseModelRepo,
+        baseModelRevision = baseModelRevision,
+        outputDir = outputDir,
+        maxSteps = maxSteps,
+        batchSize = batchSize,
+        gradientAccumulationSteps = gradientAccumulationSteps,
+        maxSeqLen = maxSeqLen,
+        evalSteps = evalSteps,
+        saveSteps = saveSteps,
+        seed = seed,
+        mixedPrecision = mixedPrecision.toEnum(),
+        device = device,
+        optim = optim.toRecord(),
+        scheduler = scheduler.toRecord(),
+    )
+
+private fun DpoConfig.toRecord(): DpoConfigRecord =
+    DpoConfigRecord(
+        core = core.toRecord(),
+        lora = lora.toRecord(),
+        beta = beta,
+        labelSmoothing = labelSmoothing,
+        referenceModelRepo = referenceModelRepo,
+        referenceModelRevision = referenceModelRevision,
+    )
+
+private fun OrpoConfig.toRecord(): OrpoConfigRecord =
+    OrpoConfigRecord(
+        core = core.toRecord(),
+        lora = lora.toRecord(),
+        lambda = lambda,
+    )
+
+private fun SimpoConfig.toRecord(): SimpoConfigRecord =
+    SimpoConfigRecord(
+        core = core.toRecord(),
+        lora = lora.toRecord(),
+        beta = beta,
+        gamma = gamma,
+    )
+
+private fun KtoConfig.toRecord(): KtoConfigRecord =
+    KtoConfigRecord(
+        core = core.toRecord(),
+        lora = lora.toRecord(),
+        beta = beta,
+        lambdaD = lambdaD,
+        lambdaU = lambdaU,
+        referenceModelRepo = referenceModelRepo,
+        referenceModelRevision = referenceModelRevision,
+    )
+
+private fun FullFineTuneConfig.toRecord(): FullFineTuneConfigRecord =
+    FullFineTuneConfigRecord(
+        core = core.toRecord(),
+        gradientCheckpointing = gradientCheckpointing,
+    )
+
+private fun FullFineTuneResultRecord.toDomain(): FullFineTuneResult =
+    FullFineTuneResult(
+        outputDir = outputDir,
+        finalLoss = finalLoss,
+        stepsCompleted = stepsCompleted,
     )
 
 private fun TrainedAdapterRecord.toDomain(): TrainedAdapter =

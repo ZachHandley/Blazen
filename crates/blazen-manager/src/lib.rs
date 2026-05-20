@@ -28,14 +28,27 @@ use crate::hf_loader::{BackendHint, HfLoadOptions};
 
 #[cfg(feature = "training")]
 pub use blazen_train::{
-    BlazenTrainError, LoraConfig, MixedPrecision, OptimConfig, SchedulerConfig, SchedulerKind,
-    TrainConfig, TrainedAdapter, TrainingDataset, TrainingEvent, TrainingProgress,
+    BlazenTrainError, DpoConfig, FullFineTuneConfig, FullFineTuneResult, KtoConfig, LoraConfig,
+    MixedPrecision, OptimConfig, OrpoConfig, PreferenceDataset, RatedDataset, SchedulerConfig,
+    SchedulerKind, SimpoConfig, TrainConfig, TrainCoreConfig, TrainedAdapter, TrainingDataset,
+    TrainingEvent, TrainingProgress,
 };
 
-// Why: the `From<BlazenTrainError> for BlazenError` impl that powers `?`
-// inside `train_lora` lives in `blazen-train` under its `blazen-llm-interop`
-// feature (orphan rule — neither type is local to `blazen-manager`).
-// `training` activates that feature.
+// Why: the concrete JSONL loaders (`PreferenceJsonlDataset`,
+// `RatedJsonlDataset`, `JsonlDataset`) intentionally stay namespaced under
+// `blazen_train::dataset::*` to match the existing convention — only the
+// trait + result types live at the root re-export surface. Callers that
+// want a JSONL dataset construct it through `blazen_train::dataset::...`
+// and pass it as an `Arc<dyn PreferenceDataset>` / `Arc<dyn RatedDataset>`
+// / `Box<dyn TrainingDataset>` into the verbs below.
+//
+// The `From<BlazenTrainError> for BlazenError` impl that powers `?` inside
+// every training verb lives in `blazen-train` under its
+// `blazen-llm-interop` feature (orphan rule — neither type is local to
+// `blazen-manager`). `training` activates that feature, and the existing
+// match arms already cover Cancelled / InvalidConfig / Unsupported / all
+// other variants, so the PR8 verbs reuse the same `?`-propagation path
+// without any new conversion code.
 
 /// Status of a registered model.
 #[derive(Debug, Clone)]
@@ -500,6 +513,157 @@ impl ModelManager {
         }
         let adapter = trainer.run(dataset).await?;
         Ok(adapter)
+    }
+
+    /// Train a `LoRA` adapter via Direct Preference Optimization (DPO).
+    ///
+    /// Same shape as [`Self::train_lora`] but expects a
+    /// [`PreferenceDataset`] of `(prompt, chosen, rejected)` triples and a
+    /// frozen reference model (defaults to `config.core.base_model_repo`
+    /// when `config.reference_model_repo` is `None`). The returned
+    /// [`TrainedAdapter`] is a `PEFT`-format `LoRA`, mountable via
+    /// [`Self::load_adapter`] on any backend that supports `PEFT` `LoRA`.
+    ///
+    /// # Errors
+    ///
+    /// - [`BlazenError::Validation`] for unknown device strings or any
+    ///   [`blazen_train::Trainer::new_dpo`] config validation failure
+    ///   (zero `lora.rank` / zero `core.max_steps`).
+    /// - [`BlazenError::Request`] (via [`BlazenError::internal`]) for any
+    ///   training-time failure: HF-Hub download, safetensors mmap, forward
+    ///   / backward / optimizer error, checkpoint or adapter export
+    ///   failure, dataset I/O error, or candle tensor error.
+    /// - [`BlazenError::cancelled`] when the progress callback aborts.
+    #[cfg(feature = "training")]
+    pub async fn train_dpo(
+        &self,
+        config: DpoConfig,
+        dataset: Arc<dyn PreferenceDataset>,
+        progress: Option<Arc<dyn TrainingProgress>>,
+    ) -> Result<TrainedAdapter, BlazenError> {
+        let device = parse_train_device(config.core.device.as_deref().unwrap_or("cpu"))?;
+        let varmap = candle_nn::VarMap::new();
+
+        let mut trainer = blazen_train::Trainer::new_dpo(config, varmap, device, progress)?;
+        trainer.load_models_dpo().await?;
+        let adapter = trainer.run_dpo(dataset).await?;
+        Ok(adapter)
+    }
+
+    /// Train a `LoRA` adapter via Odds Ratio Preference Optimization (ORPO).
+    ///
+    /// Reference-free — combines a standard SFT loss on chosen completions
+    /// with an odds-ratio preference term weighted by `config.lambda`.
+    /// Consumes the same [`PreferenceDataset`] schema as
+    /// [`Self::train_dpo`].
+    ///
+    /// # Errors
+    ///
+    /// Same surface as [`Self::train_dpo`].
+    #[cfg(feature = "training")]
+    pub async fn train_orpo(
+        &self,
+        config: OrpoConfig,
+        dataset: Arc<dyn PreferenceDataset>,
+        progress: Option<Arc<dyn TrainingProgress>>,
+    ) -> Result<TrainedAdapter, BlazenError> {
+        let device = parse_train_device(config.core.device.as_deref().unwrap_or("cpu"))?;
+        let varmap = candle_nn::VarMap::new();
+
+        let mut trainer = blazen_train::Trainer::new_orpo(config, varmap, device, progress)?;
+        trainer.load_models_orpo().await?;
+        let adapter = trainer.run_orpo(dataset).await?;
+        Ok(adapter)
+    }
+
+    /// Train a `LoRA` adapter via Simple Preference Optimization (`SimPO`).
+    ///
+    /// Reference-free and length-normalized. `config.beta` scales the
+    /// preference logits and `config.gamma` sets the target reward margin.
+    /// Consumes the same [`PreferenceDataset`] schema as
+    /// [`Self::train_dpo`].
+    ///
+    /// # Errors
+    ///
+    /// Same surface as [`Self::train_dpo`].
+    #[cfg(feature = "training")]
+    pub async fn train_simpo(
+        &self,
+        config: SimpoConfig,
+        dataset: Arc<dyn PreferenceDataset>,
+        progress: Option<Arc<dyn TrainingProgress>>,
+    ) -> Result<TrainedAdapter, BlazenError> {
+        let device = parse_train_device(config.core.device.as_deref().unwrap_or("cpu"))?;
+        let varmap = candle_nn::VarMap::new();
+
+        let mut trainer = blazen_train::Trainer::new_simpo(config, varmap, device, progress)?;
+        trainer.load_models_simpo().await?;
+        let adapter = trainer.run_simpo(dataset).await?;
+        Ok(adapter)
+    }
+
+    /// Train a `LoRA` adapter via Kahneman-Tversky Optimization (KTO).
+    ///
+    /// Like DPO, KTO requires a frozen reference model (defaults to
+    /// `config.core.base_model_repo`) — but the dataset schema differs:
+    /// each row is a `(prompt, completion, desirable)` triple
+    /// ([`RatedDataset`]), not a chosen/rejected pair.
+    ///
+    /// # Errors
+    ///
+    /// Same surface as [`Self::train_dpo`].
+    #[cfg(feature = "training")]
+    pub async fn train_kto(
+        &self,
+        config: KtoConfig,
+        dataset: Arc<dyn RatedDataset>,
+        progress: Option<Arc<dyn TrainingProgress>>,
+    ) -> Result<TrainedAdapter, BlazenError> {
+        let device = parse_train_device(config.core.device.as_deref().unwrap_or("cpu"))?;
+        let varmap = candle_nn::VarMap::new();
+
+        let mut trainer = blazen_train::Trainer::new_kto(config, varmap, device, progress)?;
+        trainer.load_models_kto().await?;
+        let adapter = trainer.run_kto(dataset).await?;
+        Ok(adapter)
+    }
+
+    /// Run a full fine-tune (every parameter trainable; no `LoRA` adapter).
+    ///
+    /// Returns [`FullFineTuneResult`] — not [`TrainedAdapter`] — because the
+    /// output is a complete set of model weights in `config.core.output_dir`
+    /// rather than a mountable PEFT delta. Setting
+    /// `config.gradient_checkpointing = true` is rejected up-front with
+    /// [`BlazenError::Validation`] (mapped from
+    /// [`BlazenTrainError::Unsupported`]) because candle 0.10.2 has no
+    /// activation-checkpointing primitive.
+    ///
+    /// # Errors
+    ///
+    /// - [`BlazenError::Validation`] for unknown device strings,
+    ///   `gradient_checkpointing = true`, or any
+    ///   [`blazen_train::Trainer::new_full_finetune`] validation failure.
+    /// - [`BlazenError::Request`] (via [`BlazenError::internal`]) for any
+    ///   training-time failure: HF-Hub download, safetensors mmap, OOM-
+    ///   bounded `>1B`-param rejection, forward / backward / optimizer
+    ///   error, checkpoint or full-weights export failure, dataset I/O
+    ///   error, or candle tensor error.
+    /// - [`BlazenError::cancelled`] when the progress callback aborts.
+    #[cfg(feature = "training")]
+    pub async fn fine_tune(
+        &self,
+        config: FullFineTuneConfig,
+        dataset: Arc<dyn TrainingDataset>,
+        progress: Option<Arc<dyn TrainingProgress>>,
+    ) -> Result<FullFineTuneResult, BlazenError> {
+        let device = parse_train_device(config.core.device.as_deref().unwrap_or("cpu"))?;
+        let varmap = candle_nn::VarMap::new();
+
+        let mut trainer =
+            blazen_train::Trainer::new_full_finetune(config, varmap, device, progress)?;
+        trainer.load_models_full_finetune().await?;
+        let result = trainer.run_full_finetune(dataset).await?;
+        Ok(result)
     }
 
     /// List adapters mounted on a registered model.
@@ -1203,5 +1367,191 @@ mod training_tests {
             }
             other => panic!("expected BlazenError::Validation, got {other:?}"),
         }
+    }
+
+    // PR8 Wave 10: dummy preference / rated datasets used by the
+    // validation-error tests. Both implementations return Dataset errors
+    // from `batch()`, but neither verb under test reaches `batch()` —
+    // every assertion below trips on config validation in
+    // `Trainer::new_dpo/orpo/simpo/kto/full_finetune` before any dataset
+    // method is called.
+    struct EmptyPreferenceDataset;
+
+    #[async_trait]
+    impl PreferenceDataset for EmptyPreferenceDataset {
+        fn len(&self) -> usize {
+            0
+        }
+        async fn batch(
+            &self,
+            _batch_size: usize,
+            _idx: usize,
+        ) -> Result<blazen_train::PreferenceBatch, BlazenTrainError> {
+            Err(BlazenTrainError::Dataset(
+                "EmptyPreferenceDataset is intentionally empty".to_string(),
+            ))
+        }
+    }
+
+    struct EmptyRatedDataset;
+
+    #[async_trait]
+    impl RatedDataset for EmptyRatedDataset {
+        fn len(&self) -> usize {
+            0
+        }
+        async fn batch(
+            &self,
+            _batch_size: usize,
+            _idx: usize,
+        ) -> Result<blazen_train::KtoBatch, BlazenTrainError> {
+            Err(BlazenTrainError::Dataset(
+                "EmptyRatedDataset is intentionally empty".to_string(),
+            ))
+        }
+    }
+
+    fn cpu_core(max_steps: usize) -> TrainCoreConfig {
+        TrainCoreConfig {
+            max_steps,
+            device: Some("cpu".to_string()),
+            ..TrainCoreConfig::default()
+        }
+    }
+
+    #[tokio::test]
+    async fn train_dpo_rejects_invalid_config() {
+        let mgr = ModelManager::with_budgets_gb(8.0, 0.0);
+        let cfg = DpoConfig {
+            core: cpu_core(0),
+            ..DpoConfig::default()
+        };
+        let err = mgr
+            .train_dpo(cfg, Arc::new(EmptyPreferenceDataset), None)
+            .await
+            .expect_err("max_steps=0 must surface as a validation error");
+        match err {
+            BlazenError::Validation { message, .. } => assert!(
+                message.contains("max_steps"),
+                "expected 'max_steps' in validation message, got: {message}"
+            ),
+            other => panic!("expected BlazenError::Validation, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn train_orpo_rejects_invalid_config() {
+        let mgr = ModelManager::with_budgets_gb(8.0, 0.0);
+        let cfg = OrpoConfig {
+            core: cpu_core(0),
+            ..OrpoConfig::default()
+        };
+        let err = mgr
+            .train_orpo(cfg, Arc::new(EmptyPreferenceDataset), None)
+            .await
+            .expect_err("max_steps=0 must surface as a validation error");
+        assert!(
+            matches!(err, BlazenError::Validation { .. }),
+            "expected BlazenError::Validation, got {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn train_orpo_rejects_unknown_device() {
+        let mgr = ModelManager::with_budgets_gb(8.0, 0.0);
+        let cfg = OrpoConfig {
+            core: TrainCoreConfig {
+                device: Some("opencl:0".to_string()),
+                ..TrainCoreConfig::default()
+            },
+            ..OrpoConfig::default()
+        };
+        let err = mgr
+            .train_orpo(cfg, Arc::new(EmptyPreferenceDataset), None)
+            .await
+            .expect_err("unknown device must surface as a validation error");
+        match err {
+            BlazenError::Validation { message, .. } => assert!(
+                message.contains("opencl"),
+                "expected device name in message, got: {message}"
+            ),
+            other => panic!("expected BlazenError::Validation, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn train_simpo_rejects_invalid_config() {
+        let mgr = ModelManager::with_budgets_gb(8.0, 0.0);
+        let cfg = SimpoConfig {
+            core: cpu_core(0),
+            ..SimpoConfig::default()
+        };
+        let err = mgr
+            .train_simpo(cfg, Arc::new(EmptyPreferenceDataset), None)
+            .await
+            .expect_err("max_steps=0 must surface as a validation error");
+        assert!(
+            matches!(err, BlazenError::Validation { .. }),
+            "expected BlazenError::Validation, got {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn train_kto_rejects_invalid_config() {
+        let mgr = ModelManager::with_budgets_gb(8.0, 0.0);
+        let cfg = KtoConfig {
+            core: cpu_core(0),
+            ..KtoConfig::default()
+        };
+        let err = mgr
+            .train_kto(cfg, Arc::new(EmptyRatedDataset), None)
+            .await
+            .expect_err("max_steps=0 must surface as a validation error");
+        assert!(
+            matches!(err, BlazenError::Validation { .. }),
+            "expected BlazenError::Validation, got {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn fine_tune_rejects_gradient_checkpointing() {
+        // gradient_checkpointing=true is rejected up-front by
+        // Trainer::new_full_finetune because candle 0.10.2 has no
+        // activation-checkpointing primitive. The BlazenTrainError::Unsupported
+        // arm of the From impl folds into BlazenError::Validation with a
+        // "training: " prefix, so we assert on the canonical substring.
+        let mgr = ModelManager::with_budgets_gb(8.0, 0.0);
+        let cfg = FullFineTuneConfig {
+            core: cpu_core(1),
+            gradient_checkpointing: true,
+        };
+        let err = mgr
+            .fine_tune(cfg, Arc::new(EmptyDataset), None)
+            .await
+            .expect_err("gradient_checkpointing=true must be rejected");
+        match err {
+            BlazenError::Validation { message, .. } => assert!(
+                message.contains("gradient checkpointing"),
+                "expected 'gradient checkpointing' in message, got: {message}"
+            ),
+            other => panic!("expected BlazenError::Validation, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn fine_tune_rejects_invalid_config() {
+        let mgr = ModelManager::with_budgets_gb(8.0, 0.0);
+        let cfg = FullFineTuneConfig {
+            core: cpu_core(0),
+            gradient_checkpointing: false,
+        };
+        let err = mgr
+            .fine_tune(cfg, Arc::new(EmptyDataset), None)
+            .await
+            .expect_err("max_steps=0 must surface as a validation error");
+        assert!(
+            matches!(err, BlazenError::Validation { .. }),
+            "expected BlazenError::Validation, got {err:?}"
+        );
     }
 }

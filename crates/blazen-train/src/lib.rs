@@ -37,7 +37,8 @@ pub mod schedulers;
 pub mod trainer;
 
 pub use config::{
-    LoraConfig, MixedPrecision, OptimConfig, SchedulerConfig, SchedulerKind, TrainConfig,
+    DpoConfig, FullFineTuneConfig, KtoConfig, LoraConfig, MixedPrecision, OptimConfig, OrpoConfig,
+    SchedulerConfig, SchedulerKind, SimpoConfig, TrainConfig, TrainCoreConfig,
 };
 pub use error::BlazenTrainError;
 pub use progress::{TrainingEvent, TrainingProgress};
@@ -45,4 +46,7 @@ pub use progress::{TrainingEvent, TrainingProgress};
 #[cfg(feature = "engine")]
 pub use lora::{LoraLinear, freeze_base_params, lora_param_names};
 #[cfg(feature = "engine")]
-pub use trainer::{ReferenceModel, TrainedAdapter, Trainer, TrainingBatch, TrainingDataset};
+pub use trainer::{
+    FullFineTuneResult, KtoBatch, PreferenceBatch, PreferenceDataset, RatedDataset, ReferenceModel,
+    TrainedAdapter, Trainer, TrainingBatch, TrainingDataset,
+};

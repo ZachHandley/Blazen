@@ -248,6 +248,114 @@ class ModelManagerTest {
     }
 
     @Test
+    fun `DpoConfig defaults match documented surface`() {
+        val cfg = DpoConfig(core = TrainCoreConfig(baseModelRepo = "repo", outputDir = "/tmp/out"))
+        assertEquals(0.1f, cfg.beta)
+        assertEquals(0.0f, cfg.labelSmoothing)
+        assertEquals(null, cfg.referenceModelRepo)
+        assertEquals(null, cfg.referenceModelRevision)
+        // Core defaults: smaller per-step batches than TrainConfig because
+        // each preference step carries two forward passes (chosen + rejected).
+        assertEquals(1u, cfg.core.batchSize)
+        assertEquals(8u, cfg.core.gradientAccumulationSteps)
+        assertEquals(1024u, cfg.core.maxSeqLen)
+        assertEquals(MixedPrecision.BF16, cfg.core.mixedPrecision)
+        // LoRA defaults reused from PR7's LoraConfig.
+        assertEquals(16u, cfg.lora.rank)
+        assertEquals(32.0f, cfg.lora.alpha)
+    }
+
+    @Test
+    fun `OrpoConfig defaults match documented surface`() {
+        val cfg = OrpoConfig(core = TrainCoreConfig(baseModelRepo = "repo", outputDir = "/tmp/out"))
+        assertEquals(0.1f, cfg.lambda)
+        assertEquals(16u, cfg.lora.rank)
+        assertEquals(MixedPrecision.BF16, cfg.core.mixedPrecision)
+    }
+
+    @Test
+    fun `SimpoConfig defaults follow TRL main`() {
+        val cfg = SimpoConfig(core = TrainCoreConfig(baseModelRepo = "repo", outputDir = "/tmp/out"))
+        // Why: TRL `main` (and the upstream Rust default) sets beta=2.0,
+        // gamma=1.0 — pinning these guards against silent drift if the
+        // generated record changes its defaults.
+        assertEquals(2.0f, cfg.beta)
+        assertEquals(1.0f, cfg.gamma)
+    }
+
+    @Test
+    fun `KtoConfig defaults weight both signs equally`() {
+        val cfg = KtoConfig(core = TrainCoreConfig(baseModelRepo = "repo", outputDir = "/tmp/out"))
+        assertEquals(0.1f, cfg.beta)
+        // Why: lambda_D and lambda_U both default to 1.0, so the desirable
+        // and undesirable terms contribute equally before per-sign tuning.
+        assertEquals(1.0f, cfg.lambdaD)
+        assertEquals(1.0f, cfg.lambdaU)
+        assertEquals(null, cfg.referenceModelRepo)
+    }
+
+    @Test
+    fun `FullFineTuneConfig defaults expose gradient checkpointing flag`() {
+        val cfg = FullFineTuneConfig(core = TrainCoreConfig(baseModelRepo = "repo", outputDir = "/tmp/out"))
+        // Why: gradient_checkpointing is accepted for forward compatibility
+        // but the Rust trainer rejects `true` at init time on candle 0.10.2.
+        // Default must be `false` so callers don't accidentally trip that
+        // validation.
+        assertEquals(false, cfg.gradientCheckpointing)
+        assertEquals(1u, cfg.core.batchSize)
+    }
+
+    @Test
+    fun `PreferenceJsonlDataset throws on invalid path`() {
+        val ex = assertThrows(UniffiBlazenException::class.java) {
+            PreferenceJsonlDataset.fromPath(
+                path = "/nonexistent/blazen-train-kotlin-wrap/missing-pref.jsonl",
+                tokenizerPath = "/nonexistent/blazen-train-kotlin-wrap/missing-tokenizer.json",
+            )
+        }
+        assertNotNull(ex.message)
+        assertTrue(ex.message!!.isNotEmpty(), "exception message must be non-empty")
+    }
+
+    @Test
+    fun `RatedJsonlDataset throws on invalid path`() {
+        val ex = assertThrows(UniffiBlazenException::class.java) {
+            RatedJsonlDataset.fromPath(
+                path = "/nonexistent/blazen-train-kotlin-wrap/missing-rated.jsonl",
+                tokenizerPath = "/nonexistent/blazen-train-kotlin-wrap/missing-tokenizer.json",
+            )
+        }
+        assertNotNull(ex.message)
+        assertTrue(ex.message!!.isNotEmpty(), "exception message must be non-empty")
+    }
+
+    @Suppress("UNUSED_VARIABLE", "unused")
+    @Test
+    fun `trainDpo trainOrpo trainSimpo trainKto fineTune signatures compile`() {
+        // Why: pure compile-time guard. We never invoke these references —
+        // the suspending native call would block on download/init — but
+        // assigning them to typed function values forces the compiler to
+        // resolve each overload, so any drift in the wrapper signature
+        // (parameter names, optional progress callback, return type)
+        // surfaces as a build failure rather than a runtime surprise.
+        val mgr: ModelManager? = null
+        if (mgr != null) {
+            val dpo: suspend (DpoConfig, PreferenceJsonlDataset, ((TrainingEvent) -> Unit)?) -> TrainedAdapter =
+                mgr::trainDpo
+            val orpo: suspend (OrpoConfig, PreferenceJsonlDataset, ((TrainingEvent) -> Unit)?) -> TrainedAdapter =
+                mgr::trainOrpo
+            val simpo: suspend (SimpoConfig, PreferenceJsonlDataset, ((TrainingEvent) -> Unit)?) -> TrainedAdapter =
+                mgr::trainSimpo
+            val kto: suspend (KtoConfig, RatedJsonlDataset, ((TrainingEvent) -> Unit)?) -> TrainedAdapter =
+                mgr::trainKto
+            val ft: suspend (FullFineTuneConfig, JsonlDataset, ((TrainingEvent) -> Unit)?) -> FullFineTuneResult =
+                mgr::fineTune
+        }
+        // Pure compile-time guard — no runtime assertion needed.
+        assertTrue(true)
+    }
+
+    @Test
     fun `ForeignLocalModel interface is implementable from Kotlin`() {
         // Why: the interface must be openly implementable (not sealed, not
         // requiring internal types) — exercise that by constructing an

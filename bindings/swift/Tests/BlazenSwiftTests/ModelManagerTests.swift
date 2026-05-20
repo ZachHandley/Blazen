@@ -233,6 +233,180 @@ final class ModelManagerTests: XCTestCase {
         }
     }
 
+    /// `DpoConfig()` exposes the documented PR8 defaults — beta=0.1,
+    /// label-smoothing=0, no override reference model.
+    func testDpoConfigDefaults() {
+        let core = TrainCoreConfig(
+            baseModelRepo: "base",
+            outputDir: "/tmp/out"
+        )
+        let cfg = DpoConfig(core: core)
+        XCTAssertEqual(cfg.beta, 0.1)
+        XCTAssertEqual(cfg.labelSmoothing, 0.0)
+        XCTAssertNil(cfg.referenceModelRepo)
+        XCTAssertNil(cfg.referenceModelRevision)
+        XCTAssertEqual(cfg.lora.rank, 16)
+
+        let custom = DpoConfig(
+            core: core,
+            beta: 0.3,
+            labelSmoothing: 0.05,
+            referenceModelRepo: "ref",
+            referenceModelRevision: "v1"
+        )
+        XCTAssertEqual(custom.beta, 0.3)
+        XCTAssertEqual(custom.labelSmoothing, 0.05)
+        XCTAssertEqual(custom.referenceModelRepo, "ref")
+        XCTAssertEqual(custom.referenceModelRevision, "v1")
+    }
+
+    /// `SimpoConfig()` exposes the documented PR8 defaults — beta=2.0,
+    /// gamma=1.0.
+    func testSimpoConfigDefaults() {
+        let core = TrainCoreConfig(
+            baseModelRepo: "base",
+            outputDir: "/tmp/out"
+        )
+        let cfg = SimpoConfig(core: core)
+        XCTAssertEqual(cfg.beta, 2.0)
+        XCTAssertEqual(cfg.gamma, 1.0)
+
+        let custom = SimpoConfig(core: core, beta: 2.5, gamma: 0.5)
+        XCTAssertEqual(custom.beta, 2.5)
+        XCTAssertEqual(custom.gamma, 0.5)
+    }
+
+    /// `KtoConfig()` exposes the documented PR8 defaults — beta=0.1,
+    /// symmetric lambda weights of 1.0.
+    func testKtoConfigDefaults() {
+        let core = TrainCoreConfig(
+            baseModelRepo: "base",
+            outputDir: "/tmp/out"
+        )
+        let cfg = KtoConfig(core: core)
+        XCTAssertEqual(cfg.beta, 0.1)
+        XCTAssertEqual(cfg.lambdaD, 1.0)
+        XCTAssertEqual(cfg.lambdaU, 1.0)
+        XCTAssertNil(cfg.referenceModelRepo)
+        XCTAssertNil(cfg.referenceModelRevision)
+
+        let custom = KtoConfig(
+            core: core,
+            beta: 0.2,
+            lambdaD: 1.5,
+            lambdaU: 0.5,
+            referenceModelRepo: "ref"
+        )
+        XCTAssertEqual(custom.beta, 0.2)
+        XCTAssertEqual(custom.lambdaD, 1.5)
+        XCTAssertEqual(custom.lambdaU, 0.5)
+        XCTAssertEqual(custom.referenceModelRepo, "ref")
+    }
+
+    /// `OrpoConfig()` and `FullFineTuneConfig()` defaults round-trip
+    /// through the public initializer.
+    func testOrpoAndFullFineTuneConfigDefaults() {
+        let core = TrainCoreConfig(
+            baseModelRepo: "base",
+            outputDir: "/tmp/out"
+        )
+        let orpo = OrpoConfig(core: core)
+        XCTAssertEqual(orpo.lambda, 0.1)
+
+        let ft = FullFineTuneConfig(core: core)
+        XCTAssertFalse(ft.gradientCheckpointing)
+
+        let ftOn = FullFineTuneConfig(core: core, gradientCheckpointing: true)
+        XCTAssertTrue(ftOn.gradientCheckpointing)
+    }
+
+    /// `PreferenceJsonlDataset.init` must throw `BlazenError` (not crash)
+    /// when the JSONL path or tokenizer path cannot be opened.
+    func testPreferenceJsonlDatasetInvalidPath() {
+        XCTAssertThrowsError(
+            try PreferenceJsonlDataset(
+                path: "/nonexistent/preference.jsonl",
+                tokenizerPath: "/nonexistent/tokenizer.json"
+            )
+        ) { err in
+            guard err is BlazenError else {
+                XCTFail("expected BlazenError, got \(type(of: err)): \(err)")
+                return
+            }
+        }
+    }
+
+    /// `RatedJsonlDataset.init` must throw `BlazenError` (not crash)
+    /// when the JSONL path or tokenizer path cannot be opened.
+    func testRatedJsonlDatasetInvalidPath() {
+        XCTAssertThrowsError(
+            try RatedJsonlDataset(
+                path: "/nonexistent/rated.jsonl",
+                tokenizerPath: "/nonexistent/tokenizer.json"
+            )
+        ) { err in
+            guard err is BlazenError else {
+                XCTFail("expected BlazenError, got \(type(of: err)): \(err)")
+                return
+            }
+        }
+    }
+
+    /// Compile-time guard that the `trainDpo` / `trainOrpo` / `trainSimpo`
+    /// / `trainKto` / `fineTune` signatures actually exist on
+    /// `ModelManager` with the documented argument shape. Never executes
+    /// the closure — references the methods through `_ = type(of:)` so
+    /// the type-checker proves the surface compiles end-to-end.
+    func testTrainDpoSignature() {
+        // Why: we don't await any of these because the bogus paths would
+        // throw at dataset construction; we only need the closure body to
+        // type-check so this is a static compile check.
+        let signatureProbe: @Sendable (ModelManager) async throws -> Void = { manager in
+            let core = TrainCoreConfig(
+                baseModelRepo: "base",
+                outputDir: "/tmp/out"
+            )
+            let prefDataset = try PreferenceJsonlDataset(
+                path: "/nonexistent/p.jsonl",
+                tokenizerPath: "/nonexistent/t.json"
+            )
+            let ratedDataset = try RatedJsonlDataset(
+                path: "/nonexistent/r.jsonl",
+                tokenizerPath: "/nonexistent/t.json"
+            )
+            let sftDataset = try JsonlDataset(
+                path: "/nonexistent/s.jsonl",
+                tokenizerPath: "/nonexistent/t.json"
+            )
+            _ = try await manager.trainDpo(
+                config: DpoConfig(core: core),
+                dataset: prefDataset
+            )
+            _ = try await manager.trainOrpo(
+                config: OrpoConfig(core: core),
+                dataset: prefDataset
+            )
+            _ = try await manager.trainSimpo(
+                config: SimpoConfig(core: core),
+                dataset: prefDataset
+            )
+            _ = try await manager.trainKto(
+                config: KtoConfig(core: core),
+                dataset: ratedDataset
+            )
+            let result: FullFineTuneResult = try await manager.fineTune(
+                config: FullFineTuneConfig(core: core),
+                dataset: sftDataset
+            )
+            _ = result.outputDir
+            _ = result.finalLoss
+            _ = result.stepsCompleted
+        }
+        // Reference the probe so the compiler keeps it (and its body's
+        // type-check) — we never invoke it because the paths are bogus.
+        XCTAssertNotNil(signatureProbe as Any?)
+    }
+
     /// Exhaustive switch over `TrainingEvent` cases must compile — guards
     /// against silent payload drift when the upstream enum gains a
     /// variant without the Swift mirror being updated.

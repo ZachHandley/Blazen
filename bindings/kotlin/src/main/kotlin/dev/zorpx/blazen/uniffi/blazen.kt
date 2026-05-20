@@ -1628,13 +1628,31 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_used_bytes(): Short
 
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_fine_tune(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_dpo(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_kto(): Short
+
     external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_lora(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_orpo(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_simpo(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_foreigntrainingprogress_on_event(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_uniffijsonldataset_is_empty(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_uniffijsonldataset_len(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffipreferencejsonldataset_is_empty(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffipreferencejsonldataset_len(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffiratedjsonldataset_is_empty(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_uniffiratedjsonldataset_len(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_peerclient_node_id(): Short
 
@@ -1813,6 +1831,10 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_with_pool_budgets(): Short
 
     external fun uniffi_blazen_uniffi_checksum_constructor_uniffijsonldataset_from_path(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_uniffipreferencejsonldataset_from_path(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_uniffiratedjsonldataset_from_path(): Short
 
     external fun uniffi_blazen_uniffi_checksum_constructor_peerclient_connect(): Short
 
@@ -2328,7 +2350,42 @@ internal object UniffiLib {
         `pool`: RustBuffer.ByValue,
     ): Long
 
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_fine_tune(
+        `ptr`: Long,
+        `config`: RustBuffer.ByValue,
+        `dataset`: Long,
+        `progress`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_train_dpo(
+        `ptr`: Long,
+        `config`: RustBuffer.ByValue,
+        `dataset`: Long,
+        `progress`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_train_kto(
+        `ptr`: Long,
+        `config`: RustBuffer.ByValue,
+        `dataset`: Long,
+        `progress`: RustBuffer.ByValue,
+    ): Long
+
     external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_train_lora(
+        `ptr`: Long,
+        `config`: RustBuffer.ByValue,
+        `dataset`: Long,
+        `progress`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_train_orpo(
+        `ptr`: Long,
+        `config`: RustBuffer.ByValue,
+        `dataset`: Long,
+        `progress`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffimodelmanager_train_simpo(
         `ptr`: Long,
         `config`: RustBuffer.ByValue,
         `dataset`: Long,
@@ -2381,6 +2438,66 @@ internal object UniffiLib {
     ): Byte
 
     external fun uniffi_blazen_uniffi_fn_method_uniffijsonldataset_len(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_clone_uniffipreferencejsonldataset(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_uniffipreferencejsonldataset(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_uniffipreferencejsonldataset_from_path(
+        `path`: RustBuffer.ByValue,
+        `tokenizerPath`: RustBuffer.ByValue,
+        `chatTemplate`: RustBuffer.ByValue,
+        `maxSeqLen`: Int,
+        `device`: RustBuffer.ByValue,
+        `padTokenId`: Int,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffipreferencejsonldataset_is_empty(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Byte
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffipreferencejsonldataset_len(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_clone_uniffiratedjsonldataset(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_uniffiratedjsonldataset(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_uniffiratedjsonldataset_from_path(
+        `path`: RustBuffer.ByValue,
+        `tokenizerPath`: RustBuffer.ByValue,
+        `chatTemplate`: RustBuffer.ByValue,
+        `maxSeqLen`: Int,
+        `device`: RustBuffer.ByValue,
+        `padTokenId`: Int,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffiratedjsonldataset_is_empty(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Byte
+
+    external fun uniffi_blazen_uniffi_fn_method_uniffiratedjsonldataset_len(
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
@@ -3856,7 +3973,22 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_used_bytes() != 51636.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_fine_tune() != 37026.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_dpo() != 58114.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_kto() != 61821.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_lora() != 22343.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_orpo() != 40322.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_train_simpo() != 57801.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_foreigntrainingprogress_on_event() != 34103.toShort()) {
@@ -3866,6 +3998,18 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_uniffijsonldataset_len() != 23707.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffipreferencejsonldataset_is_empty() != 24611.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffipreferencejsonldataset_len() != 52745.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffiratedjsonldataset_is_empty() != 34789.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_uniffiratedjsonldataset_len() != 48605.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_peerclient_node_id() != 16043.toShort()) {
@@ -4133,6 +4277,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_constructor_uniffijsonldataset_from_path() != 8101.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_uniffipreferencejsonldataset_from_path() != 2096.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_uniffiratedjsonldataset_from_path() != 20887.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_constructor_peerclient_connect() != 36996.toShort()) {
@@ -16385,6 +16535,54 @@ public interface UniffiModelManagerInterface {
     suspend fun `usedBytes`(`pool`: kotlin.String): kotlin.ULong
 
     /**
+     * Run a full fine-tune (every parameter trainable; no `LoRA`
+     * adapter).
+     *
+     * Returns [`FullFineTuneResultRecord`] rather than
+     * [`TrainedAdapterRecord`] because the output is a complete set
+     * of model weights in `config.core.output_dir`, not a mountable
+     * PEFT delta. Setting `config.gradient_checkpointing = true` is
+     * rejected up-front because candle 0.10.2 has no activation-
+     * checkpointing primitive.
+     */
+    suspend fun `fineTune`(
+        `config`: FullFineTuneConfigRecord,
+        `dataset`: UniffiJsonlDataset,
+        `progress`: ForeignTrainingProgress?,
+    ): FullFineTuneResultRecord
+
+    /**
+     * Train a `LoRA` adapter via Direct Preference Optimization (DPO).
+     *
+     * Downloads the base model from `HuggingFace` (cached) plus the
+     * reference model (defaults to `config.core.base_model_repo`),
+     * runs the DPO training loop driven by `dataset`, and writes the
+     * resulting PEFT-format adapter to `config.core.output_dir`.
+     *
+     * If `progress` is provided, its `on_event` is called for each
+     * transition. Returning `Err(_)` from the callback cancels the run
+     * with [`BlazenError::Cancelled`].
+     */
+    suspend fun `trainDpo`(
+        `config`: DpoConfigRecord,
+        `dataset`: UniffiPreferenceJsonlDataset,
+        `progress`: ForeignTrainingProgress?,
+    ): TrainedAdapterRecord
+
+    /**
+     * Train a `LoRA` adapter via Kahneman-Tversky Optimization (KTO).
+     *
+     * Like DPO, KTO requires a frozen reference model; the dataset
+     * schema differs: each row is a `(prompt, completion, desirable)`
+     * triple.
+     */
+    suspend fun `trainKto`(
+        `config`: KtoConfigRecord,
+        `dataset`: UniffiRatedJsonlDataset,
+        `progress`: ForeignTrainingProgress?,
+    ): TrainedAdapterRecord
+
+    /**
      * Train a LoRA adapter end-to-end on the configured base model.
      *
      * Downloads the base model from HuggingFace (cached), runs the
@@ -16402,6 +16600,27 @@ public interface UniffiModelManagerInterface {
     suspend fun `trainLora`(
         `config`: TrainConfigRecord,
         `dataset`: UniffiJsonlDataset,
+        `progress`: ForeignTrainingProgress?,
+    ): TrainedAdapterRecord
+
+    /**
+     * Train a `LoRA` adapter via Odds Ratio Preference Optimization
+     * (ORPO). Reference-free — combines an SFT loss on chosen
+     * completions with an odds-ratio preference term.
+     */
+    suspend fun `trainOrpo`(
+        `config`: OrpoConfigRecord,
+        `dataset`: UniffiPreferenceJsonlDataset,
+        `progress`: ForeignTrainingProgress?,
+    ): TrainedAdapterRecord
+
+    /**
+     * Train a `LoRA` adapter via Simple Preference Optimization
+     * (`SimPO`). Reference-free and length-normalized.
+     */
+    suspend fun `trainSimpo`(
+        `config`: SimpoConfigRecord,
+        `dataset`: UniffiPreferenceJsonlDataset,
         `progress`: ForeignTrainingProgress?,
     ): TrainedAdapterRecord
 
@@ -16847,6 +17066,111 @@ open class UniffiModelManager :
         )
 
     /**
+     * Run a full fine-tune (every parameter trainable; no `LoRA`
+     * adapter).
+     *
+     * Returns [`FullFineTuneResultRecord`] rather than
+     * [`TrainedAdapterRecord`] because the output is a complete set
+     * of model weights in `config.core.output_dir`, not a mountable
+     * PEFT delta. Setting `config.gradient_checkpointing = true` is
+     * rejected up-front because candle 0.10.2 has no activation-
+     * checkpointing primitive.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `fineTune`(
+        `config`: FullFineTuneConfigRecord,
+        `dataset`: UniffiJsonlDataset,
+        `progress`: ForeignTrainingProgress?,
+    ): FullFineTuneResultRecord =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_fine_tune(
+                    uniffiHandle,
+                    FfiConverterTypeFullFineTuneConfigRecord.lower(`config`),
+                    FfiConverterTypeUniffiJsonlDataset.lower(`dataset`),
+                    FfiConverterOptionalTypeForeignTrainingProgress.lower(`progress`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeFullFineTuneResultRecord.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Train a `LoRA` adapter via Direct Preference Optimization (DPO).
+     *
+     * Downloads the base model from `HuggingFace` (cached) plus the
+     * reference model (defaults to `config.core.base_model_repo`),
+     * runs the DPO training loop driven by `dataset`, and writes the
+     * resulting PEFT-format adapter to `config.core.output_dir`.
+     *
+     * If `progress` is provided, its `on_event` is called for each
+     * transition. Returning `Err(_)` from the callback cancels the run
+     * with [`BlazenError::Cancelled`].
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `trainDpo`(
+        `config`: DpoConfigRecord,
+        `dataset`: UniffiPreferenceJsonlDataset,
+        `progress`: ForeignTrainingProgress?,
+    ): TrainedAdapterRecord =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_train_dpo(
+                    uniffiHandle,
+                    FfiConverterTypeDpoConfigRecord.lower(`config`),
+                    FfiConverterTypeUniffiPreferenceJsonlDataset.lower(`dataset`),
+                    FfiConverterOptionalTypeForeignTrainingProgress.lower(`progress`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeTrainedAdapterRecord.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Train a `LoRA` adapter via Kahneman-Tversky Optimization (KTO).
+     *
+     * Like DPO, KTO requires a frozen reference model; the dataset
+     * schema differs: each row is a `(prompt, completion, desirable)`
+     * triple.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `trainKto`(
+        `config`: KtoConfigRecord,
+        `dataset`: UniffiRatedJsonlDataset,
+        `progress`: ForeignTrainingProgress?,
+    ): TrainedAdapterRecord =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_train_kto(
+                    uniffiHandle,
+                    FfiConverterTypeKtoConfigRecord.lower(`config`),
+                    FfiConverterTypeUniffiRatedJsonlDataset.lower(`dataset`),
+                    FfiConverterOptionalTypeForeignTrainingProgress.lower(`progress`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeTrainedAdapterRecord.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
      * Train a LoRA adapter end-to-end on the configured base model.
      *
      * Downloads the base model from HuggingFace (cached), runs the
@@ -16874,6 +17198,65 @@ open class UniffiModelManager :
                     uniffiHandle,
                     FfiConverterTypeTrainConfigRecord.lower(`config`),
                     FfiConverterTypeUniffiJsonlDataset.lower(`dataset`),
+                    FfiConverterOptionalTypeForeignTrainingProgress.lower(`progress`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeTrainedAdapterRecord.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Train a `LoRA` adapter via Odds Ratio Preference Optimization
+     * (ORPO). Reference-free — combines an SFT loss on chosen
+     * completions with an odds-ratio preference term.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `trainOrpo`(
+        `config`: OrpoConfigRecord,
+        `dataset`: UniffiPreferenceJsonlDataset,
+        `progress`: ForeignTrainingProgress?,
+    ): TrainedAdapterRecord =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_train_orpo(
+                    uniffiHandle,
+                    FfiConverterTypeOrpoConfigRecord.lower(`config`),
+                    FfiConverterTypeUniffiPreferenceJsonlDataset.lower(`dataset`),
+                    FfiConverterOptionalTypeForeignTrainingProgress.lower(`progress`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeTrainedAdapterRecord.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Train a `LoRA` adapter via Simple Preference Optimization
+     * (`SimPO`). Reference-free and length-normalized.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `trainSimpo`(
+        `config`: SimpoConfigRecord,
+        `dataset`: UniffiPreferenceJsonlDataset,
+        `progress`: ForeignTrainingProgress?,
+    ): TrainedAdapterRecord =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_train_simpo(
+                    uniffiHandle,
+                    FfiConverterTypeSimpoConfigRecord.lower(`config`),
+                    FfiConverterTypeUniffiPreferenceJsonlDataset.lower(`dataset`),
                     FfiConverterOptionalTypeForeignTrainingProgress.lower(`progress`),
                 )
             },
@@ -16940,6 +17323,602 @@ public object FfiConverterTypeUniffiModelManager : FfiConverter<UniffiModelManag
 
     override fun write(
         value: UniffiModelManager,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * JSONL-backed preference-pair dataset opaque handle for DPO / ORPO /
+ * `SimPO`.
+ *
+ * Each line of the input file must deserialize to either
+ * `{"prompt": "...", "chosen": "...", "rejected": "..."}` or
+ * `{"messages": [...], "chosen": "...", "rejected": "..."}` (the
+ * latter requires `chat_template`).
+ */
+public interface UniffiPreferenceJsonlDatasetInterface {
+    fun `isEmpty`(): kotlin.Boolean
+
+    /**
+     * Number of preference examples in the dataset.
+     */
+    fun `len`(): kotlin.ULong
+
+    companion object
+}
+
+/**
+ * JSONL-backed preference-pair dataset opaque handle for DPO / ORPO /
+ * `SimPO`.
+ *
+ * Each line of the input file must deserialize to either
+ * `{"prompt": "...", "chosen": "...", "rejected": "..."}` or
+ * `{"messages": [...], "chosen": "...", "rejected": "..."}` (the
+ * latter requires `chat_template`).
+ */
+open class UniffiPreferenceJsonlDataset :
+    Disposable,
+    AutoCloseable,
+    UniffiPreferenceJsonlDatasetInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_uniffipreferencejsonldataset(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_uniffipreferencejsonldataset(handle, status)
+        }
+    }
+
+    override fun `isEmpty`(): kotlin.Boolean =
+        FfiConverterBoolean.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_uniffipreferencejsonldataset_is_empty(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Number of preference examples in the dataset.
+     */
+    override fun `len`(): kotlin.ULong =
+        FfiConverterULong.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_uniffipreferencejsonldataset_len(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    companion object {
+        /**
+         * Load a preference-pair JSONL file using the tokenizer at
+         * `tokenizer_path`. Args mirror [`UniffiJsonlDataset::from_path`].
+         */
+        @Throws(BlazenException::class)
+        fun `fromPath`(
+            `path`: kotlin.String,
+            `tokenizerPath`: kotlin.String,
+            `chatTemplate`: kotlin.String?,
+            `maxSeqLen`: kotlin.UInt,
+            `device`: kotlin.String?,
+            `padTokenId`: kotlin.UInt,
+        ): UniffiPreferenceJsonlDataset =
+            FfiConverterTypeUniffiPreferenceJsonlDataset.lift(
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_constructor_uniffipreferencejsonldataset_from_path(
+                        FfiConverterString.lower(`path`),
+                        FfiConverterString.lower(`tokenizerPath`),
+                        FfiConverterOptionalString.lower(`chatTemplate`),
+                        FfiConverterUInt.lower(`maxSeqLen`),
+                        FfiConverterOptionalString.lower(`device`),
+                        FfiConverterUInt.lower(`padTokenId`),
+                        _status,
+                    )
+                },
+            )
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeUniffiPreferenceJsonlDataset : FfiConverter<UniffiPreferenceJsonlDataset, Long> {
+    override fun lower(value: UniffiPreferenceJsonlDataset): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): UniffiPreferenceJsonlDataset = UniffiPreferenceJsonlDataset(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): UniffiPreferenceJsonlDataset = lift(buf.getLong())
+
+    override fun allocationSize(value: UniffiPreferenceJsonlDataset) = 8UL
+
+    override fun write(
+        value: UniffiPreferenceJsonlDataset,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * JSONL-backed rated single-completion dataset opaque handle for KTO.
+ *
+ * Each line of the input file must deserialize to either
+ * `{"prompt": "...", "completion": "...", "label": true|false}` or
+ * `{"messages": [...], "completion": "...", "label": ...}` (the
+ * latter requires `chat_template`).
+ */
+public interface UniffiRatedJsonlDatasetInterface {
+    fun `isEmpty`(): kotlin.Boolean
+
+    /**
+     * Number of rated examples in the dataset.
+     */
+    fun `len`(): kotlin.ULong
+
+    companion object
+}
+
+/**
+ * JSONL-backed rated single-completion dataset opaque handle for KTO.
+ *
+ * Each line of the input file must deserialize to either
+ * `{"prompt": "...", "completion": "...", "label": true|false}` or
+ * `{"messages": [...], "completion": "...", "label": ...}` (the
+ * latter requires `chat_template`).
+ */
+open class UniffiRatedJsonlDataset :
+    Disposable,
+    AutoCloseable,
+    UniffiRatedJsonlDatasetInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_uniffiratedjsonldataset(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_uniffiratedjsonldataset(handle, status)
+        }
+    }
+
+    override fun `isEmpty`(): kotlin.Boolean =
+        FfiConverterBoolean.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_uniffiratedjsonldataset_is_empty(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Number of rated examples in the dataset.
+     */
+    override fun `len`(): kotlin.ULong =
+        FfiConverterULong.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_uniffiratedjsonldataset_len(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    companion object {
+        /**
+         * Load a rated JSONL file using the tokenizer at `tokenizer_path`.
+         * Args mirror [`UniffiJsonlDataset::from_path`].
+         */
+        @Throws(BlazenException::class)
+        fun `fromPath`(
+            `path`: kotlin.String,
+            `tokenizerPath`: kotlin.String,
+            `chatTemplate`: kotlin.String?,
+            `maxSeqLen`: kotlin.UInt,
+            `device`: kotlin.String?,
+            `padTokenId`: kotlin.UInt,
+        ): UniffiRatedJsonlDataset =
+            FfiConverterTypeUniffiRatedJsonlDataset.lift(
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_constructor_uniffiratedjsonldataset_from_path(
+                        FfiConverterString.lower(`path`),
+                        FfiConverterString.lower(`tokenizerPath`),
+                        FfiConverterOptionalString.lower(`chatTemplate`),
+                        FfiConverterUInt.lower(`maxSeqLen`),
+                        FfiConverterOptionalString.lower(`device`),
+                        FfiConverterUInt.lower(`padTokenId`),
+                        _status,
+                    )
+                },
+            )
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeUniffiRatedJsonlDataset : FfiConverter<UniffiRatedJsonlDataset, Long> {
+    override fun lower(value: UniffiRatedJsonlDataset): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): UniffiRatedJsonlDataset = UniffiRatedJsonlDataset(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): UniffiRatedJsonlDataset = lift(buf.getLong())
+
+    override fun allocationSize(value: UniffiRatedJsonlDataset) = 8UL
+
+    override fun write(
+        value: UniffiRatedJsonlDataset,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -18616,6 +19595,60 @@ public object FfiConverterTypeControlPlaneWorkerInfo : FfiConverterRustBuffer<Co
 }
 
 /**
+ * Direct Preference Optimization (DPO) configuration.
+ *
+ * Requires a frozen reference model. If `reference_model_repo` is
+ * `None`, the trainer reuses `core.base_model_repo`.
+ */
+data class DpoConfigRecord(
+    var `core`: TrainCoreConfigRecord,
+    var `lora`: LoraConfigRecord,
+    var `beta`: kotlin.Float = 0.1f,
+    var `labelSmoothing`: kotlin.Float = 0.0f,
+    var `referenceModelRepo`: kotlin.String? = null,
+    var `referenceModelRevision`: kotlin.String? = null,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeDpoConfigRecord : FfiConverterRustBuffer<DpoConfigRecord> {
+    override fun read(buf: ByteBuffer): DpoConfigRecord =
+        DpoConfigRecord(
+            FfiConverterTypeTrainCoreConfigRecord.read(buf),
+            FfiConverterTypeLoraConfigRecord.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+
+    override fun allocationSize(value: DpoConfigRecord) =
+        (
+            FfiConverterTypeTrainCoreConfigRecord.allocationSize(value.`core`) +
+                FfiConverterTypeLoraConfigRecord.allocationSize(value.`lora`) +
+                FfiConverterFloat.allocationSize(value.`beta`) +
+                FfiConverterFloat.allocationSize(value.`labelSmoothing`) +
+                FfiConverterOptionalString.allocationSize(value.`referenceModelRepo`) +
+                FfiConverterOptionalString.allocationSize(value.`referenceModelRevision`)
+        )
+
+    override fun write(
+        value: DpoConfigRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterTypeTrainCoreConfigRecord.write(value.`core`, buf)
+        FfiConverterTypeLoraConfigRecord.write(value.`lora`, buf)
+        FfiConverterFloat.write(value.`beta`, buf)
+        FfiConverterFloat.write(value.`labelSmoothing`, buf)
+        FfiConverterOptionalString.write(value.`referenceModelRepo`, buf)
+        FfiConverterOptionalString.write(value.`referenceModelRevision`, buf)
+    }
+}
+
+/**
  * Embedding-role defaults. V1 composes only `base`.
  */
 data class EmbeddingProviderDefaults(
@@ -18727,6 +19760,88 @@ public object FfiConverterTypeEvent : FfiConverterRustBuffer<Event> {
     ) {
         FfiConverterString.write(value.`eventType`, buf)
         FfiConverterString.write(value.`dataJson`, buf)
+    }
+}
+
+/**
+ * Full fine-tune configuration (no LoRA — every parameter trains).
+ *
+ * `gradient_checkpointing = true` is accepted for forward compatibility
+ * but the trainer rejects it at init time with
+ * [`BlazenError::Validation`] — candle 0.10.2 has no activation-
+ * checkpointing primitive.
+ */
+data class FullFineTuneConfigRecord(
+    var `core`: TrainCoreConfigRecord,
+    var `gradientCheckpointing`: kotlin.Boolean = false,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFullFineTuneConfigRecord : FfiConverterRustBuffer<FullFineTuneConfigRecord> {
+    override fun read(buf: ByteBuffer): FullFineTuneConfigRecord =
+        FullFineTuneConfigRecord(
+            FfiConverterTypeTrainCoreConfigRecord.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+
+    override fun allocationSize(value: FullFineTuneConfigRecord) =
+        (
+            FfiConverterTypeTrainCoreConfigRecord.allocationSize(value.`core`) +
+                FfiConverterBoolean.allocationSize(value.`gradientCheckpointing`)
+        )
+
+    override fun write(
+        value: FullFineTuneConfigRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterTypeTrainCoreConfigRecord.write(value.`core`, buf)
+        FfiConverterBoolean.write(value.`gradientCheckpointing`, buf)
+    }
+}
+
+/**
+ * On-disk descriptor returned by [`UniffiModelManager::fine_tune`].
+ *
+ * Unlike [`TrainedAdapterRecord`], no PEFT adapter is written — the
+ * entire model's weights are saved to `output_dir` directly.
+ */
+data class FullFineTuneResultRecord(
+    var `outputDir`: kotlin.String,
+    var `finalLoss`: kotlin.Float,
+    var `stepsCompleted`: kotlin.ULong,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFullFineTuneResultRecord : FfiConverterRustBuffer<FullFineTuneResultRecord> {
+    override fun read(buf: ByteBuffer): FullFineTuneResultRecord =
+        FullFineTuneResultRecord(
+            FfiConverterString.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterULong.read(buf),
+        )
+
+    override fun allocationSize(value: FullFineTuneResultRecord) =
+        (
+            FfiConverterString.allocationSize(value.`outputDir`) +
+                FfiConverterFloat.allocationSize(value.`finalLoss`) +
+                FfiConverterULong.allocationSize(value.`stepsCompleted`)
+        )
+
+    override fun write(
+        value: FullFineTuneResultRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`outputDir`, buf)
+        FfiConverterFloat.write(value.`finalLoss`, buf)
+        FfiConverterULong.write(value.`stepsCompleted`, buf)
     }
 }
 
@@ -19241,6 +20356,66 @@ public object FfiConverterTypeKeyValue : FfiConverterRustBuffer<KeyValue> {
 }
 
 /**
+ * Kahneman-Tversky Optimization (KTO) configuration.
+ *
+ * Like DPO, KTO requires a frozen reference model (defaults to
+ * `core.base_model_repo`) — but the dataset schema differs:
+ * each row is a `(prompt, completion, desirable)` triple
+ * ([`UniffiRatedJsonlDataset`]), not a chosen/rejected pair.
+ */
+data class KtoConfigRecord(
+    var `core`: TrainCoreConfigRecord,
+    var `lora`: LoraConfigRecord,
+    var `beta`: kotlin.Float = 0.1f,
+    var `lambdaD`: kotlin.Float = 1.0f,
+    var `lambdaU`: kotlin.Float = 1.0f,
+    var `referenceModelRepo`: kotlin.String? = null,
+    var `referenceModelRevision`: kotlin.String? = null,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeKtoConfigRecord : FfiConverterRustBuffer<KtoConfigRecord> {
+    override fun read(buf: ByteBuffer): KtoConfigRecord =
+        KtoConfigRecord(
+            FfiConverterTypeTrainCoreConfigRecord.read(buf),
+            FfiConverterTypeLoraConfigRecord.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+
+    override fun allocationSize(value: KtoConfigRecord) =
+        (
+            FfiConverterTypeTrainCoreConfigRecord.allocationSize(value.`core`) +
+                FfiConverterTypeLoraConfigRecord.allocationSize(value.`lora`) +
+                FfiConverterFloat.allocationSize(value.`beta`) +
+                FfiConverterFloat.allocationSize(value.`lambdaD`) +
+                FfiConverterFloat.allocationSize(value.`lambdaU`) +
+                FfiConverterOptionalString.allocationSize(value.`referenceModelRepo`) +
+                FfiConverterOptionalString.allocationSize(value.`referenceModelRevision`)
+        )
+
+    override fun write(
+        value: KtoConfigRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterTypeTrainCoreConfigRecord.write(value.`core`, buf)
+        FfiConverterTypeLoraConfigRecord.write(value.`lora`, buf)
+        FfiConverterFloat.write(value.`beta`, buf)
+        FfiConverterFloat.write(value.`lambdaD`, buf)
+        FfiConverterFloat.write(value.`lambdaU`, buf)
+        FfiConverterOptionalString.write(value.`referenceModelRepo`, buf)
+        FfiConverterOptionalString.write(value.`referenceModelRevision`, buf)
+    }
+}
+
+/**
  * LoRA hyperparameters.
  */
 data class LoraConfigRecord(
@@ -19624,6 +20799,48 @@ public object FfiConverterTypeOptimConfigRecord : FfiConverterRustBuffer<OptimCo
 }
 
 /**
+ * Odds Ratio Preference Optimization (ORPO) configuration.
+ *
+ * Reference-free — combines an SFT loss on chosen responses with an
+ * odds-ratio loss term weighted by `lambda`.
+ */
+data class OrpoConfigRecord(
+    var `core`: TrainCoreConfigRecord,
+    var `lora`: LoraConfigRecord,
+    var `lambda`: kotlin.Float = 0.1f,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeOrpoConfigRecord : FfiConverterRustBuffer<OrpoConfigRecord> {
+    override fun read(buf: ByteBuffer): OrpoConfigRecord =
+        OrpoConfigRecord(
+            FfiConverterTypeTrainCoreConfigRecord.read(buf),
+            FfiConverterTypeLoraConfigRecord.read(buf),
+            FfiConverterFloat.read(buf),
+        )
+
+    override fun allocationSize(value: OrpoConfigRecord) =
+        (
+            FfiConverterTypeTrainCoreConfigRecord.allocationSize(value.`core`) +
+                FfiConverterTypeLoraConfigRecord.allocationSize(value.`lora`) +
+                FfiConverterFloat.allocationSize(value.`lambda`)
+        )
+
+    override fun write(
+        value: OrpoConfigRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterTypeTrainCoreConfigRecord.write(value.`core`, buf)
+        FfiConverterTypeLoraConfigRecord.write(value.`lora`, buf)
+        FfiConverterFloat.write(value.`lambda`, buf)
+    }
+}
+
+/**
  * A serialized representation of a queued event captured in a checkpoint.
  *
  * Mirrors [`blazen_persist::SerializedEvent`]. The `data_json` field is
@@ -19782,6 +20999,52 @@ public object FfiConverterTypeSchedulerConfigRecord : FfiConverterRustBuffer<Sch
     ) {
         FfiConverterTypeSchedulerKindEnum.write(value.`kind`, buf)
         FfiConverterUInt.write(value.`warmupSteps`, buf)
+    }
+}
+
+/**
+ * Simple Preference Optimization (`SimPO`) configuration.
+ *
+ * Reference-free, length-normalized. Defaults follow TRL `main`
+ * (`beta = 2.0`, `gamma = 1.0`).
+ */
+data class SimpoConfigRecord(
+    var `core`: TrainCoreConfigRecord,
+    var `lora`: LoraConfigRecord,
+    var `beta`: kotlin.Float = 2.0f,
+    var `gamma`: kotlin.Float = 1.0f,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeSimpoConfigRecord : FfiConverterRustBuffer<SimpoConfigRecord> {
+    override fun read(buf: ByteBuffer): SimpoConfigRecord =
+        SimpoConfigRecord(
+            FfiConverterTypeTrainCoreConfigRecord.read(buf),
+            FfiConverterTypeLoraConfigRecord.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterFloat.read(buf),
+        )
+
+    override fun allocationSize(value: SimpoConfigRecord) =
+        (
+            FfiConverterTypeTrainCoreConfigRecord.allocationSize(value.`core`) +
+                FfiConverterTypeLoraConfigRecord.allocationSize(value.`lora`) +
+                FfiConverterFloat.allocationSize(value.`beta`) +
+                FfiConverterFloat.allocationSize(value.`gamma`)
+        )
+
+    override fun write(
+        value: SimpoConfigRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterTypeTrainCoreConfigRecord.write(value.`core`, buf)
+        FfiConverterTypeLoraConfigRecord.write(value.`lora`, buf)
+        FfiConverterFloat.write(value.`beta`, buf)
+        FfiConverterFloat.write(value.`gamma`, buf)
     }
 }
 
@@ -20287,6 +21550,91 @@ public object FfiConverterTypeTrainConfigRecord : FfiConverterRustBuffer<TrainCo
         FfiConverterULong.write(value.`seed`, buf)
         FfiConverterTypeMixedPrecisionEnum.write(value.`mixedPrecision`, buf)
         FfiConverterOptionalString.write(value.`device`, buf)
+    }
+}
+
+/**
+ * Shared training hyperparameters used by DPO / ORPO / SimPO / KTO /
+ * full fine-tune. Mirrors [`TrainCoreConfig`] (`TrainConfig` minus the
+ * PEFT-specific [`LoraConfigRecord`]).
+ */
+data class TrainCoreConfigRecord(
+    var `baseModelRepo`: kotlin.String,
+    var `baseModelRevision`: kotlin.String? = null,
+    var `outputDir`: kotlin.String,
+    var `maxSteps`: kotlin.UInt = 1000u,
+    var `batchSize`: kotlin.UInt = 1u,
+    var `gradientAccumulationSteps`: kotlin.UInt = 8u,
+    var `maxSeqLen`: kotlin.UInt = 1024u,
+    var `evalSteps`: kotlin.UInt? = null,
+    var `saveSteps`: kotlin.UInt? = null,
+    var `seed`: kotlin.ULong = 42uL,
+    var `mixedPrecision`: MixedPrecisionEnum,
+    var `device`: kotlin.String? = null,
+    var `optim`: OptimConfigRecord,
+    var `scheduler`: SchedulerConfigRecord,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTrainCoreConfigRecord : FfiConverterRustBuffer<TrainCoreConfigRecord> {
+    override fun read(buf: ByteBuffer): TrainCoreConfigRecord =
+        TrainCoreConfigRecord(
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterTypeMixedPrecisionEnum.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterTypeOptimConfigRecord.read(buf),
+            FfiConverterTypeSchedulerConfigRecord.read(buf),
+        )
+
+    override fun allocationSize(value: TrainCoreConfigRecord) =
+        (
+            FfiConverterString.allocationSize(value.`baseModelRepo`) +
+                FfiConverterOptionalString.allocationSize(value.`baseModelRevision`) +
+                FfiConverterString.allocationSize(value.`outputDir`) +
+                FfiConverterUInt.allocationSize(value.`maxSteps`) +
+                FfiConverterUInt.allocationSize(value.`batchSize`) +
+                FfiConverterUInt.allocationSize(value.`gradientAccumulationSteps`) +
+                FfiConverterUInt.allocationSize(value.`maxSeqLen`) +
+                FfiConverterOptionalUInt.allocationSize(value.`evalSteps`) +
+                FfiConverterOptionalUInt.allocationSize(value.`saveSteps`) +
+                FfiConverterULong.allocationSize(value.`seed`) +
+                FfiConverterTypeMixedPrecisionEnum.allocationSize(value.`mixedPrecision`) +
+                FfiConverterOptionalString.allocationSize(value.`device`) +
+                FfiConverterTypeOptimConfigRecord.allocationSize(value.`optim`) +
+                FfiConverterTypeSchedulerConfigRecord.allocationSize(value.`scheduler`)
+        )
+
+    override fun write(
+        value: TrainCoreConfigRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`baseModelRepo`, buf)
+        FfiConverterOptionalString.write(value.`baseModelRevision`, buf)
+        FfiConverterString.write(value.`outputDir`, buf)
+        FfiConverterUInt.write(value.`maxSteps`, buf)
+        FfiConverterUInt.write(value.`batchSize`, buf)
+        FfiConverterUInt.write(value.`gradientAccumulationSteps`, buf)
+        FfiConverterUInt.write(value.`maxSeqLen`, buf)
+        FfiConverterOptionalUInt.write(value.`evalSteps`, buf)
+        FfiConverterOptionalUInt.write(value.`saveSteps`, buf)
+        FfiConverterULong.write(value.`seed`, buf)
+        FfiConverterTypeMixedPrecisionEnum.write(value.`mixedPrecision`, buf)
+        FfiConverterOptionalString.write(value.`device`, buf)
+        FfiConverterTypeOptimConfigRecord.write(value.`optim`, buf)
+        FfiConverterTypeSchedulerConfigRecord.write(value.`scheduler`, buf)
     }
 }
 

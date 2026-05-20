@@ -221,6 +221,241 @@ module Blazen
   # Result returned by {ModelManager#train_lora}.
   TrainedAdapter = Struct.new(:adapter_dir, :final_loss, :total_steps, keyword_init: true)
 
+  # Shared training hyperparameters consumed by the preference-optimization
+  # configs ({DpoConfig}, {OrpoConfig}, {SimpoConfig}, {KtoConfig}) and the
+  # full-fine-tune config ({FullFineTuneConfig}) as their `core` slot.
+  #
+  # Mirrors `BlazenTrainCoreConfig`. The legacy SFT-only {TrainConfig} keeps
+  # a flat layout for PR7 backward compatibility; new training surfaces in
+  # PR8 nest a `TrainCoreConfig` plus per-algorithm hyperparameters.
+  class TrainCoreConfig
+    attr_reader :base_model_repo, :base_model_revision, :output_dir,
+                :optim, :scheduler, :max_steps, :batch_size,
+                :gradient_accumulation_steps, :max_seq_len,
+                :eval_steps, :save_steps, :seed,
+                :mixed_precision, :device
+
+    def initialize(base_model_repo:, output_dir:,
+                   base_model_revision: nil,
+                   optim: OptimConfig.new, scheduler: SchedulerConfig.new,
+                   max_steps: 100, batch_size: 1,
+                   gradient_accumulation_steps: 1, max_seq_len: 2048,
+                   eval_steps: nil, save_steps: nil, seed: 42,
+                   mixed_precision: MixedPrecision::NONE, device: nil)
+      @base_model_repo = base_model_repo.to_s
+      @base_model_revision = base_model_revision.nil? ? nil : base_model_revision.to_s
+      @output_dir = output_dir.to_s
+      @optim = optim
+      @scheduler = scheduler
+      @max_steps = Integer(max_steps)
+      @batch_size = Integer(batch_size)
+      @gradient_accumulation_steps = Integer(gradient_accumulation_steps)
+      @max_seq_len = Integer(max_seq_len)
+      @eval_steps = eval_steps.nil? ? nil : Integer(eval_steps)
+      @save_steps = save_steps.nil? ? nil : Integer(save_steps)
+      @seed = Integer(seed)
+      @mixed_precision = mixed_precision.to_s
+      @device = device.nil? ? nil : device.to_s
+    end
+  end
+
+  # DPO (Direct Preference Optimization) training configuration. Wraps
+  # {TrainCoreConfig} with DPO-specific knobs (`beta`, `label_smoothing`)
+  # plus an optional separate reference model repo (defaults to
+  # `core.base_model_repo` when nil).
+  class DpoConfig
+    attr_reader :core, :lora, :beta, :label_smoothing,
+                :reference_model_repo, :reference_model_revision
+
+    def initialize(core:, lora: LoraConfig.new, beta: 0.1,
+                   label_smoothing: 0.0,
+                   reference_model_repo: nil,
+                   reference_model_revision: nil)
+      @core = core
+      @lora = lora
+      @beta = Float(beta)
+      @label_smoothing = Float(label_smoothing)
+      @reference_model_repo = reference_model_repo.nil? ? nil : reference_model_repo.to_s
+      @reference_model_revision = reference_model_revision.nil? ? nil : reference_model_revision.to_s
+    end
+  end
+
+  # ORPO (Odds-Ratio Preference Optimization) training configuration.
+  # Reference-free: combines the SFT loss with an odds-ratio penalty term
+  # whose weight is `lambda`.
+  class OrpoConfig
+    attr_reader :core, :lora, :lambda
+
+    def initialize(core:, lora: LoraConfig.new, lambda: 0.1)
+      @core = core
+      @lora = lora
+      @lambda = Float(lambda)
+    end
+  end
+
+  # SimPO (Simple Preference Optimization) training configuration.
+  # Reference-free: length-normalized preference margin with logit scaling
+  # `beta` and target margin `gamma`.
+  class SimpoConfig
+    attr_reader :core, :lora, :beta, :gamma
+
+    def initialize(core:, lora: LoraConfig.new, beta: 2.0, gamma: 1.0)
+      @core = core
+      @lora = lora
+      @beta = Float(beta)
+      @gamma = Float(gamma)
+    end
+  end
+
+  # KTO (Kahneman-Tversky Optimization) training configuration. Consumes a
+  # {RatedJsonlDataset} (single-completion-plus-rating, not preference
+  # pairs). Requires a reference model — pass `nil` for
+  # `reference_model_repo` to reuse `core.base_model_repo`.
+  class KtoConfig
+    attr_reader :core, :lora, :beta, :lambda_d, :lambda_u,
+                :reference_model_repo, :reference_model_revision
+
+    def initialize(core:, lora: LoraConfig.new, beta: 0.1,
+                   lambda_d: 1.0, lambda_u: 1.0,
+                   reference_model_repo: nil,
+                   reference_model_revision: nil)
+      @core = core
+      @lora = lora
+      @beta = Float(beta)
+      @lambda_d = Float(lambda_d)
+      @lambda_u = Float(lambda_u)
+      @reference_model_repo = reference_model_repo.nil? ? nil : reference_model_repo.to_s
+      @reference_model_revision = reference_model_revision.nil? ? nil : reference_model_revision.to_s
+    end
+  end
+
+  # Full-fine-tune configuration (every parameter trainable, no `LoRA`
+  # wrapping). `gradient_checkpointing` is exposed for forward compatibility
+  # but the trainer currently rejects `true` because candle 0.10.2 has no
+  # checkpointing primitive.
+  class FullFineTuneConfig
+    attr_reader :core, :gradient_checkpointing
+
+    def initialize(core:, gradient_checkpointing: false)
+      @core = core
+      @gradient_checkpointing = gradient_checkpointing ? true : false
+    end
+  end
+
+  # Result returned by {ModelManager#fine_tune}. Mirrors
+  # `BlazenFullFineTuneResult`.
+  FullFineTuneResult = Struct.new(
+    :output_dir, :final_loss, :steps_completed,
+    keyword_init: true,
+  )
+
+  # Tokenized preference-pair JSONL dataset handle consumed by
+  # {ModelManager#train_dpo} / `train_orpo` / `train_simpo`. Wraps
+  # `BlazenPreferenceJsonlDataset *`; the inner pointer is freed
+  # automatically when the Ruby object is garbage-collected (via
+  # `FFI::AutoPointer`).
+  class PreferenceJsonlDataset
+    # @return [::FFI::AutoPointer] underlying `BlazenPreferenceJsonlDataset *`
+    attr_reader :ptr
+
+    # Loads a preference JSONL training file with the given tokenizer.
+    # The file format is one JSON object per line with `prompt`, `chosen`,
+    # and `rejected` fields (see `blazen_train::dataset`).
+    #
+    # @param path [String]
+    # @param tokenizer_path [String]
+    # @param chat_template [String, nil]
+    # @param max_seq_len [Integer]
+    # @param device [String, nil]
+    # @param pad_token_id [Integer]
+    # @return [PreferenceJsonlDataset]
+    # @raise [Blazen::Error] on validation, tokenizer-load, or dataset-parse errors
+    def self.from_path(path, tokenizer_path:, chat_template: nil,
+                       max_seq_len: 2048, device: nil, pad_token_id: 0)
+      raw = nil
+      Blazen::FFI.with_cstring(path.to_s) do |path_ptr|
+        Blazen::FFI.with_cstring(tokenizer_path.to_s) do |tok_ptr|
+          Blazen::FFI.with_cstring(chat_template) do |tmpl_ptr|
+            Blazen::FFI.with_cstring(device) do |dev_ptr|
+              out_err = ::FFI::MemoryPointer.new(:pointer)
+              raw = Blazen::FFI.blazen_preference_jsonl_dataset_from_path(
+                path_ptr, tok_ptr, tmpl_ptr,
+                Integer(max_seq_len), dev_ptr, Integer(pad_token_id),
+                out_err,
+              )
+              Blazen::FFI.check_error!(out_err)
+            end
+          end
+        end
+      end
+      if raw.nil? || raw.null?
+        raise Blazen::InternalError,
+              "blazen_preference_jsonl_dataset_from_path returned null without an error"
+      end
+
+      new(raw)
+    end
+
+    # @api private
+    def initialize(raw_ptr)
+      @ptr = ::FFI::AutoPointer.new(
+        raw_ptr, Blazen::FFI.method(:blazen_preference_jsonl_dataset_free),
+      )
+    end
+  end
+
+  # Tokenized rated (KTO) JSONL dataset handle consumed by
+  # {ModelManager#train_kto}. Each row carries a single
+  # prompt/completion pair plus a boolean `desirable` rating (see
+  # `blazen_train::dataset`).
+  class RatedJsonlDataset
+    # @return [::FFI::AutoPointer] underlying `BlazenRatedJsonlDataset *`
+    attr_reader :ptr
+
+    # Loads a rated JSONL training file with the given tokenizer.
+    #
+    # @param path [String]
+    # @param tokenizer_path [String]
+    # @param chat_template [String, nil]
+    # @param max_seq_len [Integer]
+    # @param device [String, nil]
+    # @param pad_token_id [Integer]
+    # @return [RatedJsonlDataset]
+    # @raise [Blazen::Error] on validation, tokenizer-load, or dataset-parse errors
+    def self.from_path(path, tokenizer_path:, chat_template: nil,
+                       max_seq_len: 2048, device: nil, pad_token_id: 0)
+      raw = nil
+      Blazen::FFI.with_cstring(path.to_s) do |path_ptr|
+        Blazen::FFI.with_cstring(tokenizer_path.to_s) do |tok_ptr|
+          Blazen::FFI.with_cstring(chat_template) do |tmpl_ptr|
+            Blazen::FFI.with_cstring(device) do |dev_ptr|
+              out_err = ::FFI::MemoryPointer.new(:pointer)
+              raw = Blazen::FFI.blazen_rated_jsonl_dataset_from_path(
+                path_ptr, tok_ptr, tmpl_ptr,
+                Integer(max_seq_len), dev_ptr, Integer(pad_token_id),
+                out_err,
+              )
+              Blazen::FFI.check_error!(out_err)
+            end
+          end
+        end
+      end
+      if raw.nil? || raw.null?
+        raise Blazen::InternalError,
+              "blazen_rated_jsonl_dataset_from_path returned null without an error"
+      end
+
+      new(raw)
+    end
+
+    # @api private
+    def initialize(raw_ptr)
+      @ptr = ::FFI::AutoPointer.new(
+        raw_ptr, Blazen::FFI.method(:blazen_rated_jsonl_dataset_free),
+      )
+    end
+  end
+
   # Tokenized JSONL dataset handle consumed by {ModelManager#train_lora}.
   # Wraps `BlazenJsonlDataset *`; the inner pointer is freed automatically
   # when the Ruby object is garbage-collected (via `FFI::AutoPointer`).
@@ -565,6 +800,128 @@ module Blazen
       end
     end
 
+    # Trains a `LoRA` adapter end-to-end against `dataset` using Direct
+    # Preference Optimization (DPO) and returns the resulting
+    # {TrainedAdapter}.
+    #
+    # Composes with `Fiber.scheduler` when one is active (via
+    # {Blazen::FFI.await_future}); otherwise blocks the calling thread on
+    # the cabi-side wait. The `dataset` handle remains valid after the
+    # call — the cabi clones the inner `Arc<PreferenceJsonlDataset>` before
+    # spawning the training run.
+    #
+    # @param config [Blazen::DpoConfig]
+    # @param dataset [Blazen::PreferenceJsonlDataset]
+    # @return [Blazen::TrainedAdapter]
+    def train_dpo(config, dataset)
+      validate_dpo_config!(config)
+      with_dpo_config(config) do |cfg_struct|
+        fut = Blazen::FFI.blazen_model_manager_train_dpo(
+          @ptr, cfg_struct.pointer, dataset.ptr,
+        )
+        if fut.nil? || fut.null?
+          raise Blazen::ValidationError,
+                "blazen_model_manager_train_dpo rejected the call " \
+                "(null manager, null dataset, or invalid config)"
+        end
+        take_trained_adapter_future(fut)
+      end
+    end
+
+    # Trains a `LoRA` adapter end-to-end against `dataset` using ORPO
+    # (Odds-Ratio Preference Optimization, reference-free).
+    #
+    # @param config [Blazen::OrpoConfig]
+    # @param dataset [Blazen::PreferenceJsonlDataset]
+    # @return [Blazen::TrainedAdapter]
+    def train_orpo(config, dataset)
+      validate_orpo_config!(config)
+      with_orpo_config(config) do |cfg_struct|
+        fut = Blazen::FFI.blazen_model_manager_train_orpo(
+          @ptr, cfg_struct.pointer, dataset.ptr,
+        )
+        if fut.nil? || fut.null?
+          raise Blazen::ValidationError,
+                "blazen_model_manager_train_orpo rejected the call " \
+                "(null manager, null dataset, or invalid config)"
+        end
+        take_trained_adapter_future(fut)
+      end
+    end
+
+    # Trains a `LoRA` adapter end-to-end against `dataset` using SimPO
+    # (Simple Preference Optimization, reference-free, length-normalized).
+    #
+    # @param config [Blazen::SimpoConfig]
+    # @param dataset [Blazen::PreferenceJsonlDataset]
+    # @return [Blazen::TrainedAdapter]
+    def train_simpo(config, dataset)
+      validate_simpo_config!(config)
+      with_simpo_config(config) do |cfg_struct|
+        fut = Blazen::FFI.blazen_model_manager_train_simpo(
+          @ptr, cfg_struct.pointer, dataset.ptr,
+        )
+        if fut.nil? || fut.null?
+          raise Blazen::ValidationError,
+                "blazen_model_manager_train_simpo rejected the call " \
+                "(null manager, null dataset, or invalid config)"
+        end
+        take_trained_adapter_future(fut)
+      end
+    end
+
+    # Trains a `LoRA` adapter end-to-end against `dataset` using KTO
+    # (Kahneman-Tversky Optimization). `dataset` must be a
+    # {RatedJsonlDataset}, not a {PreferenceJsonlDataset}.
+    #
+    # @param config [Blazen::KtoConfig]
+    # @param dataset [Blazen::RatedJsonlDataset]
+    # @return [Blazen::TrainedAdapter]
+    def train_kto(config, dataset)
+      validate_kto_config!(config)
+      with_kto_config(config) do |cfg_struct|
+        fut = Blazen::FFI.blazen_model_manager_train_kto(
+          @ptr, cfg_struct.pointer, dataset.ptr,
+        )
+        if fut.nil? || fut.null?
+          raise Blazen::ValidationError,
+                "blazen_model_manager_train_kto rejected the call " \
+                "(null manager, null dataset, or invalid config)"
+        end
+        take_trained_adapter_future(fut)
+      end
+    end
+
+    # Runs a full (every-parameter) fine-tune against `dataset` and returns
+    # the resulting {FullFineTuneResult} (output directory + final loss +
+    # steps completed). Uses the same SFT-style JSONL format as
+    # {ModelManager#train_lora}, so {JsonlDataset} is the expected dataset
+    # type.
+    #
+    # @param config [Blazen::FullFineTuneConfig]
+    # @param dataset [Blazen::JsonlDataset]
+    # @return [Blazen::FullFineTuneResult]
+    def fine_tune(config, dataset)
+      validate_full_finetune_config!(config)
+      with_full_finetune_config(config) do |cfg_struct|
+        fut = Blazen::FFI.blazen_model_manager_fine_tune(
+          @ptr, cfg_struct.pointer, dataset.ptr,
+        )
+        if fut.nil? || fut.null?
+          raise Blazen::ValidationError,
+                "blazen_model_manager_fine_tune rejected the call " \
+                "(null manager, null dataset, or invalid config)"
+        end
+        Blazen::FFI.await_future(fut) do |f|
+          out_result = Blazen::FFI::BlazenFullFineTuneResult.new
+          out_err = ::FFI::MemoryPointer.new(:pointer)
+          Blazen::FFI.blazen_future_take_full_finetune_result(f, out_result.pointer, out_err)
+          Blazen::FFI.check_error!(out_err)
+          decode_full_finetune_result(out_result)
+        end
+      end
+    end
+
     # Lists adapters mounted on `model_id`.
     #
     # @param model_id [String]
@@ -670,6 +1027,256 @@ module Blazen
       ensure
         keepalive.clear
       end
+    end
+
+    # Shared helper: drives a `BlazenFuture *` that resolves to a
+    # `BlazenTrainedAdapter` (the result type for all four LoRA-based
+    # training surfaces — DPO/ORPO/SimPO/KTO).
+    def take_trained_adapter_future(fut)
+      Blazen::FFI.await_future(fut) do |f|
+        out_adapter = Blazen::FFI::BlazenTrainedAdapter.new
+        out_err = ::FFI::MemoryPointer.new(:pointer)
+        Blazen::FFI.blazen_future_take_trained_adapter(f, out_adapter.pointer, out_err)
+        Blazen::FFI.check_error!(out_err)
+        decode_trained_adapter(out_adapter)
+      end
+    end
+
+    def validate_dpo_config!(config)
+      raise Blazen::ValidationError, "config must be a Blazen::DpoConfig" \
+        unless config.is_a?(DpoConfig)
+      validate_core_config!(config.core)
+      raise Blazen::ValidationError, "DpoConfig#lora must be a Blazen::LoraConfig" \
+        unless config.lora.is_a?(LoraConfig)
+    end
+
+    def validate_orpo_config!(config)
+      raise Blazen::ValidationError, "config must be a Blazen::OrpoConfig" \
+        unless config.is_a?(OrpoConfig)
+      validate_core_config!(config.core)
+      raise Blazen::ValidationError, "OrpoConfig#lora must be a Blazen::LoraConfig" \
+        unless config.lora.is_a?(LoraConfig)
+    end
+
+    def validate_simpo_config!(config)
+      raise Blazen::ValidationError, "config must be a Blazen::SimpoConfig" \
+        unless config.is_a?(SimpoConfig)
+      validate_core_config!(config.core)
+      raise Blazen::ValidationError, "SimpoConfig#lora must be a Blazen::LoraConfig" \
+        unless config.lora.is_a?(LoraConfig)
+    end
+
+    def validate_kto_config!(config)
+      raise Blazen::ValidationError, "config must be a Blazen::KtoConfig" \
+        unless config.is_a?(KtoConfig)
+      validate_core_config!(config.core)
+      raise Blazen::ValidationError, "KtoConfig#lora must be a Blazen::LoraConfig" \
+        unless config.lora.is_a?(LoraConfig)
+    end
+
+    def validate_full_finetune_config!(config)
+      raise Blazen::ValidationError, "config must be a Blazen::FullFineTuneConfig" \
+        unless config.is_a?(FullFineTuneConfig)
+      validate_core_config!(config.core)
+    end
+
+    def validate_core_config!(core)
+      raise Blazen::ValidationError, "core must be a Blazen::TrainCoreConfig" \
+        unless core.is_a?(TrainCoreConfig)
+      raise Blazen::ValidationError, "TrainCoreConfig#optim must be a Blazen::OptimConfig" \
+        unless core.optim.is_a?(OptimConfig)
+      raise Blazen::ValidationError, "TrainCoreConfig#scheduler must be a Blazen::SchedulerConfig" \
+        unless core.scheduler.is_a?(SchedulerConfig)
+    end
+
+    # Why: every C-string + array buffer referenced by the nested
+    # `BlazenTrainCoreConfig` and `BlazenLoraConfig` is borrowed by the
+    # cabi only for the duration of the call. The `keepalive` array holds
+    # strong refs to every `MemoryPointer.from_string` and per-array
+    # `MemoryPointer.new(:pointer, …)` allocation so GC can't reclaim them
+    # mid-call; we release the batch in the `ensure` arm after the FFI
+    # function returns.
+    def populate_core_struct(core_struct, core, keepalive)
+      to_cstr = lambda do |s|
+        next nil if s.nil?
+
+        mp = ::FFI::MemoryPointer.from_string(s.to_s)
+        keepalive << mp
+        mp
+      end
+      core_struct[:base_model_repo]     = to_cstr.call(core.base_model_repo)
+      core_struct[:base_model_revision] = to_cstr.call(core.base_model_revision)
+      core_struct[:output_dir]          = to_cstr.call(core.output_dir)
+
+      optim = core_struct[:optim]
+      optim[:learning_rate] = core.optim.learning_rate
+      optim[:beta1]         = core.optim.beta1
+      optim[:beta2]         = core.optim.beta2
+      optim[:epsilon]       = core.optim.epsilon
+      optim[:weight_decay]  = core.optim.weight_decay
+      if core.optim.gradient_clip.nil?
+        optim[:has_gradient_clip] = 0
+        optim[:gradient_clip]     = 0.0
+      else
+        optim[:has_gradient_clip] = 1
+        optim[:gradient_clip]     = core.optim.gradient_clip
+      end
+
+      sched = core_struct[:scheduler]
+      sched[:kind]         = SchedulerKind.to_cabi(core.scheduler.kind)
+      sched[:warmup_steps] = core.scheduler.warmup_steps
+
+      core_struct[:max_steps]                   = core.max_steps
+      core_struct[:batch_size]                  = core.batch_size
+      core_struct[:gradient_accumulation_steps] = core.gradient_accumulation_steps
+      core_struct[:max_seq_len]                 = core.max_seq_len
+      if core.eval_steps.nil?
+        core_struct[:has_eval_steps] = 0
+        core_struct[:eval_steps]     = 0
+      else
+        core_struct[:has_eval_steps] = 1
+        core_struct[:eval_steps]     = core.eval_steps
+      end
+      if core.save_steps.nil?
+        core_struct[:has_save_steps] = 0
+        core_struct[:save_steps]     = 0
+      else
+        core_struct[:has_save_steps] = 1
+        core_struct[:save_steps]     = core.save_steps
+      end
+      core_struct[:seed]            = core.seed
+      core_struct[:mixed_precision] = MixedPrecision.to_cabi(core.mixed_precision)
+      core_struct[:device]          = to_cstr.call(core.device)
+    end
+
+    # Populates a `BlazenLoraConfig` slot. Allocates the `target_modules`
+    # pointer array on the caller's `keepalive`.
+    def populate_lora_struct(lora_struct, lora, keepalive)
+      target_mod_ptrs = lora.target_modules.map do |m|
+        mp = ::FFI::MemoryPointer.from_string(m.to_s)
+        keepalive << mp
+        mp
+      end
+      target_mod_array = ::FFI::MemoryPointer.new(:pointer, target_mod_ptrs.length)
+      target_mod_array.write_array_of_pointer(target_mod_ptrs)
+      keepalive << target_mod_array
+
+      lora_struct[:rank]               = lora.rank
+      lora_struct[:alpha]              = lora.alpha
+      lora_struct[:dropout]            = lora.dropout
+      lora_struct[:target_modules]     = target_mod_array
+      lora_struct[:target_modules_len] = target_mod_ptrs.length
+    end
+
+    def with_dpo_config(config)
+      keepalive = []
+      to_cstr = lambda do |s|
+        next nil if s.nil?
+
+        mp = ::FFI::MemoryPointer.from_string(s.to_s)
+        keepalive << mp
+        mp
+      end
+
+      struct = Blazen::FFI::BlazenDpoConfig.new
+      populate_core_struct(struct[:core], config.core, keepalive)
+      populate_lora_struct(struct[:lora], config.lora, keepalive)
+      struct[:beta]                     = config.beta
+      struct[:label_smoothing]          = config.label_smoothing
+      struct[:reference_model_repo]     = to_cstr.call(config.reference_model_repo)
+      struct[:reference_model_revision] = to_cstr.call(config.reference_model_revision)
+
+      begin
+        yield struct
+      ensure
+        keepalive.clear
+      end
+    end
+
+    def with_orpo_config(config)
+      keepalive = []
+      struct = Blazen::FFI::BlazenOrpoConfig.new
+      populate_core_struct(struct[:core], config.core, keepalive)
+      populate_lora_struct(struct[:lora], config.lora, keepalive)
+      struct[:lambda] = config.lambda
+
+      begin
+        yield struct
+      ensure
+        keepalive.clear
+      end
+    end
+
+    def with_simpo_config(config)
+      keepalive = []
+      struct = Blazen::FFI::BlazenSimpoConfig.new
+      populate_core_struct(struct[:core], config.core, keepalive)
+      populate_lora_struct(struct[:lora], config.lora, keepalive)
+      struct[:beta]  = config.beta
+      struct[:gamma] = config.gamma
+
+      begin
+        yield struct
+      ensure
+        keepalive.clear
+      end
+    end
+
+    def with_kto_config(config)
+      keepalive = []
+      to_cstr = lambda do |s|
+        next nil if s.nil?
+
+        mp = ::FFI::MemoryPointer.from_string(s.to_s)
+        keepalive << mp
+        mp
+      end
+
+      struct = Blazen::FFI::BlazenKtoConfig.new
+      populate_core_struct(struct[:core], config.core, keepalive)
+      populate_lora_struct(struct[:lora], config.lora, keepalive)
+      struct[:beta]                     = config.beta
+      struct[:lambda_d]                 = config.lambda_d
+      struct[:lambda_u]                 = config.lambda_u
+      struct[:reference_model_repo]     = to_cstr.call(config.reference_model_repo)
+      struct[:reference_model_revision] = to_cstr.call(config.reference_model_revision)
+
+      begin
+        yield struct
+      ensure
+        keepalive.clear
+      end
+    end
+
+    def with_full_finetune_config(config)
+      keepalive = []
+      struct = Blazen::FFI::BlazenFullFineTuneConfig.new
+      populate_core_struct(struct[:core], config.core, keepalive)
+      struct[:gradient_checkpointing] = config.gradient_checkpointing ? 1 : 0
+
+      begin
+        yield struct
+      ensure
+        keepalive.clear
+      end
+    end
+
+    def decode_full_finetune_result(out_result)
+      dir_ptr = out_result[:output_dir]
+      output_dir =
+        if dir_ptr.nil? || dir_ptr.null?
+          nil
+        else
+          dir_ptr.read_string.force_encoding(Encoding::UTF_8)
+        end
+      final_loss      = out_result[:final_loss]
+      steps_completed = out_result[:steps_completed]
+      Blazen::FFI.blazen_full_finetune_result_free(out_result.pointer)
+      FullFineTuneResult.new(
+        output_dir: output_dir,
+        final_loss: final_loss,
+        steps_completed: steps_completed,
+      )
     end
 
     def decode_trained_adapter(out_adapter)
