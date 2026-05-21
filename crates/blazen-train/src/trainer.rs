@@ -368,6 +368,83 @@ impl Trainer {
         self.model = Some(model);
     }
 
+    // --- Distributed-training accessors (used by AllReduceTrainer) ---
+
+    /// Evaluate the LR schedule at `step` without mutating optimizer
+    /// state. Used by [`crate::distributed::AllReduceTrainer`].
+    #[must_use]
+    pub fn lr_for_step(&self, step: usize) -> f64 {
+        (self.lr_scheduler)(step)
+    }
+
+    /// Apply `lr` to the inner optimizer. Used by
+    /// [`crate::distributed::AllReduceTrainer`] right before the
+    /// per-step optimizer kick.
+    pub fn set_optimizer_lr(&mut self, lr: f64) {
+        self.optimizer.set_learning_rate(lr);
+    }
+
+    /// Run the SFT forward pass on `batch` and return the loss tensor
+    /// (un-scaled by gradient accumulation). Used by the distributed
+    /// wrapper to compute `loss.backward()` itself, since the
+    /// AllReduce splice happens between backward and the optimizer step.
+    ///
+    /// # Errors
+    /// - [`BlazenTrainError::InvalidConfig`] if the model hasn't loaded.
+    /// - [`BlazenTrainError::Candle`] for forward / loss tensor errors.
+    pub fn forward_loss(&self, batch: &TrainingBatch) -> Result<Tensor, BlazenTrainError> {
+        let model = self.model.as_ref().ok_or_else(|| {
+            BlazenTrainError::InvalidConfig(
+                "Trainer::forward_loss requires a loaded model — call load_base_model first"
+                    .to_string(),
+            )
+        })?;
+        let logits = model.forward(&batch.input_ids)?;
+        let (b, t, v) = logits.dims3()?;
+        let logits_2d = logits.reshape((b * t, v))?;
+        let labels_1d = batch.labels.reshape((b * t,))?.to_dtype(DType::I64)?;
+        Ok(masked_cross_entropy(&logits_2d, &labels_1d, -100)?)
+    }
+
+    /// Run the gradient-clip + optimizer step on `grads` if the
+    /// accumulation counter has reached `gradient_accumulation_steps`.
+    /// Returns `true` when the optimizer actually stepped.
+    ///
+    /// Used by [`crate::distributed::AllReduceTrainer`] after the
+    /// AllReduce splice so the wrapper can decide whether to bump
+    /// `global_step`.
+    ///
+    /// # Errors
+    /// - [`BlazenTrainError::Optimizer`] when the AdamW step fails.
+    /// - [`BlazenTrainError::Candle`] for grad-clip tensor errors.
+    pub fn maybe_step_optimizer(
+        &mut self,
+        grads: &mut candle_core::backprop::GradStore,
+        vars: &[candle_core::Var],
+    ) -> Result<bool, BlazenTrainError> {
+        let accum = self.config.gradient_accumulation_steps.max(1);
+        self.accum_counter += 1;
+        if self.accum_counter < accum {
+            return Ok(false);
+        }
+        if let Some(max) = self.config.optim.gradient_clip {
+            let var_refs: Vec<&candle_core::Var> = vars.iter().collect();
+            grad_clip::clip_grad_norm(grads, &var_refs, max)?;
+        }
+        self.optimizer
+            .step(grads)
+            .map_err(|e| BlazenTrainError::Optimizer(e.to_string()))?;
+        self.accum_counter = 0;
+        Ok(true)
+    }
+
+    /// Increment the global step counter. Used by
+    /// [`crate::distributed::AllReduceTrainer`] after a successful
+    /// optimizer step.
+    pub fn bump_global_step(&mut self) {
+        self.global_step += 1;
+    }
+
     /// Download the base model from HF Hub, parse `config.json` to detect
     /// the architecture, mmap the safetensors into a frozen `VarBuilder`,
     /// and wrap the result in a `TrainableXxx` whose LoRA params land in

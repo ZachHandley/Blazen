@@ -614,6 +614,38 @@ pub struct QloraConfig {
     pub base_quant: QloraQuantDtype,
 }
 
+/// Configuration for a multi-GPU / multi-node distributed training run.
+///
+/// Mirrors PyTorch's `torchrun` env vars (`RANK`, `WORLD_SIZE`,
+/// `MASTER_ADDR`, `MASTER_PORT`) but in struct form so the same shape
+/// can ride across the bindings without an extra layer of env parsing.
+///
+/// `peers` is the full ordered endpoint list — `peers[i]` is the gRPC
+/// AllReduce endpoint (`"host:port"`) of rank `i`. `master_addr` /
+/// `master_port` identify the bootstrap node (typically `peers[0]`).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct DistributedConfig {
+    /// 0-indexed rank of this worker. Must satisfy `rank < world_size`.
+    pub rank: usize,
+    /// Total number of workers in the ring.
+    pub world_size: usize,
+    /// Ordered list of `"host:port"` gRPC endpoints, indexed by rank.
+    #[serde(default)]
+    pub peers: Vec<String>,
+    /// Bootstrap address (typically `peers[0]`'s host).
+    pub master_addr: String,
+    /// Bootstrap port.
+    pub master_port: u16,
+}
+
+impl DistributedConfig {
+    /// `true` when `world_size > 1` — the trainer should AllReduce.
+    #[must_use]
+    pub fn is_distributed(&self) -> bool {
+        self.world_size > 1
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -817,6 +849,34 @@ mod tests {
         let parsed: RewardConfig = serde_json::from_str(&json).expect("deserialize");
         assert_core_eq(&parsed.core, &original.core);
         assert_lora_eq(&parsed.lora, &original.lora);
+    }
+
+    #[test]
+    fn distributed_config_default_is_single_worker() {
+        let cfg = DistributedConfig::default();
+        assert_eq!(cfg.rank, 0);
+        assert_eq!(cfg.world_size, 0);
+        assert!(!cfg.is_distributed());
+    }
+
+    #[test]
+    fn distributed_config_serde_roundtrip() {
+        let original = DistributedConfig {
+            rank: 2,
+            world_size: 4,
+            peers: vec![
+                "host0:50051".to_string(),
+                "host1:50051".to_string(),
+                "host2:50051".to_string(),
+                "host3:50051".to_string(),
+            ],
+            master_addr: "host0".to_string(),
+            master_port: 50051,
+        };
+        let json = serde_json::to_string(&original).expect("serialize");
+        let parsed: DistributedConfig = serde_json::from_str(&json).expect("deserialize");
+        assert_eq!(parsed, original);
+        assert!(parsed.is_distributed());
     }
 
     #[test]

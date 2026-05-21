@@ -1,0 +1,62 @@
+syntax = "proto3";
+
+package blazen.allreduce.v1;
+
+// BlazenAllReduce: minimal inter-worker transport for ring-AllReduce
+// during distributed training. Each worker holds a logical gradient
+// tensor split into `world_size` equal chunks. The reduce-scatter and
+// all-gather phases each take `world_size - 1` steps; at every step the
+// sender pushes a chunk to its `next` peer and the receiver pulls a
+// chunk from its `prev` peer.
+//
+// We use a push-only model (SendChunk on the sender side, with the
+// receiver buffering bytes until its matching RecvChunk request fires).
+// The optional Barrier RPC lets workers synchronize on step boundaries
+// before tearing down the per-step buffers.
+service BlazenAllReduce {
+  // Push a chunk of bytes from `sender_rank` to this worker for a given
+  // (step, chunk_id). The receiver buffers the payload keyed by
+  // (sender_rank, step, chunk_id) until a matching RecvChunk drains it.
+  rpc SendChunk(SendChunkRequest) returns (AckResponse);
+
+  // Pull a previously-pushed chunk. Blocks (server-side, up to a
+  // deadline) until the matching SendChunk arrives, then returns the
+  // payload. Idempotent on retry within the same step.
+  rpc RecvChunk(RecvChunkRequest) returns (ChunkBytes);
+
+  // Step-level barrier so callers can drain stale buffers safely.
+  // Optional — the in-memory transport doesn't need it because mpsc
+  // channels provide ordering, but the gRPC transport benefits from it
+  // when chunks arrive faster than the receiver drains them.
+  rpc Barrier(BarrierRequest) returns (BarrierResponse);
+}
+
+message SendChunkRequest {
+  uint32 sender_rank = 1;
+  uint32 step = 2;
+  uint32 chunk_id = 3;
+  bytes payload = 4;
+}
+
+message RecvChunkRequest {
+  uint32 sender_rank = 1;
+  uint32 step = 2;
+  uint32 chunk_id = 3;
+}
+
+message AckResponse {
+  bool ok = 1;
+}
+
+message ChunkBytes {
+  bytes payload = 1;
+}
+
+message BarrierRequest {
+  uint32 rank = 1;
+  uint32 step = 2;
+}
+
+message BarrierResponse {
+  bool ok = 1;
+}

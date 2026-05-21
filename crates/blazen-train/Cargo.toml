@@ -14,14 +14,18 @@ blazen-llm = { workspace = true, optional = true }
 candle-core = { workspace = true, optional = true }
 candle-nn = { workspace = true, optional = true }
 candle-transformers = { workspace = true, optional = true }
+futures-util = { workspace = true, optional = true }
 hf-hub = { workspace = true, features = ["tokio"], optional = true }
 minijinja = { version = "2.20.0", optional = true }
+prost = { workspace = true, optional = true }
 safetensors = { version = "0.7.0", optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true
 tokenizers = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["sync", "rt"], optional = true }
+tonic = { workspace = true, optional = true }
+tonic-prost = { workspace = true, optional = true }
 tracing.workspace = true
 
 [features]
@@ -41,6 +45,17 @@ engine = [
 # `blazen-manager::ModelManager::train_lora`. Pure plumbing — no runtime
 # behavior change.
 blazen-llm-interop = ["dep:blazen-llm"]
+# Multi-GPU / multi-node distributed training via gRPC ring-AllReduce.
+# Pulls in tonic + prost for the inter-worker transport. Implies `engine`
+# because the AllReduceTrainer wraps the candle-backed Trainer.
+distributed = [
+    "engine",
+    "dep:tonic",
+    "dep:tonic-prost",
+    "dep:prost",
+    "dep:futures-util",
+    "dep:tonic-prost-build",
+]
 
 [lints]
 workspace = true
@@ -49,3 +64,6 @@ workspace = true
 ahash = "0.8.12"
 blazen-llm-candle = { workspace = true, features = ["engine"] }
 tempfile.workspace = true
+
+[build-dependencies]
+tonic-prost-build = { workspace = true, optional = true }

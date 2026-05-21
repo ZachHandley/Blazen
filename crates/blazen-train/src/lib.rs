@@ -46,10 +46,14 @@ pub mod schedulers;
 #[cfg(feature = "engine")]
 pub mod trainer;
 
+#[cfg(feature = "engine")]
+pub mod distributed;
+
 pub use config::{
-    DpoConfig, FullFineTuneConfig, GrpoConfig, KtoConfig, LoraConfig, MixedPrecision, OptimConfig,
-    OrpoConfig, PpoConfig, QloraConfig, QloraQuantDtype, RewardConfig, SchedulerConfig,
-    SchedulerKind, SimpoConfig, TrainConfig, TrainCoreConfig, ValueModelInit,
+    DistributedConfig, DpoConfig, FullFineTuneConfig, GrpoConfig, KtoConfig, LoraConfig,
+    MixedPrecision, OptimConfig, OrpoConfig, PpoConfig, QloraConfig, QloraQuantDtype,
+    RewardConfig, SchedulerConfig, SchedulerKind, SimpoConfig, TrainConfig, TrainCoreConfig,
+    ValueModelInit,
 };
 pub use error::{BlazenTrainError, MergeError};
 pub use progress::{TrainingEvent, TrainingProgress};

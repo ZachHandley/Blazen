@@ -41,6 +41,12 @@ pub enum BlazenTrainError {
     #[error("training cancelled by progress callback")]
     Cancelled,
 
+    /// Failure in the distributed transport / AllReduce kernel.
+    /// Wraps both transport-level (gRPC) and ring-protocol errors so
+    /// callers can match the failure mode without depending on tonic.
+    #[error("distributed training error: {0}")]
+    Distributed(String),
+
     /// A feature was requested that this release does not implement yet.
     /// Used for honest, documented deferrals (e.g. activation
     /// checkpointing, multi-shard safetensors, full fine-tunes of
