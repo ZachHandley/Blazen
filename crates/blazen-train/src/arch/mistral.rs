@@ -495,10 +495,18 @@ impl TrainableMistral {
         let device = base_vb.device().clone();
 
         // Why: FullFineTune ignores LoRA targets entirely — no adapters
-        // are constructed. LoraOnly honors the user's target list.
+        // are constructed. LoraOnly honors the user's target list. Qlora
+        // is wired for Llama only in PR-Q phase 1; Mistral lands in phase 2.
         let targets: HashSet<String> = match mode {
             TrainMode::LoraOnly => lora_cfg.target_modules.iter().cloned().collect(),
             TrainMode::FullFineTune => HashSet::new(),
+            TrainMode::Qlora { .. } => {
+                return Err(candle_core::Error::Msg(
+                    "QLoRA on Mistral not yet implemented (PR-Q phase 1 ships Llama only; \
+                     Qwen2 + Mistral land in phase 2)"
+                        .to_string(),
+                ));
+            }
         };
 
         if mode == TrainMode::FullFineTune {

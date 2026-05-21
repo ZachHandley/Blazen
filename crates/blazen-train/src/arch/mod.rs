@@ -15,6 +15,8 @@ pub mod qwen2;
 use candle_core::{Result, Var};
 use candle_nn::{Embedding, Linear, RmsNorm, VarBuilder, VarMap, embedding, rms_norm};
 
+use crate::config::QloraQuantDtype;
+
 /// Selects whether a per-architecture wrapper trains LoRA adapters on top
 /// of a frozen base, or every base parameter directly.
 ///
@@ -34,6 +36,17 @@ pub enum TrainMode {
     /// [`Var`]s. The arch wrapper ignores [`crate::config::LoraConfig::target_modules`]
     /// in this mode — no LoRA layers are constructed.
     FullFineTune,
+    /// Quantized base + trainable LoRA adapters (QLoRA). At every target
+    /// linear the base weight is quantized to the GGUF integer format
+    /// carried in `quant` and wrapped with a [`crate::qlora::QLoraLinear`].
+    /// Non-target linears stay as plain frozen [`candle_nn::Linear`]s (no
+    /// quantization saving on them — they're typically a tiny fraction
+    /// of the total parameter budget). Only the LoRA `A`/`B` matrices land
+    /// in the trainer's [`VarMap`] and receive gradients.
+    Qlora {
+        /// GGUF integer format the base weights are packed into.
+        quant: QloraQuantDtype,
+    },
 }
 
 /// Copy a weight tensor read from `src_vb` (e.g., mmap'd safetensors) into
@@ -175,7 +188,12 @@ pub(crate) fn build_embedding(
     abs_path: &str,
 ) -> Result<Embedding> {
     match loader.mode {
-        TrainMode::LoraOnly => embedding(in_size, out_size, src_vb),
+        // Why: QLoRA only quantizes the per-layer attention/MLP linears
+        // listed in target_modules. Embeddings, lm_head, and layer norms
+        // stay frozen-dense — same as LoraOnly mode — because they're a
+        // tiny fraction of total params and quantizing them hurts
+        // accuracy disproportionately.
+        TrainMode::LoraOnly | TrainMode::Qlora { .. } => embedding(in_size, out_size, src_vb),
         TrainMode::FullFineTune => embedding_into_varmap(
             in_size,
             out_size,
@@ -202,7 +220,9 @@ pub(crate) fn build_rms_norm(
     abs_path: &str,
 ) -> Result<RmsNorm> {
     match loader.mode {
-        TrainMode::LoraOnly => rms_norm(size, eps, src_vb),
+        // Why: same rationale as build_embedding — QLoRA leaves the per-
+        // layer norms in dense form.
+        TrainMode::LoraOnly | TrainMode::Qlora { .. } => rms_norm(size, eps, src_vb),
         TrainMode::FullFineTune => rms_norm_into_varmap(
             size,
             eps,
@@ -238,7 +258,14 @@ impl BaseLoader<'_> {
         abs_path: &str,
     ) -> Result<Linear> {
         match self.mode {
-            TrainMode::LoraOnly => candle_nn::linear(in_dim, out_dim, base_vb),
+            // Why: in QLoRA mode the per-target linears are wrapped by
+            // QLoraLinear (which owns its own quantized base), not by a
+            // plain Linear. This helper is only called for non-target or
+            // bias-bearing linears (e.g. Qwen2 q/k/v carry bias) — for
+            // those we read the dense base frozen, identical to LoraOnly.
+            TrainMode::LoraOnly | TrainMode::Qlora { .. } => {
+                candle_nn::linear(in_dim, out_dim, base_vb)
+            }
             TrainMode::FullFineTune => linear_into_varmap(
                 in_dim,
                 out_dim,
@@ -264,7 +291,12 @@ impl BaseLoader<'_> {
         abs_path: &str,
     ) -> Result<Linear> {
         match self.mode {
-            TrainMode::LoraOnly => candle_nn::linear_no_bias(in_dim, out_dim, base_vb),
+            // Why: same rationale as `linear` — QLoRA wraps targets via
+            // `maybe_lora_linear`'s QLoRA branch directly, so callers of
+            // this helper get the dense frozen path.
+            TrainMode::LoraOnly | TrainMode::Qlora { .. } => {
+                candle_nn::linear_no_bias(in_dim, out_dim, base_vb)
+            }
             TrainMode::FullFineTune => linear_into_varmap(
                 in_dim,
                 out_dim,

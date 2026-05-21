@@ -45,20 +45,20 @@ use candle_nn::{Embedding, Linear, Module, RmsNorm, VarBuilder, VarMap};
 use crate::arch::{BaseLoader, TrainMode, build_embedding, build_rms_norm};
 use crate::config::LoraConfig;
 use crate::lora::LoraLinear;
+use crate::qlora::QLoraLinear;
 
 // ---------------------------------------------------------------------------
 // MaybeLora
 // ---------------------------------------------------------------------------
 
-/// Either a frozen [`Linear`] (target not in `LoraConfig::target_modules`)
-/// or a [`LoraLinear`] that adds a trainable low-rank delta.
-///
-/// Wave 2A's Qwen2 wrapper will eventually replace this with the shared
-/// version; until then each arch keeps its own copy of the two-variant
-/// dispatch enum.
+/// Per-projection dispatch. A target linear is either wrapped with
+/// trainable LoRA adapters on a dense base ([`MaybeLora::Lora`]), wrapped
+/// with LoRA adapters on a *quantized* base ([`MaybeLora::Qlora`] —
+/// QLoRA mode), or left as a plain frozen [`Linear`] ([`MaybeLora::Plain`]).
 enum MaybeLora {
     Plain(Linear),
     Lora(LoraLinear),
+    Qlora(QLoraLinear),
 }
 
 impl MaybeLora {
@@ -66,6 +66,7 @@ impl MaybeLora {
         match self {
             Self::Plain(l) => l.forward(x),
             Self::Lora(l) => l.forward(x),
+            Self::Qlora(l) => l.forward(x),
         }
     }
 }
@@ -104,18 +105,36 @@ fn maybe_lora_linear(
         base_vb.pp(name),
         &format!("{abs_path}.{name}"),
     )?;
-    if targets.contains(name) {
-        let wrapped = LoraLinear::wrap(
-            base,
-            in_dim,
-            out_dim,
-            lora_cfg.rank,
-            lora_cfg.alpha,
-            lora_vb.pp(name),
-        )?;
-        Ok(MaybeLora::Lora(wrapped))
-    } else {
-        Ok(MaybeLora::Plain(base))
+    if !targets.contains(name) {
+        return Ok(MaybeLora::Plain(base));
+    }
+    // Why: target linear — wrap with LoRA, optionally quantizing the
+    // frozen base if the trainer asked for QLoRA mode. FullFineTune
+    // contains an empty target set so it never reaches this branch.
+    match loader.mode {
+        TrainMode::Qlora { quant } => {
+            let wrapped = QLoraLinear::wrap(
+                base,
+                in_dim,
+                out_dim,
+                lora_cfg.rank,
+                lora_cfg.alpha,
+                quant,
+                lora_vb.pp(name),
+            )?;
+            Ok(MaybeLora::Qlora(wrapped))
+        }
+        TrainMode::LoraOnly | TrainMode::FullFineTune => {
+            let wrapped = LoraLinear::wrap(
+                base,
+                in_dim,
+                out_dim,
+                lora_cfg.rank,
+                lora_cfg.alpha,
+                lora_vb.pp(name),
+            )?;
+            Ok(MaybeLora::Lora(wrapped))
+        }
     }
 }
 
@@ -573,9 +592,14 @@ impl TrainableLlama {
         }
 
         // Why: FullFineTune ignores LoRA targets entirely — no adapters
-        // are constructed. LoraOnly honors the user's target list.
+        // are constructed. LoraOnly and Qlora both honor the user's
+        // target list; Qlora additionally quantizes the base of each
+        // target linear (the maybe_lora_linear branch keys on
+        // `loader.mode` to pick the wrapper type).
         let targets: HashSet<String> = match mode {
-            TrainMode::LoraOnly => lora_cfg.target_modules.iter().cloned().collect(),
+            TrainMode::LoraOnly | TrainMode::Qlora { .. } => {
+                lora_cfg.target_modules.iter().cloned().collect()
+            }
             TrainMode::FullFineTune => HashSet::new(),
         };
 

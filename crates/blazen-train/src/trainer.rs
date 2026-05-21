@@ -15,10 +15,11 @@ use candle_core::{D, DType, Device, Tensor};
 use candle_nn::{AdamW, Optimizer, ParamsAdamW, VarBuilder, VarMap};
 use serde::{Deserialize, Serialize};
 
-use crate::arch::{llama, mistral, qwen2};
+use crate::arch::{TrainMode, llama, mistral, qwen2};
 use crate::checkpoint;
 use crate::config::{
-    DpoConfig, FullFineTuneConfig, KtoConfig, LoraConfig, OrpoConfig, SimpoConfig, TrainConfig,
+    DpoConfig, FullFineTuneConfig, KtoConfig, LoraConfig, OrpoConfig, QloraConfig, QloraQuantDtype,
+    SimpoConfig, TrainConfig,
 };
 use crate::error::BlazenTrainError;
 use crate::export;
@@ -95,6 +96,9 @@ pub struct Trainer {
     /// Full fine-tune mode state — populated by
     /// [`Trainer::new_full_finetune`], stays `None` for every other mode.
     full_finetune: Option<FullFineTuneState>,
+    /// QLoRA mode state — populated by [`Trainer::new_qlora`], stays
+    /// `None` for SFT / preference-opt / FFT runs.
+    qlora: Option<QloraState>,
 }
 
 /// Extra state carried only by DPO-mode trainers.
@@ -171,6 +175,24 @@ pub(crate) struct FullFineTuneState {
     pub gradient_checkpointing: bool,
 }
 
+/// Extra state carried only by QLoRA-mode trainers.
+///
+/// QLoRA reuses the entire SFT / LoRA training path — same dataset, same
+/// AdamW over the LoRA `A`/`B` subset, same checkpoint + PEFT exporter —
+/// and only differs at model-build time: the per-target linear is wrapped
+/// with [`crate::qlora::QLoraLinear`] (4-bit base + dense LoRA delta)
+/// instead of [`crate::lora::LoraLinear`]. The only piece of QLoRA-only
+/// state worth carrying is the integer format the base is packed into,
+/// which the model-loader needs at construction time and which the
+/// emitted progress events can echo back for observability.
+pub(crate) struct QloraState {
+    /// GGUF integer format the frozen base weights are packed into. Set
+    /// once at [`Trainer::new_qlora`] and consumed by
+    /// [`Trainer::load_models_qlora`] when it dispatches to the per-arch
+    /// `load_with_mode` call.
+    pub quant: QloraQuantDtype,
+}
+
 impl Trainer {
     /// Construct a fresh trainer from a config + varmap + device.
     ///
@@ -243,6 +265,7 @@ impl Trainer {
             simpo: None,
             kto: None,
             full_finetune: None,
+            qlora: None,
         })
     }
 
@@ -2082,6 +2105,292 @@ impl Trainer {
         Ok(adapter)
     }
 
+    /// Construct a QLoRA trainer (4-bit quantized base + bf16/f32 LoRA
+    /// adapters).
+    ///
+    /// Mirrors [`Trainer::new`]'s validation + AdamW + LR scheduler setup,
+    /// but consumes [`QloraConfig::core`] for the train-core fields,
+    /// [`QloraConfig::lora`] for the LoRA wrapping, and stores
+    /// [`QloraConfig::base_quant`] in the trainer's [`QloraState`] so
+    /// [`Self::load_models_qlora`] knows the integer format the per-arch
+    /// wrapper should quantize the frozen base into.
+    ///
+    /// Models are NOT loaded here — call [`Self::load_models_qlora`]
+    /// before [`Self::step`] / [`Self::run`]. After load, the SFT step /
+    /// run kernels are reused verbatim: QLoRA differs from LoRA only at
+    /// the per-target linear's construction site, not at the loss /
+    /// optimizer / checkpoint paths.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BlazenTrainError::InvalidConfig`] if `lora.rank` or
+    /// `core.max_steps` is zero, or [`BlazenTrainError::Optimizer`] if
+    /// `AdamW::new` rejects the (initially empty) trainable param set.
+    pub fn new_qlora(
+        cfg: QloraConfig,
+        varmap: VarMap,
+        device: Device,
+        progress: Option<Arc<dyn TrainingProgress>>,
+    ) -> Result<Self, BlazenTrainError> {
+        let QloraConfig {
+            core,
+            lora,
+            base_quant,
+        } = cfg;
+        let synthesized = TrainConfig {
+            base_model_repo: core.base_model_repo,
+            output_dir: core.output_dir,
+            lora,
+            optim: core.optim,
+            scheduler: core.scheduler,
+            max_steps: core.max_steps,
+            batch_size: core.batch_size,
+            gradient_accumulation_steps: core.gradient_accumulation_steps,
+            max_seq_len: core.max_seq_len,
+            eval_steps: core.eval_steps,
+            save_steps: core.save_steps,
+            seed: core.seed,
+            mixed_precision: core.mixed_precision,
+            device: core.device,
+        };
+
+        let mut trainer = Self::new(synthesized, varmap, device)?;
+        trainer.progress = progress;
+        trainer.qlora = Some(QloraState { quant: base_quant });
+        Ok(trainer)
+    }
+
+    /// Load the policy model in QLoRA mode.
+    ///
+    /// Mirrors [`Self::load_base_model`] but dispatches through the per-arch
+    /// `load_with_mode(.., TrainMode::Qlora { quant })` entry so every
+    /// target linear's frozen base is quantized into a [`candle_core::quantized::QTensor`]
+    /// and wrapped with [`crate::qlora::QLoraLinear`]. Non-target linears,
+    /// embeddings, lm-head, and norms stay dense (a tiny fraction of the
+    /// parameter budget — quantizing them would hurt accuracy out of
+    /// proportion to the VRAM saving).
+    ///
+    /// After load, the optimizer is rebuilt over the LoRA `A`/`B` subset
+    /// — bit-identical to the plain-LoRA path because [`crate::qlora::QLoraLinear`]
+    /// registers the same `lora_A.weight` / `lora_B.weight` leaf names that
+    /// [`crate::lora::LoraLinear`] does.
+    ///
+    /// Phase 1 supports Llama only. Mistral and Qwen2 return an
+    /// `Unsupported`-flavored error from the per-arch loader; phase 2 will
+    /// add them.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BlazenTrainError::InvalidConfig`] if invoked on a non-QLoRA
+    /// trainer, or [`BlazenTrainError::ModelLoad`] / [`BlazenTrainError::Candle`]
+    /// for download / parse / quantize / mmap failures.
+    pub async fn load_models_qlora(&mut self) -> Result<(), BlazenTrainError> {
+        let quant = self
+            .qlora
+            .as_ref()
+            .ok_or_else(|| {
+                BlazenTrainError::InvalidConfig(
+                    "Trainer::load_models_qlora requires a QLoRA trainer — call Trainer::new_qlora instead of Trainer::new"
+                        .to_string(),
+                )
+            })?
+            .quant;
+
+        let dtype = match self.config.mixed_precision {
+            crate::config::MixedPrecision::None => DType::F32,
+            crate::config::MixedPrecision::Bf16 => DType::BF16,
+        };
+
+        let repo_id = self.config.base_model_repo.clone();
+        let api = hf_hub::api::tokio::ApiBuilder::new()
+            .with_progress(false)
+            .build()
+            .map_err(|e| BlazenTrainError::ModelLoad(format!("HF API init failed: {e}")))?;
+        let repo = api.model(repo_id.clone());
+
+        let config_path = repo.get("config.json").await.map_err(|e| {
+            BlazenTrainError::ModelLoad(format!("config.json download failed: {e}"))
+        })?;
+        let _tokenizer_path = repo.get("tokenizer.json").await.map_err(|e| {
+            BlazenTrainError::ModelLoad(format!("tokenizer.json download failed: {e}"))
+        })?;
+
+        let cfg_bytes = std::fs::read(&config_path).map_err(|e| {
+            BlazenTrainError::ModelLoad(format!(
+                "read config.json at {}: {e}",
+                config_path.display()
+            ))
+        })?;
+
+        let weight_paths = download_safetensors_shards(&repo).await?;
+
+        let probe: ArchProbe = serde_json::from_slice(&cfg_bytes).map_err(|e| {
+            BlazenTrainError::ModelLoad(format!("config.json arch probe failed: {e}"))
+        })?;
+        let arch_str = probe.model_type.as_deref().unwrap_or("");
+
+        // Why: SAFETY — HF cache files are immutable once written; the
+        // mmap stays valid for the lifetime of the model. Same contract as
+        // load_base_model / load_models_full_finetune.
+        #[allow(unsafe_code)]
+        let base_vb = unsafe {
+            VarBuilder::from_mmaped_safetensors(&weight_paths, dtype, &self.device)
+                .map_err(|e| BlazenTrainError::ModelLoad(format!("safetensors mmap failed: {e}")))?
+        };
+        let lora_vb = VarBuilder::from_varmap(&self.varmap, dtype, &self.device);
+
+        let model = build_trainable_model_from_arch_qlora(
+            arch_str,
+            &cfg_bytes,
+            base_vb,
+            lora_vb,
+            &self.config.lora,
+            quant,
+        )?;
+
+        self.model = Some(model);
+
+        // Why: rebuild the optimizer over the freshly-registered LoRA
+        // subset. QLoRA leaf names match plain LoRA, so the same
+        // freeze_base_params filter works unchanged.
+        let target_refs: Vec<&str> = self
+            .config
+            .lora
+            .target_modules
+            .iter()
+            .map(String::as_str)
+            .collect();
+        let trainable = freeze_base_params(&self.varmap, &target_refs);
+        let params = ParamsAdamW {
+            lr: self.config.optim.learning_rate,
+            beta1: self.config.optim.beta1,
+            beta2: self.config.optim.beta2,
+            eps: self.config.optim.epsilon,
+            weight_decay: self.config.optim.weight_decay,
+        };
+        self.optimizer = AdamW::new(trainable, params)
+            .map_err(|e| BlazenTrainError::Optimizer(e.to_string()))?;
+
+        Ok(())
+    }
+
+    /// Run one QLoRA training step.
+    ///
+    /// Identical loss / backward / optimizer kernel to [`Self::step`]:
+    /// QLoRA is just plain SFT against a model whose per-target linears
+    /// were built differently. The only QLoRA-only check is that the
+    /// trainer was constructed via [`Self::new_qlora`].
+    ///
+    /// Gradient clipping uses the same `target_modules` LoRA-name filter
+    /// as the plain-LoRA path because [`crate::qlora::QLoraLinear`] registers
+    /// the same `lora_A.weight` / `lora_B.weight` leaf names.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BlazenTrainError::InvalidConfig`] if the trainer was not
+    /// built via [`Self::new_qlora`] or no model has been loaded yet;
+    /// otherwise forwards every error from [`Self::step`].
+    pub async fn step_qlora(&mut self, batch: TrainingBatch) -> Result<f32, BlazenTrainError> {
+        if self.qlora.is_none() {
+            return Err(BlazenTrainError::InvalidConfig(
+                "Trainer::step_qlora requires a QLoRA trainer (use Trainer::new_qlora)".to_string(),
+            ));
+        }
+        self.step(batch).await
+    }
+
+    /// Full QLoRA training run from an SFT dataset.
+    ///
+    /// Mirrors [`Self::run`]: loads the QLoRA-wrapped policy if not
+    /// already loaded, then iterates `dataset.batch(...)` → `step_qlora(...)`
+    /// until `global_step` reaches `max_steps`. Emits progress events,
+    /// optional periodic checkpoints, and a final PEFT adapter export
+    /// (same exporter as SFT — QLoRA trains LoRA, so the artifact is a
+    /// regular LoRA adapter that any PEFT loader consumes).
+    ///
+    /// # Errors
+    ///
+    /// Forwards any [`BlazenTrainError`] from [`Self::step_qlora`],
+    /// [`crate::checkpoint::save_checkpoint`], or
+    /// [`crate::export::save_peft_adapter`]. Returns
+    /// [`BlazenTrainError::Cancelled`] if a progress callback aborts.
+    pub async fn run_qlora(
+        &mut self,
+        dataset: Box<dyn TrainingDataset>,
+    ) -> Result<TrainedAdapter, BlazenTrainError> {
+        if self.qlora.is_none() {
+            return Err(BlazenTrainError::InvalidConfig(
+                "Trainer::run_qlora requires a QLoRA trainer (use Trainer::new_qlora)".to_string(),
+            ));
+        }
+        if self.model.is_none() {
+            self.load_models_qlora().await?;
+        }
+
+        self.emit_event(TrainingEvent::Started {
+            total_steps: self.total_steps,
+        })?;
+
+        let mut final_loss = 0.0_f32;
+        while self.global_step < self.total_steps {
+            let step_idx = self.global_step;
+            let batch = dataset.batch(self.config.batch_size, step_idx).await?;
+            let started = Instant::now();
+            let loss = self.step_qlora(batch).await?;
+            let elapsed = started.elapsed();
+            final_loss = loss;
+
+            let lr = (self.lr_scheduler)(step_idx);
+            self.emit_event(TrainingEvent::StepCompleted {
+                step: step_idx,
+                loss,
+                learning_rate: lr,
+                elapsed,
+            })?;
+
+            if let Some(save_every) = self.config.save_steps
+                && save_every > 0
+                && self.global_step.is_multiple_of(save_every)
+            {
+                checkpoint::save_checkpoint(
+                    &self.config.output_dir,
+                    self.global_step,
+                    &self.varmap,
+                    &self.config,
+                )?;
+                let cp_path = self
+                    .config
+                    .output_dir
+                    .join(format!("step_{}", self.global_step));
+                self.emit_event(TrainingEvent::CheckpointSaved {
+                    step: self.global_step,
+                    path: cp_path,
+                })?;
+            }
+        }
+
+        export::save_peft_adapter(
+            &self.varmap,
+            &self.config.output_dir,
+            &self.config.lora,
+            &self.config.base_model_repo,
+        )?;
+
+        let adapter = TrainedAdapter {
+            adapter_dir: self.config.output_dir.clone(),
+            final_loss,
+            total_steps: self.global_step,
+        };
+
+        self.emit_event(TrainingEvent::Finished {
+            final_loss,
+            total_steps: self.global_step,
+            adapter_dir: self.config.output_dir.clone(),
+        })?;
+
+        Ok(adapter)
+    }
+
     fn emit_event(&self, event: TrainingEvent) -> Result<(), BlazenTrainError> {
         if let Some(sink) = self.progress.as_ref() {
             sink.on_event(event)
@@ -2570,6 +2879,51 @@ fn build_trainable_model_from_arch_full_finetune(
         other => {
             return Err(BlazenTrainError::ModelLoad(format!(
                 "unsupported model_type '{other}' (wired: qwen2, llama, mistral)"
+            )));
+        }
+    };
+    Ok(model)
+}
+
+/// QLoRA analogue of [`build_trainable_model_from_arch`].
+///
+/// Dispatches on `arch_str`, invokes the per-arch `load_with_mode` with
+/// [`TrainMode::Qlora { quant }`], and threads the LoRA targets through
+/// unchanged. PR-Q phase 1 implements the Llama branch; Mistral and
+/// Qwen2 surface `BlazenTrainError::Unsupported` until phase 2 wires
+/// their `MaybeLora` dispatch the same way Llama's now does.
+fn build_trainable_model_from_arch_qlora(
+    arch_str: &str,
+    cfg_bytes: &[u8],
+    base_vb: VarBuilder,
+    lora_vb: VarBuilder,
+    lora_cfg: &LoraConfig,
+    quant: QloraQuantDtype,
+) -> Result<TrainableModel, BlazenTrainError> {
+    let mode = TrainMode::Qlora { quant };
+    let model = match arch_str {
+        "llama" => {
+            let llama_cfg: llama::LlamaConfig = serde_json::from_slice(cfg_bytes).map_err(|e| {
+                BlazenTrainError::ModelLoad(format!("llama Config parse failed: {e}"))
+            })?;
+            let arch_cfg = llama_cfg.into_config(false);
+            // Why: QLoRA mode does not require a train_varmap (no base
+            // weights are inserted as Vars — the base is quantized in
+            // place inside QLoraLinear and never appears in the VarMap).
+            let m = llama::TrainableLlama::load_with_mode(
+                base_vb, lora_vb, None, &arch_cfg, lora_cfg, mode,
+            )?;
+            TrainableModel::Llama(m)
+        }
+        "qwen2" | "mistral" => {
+            return Err(BlazenTrainError::Unsupported(format!(
+                "QLoRA on '{arch_str}' not yet implemented (PR-Q phase 1 ships Llama only; \
+                 Mistral + Qwen2 land in phase 2)"
+            )));
+        }
+        other => {
+            return Err(BlazenTrainError::ModelLoad(format!(
+                "unsupported model_type '{other}' for QLoRA (phase 1 wires: llama)"
             )));
         }
     };

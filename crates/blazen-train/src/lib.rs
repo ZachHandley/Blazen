@@ -32,19 +32,24 @@ pub mod lora;
 #[cfg(feature = "engine")]
 pub mod mixed_precision;
 #[cfg(feature = "engine")]
+pub mod qlora;
+#[cfg(feature = "engine")]
 pub mod schedulers;
 #[cfg(feature = "engine")]
 pub mod trainer;
 
 pub use config::{
     DpoConfig, FullFineTuneConfig, KtoConfig, LoraConfig, MixedPrecision, OptimConfig, OrpoConfig,
-    SchedulerConfig, SchedulerKind, SimpoConfig, TrainConfig, TrainCoreConfig,
+    QloraConfig, QloraQuantDtype, SchedulerConfig, SchedulerKind, SimpoConfig, TrainConfig,
+    TrainCoreConfig,
 };
 pub use error::BlazenTrainError;
 pub use progress::{TrainingEvent, TrainingProgress};
 
 #[cfg(feature = "engine")]
 pub use lora::{LoraLinear, freeze_base_params, lora_param_names};
+#[cfg(feature = "engine")]
+pub use qlora::{QLoraLinear, qlora_param_names};
 #[cfg(feature = "engine")]
 pub use trainer::{
     FullFineTuneResult, KtoBatch, PreferenceBatch, PreferenceDataset, RatedDataset, ReferenceModel,

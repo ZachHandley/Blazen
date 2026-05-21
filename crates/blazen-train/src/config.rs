@@ -360,6 +360,62 @@ pub struct FullFineTuneConfig {
     pub gradient_checkpointing: bool,
 }
 
+/// Quantization dtype for the frozen base weights in a QLoRA run.
+///
+/// Mirrors a subset of [`candle_core::quantized::GgmlDType`] but lives in
+/// the config crate (no candle dependency) so it can cross FFI boundaries.
+/// The trainer's QLoRA wrapper maps each variant 1:1 onto the candle dtype
+/// at model-build time.
+///
+/// All variants are integer-quantization formats with no learnable scale
+/// — the dequant-on-matmul kernel reads the packed blocks and produces an
+/// f32/bf16 output the LoRA adapters add into.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum QloraQuantDtype {
+    /// 4-bit, 32-element blocks, single scale per block (`GgmlDType::Q4_0`).
+    /// QLoRA's reference uses NF4 which candle doesn't ship; `Q4_0` is the
+    /// closest 4-bit GGUF analogue and what mainstream candle inference
+    /// quantizes Llama-family checkpoints to. Default for the same reason —
+    /// NF4 is unavailable in candle 0.10.2 and `Q4_0` is the lowest-VRAM
+    /// 4-bit format we can use today.
+    #[default]
+    Q4_0,
+    /// 4-bit, K-quants superblock layout (`GgmlDType::Q4K`). Slightly higher
+    /// effective bit-rate than `Q4_0` for the same accuracy budget.
+    Q4K,
+    /// 5-bit, 32-element blocks (`GgmlDType::Q5_0`). Higher fidelity than
+    /// `Q4_0` at the cost of ~25% more VRAM for the frozen base.
+    Q5_0,
+    /// 8-bit, 32-element blocks (`GgmlDType::Q8_0`). The most accurate
+    /// integer format candle ships; useful as a precision-baseline run.
+    Q8_0,
+}
+
+/// QLoRA configuration: 4-bit (or other GGUF-integer) frozen base
+/// weights + bf16/f32 trainable LoRA adapters.
+///
+/// The trainer reuses every SFT plumbing path (dataset, optimizer,
+/// scheduler, grad-clip, checkpoint, exporter) and only swaps in
+/// [`crate::qlora::QLoraLinear`] in place of [`crate::lora::LoraLinear`]
+/// at the per-arch wrapper. Memory savings come from the 4-bit base,
+/// not from any change to the gradient path: only the LoRA A/B matrices
+/// are trainable and only their gradients live in optimizer state.
+///
+/// `base_quant` controls the integer format used for the frozen base
+/// weights; `lora` controls the trainable adapter shape (rank, alpha,
+/// dropout, target modules). `target_modules` is honored exactly the
+/// way SFT honors it — non-target linears stay as plain (dequantized)
+/// `Linear`s, target linears become [`crate::qlora::QLoraLinear`].
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct QloraConfig {
+    /// Shared training hyperparameters.
+    pub core: TrainCoreConfig,
+    /// LoRA hyperparameters applied to the policy model.
+    pub lora: LoraConfig,
+    /// Quantization format for the frozen base weights.
+    pub base_quant: QloraQuantDtype,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -528,5 +584,24 @@ mod tests {
         let json = serde_json::to_string(&original).expect("serialize");
         let parsed: TrainCoreConfig = serde_json::from_str(&json).expect("deserialize");
         assert_core_eq(&parsed, &original);
+    }
+
+    #[test]
+    fn qlora_config_default_is_q4_0() {
+        let cfg = QloraConfig::default();
+        assert_eq!(cfg.base_quant, QloraQuantDtype::Q4_0);
+    }
+
+    #[test]
+    fn qlora_config_serde_roundtrip() {
+        let original = QloraConfig {
+            base_quant: QloraQuantDtype::Q4K,
+            ..QloraConfig::default()
+        };
+        let json = serde_json::to_string(&original).expect("serialize");
+        let parsed: QloraConfig = serde_json::from_str(&json).expect("deserialize");
+        assert_core_eq(&parsed.core, &original.core);
+        assert_lora_eq(&parsed.lora, &original.lora);
+        assert_eq!(parsed.base_quant, original.base_quant);
     }
 }
