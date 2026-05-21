@@ -39,14 +39,14 @@ tokio = { version = "1", default-features = false, features = ["fs", "rt", "rt-m
 # bypassed entirely on this target. Excludes `wasm32-wasip1*` because `web-sys`
 # / `wasm-bindgen` are browser-only — the wasi target gets its own block below.
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dependencies]
-tokenizers = { version = "0.21", default-features = false, features = ["unstable_wasm"] }
+tokenizers = { version = "0.23", default-features = false, features = ["unstable_wasm"] }
 tract-onnx = { workspace = true, features = ["getrandom-js"] }
 ndarray = { workspace = true }
-wasm-bindgen = "=0.2.118"
-wasm-bindgen-futures = "=0.4.68"
-js-sys = "=0.3.95"
-web-sys = { version = "=0.3.95", features = ["Window", "Request", "RequestInit", "RequestMode", "Response"] }
-getrandom = { version = "0.2", features = ["js"] }
+wasm-bindgen = "=0.2.121"
+wasm-bindgen-futures = "=0.4.71"
+js-sys = "=0.3.98"
+web-sys = { version = "=0.3.98", features = ["Window", "Request", "RequestInit", "RequestMode", "Response"] }
+getrandom = { version = "0.4", features = ["wasm_js"] }
 
 # wasm32-wasip1* (the napi-rs wasi build for Cloudflare Workers / Deno): same
 # tract + tokenizers feature set as the wasm-bindgen build, but model/tokenizer
@@ -54,10 +54,10 @@ getrandom = { version = "0.2", features = ["js"] }
 # polyfills networking via the host runtime, so plain `reqwest` works here.
 # No `wasm-bindgen` / `js-sys` / `web-sys` because those are browser-only.
 [target.'cfg(all(target_arch = "wasm32", target_os = "wasi"))'.dependencies]
-tokenizers = { version = "0.21", default-features = false, features = ["unstable_wasm"] }
+tokenizers = { version = "0.23", default-features = false, features = ["unstable_wasm"] }
 tract-onnx = { workspace = true, features = ["getrandom-js"] }
 ndarray = { workspace = true }
-getrandom = { version = "0.2", features = ["js"] }
+getrandom = { version = "0.4", features = ["wasm_js"] }
 reqwest = { workspace = true }
 
 [lints]

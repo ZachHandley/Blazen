@@ -15,7 +15,7 @@ chrono.workspace = true
 uuid.workspace = true
 dashmap.workspace = true
 tsify-next = { version = "0.5", features = ["js"], optional = true }
-wasm-bindgen = { version = "=0.2.118", optional = true }
+wasm-bindgen = { version = "=0.2.121", optional = true }
 
 [features]
 default = []

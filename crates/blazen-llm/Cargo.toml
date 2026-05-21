@@ -122,9 +122,9 @@ tracing.workspace = true
 bytes.workspace = true
 chrono.workspace = true
 reqwest = { workspace = true, optional = true }
-tiktoken-rs = { version = "0.9", optional = true }
+tiktoken-rs = { version = "0.11", optional = true }
 tsify-next = { version = "0.5", features = ["js", "json"], optional = true }
-wasm-bindgen = { version = "=0.2.118", optional = true }
+wasm-bindgen = { version = "=0.2.121", optional = true }
 pythonize = { version = "0.28", optional = true }
 pyo3 = { version = "0.28", optional = true }
 base64 = { workspace = true }
@@ -169,7 +169,7 @@ web-sys = { version = "=0.3.98", features = [
     "ReadableStreamDefaultReader",
 ] }
 uuid = { workspace = true, features = ["js"] }
-getrandom = { version = "0.2", features = ["js"] }
+getrandom = { version = "0.4", features = ["wasm_js"] }
 
 # Cross-wasm32 deps (browser + wasi). web-time transparently re-exports
 # std::time on native/wasi and uses Performance.now() in the browser; the

@@ -109,9 +109,11 @@ impl TiktokenCounter {
     /// Returns [`BlazenError::Unsupported`] when `tiktoken-rs` does not
     /// recognise the model name.
     pub fn for_model(model: &str) -> Result<Self, BlazenError> {
-        let bpe = tiktoken_rs::get_bpe_from_model(model).map_err(|e| {
-            BlazenError::unsupported(format!("Unknown model for token counting: {model}: {e}"))
-        })?;
+        let bpe = tiktoken_rs::bpe_for_model(model)
+            .map_err(|e| {
+                BlazenError::unsupported(format!("Unknown model for token counting: {model}: {e}"))
+            })?
+            .clone();
 
         let (tokens_per_message, tokens_per_name) = if model.starts_with("gpt-3.5") {
             (4, -1)

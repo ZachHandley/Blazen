@@ -103,7 +103,7 @@ bytes = "1"
 base64 = "0.22"
 
 # Magic-number / file-type detection (used by blazen-llm content store).
-infer = { version = "0.16", default-features = false }
+infer = { version = "0.19", default-features = false }
 
 # Python bindings
 pyo3 = { version = "0.28", features = ["multiple-pymethods", "abi3-py310"] }
@@ -127,7 +127,7 @@ proc-macro2 = "1"
 darling = "0.23"
 
 # Persistence
-redb = "3"
+redb = "4"
 redis = { version = "1", features = ["aio", "tokio-comp", "connection-manager"] }
 
 # Internal crates
@@ -182,7 +182,7 @@ regex = "1"
 indexmap = { version = "2", features = ["serde"] }
 
 # Model caching / download
-hf-hub = { version = "0.4", default-features = false }
+hf-hub = { version = "0.5", default-features = false }
 
 # Candle ML framework (local inference)
 candle-core = "0.10"
@@ -194,16 +194,16 @@ candle-transformers = "0.10"
 # /MD). Strict linkers (lld-link) hard-error on the mismatch; real link.exe
 # tolerates it but mixing CRTs in one DLL is fragile. The pure-Rust fallback
 # only affects Unigram tokenizer init perf, not tokenization runtime.
-tokenizers = { version = "0.21", default-features = false, features = ["onig", "progressbar"] }
+tokenizers = { version = "0.23", default-features = false, features = ["onig", "progressbar"] }
 
 # Local embedding via ONNX Runtime
 fastembed = "5"
-sha2 = "0.10"
+sha2 = "0.11"
 dirs = "6"
 
 # Pure-Rust ONNX inference (for musl and other targets ORT doesn't ship)
-tract-onnx = "0.21"
-ndarray = "0.16"
+tract-onnx = "0.22"
+ndarray = "0.17"
 
 # Testing
 tempfile = "3"

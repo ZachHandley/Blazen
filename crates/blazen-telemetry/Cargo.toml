@@ -25,12 +25,12 @@ async-trait = { workspace = true }
 futures-util = { workspace = true }
 
 # OTLP (feature-gated)
-opentelemetry = { version = "0.31", optional = true }
-opentelemetry_sdk = { version = "0.31", features = ["rt-tokio"], optional = true }
-opentelemetry-otlp = { version = "0.31", default-features = false, optional = true }
-opentelemetry-http = { version = "0.31", default-features = false, optional = true }
-tracing-opentelemetry = { version = "0.32", optional = true }
-http = { version = "1.1", default-features = false, features = ["std"], optional = true }
+opentelemetry = { version = "0.32", optional = true }
+opentelemetry_sdk = { version = "0.32", features = ["rt-tokio"], optional = true }
+opentelemetry-otlp = { version = "0.32", default-features = false, optional = true }
+opentelemetry-http = { version = "0.32", default-features = false, optional = true }
+tracing-opentelemetry = { version = "0.33", optional = true }
+http = { version = "1.4", default-features = false, features = ["std"], optional = true }
 bytes = { workspace = true, optional = true }
 
 # Prometheus (feature-gated)
@@ -55,10 +55,10 @@ reqwest = { workspace = true, optional = true }
 # `spawn_local` for the langfuse dispatcher. Excluded on wasi (no DOM /
 # wasm-bindgen ABI on wasi).
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dependencies]
-wasm-bindgen = { version = "=0.2.118", optional = true }
-wasm-bindgen-futures = { version = "=0.4.68", optional = true }
-js-sys = { version = "=0.3.95", optional = true }
-web-sys = { version = "=0.3.95", optional = true, features = [
+wasm-bindgen = { version = "=0.2.121", optional = true }
+wasm-bindgen-futures = { version = "=0.4.71", optional = true }
+js-sys = { version = "=0.3.98", optional = true }
+web-sys = { version = "=0.3.98", optional = true, features = [
     "Request",
     "RequestInit",
     "Response",
