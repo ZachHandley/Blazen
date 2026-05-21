@@ -39,6 +39,7 @@ members = [
     "crates/blazen-audio-piper-vendored",
     "crates/blazen-audio-dac-vendored",
     "crates/blazen-train-tune",
+    "crates/blazen-llm-ollama",
 ]
 exclude = [
     "crates/blazen-wasm",
@@ -148,6 +149,7 @@ blazen-image-diffusion = { version = "0.0.0-dev", path = "crates/blazen-image-di
 blazen-llm-candle = { version = "0.0.0-dev", path = "crates/blazen-llm-candle", registry = "forgejo" }
 blazen-llm-llamacpp = { version = "0.0.0-dev", path = "crates/blazen-llm-llamacpp", registry = "forgejo" }
 blazen-llm-vllm = { version = "0.0.0-dev", path = "crates/blazen-llm-vllm", registry = "forgejo" }
+blazen-llm-ollama = { version = "0.0.0-dev", path = "crates/blazen-llm-ollama", registry = "forgejo" }
 blazen-audio-tts = { version = "0.0.0-dev", path = "crates/blazen-audio-tts", registry = "forgejo" }
 blazen-audio-piper-vendored = { version = "0.0.0-dev", path = "crates/blazen-audio-piper-vendored", registry = "forgejo" }
 blazen-audio-dac-vendored = { version = "0.0.0-dev", path = "crates/blazen-audio-dac-vendored", registry = "forgejo" }

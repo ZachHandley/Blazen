@@ -1,0 +1,26 @@
+[package]
+name = "blazen-llm-ollama"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Ollama HTTP proxy provider for Blazen — generate/chat/embed + Modelfile-based LoRA adapter mounting"
+
+[dependencies]
+async-trait.workspace = true
+futures-util.workspace = true
+reqwest = { workspace = true, features = ["json", "stream"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync", "macros", "rt", "time"] }
+tracing.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+mockito = "1.7.2"
+tokio = { workspace = true, features = ["macros", "rt"] }
