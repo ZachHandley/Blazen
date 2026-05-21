@@ -1,0 +1,34 @@
+[package]
+name = "blazen-llm-lmstudio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "LM Studio OpenAI-compat + native model load/unload proxy provider for Blazen"
+
+[features]
+default = []
+# Engine feature. LM Studio is an HTTP proxy — there is no in-process
+# runtime to optionally link, so this flag is currently a no-op kept for
+# parity with the other local-backend crates (`blazen-llm-mistralrs`,
+# `blazen-llm-llamacpp`, `blazen-llm-vllm`, `blazen-llm-ollama`).
+engine = []
+
+[dependencies]
+async-trait.workspace = true
+futures-util.workspace = true
+reqwest = { workspace = true, features = ["json", "stream"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time"] }
+tracing.workspace = true
+url = "2.5.8"
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+mockito = "1.7.2"

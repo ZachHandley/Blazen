@@ -42,6 +42,7 @@ members = [
     "crates/blazen-llm-ollama",
     "crates/blazen-llm-llamacpp-server",
     "crates/blazen-llm-tgi",
+    "crates/blazen-llm-lmstudio",
 ]
 exclude = [
     "crates/blazen-wasm",
@@ -154,6 +155,7 @@ blazen-llm-vllm = { version = "0.0.0-dev", path = "crates/blazen-llm-vllm", regi
 blazen-llm-ollama = { version = "0.0.0-dev", path = "crates/blazen-llm-ollama", registry = "forgejo" }
 blazen-llm-llamacpp-server = { version = "0.0.0-dev", path = "crates/blazen-llm-llamacpp-server", registry = "forgejo" }
 blazen-llm-tgi = { version = "0.0.0-dev", path = "crates/blazen-llm-tgi", registry = "forgejo" }
+blazen-llm-lmstudio = { version = "0.0.0-dev", path = "crates/blazen-llm-lmstudio", registry = "forgejo" }
 blazen-audio-tts = { version = "0.0.0-dev", path = "crates/blazen-audio-tts", registry = "forgejo" }
 blazen-audio-piper-vendored = { version = "0.0.0-dev", path = "crates/blazen-audio-piper-vendored", registry = "forgejo" }
 blazen-audio-dac-vendored = { version = "0.0.0-dev", path = "crates/blazen-audio-dac-vendored", registry = "forgejo" }

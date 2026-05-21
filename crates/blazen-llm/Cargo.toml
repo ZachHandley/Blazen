@@ -102,6 +102,10 @@ whispercpp     = ["audio-stt-whispercpp"]
 piper          = ["audio-tts-piper"]
 tts            = ["audio-tts-anytts"]
 candle-audio   = ["audio-music-musicgen"]
+# `lmstudio` enables the LM Studio HTTP-proxy backend. Adds the
+# `blazen-llm-lmstudio` crate and `reqwest` so the trait-impl bridge in
+# backends/lmstudio.rs drives the SSE response stream directly.
+lmstudio = ["dep:blazen-llm-lmstudio", "dep:reqwest"]
 
 [dependencies]
 blazen-events.workspace = true
@@ -141,6 +145,7 @@ blazen-audio-codec = { workspace = true, optional = true }
 blazen-llm-ollama = { workspace = true, optional = true }
 blazen-llm-llamacpp-server = { workspace = true, optional = true }
 blazen-llm-tgi = { workspace = true, optional = true }
+blazen-llm-lmstudio = { workspace = true, optional = true }
 
 # Timer/runtime features only on native targets (mio doesn't support any wasm32 target)
 [target.'cfg(not(any(target_os = "wasi", target_arch = "wasm32")))'.dependencies]

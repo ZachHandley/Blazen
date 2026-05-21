@@ -1001,7 +1001,12 @@ dependencies = [
  "blazen-image-diffusion",
  "blazen-llm-candle",
  "blazen-llm-llamacpp",
+<<<<<<< HEAD
  "blazen-llm-llamacpp-server",
+||||||| parent of 79405aaa (PR-PROXY-lmstudio: LM Studio HTTP proxy as a LocalModel backend)
+=======
+ "blazen-llm-lmstudio",
+>>>>>>> 79405aaa (PR-PROXY-lmstudio: LM Studio HTTP proxy as a LocalModel backend)
  "blazen-llm-mistralrs",
 <<<<<<< HEAD
  "blazen-llm-ollama",
@@ -1073,6 +1078,7 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "blazen-llm-llamacpp-server"
 version = "0.0.0-dev"
 dependencies = [
@@ -1085,6 +1091,22 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+||||||| parent of 79405aaa (PR-PROXY-lmstudio: LM Studio HTTP proxy as a LocalModel backend)
+=======
+name = "blazen-llm-lmstudio"
+version = "0.0.0-dev"
+dependencies = [
+ "async-trait",
+ "futures-util",
+ "mockito",
+ "reqwest 0.13.2",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tracing",
+ "url",
+>>>>>>> 79405aaa (PR-PROXY-lmstudio: LM Studio HTTP proxy as a LocalModel backend)
 ]
 
 [[package]]

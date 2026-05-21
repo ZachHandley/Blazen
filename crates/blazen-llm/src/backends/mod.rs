@@ -34,6 +34,9 @@ pub mod llamacpp_server;
 #[cfg(feature = "tgi")]
 pub mod tgi;
 
+#[cfg(feature = "lmstudio")]
+pub mod lmstudio;
+
 // ---------------------------------------------------------------------------
 // Audio bridges (new restructure — see PR_AUDIO_PLAN.md)
 // ---------------------------------------------------------------------------
