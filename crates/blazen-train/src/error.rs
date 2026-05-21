@@ -60,6 +60,99 @@ pub enum BlazenTrainError {
     /// JSON (de)serialization error.
     #[error("serialization error: {0}")]
     Serde(#[from] serde_json::Error),
+
+    /// Offline adapter merge failed (single-adapter merge or multi-adapter
+    /// weighted blend). See [`MergeError`] for the underlying classification.
+    #[error("adapter merge failed: {0}")]
+    Merge(#[from] MergeError),
+}
+
+/// Classifies failures from the offline LoRA merge surface
+/// ([`crate::merge::merge_lora_into_base`] and
+/// [`crate::merge::merge_lora_blend`]).
+///
+/// All variants carry a human-readable message naming the offending tensor
+/// (or path) so a caller staring at a stderr log can identify which adapter
+/// or base shard caused the failure without re-running under a debugger.
+#[derive(Debug, Error)]
+pub enum MergeError {
+    /// Base model safetensors did not contain the target tensor that an
+    /// adapter wanted to patch (i.e. the LoRA targets a module that does
+    /// not exist in the supplied base — typically a base-model mismatch).
+    #[error("base tensor missing for adapter target: {0}")]
+    MissingBaseTensor(String),
+
+    /// `B @ A` shape did not match the base linear's weight shape
+    /// (typically a mid-training shape edit or a corrupt adapter file).
+    #[error("shape mismatch merging {module}: base={base:?}, delta={delta:?}")]
+    ShapeMismatch {
+        /// Stripped module path (e.g. `model.layers.0.self_attn.q_proj`).
+        module: String,
+        /// Base weight shape (rows, cols) — i.e. (`out_dim`, `in_dim`).
+        base: Vec<usize>,
+        /// Computed `B @ A` shape (rows, cols).
+        delta: Vec<usize>,
+    },
+
+    /// Two adapters in a blend disagree about the rank of the same target
+    /// module. The merge math itself does not require equal ranks (the
+    /// `B @ A` product collapses rank), but mixing ranks is almost always
+    /// a sign the caller paired adapters trained against different base
+    /// models — surfaced as an error so the failure mode is explicit.
+    #[error(
+        "adapter rank inconsistency on {module}: adapter 0 has rank {first_rank}, adapter {other_index} has rank {other_rank}"
+    )]
+    RankMismatch {
+        /// Stripped module path the two adapters disagree on.
+        module: String,
+        /// Rank reported by the first adapter that touched `module`.
+        first_rank: usize,
+        /// Index (into the input slice) of the offending adapter.
+        other_index: usize,
+        /// Rank reported by the offending adapter.
+        other_rank: usize,
+    },
+
+    /// An adapter has `lora_A` but no matching `lora_B` (or vice versa)
+    /// for a given module. Mirrors the inference-loader's pairing rule
+    /// in `crates/blazen-llm-candle/src/lora.rs::build_layers`.
+    #[error("adapter has unpaired LoRA halves for module '{module}': missing {missing}")]
+    UnpairedLora {
+        /// Stripped module path.
+        module: String,
+        /// Which half is missing (`lora_A.weight` or `lora_B.weight`).
+        missing: &'static str,
+    },
+
+    /// Adapter `adapter_model.safetensors` could not be parsed (wrong key
+    /// shape, malformed tensor metadata, etc.).
+    #[error("malformed adapter at {path}: {reason}")]
+    MalformedAdapter {
+        /// Filesystem path of the adapter that failed to parse.
+        path: String,
+        /// Underlying parse / shape diagnostic.
+        reason: String,
+    },
+
+    /// Empty adapter list passed to [`crate::merge::merge_lora_blend`]
+    /// (zero adapters cannot yield a meaningful blend).
+    #[error("merge_lora_blend requires at least one adapter, got zero")]
+    EmptyBlend,
+
+    /// Underlying candle tensor failure (dtype mismatch in `B @ A`,
+    /// device transfer issue, etc.).
+    #[cfg(feature = "engine")]
+    #[error("candle tensor op failed: {0}")]
+    Candle(#[from] candle_core::Error),
+
+    /// Underlying safetensors serialization / parse error.
+    #[error("safetensors I/O failed: {0}")]
+    Safetensors(String),
+
+    /// Filesystem I/O error (reading a base shard, writing the merged
+    /// output, etc.).
+    #[error("io error: {0}")]
+    Io(#[from] std::io::Error),
 }
 
 // Why: lossless mapping into the framework-wide `BlazenError` so `?`

@@ -32,6 +32,8 @@ pub mod grpo;
 #[cfg(feature = "engine")]
 pub mod lora;
 #[cfg(feature = "engine")]
+pub mod merge;
+#[cfg(feature = "engine")]
 pub mod mixed_precision;
 #[cfg(feature = "engine")]
 pub mod qlora;
@@ -47,13 +49,15 @@ pub use config::{
     OrpoConfig, QloraConfig, QloraQuantDtype, RewardConfig, SchedulerConfig, SchedulerKind,
     SimpoConfig, TrainConfig, TrainCoreConfig,
 };
-pub use error::BlazenTrainError;
+pub use error::{BlazenTrainError, MergeError};
 pub use progress::{TrainingEvent, TrainingProgress};
 
 #[cfg(feature = "engine")]
 pub use grpo::{GrpoBatch, GrpoTrainer, build_reference_from_policy};
 #[cfg(feature = "engine")]
 pub use lora::{LoraLinear, freeze_base_params, lora_param_names};
+#[cfg(feature = "engine")]
+pub use merge::{merge_lora_blend, merge_lora_into_base};
 #[cfg(feature = "engine")]
 pub use qlora::{QLoraLinear, qlora_param_names};
 #[cfg(feature = "engine")]
