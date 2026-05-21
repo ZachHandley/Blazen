@@ -31,6 +31,9 @@ pub mod ollama;
 #[cfg(feature = "llamacpp-server")]
 pub mod llamacpp_server;
 
+#[cfg(feature = "tgi")]
+pub mod tgi;
+
 // ---------------------------------------------------------------------------
 // Audio bridges (new restructure — see PR_AUDIO_PLAN.md)
 // ---------------------------------------------------------------------------

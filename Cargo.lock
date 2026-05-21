@@ -1003,7 +1003,12 @@ dependencies = [
  "blazen-llm-llamacpp",
  "blazen-llm-llamacpp-server",
  "blazen-llm-mistralrs",
+<<<<<<< HEAD
  "blazen-llm-ollama",
+||||||| parent of da693784 (PR-PROXY-tgi: HuggingFace TGI HTTP proxy as a LocalModel backend)
+=======
+ "blazen-llm-tgi",
+>>>>>>> da693784 (PR-PROXY-tgi: HuggingFace TGI HTTP proxy as a LocalModel backend)
  "blazen-llm-vllm",
  "bytes",
  "chrono",
@@ -1102,7 +1107,12 @@ dependencies = [
 ]
 
 [[package]]
+<<<<<<< HEAD
 name = "blazen-llm-ollama"
+||||||| parent of da693784 (PR-PROXY-tgi: HuggingFace TGI HTTP proxy as a LocalModel backend)
+=======
+name = "blazen-llm-tgi"
+>>>>>>> da693784 (PR-PROXY-tgi: HuggingFace TGI HTTP proxy as a LocalModel backend)
 version = "0.0.0-dev"
 dependencies = [
  "async-trait",

@@ -46,6 +46,14 @@ ollama = ["dep:blazen-llm-ollama", "dep:reqwest"]
 # Pulls in `reqwest` because the bridge in backends/llamacpp_server.rs
 # drives the SSE response stream directly.
 llamacpp-server = ["dep:blazen-llm-llamacpp-server", "dep:reqwest"]
+# External-engine proxy: HuggingFace Text Generation Inference (TGI) server.
+# Supports both the native /generate + /generate_stream (SSE) surface and the
+# OpenAI-compatible /v1/chat/completions + /v1/completions + /v1/models surface
+# (TGI ≥ 1.4). Adapters must be preloaded at server startup via
+# `--lora-adapters <id1> <id2> ...` and selected per-request via `adapter_id`.
+# Pulls in `reqwest` because the bridge in backends/tgi.rs drives the SSE
+# response stream directly.
+tgi = ["dep:blazen-llm-tgi", "dep:reqwest"]
 candle-llm = ["dep:blazen-llm-candle"]     # Phase 7: local LLM via candle
 diffusion = ["dep:blazen-image-diffusion"]      # Phase 5: bridge + types only (no native runtime)
 # Forwarding activator: pull the diffusion-rs runtime so the bridge actually
@@ -132,6 +140,7 @@ blazen-audio-music = { workspace = true, optional = true }
 blazen-audio-codec = { workspace = true, optional = true }
 blazen-llm-ollama = { workspace = true, optional = true }
 blazen-llm-llamacpp-server = { workspace = true, optional = true }
+blazen-llm-tgi = { workspace = true, optional = true }
 
 # Timer/runtime features only on native targets (mio doesn't support any wasm32 target)
 [target.'cfg(not(any(target_os = "wasi", target_arch = "wasm32")))'.dependencies]

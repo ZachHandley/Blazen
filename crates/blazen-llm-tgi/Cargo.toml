@@ -1,0 +1,26 @@
+[package]
+name = "blazen-llm-tgi"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "HuggingFace Text Generation Inference (TGI) HTTP proxy provider for Blazen — native /generate + OpenAI-compatible /v1/* with per-request adapter selection"
+
+[dependencies]
+async-trait.workspace = true
+futures-util.workspace = true
+reqwest = { workspace = true, features = ["json", "stream"] }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros", "sync", "time"] }
+tracing.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+mockito = "1.7.2"
+tokio = { workspace = true, features = ["macros", "rt"] }
