@@ -36,7 +36,7 @@ members = [
     "crates/blazen-audio-codec",
     "crates/blazen-audio-music",
     "crates/blazen-audio-stt",
-    "crates/blazen-audio-piper-vendored",
+    "crates/blazen-audio-piper-vendored", "crates/blazen-train-tune",
 ]
 exclude = [
     "crates/blazen-wasm",
