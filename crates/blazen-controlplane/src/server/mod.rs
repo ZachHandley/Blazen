@@ -22,10 +22,23 @@ pub mod subscribe;
 #[cfg(feature = "valkey-store")]
 pub mod valkey_store;
 
+// PR5: remote-mode ModelManager server side. Gated behind the
+// `model-server` feature so the host can keep the workflow control
+// plane without pulling in the model-server symbols (and vice versa).
+#[cfg(feature = "model-server")]
+pub mod model_manager;
+#[cfg(feature = "model-server")]
+pub mod model_service;
+
 pub use service::ControlPlaneService;
 pub use store::{AssignmentStore, MemoryAssignmentStore};
 #[cfg(feature = "valkey-store")]
 pub use valkey_store::ValkeyAssignmentStore;
+
+#[cfg(feature = "model-server")]
+pub use model_manager::{ManagerHandle, ModelServerState};
+#[cfg(feature = "model-server")]
+pub use model_service::ModelService;
 
 use std::net::SocketAddr;
 use std::sync::Arc;

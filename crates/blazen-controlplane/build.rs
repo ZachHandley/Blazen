@@ -13,5 +13,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         .build_server(cfg!(feature = "server"))
         .build_client(cfg!(feature = "client"))
         .compile_protos(&["proto/blazen_controlplane.proto"], &["proto/"])?;
+
+    // Model server proto (PR5) — same envelope shape (PostcardRequest /
+    // PostcardResponse) but lives in its own `blazen.modelserver.v1`
+    // proto package so the generated tonic service trait doesn't collide
+    // with `BlazenControlPlane`. Always emit both server and client code
+    // when the matching feature is on so the host binary (which may flip
+    // either flag on) gets the symbols it needs.
+    if cfg!(any(feature = "model-server", feature = "model-client")) {
+        tonic_prost_build::configure()
+            .build_server(cfg!(feature = "model-server"))
+            .build_client(cfg!(feature = "model-client"))
+            .compile_protos(&["proto/blazen_modelserver.proto"], &["proto/"])?;
+    }
     Ok(())
 }

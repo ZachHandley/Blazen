@@ -73,9 +73,26 @@ pub mod pb {
     tonic::include_proto!("blazen.controlplane.v1");
 }
 
+/// Generated tonic/prost types for the PR5 `blazen.modelserver.v1`
+/// service. Same envelope shape as [`pb`] but a separate proto package
+/// so the generated service trait doesn't collide.
+#[cfg(all(
+    any(feature = "model-server", feature = "model-client"),
+    not(any(target_os = "wasi", target_arch = "wasm32"))
+))]
+#[allow(clippy::all, clippy::pedantic)]
+pub mod model_pb {
+    tonic::include_proto!("blazen.modelserver.v1");
+}
+
 pub mod auth;
 pub mod error;
 pub mod protocol;
+
+// PR5: postcard wire types for the BlazenModelServer service. Built
+// unconditionally — the types are pure data and may be useful in
+// bindings that don't pull in the tonic server / client.
+pub mod model_protocol;
 
 #[cfg(not(any(target_os = "wasi", target_arch = "wasm32")))]
 pub mod tls;
@@ -117,3 +134,16 @@ pub use server::{AssignmentStore, ControlPlaneServer, MemoryAssignmentStore};
     not(any(target_os = "wasi", target_arch = "wasm32"))
 ))]
 pub use server::ValkeyAssignmentStore;
+
+// PR5: re-exports for the BlazenModelServer service.
+#[cfg(all(
+    feature = "model-server",
+    not(any(target_os = "wasi", target_arch = "wasm32"))
+))]
+pub use server::{ManagerHandle, ModelServerState, ModelService};
+
+#[cfg(all(
+    feature = "model-client",
+    not(any(target_os = "wasi", target_arch = "wasm32"))
+))]
+pub use client::ModelClient;

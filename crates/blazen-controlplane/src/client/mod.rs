@@ -20,6 +20,15 @@
 //! or use [`Client::with_mtls`] to load a client identity + CA from PEM
 //! files via [`crate::tls::load_client_tls`].
 
+// PR5: remote-mode ModelManager client. Gated behind the `model-client`
+// feature so consumers of just the workflow control plane don't pay
+// for the model-server symbols.
+#[cfg(feature = "model-client")]
+pub mod model_client;
+
+#[cfg(feature = "model-client")]
+pub use model_client::ModelClient;
+
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;

@@ -60,9 +60,15 @@ uuid = { workspace = true }
 tonic-prost-build = { workspace = true }
 
 [features]
-default = ["server", "client"]
+default = ["server", "client", "model-server", "model-client"]
 server = []
 client = []
+# PR5: remote-mode ModelManager — gRPC `BlazenModelServer` service.
+# These flags toggle the proto codegen + the matching server / client
+# modules. They're independent of `server` / `client` (the workflow
+# control plane) because a deployment may want only one or the other.
+model-server = []
+model-client = []
 http-transport = ["dep:axum", "dep:tower", "dep:tower-http", "dep:blazen-llm", "dep:base64"]
 valkey-store = ["dep:redis"]
 

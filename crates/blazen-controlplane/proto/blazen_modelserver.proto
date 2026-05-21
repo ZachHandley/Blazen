@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+package blazen.modelserver.v1;
+
+// BlazenModelServer: remote-mode ModelManager. Workers / clients send
+// model-management and inference verbs over gRPC; the host process
+// (typically blazen-llm or blazen-manager linked into a server binary)
+// implements them via the `ManagerHandle` trait and delegates to its
+// local `ModelManager`.
+//
+// Every payload is postcard-encoded inside a `PostcardRequest` /
+// `PostcardResponse` byte envelope so the proto schema never drifts —
+// per-message versioning lives in the `envelope_version` field on each
+// payload struct (mirrors the existing BlazenControlPlane service).
+//
+// 16 RPCs in three layers:
+//   - lifecycle (5): Load, Unload, IsLoaded, Status, LoadFromHf
+//   - adapters  (3): LoadAdapter, UnloadAdapter, ListAdapters
+//   - inference (6): Complete, StreamComplete, Embed, GenerateImage,
+//                    TextToSpeech, GenerateMusic, Transcribe
+//   - blobs     (2): UploadBlob (client-stream), FetchBlob (server-stream)
+service BlazenModelServer {
+  // -------- Lifecycle --------
+  rpc Load(PostcardRequest) returns (PostcardResponse);
+  rpc Unload(PostcardRequest) returns (PostcardResponse);
+  rpc IsLoaded(PostcardRequest) returns (PostcardResponse);
+  rpc Status(PostcardRequest) returns (PostcardResponse);
+  rpc LoadFromHf(PostcardRequest) returns (PostcardResponse);
+
+  // -------- Adapters --------
+  rpc LoadAdapter(PostcardRequest) returns (PostcardResponse);
+  rpc UnloadAdapter(PostcardRequest) returns (PostcardResponse);
+  rpc ListAdapters(PostcardRequest) returns (PostcardResponse);
+
+  // -------- Inference --------
+  rpc Complete(PostcardRequest) returns (PostcardResponse);
+  rpc StreamComplete(PostcardRequest) returns (stream PostcardResponse);
+  rpc Embed(PostcardRequest) returns (PostcardResponse);
+  rpc GenerateImage(PostcardRequest) returns (PostcardResponse);
+  rpc TextToSpeech(PostcardRequest) returns (PostcardResponse);
+  rpc GenerateMusic(PostcardRequest) returns (PostcardResponse);
+  rpc Transcribe(PostcardRequest) returns (PostcardResponse);
+
+  // -------- Blob transfer (for adapter weights / large media) --------
+  // Client streams chunks; server replies once with a final ack carrying
+  // the resolved blob id + total bytes received.
+  rpc UploadBlob(stream PostcardRequest) returns (PostcardResponse);
+  // Server streams chunks; client reads to EOF and reassembles.
+  rpc FetchBlob(PostcardRequest) returns (stream PostcardResponse);
+}
+
+message PostcardRequest {
+  bytes postcard_payload = 1;
+}
+
+message PostcardResponse {
+  bytes postcard_payload = 1;
+}

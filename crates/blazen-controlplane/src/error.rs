@@ -66,4 +66,10 @@ pub enum ControlPlaneError {
     /// core operations without re-mapping.
     #[error("workflow error: {0}")]
     Workflow(#[from] blazen_core::error::WorkflowError),
+
+    /// Semantic error returned by the model server (PR5). Distinct from
+    /// `Transport` so callers can tell wire-level failures from
+    /// model-level failures.
+    #[error("model rpc error (code {}): {}", .0.code, .0.message)]
+    Rpc(crate::model_protocol::RpcError),
 }

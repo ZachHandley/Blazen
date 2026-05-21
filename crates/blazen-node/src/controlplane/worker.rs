@@ -50,6 +50,7 @@ fn controlplane_error_to_napi(err: ControlPlaneError) -> napi::Error {
         ControlPlaneError::UnknownRun(_) => "ControlPlaneUnknownRunError",
         ControlPlaneError::UnknownWorker(_) => "ControlPlaneUnknownWorkerError",
         ControlPlaneError::Workflow(_) => "ControlPlaneWorkflowError",
+        ControlPlaneError::Rpc(_) => "ControlPlaneRpcError",
     };
     napi::Error::new(Status::GenericFailure, format!("[{prefix}] {err}"))
 }

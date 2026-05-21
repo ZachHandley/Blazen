@@ -316,6 +316,7 @@ impl From<blazen_controlplane::ControlPlaneError> for BlazenError {
             C::UnknownRun(_) => "ControlPlaneUnknownRun",
             C::UnknownWorker(_) => "ControlPlaneUnknownWorker",
             C::Workflow(_) => "ControlPlaneWorkflow",
+            C::Rpc(_) => "ControlPlaneRpc",
         };
         Self::Peer {
             kind: kind.into(),
