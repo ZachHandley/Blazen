@@ -255,17 +255,19 @@ pub fn llamacpp_error_to_napi(err: blazen_llm::LlamaCppError) -> napi::Error {
     napi::Error::with_class(class, err.to_string())
 }
 
-/// Convert a [`blazen_llm::WhisperError`] to a [`napi::Error`].
+/// Convert a [`blazen_llm::WhisperError`] (alias for the new
+/// `blazen_audio_stt::SttError`) to a [`napi::Error`].
 #[cfg(feature = "whispercpp")]
 #[must_use]
 #[allow(clippy::needless_pass_by_value)]
 pub fn whisper_error_to_napi(err: blazen_llm::WhisperError) -> napi::Error {
     use blazen_llm::WhisperError;
     let class = match &err {
-        WhisperError::EngineNotAvailable => "WhisperEngineNotAvailableError",
+        WhisperError::EngineNotAvailable(_) => "WhisperEngineNotAvailableError",
         WhisperError::InvalidOptions(_) => "WhisperInvalidOptionsError",
         WhisperError::ModelLoad(_) => "WhisperModelLoadError",
         WhisperError::Transcription(_) => "WhisperTranscriptionError",
+        WhisperError::Unsupported(_) => "WhisperUnsupportedError",
         WhisperError::Io(_) => "WhisperIoError",
     };
     napi::Error::with_class(class, err.to_string())
@@ -296,7 +298,14 @@ pub fn tts_error_to_napi(err: blazen_llm::TtsError) -> napi::Error {
         TtsError::InvalidOptions(_) => "TtsInvalidOptionsError",
         TtsError::ModelLoad(_) => "TtsModelLoadError",
         TtsError::Synthesis(_) => "TtsSynthesisError",
-        TtsError::EngineNotAvailable => "TtsEngineNotAvailableError",
+        TtsError::EngineNotAvailable(_) => "TtsEngineNotAvailableError",
+        TtsError::Unsupported(_) => "TtsUnsupportedError",
+        TtsError::Auth(_) => "TtsAuthError",
+        TtsError::RateLimit { .. } => "TtsRateLimitError",
+        TtsError::ServerError { .. } => "TtsServerError",
+        TtsError::Http(_) => "TtsHttpError",
+        TtsError::Decode(_) => "TtsDecodeError",
+        TtsError::Audio(_) => "TtsAudioError",
     };
     napi::Error::with_class(class, err.to_string())
 }

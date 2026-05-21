@@ -4,9 +4,6 @@
 //! `blazen-llm` trait (e.g. [`EmbeddingModel`](crate::EmbeddingModel)) for
 //! the backing crate's model type.
 
-#[cfg(feature = "candle-audio")]
-pub mod candle_audio;
-
 #[cfg(feature = "candle-embed")]
 pub mod candle_embed;
 
@@ -22,14 +19,24 @@ pub mod embed;
 #[cfg(feature = "mistralrs")]
 pub mod mistralrs;
 
-#[cfg(feature = "whispercpp")]
-pub mod whispercpp;
-
 #[cfg(feature = "llamacpp")]
 pub mod llamacpp;
 
 #[cfg(feature = "vllm")]
 pub mod vllm;
 
-#[cfg(feature = "tts")]
+// ---------------------------------------------------------------------------
+// Audio bridges (new restructure — see PR_AUDIO_PLAN.md)
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "audio-tts")]
 pub mod tts;
+
+#[cfg(feature = "audio-stt")]
+pub mod audio_stt;
+
+#[cfg(feature = "audio-music")]
+pub mod audio_music;
+
+#[cfg(feature = "audio-codec")]
+pub mod audio_codec;

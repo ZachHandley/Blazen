@@ -246,7 +246,7 @@ impl LocalModel for JsLocalModelAdapter {
     }
 
     fn device(&self) -> Device {
-        self.device
+        self.device.clone()
     }
 
     async fn memory_bytes(&self) -> Option<u64> {
@@ -880,6 +880,7 @@ impl WasmModelManager {
         entries.sort_by_key(|(p, _)| match p {
             Pool::Cpu => (0, 0),
             Pool::Gpu(n) => (1, *n),
+            Pool::Remote => (2, 0),
         });
 
         let arr = js_sys::Array::new();

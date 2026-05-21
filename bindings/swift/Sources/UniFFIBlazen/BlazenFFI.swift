@@ -18570,18 +18570,20 @@ public func newFalTtsModel(apiKey: String, model: String?)throws  -> TtsModel  {
  * Build a local Piper text-to-speech model.
  *
  * `model_id` selects a Piper voice model (e.g. `"en_US-amy-medium"`).
- * `speaker_id` selects a speaker for multi-speaker voice models;
- * `sample_rate` overrides the model's native sample rate. Returns a
- * [`TtsModel`] handle whose [`synthesize`](TtsModel::synthesize) call
- * surfaces the upstream "engine not available" error until the Piper
- * Phase 9 wiring lands — but construction succeeds so foreign callers
- * can wire option plumbing today.
+ * Builds a local TTS model backed by `any-tts` (Kokoro-82M default).
+ *
+ * `model` is one of `"kokoro82m"`, `"vibevoice"`, or `"qwen3_tts"` (or
+ * any of the snake_case aliases); pass null to default to Kokoro-82M.
+ * `voice` selects a speaker preset (e.g. `"af_bella"`); pass null to
+ * use the model default. `sample_rate` overrides the model's native
+ * sample rate.
  */
-public func newPiperTtsModel(modelId: String?, speakerId: UInt32?, sampleRate: UInt32?)throws  -> TtsModel  {
+public func newLocalTtsModel(model: String?, voice: String?, language: String?, sampleRate: UInt32?)throws  -> TtsModel  {
     return try  FfiConverterTypeTtsModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_piper_tts_model(
-        FfiConverterOptionString.lower(modelId),
-        FfiConverterOptionUInt32.lower(speakerId),
+    uniffi_blazen_uniffi_fn_func_new_local_tts_model(
+        FfiConverterOptionString.lower(model),
+        FfiConverterOptionString.lower(voice),
+        FfiConverterOptionString.lower(language),
         FfiConverterOptionUInt32.lower(sampleRate),$0
     )
 })
@@ -19405,7 +19407,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_func_new_fal_tts_model() != 32558) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_piper_tts_model() != 57207) {
+    if (uniffi_blazen_uniffi_checksum_func_new_local_tts_model() != 38979) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_func_new_whisper_stt_model() != 40916) {

@@ -1285,6 +1285,7 @@ impl PyTtsOptions {
                 language,
                 sample_rate,
                 cache_dir: cache_dir.map(PathBuf::from),
+                ..blazen_llm::TtsOptions::default()
             },
         })
     }

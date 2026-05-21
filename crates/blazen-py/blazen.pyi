@@ -214,9 +214,6 @@ __all__ = [
     "PipelineResult",
     "PipelineSnapshot",
     "PipelineState",
-    "PiperError",
-    "PiperOptions",
-    "PiperProvider",
     "PreferenceJsonlDataset",
     "PricingEntry",
     "ProgressCallback",
@@ -312,6 +309,9 @@ __all__ = [
     "TranscriptionRequest",
     "TranscriptionResult",
     "TranscriptionSegment",
+    "TtsError",
+    "TtsOptions",
+    "TtsProvider",
     "TypedTool",
     "UnsupportedError",
     "UpscaleRequest",
@@ -8727,96 +8727,6 @@ class PipelineState:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
-class PiperOptions:
-    r"""
-    Options for the local Piper TTS backend.
-    
-    Example:
-        >>> opts = PiperOptions(model_id="en_US-amy-medium")
-        >>> provider = PiperProvider(options=opts)
-    """
-    @property
-    def model_id(self) -> typing.Optional[builtins.str]: ...
-    @model_id.setter
-    def model_id(self, value: typing.Optional[builtins.str]) -> None: ...
-    @property
-    def speaker_id(self) -> typing.Optional[builtins.int]: ...
-    @speaker_id.setter
-    def speaker_id(self, value: typing.Optional[builtins.int]) -> None: ...
-    @property
-    def sample_rate(self) -> typing.Optional[builtins.int]: ...
-    @sample_rate.setter
-    def sample_rate(self, value: typing.Optional[builtins.int]) -> None: ...
-    @property
-    def cache_dir(self) -> typing.Optional[builtins.str]: ...
-    @cache_dir.setter
-    def cache_dir(self, value: typing.Optional[builtins.str]) -> None: ...
-    def __new__(cls, *, model_id: typing.Optional[builtins.str] = None, speaker_id: typing.Optional[builtins.int] = None, sample_rate: typing.Optional[builtins.int] = None, cache_dir: typing.Optional[builtins.str] = None) -> PiperOptions:
-        r"""
-        Create a new PiperOptions.
-        
-        Args:
-            model_id: Piper voice model identifier (e.g. ``"en_US-amy-medium"``).
-            speaker_id: Speaker ID for multi-speaker models.
-            sample_rate: Output audio sample rate in Hz.
-            cache_dir: Path to cache downloaded voice models.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class PiperProvider:
-    r"""
-    A local Piper text-to-speech provider.
-    
-    Runs synthesis fully on-device via Piper voice models on ONNX Runtime.
-    No API key is required.
-    
-    The underlying Rust integration is in progress; calls to
-    :meth:`text_to_speech` currently raise :class:`PiperError` with an
-    ``"engine not available"`` message until the engine wiring lands.
-    
-    Example:
-        >>> opts = PiperOptions(model_id="en_US-amy-medium")
-        >>> provider = PiperProvider(options=opts)
-    """
-    @property
-    def model_id(self) -> typing.Optional[builtins.str]:
-        r"""
-        Get the configured voice model id, if any.
-        """
-    @property
-    def engine_available(self) -> builtins.bool:
-        r"""
-        Whether the underlying ONNX Runtime engine is compiled into this
-        build. When ``False``, all synthesis calls raise :class:`PiperError`.
-        """
-    def __new__(cls, *, options: typing.Optional[PiperOptions] = None) -> PiperProvider:
-        r"""
-        Create a new Piper provider.
-        
-        Args:
-            options: Optional :class:`PiperOptions` for voice model id,
-                speaker id, sample rate, and cache directory.
-        """
-    async def text_to_speech(self, _request: SpeechRequest) -> AudioResult:
-        r"""
-        Synthesize speech from text.
-        
-        Args:
-            request: A :class:`SpeechRequest` with text, voice, and other
-                parameters.
-        
-        Returns:
-            An :class:`AudioResult` with the synthesized audio.
-        
-        Raises:
-            PiperError: While the upstream engine integration is in
-                progress, this call always raises with an
-                ``"engine not available"`` message.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
 class PreferenceJsonlDataset:
     r"""
     JSONL-backed preference-pair dataset for DPO / ORPO / SimPO.
@@ -11780,6 +11690,98 @@ class TranscriptionSegment:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class TtsOptions:
+    r"""
+    Options for the local TTS backend (`any-tts`).
+    
+    Example:
+        >>> opts = TtsOptions(model="kokoro82m", voice="af_bella")
+        >>> provider = TtsProvider(options=opts)
+    """
+    @property
+    def model(self) -> typing.Optional[builtins.str]: ...
+    @model.setter
+    def model(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def voice(self) -> typing.Optional[builtins.str]: ...
+    @voice.setter
+    def voice(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def language(self) -> typing.Optional[builtins.str]: ...
+    @language.setter
+    def language(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def sample_rate(self) -> typing.Optional[builtins.int]: ...
+    @sample_rate.setter
+    def sample_rate(self, value: typing.Optional[builtins.int]) -> None: ...
+    @property
+    def cache_dir(self) -> typing.Optional[builtins.str]: ...
+    @cache_dir.setter
+    def cache_dir(self, value: typing.Optional[builtins.str]) -> None: ...
+    def __new__(cls, *, model: typing.Optional[builtins.str] = None, voice: typing.Optional[builtins.str] = None, language: typing.Optional[builtins.str] = None, sample_rate: typing.Optional[builtins.int] = None, cache_dir: typing.Optional[builtins.str] = None) -> TtsOptions:
+        r"""
+        Create a new TtsOptions.
+        
+        Args:
+            model: Which TTS model to load (``"kokoro82m"`` default,
+                ``"vibevoice"``, or ``"qwen3_tts"``).
+            voice: Voice / speaker preset name (e.g. ``"af_bella"`` for Kokoro).
+            language: Language ISO 639-1 code.
+            sample_rate: Output audio sample rate in Hz.
+            cache_dir: Path to cache downloaded model weights.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class TtsProvider:
+    r"""
+    A local TTS provider backed by the `any-tts` crate (Kokoro-82M default).
+    
+    Synthesis runs fully on-device. No API key is required.
+    
+    Example:
+        >>> opts = TtsOptions(model="kokoro82m", voice="af_bella")
+        >>> provider = TtsProvider(options=opts)
+    """
+    @property
+    def model(self) -> builtins.str:
+        r"""
+        The configured model kind, as a string (`"kokoro"`, `"vibevoice"`, `"qwen3_tts"`).
+        """
+    @property
+    def engine_available(self) -> builtins.bool:
+        r"""
+        Whether the underlying any-tts engine is compiled into this build.
+        When the `anytts` feature is on, this returns ``True`` — the
+        provider can be constructed regardless of the runtime model-load
+        outcome.
+        """
+    def __new__(cls, *, options: typing.Optional[TtsOptions] = None) -> TtsProvider:
+        r"""
+        Create a new TTS provider.
+        
+        Args:
+            options: Optional :class:`TtsOptions` for model, voice,
+                language, sample rate, and cache directory.
+        """
+    async def text_to_speech(self, request: SpeechRequest) -> AudioResult:
+        r"""
+        Synthesize speech from text.
+        
+        Args:
+            request: A :class:`SpeechRequest` with text, voice, language,
+                and other parameters.
+        
+        Returns:
+            An :class:`AudioResult` with the synthesized audio.
+        
+        Raises:
+            TtsError: If the engine feature is not compiled in or
+                synthesis fails.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class TypedTool:
     r"""
     A typed Python tool whose parameter schema comes from a Pydantic model.
@@ -14260,7 +14262,7 @@ def wrap_with_tracing(model: CompletionModel, provider_name: builtins.str) -> Co
 #
 # Plus 9 per-backend subclasses of ProviderError (LlamaCppError,
 # CandleLlmError, CandleEmbedError, MistralRsError, WhisperError,
-# PiperError, DiffusionError, FastEmbedError, TractError) that are
+# TtsError, DiffusionError, FastEmbedError, TractError) that are
 # feature-gated at runtime in src/error.rs but always declared here for
 # static type-checking.
 
@@ -14345,8 +14347,8 @@ class WhisperError(ProviderError):
     """whisper.cpp transcription backend error (feature: `whispercpp`)."""
     ...
 
-class PiperError(ProviderError):
-    """Piper TTS backend error (feature: `piper`)."""
+class TtsError(ProviderError):
+    """Local any-tts backend error (feature: `tts`)."""
     ...
 
 class DiffusionError(ProviderError):

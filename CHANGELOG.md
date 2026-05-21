@@ -31,6 +31,32 @@
 - `PipelineState` no longer derives `Debug` / `Clone` (incompatible with `Box<dyn Any>` in the new `objects` bag).
 - Internal `accumulate_usage` in `agent.rs` now sums every `TokenUsage` field (previously dropped `reasoning_tokens`, `cached_input_tokens`, audio token fields).
 
+### Breaking changes — PR-AUDIO restructure (Waves 1–28)
+
+- **Crate rename: `blazen-audio-whispercpp` → `blazen-audio-stt`** with `whispercpp` as a backend submodule (`blazen_audio_stt::backends::whispercpp::WhisperCppBackend`). The `whispercpp` cargo feature on `blazen-audio-stt` activates the backend.
+- **Crate rename: `blazen-audio-piper` folded into `blazen-audio-tts`** as a backend (`blazen_audio_tts::backends::piper::PiperBackend`). The dedicated `blazen-audio-piper` crate is removed.
+- **Crate split: `blazen-audio-candle` → `blazen-audio-music` + `blazen-audio-codec`.** MusicGen / AudioGen / Stable Audio land under `blazen-audio-music`; EnCodec / DAC / SNAC land under `blazen-audio-codec`. The combined `blazen-audio-candle` crate is removed.
+- **NEW crate `blazen-audio`** — capability-agnostic root types (`AudioBackend` trait, `AudioError`, `SampleFormat`, lifecycle helpers) shared by every audio sibling crate.
+- **NEW crate `blazen-audio-piper-vendored`** — fork of `piper-rs` patched to use `tract-onnx` (musl-clean) and subprocess `espeak-ng` instead of the upstream `onnxruntime` + bundled bindings. Documented in `docs/vendored-deps.md`.
+- **Feature aliases on `blazen-llm`** (deprecated — removal in two release cycles): `whispercpp` → `audio-stt-whispercpp`, `piper` → `audio-tts-piper`, `tts` → `audio-tts-anytts`, `candle-audio` → `audio-music-musicgen`. Existing manifests continue to build through the transition window.
+- **Umbrella `blazen/local-audio` feature** now activates the full new audio surface (TTS: anytts + openai + piper; STT: whispercpp + candle; music: musicgen + audiogen; codec: encodec + dac). Pre-restructure callers got `whispercpp` + `tts` + `candle-audio`; the new set is strictly broader.
+
+### Added — PR-AUDIO restructure (Waves 1–28)
+
+- **11 functional audio backends** spanning TTS / STT / music / codec, with one canonical `*Backend` trait per modality:
+  - **TTS** — `AnyTtsBackend` (Kokoro-82M / VibeVoice / Qwen3-TTS via `any-tts`), `OpenAiTtsBackend` (HTTP client for `/v1/audio/speech` + `/v1/voices/*` voice-management extensions), `PiperBackend` (tract-onnx + subprocess `espeak-ng`).
+  - **STT** — `WhisperCppBackend` (whisper.cpp via `whisper-rs`), `CandleWhisperBackend` (pure-Rust Whisper: 6 model variants Tiny/Base/Small/Medium/LargeV3 plus translate-to-English task).
+  - **Music / SFX** — `MusicgenBackend` (real end-to-end MusicGen autoregressive port: T5 prompt encoder + decoder LM with delay-pattern interleaver + classifier-free guidance + EnCodec decoder; Small / Medium / Large variants), `AudioGenBackend` (reuses MusicGen infra against `facebook/audiogen-medium`).
+  - **Codec** — `EncodecBackend` (Meta EnCodec 24 kHz, 4 codebooks via `candle-transformers`), `DacBackend` (Descript Audio Codec `descript/dac_44khz`, 9 codebooks @ 8 kbps — decode functional, encode upstream-gapped), `SnacBackend` (Multi-Scale Neural Audio Codec `hubertsiuzdak/snac_24khz`, 3 multi-scale codebooks at vq_strides `[4, 2, 1]` @ 24 kHz ≈ 3 kbps — encode + decode both functional).
+- **Real MusicGen autoregressive head** — closes the prior MusicGen-as-stub limitation. Sampler with top-k / top-p / temperature, delay-pattern build / unbuild, hard duration safety cap (60 s).
+- **Real AudioGen** — first-class text-to-SFX via the MusicGen autoregressive pipeline with AudioGen-specific 16 kHz EnCodec + 1.5B decoder LM weights.
+- **Real candle Whisper STT** — 6 model variants from the Hugging Face hub (`openai/whisper-tiny` through `openai/whisper-large-v3`), mel filter bank loaded from `mel_filters_80.npz`, transcribe + translate-to-English tasks, optional language hint.
+- **Real DAC + SNAC codec wrappers** — both via `candle-transformers`; SNAC loads via `VarBuilder::from_pth` (no safetensors mirror upstream).
+- **Real Piper backend** — built on the new `blazen-audio-piper-vendored` crate. Subprocess `espeak-ng` for phonemization, `tract-onnx` for inference, no native `onnxruntime` dependency.
+- **OpenAI HTTP TTS client** — `OpenAiTtsBackend` + `OpenAiTtsConfig` + `OpenAiTtsSpeechRequest` / `OpenAiTtsSpeechResponse` types. Speaks `/v1/audio/speech` (OpenAI standard) plus the de-facto `/v1/voices/*` extensions for voice listing / cloning / deletion.
+- **Compatibility shim `blazen_llm::compat::whisper::WhisperCppProvider`** — preserves the pre-restructure `Arc<WhisperCppProvider>` call shape (`from_options`, `ComputeProvider`, `Transcription`, `LocalModel` impls). Bindings code (`blazen-py`, `blazen-node`, `blazen-uniffi`) keeps compiling untouched.
+- **Documentation** — `docs/UNSUPPORTED_AUDIO.md` enumerates the 9 backends still gapped upstream (Stable Audio, Cosyvoice, Spark-TTS, …) with rationale per entry, and `docs/vendored-deps.md` records the Piper fork's diff.
+
 ### Added
 
 - **`CustomProvider` exposed as a foreign-implementable typed trait in all 7 bindings** (py / node / wasm / go / swift / kotlin / ruby). Users subclass and override any of 16 typed methods (`complete`, `stream`, `embed`, plus 13 compute methods: `text_to_speech`, `generate_music`, `generate_sfx`, `clone_voice`, `list_voices`, `delete_voice`, `generate_image`, `upscale_image`, `text_to_video`, `image_to_video`, `transcribe`, `generate_3d`, `remove_background`). Unoverridden methods raise `Unsupported`. Replaces the prior JSON-string `HostDispatch` design (never released).

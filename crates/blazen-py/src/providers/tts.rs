@@ -15,8 +15,8 @@ use crate::compute::request_types::PySpeechRequest;
 use crate::compute::result_types::PyAudioResult;
 use crate::error::TtsError;
 use crate::providers::options::PyTtsOptions;
-use blazen_llm::TtsProvider;
 use blazen_llm::compute::AudioGeneration;
+use blazen_llm::{AnyTtsBackend, DynTtsProvider};
 
 // ---------------------------------------------------------------------------
 // PyTtsProvider
@@ -33,7 +33,8 @@ use blazen_llm::compute::AudioGeneration;
 #[pyclass(name = "TtsProvider", from_py_object)]
 #[derive(Clone)]
 pub struct PyTtsProvider {
-    inner: Arc<TtsProvider>,
+    inner: Arc<DynTtsProvider>,
+    model_str: String,
 }
 
 #[gen_stub_pymethods]
@@ -48,24 +49,28 @@ impl PyTtsProvider {
     #[pyo3(signature = (*, options=None))]
     fn new(options: Option<PyRef<'_, PyTtsOptions>>) -> PyResult<Self> {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        let provider =
-            TtsProvider::from_options(opts).map_err(|e| TtsError::new_err(e.to_string()))?;
+        let model_str = opts.model.unwrap_or_default().as_str().to_owned();
+        let backend =
+            AnyTtsBackend::from_options(opts).map_err(|e| TtsError::new_err(e.to_string()))?;
         Ok(Self {
-            inner: Arc::new(provider),
+            inner: Arc::new(DynTtsProvider::erase(backend)),
+            model_str,
         })
     }
 
     /// The configured model kind, as a string (`"kokoro"`, `"vibevoice"`, `"qwen3_tts"`).
     #[getter]
     fn model(&self) -> String {
-        self.inner.model_kind().as_str().to_owned()
+        self.model_str.clone()
     }
 
     /// Whether the underlying any-tts engine is compiled into this build.
-    /// When ``False``, all synthesis calls raise :class:`TtsError`.
+    /// When the `anytts` feature is on, this returns ``True`` — the
+    /// provider can be constructed regardless of the runtime model-load
+    /// outcome.
     #[getter]
     fn engine_available(&self) -> bool {
-        self.inner.engine_available()
+        true
     }
 
     /// Synthesize speech from text.
@@ -97,6 +102,6 @@ impl PyTtsProvider {
     }
 
     fn __repr__(&self) -> String {
-        format!("TtsProvider(model={:?})", self.inner.model_kind().as_str())
+        format!("TtsProvider(model={:?})", self.model_str)
     }
 }

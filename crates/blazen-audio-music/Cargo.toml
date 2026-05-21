@@ -1,0 +1,62 @@
+[package]
+name = "blazen-audio-music"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Music + sound-effect generation backends for Blazen (MusicGen, AudioGen, Stable Audio)"
+
+[dependencies]
+async-trait.workspace = true
+blazen-audio = { workspace = true }
+blazen-audio-codec = { version = "0.0.0-dev", path = "../blazen-audio-codec", optional = true }
+candle-core = { workspace = true, optional = true }
+candle-nn = { workspace = true, optional = true }
+candle-transformers = { workspace = true, optional = true }
+hf-hub = { workspace = true, features = ["ureq"], optional = true }
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokenizers = { workspace = true, optional = true }
+tokio.workspace = true
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# MusicGen text-to-music backend. Pulls in the candle inference stack,
+# tokenizers (for the T5 prompt encoder), hf-hub for weight downloads,
+# and blazen-audio-codec/encodec for the EnCodec audio decoder.
+musicgen = [
+    "dep:candle-core",
+    "dep:candle-nn",
+    "dep:candle-transformers",
+    "dep:hf-hub",
+    "dep:tokenizers",
+    "dep:blazen-audio-codec",
+    "blazen-audio-codec/encodec",
+]
+# Meta AudioGen text-to-SFX backend (`facebook/audiogen-medium`). Reuses
+# the entire MusicGen autoregressive pipeline (T5 encoder + decoder LM +
+# delay-pattern + CFG sampler + EnCodec decoder) with AudioGen-specific
+# config values (16 kHz EnCodec, 1.5B-param decoder). Implemented as a
+# feature alias that activates the same dependency set as `musicgen` --
+# the AudioGen backend module is gated separately on `audiogen` so a
+# pure `musicgen` build doesn't compile in the AudioGen wrapper.
+audiogen = ["musicgen"]
+# Live, network-dependent tests that pull real weights from Hugging Face.
+# Gated separately so `cargo test --features musicgen` stays hermetic.
+live-models = []
+# CUDA acceleration. Implies `musicgen`.
+cuda = [
+    "musicgen",
+    "candle-core/cuda",
+    "candle-nn/cuda",
+    "candle-transformers/cuda",
+    "blazen-audio-codec/cuda",
+]
+# Apple Metal acceleration. Implies `musicgen`.
+metal = ["musicgen", "blazen-audio-codec/metal"]

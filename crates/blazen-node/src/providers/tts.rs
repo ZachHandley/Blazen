@@ -11,7 +11,7 @@ use std::sync::Arc;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
-use blazen_llm::{TtsModel, TtsOptions, TtsProvider};
+use blazen_llm::{AnyTtsBackend, DynTtsProvider, TtsModel, TtsOptions};
 
 // ---------------------------------------------------------------------------
 // JsTtsModel
@@ -79,6 +79,7 @@ impl From<JsTtsOptions> for TtsOptions {
             language: val.language,
             sample_rate: val.sample_rate,
             cache_dir: val.cache_dir.map(std::path::PathBuf::from),
+            ..TtsOptions::default()
         }
     }
 }
@@ -97,7 +98,12 @@ impl From<JsTtsOptions> for TtsOptions {
 /// ```
 #[napi(js_name = "TtsProvider")]
 pub struct JsTtsProvider {
-    inner: Arc<TtsProvider>,
+    // Held to keep the backend alive for the lifetime of the JS object —
+    // future JS-side synthesize methods will reach for this; today the
+    // ModelManager binding drives synthesis through its own typed handle.
+    #[allow(dead_code)]
+    inner: Arc<DynTtsProvider>,
+    model_str: String,
 }
 
 #[napi]
@@ -111,11 +117,12 @@ impl JsTtsProvider {
     #[napi(factory)]
     pub fn create(options: Option<JsTtsOptions>) -> Result<Self> {
         let opts: TtsOptions = options.map(Into::into).unwrap_or_default();
+        let model_str = opts.model.unwrap_or_default().as_str().to_owned();
+        let backend = AnyTtsBackend::from_options(opts)
+            .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
         Ok(Self {
-            inner: Arc::new(
-                TtsProvider::from_options(opts)
-                    .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?,
-            ),
+            inner: Arc::new(DynTtsProvider::erase(backend)),
+            model_str,
         })
     }
 
@@ -126,13 +133,14 @@ impl JsTtsProvider {
     /// The configured model kind, as a string (`"kokoro"`, `"vibevoice"`, `"qwen3_tts"`).
     #[napi(getter)]
     pub fn model(&self) -> String {
-        self.inner.model_kind().as_str().to_owned()
+        self.model_str.clone()
     }
 
-    /// Whether the engine feature is compiled in. When `false`,
-    /// synthesis methods will return errors.
+    /// Whether the engine feature is compiled in. When the `anytts`
+    /// feature is on, this returns `true` — the provider can be
+    /// constructed regardless of the runtime model-load outcome.
     #[napi(js_name = "engineAvailable", getter)]
     pub fn engine_available(&self) -> bool {
-        self.inner.engine_available()
+        true
     }
 }

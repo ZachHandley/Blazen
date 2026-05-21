@@ -165,6 +165,40 @@ pub trait ThreeDGeneration: ComputeProvider {
     async fn generate_3d(&self, request: ThreeDRequest) -> Result<ThreeDResult, BlazenError>;
 }
 
+/// Neural audio codec capability (PCM ↔ discrete tokens).
+///
+/// Providers that wrap a neural audio codec (`EnCodec`, `DAC`, `SNAC`, …)
+/// implement this trait to expose deterministic encode / decode passes
+/// outside the generative job API.
+///
+/// Both methods default to [`BlazenError::Unsupported`] so existing
+/// non-codec providers do not need to override them.
+#[async_trait]
+pub trait Codec: ComputeProvider {
+    /// Encode mono PCM samples (`f32` in `[-1.0, 1.0]`) into discrete
+    /// codebook tokens.
+    ///
+    /// Returns [`BlazenError::Unsupported`] by default.
+    async fn encode_audio(&self, _pcm: &[f32], _sample_rate: u32) -> Result<Vec<u32>, BlazenError> {
+        Err(BlazenError::unsupported(
+            "audio codec encode_audio not supported by this provider",
+        ))
+    }
+
+    /// Decode flat row-major codebook tokens back into mono PCM samples.
+    ///
+    /// Returns [`BlazenError::Unsupported`] by default.
+    async fn decode_audio(
+        &self,
+        _tokens: &[u32],
+        _num_codebooks: usize,
+    ) -> Result<Vec<f32>, BlazenError> {
+        Err(BlazenError::unsupported(
+            "audio codec decode_audio not supported by this provider",
+        ))
+    }
+}
+
 /// A compute provider that supports background removal on existing images.
 #[async_trait]
 pub trait BackgroundRemoval: ComputeProvider {

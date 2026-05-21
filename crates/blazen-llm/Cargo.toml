@@ -41,10 +41,45 @@ diffusion = ["dep:blazen-image-diffusion"]      # Phase 5: bridge + types only (
 # acceleration is opt-in via `diffusion-rs` directly in the binary crate --
 # see the comment block in `crates/blazen-image-diffusion/Cargo.toml`.
 diffusion-engine = ["diffusion", "blazen-image-diffusion/engine"]
-whispercpp = ["dep:blazen-audio-whispercpp"]     # Phase 4: local STT via whisper.cpp
-piper = ["dep:blazen-audio-piper"]          # Deprecated shim — use `tts` feature instead
-tts = ["dep:blazen-audio-tts"]              # Local TTS via any-tts (Kokoro-82M default)
-candle-audio = ["dep:blazen-audio-candle", "blazen-audio-candle/engine"]   # Phase 10: local music/SFX via candle
+
+# ---------------------------------------------------------------------------
+# Audio bridges (PR-AUDIO restructure)
+# ---------------------------------------------------------------------------
+# Canonical feature names. Each `audio-*` feature activates the matching
+# blazen-audio-* crate at the bridge level; backend-specific sub-features
+# (e.g. `audio-stt-whispercpp`) forward into the engine crate's own feature
+# flag to actually link the backend.
+
+# Text-to-speech bridge surface (DynTtsProvider impl of AudioGeneration).
+audio-tts          = ["dep:blazen-audio", "dep:blazen-audio-tts"]
+audio-tts-anytts   = ["audio-tts", "blazen-audio-tts/anytts"]
+audio-tts-openai   = ["audio-tts", "blazen-audio-tts/openai"]
+audio-tts-piper    = ["audio-tts"]
+
+# Speech-to-text bridge surface (DynSttProvider impl of Transcription).
+audio-stt          = ["dep:blazen-audio", "dep:blazen-audio-stt"]
+audio-stt-whispercpp = ["audio-stt", "blazen-audio-stt/whispercpp"]
+audio-stt-candle   = ["audio-stt", "blazen-audio-stt/candle"]
+
+# Music / SFX bridge surface (DynMusicProvider impl of AudioGeneration).
+audio-music        = ["dep:blazen-audio", "dep:blazen-audio-music"]
+audio-music-musicgen = ["audio-music", "blazen-audio-music/musicgen"]
+audio-music-audiogen = ["audio-music"]
+
+# Neural audio codec bridge surface (DynCodecProvider impl of Codec).
+audio-codec        = ["dep:blazen-audio", "dep:blazen-audio-codec"]
+audio-codec-encodec = ["audio-codec", "blazen-audio-codec/encodec"]
+audio-codec-dac    = ["audio-codec", "blazen-audio-codec/dac"]
+
+# ---------------------------------------------------------------------------
+# Backwards-compat aliases (deprecated — slated for removal in 2 releases).
+# Kept so existing downstream Cargo manifests continue to build during the
+# restructure transition window.
+# ---------------------------------------------------------------------------
+whispercpp     = ["audio-stt-whispercpp"]
+piper          = ["audio-tts-piper"]
+tts            = ["audio-tts-anytts"]
+candle-audio   = ["audio-music-musicgen"]
 
 [dependencies]
 blazen-events.workspace = true
@@ -71,15 +106,16 @@ infer = { workspace = true, optional = true }
 uuid.workspace = true
 blazen-embed = { workspace = true, optional = true }
 blazen-llm-mistralrs = { workspace = true, optional = true }
-blazen-audio-whispercpp = { workspace = true, optional = true }
 blazen-embed-candle = { workspace = true, optional = true }
 blazen-image-diffusion = { workspace = true, optional = true }
 blazen-llm-candle = { workspace = true, optional = true }
 blazen-llm-llamacpp = { workspace = true, optional = true }
 blazen-llm-vllm = { workspace = true, optional = true }
-blazen-audio-piper = { workspace = true, optional = true }
 blazen-audio-tts = { workspace = true, optional = true }
-blazen-audio-candle = { workspace = true, optional = true }
+blazen-audio = { workspace = true, optional = true }
+blazen-audio-stt = { workspace = true, optional = true }
+blazen-audio-music = { workspace = true, optional = true }
+blazen-audio-codec = { workspace = true, optional = true }
 
 # Timer/runtime features only on native targets (mio doesn't support any wasm32 target)
 [target.'cfg(not(any(target_os = "wasi", target_arch = "wasm32")))'.dependencies]

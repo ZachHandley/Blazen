@@ -1,0 +1,20 @@
+[package]
+name = "blazen-audio-piper-vendored"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+ndarray.workspace = true
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+tract-onnx.workspace = true
+
+[lints]
+workspace = true

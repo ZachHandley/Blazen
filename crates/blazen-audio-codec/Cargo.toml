@@ -1,0 +1,65 @@
+[package]
+name = "blazen-audio-codec"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+blazen-audio.workspace = true
+candle-core = { workspace = true, optional = true }
+candle-nn = { workspace = true, optional = true }
+candle-transformers = { workspace = true, optional = true }
+hf-hub = { workspace = true, features = ["ureq"], optional = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }
+
+[lints]
+workspace = true
+
+[features]
+default = []
+# Shared candle inference stack + hf-hub fetcher. Every neural-codec backend
+# (EnCodec, DAC, SNAC, ...) shares the same upstream crates, so we centralise
+# the dep activations behind a single internal feature rather than duplicating
+# the `dep:` pulls on every backend feature.
+candle-backbone = [
+    "dep:candle-core",
+    "dep:candle-nn",
+    "dep:candle-transformers",
+    "dep:hf-hub",
+]
+# Enable the EnCodec neural audio codec backend (Meta's `facebook/encodec_24khz`).
+encodec = ["candle-backbone"]
+# Enable the Descript Audio Codec (DAC) backend
+# (canonical checkpoint: `descript/dac_44khz`, 9 codebooks, 44.1 kHz).
+dac = ["candle-backbone"]
+# Enable the Multi-Scale Neural Audio Codec (SNAC) backend
+# (canonical checkpoint: `hubertsiuzdak/snac_24khz`, 3 multi-scale
+# codebooks, 24 kHz, ~3 kbps). Weights ship as `pytorch_model.bin` (pickle),
+# not safetensors — loaded via `candle_nn::VarBuilder::from_pth`.
+snac = ["candle-backbone"]
+# CUDA acceleration for candle-backed codec backends. Implies the shared
+# backbone feature so it works whichever concrete backend(s) the caller picks.
+cuda = [
+    "candle-backbone",
+    "candle-core/cuda",
+    "candle-nn/cuda",
+    "candle-transformers/cuda",
+]
+# Apple Metal acceleration. candle-core picks Metal up via `Device::new_metal`;
+# candle-nn / candle-transformers do not yet expose a `metal` cargo feature on
+# 0.10, so we only activate the shared backbone here.
+metal = ["candle-backbone"]
+# Live-model integration tests (gated; pulls real weights from Hugging Face
+# Hub on first run). Implies the shared backbone so the codec inference paths
+# are linked in. Use with `cargo nextest --features live-models,dac` etc.
+live-models = ["candle-backbone"]

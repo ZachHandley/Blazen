@@ -2,6 +2,28 @@
 
 Spike output for PR1.5. Read-only research; no source changes other than this doc.
 
+> **2026-05 PR-AUDIO update.** Sections referring to `blazen-audio-whispercpp`,
+> `blazen-audio-piper`, and `blazen-audio-candle` are now historical. Those
+> crates were dissolved in the PR-AUDIO restructure (Waves 1–28):
+>
+> - `blazen-audio-whispercpp` → folded into **`blazen-audio-stt`** as the
+>   `whispercpp` backend (cargo feature `audio-stt-whispercpp` on `blazen-llm`).
+> - `blazen-audio-piper` → folded into **`blazen-audio-tts`** as the `piper`
+>   backend (cargo feature `audio-tts-piper`).
+> - `blazen-audio-candle` → split into **`blazen-audio-music`** (MusicGen /
+>   AudioGen / Stable Audio) and **`blazen-audio-codec`** (EnCodec / DAC /
+>   SNAC). Cargo features `audio-music-*` and `audio-codec-*` on `blazen-llm`
+>   gate each backend.
+> - NEW root crate **`blazen-audio`** holds the capability-agnostic
+>   vocabulary (`AudioBackend` trait, `AudioError`, lifecycle helpers).
+> - NEW crate **`blazen-audio-piper-vendored`** patches upstream `piper-rs`
+>   to use `tract-onnx` + subprocess `espeak-ng`. See `docs/vendored-deps.md`.
+>
+> Deprecated aliases live on `blazen-llm` for one transition window:
+> `whispercpp` → `audio-stt-whispercpp`, `piper` → `audio-tts-piper`,
+> `tts` → `audio-tts-anytts`, `candle-audio` → `audio-music-musicgen`.
+> See `CHANGELOG.md` and `docs/UNSUPPORTED_AUDIO.md` for the full picture.
+
 This catalogs every Cargo feature across the 17 crates in the Blazen workspace
 (14 workspace members + the 3 excluded WASM/component crates), names the sharp
 edges, and proposes a unified redesign.

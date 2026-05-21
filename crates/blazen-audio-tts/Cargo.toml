@@ -6,22 +6,43 @@ license.workspace = true
 authors.workspace = true
 rust-version.workspace = true
 repository.workspace = true
-description = "Local text-to-speech backend for Blazen using any-tts (Kokoro-82M, VibeVoice, Qwen3-TTS)"
+description = "Multi-backend text-to-speech crate for Blazen (any-tts local engines + OpenAI-compatible HTTP)"
 
 [dependencies]
+blazen-audio = { workspace = true }
 blazen-model-cache = { workspace = true }
 serde = { workspace = true }
 serde_json.workspace = true
 tokio = { workspace = true }
 tracing.workspace = true
 thiserror = { workspace = true }
+async-trait.workspace = true
 any-tts = { version = "0.1.2", default-features = false, features = ["kokoro", "vibevoice", "qwen3-tts", "download"], optional = true }
+reqwest = { workspace = true, features = ["multipart"], optional = true }
+base64 = { workspace = true, optional = true }
+blazen-audio-piper-vendored = { workspace = true, optional = true }
 
 [features]
-default = []
-# `engine` activates the underlying any-tts crate; without it the provider
-# compiles as a stub and synthesis surfaces `EngineNotAvailable`.
-engine = ["dep:any-tts"]
+default = ["openai"]
+# `anytts` activates the underlying any-tts crate (Kokoro / VibeVoice /
+# Qwen3-TTS); without it the AnyTts backend errors with `Unsupported`.
+anytts = ["dep:any-tts"]
+# `openai` activates the OpenAI-compatible HTTP backend client (targets
+# `/v1/audio/speech` plus the de-facto `/v1/voices/*` extension surface).
+openai = ["dep:reqwest", "dep:base64"]
+# Back-compat alias: the previous (single-engine) feature name. Will be
+# removed one release after the multi-backend restructure ships.
+engine = ["anytts"]
+# `piper` activates the vendored piper-rs backend (tract-onnx inference +
+# subprocess espeak-ng phonemizer). See `backends/piper.rs`.
+piper = ["dep:blazen-audio-piper-vendored"]
+# Live, network-dependent tests that pull real Piper voices from Hugging
+# Face. Gated separately so `cargo test --features piper` stays hermetic.
+live-models = []
 
 [lints]
 workspace = true
+
+[dev-dependencies]
+mockito = "1.7.2"
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

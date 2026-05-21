@@ -239,8 +239,27 @@ pub use blazen_llm_mistralrs::{
 #[cfg(feature = "candle-embed")]
 pub use blazen_embed_candle::{CandleEmbedError, CandleEmbedModel, CandleEmbedOptions};
 
-#[cfg(feature = "whispercpp")]
-pub use blazen_audio_whispercpp::{WhisperCppProvider, WhisperError, WhisperModel, WhisperOptions};
+#[cfg(feature = "audio-stt")]
+pub use blazen_audio_stt::{DynSttProvider, SttError, SttOptions, SttProvider};
+
+// Backwards-compat aliases for the pre-PR-AUDIO names. The bindings still
+// reference these — they will be migrated to the canonical
+// `WhisperCppBackend` / `WhisperCppOptions` / `SttError` names in a
+// follow-up sweep.
+#[cfg(feature = "audio-stt-whispercpp")]
+pub use crate::compat::whisper::WhisperCppProvider;
+#[cfg(feature = "audio-stt-whispercpp")]
+pub use blazen_audio_stt::SttError as WhisperError;
+#[cfg(feature = "audio-stt-whispercpp")]
+pub use blazen_audio_stt::backends::whispercpp::{
+    WhisperCppOptions as WhisperOptions, WhisperModel,
+};
+
+/// Backwards-compatibility shims for legacy crate names that were
+/// dissolved in the PR-AUDIO restructure. Slated for removal in two
+/// releases — new code should reach for the canonical types directly.
+#[cfg(feature = "audio-stt-whispercpp")]
+pub mod compat;
 
 #[cfg(feature = "diffusion")]
 pub use blazen_image_diffusion::{
@@ -262,5 +281,14 @@ pub use blazen_llm_llamacpp::{
     LlamaCppError, LlamaCppOptions, LlamaCppProvider,
 };
 
-#[cfg(feature = "tts")]
-pub use blazen_audio_tts::{SynthesizedAudio, TtsError, TtsModel, TtsOptions, TtsProvider};
+#[cfg(feature = "audio-tts")]
+pub use blazen_audio_tts::{DynTtsProvider, TtsError, TtsModel, TtsOptions, TtsProvider};
+
+#[cfg(feature = "audio-tts-anytts")]
+pub use blazen_audio_tts::AnyTtsBackend;
+
+#[cfg(feature = "audio-music")]
+pub use blazen_audio_music::{DynMusicProvider, MusicError, MusicProvider};
+
+#[cfg(feature = "audio-codec")]
+pub use blazen_audio_codec::{CodecError, CodecProvider, DynCodecProvider};

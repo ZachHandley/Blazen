@@ -1,2 +1,18 @@
 [registries.forgejo]
 index = "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/"
+
+# whisper-rs-sys and llama-cpp-sys-2 each vendor their own copies of
+# ggml/gguf sources. When `local-all` enables both `whispercpp` and
+# `llamacpp` in the same final-link unit (e.g. blazen-py / blazen-node /
+# blazen-uniffi / blazen-cabi cdylibs, or blazen-py example bins), rust-lld
+# rejects the duplicate `gguf_*` and `ggml_*` symbols. `-z muldefs` tells
+# the linker to keep the first definition seen (whisper-rs-sys lands first
+# in the dep order) instead of erroring, restoring the pre-PR-AUDIO build
+# behaviour. Production deployments that only need one engine should disable
+# the other feature; the workaround is here purely so `cargo build` with
+# `--all-features` (or default `local-all`) keeps producing usable binaries.
+[target.x86_64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-Wl,--allow-multiple-definition"]
+
+[target.aarch64-unknown-linux-gnu]
+rustflags = ["-C", "link-arg=-Wl,--allow-multiple-definition"]

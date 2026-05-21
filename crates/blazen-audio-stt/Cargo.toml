@@ -1,0 +1,90 @@
+[package]
+name = "blazen-audio-stt"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Multi-backend speech-to-text engine crate for Blazen (whisper.cpp, candle)"
+
+[dependencies]
+async-trait.workspace = true
+blazen-audio.workspace = true
+blazen-model-cache = { workspace = true, optional = true }
+candle-core = { workspace = true, optional = true }
+candle-nn = { workspace = true, optional = true }
+candle-transformers = { workspace = true, optional = true }
+hf-hub = { workspace = true, features = ["ureq"], optional = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true
+tokenizers = { workspace = true, optional = true }
+tokio = { workspace = true, features = ["fs", "macros", "rt", "sync"] }
+tracing.workspace = true
+# whisper-rs with default-features = false compiles on all platforms (CPU-only).
+# Platform-specific acceleration is opt-in via `cuda`, `metal`, `coreml` features
+# below, which are intentionally NO-OP at the library level — see the
+# `cuda`/`metal`/`coreml` feature comments.
+whisper-rs = { version = "0.16", default-features = false, optional = true }
+
+[features]
+default = []
+
+# `live-models` gates integration tests that download real model weights
+# from HuggingFace on first run (~75 MB for whisper-tiny). Off by default
+# so `cargo test` stays hermetic; enable explicitly in CI/local runs that
+# can tolerate the network + disk cost.
+live-models = []
+
+# ---- Backend feature gates ----
+#
+# `whispercpp` enables the whisper.cpp-backed SttBackend implementation in
+# `src/backends/whispercpp.rs`. It pulls in the `whisper-rs` Rust bindings
+# (CPU-only by default — see the platform-specific features below) and
+# `blazen-model-cache` for GGML model downloads.
+whispercpp = ["dep:whisper-rs", "dep:blazen-model-cache"]
+
+# `candle` enables the Candle-backed Whisper SttBackend in
+# `src/backends/candle.rs`. Pulls in `candle-core`, `candle-nn`,
+# `candle-transformers` (which provides the Whisper model), `tokenizers`
+# (the HuggingFace Whisper tokenizer), and `hf-hub` (for downloading the
+# `openai/whisper-*` HuggingFace repos).
+#
+# Basic transcription only; LoRA adapter support is deferred to PR-WL (#38).
+candle = [
+    "dep:candle-core",
+    "dep:candle-nn",
+    "dep:candle-transformers",
+    "dep:tokenizers",
+    "dep:hf-hub",
+]
+
+# ---- Platform-specific acceleration features ----
+#
+# `cuda`, `metal`, `coreml` are intentionally NO-OP flags at the library
+# level for the whisper.cpp backend. Cargo features cannot be gated on
+# `cfg()` targets, and `--all-features` must pass on every platform.
+# Activating `whisper-rs/metal` on Linux or `whisper-rs/cuda` without an
+# NVIDIA GPU / CUDA toolkit causes hard compile errors from the whisper.cpp
+# build system.
+#
+# To enable GPU acceleration for whisper.cpp, add `whisper-rs` as a direct
+# dependency in your **binary crate** with the desired features:
+#
+#   [dependencies]
+#   whisper-rs = { version = "0.16", default-features = false, features = ["cuda"] }
+#
+# Cargo's feature unification will merge them with the `whispercpp` dep
+# here. The Candle backend selects the device via the `device` field on
+# `CandleWhisperConfig` (`Device::Cpu`, `Device::new_cuda(idx)`, or
+# `Device::new_metal(idx)`).
+cuda = ["whispercpp"]
+metal = ["whispercpp"]
+coreml = ["whispercpp"]
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt"] }

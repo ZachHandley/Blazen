@@ -1,13 +1,18 @@
-//! Configuration options for the local TTS backend (any-tts).
+//! Shared configuration options for any TTS backend in `blazen-audio-tts`.
+//!
+//! Each backend treats unsupported fields as silently ignored — passing
+//! [`TtsOptions::speed`] to an `AnyTtsBackend` configured for Kokoro is
+//! a no-op rather than an error, mirroring the same fail-soft pattern
+//! the `OpenAI` request DTO uses.
 
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-/// Which underlying TTS model to load.
+/// Which underlying local TTS model to load when using the `anytts` backend.
 ///
 /// All variants map onto a `ModelType` understood by the `any-tts` crate
-/// when the `engine` feature is enabled. The string form (`"kokoro82m"`,
+/// when the `anytts` feature is enabled. The string form (`"kokoro82m"`,
 /// `"vibevoice"`, …) is what gets serialised into JSON / IPC payloads so
 /// that bindings can round-trip it without bringing the heavy any-tts
 /// types onto the language boundary.
@@ -35,15 +40,12 @@ impl TtsModel {
     #[must_use]
     pub fn default_voice(self) -> Option<&'static str> {
         match self {
-            // TODO: verify exact voice string once `any-tts` Kokoro voice
-            //       catalogue is queried at runtime; fall back to first
-            //       available voice if `af_bella` is not present.
             Self::Kokoro82m => Some("af_bella"),
             Self::VibeVoice | Self::Qwen3Tts => None,
         }
     }
 
-    /// Short string used for log / error contexts.
+    /// Short string used for log / error contexts and backend ids.
     #[must_use]
     pub fn as_str(self) -> &'static str {
         match self {
@@ -54,21 +56,23 @@ impl TtsModel {
     }
 }
 
-/// Options for constructing a [`TtsProvider`](crate::TtsProvider).
+/// Per-call options for [`TtsBackend::synthesize`](crate::TtsBackend::synthesize).
 ///
-/// All fields are optional and have sensible defaults (Kokoro-82M with
-/// the `af_bella` preset voice and the model's native sample rate).
+/// All fields are optional. Backends that don't understand a particular
+/// override (e.g. the local `AnyTtsBackend` does not honor
+/// [`speed`](Self::speed)) ignore it silently — this lets callers pass
+/// the same `TtsOptions` to any backend without compile-time gating.
 ///
 /// # Examples
 ///
 /// ```
 /// use blazen_audio_tts::{TtsModel, TtsOptions};
 ///
-/// // Use defaults (Kokoro-82M, af_bella, native sample rate)
+/// // Use defaults (Kokoro-82M, af_bella, native sample rate).
 /// let opts = TtsOptions::default();
 /// assert_eq!(opts.model, Some(TtsModel::Kokoro82m));
 ///
-/// // Override specific fields
+/// // Override fields with struct-update syntax.
 /// let opts = TtsOptions {
 ///     model: Some(TtsModel::VibeVoice),
 ///     voice: Some("alloy".into()),
@@ -77,26 +81,43 @@ impl TtsModel {
 /// ```
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TtsOptions {
-    /// Which underlying TTS model to load. Defaults to Kokoro-82M.
+    /// Which `any-tts` model to load (only honored by the `anytts` backend).
+    ///
+    /// Defaults to Kokoro-82M.
     pub model: Option<TtsModel>,
 
-    /// Voice / speaker preset name (e.g. `"af_bella"` for Kokoro).
+    /// Free-form remote model identifier — honored by the `openai`
+    /// backend (e.g. `"tts-1"`, `"tts-1-hd"`). `None` falls back to the
+    /// backend's configured default model.
+    pub model_id: Option<String>,
+
+    /// Voice / speaker preset name (e.g. `"af_bella"` for Kokoro,
+    /// `"alloy"` for `OpenAI`).
     ///
-    /// When `None`, falls back to [`TtsModel::default_voice`] for the
-    /// chosen model.
+    /// When `None`, each backend falls back to its own default.
     pub voice: Option<String>,
 
-    /// Language ISO 639-1 code (e.g. `"en"`, `"ja"`). When `None`,
-    /// any-tts auto-detects from the input text.
+    /// Language ISO 639-1 code (e.g. `"en"`, `"ja"`). When `None`, the
+    /// underlying engine auto-detects from the input text.
     pub language: Option<String>,
 
     /// Override the output sample rate in Hz.
     ///
-    /// When `None`, the model's native sample rate (24 kHz for Kokoro)
-    /// is used.
+    /// When `None`, each backend picks its own native rate (24 kHz for
+    /// Kokoro, 24 kHz for `OpenAI` MP3).
     pub sample_rate: Option<u32>,
 
-    /// Path to cache downloaded model weights.
+    /// Speech speed multiplier (`1.0` = normal). Honored by the
+    /// `openai` backend.
+    pub speed: Option<f32>,
+
+    /// Output container — `"mp3"`, `"wav"`, `"flac"`, `"opus"`, `"pcm"`.
+    /// Honored by the `openai` backend; the `anytts` backend always
+    /// returns WAV.
+    pub response_format: Option<String>,
+
+    /// Path to cache downloaded model weights for the local
+    /// `anytts` backend.
     ///
     /// When `None`, falls back to `blazen-model-cache`'s default cache
     /// directory (`$BLAZEN_CACHE_DIR` or `~/.cache/blazen/models`).
@@ -107,9 +128,12 @@ impl Default for TtsOptions {
     fn default() -> Self {
         Self {
             model: Some(TtsModel::default()),
+            model_id: None,
             voice: None,
             language: None,
             sample_rate: None,
+            speed: None,
+            response_format: None,
             cache_dir: None,
         }
     }
@@ -126,7 +150,10 @@ mod tests {
         assert!(opts.voice.is_none());
         assert!(opts.language.is_none());
         assert!(opts.sample_rate.is_none());
+        assert!(opts.speed.is_none());
+        assert!(opts.response_format.is_none());
         assert!(opts.cache_dir.is_none());
+        assert!(opts.model_id.is_none());
     }
 
     #[test]
@@ -145,17 +172,23 @@ mod tests {
     fn serde_roundtrip() {
         let opts = TtsOptions {
             model: Some(TtsModel::Kokoro82m),
+            model_id: Some("tts-1-hd".into()),
             voice: Some("af_bella".into()),
             language: Some("en".into()),
             sample_rate: Some(24_000),
+            speed: Some(1.25),
+            response_format: Some("wav".into()),
             cache_dir: Some(PathBuf::from("/var/cache/tts")),
         };
         let json = serde_json::to_string(&opts).expect("serialize");
         let parsed: TtsOptions = serde_json::from_str(&json).expect("deserialize");
         assert_eq!(parsed.model, Some(TtsModel::Kokoro82m));
+        assert_eq!(parsed.model_id.as_deref(), Some("tts-1-hd"));
         assert_eq!(parsed.voice.as_deref(), Some("af_bella"));
         assert_eq!(parsed.language.as_deref(), Some("en"));
         assert_eq!(parsed.sample_rate, Some(24_000));
+        assert_eq!(parsed.speed, Some(1.25));
+        assert_eq!(parsed.response_format.as_deref(), Some("wav"));
         assert_eq!(
             parsed.cache_dir.as_deref(),
             Some(std::path::Path::new("/var/cache/tts"))

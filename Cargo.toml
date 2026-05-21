@@ -22,19 +22,21 @@ members = [
     "crates/blazen-embed-fastembed",
     "crates/blazen-embed-tract",
     "crates/blazen-llm-mistralrs",
-    "crates/blazen-audio-whispercpp",
     "crates/blazen-embed-candle",
     "crates/blazen-image-diffusion",
     "crates/blazen-llm-candle",
     "crates/blazen-llm-llamacpp",
     "crates/blazen-audio-tts",
-    "crates/blazen-audio-piper",
     "crates/blazen-peer",
     "crates/blazen-controlplane",
     "crates/blazen-manager",
     "crates/blazen-train",
-    "crates/blazen-audio-candle",
     "crates/blazen-llm-vllm",
+    "crates/blazen-audio",
+    "crates/blazen-audio-codec",
+    "crates/blazen-audio-music",
+    "crates/blazen-audio-stt",
+    "crates/blazen-audio-piper-vendored",
 ]
 exclude = [
     "crates/blazen-wasm",
@@ -138,15 +140,17 @@ blazen-embed = { version = "0.0.0-dev", path = "crates/blazen-embed", registry =
 blazen-embed-fastembed = { version = "0.0.0-dev", path = "crates/blazen-embed-fastembed", registry = "forgejo" }
 blazen-embed-tract = { version = "0.0.0-dev", path = "crates/blazen-embed-tract", registry = "forgejo" }
 blazen-llm-mistralrs = { version = "0.0.0-dev", path = "crates/blazen-llm-mistralrs", registry = "forgejo" }
-blazen-audio-whispercpp = { version = "0.0.0-dev", path = "crates/blazen-audio-whispercpp", registry = "forgejo" }
+blazen-audio = { version = "0.0.0-dev", path = "crates/blazen-audio", registry = "forgejo" }
 blazen-embed-candle = { version = "0.0.0-dev", path = "crates/blazen-embed-candle", registry = "forgejo" }
 blazen-image-diffusion = { version = "0.0.0-dev", path = "crates/blazen-image-diffusion", registry = "forgejo" }
 blazen-llm-candle = { version = "0.0.0-dev", path = "crates/blazen-llm-candle", registry = "forgejo" }
 blazen-llm-llamacpp = { version = "0.0.0-dev", path = "crates/blazen-llm-llamacpp", registry = "forgejo" }
 blazen-llm-vllm = { version = "0.0.0-dev", path = "crates/blazen-llm-vllm", registry = "forgejo" }
 blazen-audio-tts = { version = "0.0.0-dev", path = "crates/blazen-audio-tts", registry = "forgejo" }
-blazen-audio-piper = { version = "0.0.0-dev", path = "crates/blazen-audio-piper", registry = "forgejo" }
-blazen-audio-candle = { version = "0.0.0-dev", path = "crates/blazen-audio-candle", registry = "forgejo" }
+blazen-audio-piper-vendored = { version = "0.0.0-dev", path = "crates/blazen-audio-piper-vendored", registry = "forgejo" }
+blazen-audio-stt = { version = "0.0.0-dev", path = "crates/blazen-audio-stt", registry = "forgejo" }
+blazen-audio-music = { version = "0.0.0-dev", path = "crates/blazen-audio-music", registry = "forgejo" }
+blazen-audio-codec = { version = "0.0.0-dev", path = "crates/blazen-audio-codec", registry = "forgejo" }
 blazen-peer = { version = "0.0.0-dev", path = "crates/blazen-peer", registry = "forgejo" }
 blazen-controlplane = { version = "0.0.0-dev", path = "crates/blazen-controlplane", registry = "forgejo", default-features = false }
 blazen-manager = { version = "0.0.0-dev", path = "crates/blazen-manager", registry = "forgejo" }

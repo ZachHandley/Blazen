@@ -343,7 +343,7 @@ impl ImageGenBackend for FalImageGenAdapter {
 /// underlying provider surfaces `EngineNotAvailable` from synthesis.
 #[cfg(feature = "tts")]
 struct LocalTtsAdapter {
-    inner: Arc<blazen_llm::TtsProvider>,
+    inner: Arc<blazen_llm::DynTtsProvider>,
 }
 
 #[cfg(feature = "tts")]
@@ -352,18 +352,24 @@ impl TtsBackend for LocalTtsAdapter {
     async fn synthesize(
         &self,
         text: String,
-        _voice: Option<String>,
-        _language: Option<String>,
+        voice: Option<String>,
+        language: Option<String>,
     ) -> Result<TtsResult, blazen_llm::BlazenError> {
         use base64::Engine as _;
+        let opts = blazen_llm::TtsOptions {
+            voice,
+            language,
+            ..blazen_llm::TtsOptions::default()
+        };
         let synth = self
             .inner
-            .synthesize(&text)
+            .synthesize(&text, &opts)
             .await
             .map_err(|e| blazen_llm::BlazenError::provider("any-tts", e.to_string()))?;
-        let audio_base64 = base64::engine::general_purpose::STANDARD.encode(&synth.wav_bytes);
+        let audio_base64 = base64::engine::general_purpose::STANDARD.encode(&synth.bytes);
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let duration_ms = (f64::from(synth.duration_secs) * 1000.0).round() as u64;
+        let duration_ms =
+            (f64::from(synth.duration_seconds.unwrap_or(0.0)) * 1000.0).round() as u64;
         Ok(TtsResult {
             audio_base64,
             mime_type: "audio/wav".into(),
@@ -715,9 +721,10 @@ pub fn new_local_tts_model(
         language,
         sample_rate,
         cache_dir: None,
+        ..blazen_llm::TtsOptions::default()
     };
-    let provider =
-        blazen_llm::TtsProvider::from_options(opts).map_err(|e| BlazenError::Provider {
+    let backend =
+        blazen_llm::AnyTtsBackend::from_options(opts).map_err(|e| BlazenError::Provider {
             kind: "TtsInit".into(),
             message: e.to_string(),
             provider: Some("any-tts".into()),
@@ -728,7 +735,7 @@ pub fn new_local_tts_model(
             retry_after_ms: None,
         })?;
     let adapter = LocalTtsAdapter {
-        inner: Arc::new(provider),
+        inner: Arc::new(blazen_llm::DynTtsProvider::erase(backend)),
     };
     Ok(TtsModel::from_arc(Arc::new(adapter)))
 }

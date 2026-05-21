@@ -4059,28 +4059,6 @@ export declare class PipelineSnapshot {
 export type JsPipelineSnapshot = PipelineSnapshot
 
 /**
- * A local Piper TTS provider.
- *
- * ```javascript
- * const provider = PiperProvider.create({
- *   modelId: "en_US-amy-medium",
- * });
- * ```
- */
-export declare class PiperProvider {
-  /** Create a new Piper provider. */
-  static create(options?: JsPiperOptions | undefined | null): PiperProvider
-  /** Get the configured voice model identifier, if any. */
-  get modelId(): string | null
-  /**
-   * Whether the engine feature is compiled in. When `false`,
-   * synthesis methods will return errors.
-   */
-  get engineAvailable(): boolean
-}
-export type JsPiperProvider = PiperProvider
-
-/**
  * Preference-pair JSONL dataset for DPO / ORPO / SimPO.
  *
  * Each line of the input file must deserialize to either
@@ -5306,6 +5284,30 @@ export declare class TranscriptionProviderDefaults {
   set before(hook: BeforeRoleTsfn | undefined | null)
 }
 export type JsTranscriptionProviderDefaults = TranscriptionProviderDefaults
+
+/**
+ * A local TTS provider backed by `any-tts`.
+ *
+ * ```javascript
+ * const provider = TtsProvider.create({
+ *   model: "kokoro82m",
+ *   voice: "af_bella",
+ * });
+ * ```
+ */
+export declare class TtsProvider {
+  /** Create a new TTS provider. */
+  static create(options?: JsTtsOptions | undefined | null): TtsProvider
+  /** The configured model kind, as a string (`"kokoro"`, `"vibevoice"`, `"qwen3_tts"`). */
+  get model(): string
+  /**
+   * Whether the engine feature is compiled in. When the `anytts`
+   * feature is on, this returns `true` — the provider can be
+   * constructed regardless of the runtime model-load outcome.
+   */
+  get engineAvailable(): boolean
+}
+export type JsTtsProvider = TtsProvider
 
 /**
  * r" Base class for text-to-speech providers.
@@ -8049,31 +8051,6 @@ export interface JsPeerRemoteRefDescriptor {
   createdAtEpochMs: number
 }
 
-/**
- * Options for the local Piper TTS backend.
- *
- * All fields are optional. `modelId` selects the voice (e.g.
- * `"en_US-amy-medium"`); when `null`, callers must set it before
- * synthesis can run.
- *
- * ```javascript
- * const provider = PiperProvider.create({
- *   modelId: "en_US-amy-medium",
- *   sampleRate: 22050,
- * });
- * ```
- */
-export interface JsPiperOptions {
-  /** Piper voice model identifier. */
-  modelId?: string
-  /** Speaker ID for multi-speaker models. */
-  speakerId?: number
-  /** Output audio sample rate in Hz. */
-  sampleRate?: number
-  /** Path to cache downloaded voice models. */
-  cacheDir?: string
-}
-
 /** Reported per-pool budget pair returned by [`JsModelManager::pools`]. */
 export interface JsPoolBudget {
   /** Pool label (`"cpu"` or `"gpu:N"`). */
@@ -8667,6 +8644,45 @@ export interface JsTranscriptionSegment {
   start: number
   end: number
   speaker?: string
+}
+
+/**
+ * Which underlying TTS model to load. Maps onto
+ * [`blazen_llm::TtsModel`].
+ */
+export declare const enum JsTtsModel {
+  /** Kokoro-82M (default; small, CPU-friendly). */
+  Kokoro82m = 'Kokoro82m',
+  /** VibeVoice-1.5B (Microsoft). */
+  VibeVoice = 'VibeVoice',
+  /** Qwen3-TTS-12Hz-1.7B (`CustomVoice` variant). */
+  Qwen3Tts = 'Qwen3Tts'
+}
+
+/**
+ * Options for the local TTS backend.
+ *
+ * All fields are optional. `model` selects the backend (defaults to
+ * Kokoro-82M); `voice` selects the speaker preset.
+ *
+ * ```javascript
+ * const provider = TtsProvider.create({
+ *   model: "kokoro82m",
+ *   voice: "af_bella",
+ * });
+ * ```
+ */
+export interface JsTtsOptions {
+  /** TTS model to load. Defaults to `"kokoro82m"`. */
+  model?: JsTtsModel
+  /** Voice / speaker preset name. */
+  voice?: string
+  /** Language ISO 639-1 code (e.g. `"en"`, `"ja"`). */
+  language?: string
+  /** Output audio sample rate in Hz. */
+  sampleRate?: number
+  /** Path to cache downloaded model weights. */
+  cacheDir?: string
 }
 
 export interface JsUpscaleRequest {
@@ -10036,6 +10052,7 @@ export class DiffusionError extends ProviderError {}
 export class DiffusionInvalidOptionsError extends DiffusionError {}
 export class DiffusionModelLoadError extends DiffusionError {}
 export class DiffusionGenerationError extends DiffusionError {}
+export class DiffusionEngineNotAvailableError extends DiffusionError {}
 export class FastEmbedError extends ProviderError {}
 export class EmbedUnknownModelError extends FastEmbedError {}
 export class EmbedInitError extends FastEmbedError {}

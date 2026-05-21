@@ -21,7 +21,22 @@ all = ["llm", "persist", "pipeline", "prompts", "telemetry"]
 local-embeddings = ["blazen-llm/embed", "blazen-llm/candle-embed"]
 local-llm = ["blazen-llm/mistralrs", "blazen-llm/llamacpp", "blazen-llm/candle-llm"]
 local-image = ["blazen-llm/diffusion"]
-local-audio = ["blazen-llm/whispercpp", "blazen-llm/tts", "blazen-llm/candle-audio"]
+# Modality-grouped local-audio toggle. Activates every functional audio
+# backend (TTS: any-tts + OpenAI HTTP + Piper; STT: whisper.cpp + candle;
+# music: MusicGen + AudioGen; codec: EnCodec + DAC). Renamed from the
+# pre-PR-AUDIO `whispercpp`/`tts`/`candle-audio` aliases (still kept as
+# deprecated forwarders on `blazen-llm` for one transition cycle).
+local-audio = [
+    "blazen-llm/audio-tts-anytts",
+    "blazen-llm/audio-tts-openai",
+    "blazen-llm/audio-tts-piper",
+    "blazen-llm/audio-stt-whispercpp",
+    "blazen-llm/audio-stt-candle",
+    "blazen-llm/audio-music-musicgen",
+    "blazen-llm/audio-music-audiogen",
+    "blazen-llm/audio-codec-encodec",
+    "blazen-llm/audio-codec-dac",
+]
 local-all = ["local-embeddings", "local-llm", "local-image", "local-audio"]
 
 [dependencies]

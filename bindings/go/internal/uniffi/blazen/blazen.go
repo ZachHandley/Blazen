@@ -449,11 +449,11 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
-			return C.uniffi_blazen_uniffi_checksum_func_new_piper_tts_model()
+			return C.uniffi_blazen_uniffi_checksum_func_new_local_tts_model()
 		})
-		if checksum != 57207 {
+		if checksum != 38979 {
 			// If this happens try cleaning and rebuilding your project
-			panic("blazen: uniffi_blazen_uniffi_checksum_func_new_piper_tts_model: UniFFI API checksum mismatch")
+			panic("blazen: uniffi_blazen_uniffi_checksum_func_new_local_tts_model: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -20531,15 +20531,16 @@ func NewFalTtsModel(apiKey string, model *string) (*TtsModel, error) {
 // Build a local Piper text-to-speech model.
 //
 // `model_id` selects a Piper voice model (e.g. `"en_US-amy-medium"`).
-// `speaker_id` selects a speaker for multi-speaker voice models;
-// `sample_rate` overrides the model's native sample rate. Returns a
-// [`TtsModel`] handle whose [`synthesize`](TtsModel::synthesize) call
-// surfaces the upstream "engine not available" error until the Piper
-// Phase 9 wiring lands — but construction succeeds so foreign callers
-// can wire option plumbing today.
-func NewPiperTtsModel(modelId *string, speakerId *uint32, sampleRate *uint32) (*TtsModel, error) {
+// Builds a local TTS model backed by `any-tts` (Kokoro-82M default).
+//
+// `model` is one of `"kokoro82m"`, `"vibevoice"`, or `"qwen3_tts"` (or
+// any of the snake_case aliases); pass null to default to Kokoro-82M.
+// `voice` selects a speaker preset (e.g. `"af_bella"`); pass null to
+// use the model default. `sample_rate` overrides the model's native
+// sample rate.
+func NewLocalTtsModel(model *string, voice *string, language *string, sampleRate *uint32) (*TtsModel, error) {
 	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
-		return C.uniffi_blazen_uniffi_fn_func_new_piper_tts_model(FfiConverterOptionalStringINSTANCE.Lower(modelId), FfiConverterOptionalUint32INSTANCE.Lower(speakerId), FfiConverterOptionalUint32INSTANCE.Lower(sampleRate), _uniffiStatus)
+		return C.uniffi_blazen_uniffi_fn_func_new_local_tts_model(FfiConverterOptionalStringINSTANCE.Lower(model), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language), FfiConverterOptionalUint32INSTANCE.Lower(sampleRate), _uniffiStatus)
 	})
 	if _uniffiErr != nil {
 		var _uniffiDefaultValue *TtsModel
