@@ -1001,6 +1001,7 @@ dependencies = [
  "blazen-image-diffusion",
  "blazen-llm-candle",
  "blazen-llm-llamacpp",
+ "blazen-llm-llamacpp-server",
  "blazen-llm-mistralrs",
  "blazen-llm-ollama",
  "blazen-llm-vllm",
@@ -1063,6 +1064,21 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tokio-stream",
+ "tracing",
+]
+
+[[package]]
+name = "blazen-llm-llamacpp-server"
+version = "0.0.0-dev"
+dependencies = [
+ "async-trait",
+ "futures-util",
+ "mockito",
+ "reqwest 0.13.2",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
  "tracing",
 ]
 

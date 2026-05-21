@@ -38,6 +38,14 @@ vllm = ["dep:blazen-llm-vllm", "dep:reqwest"]
 # `ADAPTER` directive. Pulls in `reqwest` because the bridge in
 # backends/ollama.rs drives the NDJSON response stream directly.
 ollama = ["dep:blazen-llm-ollama", "dep:reqwest"]
+# External-engine proxy: llama.cpp's `llama-server` HTTP binary over its
+# OpenAI-compat surface + native /completion, /slots, /health, and
+# /lora-adapters endpoints (runtime adapter toggle, not load — adapters
+# must be preloaded at startup via the --lora CLI flag). Distinct from
+# `llamacpp` above which links the in-process llama-cpp-sys-2 runtime.
+# Pulls in `reqwest` because the bridge in backends/llamacpp_server.rs
+# drives the SSE response stream directly.
+llamacpp-server = ["dep:blazen-llm-llamacpp-server", "dep:reqwest"]
 candle-llm = ["dep:blazen-llm-candle"]     # Phase 7: local LLM via candle
 diffusion = ["dep:blazen-image-diffusion"]      # Phase 5: bridge + types only (no native runtime)
 # Forwarding activator: pull the diffusion-rs runtime so the bridge actually
@@ -123,6 +131,7 @@ blazen-audio-stt = { workspace = true, optional = true }
 blazen-audio-music = { workspace = true, optional = true }
 blazen-audio-codec = { workspace = true, optional = true }
 blazen-llm-ollama = { workspace = true, optional = true }
+blazen-llm-llamacpp-server = { workspace = true, optional = true }
 
 # Timer/runtime features only on native targets (mio doesn't support any wasm32 target)
 [target.'cfg(not(any(target_os = "wasi", target_arch = "wasm32")))'.dependencies]

@@ -28,6 +28,9 @@ pub mod vllm;
 #[cfg(feature = "ollama")]
 pub mod ollama;
 
+#[cfg(feature = "llamacpp-server")]
+pub mod llamacpp_server;
+
 // ---------------------------------------------------------------------------
 // Audio bridges (new restructure — see PR_AUDIO_PLAN.md)
 // ---------------------------------------------------------------------------
