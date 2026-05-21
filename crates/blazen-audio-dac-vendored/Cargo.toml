@@ -1,0 +1,31 @@
+[package]
+name = "blazen-audio-dac-vendored"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+
+[dependencies]
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+candle-transformers = { workspace = true }
+serde = { workspace = true, features = ["derive"] }
+
+[features]
+default = []
+# CUDA acceleration — forwarded to all candle deps in lockstep so the vendored
+# DAC encoder/decoder picks the same backend as the parent codec crate.
+cuda = [
+    "candle-core/cuda",
+    "candle-nn/cuda",
+    "candle-transformers/cuda",
+]
+# Apple Metal acceleration. candle-core picks Metal up via `Device::new_metal`;
+# candle-nn / candle-transformers do not yet expose a `metal` cargo feature on
+# 0.10, so this is a no-op marker that mirrors blazen-audio-codec's posture.
+metal = []
+
+[lints]
+workspace = true

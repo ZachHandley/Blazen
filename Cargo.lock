@@ -707,6 +707,7 @@ version = "0.0.0-dev"
 dependencies = [
  "async-trait",
  "blazen-audio",
+ "blazen-audio-dac-vendored",
  "candle-core",
  "candle-nn",
  "candle-transformers",
@@ -715,6 +716,16 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.18",
  "tokio",
+]
+
+[[package]]
+name = "blazen-audio-dac-vendored"
+version = "0.0.0-dev"
+dependencies = [
+ "candle-core",
+ "candle-nn",
+ "candle-transformers",
+ "serde",
 ]
 
 [[package]]

@@ -10,6 +10,7 @@ rust-version.workspace = true
 [dependencies]
 async-trait.workspace = true
 blazen-audio.workspace = true
+blazen-audio-dac-vendored = { workspace = true, optional = true }
 candle-core = { workspace = true, optional = true }
 candle-nn = { workspace = true, optional = true }
 candle-transformers = { workspace = true, optional = true }
@@ -41,7 +42,10 @@ candle-backbone = [
 encodec = ["candle-backbone"]
 # Enable the Descript Audio Codec (DAC) backend
 # (canonical checkpoint: `descript/dac_44khz`, 9 codebooks, 44.1 kHz).
-dac = ["candle-backbone"]
+# Pulls in the vendored `blazen-audio-dac-vendored` crate which exposes the
+# encode-to-codes path that upstream `candle_transformers::models::dac`
+# does not (see crates/blazen-audio-dac-vendored/VENDORED.md).
+dac = ["candle-backbone", "dep:blazen-audio-dac-vendored"]
 # Enable the Multi-Scale Neural Audio Codec (SNAC) backend
 # (canonical checkpoint: `hubertsiuzdak/snac_24khz`, 3 multi-scale
 # codebooks, 24 kHz, ~3 kbps). Weights ship as `pytorch_model.bin` (pickle),
@@ -49,11 +53,14 @@ dac = ["candle-backbone"]
 snac = ["candle-backbone"]
 # CUDA acceleration for candle-backed codec backends. Implies the shared
 # backbone feature so it works whichever concrete backend(s) the caller picks.
+# `blazen-audio-dac-vendored?/cuda` only activates when the `dac` feature
+# pulls the optional dep in, so this stays correct for snac/encodec-only builds.
 cuda = [
     "candle-backbone",
     "candle-core/cuda",
     "candle-nn/cuda",
     "candle-transformers/cuda",
+    "blazen-audio-dac-vendored?/cuda",
 ]
 # Apple Metal acceleration. candle-core picks Metal up via `Device::new_metal`;
 # candle-nn / candle-transformers do not yet expose a `metal` cargo feature on
