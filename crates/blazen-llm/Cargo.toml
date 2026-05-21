@@ -126,10 +126,10 @@ tokio = { version = "1", default-features = false, features = ["rt", "time", "fs
 # `wasm-bindgen`, which the wasi build cannot satisfy (no JS shim host),
 # so they live in the browser-only block.
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dependencies]
-wasm-bindgen = "=0.2.118"
-wasm-bindgen-futures = "=0.4.68"
-js-sys = "=0.3.95"
-web-sys = { version = "=0.3.95", features = [
+wasm-bindgen = "=0.2.121"
+wasm-bindgen-futures = "=0.4.71"
+js-sys = "=0.3.98"
+web-sys = { version = "=0.3.98", features = [
     "Request",
     "RequestInit",
     "Response",
