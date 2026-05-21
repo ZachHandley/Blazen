@@ -435,6 +435,116 @@ impl Default for GrpoConfig {
     }
 }
 
+/// How to initialize the value (critic) model in a PPO run.
+///
+/// PPO's critic is a `LlamaModel` + scalar value head (mirrors the reward
+/// head). The encoder weights can be seeded from three places:
+///
+/// - [`ValueModelInit::FromPolicy`] — clone the policy's base weights (the
+///   most common choice; gives the critic a head start at modeling the
+///   same token distribution).
+/// - [`ValueModelInit::FromReward`] — clone the reward model's encoder
+///   (common in TRL when a reward model is already on disk; the critic
+///   shares its inductive bias with the scoring function).
+/// - [`ValueModelInit::Random`] — initialize from scratch via the
+///   `VarBuilder`'s default initializer (useful for tests / ablations).
+///
+/// The scalar value head itself is always freshly initialized; only the
+/// encoder weights are affected by this choice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub enum ValueModelInit {
+    /// Clone the policy's base weights (recommended default).
+    #[default]
+    FromPolicy,
+    /// Clone the reward model's encoder weights.
+    FromReward,
+    /// Random init via the `VarBuilder`'s default initializer.
+    Random,
+}
+
+/// Proximal Policy Optimization (PPO) configuration.
+///
+/// Classical actor-critic RLHF: each step rolls out completions from the
+/// current policy, scores them with a frozen reward model, computes GAE
+/// advantages against a learned critic ("value model"), and updates the
+/// policy with the PPO clipped surrogate objective + a value-function
+/// regression + an entropy bonus.
+///
+/// Loss (per-token, masked to completion positions):
+///
+/// ```text
+/// ratio_t   = exp( log π_pol(a_t|...) - log π_old(a_t|...) )
+/// clip_t    = clip(ratio_t, 1 - eps, 1 + eps)
+/// pg_loss   = -mean_t( min(ratio_t * adv_t, clip_t * adv_t) )
+/// vf_loss   = mean_t( (V(s_t) - return_t)^2 )
+/// ent_loss  = -mean_t( H(π_pol(·|s_t)) )
+/// loss      = pg_loss + value_coef * vf_loss + entropy_coef * ent_loss
+///             + kl_coef * mean_t( KL(π_pol || π_ref) )       # optional
+/// ```
+///
+/// GAE returns: `adv_t = δ_t + γλ * adv_{t+1}` where
+/// `δ_t = r_t + γ * V(s_{t+1}) - V(s_t)`; `return_t = adv_t + V(s_t)`.
+///
+/// Phase 1 deferrals:
+/// - Full `PromptDataset → PpoBatch` rollout loop (the trainer's `step`
+///   consumes pre-rolled batches; the in-trainer sampler is wired up in
+///   phase 2 alongside the GRPO sampler).
+/// - HF-Hub reward-model loading.
+/// - Bindings (Python/Node/WASM/UniFFI/CABI).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PpoConfig {
+    /// Shared training hyperparameters.
+    pub core: TrainCoreConfig,
+    /// LoRA hyperparameters applied to the policy + critic encoder.
+    pub lora: LoraConfig,
+    /// PPO clip range epsilon. The OpenAI default is 0.2; values in
+    /// `[0.1, 0.3]` are common. Smaller = more conservative updates.
+    pub clip_epsilon: f32,
+    /// Weight of the value-function regression term in the combined loss.
+    /// OpenAI default 0.5.
+    pub value_coef: f32,
+    /// Weight of the entropy bonus. Encourages exploration; the
+    /// `spinningup` / OpenAI default is 0.01.
+    pub entropy_coef: f32,
+    /// GAE smoothing parameter `λ ∈ [0, 1]`. OpenAI default 0.95.
+    pub gae_lambda: f32,
+    /// Discount factor `γ ∈ [0, 1]`. RLHF typically uses 1.0 (episodic).
+    pub gamma: f32,
+    /// Optional KL-to-reference penalty coefficient. `0.0` disables (the
+    /// clipping objective already constrains policy drift); some recipes
+    /// add a small KL term on top.
+    pub kl_coef: f32,
+    /// Reward model repo. `None` means the trainer expects a pre-built
+    /// [`crate::reward::RewardModel`] supplied at construction time
+    /// (phase 1 path; HF-Hub loading is phase 2).
+    #[serde(default)]
+    pub reward_model_repo: Option<String>,
+    /// Optional revision for the reward model.
+    #[serde(default)]
+    pub reward_model_revision: Option<String>,
+    /// Where to seed the critic's encoder weights from.
+    #[serde(default)]
+    pub value_model_init: ValueModelInit,
+}
+
+impl Default for PpoConfig {
+    fn default() -> Self {
+        Self {
+            core: TrainCoreConfig::default(),
+            lora: LoraConfig::default(),
+            clip_epsilon: 0.2,
+            value_coef: 0.5,
+            entropy_coef: 0.01,
+            gae_lambda: 0.95,
+            gamma: 1.0,
+            kl_coef: 0.0,
+            reward_model_repo: None,
+            reward_model_revision: None,
+            value_model_init: ValueModelInit::FromPolicy,
+        }
+    }
+}
+
 /// Full fine-tune configuration (no LoRA — every parameter trains).
 ///
 /// `gradient_checkpointing = true` is accepted for forward compatibility
@@ -731,5 +841,102 @@ mod tests {
         assert!((parsed.sampling_temperature - original.sampling_temperature).abs() < f32::EPSILON);
         assert_eq!(parsed.reward_model_repo, original.reward_model_repo);
         assert_eq!(parsed.reward_model_revision, original.reward_model_revision);
+    }
+
+    #[test]
+    fn ppo_config_default_has_openai_hyperparams() {
+        let cfg = PpoConfig::default();
+        assert!((cfg.clip_epsilon - 0.2).abs() < f32::EPSILON);
+        assert!((cfg.value_coef - 0.5).abs() < f32::EPSILON);
+        assert!((cfg.entropy_coef - 0.01).abs() < f32::EPSILON);
+        assert!((cfg.gae_lambda - 0.95).abs() < f32::EPSILON);
+        assert!((cfg.gamma - 1.0).abs() < f32::EPSILON);
+        assert!((cfg.kl_coef - 0.0).abs() < f32::EPSILON);
+        assert_eq!(cfg.value_model_init, ValueModelInit::FromPolicy);
+    }
+
+    #[test]
+    fn ppo_config_serde_roundtrip() {
+        let original = PpoConfig::default();
+        let json = serde_json::to_string(&original).expect("serialize");
+        let parsed: PpoConfig = serde_json::from_str(&json).expect("deserialize");
+        assert_core_eq(&parsed.core, &original.core);
+        assert_lora_eq(&parsed.lora, &original.lora);
+        assert!((parsed.clip_epsilon - original.clip_epsilon).abs() < f32::EPSILON);
+        assert!((parsed.value_coef - original.value_coef).abs() < f32::EPSILON);
+        assert!((parsed.entropy_coef - original.entropy_coef).abs() < f32::EPSILON);
+        assert!((parsed.gae_lambda - original.gae_lambda).abs() < f32::EPSILON);
+        assert!((parsed.gamma - original.gamma).abs() < f32::EPSILON);
+        assert!((parsed.kl_coef - original.kl_coef).abs() < f32::EPSILON);
+        assert_eq!(parsed.reward_model_repo, original.reward_model_repo);
+        assert_eq!(parsed.reward_model_revision, original.reward_model_revision);
+        assert_eq!(parsed.value_model_init, original.value_model_init);
+    }
+
+    #[test]
+    fn ppo_config_serde_roundtrip_non_default_init() {
+        // Cover every `ValueModelInit` variant through serde so a future
+        // rename of the enum doesn't silently break the wire format.
+        for init in [
+            ValueModelInit::FromPolicy,
+            ValueModelInit::FromReward,
+            ValueModelInit::Random,
+        ] {
+            let original = PpoConfig {
+                value_model_init: init,
+                kl_coef: 0.05,
+                ..PpoConfig::default()
+            };
+            let json = serde_json::to_string(&original).expect("serialize");
+            let parsed: PpoConfig = serde_json::from_str(&json).expect("deserialize");
+            assert_eq!(parsed.value_model_init, init);
+            assert!((parsed.kl_coef - 0.05).abs() < f32::EPSILON);
+        }
+    }
+
+    #[test]
+    fn ppo_config_serde_accepts_legacy_no_init_field() {
+        // The `value_model_init` field is `#[serde(default)]` so older
+        // configs that pre-date the field still parse — the default is
+        // `FromPolicy`.
+        let json = r#"{
+            "core": {
+                "base_model_repo": "Qwen/Qwen2.5-0.5B",
+                "output_dir": "./out",
+                "max_steps": 100,
+                "batch_size": 1,
+                "gradient_accumulation_steps": 8,
+                "max_seq_len": 1024,
+                "eval_steps": null,
+                "save_steps": null,
+                "seed": 42,
+                "mixed_precision": "Bf16",
+                "device": null,
+                "optim": {
+                    "learning_rate": 2e-4,
+                    "beta1": 0.9,
+                    "beta2": 0.999,
+                    "epsilon": 1e-8,
+                    "weight_decay": 0.0,
+                    "gradient_clip": 1.0
+                },
+                "scheduler": { "kind": "Cosine", "warmup_steps": 50 }
+            },
+            "lora": {
+                "rank": 16,
+                "alpha": 32.0,
+                "dropout": 0.05,
+                "target_modules": ["q_proj","k_proj","v_proj","o_proj"]
+            },
+            "clip_epsilon": 0.2,
+            "value_coef": 0.5,
+            "entropy_coef": 0.01,
+            "gae_lambda": 0.95,
+            "gamma": 1.0,
+            "kl_coef": 0.0
+        }"#;
+        let parsed: PpoConfig = serde_json::from_str(json).expect("deserialize");
+        assert_eq!(parsed.value_model_init, ValueModelInit::FromPolicy);
+        assert!(parsed.reward_model_repo.is_none());
     }
 }
