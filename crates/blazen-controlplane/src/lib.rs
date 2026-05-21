@@ -53,6 +53,9 @@
 //!   environments that cannot speak HTTP/2 (browsers, some serverless
 //!   platforms). Mirrors the trick [`blazen_peer`] uses for the
 //!   wasi-http fallback.
+//! - `http-rest`: build the OpenAI-compatible REST + Blazen-admin
+//!   endpoints on top of the `ManagerHandle` trait. See
+//!   [`http::build_router`] for the entry point.
 
 // The generated tonic/prost types and the gRPC server / client that consume
 // them are unavailable on wasm32-wasi* (tonic does not compile there). The
@@ -109,7 +112,7 @@ pub mod worker;
 #[cfg(feature = "client")]
 pub mod client;
 
-#[cfg(feature = "http-transport")]
+#[cfg(any(feature = "http-transport", feature = "http-rest"))]
 pub mod http;
 
 pub use error::ControlPlaneError;
@@ -147,3 +150,10 @@ pub use server::{ManagerHandle, ModelServerState, ModelService};
     not(any(target_os = "wasi", target_arch = "wasm32"))
 ))]
 pub use client::ModelClient;
+
+// PR5 phase 2: re-exports for the OpenAI-compat REST surface.
+#[cfg(feature = "http-rest")]
+pub use http::{
+    ContentStore, HttpError as RestHttpError, RestMetrics, RestState, StoredBlob, build_router,
+    build_router_with_state,
+};
