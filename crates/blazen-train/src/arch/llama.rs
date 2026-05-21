@@ -687,6 +687,29 @@ impl TrainableLlama {
     ///
     /// Forwards any candle tensor error.
     pub fn forward(&self, input_ids: &Tensor) -> Result<Tensor> {
+        let x = self.forward_hidden_states(input_ids)?;
+        // Why: training loss needs logits at every position (next-token
+        // shift happens in the loss), so don't slice the last token like
+        // the upstream inference forward does.
+        let logits = self.lm_head.forward(&x)?;
+        logits.to_dtype(DType::F32)
+    }
+
+    /// Forward pass returning the *post-norm hidden states* `[B, T, hidden]`,
+    /// matching the input that would be fed to `lm_head`.
+    ///
+    /// This is the projection target a sequence-classification or scalar
+    /// reward head reads from: pick the last non-pad position, multiply by
+    /// a `Linear(hidden, 1)`, and you have a scalar reward per row.
+    ///
+    /// The returned tensor is in the model's training dtype (matches the
+    /// `VarBuilder` the model was loaded with) — callers that need f32 for
+    /// numerically stable downstream ops must cast.
+    ///
+    /// # Errors
+    ///
+    /// Forwards any candle tensor error.
+    pub fn forward_hidden_states(&self, input_ids: &Tensor) -> Result<Tensor> {
         let (_b, seq_len) = input_ids.dims2()?;
         let mut x = self.embed_tokens.forward(input_ids)?;
         let mask = build_causal_mask(seq_len, x.device())?;
@@ -695,12 +718,7 @@ impl TrainableLlama {
         }
         // Why: see DecoderLayer::forward — use `forward_diff` to bypass
         // the no-bwd fast-path RmsNorm.
-        let x = self.norm.forward_diff(&x)?;
-        // Why: training loss needs logits at every position (next-token
-        // shift happens in the loss), so don't slice the last token like
-        // the upstream inference forward does.
-        let logits = self.lm_head.forward(&x)?;
-        logits.to_dtype(DType::F32)
+        self.norm.forward_diff(&x)
     }
 
     /// Forward returning *only* the final-position logits `[B, vocab]`,

@@ -924,6 +924,177 @@ impl RatedDataset for RatedJsonlDataset {
     }
 }
 
+// -----------------------------------------------------------------------------
+// Prompt-only datasets (GRPO sampling)
+// -----------------------------------------------------------------------------
+
+/// A single GRPO prompt: just the prompt text (plain or chat-shaped). The
+/// completions are sampled at train time by the GRPO trainer's policy.
+#[derive(Debug, Clone, Deserialize)]
+pub struct PromptExample {
+    /// Plain-text prompt prefix.
+    #[serde(default)]
+    pub prompt: Option<String>,
+    /// Chat messages forming the prompt prefix (mutually exclusive with `prompt`).
+    #[serde(default)]
+    pub messages: Option<Vec<ChatMessage>>,
+}
+
+#[derive(Debug, Deserialize)]
+struct PromptJsonlRow {
+    #[serde(default)]
+    prompt: Option<String>,
+    #[serde(default)]
+    messages: Option<Vec<ChatMessage>>,
+}
+
+/// JSONL-backed prompt-only dataset for GRPO.
+///
+/// Each line must deserialize to `{"prompt": "..."}` or
+/// `{"messages": [...]}`. The reader tokenizes lazily — only the raw rows
+/// are held in memory. Tokenization (and chat-template rendering, if a
+/// template was supplied) happens inside [`Self::prompt_text`], called by
+/// the GRPO sampler at batch-build time.
+///
+/// The dataset is intentionally split from the GRPO trainer's batching:
+/// completion sampling requires running the policy model, which lives
+/// inside the trainer, so the dataset only owns the prompt rendering.
+pub struct PromptJsonlDataset {
+    examples: Vec<PromptExample>,
+    chat_env: Option<Arc<Environment<'static>>>,
+}
+
+impl PromptJsonlDataset {
+    /// Load and parse a prompt-only JSONL file.
+    ///
+    /// `chat_template` is the same Jinja2 string accepted by
+    /// [`JsonlDataset::from_path`]; if omitted, only `prompt` rows are
+    /// supported.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BlazenTrainError::Dataset`] for I/O failures, JSON parse
+    /// failures, an empty file, or a chat-template compile failure.
+    pub fn from_path(path: &Path, chat_template: Option<&str>) -> Result<Self, BlazenTrainError> {
+        let text = std::fs::read_to_string(path).map_err(|e| {
+            BlazenTrainError::Dataset(format!(
+                "failed to read prompt jsonl at {}: {e}",
+                path.display()
+            ))
+        })?;
+
+        let mut examples: Vec<PromptExample> = Vec::new();
+        for (lineno, line) in text.lines().enumerate() {
+            let trimmed = line.trim();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let row: PromptJsonlRow = serde_json::from_str(trimmed).map_err(|e| {
+                BlazenTrainError::Dataset(format!(
+                    "prompt jsonl parse error at {}:{}: {e}",
+                    path.display(),
+                    lineno + 1
+                ))
+            })?;
+            if row.prompt.is_none() && row.messages.is_none() {
+                return Err(BlazenTrainError::Dataset(format!(
+                    "prompt row at {}:{} must have either `prompt` or `messages`",
+                    path.display(),
+                    lineno + 1
+                )));
+            }
+            if let Some(msgs) = row.messages.as_ref()
+                && msgs.is_empty()
+            {
+                return Err(BlazenTrainError::Dataset(format!(
+                    "empty messages array at {}:{}",
+                    path.display(),
+                    lineno + 1
+                )));
+            }
+            examples.push(PromptExample {
+                prompt: row.prompt,
+                messages: row.messages,
+            });
+        }
+
+        if examples.is_empty() {
+            return Err(BlazenTrainError::Dataset(format!(
+                "prompt jsonl file at {} contains zero examples",
+                path.display()
+            )));
+        }
+
+        let chat_env = if let Some(tpl) = chat_template {
+            let mut env = Environment::new();
+            env.add_template_owned("chat", tpl.to_string())
+                .map_err(|e| {
+                    BlazenTrainError::Dataset(format!("chat_template compile failed: {e}"))
+                })?;
+            Some(Arc::new(env))
+        } else {
+            None
+        };
+
+        Ok(Self { examples, chat_env })
+    }
+
+    /// Number of prompts loaded.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.examples.len()
+    }
+
+    /// Whether the dataset is empty (only true if file had no rows).
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.examples.is_empty()
+    }
+
+    /// Borrow the rendered prompt text for the `idx`-th row.
+    ///
+    /// For `prompt` rows this is the raw string; for `messages` rows the
+    /// chat template renders the message list with `add_generation_prompt
+    /// = true`. The GRPO sampler appends sampled completions onto this
+    /// string before tokenization.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BlazenTrainError::Dataset`] if `idx` is out of bounds,
+    /// if a `messages` row arrives without a chat template, or if the
+    /// template render itself fails.
+    pub fn prompt_text(&self, idx: usize) -> Result<String, BlazenTrainError> {
+        let ex = self.examples.get(idx).ok_or_else(|| {
+            BlazenTrainError::Dataset(format!(
+                "prompt index {idx} out of range (len={})",
+                self.examples.len()
+            ))
+        })?;
+        if let Some(p) = &ex.prompt {
+            return Ok(p.clone());
+        }
+        let msgs = ex.messages.as_ref().ok_or_else(|| {
+            BlazenTrainError::Dataset("prompt example missing both fields".to_string())
+        })?;
+        let env = self.chat_env.as_ref().ok_or_else(|| {
+            BlazenTrainError::Dataset(
+                "prompt messages row encountered but no chat_template was provided".to_string(),
+            )
+        })?;
+        let tpl = env
+            .get_template("chat")
+            .map_err(|e| BlazenTrainError::Dataset(format!("chat_template lookup failed: {e}")))?;
+        let view: Vec<TemplateMsg> = msgs.iter().map(TemplateMsg::from).collect();
+        tpl.render(context! {
+            messages => view,
+            add_generation_prompt => true,
+        })
+        .map_err(|e| {
+            BlazenTrainError::Dataset(format!("chat_template render (prompt) failed: {e}"))
+        })
+    }
+}
+
 /// Pad a batch of `(ids, labels)` rows to a common length and stack into
 /// `(input_ids, attn, labels)` tensors. Used by both preference and rated
 /// datasets so their padding semantics match [`JsonlDataset`] exactly.

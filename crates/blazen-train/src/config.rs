@@ -347,6 +347,94 @@ impl Default for KtoConfig {
     }
 }
 
+/// Reward model training configuration.
+///
+/// The reward model is a base LM (today: Llama) with a scalar reward head
+/// — a single `Linear(hidden_size, 1)` projection applied to the final
+/// non-pad token's post-norm hidden state. Training uses the standard
+/// Bradley-Terry pairwise loss `-log(sigmoid(r_chosen - r_rejected))` on
+/// preference-pair data (the same JSONL format consumed by DPO/ORPO/SimPO).
+///
+/// Only Llama-family base models are supported in PR-R phase 1 — Qwen2 /
+/// Mistral reward heads are deferred to a later phase (the `forward_hidden_states`
+/// entry point is currently only implemented on `TrainableLlama`).
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct RewardConfig {
+    /// Shared training hyperparameters.
+    pub core: TrainCoreConfig,
+    /// LoRA hyperparameters applied to the base model. Set
+    /// `target_modules = []` to train every base weight (full fine-tune).
+    pub lora: LoraConfig,
+}
+
+/// Group Relative Policy Optimization (GRPO) configuration.
+///
+/// DeepSeek's critic-free PPO replacement. Each training step samples
+/// `group_size` completions per prompt from the current policy, scores
+/// each with a frozen reward model, computes group-relative advantages
+/// `(r_i - mean_group) / (std_group + eps)`, then minimizes
+/// `-mean_i(advantage_i * log_prob_i) + beta * KL(policy || reference)`.
+///
+/// The reference model is a frozen copy of the policy at step 0 (same
+/// pattern as DPO's reference).
+///
+/// Phase 1 deferrals (documented as `Unsupported` at runtime):
+/// - reward-model loading from disk: the trainer accepts a constructed
+///   [`crate::reward::RewardModel`] via `set_reward_model`; HF Hub
+///   download of a reward-model adapter is deferred to phase 2 alongside
+///   bindings.
+/// - on-policy completion sampling: phase 1's `step_grpo` consumes a
+///   caller-provided `GrpoBatch` of pre-sampled completions; the
+///   in-trainer sampler is wired up in phase 2 when the manager-level
+///   sampling APIs land.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct GrpoConfig {
+    /// Shared training hyperparameters.
+    pub core: TrainCoreConfig,
+    /// LoRA hyperparameters applied to the policy model.
+    pub lora: LoraConfig,
+    /// Number of sampled completions per prompt. 4-8 is the typical range;
+    /// DeepSeek's published recipe uses 16 for math reasoning. Must be >= 2
+    /// (a singleton group has zero variance and the advantage normalizer
+    /// collapses to 0/0).
+    pub group_size: usize,
+    /// KL-regularization strength against the frozen reference policy.
+    /// DeepSeek default 0.04; TRL defaults to 0.1. Pick by your taste for
+    /// behavioral drift vs. reward chasing.
+    pub beta: f32,
+    /// Numerical-stability epsilon added to the per-group standard
+    /// deviation before normalizing advantages. Prevents NaN when every
+    /// completion in a group scores identically.
+    pub advantage_epsilon: f32,
+    /// Sampling temperature for stochastic completion generation in
+    /// phase 2's in-trainer sampler. Carried on the config so callers can
+    /// pin reproducibility ahead of the sampler landing.
+    pub sampling_temperature: f32,
+    /// Reward model repo. `None` reuses `core.base_model_repo` as the
+    /// reward-model architecture (the reward head still needs to be
+    /// trained or loaded separately via [`crate::reward::RewardTrainer`]).
+    #[serde(default)]
+    pub reward_model_repo: Option<String>,
+    /// Optional revision for the reward model.
+    #[serde(default)]
+    pub reward_model_revision: Option<String>,
+}
+
+impl Default for GrpoConfig {
+    fn default() -> Self {
+        Self {
+            core: TrainCoreConfig::default(),
+            lora: LoraConfig::default(),
+            group_size: 4,
+            beta: 0.04,
+            advantage_epsilon: 1e-8,
+            sampling_temperature: 1.0,
+            reward_model_repo: None,
+            reward_model_revision: None,
+        }
+    }
+}
+
 /// Full fine-tune configuration (no LoRA — every parameter trains).
 ///
 /// `gradient_checkpointing = true` is accepted for forward compatibility
@@ -603,5 +691,45 @@ mod tests {
         assert_core_eq(&parsed.core, &original.core);
         assert_lora_eq(&parsed.lora, &original.lora);
         assert_eq!(parsed.base_quant, original.base_quant);
+    }
+
+    #[test]
+    fn reward_config_default_inherits_core_defaults() {
+        let cfg = RewardConfig::default();
+        assert!(cfg.core.max_steps > 0);
+        assert!(cfg.lora.rank > 0);
+    }
+
+    #[test]
+    fn reward_config_serde_roundtrip() {
+        let original = RewardConfig::default();
+        let json = serde_json::to_string(&original).expect("serialize");
+        let parsed: RewardConfig = serde_json::from_str(&json).expect("deserialize");
+        assert_core_eq(&parsed.core, &original.core);
+        assert_lora_eq(&parsed.lora, &original.lora);
+    }
+
+    #[test]
+    fn grpo_config_default_group_size_is_four() {
+        let cfg = GrpoConfig::default();
+        assert_eq!(cfg.group_size, 4);
+        assert!((cfg.beta - 0.04).abs() < f32::EPSILON);
+        assert!(cfg.advantage_epsilon > 0.0);
+        assert!((cfg.sampling_temperature - 1.0).abs() < f32::EPSILON);
+    }
+
+    #[test]
+    fn grpo_config_serde_roundtrip() {
+        let original = GrpoConfig::default();
+        let json = serde_json::to_string(&original).expect("serialize");
+        let parsed: GrpoConfig = serde_json::from_str(&json).expect("deserialize");
+        assert_core_eq(&parsed.core, &original.core);
+        assert_lora_eq(&parsed.lora, &original.lora);
+        assert_eq!(parsed.group_size, original.group_size);
+        assert!((parsed.beta - original.beta).abs() < f32::EPSILON);
+        assert!((parsed.advantage_epsilon - original.advantage_epsilon).abs() < f32::EPSILON);
+        assert!((parsed.sampling_temperature - original.sampling_temperature).abs() < f32::EPSILON);
+        assert_eq!(parsed.reward_model_repo, original.reward_model_repo);
+        assert_eq!(parsed.reward_model_revision, original.reward_model_revision);
     }
 }
