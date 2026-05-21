@@ -24,6 +24,7 @@
 pub mod agent;
 pub mod agent_types;
 pub mod batch;
+pub mod byo_backend;
 pub mod capability_providers;
 pub mod chat_message;
 pub mod completion_model;

@@ -541,6 +541,53 @@ impl WasmModelManager {
         })))
     }
 
+    /// Register a Bring-Your-Own (BYO) JS-implemented inference backend.
+    ///
+    /// `backend` must satisfy the
+    /// [`BlazenJsBackend`](../byo_backend/index.html) TypeScript interface
+    /// (defined in `byo_backend.rs`). The backend object is wrapped in a
+    /// [`crate::byo_backend::JsBackendShim`] that implements
+    /// [`LocalModel`] + [`CompletionModel`] (+ [`EmbeddingModel`] if the
+    /// optional `embed()` method is present), and is registered with the
+    /// underlying [`ModelManager`] under the given `id`.
+    ///
+    /// The shim's `memoryBytes` field (or callback) supplies the manager's
+    /// memory accounting. If absent or zero, the manager treats the model
+    /// as occupying zero bytes — pool budgets will not evict it.
+    ///
+    /// Returns a `Promise<void>` that resolves once registration completes.
+    ///
+    /// ```js
+    /// const backend = {
+    ///   modelId: 'my-webgpu-llm',
+    ///   memoryBytes: 4_000_000_000,
+    ///   device: 'gpu',
+    ///   async complete(req) { return await myEngine.generate(req); },
+    ///   async streamComplete(req, onChunk) { onChunk({ delta: 'hi' }); },
+    /// };
+    /// await manager.registerByoBackend('my-webgpu-llm', backend);
+    /// await manager.load('my-webgpu-llm');
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Rejects if `backend` is not a JS object, its required `complete`
+    /// method is missing or not a function, or any optional method key is
+    /// present but not a function.
+    #[wasm_bindgen(js_name = "registerByoBackend")]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn register_byo_backend(&self, id: String, backend: JsValue) -> Result<Promise, JsValue> {
+        let shim = crate::byo_backend::shim_from_js(backend)?;
+        let memory_estimate = shim.memory_bytes_estimate();
+        let adapter: Arc<dyn LocalModel> = shim;
+
+        let inner = Arc::clone(&self.inner);
+        Ok(future_to_promise(SendFuture(async move {
+            inner.register(&id, adapter, memory_estimate).await;
+            Ok(JsValue::UNDEFINED)
+        })))
+    }
+
     /// Unregister a model, removing it from the manager.
     ///
     /// If the model is currently loaded, it is **not** unloaded first --
@@ -603,11 +650,13 @@ impl WasmModelManager {
                      (in-browser adapter mounting not supported by SDK built-in backends)"
                 )));
             };
-            let result = cb.0.call2(&JsValue::NULL, &bytes_val, &opts_val).map_err(|e| {
-                JsValue::from_str(&format!(
-                    "model '{id}' lifecycle.loadAdapter() threw: {e:?}"
-                ))
-            })?;
+            let result =
+                cb.0.call2(&JsValue::NULL, &bytes_val, &opts_val)
+                    .map_err(|e| {
+                        JsValue::from_str(&format!(
+                            "model '{id}' lifecycle.loadAdapter() threw: {e:?}"
+                        ))
+                    })?;
             if result.has_type::<Promise>() {
                 let promise: Promise = result.unchecked_into();
                 let val = JsFuture::from(promise).await.map_err(|e| {
@@ -653,14 +702,13 @@ impl WasmModelManager {
                      (in-browser adapter mounting not supported by SDK built-in backends)"
                 )));
             };
-            let result = cb
-                .0
-                .call1(&JsValue::NULL, &JsValue::from_str(&adapter_id))
-                .map_err(|e| {
-                    JsValue::from_str(&format!(
-                        "model '{id}' lifecycle.unloadAdapter() threw: {e:?}"
-                    ))
-                })?;
+            let result =
+                cb.0.call1(&JsValue::NULL, &JsValue::from_str(&adapter_id))
+                    .map_err(|e| {
+                        JsValue::from_str(&format!(
+                            "model '{id}' lifecycle.unloadAdapter() threw: {e:?}"
+                        ))
+                    })?;
             if result.has_type::<Promise>() {
                 let promise: Promise = result.unchecked_into();
                 JsFuture::from(promise).await.map_err(|e| {
@@ -735,12 +783,7 @@ impl WasmModelManager {
     /// @param _repo    - Unused; accepted for signature parity with native.
     /// @param _options - Unused; accepted for signature parity with native.
     #[wasm_bindgen(js_name = "loadFromHf")]
-    pub fn load_from_hf(
-        &self,
-        _id: String,
-        _repo: String,
-        _options: Option<JsValue>,
-    ) -> Promise {
+    pub fn load_from_hf(&self, _id: String, _repo: String, _options: Option<JsValue>) -> Promise {
         Promise::reject(&JsValue::from_str(
             "WASM SDK does not download HF models in-browser; provide bytes via lifecycle.load",
         ))
