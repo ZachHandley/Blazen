@@ -701,6 +701,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "blazen-3d"
+version = "0.0.0-dev"
+dependencies = [
+ "async-trait",
+ "blazen-core",
+ "futures-core",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "blazen-audio"
 version = "0.0.0-dev"
 dependencies = [
@@ -817,6 +829,7 @@ dependencies = [
  "candle-core",
  "candle-nn",
  "candle-transformers",
+ "futures-core",
  "hf-hub 0.5.0",
  "mockito",
  "reqwest 0.13.3",
@@ -836,7 +849,6 @@ dependencies = [
  "async-trait",
  "bincode",
  "blazen-audio",
- "blazen-core",
  "candle-core",
  "candle-nn",
  "futures-core",
@@ -1051,6 +1063,7 @@ dependencies = [
  "blazen-audio-music",
  "blazen-audio-stt",
  "blazen-audio-tts",
+ "blazen-audio-vc",
  "blazen-embed",
  "blazen-embed-candle",
  "blazen-events",
