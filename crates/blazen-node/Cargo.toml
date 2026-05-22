@@ -61,6 +61,9 @@ audio-stt-whisper-streaming = ["blazen-llm/audio-stt-whisper-streaming"]
 audio-tts-bark = ["blazen-llm/audio-tts-bark"]
 audio-tts-f5 = ["blazen-llm/audio-tts-f5"]
 audio-vc-rvc = ["blazen-llm/audio-vc-rvc"]
+# 3D-pipeline bridge surface (HTTP-proxy backend forwards to upstream 3D services).
+threed = ["blazen-llm/threed"]
+threed-compat-proxy = ["blazen-llm/threed-compat-proxy"]
 # `ModelManager.loadFromHf` auto-backend selection via the Hugging Face Hub
 # metadata probe. Forwards to `blazen-manager/hf-loader`.
 hf-loader = ["blazen-manager/hf-loader"]

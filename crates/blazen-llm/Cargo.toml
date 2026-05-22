@@ -115,6 +115,13 @@ candle-audio   = ["audio-music-musicgen"]
 # backends/lmstudio.rs drives the SSE response stream directly.
 lmstudio = ["dep:blazen-llm-lmstudio", "dep:reqwest"]
 
+# 3D-pipeline bridge surface (texturizer/rigger/refiner/animator capability
+# traits live in `blazen-3d`). `threed-compat-proxy` enables the HTTP proxy
+# backend `Compat3dProvider` for forwarding multipart requests to upstream
+# 3D services.
+threed              = ["dep:blazen-3d"]
+threed-compat-proxy = ["threed", "blazen-3d/compat-proxy"]
+
 [dependencies]
 blazen-events.workspace = true
 async-trait.workspace = true
@@ -155,6 +162,7 @@ blazen-llm-llamacpp-server = { workspace = true, optional = true }
 blazen-llm-tgi = { workspace = true, optional = true }
 blazen-llm-lmstudio = { workspace = true, optional = true }
 blazen-audio-vc = { workspace = true, optional = true }
+blazen-3d = { version = "0.0.0-dev", path = "../blazen-3d", optional = true }
 
 # Timer/runtime features only on native targets (mio doesn't support any wasm32 target)
 [target.'cfg(not(any(target_os = "wasi", target_arch = "wasm32")))'.dependencies]

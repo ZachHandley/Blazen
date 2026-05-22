@@ -118,6 +118,10 @@ audio-tts-bark = ["blazen-llm/audio-tts-bark"]
 audio-tts-f5 = ["blazen-llm/audio-tts-f5"]
 audio-vc-rvc = ["blazen-llm/audio-vc-rvc"]
 
+# 3D-pipeline bridge surface (HTTP-proxy backend forwards to upstream 3D services).
+threed = ["blazen-llm/threed"]
+threed-compat-proxy = ["blazen-llm/threed-compat-proxy"]
+
 # Telemetry exporters
 otlp = ["blazen-telemetry/otlp"]
 prometheus = ["blazen-telemetry/prometheus"]

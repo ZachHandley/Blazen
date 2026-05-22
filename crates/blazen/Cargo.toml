@@ -41,7 +41,10 @@ local-audio = [
     "blazen-llm/audio-codec-dac",
     "blazen-llm/audio-vc-rvc",
 ]
-local-all = ["local-embeddings", "local-llm", "local-image", "local-audio"]
+# Modality-grouped local-3d toggle. Activates the HTTP-proxy backend for the
+# blazen-3d capability traits (texturizer, rigger, refiner, animator).
+local-3d = ["blazen-llm/threed-compat-proxy"]
+local-all = ["local-embeddings", "local-llm", "local-image", "local-audio", "local-3d"]
 
 [dependencies]
 blazen-events.workspace = true

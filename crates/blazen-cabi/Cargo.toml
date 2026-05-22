@@ -91,6 +91,10 @@ audio-tts-bark = ["blazen-uniffi/audio-tts-bark"]
 audio-tts-f5 = ["blazen-uniffi/audio-tts-f5"]
 audio-vc-rvc = ["blazen-uniffi/audio-vc-rvc"]
 
+# 3D-pipeline bridge surface (HTTP-proxy backend forwards to upstream 3D services).
+threed = ["blazen-uniffi/threed"]
+threed-compat-proxy = ["blazen-uniffi/threed-compat-proxy"]
+
 otlp = ["blazen-uniffi/otlp"]
 prometheus = ["blazen-uniffi/prometheus"]
 langfuse = ["blazen-uniffi/langfuse"]
