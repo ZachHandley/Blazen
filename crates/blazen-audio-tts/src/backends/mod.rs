@@ -6,11 +6,15 @@
 //! | Module       | Feature   | Notes                                       |
 //! |--------------|-----------|---------------------------------------------|
 //! | [`anytts`]   | `anytts`  | Local engines (Kokoro / VibeVoice / Qwen3). |
+//! | [`bark`]     | `bark`    | Suno-AI Bark (3-stage AR + EnCodec).        |
 //! | [`openai`]   | `openai`  | HTTP client for OpenAI-compat servers.      |
 //! | [`piper`]    | always on | Reserved stub — see module docs.            |
 
 #[cfg(feature = "anytts")]
 pub mod anytts;
+
+#[cfg(feature = "bark")]
+pub mod bark;
 
 #[cfg(feature = "openai")]
 pub mod openai;
@@ -22,6 +26,9 @@ pub mod piper;
 
 #[cfg(feature = "anytts")]
 pub use anytts::AnyTtsBackend;
+
+#[cfg(feature = "bark")]
+pub use bark::{BARK_BACKEND_ID_PREFIX, BarkBackend, BarkConfig};
 
 #[cfg(feature = "openai")]
 pub use openai::{

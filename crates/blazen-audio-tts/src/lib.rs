@@ -30,6 +30,8 @@
 //! |-----------|---------|---------------------------------------------------|
 //! | `openai`  | yes     | Builds [`backends::openai::OpenAiTtsBackend`].    |
 //! | `anytts`  | no      | Builds [`backends::anytts::AnyTtsBackend`].       |
+//! | `bark`    | no      | Builds [`backends::bark::BarkBackend`] (Suno-AI   |
+//! |           |         | Bark: 3-stage AR transformer + EnCodec).          |
 //! | `engine`  | no      | **Deprecated** alias for `anytts`; will be       |
 //! |           |         | removed one release after the multi-backend      |
 //! |           |         | restructure ships.                               |
@@ -52,6 +54,9 @@ pub use traits::TtsBackend;
 
 #[cfg(feature = "anytts")]
 pub use backends::AnyTtsBackend;
+
+#[cfg(feature = "bark")]
+pub use backends::{BARK_BACKEND_ID_PREFIX, BarkBackend, BarkConfig};
 
 #[cfg(feature = "openai")]
 pub use backends::{

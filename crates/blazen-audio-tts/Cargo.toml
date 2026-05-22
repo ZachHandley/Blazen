@@ -21,6 +21,12 @@ any-tts = { version = "0.1.2", default-features = false, features = ["kokoro", "
 reqwest = { workspace = true, features = ["multipart"], optional = true }
 base64 = { workspace = true, optional = true }
 blazen-audio-piper-vendored = { workspace = true, optional = true }
+candle-core = { workspace = true, optional = true }
+candle-nn = { workspace = true, optional = true }
+candle-transformers = { workspace = true, optional = true }
+tokenizers = { workspace = true, optional = true }
+hf-hub = { workspace = true, features = ["ureq"], optional = true }
+blazen-audio-codec = { workspace = true, optional = true }
 
 [features]
 default = ["openai"]
@@ -39,6 +45,19 @@ piper = ["dep:blazen-audio-piper-vendored"]
 # Live, network-dependent tests that pull real Piper voices from Hugging
 # Face. Gated separately so `cargo test --features piper` stays hermetic.
 live-models = []
+# `bark` enables the Suno-AI Bark text-to-speech backend. 3-stage AR
+# transformer (semantic → coarse → fine) + EnCodec waveform synthesis.
+# Zero-shot voice cloning via prompt-conditioned generation. Upstream
+# `suno-ai/bark` is MIT-licensed.
+bark = [
+    "dep:candle-core",
+    "dep:candle-nn",
+    "dep:candle-transformers",
+    "dep:tokenizers",
+    "dep:hf-hub",
+    "dep:blazen-audio-codec",
+    "blazen-audio-codec/encodec",
+]
 
 [lints]
 workspace = true
