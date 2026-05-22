@@ -10,10 +10,12 @@
 //! `blazen-controlplane/server`.
 
 pub mod client;
+pub mod model_client;
 pub mod types;
 pub mod worker;
 
 pub use client::{PyControlPlaneClient, PyRunEventStream};
+pub use model_client::PyModelClient;
 pub use types::{
     PyAdmissionMode, PyControlPlaneResourceHint, PyControlPlaneRunStatus,
     PyControlPlaneWorkerCapability,

@@ -567,6 +567,24 @@ fileprivate struct FfiConverterString: FfiConverter {
     }
 }
 
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterData: FfiConverterRustBuffer {
+    typealias SwiftType = Data
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Data {
+        let len: Int32 = try readInt(&buf)
+        return Data(try readBytes(&buf, count: Int(len)))
+    }
+
+    public static func write(_ value: Data, into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        writeBytes(&buf, value)
+    }
+}
+
 
 
 
@@ -6723,6 +6741,967 @@ public func FfiConverterTypeModel_lower(_ value: Model) -> UInt64 {
 
 
 /**
+ * gRPC client for the `BlazenModelServer` service, exposed to Go /
+ * Swift / Kotlin / Ruby via UniFFI.
+ *
+ * Wraps [`blazen_controlplane::ModelClient`] one-to-one; the upstream
+ * type is already cheaply cloneable and serialises concurrent RPCs
+ * internally, so the wrapper does not need its own mutex.
+ */
+public protocol ModelClientProtocol: AnyObject, Sendable {
+    
+    /**
+     * Issue a non-streaming completion.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::CompleteRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::CompleteResponse`].
+     *
+     * For streaming completions use a future wave's `stream_complete`
+     * surface — this method always buffers the full response.
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    func complete(requestJson: String) async throws  -> String
+    
+    /**
+     * Compute embeddings for one or more inputs.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::EmbedRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::EmbedResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    func embed(requestJson: String) async throws  -> String
+    
+    /**
+     * Fetch a blob in one shot.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::FetchBlobRequest`]; the
+     * `envelope_version` field is filled in automatically. The whole
+     * response stream is buffered in memory: each
+     * [`FetchBlobChunk::Data`] frame's bytes are concatenated and returned
+     * as a single `Vec<u8>`; `Start` and `End` frames carry only metadata
+     * and are not surfaced through this API.
+     *
+     * Callers that need to stream multi-gigabyte blobs without buffering
+     * should drive [`blazen_controlplane::ModelClient::fetch_blob`]
+     * directly from Rust.
+     *
+     * # Errors
+     * Returns [`BlazenError::Validation`] when the request JSON cannot be
+     * parsed; [`BlazenError::Peer`] for control-plane / transport failures
+     * (either starting the stream or mid-stream).
+     */
+    func fetchBlob(requestJson: String) async throws  -> Data
+    
+    /**
+     * Generate one or more images.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::GenerateImageRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::GenerateImageResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    func generateImage(requestJson: String) async throws  -> String
+    
+    /**
+     * Generate music from a textual prompt.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::GenerateMusicRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::GenerateMusicResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    func generateMusic(requestJson: String) async throws  -> String
+    
+    /**
+     * Liveness check for a single model.
+     *
+     * # Errors
+     * See [`Self::status`].
+     */
+    func isLoaded(modelId: String) async throws  -> Bool
+    
+    /**
+     * List adapters mounted on a model.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::ListAdaptersRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::ListAdaptersResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    func listAdapters(requestJson: String) async throws  -> String
+    
+    /**
+     * Load a previously-registered model into its pool.
+     *
+     * # Errors
+     * Returns [`BlazenError::Peer`] (`ControlPlaneTransport` /
+     * `ControlPlaneRpc`) for wire or model-layer failures (e.g. unknown
+     * `model_id`).
+     */
+    func load(request: LoadRecord) async throws  -> LoadResultRecord
+    
+    /**
+     * Mount a LoRA / adapter onto a loaded model.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::LoadAdapterRequest`]; the
+     * `envelope_version` field is filled in automatically and may be
+     * omitted by the caller. Returns the JSON form of
+     * [`blazen_controlplane::model_protocol::LoadAdapterResponse`].
+     *
+     * # Errors
+     * Returns [`BlazenError::Validation`] when the request JSON cannot be
+     * parsed or the response cannot be serialized;
+     * [`BlazenError::Peer`] for control-plane / transport failures.
+     */
+    func loadAdapter(requestJson: String) async throws  -> String
+    
+    /**
+     * Register-and-load a model directly from a Hugging Face Hub repo.
+     * Returns the backend the loader chose (never
+     * [`HfBackendHint::Auto`]).
+     *
+     * # Errors
+     * See [`Self::load`]. Additionally surfaces loader-side failures
+     * (HF fetch errors, unsupported repo layouts) via
+     * `BlazenError::Peer` with `kind = "ControlPlaneRpc"`.
+     */
+    func loadFromHf(request: LoadFromHfRecord) async throws  -> LoadResultRecord
+    
+    /**
+     * Fetch the server's view of registered models.
+     *
+     * When `model_id` is `Some(id)`, the response is filtered to just
+     * that model (empty `models` vec if the id is unknown). When
+     * `None`, every registered model is returned.
+     *
+     * # Errors
+     * Returns [`BlazenError::Peer`] (`ControlPlaneTransport` /
+     * `ControlPlaneRpc`) for wire or model-layer failures.
+     */
+    func status(modelId: String?) async throws  -> StatusRecord
+    
+    /**
+     * Issue a streaming completion, delivering each token-delta to `sink`.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::CompleteRequest`]; the
+     * `envelope_version` field is filled in automatically. As frames arrive
+     * from the server, the [`StreamCompleteChunk::Delta`]'s `text` is
+     * forwarded to [`CompletionStreamSink::on_chunk`] as the chunk's
+     * `content_delta`; the terminal [`StreamCompleteChunk::Done`] triggers
+     * [`CompletionStreamSink::on_done`] with the reported `finish_reason`
+     * (empty string when the provider didn't supply one) and a
+     * [`TokenUsage`] built from the `prompt_tokens` / `completion_tokens`
+     * fields.
+     *
+     * Errors observed mid-stream are *delivered* via
+     * [`CompletionStreamSink::on_error`] and the method returns `Ok(())`,
+     * mirroring the symmetry of
+     * [`crate::streaming::complete_streaming`]: the sink owns both
+     * happy-path and error-path observation. The only way this method
+     * itself returns `Err` is when the initial request JSON cannot be
+     * parsed or the upstream `stream_complete` call fails to *start* the
+     * stream.
+     *
+     * Reuses the existing text-only [`CompletionStreamSink`] so Go / Swift
+     * / Kotlin / Ruby callers see a uniform streaming surface across both
+     * the in-process [`crate::llm::Model`] path and the gRPC
+     * [`ModelClient`] path. The wire-level
+     * [`StreamCompleteChunk`] carries only `text` payloads today (no
+     * per-frame tool-call deltas, citations, or reasoning trace), so the
+     * text-only sink loses no information; if a future wire schema grows
+     * structured fields, callers that need them should drive the gRPC
+     * client directly.
+     *
+     * # Errors
+     * Returns [`BlazenError::Validation`] when the request JSON cannot be
+     * parsed; [`BlazenError::Peer`] for control-plane / transport failures
+     * starting the stream.
+     */
+    func streamComplete(requestJson: String, sink: CompletionStreamSink) async throws 
+    
+    /**
+     * Synthesize speech from text.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::TextToSpeechRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::TextToSpeechResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    func textToSpeech(requestJson: String) async throws  -> String
+    
+    /**
+     * Transcribe audio to text.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::TranscribeRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::TranscribeResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    func transcribe(requestJson: String) async throws  -> String
+    
+    /**
+     * Drop a previously-loaded model from memory.
+     *
+     * # Errors
+     * See [`Self::load`].
+     */
+    func unload(modelId: String) async throws 
+    
+    /**
+     * Drop a previously-mounted adapter.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::UnloadAdapterRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::UnloadAdapterResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    func unloadAdapter(requestJson: String) async throws  -> String
+    
+    /**
+     * Upload a blob in one shot.
+     *
+     * The entire `data` payload is buffered in memory and sent as a single
+     * `UploadBlobChunk::Data` frame between a `Start` (carrying `blob_id`
+     * + `mime`) and `End` frame. Returns the JSON form of
+     * [`blazen_controlplane::model_protocol::UploadBlobResponse`] (the
+     * server's ack, echoing the blob id + bytes received).
+     *
+     * This buffered surface is the simple path for the UniFFI bindings —
+     * the whole payload must fit in process memory on both sides. Callers
+     * pushing multi-gigabyte blobs (e.g. base model weights) should drive
+     * [`blazen_controlplane::ModelClient::upload_blob`] directly from Rust
+     * where they can construct the chunk stream incrementally.
+     *
+     * # Errors
+     * Returns [`BlazenError::Peer`] for control-plane / transport
+     * failures, or [`BlazenError::Validation`] when the response cannot be
+     * serialized.
+     */
+    func uploadBlob(blobId: String, mime: String, data: Data) async throws  -> String
+    
+}
+/**
+ * gRPC client for the `BlazenModelServer` service, exposed to Go /
+ * Swift / Kotlin / Ruby via UniFFI.
+ *
+ * Wraps [`blazen_controlplane::ModelClient`] one-to-one; the upstream
+ * type is already cheaply cloneable and serialises concurrent RPCs
+ * internally, so the wrapper does not need its own mutex.
+ */
+open class ModelClient: ModelClientProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_modelclient(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_modelclient(handle, $0) }
+    }
+
+    
+    /**
+     * Open a plaintext connection to a `BlazenModelServer` at
+     * `endpoint` (e.g. `"http://127.0.0.1:7070"`).
+     *
+     * # Errors
+     * Returns a [`BlazenError::Peer`] with `kind =
+     * "ControlPlaneTransport"` when the endpoint URI is invalid or the
+     * TCP / HTTP-2 handshake fails.
+     */
+public static func connect(endpoint: String)async throws  -> ModelClient  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_constructor_modelclient_connect(FfiConverterString.lower(endpoint)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_u64,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_u64,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_u64,
+            liftFunc: FfiConverterTypeModelClient_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Open a TLS / mTLS connection. `ca_cert_pem` is the trust root
+     * the client uses to verify the server; `client_cert_pem` and
+     * `client_key_pem` are the client identity for mutual TLS (pass
+     * both or neither).
+     *
+     * # Errors
+     * Returns a [`BlazenError::Peer`] with `kind = "ControlPlaneTls"`
+     * when the PEM material can't be parsed, or with
+     * `kind = "ControlPlaneTransport"` for handshake failures.
+     * [`BlazenError::Validation`] if exactly one of `client_cert_pem`
+     * / `client_key_pem` is supplied.
+     */
+public static func connectWithTls(endpoint: String, caCertPem: String, clientCertPem: String?, clientKeyPem: String?)async throws  -> ModelClient  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_constructor_modelclient_connect_with_tls(FfiConverterString.lower(endpoint),FfiConverterString.lower(caCertPem),FfiConverterOptionString.lower(clientCertPem),FfiConverterOptionString.lower(clientKeyPem)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_u64,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_u64,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_u64,
+            liftFunc: FfiConverterTypeModelClient_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+
+    
+    /**
+     * Issue a non-streaming completion.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::CompleteRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::CompleteResponse`].
+     *
+     * For streaming completions use a future wave's `stream_complete`
+     * surface — this method always buffers the full response.
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+open func complete(requestJson: String)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_modelclient_complete(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(requestJson)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Compute embeddings for one or more inputs.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::EmbedRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::EmbedResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+open func embed(requestJson: String)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_modelclient_embed(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(requestJson)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Fetch a blob in one shot.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::FetchBlobRequest`]; the
+     * `envelope_version` field is filled in automatically. The whole
+     * response stream is buffered in memory: each
+     * [`FetchBlobChunk::Data`] frame's bytes are concatenated and returned
+     * as a single `Vec<u8>`; `Start` and `End` frames carry only metadata
+     * and are not surfaced through this API.
+     *
+     * Callers that need to stream multi-gigabyte blobs without buffering
+     * should drive [`blazen_controlplane::ModelClient::fetch_blob`]
+     * directly from Rust.
+     *
+     * # Errors
+     * Returns [`BlazenError::Validation`] when the request JSON cannot be
+     * parsed; [`BlazenError::Peer`] for control-plane / transport failures
+     * (either starting the stream or mid-stream).
+     */
+open func fetchBlob(requestJson: String)async throws  -> Data  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_modelclient_fetch_blob(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(requestJson)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterData.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Generate one or more images.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::GenerateImageRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::GenerateImageResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+open func generateImage(requestJson: String)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_modelclient_generate_image(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(requestJson)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Generate music from a textual prompt.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::GenerateMusicRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::GenerateMusicResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+open func generateMusic(requestJson: String)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_modelclient_generate_music(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(requestJson)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Liveness check for a single model.
+     *
+     * # Errors
+     * See [`Self::status`].
+     */
+open func isLoaded(modelId: String)async throws  -> Bool  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_modelclient_is_loaded(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(modelId)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_i8,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_i8,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_i8,
+            liftFunc: FfiConverterBool.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * List adapters mounted on a model.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::ListAdaptersRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::ListAdaptersResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+open func listAdapters(requestJson: String)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_modelclient_list_adapters(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(requestJson)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Load a previously-registered model into its pool.
+     *
+     * # Errors
+     * Returns [`BlazenError::Peer`] (`ControlPlaneTransport` /
+     * `ControlPlaneRpc`) for wire or model-layer failures (e.g. unknown
+     * `model_id`).
+     */
+open func load(request: LoadRecord)async throws  -> LoadResultRecord  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_modelclient_load(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeLoadRecord_lower(request)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeLoadResultRecord_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Mount a LoRA / adapter onto a loaded model.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::LoadAdapterRequest`]; the
+     * `envelope_version` field is filled in automatically and may be
+     * omitted by the caller. Returns the JSON form of
+     * [`blazen_controlplane::model_protocol::LoadAdapterResponse`].
+     *
+     * # Errors
+     * Returns [`BlazenError::Validation`] when the request JSON cannot be
+     * parsed or the response cannot be serialized;
+     * [`BlazenError::Peer`] for control-plane / transport failures.
+     */
+open func loadAdapter(requestJson: String)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_modelclient_load_adapter(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(requestJson)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Register-and-load a model directly from a Hugging Face Hub repo.
+     * Returns the backend the loader chose (never
+     * [`HfBackendHint::Auto`]).
+     *
+     * # Errors
+     * See [`Self::load`]. Additionally surfaces loader-side failures
+     * (HF fetch errors, unsupported repo layouts) via
+     * `BlazenError::Peer` with `kind = "ControlPlaneRpc"`.
+     */
+open func loadFromHf(request: LoadFromHfRecord)async throws  -> LoadResultRecord  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_modelclient_load_from_hf(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeLoadFromHfRecord_lower(request)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeLoadResultRecord_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Fetch the server's view of registered models.
+     *
+     * When `model_id` is `Some(id)`, the response is filtered to just
+     * that model (empty `models` vec if the id is unknown). When
+     * `None`, every registered model is returned.
+     *
+     * # Errors
+     * Returns [`BlazenError::Peer`] (`ControlPlaneTransport` /
+     * `ControlPlaneRpc`) for wire or model-layer failures.
+     */
+open func status(modelId: String?)async throws  -> StatusRecord  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_modelclient_status(
+                    self.uniffiCloneHandle(),
+                    FfiConverterOptionString.lower(modelId)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeStatusRecord_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Issue a streaming completion, delivering each token-delta to `sink`.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::CompleteRequest`]; the
+     * `envelope_version` field is filled in automatically. As frames arrive
+     * from the server, the [`StreamCompleteChunk::Delta`]'s `text` is
+     * forwarded to [`CompletionStreamSink::on_chunk`] as the chunk's
+     * `content_delta`; the terminal [`StreamCompleteChunk::Done`] triggers
+     * [`CompletionStreamSink::on_done`] with the reported `finish_reason`
+     * (empty string when the provider didn't supply one) and a
+     * [`TokenUsage`] built from the `prompt_tokens` / `completion_tokens`
+     * fields.
+     *
+     * Errors observed mid-stream are *delivered* via
+     * [`CompletionStreamSink::on_error`] and the method returns `Ok(())`,
+     * mirroring the symmetry of
+     * [`crate::streaming::complete_streaming`]: the sink owns both
+     * happy-path and error-path observation. The only way this method
+     * itself returns `Err` is when the initial request JSON cannot be
+     * parsed or the upstream `stream_complete` call fails to *start* the
+     * stream.
+     *
+     * Reuses the existing text-only [`CompletionStreamSink`] so Go / Swift
+     * / Kotlin / Ruby callers see a uniform streaming surface across both
+     * the in-process [`crate::llm::Model`] path and the gRPC
+     * [`ModelClient`] path. The wire-level
+     * [`StreamCompleteChunk`] carries only `text` payloads today (no
+     * per-frame tool-call deltas, citations, or reasoning trace), so the
+     * text-only sink loses no information; if a future wire schema grows
+     * structured fields, callers that need them should drive the gRPC
+     * client directly.
+     *
+     * # Errors
+     * Returns [`BlazenError::Validation`] when the request JSON cannot be
+     * parsed; [`BlazenError::Peer`] for control-plane / transport failures
+     * starting the stream.
+     */
+open func streamComplete(requestJson: String, sink: CompletionStreamSink)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_modelclient_stream_complete(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(requestJson),FfiConverterTypeCompletionStreamSink_lower(sink)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synthesize speech from text.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::TextToSpeechRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::TextToSpeechResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+open func textToSpeech(requestJson: String)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_modelclient_text_to_speech(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(requestJson)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Transcribe audio to text.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::TranscribeRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::TranscribeResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+open func transcribe(requestJson: String)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_modelclient_transcribe(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(requestJson)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Drop a previously-loaded model from memory.
+     *
+     * # Errors
+     * See [`Self::load`].
+     */
+open func unload(modelId: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_modelclient_unload(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(modelId)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Drop a previously-mounted adapter.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::UnloadAdapterRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::UnloadAdapterResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+open func unloadAdapter(requestJson: String)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_modelclient_unload_adapter(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(requestJson)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Upload a blob in one shot.
+     *
+     * The entire `data` payload is buffered in memory and sent as a single
+     * `UploadBlobChunk::Data` frame between a `Start` (carrying `blob_id`
+     * + `mime`) and `End` frame. Returns the JSON form of
+     * [`blazen_controlplane::model_protocol::UploadBlobResponse`] (the
+     * server's ack, echoing the blob id + bytes received).
+     *
+     * This buffered surface is the simple path for the UniFFI bindings —
+     * the whole payload must fit in process memory on both sides. Callers
+     * pushing multi-gigabyte blobs (e.g. base model weights) should drive
+     * [`blazen_controlplane::ModelClient::upload_blob`] directly from Rust
+     * where they can construct the chunk stream incrementally.
+     *
+     * # Errors
+     * Returns [`BlazenError::Peer`] for control-plane / transport
+     * failures, or [`BlazenError::Validation`] when the response cannot be
+     * serialized.
+     */
+open func uploadBlob(blobId: String, mime: String, data: Data)async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_modelclient_upload_blob(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(blobId),FfiConverterString.lower(mime),FfiConverterData.lower(data)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeModelClient: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = ModelClient
+
+    public static func lift(_ handle: UInt64) throws -> ModelClient {
+        return ModelClient(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: ModelClient) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ModelClient {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: ModelClient, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModelClient_lift(_ handle: UInt64) throws -> ModelClient {
+    return try FfiConverterTypeModelClient.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModelClient_lower(_ value: ModelClient) -> UInt64 {
+    return FfiConverterTypeModelClient.lower(value)
+}
+
+
+
+
+
+
+/**
  * Client handle for invoking workflows on a remote [`PeerServer`].
  *
  * Construct with [`PeerClient::connect`]. RPCs go out over a multiplexed
@@ -12727,6 +13706,300 @@ public func FfiConverterTypeKtoConfigRecord_lower(_ value: KtoConfigRecord) -> R
 
 
 /**
+ * Foreign-facing request for [`ModelClient::load_from_hf`]. Mirrors
+ * [`LoadFromHfRequest`] minus the `envelope_version`.
+ */
+public struct LoadFromHfRecord: Equatable, Hashable {
+    /**
+     * Id under which to register the resulting model.
+     */
+    public var modelId: String
+    /**
+     * Hugging Face repo slug (`org/name`).
+     */
+    public var repo: String
+    /**
+     * Optional explicit memory estimate in bytes; `None` asks the
+     * loader to estimate from repo metadata.
+     */
+    public var memoryEstimateBytes: UInt64?
+    /**
+     * Optional backend override.
+     */
+    public var backendHint: HfBackendHint?
+    /**
+     * Optional GGUF file name when the backend is llama.cpp.
+     */
+    public var ggufFile: String?
+    /**
+     * Optional HF revision (branch / tag / commit).
+     */
+    public var revision: String?
+    /**
+     * Optional bearer token for gated repos.
+     */
+    public var hfToken: String?
+    /**
+     * Pre-serialised JSON for any backend-specific extra options the
+     * host should honor. Empty string = none.
+     */
+    public var extraOptionsJson: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Id under which to register the resulting model.
+         */modelId: String, 
+        /**
+         * Hugging Face repo slug (`org/name`).
+         */repo: String, 
+        /**
+         * Optional explicit memory estimate in bytes; `None` asks the
+         * loader to estimate from repo metadata.
+         */memoryEstimateBytes: UInt64?, 
+        /**
+         * Optional backend override.
+         */backendHint: HfBackendHint?, 
+        /**
+         * Optional GGUF file name when the backend is llama.cpp.
+         */ggufFile: String?, 
+        /**
+         * Optional HF revision (branch / tag / commit).
+         */revision: String?, 
+        /**
+         * Optional bearer token for gated repos.
+         */hfToken: String?, 
+        /**
+         * Pre-serialised JSON for any backend-specific extra options the
+         * host should honor. Empty string = none.
+         */extraOptionsJson: String) {
+        self.modelId = modelId
+        self.repo = repo
+        self.memoryEstimateBytes = memoryEstimateBytes
+        self.backendHint = backendHint
+        self.ggufFile = ggufFile
+        self.revision = revision
+        self.hfToken = hfToken
+        self.extraOptionsJson = extraOptionsJson
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension LoadFromHfRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLoadFromHfRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LoadFromHfRecord {
+        return
+            try LoadFromHfRecord(
+                modelId: FfiConverterString.read(from: &buf), 
+                repo: FfiConverterString.read(from: &buf), 
+                memoryEstimateBytes: FfiConverterOptionUInt64.read(from: &buf), 
+                backendHint: FfiConverterOptionTypeHfBackendHint.read(from: &buf), 
+                ggufFile: FfiConverterOptionString.read(from: &buf), 
+                revision: FfiConverterOptionString.read(from: &buf), 
+                hfToken: FfiConverterOptionString.read(from: &buf), 
+                extraOptionsJson: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LoadFromHfRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.modelId, into: &buf)
+        FfiConverterString.write(value.repo, into: &buf)
+        FfiConverterOptionUInt64.write(value.memoryEstimateBytes, into: &buf)
+        FfiConverterOptionTypeHfBackendHint.write(value.backendHint, into: &buf)
+        FfiConverterOptionString.write(value.ggufFile, into: &buf)
+        FfiConverterOptionString.write(value.revision, into: &buf)
+        FfiConverterOptionString.write(value.hfToken, into: &buf)
+        FfiConverterString.write(value.extraOptionsJson, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLoadFromHfRecord_lift(_ buf: RustBuffer) throws -> LoadFromHfRecord {
+    return try FfiConverterTypeLoadFromHfRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLoadFromHfRecord_lower(_ value: LoadFromHfRecord) -> RustBuffer {
+    return FfiConverterTypeLoadFromHfRecord.lower(value)
+}
+
+
+/**
+ * Foreign-facing request for [`ModelClient::load`].
+ *
+ * Mirrors [`blazen_controlplane::model_protocol::LoadRequest`] minus the
+ * `envelope_version` (the wrapper fills that in from
+ * [`MODEL_ENVELOPE_VERSION`]).
+ */
+public struct LoadRecord: Equatable, Hashable {
+    /**
+     * Id under which the target model was previously registered.
+     */
+    public var modelId: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Id under which the target model was previously registered.
+         */modelId: String) {
+        self.modelId = modelId
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension LoadRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLoadRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LoadRecord {
+        return
+            try LoadRecord(
+                modelId: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LoadRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.modelId, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLoadRecord_lift(_ buf: RustBuffer) throws -> LoadRecord {
+    return try FfiConverterTypeLoadRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLoadRecord_lower(_ value: LoadRecord) -> RustBuffer {
+    return FfiConverterTypeLoadRecord.lower(value)
+}
+
+
+/**
+ * Foreign-facing response from [`ModelClient::load`] and
+ * [`ModelClient::load_from_hf`].
+ *
+ * `LoadResponse` is empty on the wire (failures travel via the
+ * `Result`), but `LoadFromHfResponse` reports the chosen backend; we
+ * surface both through a single record with optional fields so foreign
+ * callers see one shape regardless of which loader they invoke.
+ */
+public struct LoadResultRecord: Equatable, Hashable {
+    /**
+     * Model id that was loaded. Echoes the request's `model_id` so
+     * foreign callers don't have to thread the value through their own
+     * state.
+     */
+    public var modelId: String
+    /**
+     * Whether the load succeeded. Always `true` on the success branch
+     * of the `Result`; provided for forward-compat with future wire
+     * schemas that may carry a richer status.
+     */
+    public var loaded: Bool
+    /**
+     * Backend the loader chose. Only populated by `load_from_hf`;
+     * `None` for the plain `load` path which does not negotiate a
+     * backend.
+     */
+    public var chosenBackend: HfBackendHint?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Model id that was loaded. Echoes the request's `model_id` so
+         * foreign callers don't have to thread the value through their own
+         * state.
+         */modelId: String, 
+        /**
+         * Whether the load succeeded. Always `true` on the success branch
+         * of the `Result`; provided for forward-compat with future wire
+         * schemas that may carry a richer status.
+         */loaded: Bool, 
+        /**
+         * Backend the loader chose. Only populated by `load_from_hf`;
+         * `None` for the plain `load` path which does not negotiate a
+         * backend.
+         */chosenBackend: HfBackendHint?) {
+        self.modelId = modelId
+        self.loaded = loaded
+        self.chosenBackend = chosenBackend
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension LoadResultRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLoadResultRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LoadResultRecord {
+        return
+            try LoadResultRecord(
+                modelId: FfiConverterString.read(from: &buf), 
+                loaded: FfiConverterBool.read(from: &buf), 
+                chosenBackend: FfiConverterOptionTypeHfBackendHint.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: LoadResultRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.modelId, into: &buf)
+        FfiConverterBool.write(value.loaded, into: &buf)
+        FfiConverterOptionTypeHfBackendHint.write(value.chosenBackend, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLoadResultRecord_lift(_ buf: RustBuffer) throws -> LoadResultRecord {
+    return try FfiConverterTypeLoadResultRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLoadResultRecord_lower(_ value: LoadResultRecord) -> RustBuffer {
+    return FfiConverterTypeLoadResultRecord.lower(value)
+}
+
+
+/**
  * LoRA hyperparameters.
  */
 public struct LoraConfigRecord: Equatable, Hashable {
@@ -12948,6 +14221,99 @@ public func FfiConverterTypeMediaOutput_lift(_ buf: RustBuffer) throws -> MediaO
 #endif
 public func FfiConverterTypeMediaOutput_lower(_ value: MediaOutput) -> RustBuffer {
     return FfiConverterTypeMediaOutput.lower(value)
+}
+
+
+/**
+ * Foreign-facing snapshot of a single registered model.
+ *
+ * Mirrors [`ModelStatusWire`] from the model protocol. The upstream
+ * `adapters: Vec<AdapterStatusWire>` field is omitted in this wave —
+ * adapter introspection lands with the adapter RPCs in a later wave.
+ */
+public struct ModelClientStatusRecord: Equatable, Hashable {
+    /**
+     * Identifier under which the model was registered.
+     */
+    public var id: String
+    /**
+     * Whether the model is currently loaded into its pool.
+     */
+    public var loaded: Bool
+    /**
+     * Estimated memory footprint in bytes (includes any mounted adapters).
+     */
+    public var memoryEstimateBytes: UInt64
+    /**
+     * Pool the model is charged against.
+     */
+    public var pool: ModelPool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Identifier under which the model was registered.
+         */id: String, 
+        /**
+         * Whether the model is currently loaded into its pool.
+         */loaded: Bool, 
+        /**
+         * Estimated memory footprint in bytes (includes any mounted adapters).
+         */memoryEstimateBytes: UInt64, 
+        /**
+         * Pool the model is charged against.
+         */pool: ModelPool) {
+        self.id = id
+        self.loaded = loaded
+        self.memoryEstimateBytes = memoryEstimateBytes
+        self.pool = pool
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ModelClientStatusRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeModelClientStatusRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ModelClientStatusRecord {
+        return
+            try ModelClientStatusRecord(
+                id: FfiConverterString.read(from: &buf), 
+                loaded: FfiConverterBool.read(from: &buf), 
+                memoryEstimateBytes: FfiConverterUInt64.read(from: &buf), 
+                pool: FfiConverterTypeModelPool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ModelClientStatusRecord, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterBool.write(value.loaded, into: &buf)
+        FfiConverterUInt64.write(value.memoryEstimateBytes, into: &buf)
+        FfiConverterTypeModelPool.write(value.pool, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModelClientStatusRecord_lift(_ buf: RustBuffer) throws -> ModelClientStatusRecord {
+    return try FfiConverterTypeModelClientStatusRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModelClientStatusRecord_lower(_ value: ModelClientStatusRecord) -> RustBuffer {
+    return FfiConverterTypeModelClientStatusRecord.lower(value)
 }
 
 
@@ -14032,6 +15398,71 @@ public func FfiConverterTypeSpeechRequest_lift(_ buf: RustBuffer) throws -> Spee
 #endif
 public func FfiConverterTypeSpeechRequest_lower(_ value: SpeechRequest) -> RustBuffer {
     return FfiConverterTypeSpeechRequest.lower(value)
+}
+
+
+/**
+ * Foreign-facing response from
+ * [`ModelClient::status`]. Mirrors
+ * [`blazen_controlplane::model_protocol::StatusResponse`] but filters
+ * to a single model when the caller scopes the query with a
+ * `model_id`.
+ */
+public struct StatusRecord: Equatable, Hashable {
+    /**
+     * Snapshot of each registered model (or just the requested one,
+     * when `status(Some(id))` was called).
+     */
+    public var models: [ModelClientStatusRecord]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Snapshot of each registered model (or just the requested one,
+         * when `status(Some(id))` was called).
+         */models: [ModelClientStatusRecord]) {
+        self.models = models
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension StatusRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStatusRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StatusRecord {
+        return
+            try StatusRecord(
+                models: FfiConverterSequenceTypeModelClientStatusRecord.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: StatusRecord, into buf: inout [UInt8]) {
+        FfiConverterSequenceTypeModelClientStatusRecord.write(value.models, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStatusRecord_lift(_ buf: RustBuffer) throws -> StatusRecord {
+    return try FfiConverterTypeStatusRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStatusRecord_lower(_ value: StatusRecord) -> RustBuffer {
+    return FfiConverterTypeStatusRecord.lower(value)
 }
 
 
@@ -16952,6 +18383,103 @@ public func FfiConverterTypeControlPlaneRunStatus_lower(_ value: ControlPlaneRun
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Backend selector used by [`ModelClient::load_from_hf`]. Mirrors
+ * [`BackendHintWire`].
+ */
+
+public enum HfBackendHint: Equatable, Hashable {
+    
+    /**
+     * Auto-detect from the repo layout.
+     */
+    case auto
+    /**
+     * Force the `mistral.rs` backend.
+     */
+    case mistralRs
+    /**
+     * Force the candle-llm backend.
+     */
+    case candle
+    /**
+     * Force the llama.cpp backend.
+     */
+    case llamaCpp
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension HfBackendHint: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeHfBackendHint: FfiConverterRustBuffer {
+    typealias SwiftType = HfBackendHint
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> HfBackendHint {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .auto
+        
+        case 2: return .mistralRs
+        
+        case 3: return .candle
+        
+        case 4: return .llamaCpp
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: HfBackendHint, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .auto:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .mistralRs:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .candle:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .llamaCpp:
+            writeInt(&buf, Int32(4))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHfBackendHint_lift(_ buf: RustBuffer) throws -> HfBackendHint {
+    return try FfiConverterTypeHfBackendHint.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeHfBackendHint_lower(_ value: HfBackendHint) -> RustBuffer {
+    return FfiConverterTypeHfBackendHint.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum MixedPrecisionEnum: Equatable, Hashable {
     
@@ -17014,6 +18542,98 @@ public func FfiConverterTypeMixedPrecisionEnum_lift(_ buf: RustBuffer) throws ->
 #endif
 public func FfiConverterTypeMixedPrecisionEnum_lower(_ value: MixedPrecisionEnum) -> RustBuffer {
     return FfiConverterTypeMixedPrecisionEnum.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * Pool a model is registered against. Mirrors
+ * [`blazen_controlplane::model_protocol::PoolWire`] in a UniFFI-friendly
+ * shape — Rust's `Gpu(u32)` payload becomes a discriminator + optional
+ * `device_index` so the enum can cross the FFI boundary cleanly.
+ */
+
+public enum ModelPool: Equatable, Hashable {
+    
+    /**
+     * Host RAM pool.
+     */
+    case cpu
+    /**
+     * GPU VRAM pool at `device_index`. Metal collapses to index `0`.
+     */
+    case gpu(deviceIndex: UInt32
+    )
+    /**
+     * Off-host pool — memory lives in another process / host.
+     */
+    case remote
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension ModelPool: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeModelPool: FfiConverterRustBuffer {
+    typealias SwiftType = ModelPool
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ModelPool {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .cpu
+        
+        case 2: return .gpu(deviceIndex: try FfiConverterUInt32.read(from: &buf)
+        )
+        
+        case 3: return .remote
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ModelPool, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .cpu:
+            writeInt(&buf, Int32(1))
+        
+        
+        case let .gpu(deviceIndex):
+            writeInt(&buf, Int32(2))
+            FfiConverterUInt32.write(deviceIndex, into: &buf)
+            
+        
+        case .remote:
+            writeInt(&buf, Int32(3))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModelPool_lift(_ buf: RustBuffer) throws -> ModelPool {
+    return try FfiConverterTypeModelPool.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModelPool_lower(_ value: ModelPool) -> RustBuffer {
+    return FfiConverterTypeModelPool.lower(value)
 }
 
 
@@ -17597,6 +19217,30 @@ fileprivate struct FfiConverterOptionTypeBackendHintEnum: FfiConverterRustBuffer
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeHfBackendHint: FfiConverterRustBuffer {
+    typealias SwiftType = HfBackendHint?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeHfBackendHint.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeHfBackendHint.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceDouble: FfiConverterRustBuffer {
     typealias SwiftType = [Double]
 
@@ -17939,6 +19583,31 @@ fileprivate struct FfiConverterSequenceTypeMedia: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeMedia.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeModelClientStatusRecord: FfiConverterRustBuffer {
+    typealias SwiftType = [ModelClientStatusRecord]
+
+    public static func write(_ value: [ModelClientStatusRecord], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeModelClientStatusRecord.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ModelClientStatusRecord] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ModelClientStatusRecord]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeModelClientStatusRecord.read(from: &buf))
         }
         return seq
     }
@@ -19743,6 +21412,57 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_uniffiratedjsonldataset_len() != 48605) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_modelclient_complete() != 42969) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_modelclient_embed() != 27994) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_modelclient_fetch_blob() != 31110) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_modelclient_generate_image() != 64354) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_modelclient_generate_music() != 17866) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_modelclient_is_loaded() != 2818) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_modelclient_list_adapters() != 9453) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_modelclient_load() != 64540) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_modelclient_load_adapter() != 33876) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_modelclient_load_from_hf() != 27748) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_modelclient_status() != 46116) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_modelclient_stream_complete() != 49585) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_modelclient_text_to_speech() != 48656) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_modelclient_transcribe() != 48760) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_modelclient_unload() != 6162) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_modelclient_unload_adapter() != 26088) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_modelclient_upload_blob() != 1673) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_peerclient_node_id() != 16043) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -20014,6 +21734,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_constructor_uniffiratedjsonldataset_from_path() != 20887) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_modelclient_connect() != 48616) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_modelclient_connect_with_tls() != 61737) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_constructor_peerclient_connect() != 36996) {

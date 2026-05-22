@@ -181,6 +181,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<controlplane::PyControlPlaneWorker>()?;
         m.add_class::<controlplane::PyControlPlaneClient>()?;
         m.add_class::<controlplane::PyRunEventStream>()?;
+        m.add_class::<controlplane::PyModelClient>()?;
         controlplane::worker::register_exceptions(m)?;
     }
 

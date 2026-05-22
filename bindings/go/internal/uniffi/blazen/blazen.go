@@ -1457,6 +1457,159 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_modelclient_complete()
+		})
+		if checksum != 42969 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_modelclient_complete: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_modelclient_embed()
+		})
+		if checksum != 27994 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_modelclient_embed: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_modelclient_fetch_blob()
+		})
+		if checksum != 31110 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_modelclient_fetch_blob: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_modelclient_generate_image()
+		})
+		if checksum != 64354 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_modelclient_generate_image: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_modelclient_generate_music()
+		})
+		if checksum != 17866 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_modelclient_generate_music: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_modelclient_is_loaded()
+		})
+		if checksum != 2818 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_modelclient_is_loaded: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_modelclient_list_adapters()
+		})
+		if checksum != 9453 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_modelclient_list_adapters: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_modelclient_load()
+		})
+		if checksum != 64540 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_modelclient_load: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_modelclient_load_adapter()
+		})
+		if checksum != 33876 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_modelclient_load_adapter: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_modelclient_load_from_hf()
+		})
+		if checksum != 27748 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_modelclient_load_from_hf: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_modelclient_status()
+		})
+		if checksum != 46116 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_modelclient_status: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_modelclient_stream_complete()
+		})
+		if checksum != 49585 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_modelclient_stream_complete: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_modelclient_text_to_speech()
+		})
+		if checksum != 48656 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_modelclient_text_to_speech: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_modelclient_transcribe()
+		})
+		if checksum != 48760 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_modelclient_transcribe: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_modelclient_unload()
+		})
+		if checksum != 6162 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_modelclient_unload: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_modelclient_unload_adapter()
+		})
+		if checksum != 26088 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_modelclient_unload_adapter: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_modelclient_upload_blob()
+		})
+		if checksum != 1673 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_modelclient_upload_blob: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_peerclient_node_id()
 		})
 		if checksum != 16043 {
@@ -2276,6 +2429,24 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_modelclient_connect()
+		})
+		if checksum != 48616 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_modelclient_connect: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_modelclient_connect_with_tls()
+		})
+		if checksum != 61737 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_modelclient_connect_with_tls: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_constructor_peerclient_connect()
 		})
 		if checksum != 36996 {
@@ -2534,6 +2705,54 @@ func (FfiConverterString) Write(writer io.Writer, value string) {
 type FfiDestroyerString struct{}
 
 func (FfiDestroyerString) Destroy(_ string) {}
+
+type FfiConverterBytes struct{}
+
+var FfiConverterBytesINSTANCE = FfiConverterBytes{}
+
+func (c FfiConverterBytes) Lower(value []byte) C.RustBuffer {
+	return LowerIntoRustBuffer[[]byte](c, value)
+}
+
+func (c FfiConverterBytes) LowerExternal(value []byte) ExternalCRustBuffer {
+	return RustBufferFromC(c.Lower(value))
+}
+
+func (c FfiConverterBytes) Write(writer io.Writer, value []byte) {
+	if len(value) > math.MaxInt32 {
+		panic("[]byte is too large to fit into Int32")
+	}
+
+	writeInt32(writer, int32(len(value)))
+	write_length, err := writer.Write(value)
+	if err != nil {
+		panic(err)
+	}
+	if write_length != len(value) {
+		panic(fmt.Errorf("bad write length when writing []byte, expected %d, written %d", len(value), write_length))
+	}
+}
+
+func (c FfiConverterBytes) Lift(rb RustBufferI) []byte {
+	return LiftFromRustBuffer[[]byte](c, rb)
+}
+
+func (c FfiConverterBytes) Read(reader io.Reader) []byte {
+	length := readInt32(reader)
+	buffer := make([]byte, length)
+	read_length, err := reader.Read(buffer)
+	if err != nil && err != io.EOF {
+		panic(err)
+	}
+	if read_length != int(length) {
+		panic(fmt.Errorf("bad read length when reading []byte, expected %d, read %d", length, read_length))
+	}
+	return buffer
+}
+
+type FfiDestroyerBytes struct{}
+
+func (FfiDestroyerBytes) Destroy(_ []byte) {}
 
 // Below is an implementation of synchronization requirements outlined in the link.
 // https://github.com/mozilla/uniffi-rs/blob/0dc031132d9493ca812c3af6e7dd60ad2ea95bf0/uniffi_bindgen/src/bindings/kotlin/templates/ObjectRuntime.kt#L31
@@ -9063,6 +9282,1158 @@ func (_ FfiDestroyerModel) Destroy(value *Model) {
 	value.Destroy()
 }
 
+// gRPC client for the `BlazenModelServer` service, exposed to Go /
+// Swift / Kotlin / Ruby via UniFFI.
+//
+// Wraps [`blazen_controlplane::ModelClient`] one-to-one; the upstream
+// type is already cheaply cloneable and serialises concurrent RPCs
+// internally, so the wrapper does not need its own mutex.
+type ModelClientInterface interface {
+	// Issue a non-streaming completion.
+	//
+	// `request_json` is the JSON form of
+	// [`blazen_controlplane::model_protocol::CompleteRequest`]; the
+	// `envelope_version` field is filled in automatically. Returns the
+	// JSON form of
+	// [`blazen_controlplane::model_protocol::CompleteResponse`].
+	//
+	// For streaming completions use a future wave's `stream_complete`
+	// surface — this method always buffers the full response.
+	//
+	// # Errors
+	// See [`Self::load_adapter`].
+	Complete(requestJson string) (string, error)
+	// Compute embeddings for one or more inputs.
+	//
+	// `request_json` is the JSON form of
+	// [`blazen_controlplane::model_protocol::EmbedRequest`]; the
+	// `envelope_version` field is filled in automatically. Returns the
+	// JSON form of
+	// [`blazen_controlplane::model_protocol::EmbedResponse`].
+	//
+	// # Errors
+	// See [`Self::load_adapter`].
+	Embed(requestJson string) (string, error)
+	// Fetch a blob in one shot.
+	//
+	// `request_json` is the JSON form of
+	// [`blazen_controlplane::model_protocol::FetchBlobRequest`]; the
+	// `envelope_version` field is filled in automatically. The whole
+	// response stream is buffered in memory: each
+	// [`FetchBlobChunk::Data`] frame's bytes are concatenated and returned
+	// as a single `Vec<u8>`; `Start` and `End` frames carry only metadata
+	// and are not surfaced through this API.
+	//
+	// Callers that need to stream multi-gigabyte blobs without buffering
+	// should drive [`blazen_controlplane::ModelClient::fetch_blob`]
+	// directly from Rust.
+	//
+	// # Errors
+	// Returns [`BlazenError::Validation`] when the request JSON cannot be
+	// parsed; [`BlazenError::Peer`] for control-plane / transport failures
+	// (either starting the stream or mid-stream).
+	FetchBlob(requestJson string) ([]byte, error)
+	// Generate one or more images.
+	//
+	// `request_json` is the JSON form of
+	// [`blazen_controlplane::model_protocol::GenerateImageRequest`]; the
+	// `envelope_version` field is filled in automatically. Returns the
+	// JSON form of
+	// [`blazen_controlplane::model_protocol::GenerateImageResponse`].
+	//
+	// # Errors
+	// See [`Self::load_adapter`].
+	GenerateImage(requestJson string) (string, error)
+	// Generate music from a textual prompt.
+	//
+	// `request_json` is the JSON form of
+	// [`blazen_controlplane::model_protocol::GenerateMusicRequest`]; the
+	// `envelope_version` field is filled in automatically. Returns the
+	// JSON form of
+	// [`blazen_controlplane::model_protocol::GenerateMusicResponse`].
+	//
+	// # Errors
+	// See [`Self::load_adapter`].
+	GenerateMusic(requestJson string) (string, error)
+	// Liveness check for a single model.
+	//
+	// # Errors
+	// See [`Self::status`].
+	IsLoaded(modelId string) (bool, error)
+	// List adapters mounted on a model.
+	//
+	// `request_json` is the JSON form of
+	// [`blazen_controlplane::model_protocol::ListAdaptersRequest`]; the
+	// `envelope_version` field is filled in automatically. Returns the
+	// JSON form of
+	// [`blazen_controlplane::model_protocol::ListAdaptersResponse`].
+	//
+	// # Errors
+	// See [`Self::load_adapter`].
+	ListAdapters(requestJson string) (string, error)
+	// Load a previously-registered model into its pool.
+	//
+	// # Errors
+	// Returns [`BlazenError::Peer`] (`ControlPlaneTransport` /
+	// `ControlPlaneRpc`) for wire or model-layer failures (e.g. unknown
+	// `model_id`).
+	Load(request LoadRecord) (LoadResultRecord, error)
+	// Mount a LoRA / adapter onto a loaded model.
+	//
+	// `request_json` is the JSON form of
+	// [`blazen_controlplane::model_protocol::LoadAdapterRequest`]; the
+	// `envelope_version` field is filled in automatically and may be
+	// omitted by the caller. Returns the JSON form of
+	// [`blazen_controlplane::model_protocol::LoadAdapterResponse`].
+	//
+	// # Errors
+	// Returns [`BlazenError::Validation`] when the request JSON cannot be
+	// parsed or the response cannot be serialized;
+	// [`BlazenError::Peer`] for control-plane / transport failures.
+	LoadAdapter(requestJson string) (string, error)
+	// Register-and-load a model directly from a Hugging Face Hub repo.
+	// Returns the backend the loader chose (never
+	// [`HfBackendHint::Auto`]).
+	//
+	// # Errors
+	// See [`Self::load`]. Additionally surfaces loader-side failures
+	// (HF fetch errors, unsupported repo layouts) via
+	// `BlazenError::Peer` with `kind = "ControlPlaneRpc"`.
+	LoadFromHf(request LoadFromHfRecord) (LoadResultRecord, error)
+	// Fetch the server's view of registered models.
+	//
+	// When `model_id` is `Some(id)`, the response is filtered to just
+	// that model (empty `models` vec if the id is unknown). When
+	// `None`, every registered model is returned.
+	//
+	// # Errors
+	// Returns [`BlazenError::Peer`] (`ControlPlaneTransport` /
+	// `ControlPlaneRpc`) for wire or model-layer failures.
+	Status(modelId *string) (StatusRecord, error)
+	// Issue a streaming completion, delivering each token-delta to `sink`.
+	//
+	// `request_json` is the JSON form of
+	// [`blazen_controlplane::model_protocol::CompleteRequest`]; the
+	// `envelope_version` field is filled in automatically. As frames arrive
+	// from the server, the [`StreamCompleteChunk::Delta`]'s `text` is
+	// forwarded to [`CompletionStreamSink::on_chunk`] as the chunk's
+	// `content_delta`; the terminal [`StreamCompleteChunk::Done`] triggers
+	// [`CompletionStreamSink::on_done`] with the reported `finish_reason`
+	// (empty string when the provider didn't supply one) and a
+	// [`TokenUsage`] built from the `prompt_tokens` / `completion_tokens`
+	// fields.
+	//
+	// Errors observed mid-stream are *delivered* via
+	// [`CompletionStreamSink::on_error`] and the method returns `Ok(())`,
+	// mirroring the symmetry of
+	// [`crate::streaming::complete_streaming`]: the sink owns both
+	// happy-path and error-path observation. The only way this method
+	// itself returns `Err` is when the initial request JSON cannot be
+	// parsed or the upstream `stream_complete` call fails to *start* the
+	// stream.
+	//
+	// Reuses the existing text-only [`CompletionStreamSink`] so Go / Swift
+	// / Kotlin / Ruby callers see a uniform streaming surface across both
+	// the in-process [`crate::llm::Model`] path and the gRPC
+	// [`ModelClient`] path. The wire-level
+	// [`StreamCompleteChunk`] carries only `text` payloads today (no
+	// per-frame tool-call deltas, citations, or reasoning trace), so the
+	// text-only sink loses no information; if a future wire schema grows
+	// structured fields, callers that need them should drive the gRPC
+	// client directly.
+	//
+	// # Errors
+	// Returns [`BlazenError::Validation`] when the request JSON cannot be
+	// parsed; [`BlazenError::Peer`] for control-plane / transport failures
+	// starting the stream.
+	StreamComplete(requestJson string, sink CompletionStreamSink) error
+	// Synthesize speech from text.
+	//
+	// `request_json` is the JSON form of
+	// [`blazen_controlplane::model_protocol::TextToSpeechRequest`]; the
+	// `envelope_version` field is filled in automatically. Returns the
+	// JSON form of
+	// [`blazen_controlplane::model_protocol::TextToSpeechResponse`].
+	//
+	// # Errors
+	// See [`Self::load_adapter`].
+	TextToSpeech(requestJson string) (string, error)
+	// Transcribe audio to text.
+	//
+	// `request_json` is the JSON form of
+	// [`blazen_controlplane::model_protocol::TranscribeRequest`]; the
+	// `envelope_version` field is filled in automatically. Returns the
+	// JSON form of
+	// [`blazen_controlplane::model_protocol::TranscribeResponse`].
+	//
+	// # Errors
+	// See [`Self::load_adapter`].
+	Transcribe(requestJson string) (string, error)
+	// Drop a previously-loaded model from memory.
+	//
+	// # Errors
+	// See [`Self::load`].
+	Unload(modelId string) error
+	// Drop a previously-mounted adapter.
+	//
+	// `request_json` is the JSON form of
+	// [`blazen_controlplane::model_protocol::UnloadAdapterRequest`]; the
+	// `envelope_version` field is filled in automatically. Returns the
+	// JSON form of
+	// [`blazen_controlplane::model_protocol::UnloadAdapterResponse`].
+	//
+	// # Errors
+	// See [`Self::load_adapter`].
+	UnloadAdapter(requestJson string) (string, error)
+	// Upload a blob in one shot.
+	//
+	// The entire `data` payload is buffered in memory and sent as a single
+	// `UploadBlobChunk::Data` frame between a `Start` (carrying `blob_id`
+	// + `mime`) and `End` frame. Returns the JSON form of
+	// [`blazen_controlplane::model_protocol::UploadBlobResponse`] (the
+	// server's ack, echoing the blob id + bytes received).
+	//
+	// This buffered surface is the simple path for the UniFFI bindings —
+	// the whole payload must fit in process memory on both sides. Callers
+	// pushing multi-gigabyte blobs (e.g. base model weights) should drive
+	// [`blazen_controlplane::ModelClient::upload_blob`] directly from Rust
+	// where they can construct the chunk stream incrementally.
+	//
+	// # Errors
+	// Returns [`BlazenError::Peer`] for control-plane / transport
+	// failures, or [`BlazenError::Validation`] when the response cannot be
+	// serialized.
+	UploadBlob(blobId string, mime string, data []byte) (string, error)
+}
+
+// gRPC client for the `BlazenModelServer` service, exposed to Go /
+// Swift / Kotlin / Ruby via UniFFI.
+//
+// Wraps [`blazen_controlplane::ModelClient`] one-to-one; the upstream
+// type is already cheaply cloneable and serialises concurrent RPCs
+// internally, so the wrapper does not need its own mutex.
+type ModelClient struct {
+	ffiObject FfiObject
+}
+
+// Open a plaintext connection to a `BlazenModelServer` at
+// `endpoint` (e.g. `"http://127.0.0.1:7070"`).
+//
+// # Errors
+// Returns a [`BlazenError::Peer`] with `kind =
+// "ControlPlaneTransport"` when the endpoint URI is invalid or the
+// TCP / HTTP-2 handshake fails.
+func ModelClientConnect(endpoint string) (*ModelClient, error) {
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+			res := C.ffi_blazen_uniffi_rust_future_complete_u64(handle, status)
+			return res
+		},
+		// liftFn
+		func(ffi C.uint64_t) *ModelClient {
+			return FfiConverterModelClientINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_constructor_modelclient_connect(FfiConverterStringINSTANCE.Lower(endpoint)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_u64(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_u64(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Open a TLS / mTLS connection. `ca_cert_pem` is the trust root
+// the client uses to verify the server; `client_cert_pem` and
+// `client_key_pem` are the client identity for mutual TLS (pass
+// both or neither).
+//
+// # Errors
+// Returns a [`BlazenError::Peer`] with `kind = "ControlPlaneTls"`
+// when the PEM material can't be parsed, or with
+// `kind = "ControlPlaneTransport"` for handshake failures.
+// [`BlazenError::Validation`] if exactly one of `client_cert_pem`
+// / `client_key_pem` is supplied.
+func ModelClientConnectWithTls(endpoint string, caCertPem string, clientCertPem *string, clientKeyPem *string) (*ModelClient, error) {
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+			res := C.ffi_blazen_uniffi_rust_future_complete_u64(handle, status)
+			return res
+		},
+		// liftFn
+		func(ffi C.uint64_t) *ModelClient {
+			return FfiConverterModelClientINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_constructor_modelclient_connect_with_tls(FfiConverterStringINSTANCE.Lower(endpoint), FfiConverterStringINSTANCE.Lower(caCertPem), FfiConverterOptionalStringINSTANCE.Lower(clientCertPem), FfiConverterOptionalStringINSTANCE.Lower(clientKeyPem)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_u64(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_u64(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Issue a non-streaming completion.
+//
+// `request_json` is the JSON form of
+// [`blazen_controlplane::model_protocol::CompleteRequest`]; the
+// `envelope_version` field is filled in automatically. Returns the
+// JSON form of
+// [`blazen_controlplane::model_protocol::CompleteResponse`].
+//
+// For streaming completions use a future wave's `stream_complete`
+// surface — this method always buffers the full response.
+//
+// # Errors
+// See [`Self::load_adapter`].
+func (_self *ModelClient) Complete(requestJson string) (string, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ModelClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) string {
+			return FfiConverterStringINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_modelclient_complete(
+			_pointer, FfiConverterStringINSTANCE.Lower(requestJson)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Compute embeddings for one or more inputs.
+//
+// `request_json` is the JSON form of
+// [`blazen_controlplane::model_protocol::EmbedRequest`]; the
+// `envelope_version` field is filled in automatically. Returns the
+// JSON form of
+// [`blazen_controlplane::model_protocol::EmbedResponse`].
+//
+// # Errors
+// See [`Self::load_adapter`].
+func (_self *ModelClient) Embed(requestJson string) (string, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ModelClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) string {
+			return FfiConverterStringINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_modelclient_embed(
+			_pointer, FfiConverterStringINSTANCE.Lower(requestJson)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Fetch a blob in one shot.
+//
+// `request_json` is the JSON form of
+// [`blazen_controlplane::model_protocol::FetchBlobRequest`]; the
+// `envelope_version` field is filled in automatically. The whole
+// response stream is buffered in memory: each
+// [`FetchBlobChunk::Data`] frame's bytes are concatenated and returned
+// as a single `Vec<u8>`; `Start` and `End` frames carry only metadata
+// and are not surfaced through this API.
+//
+// Callers that need to stream multi-gigabyte blobs without buffering
+// should drive [`blazen_controlplane::ModelClient::fetch_blob`]
+// directly from Rust.
+//
+// # Errors
+// Returns [`BlazenError::Validation`] when the request JSON cannot be
+// parsed; [`BlazenError::Peer`] for control-plane / transport failures
+// (either starting the stream or mid-stream).
+func (_self *ModelClient) FetchBlob(requestJson string) ([]byte, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ModelClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) []byte {
+			return FfiConverterBytesINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_modelclient_fetch_blob(
+			_pointer, FfiConverterStringINSTANCE.Lower(requestJson)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Generate one or more images.
+//
+// `request_json` is the JSON form of
+// [`blazen_controlplane::model_protocol::GenerateImageRequest`]; the
+// `envelope_version` field is filled in automatically. Returns the
+// JSON form of
+// [`blazen_controlplane::model_protocol::GenerateImageResponse`].
+//
+// # Errors
+// See [`Self::load_adapter`].
+func (_self *ModelClient) GenerateImage(requestJson string) (string, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ModelClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) string {
+			return FfiConverterStringINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_modelclient_generate_image(
+			_pointer, FfiConverterStringINSTANCE.Lower(requestJson)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Generate music from a textual prompt.
+//
+// `request_json` is the JSON form of
+// [`blazen_controlplane::model_protocol::GenerateMusicRequest`]; the
+// `envelope_version` field is filled in automatically. Returns the
+// JSON form of
+// [`blazen_controlplane::model_protocol::GenerateMusicResponse`].
+//
+// # Errors
+// See [`Self::load_adapter`].
+func (_self *ModelClient) GenerateMusic(requestJson string) (string, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ModelClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) string {
+			return FfiConverterStringINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_modelclient_generate_music(
+			_pointer, FfiConverterStringINSTANCE.Lower(requestJson)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Liveness check for a single model.
+//
+// # Errors
+// See [`Self::status`].
+func (_self *ModelClient) IsLoaded(modelId string) (bool, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ModelClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) C.int8_t {
+			res := C.ffi_blazen_uniffi_rust_future_complete_i8(handle, status)
+			return res
+		},
+		// liftFn
+		func(ffi C.int8_t) bool {
+			return FfiConverterBoolINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_modelclient_is_loaded(
+			_pointer, FfiConverterStringINSTANCE.Lower(modelId)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_i8(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_i8(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// List adapters mounted on a model.
+//
+// `request_json` is the JSON form of
+// [`blazen_controlplane::model_protocol::ListAdaptersRequest`]; the
+// `envelope_version` field is filled in automatically. Returns the
+// JSON form of
+// [`blazen_controlplane::model_protocol::ListAdaptersResponse`].
+//
+// # Errors
+// See [`Self::load_adapter`].
+func (_self *ModelClient) ListAdapters(requestJson string) (string, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ModelClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) string {
+			return FfiConverterStringINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_modelclient_list_adapters(
+			_pointer, FfiConverterStringINSTANCE.Lower(requestJson)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Load a previously-registered model into its pool.
+//
+// # Errors
+// Returns [`BlazenError::Peer`] (`ControlPlaneTransport` /
+// `ControlPlaneRpc`) for wire or model-layer failures (e.g. unknown
+// `model_id`).
+func (_self *ModelClient) Load(request LoadRecord) (LoadResultRecord, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ModelClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) LoadResultRecord {
+			return FfiConverterLoadResultRecordINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_modelclient_load(
+			_pointer, FfiConverterLoadRecordINSTANCE.Lower(request)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Mount a LoRA / adapter onto a loaded model.
+//
+// `request_json` is the JSON form of
+// [`blazen_controlplane::model_protocol::LoadAdapterRequest`]; the
+// `envelope_version` field is filled in automatically and may be
+// omitted by the caller. Returns the JSON form of
+// [`blazen_controlplane::model_protocol::LoadAdapterResponse`].
+//
+// # Errors
+// Returns [`BlazenError::Validation`] when the request JSON cannot be
+// parsed or the response cannot be serialized;
+// [`BlazenError::Peer`] for control-plane / transport failures.
+func (_self *ModelClient) LoadAdapter(requestJson string) (string, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ModelClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) string {
+			return FfiConverterStringINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_modelclient_load_adapter(
+			_pointer, FfiConverterStringINSTANCE.Lower(requestJson)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Register-and-load a model directly from a Hugging Face Hub repo.
+// Returns the backend the loader chose (never
+// [`HfBackendHint::Auto`]).
+//
+// # Errors
+// See [`Self::load`]. Additionally surfaces loader-side failures
+// (HF fetch errors, unsupported repo layouts) via
+// `BlazenError::Peer` with `kind = "ControlPlaneRpc"`.
+func (_self *ModelClient) LoadFromHf(request LoadFromHfRecord) (LoadResultRecord, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ModelClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) LoadResultRecord {
+			return FfiConverterLoadResultRecordINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_modelclient_load_from_hf(
+			_pointer, FfiConverterLoadFromHfRecordINSTANCE.Lower(request)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Fetch the server's view of registered models.
+//
+// When `model_id` is `Some(id)`, the response is filtered to just
+// that model (empty `models` vec if the id is unknown). When
+// `None`, every registered model is returned.
+//
+// # Errors
+// Returns [`BlazenError::Peer`] (`ControlPlaneTransport` /
+// `ControlPlaneRpc`) for wire or model-layer failures.
+func (_self *ModelClient) Status(modelId *string) (StatusRecord, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ModelClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) StatusRecord {
+			return FfiConverterStatusRecordINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_modelclient_status(
+			_pointer, FfiConverterOptionalStringINSTANCE.Lower(modelId)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Issue a streaming completion, delivering each token-delta to `sink`.
+//
+// `request_json` is the JSON form of
+// [`blazen_controlplane::model_protocol::CompleteRequest`]; the
+// `envelope_version` field is filled in automatically. As frames arrive
+// from the server, the [`StreamCompleteChunk::Delta`]'s `text` is
+// forwarded to [`CompletionStreamSink::on_chunk`] as the chunk's
+// `content_delta`; the terminal [`StreamCompleteChunk::Done`] triggers
+// [`CompletionStreamSink::on_done`] with the reported `finish_reason`
+// (empty string when the provider didn't supply one) and a
+// [`TokenUsage`] built from the `prompt_tokens` / `completion_tokens`
+// fields.
+//
+// Errors observed mid-stream are *delivered* via
+// [`CompletionStreamSink::on_error`] and the method returns `Ok(())`,
+// mirroring the symmetry of
+// [`crate::streaming::complete_streaming`]: the sink owns both
+// happy-path and error-path observation. The only way this method
+// itself returns `Err` is when the initial request JSON cannot be
+// parsed or the upstream `stream_complete` call fails to *start* the
+// stream.
+//
+// Reuses the existing text-only [`CompletionStreamSink`] so Go / Swift
+// / Kotlin / Ruby callers see a uniform streaming surface across both
+// the in-process [`crate::llm::Model`] path and the gRPC
+// [`ModelClient`] path. The wire-level
+// [`StreamCompleteChunk`] carries only `text` payloads today (no
+// per-frame tool-call deltas, citations, or reasoning trace), so the
+// text-only sink loses no information; if a future wire schema grows
+// structured fields, callers that need them should drive the gRPC
+// client directly.
+//
+// # Errors
+// Returns [`BlazenError::Validation`] when the request JSON cannot be
+// parsed; [`BlazenError::Peer`] for control-plane / transport failures
+// starting the stream.
+func (_self *ModelClient) StreamComplete(requestJson string, sink CompletionStreamSink) error {
+	_pointer := _self.ffiObject.incrementPointer("*ModelClient")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_modelclient_stream_complete(
+			_pointer, FfiConverterStringINSTANCE.Lower(requestJson), FfiConverterCompletionStreamSinkINSTANCE.Lower(sink)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+// Synthesize speech from text.
+//
+// `request_json` is the JSON form of
+// [`blazen_controlplane::model_protocol::TextToSpeechRequest`]; the
+// `envelope_version` field is filled in automatically. Returns the
+// JSON form of
+// [`blazen_controlplane::model_protocol::TextToSpeechResponse`].
+//
+// # Errors
+// See [`Self::load_adapter`].
+func (_self *ModelClient) TextToSpeech(requestJson string) (string, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ModelClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) string {
+			return FfiConverterStringINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_modelclient_text_to_speech(
+			_pointer, FfiConverterStringINSTANCE.Lower(requestJson)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Transcribe audio to text.
+//
+// `request_json` is the JSON form of
+// [`blazen_controlplane::model_protocol::TranscribeRequest`]; the
+// `envelope_version` field is filled in automatically. Returns the
+// JSON form of
+// [`blazen_controlplane::model_protocol::TranscribeResponse`].
+//
+// # Errors
+// See [`Self::load_adapter`].
+func (_self *ModelClient) Transcribe(requestJson string) (string, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ModelClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) string {
+			return FfiConverterStringINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_modelclient_transcribe(
+			_pointer, FfiConverterStringINSTANCE.Lower(requestJson)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Drop a previously-loaded model from memory.
+//
+// # Errors
+// See [`Self::load`].
+func (_self *ModelClient) Unload(modelId string) error {
+	_pointer := _self.ffiObject.incrementPointer("*ModelClient")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_modelclient_unload(
+			_pointer, FfiConverterStringINSTANCE.Lower(modelId)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+// Drop a previously-mounted adapter.
+//
+// `request_json` is the JSON form of
+// [`blazen_controlplane::model_protocol::UnloadAdapterRequest`]; the
+// `envelope_version` field is filled in automatically. Returns the
+// JSON form of
+// [`blazen_controlplane::model_protocol::UnloadAdapterResponse`].
+//
+// # Errors
+// See [`Self::load_adapter`].
+func (_self *ModelClient) UnloadAdapter(requestJson string) (string, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ModelClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) string {
+			return FfiConverterStringINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_modelclient_unload_adapter(
+			_pointer, FfiConverterStringINSTANCE.Lower(requestJson)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Upload a blob in one shot.
+//
+// The entire `data` payload is buffered in memory and sent as a single
+// `UploadBlobChunk::Data` frame between a `Start` (carrying `blob_id`
+// + `mime`) and `End` frame. Returns the JSON form of
+// [`blazen_controlplane::model_protocol::UploadBlobResponse`] (the
+// server's ack, echoing the blob id + bytes received).
+//
+// This buffered surface is the simple path for the UniFFI bindings —
+// the whole payload must fit in process memory on both sides. Callers
+// pushing multi-gigabyte blobs (e.g. base model weights) should drive
+// [`blazen_controlplane::ModelClient::upload_blob`] directly from Rust
+// where they can construct the chunk stream incrementally.
+//
+// # Errors
+// Returns [`BlazenError::Peer`] for control-plane / transport
+// failures, or [`BlazenError::Validation`] when the response cannot be
+// serialized.
+func (_self *ModelClient) UploadBlob(blobId string, mime string, data []byte) (string, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ModelClient")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) string {
+			return FfiConverterStringINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_modelclient_upload_blob(
+			_pointer, FfiConverterStringINSTANCE.Lower(blobId), FfiConverterStringINSTANCE.Lower(mime), FfiConverterBytesINSTANCE.Lower(data)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+func (object *ModelClient) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterModelClient struct{}
+
+var FfiConverterModelClientINSTANCE = FfiConverterModelClient{}
+
+func (c FfiConverterModelClient) Lift(handle C.uint64_t) *ModelClient {
+	result := &ModelClient{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_modelclient(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_modelclient(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*ModelClient).Destroy)
+	return result
+}
+
+func (c FfiConverterModelClient) Read(reader io.Reader) *ModelClient {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterModelClient) Lower(value *ModelClient) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*ModelClient")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterModelClient) Write(writer io.Writer, value *ModelClient) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalModelClient(handle uint64) *ModelClient {
+	return FfiConverterModelClientINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalModelClient(value *ModelClient) uint64 {
+	return uint64(FfiConverterModelClientINSTANCE.Lower(value))
+}
+
+type FfiDestroyerModelClient struct{}
+
+func (_ FfiDestroyerModelClient) Destroy(value *ModelClient) {
+	value.Destroy()
+}
+
 // Client handle for invoking workflows on a remote [`PeerServer`].
 //
 // Construct with [`PeerClient::connect`]. RPCs go out over a multiplexed
@@ -14223,6 +15594,196 @@ func (_ FfiDestroyerKtoConfigRecord) Destroy(value KtoConfigRecord) {
 	value.Destroy()
 }
 
+// Foreign-facing request for [`ModelClient::load_from_hf`]. Mirrors
+// [`LoadFromHfRequest`] minus the `envelope_version`.
+type LoadFromHfRecord struct {
+	// Id under which to register the resulting model.
+	ModelId string
+	// Hugging Face repo slug (`org/name`).
+	Repo string
+	// Optional explicit memory estimate in bytes; `None` asks the
+	// loader to estimate from repo metadata.
+	MemoryEstimateBytes *uint64
+	// Optional backend override.
+	BackendHint *HfBackendHint
+	// Optional GGUF file name when the backend is llama.cpp.
+	GgufFile *string
+	// Optional HF revision (branch / tag / commit).
+	Revision *string
+	// Optional bearer token for gated repos.
+	HfToken *string
+	// Pre-serialised JSON for any backend-specific extra options the
+	// host should honor. Empty string = none.
+	ExtraOptionsJson string
+}
+
+func (r *LoadFromHfRecord) Destroy() {
+	FfiDestroyerString{}.Destroy(r.ModelId)
+	FfiDestroyerString{}.Destroy(r.Repo)
+	FfiDestroyerOptionalUint64{}.Destroy(r.MemoryEstimateBytes)
+	FfiDestroyerOptionalHfBackendHint{}.Destroy(r.BackendHint)
+	FfiDestroyerOptionalString{}.Destroy(r.GgufFile)
+	FfiDestroyerOptionalString{}.Destroy(r.Revision)
+	FfiDestroyerOptionalString{}.Destroy(r.HfToken)
+	FfiDestroyerString{}.Destroy(r.ExtraOptionsJson)
+}
+
+type FfiConverterLoadFromHfRecord struct{}
+
+var FfiConverterLoadFromHfRecordINSTANCE = FfiConverterLoadFromHfRecord{}
+
+func (c FfiConverterLoadFromHfRecord) Lift(rb RustBufferI) LoadFromHfRecord {
+	return LiftFromRustBuffer[LoadFromHfRecord](c, rb)
+}
+
+func (c FfiConverterLoadFromHfRecord) Read(reader io.Reader) LoadFromHfRecord {
+	return LoadFromHfRecord{
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterOptionalUint64INSTANCE.Read(reader),
+		FfiConverterOptionalHfBackendHintINSTANCE.Read(reader),
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+		FfiConverterStringINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterLoadFromHfRecord) Lower(value LoadFromHfRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[LoadFromHfRecord](c, value)
+}
+
+func (c FfiConverterLoadFromHfRecord) LowerExternal(value LoadFromHfRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[LoadFromHfRecord](c, value))
+}
+
+func (c FfiConverterLoadFromHfRecord) Write(writer io.Writer, value LoadFromHfRecord) {
+	FfiConverterStringINSTANCE.Write(writer, value.ModelId)
+	FfiConverterStringINSTANCE.Write(writer, value.Repo)
+	FfiConverterOptionalUint64INSTANCE.Write(writer, value.MemoryEstimateBytes)
+	FfiConverterOptionalHfBackendHintINSTANCE.Write(writer, value.BackendHint)
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.GgufFile)
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.Revision)
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.HfToken)
+	FfiConverterStringINSTANCE.Write(writer, value.ExtraOptionsJson)
+}
+
+type FfiDestroyerLoadFromHfRecord struct{}
+
+func (_ FfiDestroyerLoadFromHfRecord) Destroy(value LoadFromHfRecord) {
+	value.Destroy()
+}
+
+// Foreign-facing request for [`ModelClient::load`].
+//
+// Mirrors [`blazen_controlplane::model_protocol::LoadRequest`] minus the
+// `envelope_version` (the wrapper fills that in from
+// [`MODEL_ENVELOPE_VERSION`]).
+type LoadRecord struct {
+	// Id under which the target model was previously registered.
+	ModelId string
+}
+
+func (r *LoadRecord) Destroy() {
+	FfiDestroyerString{}.Destroy(r.ModelId)
+}
+
+type FfiConverterLoadRecord struct{}
+
+var FfiConverterLoadRecordINSTANCE = FfiConverterLoadRecord{}
+
+func (c FfiConverterLoadRecord) Lift(rb RustBufferI) LoadRecord {
+	return LiftFromRustBuffer[LoadRecord](c, rb)
+}
+
+func (c FfiConverterLoadRecord) Read(reader io.Reader) LoadRecord {
+	return LoadRecord{
+		FfiConverterStringINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterLoadRecord) Lower(value LoadRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[LoadRecord](c, value)
+}
+
+func (c FfiConverterLoadRecord) LowerExternal(value LoadRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[LoadRecord](c, value))
+}
+
+func (c FfiConverterLoadRecord) Write(writer io.Writer, value LoadRecord) {
+	FfiConverterStringINSTANCE.Write(writer, value.ModelId)
+}
+
+type FfiDestroyerLoadRecord struct{}
+
+func (_ FfiDestroyerLoadRecord) Destroy(value LoadRecord) {
+	value.Destroy()
+}
+
+// Foreign-facing response from [`ModelClient::load`] and
+// [`ModelClient::load_from_hf`].
+//
+// `LoadResponse` is empty on the wire (failures travel via the
+// `Result`), but `LoadFromHfResponse` reports the chosen backend; we
+// surface both through a single record with optional fields so foreign
+// callers see one shape regardless of which loader they invoke.
+type LoadResultRecord struct {
+	// Model id that was loaded. Echoes the request's `model_id` so
+	// foreign callers don't have to thread the value through their own
+	// state.
+	ModelId string
+	// Whether the load succeeded. Always `true` on the success branch
+	// of the `Result`; provided for forward-compat with future wire
+	// schemas that may carry a richer status.
+	Loaded bool
+	// Backend the loader chose. Only populated by `load_from_hf`;
+	// `None` for the plain `load` path which does not negotiate a
+	// backend.
+	ChosenBackend *HfBackendHint
+}
+
+func (r *LoadResultRecord) Destroy() {
+	FfiDestroyerString{}.Destroy(r.ModelId)
+	FfiDestroyerBool{}.Destroy(r.Loaded)
+	FfiDestroyerOptionalHfBackendHint{}.Destroy(r.ChosenBackend)
+}
+
+type FfiConverterLoadResultRecord struct{}
+
+var FfiConverterLoadResultRecordINSTANCE = FfiConverterLoadResultRecord{}
+
+func (c FfiConverterLoadResultRecord) Lift(rb RustBufferI) LoadResultRecord {
+	return LiftFromRustBuffer[LoadResultRecord](c, rb)
+}
+
+func (c FfiConverterLoadResultRecord) Read(reader io.Reader) LoadResultRecord {
+	return LoadResultRecord{
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterBoolINSTANCE.Read(reader),
+		FfiConverterOptionalHfBackendHintINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterLoadResultRecord) Lower(value LoadResultRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[LoadResultRecord](c, value)
+}
+
+func (c FfiConverterLoadResultRecord) LowerExternal(value LoadResultRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[LoadResultRecord](c, value))
+}
+
+func (c FfiConverterLoadResultRecord) Write(writer io.Writer, value LoadResultRecord) {
+	FfiConverterStringINSTANCE.Write(writer, value.ModelId)
+	FfiConverterBoolINSTANCE.Write(writer, value.Loaded)
+	FfiConverterOptionalHfBackendHintINSTANCE.Write(writer, value.ChosenBackend)
+}
+
+type FfiDestroyerLoadResultRecord struct{}
+
+func (_ FfiDestroyerLoadResultRecord) Destroy(value LoadResultRecord) {
+	value.Destroy()
+}
+
 // LoRA hyperparameters.
 type LoraConfigRecord struct {
 	Rank          uint32
@@ -14399,6 +15960,67 @@ func (c FfiConverterMediaOutput) Write(writer io.Writer, value MediaOutput) {
 type FfiDestroyerMediaOutput struct{}
 
 func (_ FfiDestroyerMediaOutput) Destroy(value MediaOutput) {
+	value.Destroy()
+}
+
+// Foreign-facing snapshot of a single registered model.
+//
+// Mirrors [`ModelStatusWire`] from the model protocol. The upstream
+// `adapters: Vec<AdapterStatusWire>` field is omitted in this wave —
+// adapter introspection lands with the adapter RPCs in a later wave.
+type ModelClientStatusRecord struct {
+	// Identifier under which the model was registered.
+	Id string
+	// Whether the model is currently loaded into its pool.
+	Loaded bool
+	// Estimated memory footprint in bytes (includes any mounted adapters).
+	MemoryEstimateBytes uint64
+	// Pool the model is charged against.
+	Pool ModelPool
+}
+
+func (r *ModelClientStatusRecord) Destroy() {
+	FfiDestroyerString{}.Destroy(r.Id)
+	FfiDestroyerBool{}.Destroy(r.Loaded)
+	FfiDestroyerUint64{}.Destroy(r.MemoryEstimateBytes)
+	FfiDestroyerModelPool{}.Destroy(r.Pool)
+}
+
+type FfiConverterModelClientStatusRecord struct{}
+
+var FfiConverterModelClientStatusRecordINSTANCE = FfiConverterModelClientStatusRecord{}
+
+func (c FfiConverterModelClientStatusRecord) Lift(rb RustBufferI) ModelClientStatusRecord {
+	return LiftFromRustBuffer[ModelClientStatusRecord](c, rb)
+}
+
+func (c FfiConverterModelClientStatusRecord) Read(reader io.Reader) ModelClientStatusRecord {
+	return ModelClientStatusRecord{
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterBoolINSTANCE.Read(reader),
+		FfiConverterUint64INSTANCE.Read(reader),
+		FfiConverterModelPoolINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterModelClientStatusRecord) Lower(value ModelClientStatusRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[ModelClientStatusRecord](c, value)
+}
+
+func (c FfiConverterModelClientStatusRecord) LowerExternal(value ModelClientStatusRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[ModelClientStatusRecord](c, value))
+}
+
+func (c FfiConverterModelClientStatusRecord) Write(writer io.Writer, value ModelClientStatusRecord) {
+	FfiConverterStringINSTANCE.Write(writer, value.Id)
+	FfiConverterBoolINSTANCE.Write(writer, value.Loaded)
+	FfiConverterUint64INSTANCE.Write(writer, value.MemoryEstimateBytes)
+	FfiConverterModelPoolINSTANCE.Write(writer, value.Pool)
+}
+
+type FfiDestroyerModelClientStatusRecord struct{}
+
+func (_ FfiDestroyerModelClientStatusRecord) Destroy(value ModelClientStatusRecord) {
 	value.Destroy()
 }
 
@@ -15219,6 +16841,53 @@ func (c FfiConverterSpeechRequest) Write(writer io.Writer, value SpeechRequest) 
 type FfiDestroyerSpeechRequest struct{}
 
 func (_ FfiDestroyerSpeechRequest) Destroy(value SpeechRequest) {
+	value.Destroy()
+}
+
+// Foreign-facing response from
+// [`ModelClient::status`]. Mirrors
+// [`blazen_controlplane::model_protocol::StatusResponse`] but filters
+// to a single model when the caller scopes the query with a
+// `model_id`.
+type StatusRecord struct {
+	// Snapshot of each registered model (or just the requested one,
+	// when `status(Some(id))` was called).
+	Models []ModelClientStatusRecord
+}
+
+func (r *StatusRecord) Destroy() {
+	FfiDestroyerSequenceModelClientStatusRecord{}.Destroy(r.Models)
+}
+
+type FfiConverterStatusRecord struct{}
+
+var FfiConverterStatusRecordINSTANCE = FfiConverterStatusRecord{}
+
+func (c FfiConverterStatusRecord) Lift(rb RustBufferI) StatusRecord {
+	return LiftFromRustBuffer[StatusRecord](c, rb)
+}
+
+func (c FfiConverterStatusRecord) Read(reader io.Reader) StatusRecord {
+	return StatusRecord{
+		FfiConverterSequenceModelClientStatusRecordINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterStatusRecord) Lower(value StatusRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[StatusRecord](c, value)
+}
+
+func (c FfiConverterStatusRecord) LowerExternal(value StatusRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[StatusRecord](c, value))
+}
+
+func (c FfiConverterStatusRecord) Write(writer io.Writer, value StatusRecord) {
+	FfiConverterSequenceModelClientStatusRecordINSTANCE.Write(writer, value.Models)
+}
+
+type FfiDestroyerStatusRecord struct{}
+
+func (_ FfiDestroyerStatusRecord) Destroy(value StatusRecord) {
 	value.Destroy()
 }
 
@@ -18183,6 +19852,50 @@ type FfiDestroyerControlPlaneRunStatus struct{}
 func (_ FfiDestroyerControlPlaneRunStatus) Destroy(value ControlPlaneRunStatus) {
 }
 
+// Backend selector used by [`ModelClient::load_from_hf`]. Mirrors
+// [`BackendHintWire`].
+type HfBackendHint uint
+
+const (
+	// Auto-detect from the repo layout.
+	HfBackendHintAuto HfBackendHint = 1
+	// Force the `mistral.rs` backend.
+	HfBackendHintMistralRs HfBackendHint = 2
+	// Force the candle-llm backend.
+	HfBackendHintCandle HfBackendHint = 3
+	// Force the llama.cpp backend.
+	HfBackendHintLlamaCpp HfBackendHint = 4
+)
+
+type FfiConverterHfBackendHint struct{}
+
+var FfiConverterHfBackendHintINSTANCE = FfiConverterHfBackendHint{}
+
+func (c FfiConverterHfBackendHint) Lift(rb RustBufferI) HfBackendHint {
+	return LiftFromRustBuffer[HfBackendHint](c, rb)
+}
+
+func (c FfiConverterHfBackendHint) Lower(value HfBackendHint) C.RustBuffer {
+	return LowerIntoRustBuffer[HfBackendHint](c, value)
+}
+
+func (c FfiConverterHfBackendHint) LowerExternal(value HfBackendHint) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[HfBackendHint](c, value))
+}
+func (FfiConverterHfBackendHint) Read(reader io.Reader) HfBackendHint {
+	id := readInt32(reader)
+	return HfBackendHint(id)
+}
+
+func (FfiConverterHfBackendHint) Write(writer io.Writer, value HfBackendHint) {
+	writeInt32(writer, int32(value))
+}
+
+type FfiDestroyerHfBackendHint struct{}
+
+func (_ FfiDestroyerHfBackendHint) Destroy(value HfBackendHint) {
+}
+
 type MixedPrecisionEnum uint
 
 const (
@@ -18217,6 +19930,89 @@ func (FfiConverterMixedPrecisionEnum) Write(writer io.Writer, value MixedPrecisi
 type FfiDestroyerMixedPrecisionEnum struct{}
 
 func (_ FfiDestroyerMixedPrecisionEnum) Destroy(value MixedPrecisionEnum) {
+}
+
+// Pool a model is registered against. Mirrors
+// [`blazen_controlplane::model_protocol::PoolWire`] in a UniFFI-friendly
+// shape — Rust's `Gpu(u32)` payload becomes a discriminator + optional
+// `device_index` so the enum can cross the FFI boundary cleanly.
+type ModelPool interface {
+	Destroy()
+}
+
+// Host RAM pool.
+type ModelPoolCpu struct {
+}
+
+func (e ModelPoolCpu) Destroy() {
+}
+
+// GPU VRAM pool at `device_index`. Metal collapses to index `0`.
+type ModelPoolGpu struct {
+	DeviceIndex uint32
+}
+
+func (e ModelPoolGpu) Destroy() {
+	FfiDestroyerUint32{}.Destroy(e.DeviceIndex)
+}
+
+// Off-host pool — memory lives in another process / host.
+type ModelPoolRemote struct {
+}
+
+func (e ModelPoolRemote) Destroy() {
+}
+
+type FfiConverterModelPool struct{}
+
+var FfiConverterModelPoolINSTANCE = FfiConverterModelPool{}
+
+func (c FfiConverterModelPool) Lift(rb RustBufferI) ModelPool {
+	return LiftFromRustBuffer[ModelPool](c, rb)
+}
+
+func (c FfiConverterModelPool) Lower(value ModelPool) C.RustBuffer {
+	return LowerIntoRustBuffer[ModelPool](c, value)
+}
+
+func (c FfiConverterModelPool) LowerExternal(value ModelPool) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[ModelPool](c, value))
+}
+func (FfiConverterModelPool) Read(reader io.Reader) ModelPool {
+	id := readInt32(reader)
+	switch id {
+	case 1:
+		return ModelPoolCpu{}
+	case 2:
+		return ModelPoolGpu{
+			FfiConverterUint32INSTANCE.Read(reader),
+		}
+	case 3:
+		return ModelPoolRemote{}
+	default:
+		panic(fmt.Sprintf("invalid enum value %v in FfiConverterModelPool.Read()", id))
+	}
+}
+
+func (FfiConverterModelPool) Write(writer io.Writer, value ModelPool) {
+	switch variant_value := value.(type) {
+	case ModelPoolCpu:
+		writeInt32(writer, 1)
+	case ModelPoolGpu:
+		writeInt32(writer, 2)
+		FfiConverterUint32INSTANCE.Write(writer, variant_value.DeviceIndex)
+	case ModelPoolRemote:
+		writeInt32(writer, 3)
+	default:
+		_ = variant_value
+		panic(fmt.Sprintf("invalid enum value `%v` in FfiConverterModelPool.Write", value))
+	}
+}
+
+type FfiDestroyerModelPool struct{}
+
+func (_ FfiDestroyerModelPool) Destroy(value ModelPool) {
+	value.Destroy()
 }
 
 type SchedulerKindEnum uint
@@ -18992,6 +20788,47 @@ func (_ FfiDestroyerOptionalBackendHintEnum) Destroy(value *BackendHintEnum) {
 	}
 }
 
+type FfiConverterOptionalHfBackendHint struct{}
+
+var FfiConverterOptionalHfBackendHintINSTANCE = FfiConverterOptionalHfBackendHint{}
+
+func (c FfiConverterOptionalHfBackendHint) Lift(rb RustBufferI) *HfBackendHint {
+	return LiftFromRustBuffer[*HfBackendHint](c, rb)
+}
+
+func (_ FfiConverterOptionalHfBackendHint) Read(reader io.Reader) *HfBackendHint {
+	if readInt8(reader) == 0 {
+		return nil
+	}
+	temp := FfiConverterHfBackendHintINSTANCE.Read(reader)
+	return &temp
+}
+
+func (c FfiConverterOptionalHfBackendHint) Lower(value *HfBackendHint) C.RustBuffer {
+	return LowerIntoRustBuffer[*HfBackendHint](c, value)
+}
+
+func (c FfiConverterOptionalHfBackendHint) LowerExternal(value *HfBackendHint) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[*HfBackendHint](c, value))
+}
+
+func (_ FfiConverterOptionalHfBackendHint) Write(writer io.Writer, value *HfBackendHint) {
+	if value == nil {
+		writeInt8(writer, 0)
+	} else {
+		writeInt8(writer, 1)
+		FfiConverterHfBackendHintINSTANCE.Write(writer, *value)
+	}
+}
+
+type FfiDestroyerOptionalHfBackendHint struct{}
+
+func (_ FfiDestroyerOptionalHfBackendHint) Destroy(value *HfBackendHint) {
+	if value != nil {
+		FfiDestroyerHfBackendHint{}.Destroy(*value)
+	}
+}
+
 type FfiConverterSequenceFloat64 struct{}
 
 var FfiConverterSequenceFloat64INSTANCE = FfiConverterSequenceFloat64{}
@@ -19647,6 +21484,53 @@ type FfiDestroyerSequenceMedia struct{}
 func (FfiDestroyerSequenceMedia) Destroy(sequence []Media) {
 	for _, value := range sequence {
 		FfiDestroyerMedia{}.Destroy(value)
+	}
+}
+
+type FfiConverterSequenceModelClientStatusRecord struct{}
+
+var FfiConverterSequenceModelClientStatusRecordINSTANCE = FfiConverterSequenceModelClientStatusRecord{}
+
+func (c FfiConverterSequenceModelClientStatusRecord) Lift(rb RustBufferI) []ModelClientStatusRecord {
+	return LiftFromRustBuffer[[]ModelClientStatusRecord](c, rb)
+}
+
+func (c FfiConverterSequenceModelClientStatusRecord) Read(reader io.Reader) []ModelClientStatusRecord {
+	length := readInt32(reader)
+	if length == 0 {
+		return nil
+	}
+	result := make([]ModelClientStatusRecord, 0, length)
+	for i := int32(0); i < length; i++ {
+		result = append(result, FfiConverterModelClientStatusRecordINSTANCE.Read(reader))
+	}
+	return result
+}
+
+func (c FfiConverterSequenceModelClientStatusRecord) Lower(value []ModelClientStatusRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[[]ModelClientStatusRecord](c, value)
+}
+
+func (c FfiConverterSequenceModelClientStatusRecord) LowerExternal(value []ModelClientStatusRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[[]ModelClientStatusRecord](c, value))
+}
+
+func (c FfiConverterSequenceModelClientStatusRecord) Write(writer io.Writer, value []ModelClientStatusRecord) {
+	if len(value) > math.MaxInt32 {
+		panic("[]ModelClientStatusRecord is too large to fit into Int32")
+	}
+
+	writeInt32(writer, int32(len(value)))
+	for _, item := range value {
+		FfiConverterModelClientStatusRecordINSTANCE.Write(writer, item)
+	}
+}
+
+type FfiDestroyerSequenceModelClientStatusRecord struct{}
+
+func (FfiDestroyerSequenceModelClientStatusRecord) Destroy(sequence []ModelClientStatusRecord) {
+	for _, value := range sequence {
+		FfiDestroyerModelClientStatusRecord{}.Destroy(value)
 	}
 }
 

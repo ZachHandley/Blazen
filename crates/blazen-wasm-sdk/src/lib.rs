@@ -48,6 +48,7 @@ pub mod memory;
 pub mod memory_types;
 pub mod middleware;
 pub mod model_abcs;
+pub mod model_client;
 pub mod model_registry;
 pub mod peer_http;
 pub mod pipeline;

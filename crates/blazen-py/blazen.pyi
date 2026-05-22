@@ -103,6 +103,7 @@ __all__ = [
     "FastEmbedError",
     "FastEmbedModel",
     "FastEmbedOptions",
+    "FetchBlobStream",
     "FileContent",
     "FinishReason",
     "FireworksProvider",
@@ -179,6 +180,7 @@ __all__ = [
     "Model",
     "ModelCache",
     "ModelCapabilities",
+    "ModelClient",
     "ModelInfo",
     "ModelManager",
     "ModelOptions",
@@ -275,6 +277,7 @@ __all__ = [
     "StreamChunk",
     "StreamChunkEvent",
     "StreamCompleteEvent",
+    "StreamCompleteStream",
     "StructuredOutput",
     "StructuredResponse",
     "SubWorkflowRequest",
@@ -4247,6 +4250,21 @@ class FastEmbedOptions:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class FetchBlobStream:
+    r"""
+    Async iterator over the [`FetchBlobChunk::Data`] payloads from a
+    `FetchBlob` server-stream.
+    
+    Mirrors [`PyStreamCompleteStream`]: the upstream RPC opens on the
+    first `__anext__` call and a spawned tokio task owns the
+    [`ModelClient`] clone for the stream's lifetime. `Start` / `End`
+    frames are consumed internally and never surface to Python — the
+    iterator yields raw chunk bytes only.
+    """
+    def __aiter__(self) -> FetchBlobStream: ...
+    async def __anext__(self) -> bytes: ...
+
+@typing.final
 class FileContent:
     r"""
     File / document content (PDFs and other documents) for multimodal messages.
@@ -7191,6 +7209,302 @@ class ModelCapabilities:
     @property
     def three_d_generation(self) -> builtins.bool: ...
     def __new__(cls, *, chat: builtins.bool = False, streaming: builtins.bool = False, tool_use: builtins.bool = False, structured_output: builtins.bool = False, vision: builtins.bool = False, image_generation: builtins.bool = False, embeddings: builtins.bool = False, video_generation: builtins.bool = False, text_to_speech: builtins.bool = False, speech_to_text: builtins.bool = False, audio_generation: builtins.bool = False, three_d_generation: builtins.bool = False) -> ModelCapabilities: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ModelClient:
+    r"""
+    gRPC client for a Blazen `BlazenModelServer`. Construct via
+    [`PyModelClient::connect`] or [`PyModelClient::connect_with_tls`].
+    
+    Cheaply cloneable on the Rust side; the Python wrapper guards a
+    single shared connection.
+    """
+    @classmethod
+    async def connect(cls, endpoint: builtins.str) -> ModelClient:
+        r"""
+        Open a plaintext gRPC connection to a Blazen model server.
+        
+        Args:
+            endpoint: gRPC URI, e.g. ``"http://model.example.com:7446"``.
+        
+        Raises:
+            ControlPlaneError: If the URI is invalid or the TCP / HTTP-2
+                handshake fails.
+        """
+    @classmethod
+    async def connect_with_tls(cls, endpoint: builtins.str, *, ca_cert: builtins.str, client_cert: typing.Optional[builtins.str] = None, client_key: typing.Optional[builtins.str] = None) -> ModelClient:
+        r"""
+        Open a TLS gRPC connection to a Blazen model server.
+        
+        Args:
+            endpoint: gRPC URI, typically ``"https://..."``.
+            ca_cert: Path to a PEM-encoded CA certificate trusted to sign
+                the server's leaf certificate.
+            client_cert: Optional path to a PEM client certificate for
+                mTLS. Must be supplied together with ``client_key``.
+            client_key: Optional path to the matching PEM client private
+                key. Must be supplied together with ``client_cert``.
+        
+        Raises:
+            ControlPlaneError: If a PEM file cannot be read, the resulting
+                TLS config is rejected, the URI is invalid, or the
+                handshake fails.
+        """
+    async def status(self, model_id: typing.Optional[builtins.str] = None) -> dict:
+        r"""
+        Fetch a snapshot of every model registered on the server.
+        
+        Args:
+            model_id: Reserved for future use (the underlying RPC takes no
+                filter today). Accepted but ignored so callers can already
+                pass a hint forward.
+        
+        Returns:
+            A dict ``{"envelope_version": int, "models": list[dict]}``
+            where each model dict carries ``id``, ``loaded``,
+            ``memory_estimate_bytes``, ``pool`` (one of ``"cpu"``,
+            ``"gpu:<index>"``, ``"remote"``), and ``adapters`` (a list of
+            ``{adapter_id, scale, source_dir, memory_bytes}`` dicts).
+        """
+    async def is_loaded(self, model_id: builtins.str) -> bool:
+        r"""
+        Check whether a single model is currently loaded.
+        
+        Args:
+            model_id: Identifier under which the model was registered.
+        
+        Returns:
+            ``True`` if the model is loaded, ``False`` otherwise.
+        """
+    async def load(self, request: dict) -> dict:
+        r"""
+        Issue a `Load` RPC.
+        
+        Args:
+            request: ``{"model_id": str}``. The envelope version is filled
+                in automatically.
+        
+        Returns:
+            ``{"envelope_version": int}``.
+        """
+    async def unload(self, request: dict) -> dict:
+        r"""
+        Issue an `Unload` RPC.
+        
+        Args:
+            request: ``{"model_id": str}``.
+        
+        Returns:
+            ``{"envelope_version": int}``.
+        """
+    async def load_from_hf(self, request: dict) -> dict:
+        r"""
+        Issue a `LoadFromHf` RPC.
+        
+        Args:
+            request: dict with required ``model_id`` and ``repo``, and
+                optional ``memory_estimate_bytes`` (int), ``backend_hint``
+                (one of ``"auto"``, ``"mistral_rs"``, ``"candle"``,
+                ``"llama_cpp"``), ``gguf_file`` (str), ``revision`` (str),
+                ``hf_token`` (str), and ``extra_options_json`` (str — raw
+                JSON, empty string for none).
+        
+        Returns:
+            ``{"envelope_version": int, "chosen_backend": str}`` where
+            ``chosen_backend`` is one of ``"auto"``, ``"mistral_rs"``,
+            ``"candle"``, ``"llama_cpp"``.
+        """
+    async def load_adapter(self, request: dict) -> dict:
+        r"""
+        Issue a `LoadAdapter` RPC.
+        
+        Args:
+            request: dict with required ``model_id`` (str),
+                ``adapter_dir`` (str), ``adapter_id`` (str), and ``scale``
+                (float).
+        
+        Returns:
+            ``{"envelope_version": int, "adapter_id": str,
+               "memory_bytes": int, "mount_strategy": str}`` where
+            ``mount_strategy`` is one of ``"attached"``, ``"rebuilt"``,
+            ``"merged"``.
+        """
+    async def unload_adapter(self, request: dict) -> dict:
+        r"""
+        Issue an `UnloadAdapter` RPC.
+        
+        Args:
+            request: ``{"model_id": str, "adapter_id": str}``.
+        
+        Returns:
+            ``{"envelope_version": int}``.
+        """
+    async def list_adapters(self, request: dict) -> dict:
+        r"""
+        Issue a `ListAdapters` RPC.
+        
+        Args:
+            request: ``{"model_id": str}``.
+        
+        Returns:
+            ``{"envelope_version": int, "adapters": list[dict]}`` — each
+            adapter dict carries ``adapter_id``, ``scale``, ``source_dir``,
+            ``memory_bytes``.
+        """
+    async def complete(self, request: dict) -> dict:
+        r"""
+        Issue a `Complete` RPC.
+        
+        Args:
+            request: dict with required ``model_id`` (str) and ``messages``
+                (list of ``{"role": str, "text": str, "content_json": str}``
+                where ``content_json`` is optional raw JSON). Optional
+                keys: ``max_tokens`` (int), ``temperature`` (float),
+                ``top_p`` (float), ``stop`` (list[str]),
+                ``response_format_json`` (str — raw JSON, empty for none),
+                ``extra_json`` (str — raw JSON, empty for none), and
+                ``tags`` (dict[str, str]).
+        
+        Returns:
+            ``{"envelope_version": int, "text": str,
+               "prompt_tokens": int|None, "completion_tokens": int|None,
+               "finish_reason": str|None, "tool_calls_json": str}``.
+        """
+    def stream_complete(self, request: dict) -> typing.AsyncIterator[dict]:
+        r"""
+        Issue a `StreamComplete` server-streaming RPC.
+        
+        Returns an async iterator that yields one dict per chunk until
+        the server closes the stream. Each dict carries a ``kind`` field:
+        
+        * ``{"kind": "delta", "envelope_version": int, "text": str}`` —
+          incremental token group emitted by the backend.
+        * ``{"kind": "done", "envelope_version": int,
+             "prompt_tokens": int|None, "completion_tokens": int|None,
+             "finish_reason": str|None}`` — terminal frame.
+        
+        Args:
+            request: identical schema to :meth:`complete`.
+        
+        Raises:
+            ControlPlaneError: If the initial RPC fails or a frame
+                arrives that cannot be decoded.
+        """
+    async def embed(self, request: dict) -> dict:
+        r"""
+        Issue an `Embed` RPC.
+        
+        Args:
+            request: dict with required ``model_id`` (str) and ``inputs``
+                (list[str]). Optional ``dimensions`` (int) and
+                ``extra_json`` (str — raw JSON, empty for none).
+        
+        Returns:
+            ``{"envelope_version": int, "vectors": list[list[float]],
+               "prompt_tokens": int|None}``.
+        """
+    async def generate_image(self, request: dict) -> dict:
+        r"""
+        Issue a `GenerateImage` RPC.
+        
+        Args:
+            request: dict with required ``model_id`` (str) and ``prompt``
+                (str). Optional ``negative_prompt`` (str), ``width`` (int),
+                ``height`` (int), ``num_images`` (int), ``seed`` (int), and
+                ``image_config_json`` (str — raw JSON, empty for none).
+        
+        Returns:
+            ``{"envelope_version": int, "images": list[dict]}`` where each
+            image dict is ``{"mime": str, "data": bytes}``.
+        """
+    async def text_to_speech(self, request: dict) -> dict:
+        r"""
+        Issue a `TextToSpeech` RPC.
+        
+        Args:
+            request: dict with required ``model_id`` (str) and ``text``
+                (str). Optional ``voice`` (str), ``language`` (str),
+                ``sample_rate_hz`` (int), and ``audio_config_json`` (str —
+                raw JSON, empty for none).
+        
+        Returns:
+            ``{"envelope_version": int, "mime": str, "data": bytes,
+               "sample_rate_hz": int|None}``.
+        """
+    async def generate_music(self, request: dict) -> dict:
+        r"""
+        Issue a `GenerateMusic` RPC.
+        
+        Args:
+            request: dict with required ``model_id`` (str) and ``prompt``
+                (str). Optional ``duration_secs`` (float), ``seed`` (int),
+                and ``extra_json`` (str — raw JSON, empty for none).
+        
+        Returns:
+            ``{"envelope_version": int, "mime": str, "data": bytes,
+               "sample_rate_hz": int|None}``.
+        """
+    async def transcribe(self, request: dict) -> dict:
+        r"""
+        Issue a `Transcribe` RPC.
+        
+        Args:
+            request: dict with required ``model_id`` (str), ``audio``
+                (bytes — raw audio matching ``mime``), and ``mime`` (str).
+                Optional ``language`` (str) and ``extra_json`` (str — raw
+                JSON, empty for none).
+        
+        Returns:
+            ``{"envelope_version": int, "text": str,
+               "language": str|None, "segments_json": str}``.
+        """
+    async def upload_blob(self, chunks: typing.Any, *, blob_id: builtins.str = '', mime: builtins.str = '') -> dict:
+        r"""
+        Upload a blob via the `UploadBlob` client-streaming RPC.
+        
+        The supplied async iterator must yield ``bytes`` (or any
+        buffer-protocol object) one chunk at a time. The Rust side
+        prepends an [`UploadBlobChunk::Start`] frame with the given
+        ``blob_id`` / ``mime`` and appends a terminal
+        [`UploadBlobChunk::End`] after the iterator is exhausted.
+        
+        Args:
+            chunks: async iterator (anything implementing
+                ``__aiter__``/``__anext__``) yielding ``bytes``-like
+                objects.
+            blob_id: caller-chosen blob id. Empty string is allowed but
+                server policy may reject it.
+            mime: optional MIME / content-type hint. Empty string omits
+                the field on the wire (``content_type: None``).
+        
+        Returns:
+            ``{"envelope_version": int, "blob_id": str,
+               "bytes_received": int}`` once the server reads ``End``.
+        
+        Raises:
+            ControlPlaneError: If the upstream RPC fails.
+            TypeError: If the iterator yields a non-bytes-like value.
+        """
+    def fetch_blob(self, request: dict) -> typing.AsyncIterator[bytes]:
+        r"""
+        Fetch a blob via the `FetchBlob` server-streaming RPC.
+        
+        Returns an async iterator that yields one ``bytes`` per
+        [`FetchBlobChunk::Data`] frame received from the server. The
+        initial ``Start`` and terminal ``End`` envelope frames are
+        consumed internally and not surfaced to Python — callers see
+        only the body bytes, ordered as they arrive.
+        
+        Args:
+            request: dict with required ``blob_id`` (str) and optional
+                ``offset`` (int) and ``chunk_size`` (int — per-frame
+                hint).
+        
+        Raises:
+            ControlPlaneError: If the initial RPC fails or a frame
+                arrives that cannot be decoded.
+        """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -10496,6 +10810,20 @@ class StreamCompleteEvent:
         Construct a stream-complete event.
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class StreamCompleteStream:
+    r"""
+    Async iterator over [`StreamCompleteChunk`]s.
+    
+    Mirrors the lazy-init pattern used by
+    [`super::client::PyRunEventStream`]: the upstream RPC is opened on
+    the first `__anext__` call, and a tokio task owns a clone of the
+    `ModelClient` so the borrowed stream stays valid for the receiver's
+    lifetime.
+    """
+    def __aiter__(self) -> StreamCompleteStream: ...
+    async def __anext__(self) -> dict: ...
 
 class StructuredOutput:
     r"""

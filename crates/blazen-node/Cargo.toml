@@ -112,9 +112,10 @@ blazen-llm = { workspace = true, features = ["reqwest"] }
 blazen-memory-valkey = { workspace = true, features = ["redis-tcp", "upstash"] }
 blazen-peer = { workspace = true, features = ["server", "client", "http-transport"] }
 blazen-persist = { workspace = true, features = ["redb", "valkey"] }
-blazen-controlplane = { workspace = true, default-features = false, features = ["client"] }
+blazen-controlplane = { workspace = true, default-features = false, features = ["client", "model-client"] }
 tokio = { workspace = true }
 tokio-util = { workspace = true }
+tonic = { workspace = true }
 
 [target.'cfg(target_os = "wasi")'.dependencies]
 blazen-memory-valkey = { version = "0.0.0-dev", path = "../blazen-memory-valkey", registry = "forgejo", default-features = false, features = ["upstash"] }

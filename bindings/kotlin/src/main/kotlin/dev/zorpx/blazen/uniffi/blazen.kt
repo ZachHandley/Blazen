@@ -1654,6 +1654,40 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_method_uniffiratedjsonldataset_len(): Short
 
+    external fun uniffi_blazen_uniffi_checksum_method_modelclient_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_modelclient_embed(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_modelclient_fetch_blob(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_modelclient_generate_image(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_modelclient_generate_music(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_modelclient_is_loaded(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_modelclient_list_adapters(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_modelclient_load(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_modelclient_load_adapter(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_modelclient_load_from_hf(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_modelclient_status(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_modelclient_stream_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_modelclient_text_to_speech(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_modelclient_transcribe(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_modelclient_unload(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_modelclient_unload_adapter(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_modelclient_upload_blob(): Short
+
     external fun uniffi_blazen_uniffi_checksum_method_peerclient_node_id(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_peerclient_run_remote_workflow(): Short
@@ -1835,6 +1869,10 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_blazen_uniffi_checksum_constructor_uniffipreferencejsonldataset_from_path(): Short
 
     external fun uniffi_blazen_uniffi_checksum_constructor_uniffiratedjsonldataset_from_path(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_modelclient_connect(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_modelclient_connect_with_tls(): Short
 
     external fun uniffi_blazen_uniffi_checksum_constructor_peerclient_connect(): Short
 
@@ -2500,6 +2538,113 @@ internal object UniffiLib {
     external fun uniffi_blazen_uniffi_fn_method_uniffiratedjsonldataset_len(
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_clone_modelclient(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_modelclient(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_modelclient_connect(`endpoint`: RustBuffer.ByValue): Long
+
+    external fun uniffi_blazen_uniffi_fn_constructor_modelclient_connect_with_tls(
+        `endpoint`: RustBuffer.ByValue,
+        `caCertPem`: RustBuffer.ByValue,
+        `clientCertPem`: RustBuffer.ByValue,
+        `clientKeyPem`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_modelclient_complete(
+        `ptr`: Long,
+        `requestJson`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_modelclient_embed(
+        `ptr`: Long,
+        `requestJson`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_modelclient_fetch_blob(
+        `ptr`: Long,
+        `requestJson`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_modelclient_generate_image(
+        `ptr`: Long,
+        `requestJson`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_modelclient_generate_music(
+        `ptr`: Long,
+        `requestJson`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_modelclient_is_loaded(
+        `ptr`: Long,
+        `modelId`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_modelclient_list_adapters(
+        `ptr`: Long,
+        `requestJson`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_modelclient_load(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_modelclient_load_adapter(
+        `ptr`: Long,
+        `requestJson`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_modelclient_load_from_hf(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_modelclient_status(
+        `ptr`: Long,
+        `modelId`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_modelclient_stream_complete(
+        `ptr`: Long,
+        `requestJson`: RustBuffer.ByValue,
+        `sink`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_modelclient_text_to_speech(
+        `ptr`: Long,
+        `requestJson`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_modelclient_transcribe(
+        `ptr`: Long,
+        `requestJson`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_modelclient_unload(
+        `ptr`: Long,
+        `modelId`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_modelclient_unload_adapter(
+        `ptr`: Long,
+        `requestJson`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_modelclient_upload_blob(
+        `ptr`: Long,
+        `blobId`: RustBuffer.ByValue,
+        `mime`: RustBuffer.ByValue,
+        `data`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_blazen_uniffi_fn_clone_peerclient(
@@ -4013,6 +4158,57 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_uniffiratedjsonldataset_len() != 48605.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_blazen_uniffi_checksum_method_modelclient_complete() != 42969.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_modelclient_embed() != 27994.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_modelclient_fetch_blob() != 31110.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_modelclient_generate_image() != 64354.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_modelclient_generate_music() != 17866.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_modelclient_is_loaded() != 2818.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_modelclient_list_adapters() != 9453.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_modelclient_load() != 64540.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_modelclient_load_adapter() != 33876.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_modelclient_load_from_hf() != 27748.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_modelclient_status() != 46116.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_modelclient_stream_complete() != 49585.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_modelclient_text_to_speech() != 48656.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_modelclient_transcribe() != 48760.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_modelclient_unload() != 6162.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_modelclient_unload_adapter() != 26088.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_modelclient_upload_blob() != 1673.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_blazen_uniffi_checksum_method_peerclient_node_id() != 16043.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -4284,6 +4480,12 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_constructor_uniffiratedjsonldataset_from_path() != 20887.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_modelclient_connect() != 48616.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_modelclient_connect_with_tls() != 61737.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_constructor_peerclient_connect() != 36996.toShort()) {
@@ -4826,6 +5028,28 @@ public object FfiConverterString : FfiConverter<String, RustBuffer.ByValue> {
         val byteBuf = toUtf8(value)
         buf.putInt(byteBuf.limit())
         buf.put(byteBuf)
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterByteArray : FfiConverterRustBuffer<ByteArray> {
+    override fun read(buf: ByteBuffer): ByteArray {
+        val len = buf.getInt()
+        val byteArr = ByteArray(len)
+        buf.get(byteArr)
+        return byteArr
+    }
+
+    override fun allocationSize(value: ByteArray): ULong = 4UL + value.size.toULong()
+
+    override fun write(
+        value: ByteArray,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        buf.put(value)
     }
 }
 
@@ -13172,6 +13396,1139 @@ public object FfiConverterTypeModel : FfiConverter<Model, Long> {
 //
 
 /**
+ * gRPC client for the `BlazenModelServer` service, exposed to Go /
+ * Swift / Kotlin / Ruby via UniFFI.
+ *
+ * Wraps [`blazen_controlplane::ModelClient`] one-to-one; the upstream
+ * type is already cheaply cloneable and serialises concurrent RPCs
+ * internally, so the wrapper does not need its own mutex.
+ */
+public interface ModelClientInterface {
+    /**
+     * Issue a non-streaming completion.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::CompleteRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::CompleteResponse`].
+     *
+     * For streaming completions use a future wave's `stream_complete`
+     * surface — this method always buffers the full response.
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    suspend fun `complete`(`requestJson`: kotlin.String): kotlin.String
+
+    /**
+     * Compute embeddings for one or more inputs.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::EmbedRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::EmbedResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    suspend fun `embed`(`requestJson`: kotlin.String): kotlin.String
+
+    /**
+     * Fetch a blob in one shot.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::FetchBlobRequest`]; the
+     * `envelope_version` field is filled in automatically. The whole
+     * response stream is buffered in memory: each
+     * [`FetchBlobChunk::Data`] frame's bytes are concatenated and returned
+     * as a single `Vec<u8>`; `Start` and `End` frames carry only metadata
+     * and are not surfaced through this API.
+     *
+     * Callers that need to stream multi-gigabyte blobs without buffering
+     * should drive [`blazen_controlplane::ModelClient::fetch_blob`]
+     * directly from Rust.
+     *
+     * # Errors
+     * Returns [`BlazenError::Validation`] when the request JSON cannot be
+     * parsed; [`BlazenError::Peer`] for control-plane / transport failures
+     * (either starting the stream or mid-stream).
+     */
+    suspend fun `fetchBlob`(`requestJson`: kotlin.String): kotlin.ByteArray
+
+    /**
+     * Generate one or more images.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::GenerateImageRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::GenerateImageResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    suspend fun `generateImage`(`requestJson`: kotlin.String): kotlin.String
+
+    /**
+     * Generate music from a textual prompt.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::GenerateMusicRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::GenerateMusicResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    suspend fun `generateMusic`(`requestJson`: kotlin.String): kotlin.String
+
+    /**
+     * Liveness check for a single model.
+     *
+     * # Errors
+     * See [`Self::status`].
+     */
+    suspend fun `isLoaded`(`modelId`: kotlin.String): kotlin.Boolean
+
+    /**
+     * List adapters mounted on a model.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::ListAdaptersRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::ListAdaptersResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    suspend fun `listAdapters`(`requestJson`: kotlin.String): kotlin.String
+
+    /**
+     * Load a previously-registered model into its pool.
+     *
+     * # Errors
+     * Returns [`BlazenError::Peer`] (`ControlPlaneTransport` /
+     * `ControlPlaneRpc`) for wire or model-layer failures (e.g. unknown
+     * `model_id`).
+     */
+    suspend fun `load`(`request`: LoadRecord): LoadResultRecord
+
+    /**
+     * Mount a LoRA / adapter onto a loaded model.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::LoadAdapterRequest`]; the
+     * `envelope_version` field is filled in automatically and may be
+     * omitted by the caller. Returns the JSON form of
+     * [`blazen_controlplane::model_protocol::LoadAdapterResponse`].
+     *
+     * # Errors
+     * Returns [`BlazenError::Validation`] when the request JSON cannot be
+     * parsed or the response cannot be serialized;
+     * [`BlazenError::Peer`] for control-plane / transport failures.
+     */
+    suspend fun `loadAdapter`(`requestJson`: kotlin.String): kotlin.String
+
+    /**
+     * Register-and-load a model directly from a Hugging Face Hub repo.
+     * Returns the backend the loader chose (never
+     * [`HfBackendHint::Auto`]).
+     *
+     * # Errors
+     * See [`Self::load`]. Additionally surfaces loader-side failures
+     * (HF fetch errors, unsupported repo layouts) via
+     * `BlazenError::Peer` with `kind = "ControlPlaneRpc"`.
+     */
+    suspend fun `loadFromHf`(`request`: LoadFromHfRecord): LoadResultRecord
+
+    /**
+     * Fetch the server's view of registered models.
+     *
+     * When `model_id` is `Some(id)`, the response is filtered to just
+     * that model (empty `models` vec if the id is unknown). When
+     * `None`, every registered model is returned.
+     *
+     * # Errors
+     * Returns [`BlazenError::Peer`] (`ControlPlaneTransport` /
+     * `ControlPlaneRpc`) for wire or model-layer failures.
+     */
+    suspend fun `status`(`modelId`: kotlin.String?): StatusRecord
+
+    /**
+     * Issue a streaming completion, delivering each token-delta to `sink`.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::CompleteRequest`]; the
+     * `envelope_version` field is filled in automatically. As frames arrive
+     * from the server, the [`StreamCompleteChunk::Delta`]'s `text` is
+     * forwarded to [`CompletionStreamSink::on_chunk`] as the chunk's
+     * `content_delta`; the terminal [`StreamCompleteChunk::Done`] triggers
+     * [`CompletionStreamSink::on_done`] with the reported `finish_reason`
+     * (empty string when the provider didn't supply one) and a
+     * [`TokenUsage`] built from the `prompt_tokens` / `completion_tokens`
+     * fields.
+     *
+     * Errors observed mid-stream are *delivered* via
+     * [`CompletionStreamSink::on_error`] and the method returns `Ok(())`,
+     * mirroring the symmetry of
+     * [`crate::streaming::complete_streaming`]: the sink owns both
+     * happy-path and error-path observation. The only way this method
+     * itself returns `Err` is when the initial request JSON cannot be
+     * parsed or the upstream `stream_complete` call fails to *start* the
+     * stream.
+     *
+     * Reuses the existing text-only [`CompletionStreamSink`] so Go / Swift
+     * / Kotlin / Ruby callers see a uniform streaming surface across both
+     * the in-process [`crate::llm::Model`] path and the gRPC
+     * [`ModelClient`] path. The wire-level
+     * [`StreamCompleteChunk`] carries only `text` payloads today (no
+     * per-frame tool-call deltas, citations, or reasoning trace), so the
+     * text-only sink loses no information; if a future wire schema grows
+     * structured fields, callers that need them should drive the gRPC
+     * client directly.
+     *
+     * # Errors
+     * Returns [`BlazenError::Validation`] when the request JSON cannot be
+     * parsed; [`BlazenError::Peer`] for control-plane / transport failures
+     * starting the stream.
+     */
+    suspend fun `streamComplete`(
+        `requestJson`: kotlin.String,
+        `sink`: CompletionStreamSink,
+    )
+
+    /**
+     * Synthesize speech from text.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::TextToSpeechRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::TextToSpeechResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    suspend fun `textToSpeech`(`requestJson`: kotlin.String): kotlin.String
+
+    /**
+     * Transcribe audio to text.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::TranscribeRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::TranscribeResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    suspend fun `transcribe`(`requestJson`: kotlin.String): kotlin.String
+
+    /**
+     * Drop a previously-loaded model from memory.
+     *
+     * # Errors
+     * See [`Self::load`].
+     */
+    suspend fun `unload`(`modelId`: kotlin.String)
+
+    /**
+     * Drop a previously-mounted adapter.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::UnloadAdapterRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::UnloadAdapterResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    suspend fun `unloadAdapter`(`requestJson`: kotlin.String): kotlin.String
+
+    /**
+     * Upload a blob in one shot.
+     *
+     * The entire `data` payload is buffered in memory and sent as a single
+     * `UploadBlobChunk::Data` frame between a `Start` (carrying `blob_id`
+     * + `mime`) and `End` frame. Returns the JSON form of
+     * [`blazen_controlplane::model_protocol::UploadBlobResponse`] (the
+     * server's ack, echoing the blob id + bytes received).
+     *
+     * This buffered surface is the simple path for the UniFFI bindings —
+     * the whole payload must fit in process memory on both sides. Callers
+     * pushing multi-gigabyte blobs (e.g. base model weights) should drive
+     * [`blazen_controlplane::ModelClient::upload_blob`] directly from Rust
+     * where they can construct the chunk stream incrementally.
+     *
+     * # Errors
+     * Returns [`BlazenError::Peer`] for control-plane / transport
+     * failures, or [`BlazenError::Validation`] when the response cannot be
+     * serialized.
+     */
+    suspend fun `uploadBlob`(
+        `blobId`: kotlin.String,
+        `mime`: kotlin.String,
+        `data`: kotlin.ByteArray,
+    ): kotlin.String
+
+    companion object
+}
+
+/**
+ * gRPC client for the `BlazenModelServer` service, exposed to Go /
+ * Swift / Kotlin / Ruby via UniFFI.
+ *
+ * Wraps [`blazen_controlplane::ModelClient`] one-to-one; the upstream
+ * type is already cheaply cloneable and serialises concurrent RPCs
+ * internally, so the wrapper does not need its own mutex.
+ */
+open class ModelClient :
+    Disposable,
+    AutoCloseable,
+    ModelClientInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_modelclient(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_modelclient(handle, status)
+        }
+    }
+
+    /**
+     * Issue a non-streaming completion.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::CompleteRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::CompleteResponse`].
+     *
+     * For streaming completions use a future wave's `stream_complete`
+     * surface — this method always buffers the full response.
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`requestJson`: kotlin.String): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_modelclient_complete(
+                    uniffiHandle,
+                    FfiConverterString.lower(`requestJson`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Compute embeddings for one or more inputs.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::EmbedRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::EmbedResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `embed`(`requestJson`: kotlin.String): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_modelclient_embed(
+                    uniffiHandle,
+                    FfiConverterString.lower(`requestJson`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Fetch a blob in one shot.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::FetchBlobRequest`]; the
+     * `envelope_version` field is filled in automatically. The whole
+     * response stream is buffered in memory: each
+     * [`FetchBlobChunk::Data`] frame's bytes are concatenated and returned
+     * as a single `Vec<u8>`; `Start` and `End` frames carry only metadata
+     * and are not surfaced through this API.
+     *
+     * Callers that need to stream multi-gigabyte blobs without buffering
+     * should drive [`blazen_controlplane::ModelClient::fetch_blob`]
+     * directly from Rust.
+     *
+     * # Errors
+     * Returns [`BlazenError::Validation`] when the request JSON cannot be
+     * parsed; [`BlazenError::Peer`] for control-plane / transport failures
+     * (either starting the stream or mid-stream).
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `fetchBlob`(`requestJson`: kotlin.String): kotlin.ByteArray =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_modelclient_fetch_blob(
+                    uniffiHandle,
+                    FfiConverterString.lower(`requestJson`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterByteArray.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Generate one or more images.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::GenerateImageRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::GenerateImageResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `generateImage`(`requestJson`: kotlin.String): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_modelclient_generate_image(
+                    uniffiHandle,
+                    FfiConverterString.lower(`requestJson`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Generate music from a textual prompt.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::GenerateMusicRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::GenerateMusicResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `generateMusic`(`requestJson`: kotlin.String): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_modelclient_generate_music(
+                    uniffiHandle,
+                    FfiConverterString.lower(`requestJson`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Liveness check for a single model.
+     *
+     * # Errors
+     * See [`Self::status`].
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `isLoaded`(`modelId`: kotlin.String): kotlin.Boolean =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_modelclient_is_loaded(
+                    uniffiHandle,
+                    FfiConverterString.lower(`modelId`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_i8(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_i8(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_i8(future) },
+            // lift function
+            { FfiConverterBoolean.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * List adapters mounted on a model.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::ListAdaptersRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::ListAdaptersResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `listAdapters`(`requestJson`: kotlin.String): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_modelclient_list_adapters(
+                    uniffiHandle,
+                    FfiConverterString.lower(`requestJson`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Load a previously-registered model into its pool.
+     *
+     * # Errors
+     * Returns [`BlazenError::Peer`] (`ControlPlaneTransport` /
+     * `ControlPlaneRpc`) for wire or model-layer failures (e.g. unknown
+     * `model_id`).
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `load`(`request`: LoadRecord): LoadResultRecord =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_modelclient_load(
+                    uniffiHandle,
+                    FfiConverterTypeLoadRecord.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeLoadResultRecord.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Mount a LoRA / adapter onto a loaded model.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::LoadAdapterRequest`]; the
+     * `envelope_version` field is filled in automatically and may be
+     * omitted by the caller. Returns the JSON form of
+     * [`blazen_controlplane::model_protocol::LoadAdapterResponse`].
+     *
+     * # Errors
+     * Returns [`BlazenError::Validation`] when the request JSON cannot be
+     * parsed or the response cannot be serialized;
+     * [`BlazenError::Peer`] for control-plane / transport failures.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `loadAdapter`(`requestJson`: kotlin.String): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_modelclient_load_adapter(
+                    uniffiHandle,
+                    FfiConverterString.lower(`requestJson`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Register-and-load a model directly from a Hugging Face Hub repo.
+     * Returns the backend the loader chose (never
+     * [`HfBackendHint::Auto`]).
+     *
+     * # Errors
+     * See [`Self::load`]. Additionally surfaces loader-side failures
+     * (HF fetch errors, unsupported repo layouts) via
+     * `BlazenError::Peer` with `kind = "ControlPlaneRpc"`.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `loadFromHf`(`request`: LoadFromHfRecord): LoadResultRecord =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_modelclient_load_from_hf(
+                    uniffiHandle,
+                    FfiConverterTypeLoadFromHfRecord.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeLoadResultRecord.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Fetch the server's view of registered models.
+     *
+     * When `model_id` is `Some(id)`, the response is filtered to just
+     * that model (empty `models` vec if the id is unknown). When
+     * `None`, every registered model is returned.
+     *
+     * # Errors
+     * Returns [`BlazenError::Peer`] (`ControlPlaneTransport` /
+     * `ControlPlaneRpc`) for wire or model-layer failures.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `status`(`modelId`: kotlin.String?): StatusRecord =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_modelclient_status(
+                    uniffiHandle,
+                    FfiConverterOptionalString.lower(`modelId`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeStatusRecord.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Issue a streaming completion, delivering each token-delta to `sink`.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::CompleteRequest`]; the
+     * `envelope_version` field is filled in automatically. As frames arrive
+     * from the server, the [`StreamCompleteChunk::Delta`]'s `text` is
+     * forwarded to [`CompletionStreamSink::on_chunk`] as the chunk's
+     * `content_delta`; the terminal [`StreamCompleteChunk::Done`] triggers
+     * [`CompletionStreamSink::on_done`] with the reported `finish_reason`
+     * (empty string when the provider didn't supply one) and a
+     * [`TokenUsage`] built from the `prompt_tokens` / `completion_tokens`
+     * fields.
+     *
+     * Errors observed mid-stream are *delivered* via
+     * [`CompletionStreamSink::on_error`] and the method returns `Ok(())`,
+     * mirroring the symmetry of
+     * [`crate::streaming::complete_streaming`]: the sink owns both
+     * happy-path and error-path observation. The only way this method
+     * itself returns `Err` is when the initial request JSON cannot be
+     * parsed or the upstream `stream_complete` call fails to *start* the
+     * stream.
+     *
+     * Reuses the existing text-only [`CompletionStreamSink`] so Go / Swift
+     * / Kotlin / Ruby callers see a uniform streaming surface across both
+     * the in-process [`crate::llm::Model`] path and the gRPC
+     * [`ModelClient`] path. The wire-level
+     * [`StreamCompleteChunk`] carries only `text` payloads today (no
+     * per-frame tool-call deltas, citations, or reasoning trace), so the
+     * text-only sink loses no information; if a future wire schema grows
+     * structured fields, callers that need them should drive the gRPC
+     * client directly.
+     *
+     * # Errors
+     * Returns [`BlazenError::Validation`] when the request JSON cannot be
+     * parsed; [`BlazenError::Peer`] for control-plane / transport failures
+     * starting the stream.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `streamComplete`(
+        `requestJson`: kotlin.String,
+        `sink`: CompletionStreamSink,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_blazen_uniffi_fn_method_modelclient_stream_complete(
+                uniffiHandle,
+                FfiConverterString.lower(`requestJson`),
+                FfiConverterTypeCompletionStreamSink.lower(`sink`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        BlazenException.ErrorHandler,
+    )
+
+    /**
+     * Synthesize speech from text.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::TextToSpeechRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::TextToSpeechResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `textToSpeech`(`requestJson`: kotlin.String): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_modelclient_text_to_speech(
+                    uniffiHandle,
+                    FfiConverterString.lower(`requestJson`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Transcribe audio to text.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::TranscribeRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::TranscribeResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `transcribe`(`requestJson`: kotlin.String): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_modelclient_transcribe(
+                    uniffiHandle,
+                    FfiConverterString.lower(`requestJson`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Drop a previously-loaded model from memory.
+     *
+     * # Errors
+     * See [`Self::load`].
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `unload`(`modelId`: kotlin.String) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_modelclient_unload(
+                    uniffiHandle,
+                    FfiConverterString.lower(`modelId`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Drop a previously-mounted adapter.
+     *
+     * `request_json` is the JSON form of
+     * [`blazen_controlplane::model_protocol::UnloadAdapterRequest`]; the
+     * `envelope_version` field is filled in automatically. Returns the
+     * JSON form of
+     * [`blazen_controlplane::model_protocol::UnloadAdapterResponse`].
+     *
+     * # Errors
+     * See [`Self::load_adapter`].
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `unloadAdapter`(`requestJson`: kotlin.String): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_modelclient_unload_adapter(
+                    uniffiHandle,
+                    FfiConverterString.lower(`requestJson`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Upload a blob in one shot.
+     *
+     * The entire `data` payload is buffered in memory and sent as a single
+     * `UploadBlobChunk::Data` frame between a `Start` (carrying `blob_id`
+     * + `mime`) and `End` frame. Returns the JSON form of
+     * [`blazen_controlplane::model_protocol::UploadBlobResponse`] (the
+     * server's ack, echoing the blob id + bytes received).
+     *
+     * This buffered surface is the simple path for the UniFFI bindings —
+     * the whole payload must fit in process memory on both sides. Callers
+     * pushing multi-gigabyte blobs (e.g. base model weights) should drive
+     * [`blazen_controlplane::ModelClient::upload_blob`] directly from Rust
+     * where they can construct the chunk stream incrementally.
+     *
+     * # Errors
+     * Returns [`BlazenError::Peer`] for control-plane / transport
+     * failures, or [`BlazenError::Validation`] when the response cannot be
+     * serialized.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `uploadBlob`(
+        `blobId`: kotlin.String,
+        `mime`: kotlin.String,
+        `data`: kotlin.ByteArray,
+    ): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_modelclient_upload_blob(
+                    uniffiHandle,
+                    FfiConverterString.lower(`blobId`),
+                    FfiConverterString.lower(`mime`),
+                    FfiConverterByteArray.lower(`data`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    companion object {
+        /**
+         * Open a plaintext connection to a `BlazenModelServer` at
+         * `endpoint` (e.g. `"http://127.0.0.1:7070"`).
+         *
+         * # Errors
+         * Returns a [`BlazenError::Peer`] with `kind =
+         * "ControlPlaneTransport"` when the endpoint URI is invalid or the
+         * TCP / HTTP-2 handshake fails.
+         */
+        @Throws(BlazenException::class)
+        @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+        suspend fun `connect`(`endpoint`: kotlin.String): ModelClient =
+            uniffiRustCallAsync(
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_modelclient_connect(FfiConverterString.lower(`endpoint`)),
+                { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_u64(future, callback, continuation) },
+                { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_u64(future, continuation) },
+                { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_u64(future) },
+                // lift function
+                { FfiConverterTypeModelClient.lift(it) },
+                // Error FFI converter
+                BlazenException.ErrorHandler,
+            )
+
+        /**
+         * Open a TLS / mTLS connection. `ca_cert_pem` is the trust root
+         * the client uses to verify the server; `client_cert_pem` and
+         * `client_key_pem` are the client identity for mutual TLS (pass
+         * both or neither).
+         *
+         * # Errors
+         * Returns a [`BlazenError::Peer`] with `kind = "ControlPlaneTls"`
+         * when the PEM material can't be parsed, or with
+         * `kind = "ControlPlaneTransport"` for handshake failures.
+         * [`BlazenError::Validation`] if exactly one of `client_cert_pem`
+         * / `client_key_pem` is supplied.
+         */
+        @Throws(BlazenException::class)
+        @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+        suspend fun `connectWithTls`(
+            `endpoint`: kotlin.String,
+            `caCertPem`: kotlin.String,
+            `clientCertPem`: kotlin.String?,
+            `clientKeyPem`: kotlin.String?,
+        ): ModelClient =
+            uniffiRustCallAsync(
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_modelclient_connect_with_tls(
+                    FfiConverterString.lower(`endpoint`),
+                    FfiConverterString.lower(`caCertPem`),
+                    FfiConverterOptionalString.lower(`clientCertPem`),
+                    FfiConverterOptionalString.lower(`clientKeyPem`),
+                ),
+                { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_u64(future, callback, continuation) },
+                { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_u64(future, continuation) },
+                { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_u64(future) },
+                // lift function
+                { FfiConverterTypeModelClient.lift(it) },
+                // Error FFI converter
+                BlazenException.ErrorHandler,
+            )
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeModelClient : FfiConverter<ModelClient, Long> {
+    override fun lower(value: ModelClient): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): ModelClient = ModelClient(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): ModelClient = lift(buf.getLong())
+
+    override fun allocationSize(value: ModelClient) = 8UL
+
+    override fun write(
+        value: ModelClient,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
  * Client handle for invoking workflows on a remote [`PeerServer`].
  *
  * Construct with [`PeerClient::connect`]. RPCs go out over a multiplexed
@@ -20233,6 +21590,190 @@ public object FfiConverterTypeKtoConfigRecord : FfiConverterRustBuffer<KtoConfig
 }
 
 /**
+ * Foreign-facing request for [`ModelClient::load_from_hf`]. Mirrors
+ * [`LoadFromHfRequest`] minus the `envelope_version`.
+ */
+data class LoadFromHfRecord(
+    /**
+     * Id under which to register the resulting model.
+     */
+    var `modelId`: kotlin.String,
+    /**
+     * Hugging Face repo slug (`org/name`).
+     */
+    var `repo`: kotlin.String,
+    /**
+     * Optional explicit memory estimate in bytes; `None` asks the
+     * loader to estimate from repo metadata.
+     */
+    var `memoryEstimateBytes`: kotlin.ULong?,
+    /**
+     * Optional backend override.
+     */
+    var `backendHint`: HfBackendHint?,
+    /**
+     * Optional GGUF file name when the backend is llama.cpp.
+     */
+    var `ggufFile`: kotlin.String?,
+    /**
+     * Optional HF revision (branch / tag / commit).
+     */
+    var `revision`: kotlin.String?,
+    /**
+     * Optional bearer token for gated repos.
+     */
+    var `hfToken`: kotlin.String?,
+    /**
+     * Pre-serialised JSON for any backend-specific extra options the
+     * host should honor. Empty string = none.
+     */
+    var `extraOptionsJson`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeLoadFromHfRecord : FfiConverterRustBuffer<LoadFromHfRecord> {
+    override fun read(buf: ByteBuffer): LoadFromHfRecord =
+        LoadFromHfRecord(
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalULong.read(buf),
+            FfiConverterOptionalTypeHfBackendHint.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: LoadFromHfRecord) =
+        (
+            FfiConverterString.allocationSize(value.`modelId`) +
+                FfiConverterString.allocationSize(value.`repo`) +
+                FfiConverterOptionalULong.allocationSize(value.`memoryEstimateBytes`) +
+                FfiConverterOptionalTypeHfBackendHint.allocationSize(value.`backendHint`) +
+                FfiConverterOptionalString.allocationSize(value.`ggufFile`) +
+                FfiConverterOptionalString.allocationSize(value.`revision`) +
+                FfiConverterOptionalString.allocationSize(value.`hfToken`) +
+                FfiConverterString.allocationSize(value.`extraOptionsJson`)
+        )
+
+    override fun write(
+        value: LoadFromHfRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`modelId`, buf)
+        FfiConverterString.write(value.`repo`, buf)
+        FfiConverterOptionalULong.write(value.`memoryEstimateBytes`, buf)
+        FfiConverterOptionalTypeHfBackendHint.write(value.`backendHint`, buf)
+        FfiConverterOptionalString.write(value.`ggufFile`, buf)
+        FfiConverterOptionalString.write(value.`revision`, buf)
+        FfiConverterOptionalString.write(value.`hfToken`, buf)
+        FfiConverterString.write(value.`extraOptionsJson`, buf)
+    }
+}
+
+/**
+ * Foreign-facing request for [`ModelClient::load`].
+ *
+ * Mirrors [`blazen_controlplane::model_protocol::LoadRequest`] minus the
+ * `envelope_version` (the wrapper fills that in from
+ * [`MODEL_ENVELOPE_VERSION`]).
+ */
+data class LoadRecord(
+    /**
+     * Id under which the target model was previously registered.
+     */
+    var `modelId`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeLoadRecord : FfiConverterRustBuffer<LoadRecord> {
+    override fun read(buf: ByteBuffer): LoadRecord =
+        LoadRecord(
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: LoadRecord) =
+        (
+            FfiConverterString.allocationSize(value.`modelId`)
+        )
+
+    override fun write(
+        value: LoadRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`modelId`, buf)
+    }
+}
+
+/**
+ * Foreign-facing response from [`ModelClient::load`] and
+ * [`ModelClient::load_from_hf`].
+ *
+ * `LoadResponse` is empty on the wire (failures travel via the
+ * `Result`), but `LoadFromHfResponse` reports the chosen backend; we
+ * surface both through a single record with optional fields so foreign
+ * callers see one shape regardless of which loader they invoke.
+ */
+data class LoadResultRecord(
+    /**
+     * Model id that was loaded. Echoes the request's `model_id` so
+     * foreign callers don't have to thread the value through their own
+     * state.
+     */
+    var `modelId`: kotlin.String,
+    /**
+     * Whether the load succeeded. Always `true` on the success branch
+     * of the `Result`; provided for forward-compat with future wire
+     * schemas that may carry a richer status.
+     */
+    var `loaded`: kotlin.Boolean,
+    /**
+     * Backend the loader chose. Only populated by `load_from_hf`;
+     * `None` for the plain `load` path which does not negotiate a
+     * backend.
+     */
+    var `chosenBackend`: HfBackendHint?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeLoadResultRecord : FfiConverterRustBuffer<LoadResultRecord> {
+    override fun read(buf: ByteBuffer): LoadResultRecord =
+        LoadResultRecord(
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalTypeHfBackendHint.read(buf),
+        )
+
+    override fun allocationSize(value: LoadResultRecord) =
+        (
+            FfiConverterString.allocationSize(value.`modelId`) +
+                FfiConverterBoolean.allocationSize(value.`loaded`) +
+                FfiConverterOptionalTypeHfBackendHint.allocationSize(value.`chosenBackend`)
+        )
+
+    override fun write(
+        value: LoadResultRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`modelId`, buf)
+        FfiConverterBoolean.write(value.`loaded`, buf)
+        FfiConverterOptionalTypeHfBackendHint.write(value.`chosenBackend`, buf)
+    }
+}
+
+/**
  * LoRA hyperparameters.
  */
 data class LoraConfigRecord(
@@ -20382,6 +21923,65 @@ public object FfiConverterTypeMediaOutput : FfiConverterRustBuffer<MediaOutput> 
         FfiConverterString.write(value.`mediaType`, buf)
         FfiConverterOptionalULong.write(value.`fileSize`, buf)
         FfiConverterString.write(value.`metadata`, buf)
+    }
+}
+
+/**
+ * Foreign-facing snapshot of a single registered model.
+ *
+ * Mirrors [`ModelStatusWire`] from the model protocol. The upstream
+ * `adapters: Vec<AdapterStatusWire>` field is omitted in this wave —
+ * adapter introspection lands with the adapter RPCs in a later wave.
+ */
+data class ModelClientStatusRecord(
+    /**
+     * Identifier under which the model was registered.
+     */
+    var `id`: kotlin.String,
+    /**
+     * Whether the model is currently loaded into its pool.
+     */
+    var `loaded`: kotlin.Boolean,
+    /**
+     * Estimated memory footprint in bytes (includes any mounted adapters).
+     */
+    var `memoryEstimateBytes`: kotlin.ULong,
+    /**
+     * Pool the model is charged against.
+     */
+    var `pool`: ModelPool,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeModelClientStatusRecord : FfiConverterRustBuffer<ModelClientStatusRecord> {
+    override fun read(buf: ByteBuffer): ModelClientStatusRecord =
+        ModelClientStatusRecord(
+            FfiConverterString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterULong.read(buf),
+            FfiConverterTypeModelPool.read(buf),
+        )
+
+    override fun allocationSize(value: ModelClientStatusRecord) =
+        (
+            FfiConverterString.allocationSize(value.`id`) +
+                FfiConverterBoolean.allocationSize(value.`loaded`) +
+                FfiConverterULong.allocationSize(value.`memoryEstimateBytes`) +
+                FfiConverterTypeModelPool.allocationSize(value.`pool`)
+        )
+
+    override fun write(
+        value: ModelClientStatusRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`id`, buf)
+        FfiConverterBoolean.write(value.`loaded`, buf)
+        FfiConverterULong.write(value.`memoryEstimateBytes`, buf)
+        FfiConverterTypeModelPool.write(value.`pool`, buf)
     }
 }
 
@@ -21098,6 +22698,45 @@ public object FfiConverterTypeSpeechRequest : FfiConverterRustBuffer<SpeechReque
         FfiConverterOptionalFloat.write(value.`speed`, buf)
         FfiConverterOptionalString.write(value.`model`, buf)
         FfiConverterString.write(value.`parameters`, buf)
+    }
+}
+
+/**
+ * Foreign-facing response from
+ * [`ModelClient::status`]. Mirrors
+ * [`blazen_controlplane::model_protocol::StatusResponse`] but filters
+ * to a single model when the caller scopes the query with a
+ * `model_id`.
+ */
+data class StatusRecord(
+    /**
+     * Snapshot of each registered model (or just the requested one,
+     * when `status(Some(id))` was called).
+     */
+    var `models`: List<ModelClientStatusRecord>,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeStatusRecord : FfiConverterRustBuffer<StatusRecord> {
+    override fun read(buf: ByteBuffer): StatusRecord =
+        StatusRecord(
+            FfiConverterSequenceTypeModelClientStatusRecord.read(buf),
+        )
+
+    override fun allocationSize(value: StatusRecord) =
+        (
+            FfiConverterSequenceTypeModelClientStatusRecord.allocationSize(value.`models`)
+        )
+
+    override fun write(
+        value: StatusRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterSequenceTypeModelClientStatusRecord.write(value.`models`, buf)
     }
 }
 
@@ -23481,6 +25120,58 @@ public object FfiConverterTypeControlPlaneRunStatus : FfiConverterRustBuffer<Con
     }
 }
 
+/**
+ * Backend selector used by [`ModelClient::load_from_hf`]. Mirrors
+ * [`BackendHintWire`].
+ */
+
+enum class HfBackendHint {
+    /**
+     * Auto-detect from the repo layout.
+     */
+    AUTO,
+
+    /**
+     * Force the `mistral.rs` backend.
+     */
+    MISTRAL_RS,
+
+    /**
+     * Force the candle-llm backend.
+     */
+    CANDLE,
+
+    /**
+     * Force the llama.cpp backend.
+     */
+    LLAMA_CPP,
+
+    ;
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeHfBackendHint : FfiConverterRustBuffer<HfBackendHint> {
+    override fun read(buf: ByteBuffer) =
+        try {
+            HfBackendHint.values()[buf.getInt() - 1]
+        } catch (e: IndexOutOfBoundsException) {
+            throw RuntimeException("invalid enum value, something is very wrong!!", e)
+        }
+
+    override fun allocationSize(value: HfBackendHint) = 4UL
+
+    override fun write(
+        value: HfBackendHint,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.ordinal + 1)
+    }
+}
+
 enum class MixedPrecisionEnum {
     NONE,
     BF16,
@@ -23507,6 +25198,109 @@ public object FfiConverterTypeMixedPrecisionEnum : FfiConverterRustBuffer<MixedP
         buf: ByteBuffer,
     ) {
         buf.putInt(value.ordinal + 1)
+    }
+}
+
+/**
+ * Pool a model is registered against. Mirrors
+ * [`blazen_controlplane::model_protocol::PoolWire`] in a UniFFI-friendly
+ * shape — Rust's `Gpu(u32)` payload becomes a discriminator + optional
+ * `device_index` so the enum can cross the FFI boundary cleanly.
+ */
+sealed class ModelPool {
+    /**
+     * Host RAM pool.
+     */
+    object Cpu : ModelPool()
+
+    /**
+     * GPU VRAM pool at `device_index`. Metal collapses to index `0`.
+     */
+    data class Gpu(
+        val `deviceIndex`: kotlin.UInt,
+    ) : ModelPool() {
+        companion object
+    }
+
+    /**
+     * Off-host pool — memory lives in another process / host.
+     */
+    object Remote : ModelPool()
+
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeModelPool : FfiConverterRustBuffer<ModelPool> {
+    override fun read(buf: ByteBuffer): ModelPool =
+        when (buf.getInt()) {
+            1 -> {
+                ModelPool.Cpu
+            }
+
+            2 -> {
+                ModelPool.Gpu(
+                    FfiConverterUInt.read(buf),
+                )
+            }
+
+            3 -> {
+                ModelPool.Remote
+            }
+
+            else -> {
+                throw RuntimeException("invalid enum value, something is very wrong!!")
+            }
+        }
+
+    override fun allocationSize(value: ModelPool) =
+        when (value) {
+            is ModelPool.Cpu -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+
+            is ModelPool.Gpu -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL +
+                        FfiConverterUInt.allocationSize(value.`deviceIndex`)
+                )
+            }
+
+            is ModelPool.Remote -> {
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                (
+                    4UL
+                )
+            }
+        }
+
+    override fun write(
+        value: ModelPool,
+        buf: ByteBuffer,
+    ) {
+        when (value) {
+            is ModelPool.Cpu -> {
+                buf.putInt(1)
+                Unit
+            }
+
+            is ModelPool.Gpu -> {
+                buf.putInt(2)
+                FfiConverterUInt.write(value.`deviceIndex`, buf)
+                Unit
+            }
+
+            is ModelPool.Remote -> {
+                buf.putInt(3)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
     }
 }
 
@@ -24248,6 +26042,38 @@ public object FfiConverterOptionalTypeBackendHintEnum : FfiConverterRustBuffer<B
 /**
  * @suppress
  */
+public object FfiConverterOptionalTypeHfBackendHint : FfiConverterRustBuffer<HfBackendHint?> {
+    override fun read(buf: ByteBuffer): HfBackendHint? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypeHfBackendHint.read(buf)
+    }
+
+    override fun allocationSize(value: HfBackendHint?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypeHfBackendHint.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: HfBackendHint?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypeHfBackendHint.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceDouble : FfiConverterRustBuffer<List<kotlin.Double>> {
     override fun read(buf: ByteBuffer): List<kotlin.Double> {
         val len = buf.getInt()
@@ -24633,6 +26459,34 @@ public object FfiConverterSequenceTypeMedia : FfiConverterRustBuffer<List<Media>
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMedia.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeModelClientStatusRecord : FfiConverterRustBuffer<List<ModelClientStatusRecord>> {
+    override fun read(buf: ByteBuffer): List<ModelClientStatusRecord> {
+        val len = buf.getInt()
+        return List<ModelClientStatusRecord>(len) {
+            FfiConverterTypeModelClientStatusRecord.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<ModelClientStatusRecord>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeModelClientStatusRecord.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<ModelClientStatusRecord>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeModelClientStatusRecord.write(it, buf)
         }
     }
 }

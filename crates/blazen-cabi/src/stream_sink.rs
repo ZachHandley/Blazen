@@ -203,6 +203,15 @@ pub(crate) struct CStreamSink {
     vtable: BlazenCompletionStreamSinkVTable,
 }
 
+impl CStreamSink {
+    /// Construct a `CStreamSink` from a caller-supplied vtable. Ownership of
+    /// `vtable.user_data` transfers to the returned sink; the foreign-side
+    /// `drop_user_data` thunk is invoked exactly once on drop.
+    pub(crate) fn from_vtable(vtable: BlazenCompletionStreamSinkVTable) -> Self {
+        Self { vtable }
+    }
+}
+
 impl Drop for CStreamSink {
     fn drop(&mut self) {
         // SAFETY: by the vtable contract, `drop_user_data` is the foreign

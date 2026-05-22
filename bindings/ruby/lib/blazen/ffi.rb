@@ -1039,6 +1039,78 @@ module Blazen
     attach_function :blazen_controlplane_subscription_free,
                     [:pointer], :void
 
+    # ModelClient — lightweight client for the model-serving control plane
+    # (the `blazen-controlplane` gRPC `BlazenModelServer`). Only the
+    # blocking surface is exposed today; future waves will add the async
+    # future-returning variants and richer telemetry RPCs.
+    attach_function :blazen_modelclient_connect_blocking,
+                    [:pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_connect_with_tls_blocking,
+                    [:pointer, :pointer, :pointer, :pointer,
+                     :pointer, :pointer],
+                    :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_status_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_is_loaded_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_load_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_unload_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_load_from_hf_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_load_adapter_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_unload_adapter_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_list_adapters_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_complete_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_embed_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_generate_image_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_text_to_speech_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_generate_music_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_transcribe_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_stream_complete_blocking,
+                    [:pointer, :pointer,
+                     BlazenCompletionStreamSinkVTable.by_value,
+                     :pointer, :pointer],
+                    :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_upload_blob_blocking,
+                    [:pointer, :pointer, :pointer, :pointer, :size_t,
+                     :pointer, :pointer],
+                    :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_fetch_blob_blocking,
+                    [:pointer, :pointer, :pointer, :pointer, :pointer],
+                    :int32,
+                    blocking: true
+    attach_function :blazen_modelclient_bytes_free, [:pointer, :size_t], :void
+    attach_function :blazen_modelclient_free, [:pointer], :void
+
     # Typed future takers
     attach_function :blazen_future_take_controlplane_client,
                     [:pointer, :pointer, :pointer], :int32

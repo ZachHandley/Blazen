@@ -30,6 +30,8 @@ pub mod llm;
 pub mod llm_records;
 pub mod manager;
 pub mod manager_records;
+#[cfg(feature = "distributed")]
+pub mod model_client;
 pub mod peer;
 pub mod persist;
 pub mod persist_factories;

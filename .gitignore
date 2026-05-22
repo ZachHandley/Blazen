@@ -36,3 +36,4 @@ bindings/ruby/.rspec_status
 bindings/ruby/Gemfile.lock
 bindings/ruby/vendor/
 bindings/ruby/.bundle/
+.claude/

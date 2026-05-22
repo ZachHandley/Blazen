@@ -3272,6 +3272,203 @@ export declare class ModelCache {
 export type JsModelCache = ModelCache
 
 /**
+ * gRPC client for the `BlazenModelServer` service.
+ *
+ * Connect with [`connect`](Self::connect) (plaintext) or
+ * [`connectWithTls`](Self::connect_with_tls) (TLS / mTLS), then issue
+ * RPCs. This wave exposes only the status RPCs; later waves add load /
+ * unload / completions / embeddings / media / blobs.
+ *
+ * ```typescript
+ * const client = await ModelClient.connect("http://model-server:50051");
+ * const status = await client.status();
+ * if (await client.isLoaded("gpt-oss-120b")) {
+ *   // ...
+ * }
+ * ```
+ */
+export declare class ModelClient {
+  /**
+   * Open a plaintext connection to a `BlazenModelServer` at
+   * `endpoint` (e.g. `"http://localhost:50051"`).
+   */
+  static connect(endpoint: string): Promise<ModelClient>
+  /**
+   * Open a TLS (or mTLS, when `opts.clientCert` + `opts.clientKey`
+   * are supplied) connection to a `BlazenModelServer` at `endpoint`.
+   */
+  static connectWithTls(endpoint: string, opts: JsModelClientTlsOptions): Promise<ModelClient>
+  /**
+   * Fetch a snapshot of every registered model on the server.
+   *
+   * `model_id` is currently unused (the server returns every model
+   * either way) but is reserved for a future per-model filter. Pass
+   * `undefined` / omit the argument for the full snapshot.
+   *
+   * Returns a plain JS object with the wire shape of
+   * [`StatusResponse`] (`{ envelopeVersion, models: [...] }`),
+   * produced via `serde_json` so the model + adapter wires serialize
+   * recursively without per-field napi glue.
+   */
+  status(modelId?: string): Promise<any>
+  /** Liveness check for a specific registered model. */
+  isLoaded(modelId: string): Promise<boolean>
+  /**
+   * Issue a `Load` RPC for a previously-registered model.
+   *
+   * `request` is a plain JS object matching the wire shape of
+   * [`LoadRequest`] (`{ envelopeVersion?, modelId }`). The
+   * `envelopeVersion` field is filled in from
+   * [`MODEL_ENVELOPE_VERSION`] when omitted by the caller — pass the
+   * shorthand `{ modelId: "qwen3-7b" }` and the binding will set the
+   * rest. Returns the wire-shaped [`LoadResponse`] as a plain JS
+   * object.
+   */
+  load(request: any): Promise<any>
+  /**
+   * Issue an `Unload` RPC to drop a loaded model from memory.
+   *
+   * `request` mirrors [`UnloadRequest`] on the wire
+   * (`{ envelopeVersion?, modelId }`). Returns the wire-shaped
+   * [`UnloadResponse`] as a plain JS object.
+   */
+  unload(request: any): Promise<any>
+  /**
+   * Issue a `LoadFromHf` RPC — register-and-load a model from a
+   * Hugging Face Hub repo. Whether the server actually honors the
+   * request depends on it having been built with the `hf-loader`
+   * feature; the client speaks the wire either way.
+   *
+   * `request` matches [`LoadFromHfRequest`] on the wire
+   * (`{ envelopeVersion?, modelId, repo, memoryEstimateBytes?,
+   * backendHint?, ggufFile?, revision?, hfToken?,
+   * extraOptionsJson? }`). Returns the wire-shaped
+   * [`LoadFromHfResponse`] as a plain JS object.
+   */
+  loadFromHf(request: any): Promise<any>
+  /**
+   * Issue a `LoadAdapter` RPC.
+   *
+   * `request` matches [`LoadAdapterRequest`] on the wire. Returns the
+   * wire-shaped [`LoadAdapterResponse`] as a plain JS object.
+   */
+  loadAdapter(request: any): Promise<any>
+  /**
+   * Issue an `UnloadAdapter` RPC.
+   *
+   * `request` matches [`UnloadAdapterRequest`] on the wire. Returns the
+   * wire-shaped [`UnloadAdapterResponse`] as a plain JS object.
+   */
+  unloadAdapter(request: any): Promise<any>
+  /**
+   * Issue a `ListAdapters` RPC.
+   *
+   * `request` matches [`ListAdaptersRequest`] on the wire. Returns the
+   * wire-shaped [`ListAdaptersResponse`] as a plain JS object.
+   */
+  listAdapters(request: any): Promise<any>
+  /**
+   * Issue a `Complete` RPC.
+   *
+   * `request` matches [`CompleteRequest`] on the wire. Returns the
+   * wire-shaped [`CompleteResponse`] as a plain JS object.
+   */
+  complete(request: any): Promise<any>
+  /**
+   * Issue an `Embed` RPC.
+   *
+   * `request` matches [`EmbedRequest`] on the wire. Returns the
+   * wire-shaped [`EmbedResponse`] as a plain JS object.
+   */
+  embed(request: any): Promise<any>
+  /**
+   * Issue a `GenerateImage` RPC.
+   *
+   * `request` matches [`GenerateImageRequest`] on the wire. Returns the
+   * wire-shaped [`GenerateImageResponse`] as a plain JS object.
+   */
+  generateImage(request: any): Promise<any>
+  /**
+   * Issue a `TextToSpeech` RPC.
+   *
+   * `request` matches [`TextToSpeechRequest`] on the wire. Returns the
+   * wire-shaped [`TextToSpeechResponse`] as a plain JS object.
+   */
+  textToSpeech(request: any): Promise<any>
+  /**
+   * Issue a `GenerateMusic` RPC.
+   *
+   * `request` matches [`GenerateMusicRequest`] on the wire. Returns the
+   * wire-shaped [`GenerateMusicResponse`] as a plain JS object.
+   */
+  generateMusic(request: any): Promise<any>
+  /**
+   * Issue a `Transcribe` RPC.
+   *
+   * `request` matches [`TranscribeRequest`] on the wire. Returns the
+   * wire-shaped [`TranscribeResponse`] as a plain JS object.
+   */
+  transcribe(request: any): Promise<any>
+  /**
+   * Issue a `StreamComplete` server-streaming RPC.
+   *
+   * `request` matches [`CompleteRequest`] on the wire (same shape as
+   * the unary `complete` method). Returns a JS
+   * `AsyncIterableIterator` that yields wire-shaped
+   * [`StreamCompleteChunk`](blazen_controlplane::model_protocol::StreamCompleteChunk)
+   * objects (each a plain JS object — `{ kind: "delta", ... }` or
+   * `{ kind: "done", ... }` depending on the variant) until the
+   * server closes the stream.
+   *
+   * The stream is opened lazily on the first `next()` call so the
+   * initial RPC error (if any) surfaces to the consumer rather than
+   * to the synchronous call site.
+   *
+   * Mirrors the lazy-open `AsyncIterableIterator` pattern used by
+   * [`crate::controlplane::client::JsControlPlaneClient::subscribe_run_events`].
+   */
+  streamComplete(request: object): AsyncIterableIterator<object>
+  /**
+   * Issue an `UploadBlob` client-streaming RPC.
+   *
+   * `chunks` is the pre-collected blob payload split into one or more
+   * `Buffer` (or `Uint8Array`) pieces. The binding wraps them in the
+   * canonical `Start` / `Data*` / `End` frame sequence — callers do
+   * not need to construct envelope frames themselves. `options.blobId`
+   * names the upload (defaults to a freshly-generated UUID-shaped
+   * string when omitted); `options.mime` is forwarded as the
+   * `content_type` hint on the `Start` frame.
+   *
+   * This binding uses the **pre-collected `Vec<Buffer>`** approach
+   * rather than consuming a JS `AsyncIterable`: napi-rs does not yet
+   * surface a first-class JS-async-iterator → Rust-`Stream` adapter,
+   * and a hand-rolled `iterator.next()`-pumping bridge would have run
+   * well past the ~50-line budget called out in the wave plan. The
+   * streaming-over-the-wire shape (multiple postcard frames) is
+   * preserved — only the JS-side ergonomics differ from a true async
+   * iterable. Returns the wire-shaped [`UploadBlobResponse`] as a
+   * plain JS object.
+   */
+  uploadBlob(chunks: Array<Buffer | Uint8Array>, options?: { blobId?: string, mime?: string }): Promise<any>
+  /**
+   * Issue a `FetchBlob` server-streaming RPC.
+   *
+   * `request` matches [`FetchBlobRequest`] on the wire
+   * (`{ envelopeVersion?, blobId, offset?, chunkSize? }`). Returns a
+   * JS `AsyncIterableIterator<Buffer>` that yields the blob body in
+   * order — only the `Data` frames are surfaced as `Buffer` values;
+   * the `Start` / `End` envelope frames are consumed transparently
+   * (`Start` is dropped so callers see only bytes, `End` terminates
+   * iteration). The stream is opened lazily on the first `next()`
+   * call so the initial RPC error (if any) surfaces to the consumer.
+   *
+   * Mirrors the lazy-open pattern used by [`Self::stream_complete`].
+   */
+  fetchBlob(request: object): AsyncIterableIterator<Buffer>
+}
+export type JsModelClient = ModelClient
+
+/**
  * Memory-budget-aware model manager with per-pool LRU eviction.
  *
  * Tracks registered local models and their estimated memory footprint.
@@ -7819,6 +8016,25 @@ export interface JsMistralRsOptions {
 export declare const enum JsMixedPrecision {
   None = 'none',
   Bf16 = 'bf16'
+}
+
+/** TLS options accepted by [`JsModelClient::connect_with_tls`]. */
+export interface JsModelClientTlsOptions {
+  /**
+   * Filesystem path to the PEM-encoded CA certificate used to verify
+   * the server.
+   */
+  caCert: string
+  /**
+   * Optional path to the PEM-encoded client certificate (mTLS). Must
+   * be paired with [`Self::client_key`].
+   */
+  clientCert?: string
+  /**
+   * Optional path to the PEM-encoded client private key (mTLS). Must
+   * be paired with [`Self::client_cert`].
+   */
+  clientKey?: string
 }
 
 /** Options for a chat completion request. */

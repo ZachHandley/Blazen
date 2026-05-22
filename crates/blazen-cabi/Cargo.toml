@@ -21,7 +21,7 @@ blazen-uniffi = { version = "0.0.0-dev", path = "../blazen-uniffi", default-feat
 # Control-plane crate is only used by the optional `distributed` feature; gate
 # it so non-distributed builds don't pull in the full tonic/rustls stack.
 blazen-core = { workspace = true, features = ["distributed"], optional = true }
-blazen-controlplane = { workspace = true, optional = true }
+blazen-controlplane = { workspace = true, optional = true, features = ["client", "model-client"] }
 # `tokio-util` is only used by the optional `distributed` feature to obtain
 # `CancellationToken` for subscription handles. Gated to keep the non-
 # distributed build slim. The `rt` feature carries the cancellation token.
@@ -39,6 +39,7 @@ blazen-manager.workspace = true
 blazen-train = { workspace = true, optional = true }
 tokenizers = { workspace = true, optional = true }
 candle-core = { workspace = true, optional = true }
+tonic = { workspace = true, optional = true, features = ["tls-aws-lc"] }
 
 [build-dependencies]
 cbindgen = "0.29"
@@ -95,6 +96,7 @@ distributed = [
     "dep:blazen-core",
     "dep:blazen-controlplane",
     "dep:tokio-util",
+    "dep:tonic",
 ]
 # Local LoRA fine-tuning via `ModelManager::train_lora` exposed through the
 # C ABI. Forwards to the matching arms on blazen-uniffi / blazen-manager and

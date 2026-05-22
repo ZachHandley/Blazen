@@ -16,10 +16,12 @@
 //! [`ControlPlaneWorkerConfig`]: worker::JsControlPlaneWorkerConfig
 
 pub mod client;
+pub mod model_client;
 pub mod types;
 pub mod worker;
 
 pub use client::JsControlPlaneClient;
+pub use model_client::{JsModelClient, JsModelClientTlsOptions};
 pub use types::{
     JsAdmissionMode, JsAdmissionModeTag, JsAssignment, JsClientConnectOptions, JsMtlsOptions,
     JsRunEvent, JsRunStateSnapshot, JsRunStatus, JsSubmitWorkflowOptions, JsSubscribeAllOptions,

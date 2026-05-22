@@ -55,6 +55,7 @@ require_relative "blazen/persist"
 require_relative "blazen/telemetry"
 require_relative "blazen/peer"
 require_relative "blazen/controlplane"
+require_relative "blazen/model_client"
 require_relative "blazen/model_manager"
 
 module Blazen

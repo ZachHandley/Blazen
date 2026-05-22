@@ -56,6 +56,7 @@ pyo3-stub-gen-derive = "0.22"
 blazen-train = { workspace = true, optional = true }
 tokenizers = { workspace = true, optional = true }
 candle-core = { workspace = true, optional = true }
+tonic = { workspace = true, optional = true }
 
 [features]
 default = ["local-all"]
@@ -89,6 +90,8 @@ distributed = [
     "dep:blazen-controlplane",
     "blazen-controlplane/client",
     "blazen-controlplane/server",
+    "blazen-controlplane/model-client",
+    "dep:tonic",
 ]
 blazen-embed-fastembed = ["dep:blazen-embed-fastembed"]
 # Local LoRA fine-tuning via `ModelManager.train_lora`. Pulls in
@@ -103,7 +106,6 @@ training = [
     "dep:candle-core",
     "blazen-manager/training",
 ]
-
 [lints]
 workspace = true
 

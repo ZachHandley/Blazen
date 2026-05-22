@@ -1,3 +1,7 @@
+#[allow(
+    clippy::unnecessary_wraps,
+    reason = "Result required when feature `distributed` is on"
+)]
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     // The proto-generated `allreduce_pb` module and the gRPC server / client
     // that consume it are gated on the `distributed` feature in `lib.rs`

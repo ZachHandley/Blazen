@@ -25,7 +25,7 @@ blazen-manager.workspace = true
 blazen-memory.workspace = true
 blazen-memory-valkey = { workspace = true, features = ["redis-tcp", "upstash"] }
 blazen-model-cache.workspace = true
-blazen-controlplane = { workspace = true, optional = true, features = ["client"] }
+blazen-controlplane = { workspace = true, optional = true, features = ["client", "model-client"] }
 blazen-peer = { workspace = true, features = ["server", "client", "http-transport"] }
 blazen-persist = { workspace = true, features = ["redb", "valkey"] }
 blazen-pipeline.workspace = true
@@ -49,6 +49,7 @@ blazen-train = { workspace = true, optional = true }
 candle-core = { workspace = true, optional = true }
 tokenizers = { workspace = true, optional = true }
 base64.workspace = true
+tonic = { workspace = true, optional = true, features = ["tls-aws-lc"] }
 
 [build-dependencies]
 uniffi_build.workspace = true
@@ -121,6 +122,7 @@ distributed = [
     "blazen-peer/server",
     "blazen-peer/client",
     "dep:blazen-controlplane",
+    "dep:tonic",
 ]
 blazen-embed-fastembed = ["dep:blazen-embed-fastembed"]
 

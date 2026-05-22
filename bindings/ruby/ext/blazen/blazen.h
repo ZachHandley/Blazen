@@ -415,6 +415,14 @@ typedef struct BlazenMedia BlazenMedia;
 typedef struct BlazenModel BlazenModel;
 
 /**
+ * Opaque wrapper around [`blazen_controlplane::ModelClient`]. The
+ * inner [`InnerModelClient`] is cheaply cloneable (it holds an
+ * `Arc<Mutex<...>>` internally) so multiple cabi calls on the same
+ * handle can run concurrently.
+ */
+typedef struct BlazenModelClient BlazenModelClient;
+
+/**
  * Opaque handle around [`blazen_manager::ModelManager`]. Construct via
  * [`blazen_model_manager_new`] or [`blazen_model_manager_with_budgets_gb`];
  * release with [`blazen_model_manager_free`].
@@ -1398,6 +1406,77 @@ typedef struct {
 } BlazenFullFineTuneConfig;
 
 /**
+ * Function-pointer vtable a foreign caller fills out to implement
+ * [`CompletionStreamSink`] across the C ABI.
+ *
+ * All three callbacks plus `drop_user_data` are required (no nullable
+ * function pointers). The vtable is consumed by
+ * [`blazen_complete_streaming`] / [`blazen_complete_streaming_blocking`],
+ * which take ownership of `user_data` and the function pointers for the
+ * lifetime of the streaming call. `drop_user_data` runs exactly once when
+ * the wrapping [`CStreamSink`] drops (after the stream has terminated, or on
+ * an early-return failure path before the stream starts).
+ *
+ * ## Thread safety
+ *
+ * The streaming engine schedules callbacks on tokio worker threads which
+ * will generally differ from the thread that registered the sink. The
+ * foreign side guarantees that `user_data` and the function pointers are
+ * safe to invoke from any thread. In Ruby, the `ffi` gem's `FFI::Callback`
+ * reacquires the GVL automatically before invoking the user-provided block;
+ * in Dart, `NativeCallable.listener` marshals back to the isolate event
+ * loop; in native hosts the responsibility falls to the embedder.
+ *
+ * ## Callback contracts
+ *
+ * See the module-level docs for the per-callback ownership rules. In
+ * summary: every pointer passed *into* a callback is caller-owned and the
+ * callback must free it (or consume it into a derivative structure) before
+ * returning. Every pointer the callback writes *out* (`out_err`) becomes
+ * caller-owned and the cabi will free it after consuming.
+ */
+typedef struct {
+    /**
+     * Opaque foreign-side context handed back to each callback. Owned by
+     * this vtable struct; released via `drop_user_data` when the wrapper
+     * drops.
+     */
+    void *user_data;
+    /**
+     * Invoked exactly once when the wrapping `CStreamSink` drops.
+     * Implementations should reclaim and release `user_data`.
+     */
+    void (*drop_user_data)(void *user_data);
+    /**
+     * Receive a single chunk. `chunk` is caller-owned; the callback MUST
+     * free it via `blazen_stream_chunk_free` (or consume it into a
+     * derivative structure). Returns `0` on success or `-1` on failure
+     * (writing a fresh `*mut BlazenError` into `*out_err`). A `-1` aborts
+     * the stream.
+     */
+    int32_t (*on_chunk)(void *user_data, BlazenStreamChunk *chunk, BlazenError **out_err);
+    /**
+     * Receive the terminal completion signal. `finish_reason` is a
+     * caller-owned `*mut c_char` freed via `blazen_string_free`; `usage`
+     * is a caller-owned `*mut BlazenTokenUsage` freed via
+     * `blazen_token_usage_free`. Returns `0` on success or `-1` on
+     * failure (writing a fresh `*mut BlazenError` into `*out_err`).
+     */
+    int32_t (*on_done)(void *user_data,
+                       char *finish_reason,
+                       BlazenTokenUsage *usage,
+                       BlazenError **out_err);
+    /**
+     * Receive a fatal error from the stream. `err` is a caller-owned
+     * `*mut BlazenError` freed via `blazen_error_free`. Returns `0` on
+     * success or `-1` on failure (writing the callback's own error into
+     * `*out_err`). A `-1` from `on_error` is logged via the resulting
+     * `BlazenResult` but does NOT trigger a second `on_error` invocation.
+     */
+    int32_t (*on_error)(void *user_data, BlazenError *err, BlazenError **out_err);
+} BlazenCompletionStreamSinkVTable;
+
+/**
  * Opaque wrapper around [`blazen_llm::providers::openai_compat::OpenAiCompatConfig`].
  */
 typedef struct {
@@ -1717,77 +1796,6 @@ typedef struct {
                       BlazenStepOutput **out_output,
                       BlazenError **out_err);
 } BlazenStepHandlerVTable;
-
-/**
- * Function-pointer vtable a foreign caller fills out to implement
- * [`CompletionStreamSink`] across the C ABI.
- *
- * All three callbacks plus `drop_user_data` are required (no nullable
- * function pointers). The vtable is consumed by
- * [`blazen_complete_streaming`] / [`blazen_complete_streaming_blocking`],
- * which take ownership of `user_data` and the function pointers for the
- * lifetime of the streaming call. `drop_user_data` runs exactly once when
- * the wrapping [`CStreamSink`] drops (after the stream has terminated, or on
- * an early-return failure path before the stream starts).
- *
- * ## Thread safety
- *
- * The streaming engine schedules callbacks on tokio worker threads which
- * will generally differ from the thread that registered the sink. The
- * foreign side guarantees that `user_data` and the function pointers are
- * safe to invoke from any thread. In Ruby, the `ffi` gem's `FFI::Callback`
- * reacquires the GVL automatically before invoking the user-provided block;
- * in Dart, `NativeCallable.listener` marshals back to the isolate event
- * loop; in native hosts the responsibility falls to the embedder.
- *
- * ## Callback contracts
- *
- * See the module-level docs for the per-callback ownership rules. In
- * summary: every pointer passed *into* a callback is caller-owned and the
- * callback must free it (or consume it into a derivative structure) before
- * returning. Every pointer the callback writes *out* (`out_err`) becomes
- * caller-owned and the cabi will free it after consuming.
- */
-typedef struct {
-    /**
-     * Opaque foreign-side context handed back to each callback. Owned by
-     * this vtable struct; released via `drop_user_data` when the wrapper
-     * drops.
-     */
-    void *user_data;
-    /**
-     * Invoked exactly once when the wrapping `CStreamSink` drops.
-     * Implementations should reclaim and release `user_data`.
-     */
-    void (*drop_user_data)(void *user_data);
-    /**
-     * Receive a single chunk. `chunk` is caller-owned; the callback MUST
-     * free it via `blazen_stream_chunk_free` (or consume it into a
-     * derivative structure). Returns `0` on success or `-1` on failure
-     * (writing a fresh `*mut BlazenError` into `*out_err`). A `-1` aborts
-     * the stream.
-     */
-    int32_t (*on_chunk)(void *user_data, BlazenStreamChunk *chunk, BlazenError **out_err);
-    /**
-     * Receive the terminal completion signal. `finish_reason` is a
-     * caller-owned `*mut c_char` freed via `blazen_string_free`; `usage`
-     * is a caller-owned `*mut BlazenTokenUsage` freed via
-     * `blazen_token_usage_free`. Returns `0` on success or `-1` on
-     * failure (writing a fresh `*mut BlazenError` into `*out_err`).
-     */
-    int32_t (*on_done)(void *user_data,
-                       char *finish_reason,
-                       BlazenTokenUsage *usage,
-                       BlazenError **out_err);
-    /**
-     * Receive a fatal error from the stream. `err` is a caller-owned
-     * `*mut BlazenError` freed via `blazen_error_free`. Returns `0` on
-     * success or `-1` on failure (writing the callback's own error into
-     * `*out_err`). A `-1` from `on_error` is logged via the resulting
-     * `BlazenResult` but does NOT trigger a second `on_error` invocation.
-     */
-    int32_t (*on_error)(void *user_data, BlazenError *err, BlazenError **out_err);
-} BlazenCompletionStreamSinkVTable;
 
 /**
  * Function-pointer vtable a foreign caller fills out to implement
@@ -7214,6 +7222,557 @@ const BlazenPoolStatus *blazen_pool_status_list_get(const BlazenPoolStatusList *
  * `h` must be null OR a pointer produced by the cabi surface.
  */
  void blazen_adapter_handle_info_free(BlazenAdapterHandleInfo *h);
+
+/**
+ * Synchronously open a plaintext gRPC connection to a model server at
+ * `endpoint`. Blocks the calling thread on the cabi tokio runtime.
+ * Returns `0` on success (writing a caller-owned `*mut BlazenModelClient`
+ * to `out_handle`) or `-1` on failure (writing the inner error to
+ * `out_err`).
+ *
+ * `endpoint` is a gRPC URI such as `"http://models.example.com:7446"`.
+ * For TLS, use [`blazen_modelclient_connect_with_tls_blocking`].
+ *
+ * # Safety
+ *
+ * `endpoint` must be a valid NUL-terminated UTF-8 buffer that remains
+ * live for the duration of the call. `out_handle` is null OR a
+ * destination for one `*mut BlazenModelClient` write. `out_err` is
+ * null OR a destination for one `*mut BlazenError` write.
+ */
+
+int32_t blazen_modelclient_connect_blocking(const char *endpoint,
+                                            BlazenModelClient **out_handle,
+                                            BlazenError **out_err);
+
+/**
+ * Synchronously open a TLS (or mTLS) gRPC connection to a model
+ * server at `endpoint`, supplying PEM credentials as in-memory UTF-8
+ * strings. Same return shape as
+ * [`blazen_modelclient_connect_blocking`].
+ *
+ * `ca_cert_pem` is required and pins the server's identity. If both
+ * `client_cert_pem` and `client_key_pem` are supplied (non-null), the
+ * connection upgrades to mutual TLS using that client identity;
+ * otherwise the connection is server-auth-only TLS. Supplying only
+ * one of the pair returns a validation error.
+ *
+ * # Safety
+ *
+ * `endpoint` and `ca_cert_pem` must be valid NUL-terminated UTF-8
+ * buffers that remain live for the duration of the call.
+ * `client_cert_pem` and `client_key_pem` must each be null OR a valid
+ * NUL-terminated UTF-8 buffer. `out_handle` is null OR a destination
+ * for one `*mut BlazenModelClient` write. `out_err` is null OR a
+ * destination for one `*mut BlazenError` write.
+ */
+
+int32_t blazen_modelclient_connect_with_tls_blocking(const char *endpoint,
+                                                     const char *ca_cert_pem,
+                                                     const char *client_cert_pem,
+                                                     const char *client_key_pem,
+                                                     BlazenModelClient **out_handle,
+                                                     BlazenError **out_err);
+
+/**
+ * Synchronously fetch the server's model status snapshot. Returns `0`
+ * on success (writing a caller-owned `*mut c_char` JSON string to
+ * `out_status_json`; free via [`crate::string::blazen_string_free`])
+ * or `-1` on failure.
+ *
+ * `model_id` is currently ignored on the wire (the server returns the
+ * full registry snapshot), but is accepted for forward compatibility.
+ * Pass null to request the full snapshot explicitly.
+ *
+ * The JSON payload mirrors
+ * [`blazen_controlplane::model_protocol::StatusResponse`] —
+ * `{ "envelope_version": u32, "models": [...] }`.
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer to a `BlazenModelClient`.
+ * `model_id` is null OR a valid NUL-terminated UTF-8 buffer.
+ * `out_status_json` is null OR a destination for one `*mut c_char`
+ * write. `out_err` is null OR a destination for one `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_modelclient_status_blocking(BlazenModelClient *handle,
+                                           const char *model_id,
+                                           char **out_status_json,
+                                           BlazenError **out_err);
+
+/**
+ * Synchronously probe whether the named model is currently loaded on
+ * the server. Returns `0` on success (writing the boolean to
+ * `out_loaded`) or `-1` on failure.
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer to a `BlazenModelClient`.
+ * `model_id` must be a valid NUL-terminated UTF-8 buffer. `out_loaded`
+ * is null OR a destination for one `bool` write. `out_err` is null OR
+ * a destination for one `*mut BlazenError` write.
+ */
+
+int32_t blazen_modelclient_is_loaded_blocking(BlazenModelClient *handle,
+                                              const char *model_id,
+                                              bool *out_loaded,
+                                              BlazenError **out_err);
+
+/**
+ * Synchronously load a previously-registered model on the server.
+ * Returns `0` on success (writing a caller-owned `*mut c_char` JSON
+ * string for the `LoadResponse` to `out_response_json`; free via
+ * [`crate::string::blazen_string_free`]) or `-1` on failure.
+ *
+ * `request_json` is a NUL-terminated UTF-8 buffer holding a JSON
+ * serialisation of
+ * [`blazen_controlplane::model_protocol::LoadRequest`].
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer to a `BlazenModelClient`.
+ * `request_json` must be a valid NUL-terminated UTF-8 buffer.
+ * `out_response_json` is null OR a destination for one `*mut c_char`
+ * write. `out_err` is null OR a destination for one `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_modelclient_load_blocking(BlazenModelClient *handle,
+                                         const char *request_json,
+                                         char **out_response_json,
+                                         BlazenError **out_err);
+
+/**
+ * Synchronously unload a previously-loaded model on the server.
+ * Returns `0` on success (writing a caller-owned `*mut c_char` JSON
+ * string for the `UnloadResponse` to `out_response_json`; free via
+ * [`crate::string::blazen_string_free`]) or `-1` on failure.
+ *
+ * `request_json` is a NUL-terminated UTF-8 buffer holding a JSON
+ * serialisation of
+ * [`blazen_controlplane::model_protocol::UnloadRequest`].
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer to a `BlazenModelClient`.
+ * `request_json` must be a valid NUL-terminated UTF-8 buffer.
+ * `out_response_json` is null OR a destination for one `*mut c_char`
+ * write. `out_err` is null OR a destination for one `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_modelclient_unload_blocking(BlazenModelClient *handle,
+                                           const char *request_json,
+                                           char **out_response_json,
+                                           BlazenError **out_err);
+
+/**
+ * Synchronously register-and-load a model from a Hugging Face Hub repo.
+ * Returns `0` on success (writing a caller-owned `*mut c_char` JSON
+ * string for the `LoadFromHfResponse` to `out_response_json`; free via
+ * [`crate::string::blazen_string_free`]) or `-1` on failure.
+ *
+ * `request_json` is a NUL-terminated UTF-8 buffer holding a JSON
+ * serialisation of
+ * [`blazen_controlplane::model_protocol::LoadFromHfRequest`].
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer to a `BlazenModelClient`.
+ * `request_json` must be a valid NUL-terminated UTF-8 buffer.
+ * `out_response_json` is null OR a destination for one `*mut c_char`
+ * write. `out_err` is null OR a destination for one `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_modelclient_load_from_hf_blocking(BlazenModelClient *handle,
+                                                 const char *request_json,
+                                                 char **out_response_json,
+                                                 BlazenError **out_err);
+
+/**
+ * Synchronously load an adapter onto a previously-loaded base model.
+ * Returns `0` on success (writing a caller-owned `*mut c_char` JSON
+ * string for the `LoadAdapterResponse` to `out_response_json`; free via
+ * [`crate::string::blazen_string_free`]) or `-1` on failure.
+ *
+ * `request_json` is a NUL-terminated UTF-8 buffer holding a JSON
+ * serialisation of
+ * [`blazen_controlplane::model_protocol::LoadAdapterRequest`].
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer to a `BlazenModelClient`.
+ * `request_json` must be a valid NUL-terminated UTF-8 buffer.
+ * `out_response_json` is null OR a destination for one `*mut c_char`
+ * write. `out_err` is null OR a destination for one `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_modelclient_load_adapter_blocking(BlazenModelClient *handle,
+                                                 const char *request_json,
+                                                 char **out_response_json,
+                                                 BlazenError **out_err);
+
+/**
+ * Synchronously unload a previously-mounted adapter.
+ * Returns `0` on success (writing a caller-owned `*mut c_char` JSON
+ * string for the `UnloadAdapterResponse` to `out_response_json`; free
+ * via [`crate::string::blazen_string_free`]) or `-1` on failure.
+ *
+ * `request_json` is a NUL-terminated UTF-8 buffer holding a JSON
+ * serialisation of
+ * [`blazen_controlplane::model_protocol::UnloadAdapterRequest`].
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer to a `BlazenModelClient`.
+ * `request_json` must be a valid NUL-terminated UTF-8 buffer.
+ * `out_response_json` is null OR a destination for one `*mut c_char`
+ * write. `out_err` is null OR a destination for one `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_modelclient_unload_adapter_blocking(BlazenModelClient *handle,
+                                                   const char *request_json,
+                                                   char **out_response_json,
+                                                   BlazenError **out_err);
+
+/**
+ * Synchronously list the adapters currently mounted on a model.
+ * Returns `0` on success (writing a caller-owned `*mut c_char` JSON
+ * string for the `ListAdaptersResponse` to `out_response_json`; free
+ * via [`crate::string::blazen_string_free`]) or `-1` on failure.
+ *
+ * `request_json` is a NUL-terminated UTF-8 buffer holding a JSON
+ * serialisation of
+ * [`blazen_controlplane::model_protocol::ListAdaptersRequest`].
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer to a `BlazenModelClient`.
+ * `request_json` must be a valid NUL-terminated UTF-8 buffer.
+ * `out_response_json` is null OR a destination for one `*mut c_char`
+ * write. `out_err` is null OR a destination for one `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_modelclient_list_adapters_blocking(BlazenModelClient *handle,
+                                                  const char *request_json,
+                                                  char **out_response_json,
+                                                  BlazenError **out_err);
+
+/**
+ * Synchronously issue a `Complete` RPC against a loaded model.
+ * Returns `0` on success (writing a caller-owned `*mut c_char` JSON
+ * string for the `CompleteResponse` to `out_response_json`; free via
+ * [`crate::string::blazen_string_free`]) or `-1` on failure.
+ *
+ * `request_json` is a NUL-terminated UTF-8 buffer holding a JSON
+ * serialisation of
+ * [`blazen_controlplane::model_protocol::CompleteRequest`].
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer to a `BlazenModelClient`.
+ * `request_json` must be a valid NUL-terminated UTF-8 buffer.
+ * `out_response_json` is null OR a destination for one `*mut c_char`
+ * write. `out_err` is null OR a destination for one `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_modelclient_complete_blocking(BlazenModelClient *handle,
+                                             const char *request_json,
+                                             char **out_response_json,
+                                             BlazenError **out_err);
+
+/**
+ * Synchronously issue an `Embed` RPC.
+ * Returns `0` on success (writing a caller-owned `*mut c_char` JSON
+ * string for the `EmbedResponse` to `out_response_json`; free via
+ * [`crate::string::blazen_string_free`]) or `-1` on failure.
+ *
+ * `request_json` is a NUL-terminated UTF-8 buffer holding a JSON
+ * serialisation of
+ * [`blazen_controlplane::model_protocol::EmbedRequest`].
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer to a `BlazenModelClient`.
+ * `request_json` must be a valid NUL-terminated UTF-8 buffer.
+ * `out_response_json` is null OR a destination for one `*mut c_char`
+ * write. `out_err` is null OR a destination for one `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_modelclient_embed_blocking(BlazenModelClient *handle,
+                                          const char *request_json,
+                                          char **out_response_json,
+                                          BlazenError **out_err);
+
+/**
+ * Synchronously issue a `GenerateImage` RPC.
+ * Returns `0` on success (writing a caller-owned `*mut c_char` JSON
+ * string for the `GenerateImageResponse` to `out_response_json`; free
+ * via [`crate::string::blazen_string_free`]) or `-1` on failure.
+ *
+ * `request_json` is a NUL-terminated UTF-8 buffer holding a JSON
+ * serialisation of
+ * [`blazen_controlplane::model_protocol::GenerateImageRequest`].
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer to a `BlazenModelClient`.
+ * `request_json` must be a valid NUL-terminated UTF-8 buffer.
+ * `out_response_json` is null OR a destination for one `*mut c_char`
+ * write. `out_err` is null OR a destination for one `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_modelclient_generate_image_blocking(BlazenModelClient *handle,
+                                                   const char *request_json,
+                                                   char **out_response_json,
+                                                   BlazenError **out_err);
+
+/**
+ * Synchronously issue a `TextToSpeech` RPC.
+ * Returns `0` on success (writing a caller-owned `*mut c_char` JSON
+ * string for the `TextToSpeechResponse` to `out_response_json`; free
+ * via [`crate::string::blazen_string_free`]) or `-1` on failure.
+ *
+ * `request_json` is a NUL-terminated UTF-8 buffer holding a JSON
+ * serialisation of
+ * [`blazen_controlplane::model_protocol::TextToSpeechRequest`].
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer to a `BlazenModelClient`.
+ * `request_json` must be a valid NUL-terminated UTF-8 buffer.
+ * `out_response_json` is null OR a destination for one `*mut c_char`
+ * write. `out_err` is null OR a destination for one `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_modelclient_text_to_speech_blocking(BlazenModelClient *handle,
+                                                   const char *request_json,
+                                                   char **out_response_json,
+                                                   BlazenError **out_err);
+
+/**
+ * Synchronously issue a `GenerateMusic` RPC.
+ * Returns `0` on success (writing a caller-owned `*mut c_char` JSON
+ * string for the `GenerateMusicResponse` to `out_response_json`; free
+ * via [`crate::string::blazen_string_free`]) or `-1` on failure.
+ *
+ * `request_json` is a NUL-terminated UTF-8 buffer holding a JSON
+ * serialisation of
+ * [`blazen_controlplane::model_protocol::GenerateMusicRequest`].
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer to a `BlazenModelClient`.
+ * `request_json` must be a valid NUL-terminated UTF-8 buffer.
+ * `out_response_json` is null OR a destination for one `*mut c_char`
+ * write. `out_err` is null OR a destination for one `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_modelclient_generate_music_blocking(BlazenModelClient *handle,
+                                                   const char *request_json,
+                                                   char **out_response_json,
+                                                   BlazenError **out_err);
+
+/**
+ * Synchronously issue a `Transcribe` RPC.
+ * Returns `0` on success (writing a caller-owned `*mut c_char` JSON
+ * string for the `TranscribeResponse` to `out_response_json`; free
+ * via [`crate::string::blazen_string_free`]) or `-1` on failure.
+ *
+ * `request_json` is a NUL-terminated UTF-8 buffer holding a JSON
+ * serialisation of
+ * [`blazen_controlplane::model_protocol::TranscribeRequest`].
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer to a `BlazenModelClient`.
+ * `request_json` must be a valid NUL-terminated UTF-8 buffer.
+ * `out_response_json` is null OR a destination for one `*mut c_char`
+ * write. `out_err` is null OR a destination for one `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_modelclient_transcribe_blocking(BlazenModelClient *handle,
+                                               const char *request_json,
+                                               char **out_response_json,
+                                               BlazenError **out_err);
+
+/**
+ * Synchronously issue a `StreamComplete` server-streaming RPC against a
+ * loaded model, dispatching each token-delta to the supplied vtable. Blocks
+ * the calling thread on the cabi tokio runtime until the stream terminates.
+ * Returns `0` on success (the sink's `on_done` fired) or `-1` on
+ * initial-stream-start failure (writing a fresh `*mut BlazenError` to
+ * `out_err`).
+ *
+ * `request_json` is a NUL-terminated UTF-8 buffer holding a JSON
+ * serialisation of [`blazen_controlplane::model_protocol::CompleteRequest`];
+ * the `envelope_version` field is overwritten with
+ * [`MODEL_ENVELOPE_VERSION`] before dispatch.
+ *
+ * ## Mid-stream errors
+ *
+ * Errors observed mid-stream are delivered to the sink via `on_error`, and
+ * the function still returns `0`. The only way to receive `-1` is to fail
+ * before the first frame: invalid JSON, transport handshake failure on
+ * `stream_complete`, or a null pointer argument. This mirrors the
+ * uniffi-side [`blazen_uniffi::model_client::ModelClient::stream_complete`]
+ * surface so all bindings observe a uniform happy/error split.
+ *
+ * ## Text-only simplification
+ *
+ * The wire-level [`StreamCompleteChunk`] carries only `text` payloads
+ * (no per-frame tool-call deltas, citations, or reasoning trace). Each
+ * `Delta` frame's `text` is forwarded to `on_chunk` as the
+ * `BlazenStreamChunk`'s `content_delta`; `tool_calls` is empty. The
+ * terminal `Done` frame's `finish_reason` (or `""` if absent) and the
+ * reported `prompt_tokens`/`completion_tokens` are delivered through
+ * `on_done` as a `BlazenTokenUsage`. The penultimate-vs-final flagging
+ * mirrors the uniffi side: one chunk is buffered so the last
+ * content-bearing chunk lands with `is_final = true`.
+ *
+ * ## Ownership transfer
+ *
+ * - `handle` is BORROWED — the inner `ModelClient` is cloned (cheap; it's
+ *   an `Arc<Mutex<...>>` internally) into the streaming call.
+ * - `request_json` is BORROWED — copied into an owned `String` before
+ *   the runtime block; caller retains its buffer.
+ * - `vtable` is CONSUMED — ownership of `user_data` transfers to the
+ *   wrapping `CStreamSink`, which releases it via `drop_user_data` on drop.
+ *   On every early-return failure path that aborts BEFORE constructing
+ *   `CStreamSink`, this function explicitly invokes
+ *   `(vtable.drop_user_data)(vtable.user_data)` to honour the same contract.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a valid pointer to a `BlazenModelClient`.
+ * `request_json` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * `vtable.user_data` and its four function pointers must satisfy the
+ * contracts documented on [`BlazenCompletionStreamSinkVTable`]. `out_err`
+ * must be null OR a writable slot for a single `*mut BlazenError` write.
+ */
+
+int32_t blazen_modelclient_stream_complete_blocking(BlazenModelClient *handle,
+                                                    const char *request_json,
+                                                    BlazenCompletionStreamSinkVTable vtable,
+                                                    BlazenError **out_err);
+
+/**
+ * Synchronously issue an `UploadBlob` client-streaming RPC. Sends a
+ * single `Start` frame naming the blob (with optional `mime`), a single
+ * `Data` frame carrying `data[..data_len]`, then `End`, and returns the
+ * server's acknowledgement once the stream is closed.
+ *
+ * Returns `0` on success (writing a caller-owned `*mut c_char` JSON
+ * string for the `UploadBlobResponse` to `out_ack_json`; free via
+ * [`crate::string::blazen_string_free`]) or `-1` on failure.
+ *
+ * `blob_id` is required. `mime` may be null (omits the content-type
+ * hint). `data` may be null only when `data_len == 0`.
+ *
+ * ## Buffered ownership
+ *
+ * The cabi pre-buffers the entire payload into a single in-memory
+ * `Vec<u8>` before opening the stream — matching the `UniFFI` sibling
+ * surface's synchronous-buffered semantics. For multi-gigabyte blobs
+ * this materialises the full payload twice (caller buffer + chunk
+ * vec); chunked streaming is reserved for a future wave once the
+ * foreign-language sinks land.
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer to a `BlazenModelClient`. `blob_id`
+ * must be a valid NUL-terminated UTF-8 buffer. `mime` is null OR a
+ * valid NUL-terminated UTF-8 buffer. `data` is null OR points to at
+ * least `data_len` readable bytes. `out_ack_json` is null OR a
+ * destination for one `*mut c_char` write. `out_err` is null OR a
+ * destination for one `*mut BlazenError` write.
+ */
+
+int32_t blazen_modelclient_upload_blob_blocking(BlazenModelClient *handle,
+                                                const char *blob_id,
+                                                const char *mime,
+                                                const uint8_t *data,
+                                                uintptr_t data_len,
+                                                char **out_ack_json,
+                                                BlazenError **out_err);
+
+/**
+ * Synchronously issue a `FetchBlob` server-streaming RPC, draining the
+ * stream into a single heap-allocated byte buffer.
+ *
+ * Returns `0` on success (writing a caller-owned `*mut u8` to
+ * `out_data` and its length to `out_data_len`; free via
+ * [`blazen_modelclient_bytes_free`]) or `-1` on failure.
+ *
+ * `request_json` is a NUL-terminated UTF-8 buffer holding a JSON
+ * serialisation of
+ * [`blazen_controlplane::model_protocol::FetchBlobRequest`]; the
+ * `envelope_version` field is overwritten with
+ * [`MODEL_ENVELOPE_VERSION`] before dispatch.
+ *
+ * ## Buffered ownership
+ *
+ * All `FetchBlobChunk::Data` frames' bytes are concatenated into a
+ * single contiguous buffer. The `Start` and `End` frames carry no
+ * payload bytes and are consumed silently. For multi-gigabyte blobs
+ * this materialises the full payload in memory; chunked streaming is
+ * reserved for a future wave.
+ *
+ * # Safety
+ *
+ * `handle` must be a valid pointer to a `BlazenModelClient`.
+ * `request_json` must be a valid NUL-terminated UTF-8 buffer.
+ * `out_data` is null OR a destination for one `*mut u8` write.
+ * `out_data_len` is null OR a destination for one `usize` write.
+ * `out_err` is null OR a destination for one `*mut BlazenError` write.
+ */
+
+int32_t blazen_modelclient_fetch_blob_blocking(BlazenModelClient *handle,
+                                               const char *request_json,
+                                               uint8_t **out_data,
+                                               uintptr_t *out_data_len,
+                                               BlazenError **out_err);
+
+/**
+ * Frees a byte buffer previously produced by
+ * [`blazen_modelclient_fetch_blob_blocking`]. Pairs the `*mut u8` /
+ * `usize` (length) out-params produced by that call.
+ *
+ * No-op when `ptr` is null. `len` must match the length originally
+ * returned via `out_data_len`; passing a mismatched length is undefined
+ * behaviour (the underlying allocation is reconstructed as
+ * `Box<[u8]>` of exactly `len` bytes).
+ *
+ * # Safety
+ *
+ * `ptr` must be null OR a pointer previously produced by
+ * [`blazen_modelclient_fetch_blob_blocking`]. `len` must equal the
+ * length originally written to that call's `out_data_len`. Calling this
+ * twice on the same pointer is a double-free.
+ */
+ void blazen_modelclient_bytes_free(uint8_t *ptr, uintptr_t len);
+
+/**
+ * Frees a `BlazenModelClient` handle. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer previously produced by the cabi
+ * model-client surface. Calling this twice is a double-free.
+ */
+ void blazen_modelclient_free(BlazenModelClient *handle);
 
 /**
  * Construct a new peer server with the given UTF-8 `node_id`. Returns null

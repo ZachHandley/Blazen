@@ -37,6 +37,8 @@ pub mod llm;
 pub mod local_model;
 pub mod manager;
 #[cfg(feature = "distributed")]
+pub mod model_client;
+#[cfg(feature = "distributed")]
 pub mod peer;
 pub mod persist;
 pub mod pipeline;
@@ -78,6 +80,8 @@ pub use local_model::{
     AdapterHandleRecord, AdapterOptionsRecord, AdapterStatusRecord, ForeignLocalModel,
 };
 pub use manager::{ModelStatusRecord, PoolStatusRecord, UniffiModelManager};
+#[cfg(feature = "distributed")]
+pub use model_client::{ModelClient, ModelClientStatusRecord, ModelPool, StatusRecord};
 #[cfg(feature = "distributed")]
 pub use peer::{PeerClient, PeerServer};
 pub use persist::{
