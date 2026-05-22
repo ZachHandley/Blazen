@@ -1,0 +1,21 @@
+[package]
+name = "blazen-video-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Shared candle primitives (temporal attention, time-causal Conv3d, sinusoidal time embeddings) reused across Blazen video diffusion backends (CogVideoX, HunyuanVideo, Mochi)"
+
+[lib]
+crate-type = ["rlib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+candle-core.workspace = true
+candle-nn.workspace = true
+serde = { workspace = true, features = ["derive"] }
+thiserror.workspace = true

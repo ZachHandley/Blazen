@@ -706,7 +706,6 @@ version = "0.0.0-dev"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
- "blazen-core",
  "futures-core",
  "mockito",
  "reqwest 0.13.3",
@@ -1074,6 +1073,7 @@ version = "0.0.0-dev"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "blazen-3d",
  "blazen-audio",
  "blazen-audio-codec",
  "blazen-audio-music",
@@ -1619,6 +1619,16 @@ dependencies = [
  "uniffi",
  "uniffi_build",
  "uuid 1.23.1",
+]
+
+[[package]]
+name = "blazen-video-core"
+version = "0.0.0-dev"
+dependencies = [
+ "candle-core",
+ "candle-nn",
+ "serde",
+ "thiserror 2.0.18",
 ]
 
 [[package]]
