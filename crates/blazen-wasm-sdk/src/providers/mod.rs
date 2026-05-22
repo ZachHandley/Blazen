@@ -1,13 +1,13 @@
 //! Standalone `wasm-bindgen` wrappers for each cloud LLM provider.
 //!
-//! These classes complement the [`crate::completion_model::WasmCompletionModel`]
+//! These classes complement the [`crate::model::WasmModel`]
 //! factory methods. They give JavaScript callers a typed, named class per
 //! provider, plus access to provider-specific capability methods that the
-//! generic `CompletionModel` does not surface (e.g. `OpenAiProvider.textToSpeech`,
+//! generic `Model` does not surface (e.g. `OpenAiProvider.textToSpeech`,
 //! `FalProvider.generateImage`).
 //!
-//! Each class is itself a `CompletionModel` -- call `.toCompletionModel()` to
-//! obtain a generic [`crate::completion_model::WasmCompletionModel`] that can
+//! Each class is itself a `Model` -- call `.toModel()` to
+//! obtain a generic [`crate::model::WasmModel`] that can
 //! be passed to `runAgent`, `batchComplete`, decorators, etc.
 
 use std::sync::Arc;
@@ -17,11 +17,11 @@ use wasm_bindgen_futures::future_to_promise;
 
 use blazen_llm::FetchHttpClient;
 use blazen_llm::http::HttpClient;
-use blazen_llm::traits::CompletionModel;
-use blazen_llm::types::{CompletionRequest, ToolDefinition};
+use blazen_llm::traits::Model;
+use blazen_llm::types::{ModelRequest, ToolDefinition};
 
 use crate::chat_message::js_messages_to_vec;
-use crate::completion_model::WasmCompletionModel;
+use crate::model::WasmModel;
 
 pub mod anthropic;
 pub mod api_protocol;
@@ -51,7 +51,7 @@ pub use custom::WasmCustomProvider;
 pub use defaults::{
     WasmAudioMusicProviderDefaults, WasmAudioSpeechProviderDefaults,
     WasmBackgroundRemovalProviderDefaults, WasmBaseProviderDefaults,
-    WasmCompletionProviderDefaults, WasmEmbeddingProviderDefaults,
+    WasmProviderDefaults, WasmEmbeddingProviderDefaults,
     WasmImageGenerationProviderDefaults, WasmImageUpscaleProviderDefaults,
     WasmThreeDProviderDefaults, WasmTranscriptionProviderDefaults, WasmVideoProviderDefaults,
     WasmVoiceCloningProviderDefaults,
@@ -72,15 +72,15 @@ pub(crate) fn fetch_client() -> Arc<dyn HttpClient> {
 }
 
 /// Convert a concrete provider `Arc` into the trait-object form expected by
-/// [`crate::completion_model::WasmCompletionModel`] and the shared
+/// [`crate::model::WasmModel`] and the shared
 /// `complete_promise` / `stream_promise` helpers.
 ///
 /// This exists because `Arc<T> -> Arc<dyn Trait>` requires a coercion site
 /// (`let` with explicit type, or function-call boundary), which is not
 /// available at every call site in this module.
-pub(crate) fn as_dyn_completion<T>(arc: Arc<T>) -> Arc<dyn CompletionModel>
+pub(crate) fn as_dyn_completion<T>(arc: Arc<T>) -> Arc<dyn Model>
 where
-    T: CompletionModel + 'static,
+    T: Model + 'static,
 {
     arc
 }
@@ -93,14 +93,14 @@ pub(crate) fn resolve_key(provider: &str, explicit: Option<String>) -> Result<St
 }
 
 /// Apply request-level options (temperature, maxTokens, topP, model, tools,
-/// responseFormat) from a JS plain object to a [`CompletionRequest`].
+/// responseFormat) from a JS plain object to a [`ModelRequest`].
 ///
 /// Mirrors the option handling of
-/// [`crate::completion_model::WasmCompletionModel::complete_with_options`].
+/// [`crate::model::WasmModel::complete_with_options`].
 pub(crate) fn apply_request_options(
-    mut request: CompletionRequest,
+    mut request: ModelRequest,
     options: JsValue,
-) -> Result<CompletionRequest, JsValue> {
+) -> Result<ModelRequest, JsValue> {
     if !options.is_object() {
         return Ok(request);
     }
@@ -148,12 +148,12 @@ pub(crate) fn apply_request_options(
 /// Run a non-streaming completion through `model`, converting messages from
 /// a JS array and the response back to a JS object.
 pub(crate) fn complete_promise(
-    model: Arc<dyn CompletionModel>,
+    model: Arc<dyn Model>,
     messages: JsValue,
 ) -> js_sys::Promise {
     future_to_promise(async move {
         let msgs = js_messages_to_vec(&messages)?;
-        let request = CompletionRequest::new(msgs);
+        let request = ModelRequest::new(msgs);
         let response = model
             .complete(request)
             .await
@@ -164,13 +164,13 @@ pub(crate) fn complete_promise(
 
 /// Streaming sibling of [`complete_promise`].
 pub(crate) fn stream_promise(
-    model: Arc<dyn CompletionModel>,
+    model: Arc<dyn Model>,
     messages: JsValue,
     callback: js_sys::Function,
 ) -> js_sys::Promise {
     future_to_promise(async move {
         let msgs = js_messages_to_vec(&messages)?;
-        let request = CompletionRequest::new(msgs);
+        let request = ModelRequest::new(msgs);
         let mut stream = model
             .stream(request)
             .await

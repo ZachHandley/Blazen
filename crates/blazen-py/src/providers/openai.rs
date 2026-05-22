@@ -2,7 +2,7 @@
 //!
 //! Exposes [`OpenAiProvider`](blazen_llm::providers::openai::OpenAiProvider)
 //! to Python with text-to-speech support. For LLM completion, use
-//! [`PyCompletionModel::openai`](crate::providers::completion_model::PyCompletionModel::openai)
+//! [`PyModel::openai`](crate::providers::model::PyModel::openai)
 //! instead -- this class is specifically for the non-completion capabilities
 //! (TTS, and in the future other audio methods).
 
@@ -26,7 +26,7 @@ use blazen_llm::providers::openai::OpenAiProvider;
 
 /// An OpenAI provider for text-to-speech and other compute capabilities.
 ///
-/// For LLM chat completions, use [`CompletionModel.openai`] instead.
+/// For LLM chat completions, use [`Model.openai`] instead.
 /// This class wraps [`blazen_llm::providers::openai::OpenAiProvider`]
 /// directly and exposes its non-completion capabilities.
 ///

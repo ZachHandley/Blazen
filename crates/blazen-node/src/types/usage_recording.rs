@@ -16,16 +16,16 @@ use napi_derive::napi;
 use uuid::Uuid;
 
 use blazen_events::UsageEvent;
-use blazen_llm::traits::{CompletionModel, EmbeddingModel};
+use blazen_llm::traits::{EmbeddingModel, Model};
 use blazen_llm::usage_recording::{
     NoopUsageEmitter as CoreNoopUsageEmitter, UsageEmitter,
-    UsageRecordingCompletionModel as CoreUsageRecordingCompletionModel,
     UsageRecordingEmbeddingModel as CoreUsageRecordingEmbeddingModel,
+    UsageRecordingModel as CoreUsageRecordingModel,
 };
 
 use super::embedding::JsEmbeddingModel;
 use super::events_wave::JsUsageEvent;
-use crate::providers::completion_model::JsCompletionModel;
+use crate::providers::model::JsModel;
 
 // ---------------------------------------------------------------------------
 // JsUsageEmitter
@@ -40,7 +40,7 @@ use crate::providers::completion_model::JsCompletionModel;
 /// ```javascript
 /// const events: UsageEvent[] = [];
 /// const emitter = new UsageEmitter((event) => { events.push(event); });
-/// const model = new UsageRecordingCompletionModel(base, emitter, "openai");
+/// const model = new UsageRecordingModel(base, emitter, "openai");
 /// ```
 #[napi(js_name = "UsageEmitter")]
 pub struct JsUsageEmitter {
@@ -106,7 +106,7 @@ impl UsageEmitter for JsUsageEmitterAdapter {
 /// Useful as a default when no downstream observer is wired up:
 ///
 /// ```javascript
-/// const model = new UsageRecordingCompletionModel(base, new NoopUsageEmitter(), "openai");
+/// const model = new UsageRecordingModel(base, new NoopUsageEmitter(), "openai");
 /// ```
 #[napi(js_name = "NoopUsageEmitter")]
 pub struct JsNoopUsageEmitter;
@@ -146,31 +146,29 @@ fn parse_run_id(run_id: Option<String>) -> Result<Uuid> {
 }
 
 // ---------------------------------------------------------------------------
-// JsUsageRecordingCompletionModel
+// JsUsageRecordingModel
 // ---------------------------------------------------------------------------
 
-fn require_completion_inner(model: &JsCompletionModel) -> Result<Arc<dyn CompletionModel>> {
+fn require_completion_inner(model: &JsModel) -> Result<Arc<dyn Model>> {
     model.inner.clone().ok_or_else(|| {
-        napi::Error::from_reason(
-            "UsageRecordingCompletionModel: source CompletionModel has no inner provider",
-        )
+        napi::Error::from_reason("UsageRecordingModel: source Model has no inner provider")
     })
 }
 
-/// A `CompletionModel` decorator that emits a `UsageEvent` after each
+/// A `Model` decorator that emits a `UsageEvent` after each
 /// successful `complete` call. Mirrors
-/// `blazen_llm::usage_recording::UsageRecordingCompletionModel`.
+/// `blazen_llm::usage_recording::UsageRecordingModel`.
 ///
 /// ```javascript
-/// const base = CompletionModel.openai();
+/// const base = Model.openai();
 /// const events = [];
 /// const emitter = new UsageEmitter((e) => events.push(e));
-/// const model = new UsageRecordingCompletionModel(base, emitter, "openai");
+/// const model = new UsageRecordingModel(base, emitter, "openai");
 /// const response = await model.complete([ChatMessage.user("hi")]);
 /// ```
-#[napi(js_name = "UsageRecordingCompletionModel")]
-pub struct JsUsageRecordingCompletionModel {
-    inner: Arc<dyn CompletionModel>,
+#[napi(js_name = "UsageRecordingModel")]
+pub struct JsUsageRecordingModel {
+    inner: Arc<dyn Model>,
 }
 
 #[napi]
@@ -179,11 +177,11 @@ pub struct JsUsageRecordingCompletionModel {
     clippy::missing_errors_doc,
     clippy::needless_pass_by_value
 )]
-impl JsUsageRecordingCompletionModel {
-    /// Wrap a `CompletionModel` with a usage-recording layer.
+impl JsUsageRecordingModel {
+    /// Wrap a `Model` with a usage-recording layer.
     #[napi(constructor)]
     pub fn new(
-        model: &JsCompletionModel,
+        model: &JsModel,
         emitter: AnyEmitter<'_>,
         provider_label: String,
         run_id: Option<String>,
@@ -191,7 +189,7 @@ impl JsUsageRecordingCompletionModel {
         let inner_model = require_completion_inner(model)?;
         let emitter_arc = emitter_arc(emitter);
         let run_id_uuid = parse_run_id(run_id)?;
-        let wrapped = CoreUsageRecordingCompletionModel::from_arc(
+        let wrapped = CoreUsageRecordingModel::from_arc(
             inner_model,
             emitter_arc,
             provider_label,
@@ -208,11 +206,11 @@ impl JsUsageRecordingCompletionModel {
         self.inner.model_id().to_owned()
     }
 
-    /// Convert this decorator into a `CompletionModel` so it can be passed to
+    /// Convert this decorator into a `Model` so it can be passed to
     /// APIs that expect the base type (`runAgent`, further decorators, …).
-    #[napi(js_name = "toCompletionModel")]
-    pub fn to_completion_model(&self) -> JsCompletionModel {
-        JsCompletionModel {
+    #[napi(js_name = "toModel")]
+    pub fn to_model(&self) -> JsModel {
+        JsModel {
             inner: Some(Arc::clone(&self.inner)),
             local_model: None,
             config: None,

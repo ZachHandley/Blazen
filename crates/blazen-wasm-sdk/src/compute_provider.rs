@@ -120,7 +120,7 @@ export interface ComputeProviderHandlers {
 }
 
 /** Options accepted by `ComputeProvider.awaitCompletion`. */
-export interface AwaitCompletionOptions {
+export interface AwaitModelOptions {
     /** Polling interval in milliseconds (default: 1000). */
     pollIntervalMs?: number;
     /** Maximum number of polls before giving up (default: 600). */

@@ -3,8 +3,8 @@
 module Blazen
   # Batch-completion helpers.
   #
-  # Runs many {Blazen::Llm::CompletionRequest}s through a single
-  # {Blazen::Llm::CompletionModel} with a bounded number of in-flight
+  # Runs many {Blazen::Llm::ModelRequest}s through a single
+  # {Blazen::Llm::Model} with a bounded number of in-flight
   # requests, then exposes the per-request success/failure result and
   # aggregated usage/cost totals via {BatchResult} / {BatchItem}.
   module Batch
@@ -22,8 +22,8 @@ module Blazen
     # future-await pattern and composes with {Fiber.scheduler}; use
     # {complete_blocking} for an explicit thread-block.
     #
-    # @param model [Blazen::Llm::CompletionModel]
-    # @param requests [Array<Blazen::Llm::CompletionRequest>]
+    # @param model [Blazen::Llm::Model]
+    # @param requests [Array<Blazen::Llm::ModelRequest>]
     # @param max_concurrency [Integer]
     # @return [Blazen::Batch::BatchResult]
     def complete(model, requests, max_concurrency: DEFAULT_MAX_CONCURRENCY)
@@ -46,8 +46,8 @@ module Blazen
 
     # Blocking-thread variant of {complete}.
     #
-    # @param model [Blazen::Llm::CompletionModel]
-    # @param requests [Array<Blazen::Llm::CompletionRequest>]
+    # @param model [Blazen::Llm::Model]
+    # @param requests [Array<Blazen::Llm::ModelRequest>]
     # @param max_concurrency [Integer]
     # @return [Blazen::Batch::BatchResult]
     def complete_blocking(model, requests, max_concurrency: DEFAULT_MAX_CONCURRENCY)
@@ -62,13 +62,13 @@ module Blazen
       BatchResult.new(out_result.read_pointer)
     end
 
-    # Packs an array of CompletionRequest wrappers into a +const*+ pointer
+    # Packs an array of ModelRequest wrappers into a +const*+ pointer
     # array suitable for the cabi. Each request's underlying handle is
     # consumed (its auto-free hook disabled) so ownership transfers to
     # the C side.
     #
     # @api private
-    # @param requests [Array<Blazen::Llm::CompletionRequest>]
+    # @param requests [Array<Blazen::Llm::ModelRequest>]
     # @return [Array(::FFI::MemoryPointer, Integer)] +(array, count)+
     def self.pack_requests(requests)
       count = requests.length
@@ -176,7 +176,7 @@ module Blazen
     # variants:
     #
     # - +success+: the corresponding completion finished and {#response}
-    #   returns a freshly-cloned {Blazen::Llm::CompletionResponse}.
+    #   returns a freshly-cloned {Blazen::Llm::ModelResponse}.
     # - +failure+: the request errored out and {#failure_message} returns
     #   the error message; {#response} returns +nil+.
     class BatchItem
@@ -207,19 +207,19 @@ module Blazen
 
       # Returns a freshly-cloned completion response when this item is the
       # +:success+ variant, +nil+ otherwise. The clone is wrapped in
-      # {Blazen::Llm::CompletionResponse} when that class is available
+      # {Blazen::Llm::ModelResponse} when that class is available
       # (Phase R7 Agent A); otherwise the raw pointer is returned with an
       # {::FFI::AutoPointer} drop hook so callers can still free it.
       #
-      # @return [Blazen::Llm::CompletionResponse, ::FFI::AutoPointer, nil]
+      # @return [Blazen::Llm::ModelResponse, ::FFI::AutoPointer, nil]
       def response
         raw = Blazen::FFI.blazen_batch_item_success_response(@ptr)
         return nil if raw.nil? || raw.null?
 
-        if defined?(Blazen::Llm) && defined?(Blazen::Llm::CompletionResponse)
-          Blazen::Llm::CompletionResponse.new(raw)
+        if defined?(Blazen::Llm) && defined?(Blazen::Llm::ModelResponse)
+          Blazen::Llm::ModelResponse.new(raw)
         else
-          ::FFI::AutoPointer.new(raw, Blazen::FFI.method(:blazen_completion_response_free))
+          ::FFI::AutoPointer.new(raw, Blazen::FFI.method(:blazen_model_response_free))
         end
       end
 

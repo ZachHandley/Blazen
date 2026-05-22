@@ -7,7 +7,7 @@
 //! ```js
 //! const manager = new ModelManager(8); // 8 GB CPU memory budget
 //!
-//! const model = CompletionModel.webLlm('Llama-3.1-8B-Instruct-q4f32_1-MLC');
+//! const model = Model.webLlm('Llama-3.1-8B-Instruct-q4f32_1-MLC');
 //! let loaded = false;
 //! await manager.register('llama-8b', model, 4_000_000_000, {
 //!   load: async () => { loaded = true; /* load model */ },
@@ -446,7 +446,7 @@ impl WasmModelManager {
     /// Returns a `Promise<void>` that resolves once registration completes.
     ///
     /// @param id                  - Unique identifier for this model.
-    /// @param model               - The model value (`CompletionModel`, etc.) or `null`.
+    /// @param model               - The model value (`Model`, etc.) or `null`.
     /// @param memoryEstimateBytes - Estimated memory footprint in bytes.
     /// @param lifecycle           - Object with `load()` and `unload()` async methods,
     ///                              plus optional `isLoaded()`, `memoryBytes()`, and
@@ -547,7 +547,7 @@ impl WasmModelManager {
     /// [`BlazenJsBackend`](../byo_backend/index.html) TypeScript interface
     /// (defined in `byo_backend.rs`). The backend object is wrapped in a
     /// [`crate::byo_backend::JsBackendShim`] that implements
-    /// [`LocalModel`] + [`CompletionModel`] (+ [`EmbeddingModel`] if the
+    /// [`LocalModel`] + [`Model`] (+ [`EmbeddingModel`] if the
     /// optional `embed()` method is present), and is registered with the
     /// underlying [`ModelManager`] under the given `id`.
     ///

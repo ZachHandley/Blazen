@@ -24,7 +24,7 @@ model = Blazen::Providers.openai(
   model: 'gpt-4o-mini',
 )
 
-req = Blazen::Llm.completion_request(
+req = Blazen::Llm.model_request(
   messages: [
     Blazen::Llm.system('You are a helpful assistant.'),
     Blazen::Llm.user('Tell me a short joke about Ruby blocks.'),
@@ -47,7 +47,7 @@ Blazen::Streaming.complete(model, req) do |kind, *args|
 end
 ```
 
-`Blazen::Streaming.complete` consumes the `CompletionRequest` -- once you pass a request in, do not reuse the same wrapper for a second call. Build a fresh one each time.
+`Blazen::Streaming.complete` consumes the `ModelRequest` -- once you pass a request in, do not reuse the same wrapper for a second call. Build a fresh one each time.
 
 ## Explicit handlers
 

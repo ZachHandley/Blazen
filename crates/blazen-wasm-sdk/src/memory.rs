@@ -1592,7 +1592,7 @@ impl WasmRetryMemoryBackend {
     /// Wrap an [`InMemoryBackend`] with retry-on-transient-error behaviour.
     ///
     /// `options` is an optional plain JS object with the same shape as
-    /// `RetryCompletionModel`'s options:
+    /// `RetryModel`'s options:
     /// - `maxRetries` (number) — default 3
     /// - `initialDelayMs` (number) — default 1000
     /// - `maxDelayMs` (number) — default 30000

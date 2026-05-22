@@ -1,5 +1,5 @@
 //! LLM-related record marshalling. Wraps `Media`, `ChatMessage`, `ToolCall`,
-//! `Tool`, `TokenUsage`, `CompletionRequest`, `CompletionResponse`, and
+//! `Tool`, `TokenUsage`, `ModelRequest`, `ModelResponse`, and
 //! `EmbeddingResponse` from `blazen_uniffi::llm` as opaque C handles.
 //!
 //! # Ownership conventions
@@ -36,15 +36,12 @@
 
 use std::ffi::{CStr, c_char};
 
-use blazen_llm::{
-    CompletionResponse as CoreCompletionResponse, EmbeddingResponse as CoreEmbeddingResponse,
-};
+use blazen_llm::{EmbeddingResponse as CoreEmbeddingResponse, ModelResponse as CoreModelResponse};
 use blazen_uniffi::errors::BlazenError as InnerError;
 use blazen_uniffi::llm::{
-    ChatMessage as InnerChatMessage, CompletionRequest as InnerCompletionRequest,
-    CompletionResponse as InnerCompletionResponse, EmbeddingResponse as InnerEmbeddingResponse,
-    Media as InnerMedia, TokenUsage as InnerTokenUsage, Tool as InnerTool,
-    ToolCall as InnerToolCall,
+    ChatMessage as InnerChatMessage, EmbeddingResponse as InnerEmbeddingResponse,
+    Media as InnerMedia, ModelRequest as InnerModelRequest, ModelResponse as InnerModelResponse,
+    TokenUsage as InnerTokenUsage, Tool as InnerTool, ToolCall as InnerToolCall,
 };
 
 use crate::error::BlazenError;
@@ -919,29 +916,29 @@ pub unsafe extern "C" fn blazen_chat_message_free(handle: *mut BlazenChatMessage
 }
 
 // ---------------------------------------------------------------------------
-// BlazenCompletionRequest
+// BlazenModelRequest
 // ---------------------------------------------------------------------------
 
-/// Opaque wrapper around [`blazen_uniffi::llm::CompletionRequest`].
-pub struct BlazenCompletionRequest(pub(crate) InnerCompletionRequest);
+/// Opaque wrapper around [`blazen_uniffi::llm::ModelRequest`].
+pub struct BlazenModelRequest(pub(crate) InnerModelRequest);
 
-impl BlazenCompletionRequest {
-    pub(crate) fn into_ptr(self) -> *mut BlazenCompletionRequest {
+impl BlazenModelRequest {
+    pub(crate) fn into_ptr(self) -> *mut BlazenModelRequest {
         Box::into_raw(Box::new(self))
     }
 }
 
-impl From<InnerCompletionRequest> for BlazenCompletionRequest {
-    fn from(inner: InnerCompletionRequest) -> Self {
+impl From<InnerModelRequest> for BlazenModelRequest {
+    fn from(inner: InnerModelRequest) -> Self {
         Self(inner)
     }
 }
 
-/// Constructs a new `CompletionRequest` with empty `messages`/`tools` vecs and
+/// Constructs a new `ModelRequest` with empty `messages`/`tools` vecs and
 /// every optional field unset. Always succeeds; caller owns the handle.
 #[unsafe(no_mangle)]
-pub extern "C" fn blazen_completion_request_new() -> *mut BlazenCompletionRequest {
-    BlazenCompletionRequest(InnerCompletionRequest {
+pub extern "C" fn blazen_model_request_new() -> *mut BlazenModelRequest {
+    BlazenModelRequest(InnerModelRequest {
         messages: Vec::new(),
         tools: Vec::new(),
         temperature: None,
@@ -959,11 +956,11 @@ pub extern "C" fn blazen_completion_request_new() -> *mut BlazenCompletionReques
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionRequest`. `message` must
+/// `handle` must be null OR a live `BlazenModelRequest`. `message` must
 /// be null OR a live `BlazenChatMessage`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_request_messages_push(
-    handle: *mut BlazenCompletionRequest,
+pub unsafe extern "C" fn blazen_model_request_messages_push(
+    handle: *mut BlazenModelRequest,
     message: *mut BlazenChatMessage,
 ) {
     if message.is_null() {
@@ -975,7 +972,7 @@ pub unsafe extern "C" fn blazen_completion_request_messages_push(
         drop(msg_box);
         return;
     }
-    // SAFETY: caller has guaranteed `handle` is a live `BlazenCompletionRequest`.
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenModelRequest`.
     let r = unsafe { &mut *handle };
     r.0.messages.push(msg_box.0);
 }
@@ -984,11 +981,11 @@ pub unsafe extern "C" fn blazen_completion_request_messages_push(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionRequest`. `tool` must be
+/// `handle` must be null OR a live `BlazenModelRequest`. `tool` must be
 /// null OR a live `BlazenTool`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_request_tools_push(
-    handle: *mut BlazenCompletionRequest,
+pub unsafe extern "C" fn blazen_model_request_tools_push(
+    handle: *mut BlazenModelRequest,
     tool: *mut BlazenTool,
 ) {
     if tool.is_null() {
@@ -1000,7 +997,7 @@ pub unsafe extern "C" fn blazen_completion_request_tools_push(
         drop(tool_box);
         return;
     }
-    // SAFETY: caller has guaranteed `handle` is a live `BlazenCompletionRequest`.
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenModelRequest`.
     let r = unsafe { &mut *handle };
     r.0.tools.push(tool_box.0);
 }
@@ -1009,16 +1006,16 @@ pub unsafe extern "C" fn blazen_completion_request_tools_push(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionRequest`.
+/// `handle` must be null OR a live `BlazenModelRequest`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_request_set_temperature(
-    handle: *mut BlazenCompletionRequest,
+pub unsafe extern "C" fn blazen_model_request_set_temperature(
+    handle: *mut BlazenModelRequest,
     value: f64,
 ) {
     if handle.is_null() {
         return;
     }
-    // SAFETY: caller has guaranteed `handle` is a live `BlazenCompletionRequest`.
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenModelRequest`.
     let r = unsafe { &mut *handle };
     r.0.temperature = Some(value);
 }
@@ -1027,15 +1024,13 @@ pub unsafe extern "C" fn blazen_completion_request_set_temperature(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionRequest`.
+/// `handle` must be null OR a live `BlazenModelRequest`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_request_clear_temperature(
-    handle: *mut BlazenCompletionRequest,
-) {
+pub unsafe extern "C" fn blazen_model_request_clear_temperature(handle: *mut BlazenModelRequest) {
     if handle.is_null() {
         return;
     }
-    // SAFETY: caller has guaranteed `handle` is a live `BlazenCompletionRequest`.
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenModelRequest`.
     let r = unsafe { &mut *handle };
     r.0.temperature = None;
 }
@@ -1044,16 +1039,16 @@ pub unsafe extern "C" fn blazen_completion_request_clear_temperature(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionRequest`.
+/// `handle` must be null OR a live `BlazenModelRequest`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_request_set_max_tokens(
-    handle: *mut BlazenCompletionRequest,
+pub unsafe extern "C" fn blazen_model_request_set_max_tokens(
+    handle: *mut BlazenModelRequest,
     value: u32,
 ) {
     if handle.is_null() {
         return;
     }
-    // SAFETY: caller has guaranteed `handle` is a live `BlazenCompletionRequest`.
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenModelRequest`.
     let r = unsafe { &mut *handle };
     r.0.max_tokens = Some(value);
 }
@@ -1062,15 +1057,13 @@ pub unsafe extern "C" fn blazen_completion_request_set_max_tokens(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionRequest`.
+/// `handle` must be null OR a live `BlazenModelRequest`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_request_clear_max_tokens(
-    handle: *mut BlazenCompletionRequest,
-) {
+pub unsafe extern "C" fn blazen_model_request_clear_max_tokens(handle: *mut BlazenModelRequest) {
     if handle.is_null() {
         return;
     }
-    // SAFETY: caller has guaranteed `handle` is a live `BlazenCompletionRequest`.
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenModelRequest`.
     let r = unsafe { &mut *handle };
     r.0.max_tokens = None;
 }
@@ -1079,16 +1072,16 @@ pub unsafe extern "C" fn blazen_completion_request_clear_max_tokens(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionRequest`.
+/// `handle` must be null OR a live `BlazenModelRequest`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_request_set_top_p(
-    handle: *mut BlazenCompletionRequest,
+pub unsafe extern "C" fn blazen_model_request_set_top_p(
+    handle: *mut BlazenModelRequest,
     value: f64,
 ) {
     if handle.is_null() {
         return;
     }
-    // SAFETY: caller has guaranteed `handle` is a live `BlazenCompletionRequest`.
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenModelRequest`.
     let r = unsafe { &mut *handle };
     r.0.top_p = Some(value);
 }
@@ -1097,15 +1090,13 @@ pub unsafe extern "C" fn blazen_completion_request_set_top_p(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionRequest`.
+/// `handle` must be null OR a live `BlazenModelRequest`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_request_clear_top_p(
-    handle: *mut BlazenCompletionRequest,
-) {
+pub unsafe extern "C" fn blazen_model_request_clear_top_p(handle: *mut BlazenModelRequest) {
     if handle.is_null() {
         return;
     }
-    // SAFETY: caller has guaranteed `handle` is a live `BlazenCompletionRequest`.
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenModelRequest`.
     let r = unsafe { &mut *handle };
     r.0.top_p = None;
 }
@@ -1114,17 +1105,17 @@ pub unsafe extern "C" fn blazen_completion_request_clear_top_p(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionRequest`. `value` must be
+/// `handle` must be null OR a live `BlazenModelRequest`. `value` must be
 /// null OR point to a NUL-terminated UTF-8 buffer.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_request_set_model(
-    handle: *mut BlazenCompletionRequest,
+pub unsafe extern "C" fn blazen_model_request_set_model(
+    handle: *mut BlazenModelRequest,
     value: *const c_char,
 ) {
     if handle.is_null() {
         return;
     }
-    // SAFETY: caller has guaranteed `handle` is a live `BlazenCompletionRequest`.
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenModelRequest`.
     let r = unsafe { &mut *handle };
     // SAFETY: caller upholds the NUL-terminated UTF-8 contract.
     r.0.model = unsafe { cstr_to_opt_string(value) };
@@ -1134,17 +1125,17 @@ pub unsafe extern "C" fn blazen_completion_request_set_model(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionRequest`. `value` must be
+/// `handle` must be null OR a live `BlazenModelRequest`. `value` must be
 /// null OR point to a NUL-terminated UTF-8 buffer.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_request_set_response_format_json(
-    handle: *mut BlazenCompletionRequest,
+pub unsafe extern "C" fn blazen_model_request_set_response_format_json(
+    handle: *mut BlazenModelRequest,
     value: *const c_char,
 ) {
     if handle.is_null() {
         return;
     }
-    // SAFETY: caller has guaranteed `handle` is a live `BlazenCompletionRequest`.
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenModelRequest`.
     let r = unsafe { &mut *handle };
     // SAFETY: caller upholds the NUL-terminated UTF-8 contract.
     r.0.response_format_json = unsafe { cstr_to_opt_string(value) };
@@ -1154,23 +1145,23 @@ pub unsafe extern "C" fn blazen_completion_request_set_response_format_json(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionRequest`. `value` must be
+/// `handle` must be null OR a live `BlazenModelRequest`. `value` must be
 /// null OR point to a NUL-terminated UTF-8 buffer.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_request_set_system(
-    handle: *mut BlazenCompletionRequest,
+pub unsafe extern "C" fn blazen_model_request_set_system(
+    handle: *mut BlazenModelRequest,
     value: *const c_char,
 ) {
     if handle.is_null() {
         return;
     }
-    // SAFETY: caller has guaranteed `handle` is a live `BlazenCompletionRequest`.
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenModelRequest`.
     let r = unsafe { &mut *handle };
     // SAFETY: caller upholds the NUL-terminated UTF-8 contract.
     r.0.system = unsafe { cstr_to_opt_string(value) };
 }
 
-/// Frees a `BlazenCompletionRequest` handle and all owned contents. No-op on
+/// Frees a `BlazenModelRequest` handle and all owned contents. No-op on
 /// a null pointer.
 ///
 /// # Safety
@@ -1178,7 +1169,7 @@ pub unsafe extern "C" fn blazen_completion_request_set_system(
 /// `handle` must be null OR a pointer previously produced by the cabi
 /// surface.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_request_free(handle: *mut BlazenCompletionRequest) {
+pub unsafe extern "C" fn blazen_model_request_free(handle: *mut BlazenModelRequest) {
     if handle.is_null() {
         return;
     }
@@ -1187,21 +1178,21 @@ pub unsafe extern "C" fn blazen_completion_request_free(handle: *mut BlazenCompl
 }
 
 // ---------------------------------------------------------------------------
-// BlazenCompletionResponse (output-only)
+// BlazenModelResponse (output-only)
 // ---------------------------------------------------------------------------
 
-/// Opaque wrapper around [`blazen_uniffi::llm::CompletionResponse`]. Produced
+/// Opaque wrapper around [`blazen_uniffi::llm::ModelResponse`]. Produced
 /// by `complete` / `complete_blocking` in Phase R3; no public constructor.
-pub struct BlazenCompletionResponse(pub(crate) InnerCompletionResponse);
+pub struct BlazenModelResponse(pub(crate) InnerModelResponse);
 
-impl BlazenCompletionResponse {
-    pub(crate) fn into_ptr(self) -> *mut BlazenCompletionResponse {
+impl BlazenModelResponse {
+    pub(crate) fn into_ptr(self) -> *mut BlazenModelResponse {
         Box::into_raw(Box::new(self))
     }
 }
 
-impl From<InnerCompletionResponse> for BlazenCompletionResponse {
-    fn from(inner: InnerCompletionResponse) -> Self {
+impl From<InnerModelResponse> for BlazenModelResponse {
+    fn from(inner: InnerModelResponse) -> Self {
         Self(inner)
     }
 }
@@ -1211,15 +1202,15 @@ impl From<InnerCompletionResponse> for BlazenCompletionResponse {
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionResponse`.
+/// `handle` must be null OR a live `BlazenModelResponse`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_response_content(
-    handle: *const BlazenCompletionResponse,
+pub unsafe extern "C" fn blazen_model_response_content(
+    handle: *const BlazenModelResponse,
 ) -> *mut c_char {
     if handle.is_null() {
         return std::ptr::null_mut();
     }
-    // SAFETY: caller has guaranteed `handle` is a live `BlazenCompletionResponse`.
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenModelResponse`.
     let r = unsafe { &*handle };
     alloc_cstring(&r.0.content)
 }
@@ -1228,15 +1219,15 @@ pub unsafe extern "C" fn blazen_completion_response_content(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionResponse`.
+/// `handle` must be null OR a live `BlazenModelResponse`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_response_finish_reason(
-    handle: *const BlazenCompletionResponse,
+pub unsafe extern "C" fn blazen_model_response_finish_reason(
+    handle: *const BlazenModelResponse,
 ) -> *mut c_char {
     if handle.is_null() {
         return std::ptr::null_mut();
     }
-    // SAFETY: caller has guaranteed `handle` is a live `BlazenCompletionResponse`.
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenModelResponse`.
     let r = unsafe { &*handle };
     alloc_cstring(&r.0.finish_reason)
 }
@@ -1245,15 +1236,15 @@ pub unsafe extern "C" fn blazen_completion_response_finish_reason(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionResponse`.
+/// `handle` must be null OR a live `BlazenModelResponse`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_response_model(
-    handle: *const BlazenCompletionResponse,
+pub unsafe extern "C" fn blazen_model_response_model(
+    handle: *const BlazenModelResponse,
 ) -> *mut c_char {
     if handle.is_null() {
         return std::ptr::null_mut();
     }
-    // SAFETY: caller has guaranteed `handle` is a live `BlazenCompletionResponse`.
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenModelResponse`.
     let r = unsafe { &*handle };
     alloc_cstring(&r.0.model)
 }
@@ -1262,15 +1253,15 @@ pub unsafe extern "C" fn blazen_completion_response_model(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionResponse`.
+/// `handle` must be null OR a live `BlazenModelResponse`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_response_tool_calls_count(
-    handle: *const BlazenCompletionResponse,
+pub unsafe extern "C" fn blazen_model_response_tool_calls_count(
+    handle: *const BlazenModelResponse,
 ) -> usize {
     if handle.is_null() {
         return 0;
     }
-    // SAFETY: caller has guaranteed `handle` is a live `BlazenCompletionResponse`.
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenModelResponse`.
     let r = unsafe { &*handle };
     r.0.tool_calls.len()
 }
@@ -1279,16 +1270,16 @@ pub unsafe extern "C" fn blazen_completion_response_tool_calls_count(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionResponse`.
+/// `handle` must be null OR a live `BlazenModelResponse`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_response_tool_calls_get(
-    handle: *const BlazenCompletionResponse,
+pub unsafe extern "C" fn blazen_model_response_tool_calls_get(
+    handle: *const BlazenModelResponse,
     idx: usize,
 ) -> *mut BlazenToolCall {
     if handle.is_null() {
         return std::ptr::null_mut();
     }
-    // SAFETY: caller has guaranteed `handle` is a live `BlazenCompletionResponse`.
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenModelResponse`.
     let r = unsafe { &*handle };
     match r.0.tool_calls.get(idx) {
         Some(tc) => BlazenToolCall(tc.clone()).into_ptr(),
@@ -1301,27 +1292,27 @@ pub unsafe extern "C" fn blazen_completion_response_tool_calls_get(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionResponse`.
+/// `handle` must be null OR a live `BlazenModelResponse`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_response_usage(
-    handle: *const BlazenCompletionResponse,
+pub unsafe extern "C" fn blazen_model_response_usage(
+    handle: *const BlazenModelResponse,
 ) -> *mut BlazenTokenUsage {
     if handle.is_null() {
         return std::ptr::null_mut();
     }
-    // SAFETY: caller has guaranteed `handle` is a live `BlazenCompletionResponse`.
+    // SAFETY: caller has guaranteed `handle` is a live `BlazenModelResponse`.
     let r = unsafe { &*handle };
     BlazenTokenUsage(r.0.usage.clone()).into_ptr()
 }
 
-/// Frees a `BlazenCompletionResponse` handle. No-op on a null pointer.
+/// Frees a `BlazenModelResponse` handle. No-op on a null pointer.
 ///
 /// # Safety
 ///
 /// `handle` must be null OR a pointer previously produced by the cabi
 /// surface.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_response_free(handle: *mut BlazenCompletionResponse) {
+pub unsafe extern "C" fn blazen_model_response_free(handle: *mut BlazenModelResponse) {
     if handle.is_null() {
         return;
     }
@@ -1503,24 +1494,24 @@ pub unsafe extern "C" fn blazen_embedding_response_free(handle: *mut BlazenEmbed
 // ===========================================================================
 // JSON-shim constructors (Wave 3a)
 //
-// `BlazenCompletionResponse` and `BlazenEmbeddingResponse` wrap UniFFI
+// `BlazenModelResponse` and `BlazenEmbeddingResponse` wrap UniFFI
 // `Record` types in `blazen_uniffi::llm`, which intentionally do NOT derive
 // `serde::Deserialize` (UniFFI's record macro doesn't emit it). To accept
 // JSON from FFI hosts, we parse against the underlying `blazen_llm` native
 // types (which DO derive `Serialize` / `Deserialize`) and convert via the
-// existing `From<CoreCompletionResponse> for CompletionResponse` /
+// existing `From<CoreModelResponse> for ModelResponse` /
 // `From<CoreEmbeddingResponse> for EmbeddingResponse` impls in
 // `blazen_uniffi::llm`. Round-trip fidelity matches the existing
-// future-take path used by `blazen_future_take_completion_response`.
+// future-take path used by `blazen_future_take_model_response`.
 // ===========================================================================
 
-/// Constructs a [`BlazenCompletionResponse`] handle from a JSON-encoded
-/// [`blazen_llm::CompletionResponse`].
+/// Constructs a [`BlazenModelResponse`] handle from a JSON-encoded
+/// [`blazen_llm::ModelResponse`].
 ///
 /// # Ownership
 ///
 /// On success returns a non-null handle owned by the caller — release with
-/// [`blazen_completion_response_free`]. On failure returns null and writes a
+/// [`blazen_model_response_free`]. On failure returns null and writes a
 /// fresh `BlazenError::Internal { message }` into `*out_err` when `out_err`
 /// is non-null (caller frees with [`crate::error::blazen_error_free`]).
 ///
@@ -1530,22 +1521,21 @@ pub unsafe extern "C" fn blazen_embedding_response_free(handle: *mut BlazenEmbed
 /// the duration of this call. `out_err` must be null OR point to a writable
 /// `*mut BlazenError` slot.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_response_from_json(
+pub unsafe extern "C" fn blazen_model_response_from_json(
     json: *const c_char,
     out_err: *mut *mut BlazenError,
-) -> *mut BlazenCompletionResponse {
+) -> *mut BlazenModelResponse {
     // SAFETY: forwarded to `read_json_input`; caller upholds the contract.
-    let Some(s) =
-        (unsafe { read_json_input(json, "blazen_completion_response_from_json", out_err) })
+    let Some(s) = (unsafe { read_json_input(json, "blazen_model_response_from_json", out_err) })
     else {
         return std::ptr::null_mut();
     };
-    match serde_json::from_str::<CoreCompletionResponse>(s) {
-        Ok(core) => BlazenCompletionResponse(InnerCompletionResponse::from(core)).into_ptr(),
+    match serde_json::from_str::<CoreModelResponse>(s) {
+        Ok(core) => BlazenModelResponse(InnerModelResponse::from(core)).into_ptr(),
         Err(e) => {
             write_internal_err(
                 out_err,
-                format!("blazen_completion_response_from_json: deserialize failed: {e}"),
+                format!("blazen_model_response_from_json: deserialize failed: {e}"),
             );
             std::ptr::null_mut()
         }

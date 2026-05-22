@@ -34,7 +34,7 @@ import test from "ava";
 
 import {
   ChatMessage,
-  CompletionModel,
+  Model,
   CustomProvider,
   runAgent,
 } from "../../crates/blazen-node/index.js";
@@ -48,7 +48,7 @@ class StubPartsProvider extends CustomProvider {
   }
 
   async complete(request) {
-    // `request` is the JS-facing CompletionRequest. `messages` carries the
+    // `request` is the JS-facing ModelRequest. `messages` carries the
     // full conversation including any tool result messages emitted by the
     // agent loop on prior iterations.
     this.lastMessages = request?.messages ?? null;
@@ -62,7 +62,7 @@ class StubPartsProvider extends CustomProvider {
 
 test("tool_output.parts · structured llmOverride with text part round-trips through runAgent", async (t) => {
   // NOTE: `CustomProvider.complete` overrides go through `dispatch`
-  // which uses raw `serde_json::from_value::<CompletionResponse>(...)`.
+  // which uses raw `serde_json::from_value::<ModelResponse>(...)`.
   // The serde representation is snake_case (`tool_calls`, not
   // `toolCalls`). Returning camelCase keys would deserialize to a
   // response with an empty `tool_calls` array, and the agent loop would
@@ -102,7 +102,7 @@ test("tool_output.parts · structured llmOverride with text part round-trips thr
     },
   ]);
 
-  const model = CompletionModel.custom(stub, "stub-parts");
+  const model = Model.custom(stub, "stub-parts");
 
   const toolHandler = async (toolName, args) => {
     if (toolName !== "getSummary") {

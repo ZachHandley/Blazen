@@ -1,4 +1,4 @@
-//! Python wrapper for the CompletionModel type with all provider constructors.
+//! Python wrapper for the Model type with all provider constructors.
 
 use std::pin::Pin;
 use std::sync::Arc;
@@ -8,11 +8,11 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use tokio::sync::Mutex;
 use tokio_stream::{Stream, StreamExt};
 
-use blazen_llm::cache::CachedCompletionModel;
+use blazen_llm::cache::CachedModel;
 use blazen_llm::fallback::FallbackModel;
-use blazen_llm::retry::RetryCompletionModel;
+use blazen_llm::retry::RetryModel;
 use blazen_llm::types::ToolDefinition;
-use blazen_llm::{BlazenError, ChatMessage, CompletionModel, CompletionRequest, StreamChunk};
+use blazen_llm::{BlazenError, ChatMessage, Model, ModelRequest, StreamChunk};
 
 use crate::agent::PyToolDef;
 use crate::error::BlazenPyError;
@@ -20,24 +20,24 @@ use crate::providers::config::{PyCacheConfig, PyRetryConfig};
 use crate::providers::options::{
     PyAzureOptions, PyBedrockOptions, PyFalOptions, PyProviderOptions,
 };
-use crate::types::{PyChatMessage, PyCompletionResponse};
+use crate::types::{PyChatMessage, PyModelResponse};
 
-/// Type alias for the pinned boxed stream returned by `CompletionModel::stream`.
+/// Type alias for the pinned boxed stream returned by `Model::stream`.
 type PinnedChunkStream = Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>;
 
 // ---------------------------------------------------------------------------
-// PyCompletionOptions
+// PyModelOptions
 // ---------------------------------------------------------------------------
 
 /// Options for a chat completion request.
 ///
 /// Example:
-///     >>> opts = CompletionOptions(temperature=0.7, max_tokens=1000)
+///     >>> opts = ModelOptions(temperature=0.7, max_tokens=1000)
 ///     >>> response = await model.complete(messages, opts)
 #[gen_stub_pyclass]
-#[pyclass(name = "CompletionOptions")]
+#[pyclass(name = "ModelOptions")]
 #[derive(Debug, Default)]
-pub struct PyCompletionOptions {
+pub struct PyModelOptions {
     /// Sampling temperature (0.0-2.0).
     #[pyo3(get, set)]
     pub temperature: Option<f32>,
@@ -60,7 +60,7 @@ pub struct PyCompletionOptions {
 
 #[gen_stub_pymethods]
 #[pymethods]
-impl PyCompletionOptions {
+impl PyModelOptions {
     #[new]
     #[pyo3(signature = (temperature=None, max_tokens=None, top_p=None, model=None, tools=None, response_format=None))]
     fn new(
@@ -83,7 +83,7 @@ impl PyCompletionOptions {
 }
 
 // ---------------------------------------------------------------------------
-// PyCompletionModel
+// PyModel
 // ---------------------------------------------------------------------------
 
 /// A chat completion model.
@@ -92,18 +92,18 @@ impl PyCompletionOptions {
 /// provider, then call `complete()` to generate responses.
 ///
 /// Example:
-///     >>> model = CompletionModel.openai()
-///     >>> model = CompletionModel.anthropic()
-///     >>> model = CompletionModel.openrouter()
+///     >>> model = Model.openai()
+///     >>> model = Model.anthropic()
+///     >>> model = Model.openrouter()
 ///     >>>
 ///     >>> response = await model.complete([
 ///     ...     ChatMessage.user("What is 2+2?")
 ///     ... ])
 #[gen_stub_pyclass]
-#[pyclass(name = "CompletionModel", subclass, from_py_object)]
+#[pyclass(name = "Model", subclass, from_py_object)]
 #[derive(Clone)]
-pub struct PyCompletionModel {
-    pub(crate) inner: Option<Arc<dyn CompletionModel>>,
+pub struct PyModel {
+    pub(crate) inner: Option<Arc<dyn Model>>,
     /// Present iff the underlying provider is a local in-process model
     /// (mistral.rs, llama.cpp, candle) that implements
     /// [`blazen_llm::LocalModel`]. `None` for remote HTTP providers.
@@ -116,7 +116,7 @@ pub struct PyCompletionModel {
 
 #[gen_stub_pymethods]
 #[pymethods]
-impl PyCompletionModel {
+impl PyModel {
     // -----------------------------------------------------------------
     // Subclass constructor
     // -----------------------------------------------------------------
@@ -133,9 +133,9 @@ impl PyCompletionModel {
     ///     pricing: Optional pricing information.
     ///     memory_estimate_bytes: Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise).
     ///     max_output_tokens: Maximum output tokens the model supports.
-    /// `__new__` for `CompletionModel`. PyO3's `#[new]` is the `__new__`
+    /// `__new__` for `Model`. PyO3's `#[new]` is the `__new__`
     /// slot; when a Python subclass like
-    /// `class MockLLM(CompletionModel): def __init__(self): super().__init__(model_id=...)`
+    /// `class MockLLM(Model): def __init__(self): super().__init__(model_id=...)`
     /// is instantiated, Python calls `MockLLM.__new__(MockLLM, *outer_args)`.
     /// To let arbitrary subclass `__init__` signatures (positional or keyword)
     /// flow through without erroring at `__new__` time, we accept `*args,
@@ -451,7 +451,7 @@ impl PyCompletionModel {
         })
     }
 
-    /// Build a `CompletionModel` for an Ollama server.
+    /// Build a `Model` for an Ollama server.
     ///
     /// Equivalent to constructing an OpenAI-compatible provider with
     /// `base_url = format!("http://{host}:{port}/v1")` and no API key.
@@ -471,7 +471,7 @@ impl PyCompletionModel {
         }
     }
 
-    /// Build a `CompletionModel` for an LM Studio server.
+    /// Build a `Model` for an LM Studio server.
     ///
     /// Args:
     ///     host: Hostname or IP.
@@ -488,7 +488,7 @@ impl PyCompletionModel {
         }
     }
 
-    /// Build a `CompletionModel` from an arbitrary OpenAI-compatible config.
+    /// Build a `Model` from an arbitrary OpenAI-compatible config.
     ///
     /// Use this for OpenAI-compatible servers that aren't pre-configured by
     /// the `ollama` / `lm_studio` helpers (vLLM, llama.cpp's server, TGI, or
@@ -507,12 +507,12 @@ impl PyCompletionModel {
         }
     }
 
-    /// Build a `CompletionModel` backed by a Python host object that implements
+    /// Build a `Model` backed by a Python host object that implements
     /// `complete` (and optionally `stream`).
     ///
     /// Use this for fully-custom protocols where the framework can't help with
     /// the wire format. The host object's `complete(request)` async method will
-    /// be invoked with a serialized `CompletionRequest`.
+    /// be invoked with a serialized `ModelRequest`.
     ///
     /// Args:
     ///     host_object: A Python class instance with async `complete` method.
@@ -580,7 +580,7 @@ impl PyCompletionModel {
 
     /// Wrap this model with automatic retry on transient failures.
     ///
-    /// Returns a new CompletionModel that retries on rate limits,
+    /// Returns a new Model that retries on rate limits,
     /// timeouts, and server errors with exponential backoff.
     ///
     /// Args:
@@ -588,16 +588,16 @@ impl PyCompletionModel {
     ///         ``RetryConfig()`` (3 retries, 1s initial, 30s max).
     ///
     /// Returns:
-    ///     A new CompletionModel with retry behaviour.
+    ///     A new Model with retry behaviour.
     ///
     /// Example:
-    ///     >>> model = CompletionModel.openai(options=ProviderOptions(api_key="sk-...")).with_retry(RetryConfig(max_retries=5))
+    ///     >>> model = Model.openai(options=ProviderOptions(api_key="sk-...")).with_retry(RetryConfig(max_retries=5))
     #[pyo3(signature = (config=None))]
     fn with_retry(slf: Bound<'_, Self>, config: Option<PyRef<'_, PyRetryConfig>>) -> Self {
         let retry_config = config.map(|c| c.inner.clone()).unwrap_or_default();
         let local_model = slf.borrow().local_model.clone();
         let inner = arc_from_bound(&slf);
-        let model = RetryCompletionModel::from_arc(inner, retry_config);
+        let model = RetryModel::from_arc(inner, retry_config);
         Self {
             inner: Some(Arc::new(model)),
             local_model,
@@ -612,23 +612,23 @@ impl PyCompletionModel {
     /// validation) short-circuit immediately.
     ///
     /// Args:
-    ///     models: A list of CompletionModel instances to try in order.
+    ///     models: A list of Model instances to try in order.
     ///
     /// Returns:
-    ///     A new CompletionModel that falls back through the providers.
+    ///     A new Model that falls back through the providers.
     ///
     /// Example:
-    ///     >>> primary = CompletionModel.openai(options=ProviderOptions(api_key="sk-..."))
-    ///     >>> backup = CompletionModel.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
-    ///     >>> model = CompletionModel.with_fallback([primary, backup])
+    ///     >>> primary = Model.openai(options=ProviderOptions(api_key="sk-..."))
+    ///     >>> backup = Model.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
+    ///     >>> model = Model.with_fallback([primary, backup])
     #[staticmethod]
-    fn with_fallback(models: Vec<Bound<'_, PyCompletionModel>>) -> PyResult<Self> {
+    fn with_fallback(models: Vec<Bound<'_, PyModel>>) -> PyResult<Self> {
         if models.is_empty() {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "with_fallback requires at least one model",
             ));
         }
-        let providers: Vec<Arc<dyn CompletionModel>> = models.iter().map(arc_from_bound).collect();
+        let providers: Vec<Arc<dyn Model>> = models.iter().map(arc_from_bound).collect();
         let model = FallbackModel::new(providers);
         // A fallback chain is a composition of heterogeneous providers, so
         // there is no single `LocalModel` to forward load/unload to. Callers
@@ -652,16 +652,16 @@ impl PyCompletionModel {
     ///         ``CacheConfig()`` (content-hash strategy, 300s TTL, 1000 entries).
     ///
     /// Returns:
-    ///     A new CompletionModel with caching enabled.
+    ///     A new Model with caching enabled.
     ///
     /// Example:
-    ///     >>> model = CompletionModel.openai(options=ProviderOptions(api_key="sk-...")).with_cache(CacheConfig(ttl_seconds=600))
+    ///     >>> model = Model.openai(options=ProviderOptions(api_key="sk-...")).with_cache(CacheConfig(ttl_seconds=600))
     #[pyo3(signature = (config=None))]
     fn with_cache(slf: Bound<'_, Self>, config: Option<PyRef<'_, PyCacheConfig>>) -> Self {
         let cache_config = config.map(|c| c.inner.clone()).unwrap_or_default();
         let local_model = slf.borrow().local_model.clone();
         let inner = arc_from_bound(&slf);
-        let model = CachedCompletionModel::from_arc(inner, cache_config);
+        let model = CachedModel::from_arc(inner, cache_config);
         Self {
             inner: Some(Arc::new(model)),
             local_model,
@@ -677,11 +677,11 @@ impl PyCompletionModel {
     ///
     /// Args:
     ///     messages: A list of ChatMessage objects.
-    ///     options: Optional CompletionOptions for sampling parameters,
+    ///     options: Optional ModelOptions for sampling parameters,
     ///         tools, and response format.
     ///
     /// Returns:
-    ///     A CompletionResponse with content, model, tool_calls, usage,
+    ///     A ModelResponse with content, model, tool_calls, usage,
     ///     and finish_reason attributes.
     ///
     /// Example:
@@ -691,12 +691,12 @@ impl PyCompletionModel {
     ///     ... ])
     ///     >>> print(response.content)
     #[pyo3(signature = (messages, options=None))]
-    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, CompletionResponse]", imports = ("typing",)))]
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ModelResponse]", imports = ("typing",)))]
     fn complete<'py>(
         &self,
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         if let Some(ref inner) = self.inner {
             // Built-in provider path
@@ -706,7 +706,7 @@ impl PyCompletionModel {
             let inner = inner.clone();
             pyo3_async_runtimes::tokio::future_into_py(py, async move {
                 let response = inner.complete(request).await.map_err(BlazenPyError::from)?;
-                Ok(PyCompletionResponse { inner: response })
+                Ok(PyModelResponse { inner: response })
             })
         } else {
             // Subclass path -- if we got here, the subclass didn't override complete()
@@ -730,7 +730,7 @@ impl PyCompletionModel {
     ///     messages: A list of ChatMessage objects.
     ///     on_chunk: Optional callback function receiving each chunk. If
     ///         omitted, the method returns an async iterator.
-    ///     options: Optional [`CompletionOptions`] for sampling parameters,
+    ///     options: Optional [`ModelOptions`] for sampling parameters,
     ///         tools, and response format.
     ///
     /// Example (async iterator):
@@ -749,7 +749,7 @@ impl PyCompletionModel {
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
         on_chunk: Option<Py<PyAny>>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = match self.inner {
             Some(ref inner) => inner.clone(),
@@ -820,7 +820,7 @@ impl PyCompletionModel {
     }
 
     fn __repr__(&self) -> String {
-        format!("CompletionModel(model_id='{}')", self.model_id())
+        format!("Model(model_id='{}')", self.model_id())
     }
 
     // -----------------------------------------------------------------
@@ -910,8 +910,8 @@ impl PyCompletionModel {
 /// Boxed to keep the enum variant sizes balanced (avoids
 /// `clippy::large_enum_variant`).
 pub(crate) struct PendingStream {
-    pub(crate) model: Arc<dyn CompletionModel>,
-    pub(crate) request: Option<CompletionRequest>,
+    pub(crate) model: Arc<dyn Model>,
+    pub(crate) request: Option<ModelRequest>,
 }
 
 /// Internal state for [`PyLazyCompletionStream`].
@@ -953,7 +953,7 @@ impl PyLazyCompletionStream {
         slf
     }
 
-    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, CompletionResponse]", imports = ("typing",)))]
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ModelResponse]", imports = ("typing",)))]
     fn __anext__<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let state = self.state.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
@@ -1014,13 +1014,13 @@ impl PyLazyCompletionStream {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Build a [`CompletionRequest`] from messages and optional [`PyCompletionOptions`].
+/// Build a [`ModelRequest`] from messages and optional [`PyModelOptions`].
 pub(crate) fn build_request(
     py: Python<'_>,
     messages: Vec<ChatMessage>,
-    options: Option<&PyCompletionOptions>,
-) -> PyResult<CompletionRequest> {
-    let mut request = CompletionRequest::new(messages);
+    options: Option<&PyModelOptions>,
+) -> PyResult<ModelRequest> {
+    let mut request = ModelRequest::new(messages);
 
     if let Some(opts) = options {
         if let Some(t) = opts.temperature {
@@ -1059,11 +1059,11 @@ pub(crate) fn build_request(
 }
 
 // ---------------------------------------------------------------------------
-// PySubclassCompletionModel -- Python-subclass adapter
+// PySubclassModel -- Python-subclass adapter
 // ---------------------------------------------------------------------------
 
-/// Bridges a Python `CompletionModel` subclass into the Rust
-/// [`CompletionModel`] trait. Methods on this adapter dispatch back into
+/// Bridges a Python `Model` subclass into the Rust
+/// [`Model`] trait. Methods on this adapter dispatch back into
 /// the Python object's `complete()` override, so Rust-side helpers
 /// (`run_agent`, `with_retry`, `with_cache`, `with_fallback`,
 /// `complete_batch`) work uniformly for both built-in providers and
@@ -1071,8 +1071,8 @@ pub(crate) fn build_request(
 ///
 /// The adapter works in three phases for each `complete()` call:
 ///
-/// 1. Under the GIL, translate the Rust [`CompletionRequest`] into
-///    Python-side [`PyChatMessage`] / [`PyCompletionOptions`] values,
+/// 1. Under the GIL, translate the Rust [`ModelRequest`] into
+///    Python-side [`PyChatMessage`] / [`PyModelOptions`] values,
 ///    invoke the subclass's `complete()` method to obtain a coroutine,
 ///    capture the active asyncio task locals, and convert the coroutine
 ///    into a Rust future.
@@ -1080,33 +1080,33 @@ pub(crate) fn build_request(
 ///    the future to completion so the Python coroutine runs on the
 ///    correct event loop.
 /// 3. Under the GIL again, extract the returned
-///    [`PyCompletionResponse`] (preferred path) or fall back to
+///    [`PyModelResponse`] (preferred path) or fall back to
 ///    `depythonize` if the subclass returns a compatible dict.
 ///
 /// Streaming through the adapter is not yet supported; `stream()`
 /// returns [`BlazenError::Unsupported`]. Callers who want streaming from
 /// a subclassed model must call `stream()` directly on the Python object.
-pub(crate) struct PySubclassCompletionModel {
+pub(crate) struct PySubclassModel {
     py_obj: Py<PyAny>,
     model_id: String,
 }
 
-impl PySubclassCompletionModel {
+impl PySubclassModel {
     pub(crate) fn new(py_obj: Py<PyAny>, model_id: String) -> Self {
         Self { py_obj, model_id }
     }
 }
 
 #[async_trait::async_trait]
-impl CompletionModel for PySubclassCompletionModel {
+impl Model for PySubclassModel {
     fn model_id(&self) -> &str {
         &self.model_id
     }
 
     async fn complete(
         &self,
-        request: blazen_llm::CompletionRequest,
-    ) -> Result<blazen_llm::CompletionResponse, BlazenError> {
+        request: blazen_llm::ModelRequest,
+    ) -> Result<blazen_llm::ModelResponse, BlazenError> {
         // Phase 1: under GIL, translate the request into Python values,
         // call `complete(messages, options)`, capture asyncio task
         // locals, and convert the returned coroutine into a Rust future.
@@ -1154,19 +1154,19 @@ impl CompletionModel for PySubclassCompletionModel {
                 BlazenError::provider("subclass", format!("subclass complete() raised: {e}"))
             })?;
 
-        // Phase 3: under the GIL, extract a `CompletionResponse` from
+        // Phase 3: under the GIL, extract a `ModelResponse` from
         // the Python result. Preferred path: the subclass returned a
-        // `PyCompletionResponse`. Fallback: allow a compatible dict.
+        // `PyModelResponse`. Fallback: allow a compatible dict.
         tokio::task::block_in_place(|| {
-            Python::attach(|py| -> PyResult<blazen_llm::CompletionResponse> {
+            Python::attach(|py| -> PyResult<blazen_llm::ModelResponse> {
                 let bound = py_result.bind(py);
-                if let Ok(resp) = bound.extract::<PyRef<'_, PyCompletionResponse>>() {
+                if let Ok(resp) = bound.extract::<PyRef<'_, PyModelResponse>>() {
                     return Ok(resp.inner.clone());
                 }
-                let response: blazen_llm::CompletionResponse = pythonize::depythonize(bound)
+                let response: blazen_llm::ModelResponse = pythonize::depythonize(bound)
                     .map_err(|e| {
                         pyo3::exceptions::PyValueError::new_err(format!(
-                            "subclass complete() must return CompletionResponse or a compatible dict: {e}"
+                            "subclass complete() must return ModelResponse or a compatible dict: {e}"
                         ))
                     })?;
                 Ok(response)
@@ -1182,11 +1182,11 @@ impl CompletionModel for PySubclassCompletionModel {
 
     async fn stream(
         &self,
-        _request: blazen_llm::CompletionRequest,
+        _request: blazen_llm::ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         Err(BlazenError::unsupported(
-            "stream() on subclassed CompletionModel is not yet supported from Rust-side callers; call stream() directly on the Python subclass instance",
+            "stream() on subclassed Model is not yet supported from Rust-side callers; call stream() directly on the Python subclass instance",
         ))
     }
 
@@ -1196,16 +1196,16 @@ impl CompletionModel for PySubclassCompletionModel {
 }
 
 /// Public re-export of [`build_py_options_from_request`] for sibling
-/// modules that need to reify a Rust `CompletionRequest` back into
-/// Python [`PyCompletionOptions`] (e.g. the middleware adapter).
+/// modules that need to reify a Rust `ModelRequest` back into
+/// Python [`PyModelOptions`] (e.g. the middleware adapter).
 pub(crate) fn build_py_options_from_request_helper(
     py: Python<'_>,
-    request: &blazen_llm::CompletionRequest,
-) -> PyResult<Option<Py<PyCompletionOptions>>> {
+    request: &blazen_llm::ModelRequest,
+) -> PyResult<Option<Py<PyModelOptions>>> {
     build_py_options_from_request(py, request)
 }
 
-/// Build a [`PyCompletionOptions`] instance from a [`CompletionRequest`].
+/// Build a [`PyModelOptions`] instance from a [`ModelRequest`].
 ///
 /// Returns `None` if no request field is set that would populate
 /// options, so the subclass's `complete()` method can be called with
@@ -1213,8 +1213,8 @@ pub(crate) fn build_py_options_from_request_helper(
 /// signature `async def complete(self, messages, options=None)`).
 fn build_py_options_from_request(
     py: Python<'_>,
-    request: &blazen_llm::CompletionRequest,
-) -> PyResult<Option<Py<PyCompletionOptions>>> {
+    request: &blazen_llm::ModelRequest,
+) -> PyResult<Option<Py<PyModelOptions>>> {
     if request.temperature.is_none()
         && request.max_tokens.is_none()
         && request.top_p.is_none()
@@ -1257,7 +1257,7 @@ fn build_py_options_from_request(
         None => None,
     };
 
-    let opts = PyCompletionOptions {
+    let opts = PyModelOptions {
         temperature: request.temperature,
         max_tokens: request.max_tokens,
         top_p: request.top_p,
@@ -1269,12 +1269,12 @@ fn build_py_options_from_request(
     Py::new(py, opts).map(Some)
 }
 
-/// Build an `Arc<dyn CompletionModel>` from a bound [`PyCompletionModel`].
+/// Build an `Arc<dyn Model>` from a bound [`PyModel`].
 ///
 /// If the model has a concrete `inner` (built-in provider), returns that
-/// directly. Otherwise constructs a [`PySubclassCompletionModel`] that
+/// directly. Otherwise constructs a [`PySubclassModel`] that
 /// dispatches back into the Python subclass object.
-pub(crate) fn arc_from_bound(bound: &Bound<'_, PyCompletionModel>) -> Arc<dyn CompletionModel> {
+pub(crate) fn arc_from_bound(bound: &Bound<'_, PyModel>) -> Arc<dyn Model> {
     let borrow = bound.borrow();
     if let Some(ref inner) = borrow.inner {
         return inner.clone();
@@ -1286,7 +1286,7 @@ pub(crate) fn arc_from_bound(bound: &Bound<'_, PyCompletionModel>) -> Arc<dyn Co
         .unwrap_or_else(|| "subclass".to_owned());
     drop(borrow);
     let py_obj: Py<PyAny> = bound.clone().into_any().unbind();
-    Arc::new(PySubclassCompletionModel::new(py_obj, model_id))
+    Arc::new(PySubclassModel::new(py_obj, model_id))
 }
 
 // ---------------------------------------------------------------------------
@@ -1297,7 +1297,7 @@ pub(crate) fn arc_from_bound(bound: &Bound<'_, PyCompletionModel>) -> Arc<dyn Co
 #[cfg(feature = "mistralrs")]
 #[gen_stub_pymethods]
 #[pymethods]
-impl PyCompletionModel {
+impl PyModel {
     /// Create a local mistral.rs provider.
     ///
     /// Runs LLM inference entirely on-device using the mistral.rs engine.

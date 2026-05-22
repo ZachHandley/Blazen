@@ -1,7 +1,7 @@
 //! Non-LLM compute surface for the UniFFI bindings.
 //!
 //! Exposes the four upstream compute modalities that don't fit Blazen's
-//! `CompletionModel` / `EmbeddingModel` shape:
+//! `Model` / `EmbeddingModel` shape:
 //!
 //! - **Text-to-speech** — local Piper backend (feature-gated) and fal.ai
 //!   cloud TTS, behind a single [`TtsModel`] handle.
@@ -11,7 +11,7 @@
 //!   fal.ai cloud image generation, behind a single [`ImageGenModel`]
 //!   handle.
 //!
-//! The opaque handles parallel [`crate::llm::CompletionModel`] /
+//! The opaque handles parallel [`crate::llm::Model`] /
 //! [`crate::llm::EmbeddingModel`]: foreign callers receive an `Arc<Self>`
 //! from a factory function and dispatch through async + `_blocking`
 //! methods. Each modality has its own factory per concrete backend

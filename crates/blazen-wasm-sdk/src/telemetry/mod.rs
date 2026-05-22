@@ -6,7 +6,7 @@
 //! - `langfuse`: Langfuse trace exporter via reqwest's wasm32 fetch backend.
 //!
 //! Out of scope on wasm32:
-//! - `spans` (TracingCompletionModel) -- pulls in additional tracing
+//! - `spans` (TracingModel) -- pulls in additional tracing
 //!   subscriber machinery not currently bound here.
 //! - `otlp` (gRPC variant) -- tonic + h2 sockets do not compile to wasm32;
 //!   the `otlp-http` variant above is the wasm-friendly equivalent.

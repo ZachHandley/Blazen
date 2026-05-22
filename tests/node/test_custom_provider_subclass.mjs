@@ -25,7 +25,7 @@ import test from "ava";
 import {
   BaseProvider,
   ChatMessage,
-  CompletionModel,
+  Model,
   CustomProvider,
 } from "../../crates/blazen-node/index.js";
 
@@ -70,12 +70,12 @@ test("CustomProvider subclass · textToSpeech override fires", async (t) => {
 // ---------------------------------------------------------------------------
 //
 // `CustomProvider` does not expose `.complete()` directly to JS (the
-// completion path is driven through `CompletionModel`). To verify the
+// completion path is driven through `Model`). To verify the
 // subclass override is wired into the trait adapter, wrap the subclass
-// instance with `CompletionModel.custom(...)` and drive `.complete()`
+// instance with `Model.custom(...)` and drive `.complete()`
 // from there — the camelCase trait-method walk picks up the override.
 
-test("CustomProvider subclass · complete override returns stubbed CompletionResponse", async (t) => {
+test("CustomProvider subclass · complete override returns stubbed ModelResponse", async (t) => {
   let completeCalls = 0;
 
   class StubLlm extends CustomProvider {
@@ -99,7 +99,7 @@ test("CustomProvider subclass · complete override returns stubbed CompletionRes
   }
 
   const stub = new StubLlm();
-  const model = CompletionModel.custom(stub, "stub-llm");
+  const model = Model.custom(stub, "stub-llm");
 
   const response = await model.complete([
     ChatMessage.user("ping"),
@@ -126,7 +126,7 @@ test("CustomProvider · unimplemented method rejects with Unsupported", async (t
   // *direct* construction path keeps this test deterministic until that
   // binding issue is fixed; the subclass-routing semantics are still
   // covered by the `textToSpeech override fires` and `complete override
-  // returns stubbed CompletionResponse` tests above.
+  // returns stubbed ModelResponse` tests above.
   const provider = new CustomProvider({ providerId: "plain-custom" });
   const err = await t.throwsAsync(
     () => provider.generateImage({ prompt: "an unused capability" }),
@@ -220,8 +220,8 @@ test("CustomProvider subclass · prototype walk skips napi-installed methods", a
 // ---------------------------------------------------------------------------
 //
 // Stub `complete` on a CustomProvider subclass so it returns a JSON
-// payload matching the supplied schema. Wrap via `CompletionModel.custom`
-// so `BaseProvider.extract` has a concrete inner CompletionModel.
+// payload matching the supplied schema. Wrap via `Model.custom`
+// so `BaseProvider.extract` has a concrete inner Model.
 
 test("BaseProvider.extract · parses object via JSON Schema with subclass complete", async (t) => {
   class StubLlm extends CustomProvider {
@@ -244,7 +244,7 @@ test("BaseProvider.extract · parses object via JSON Schema with subclass comple
   }
 
   const stub = new StubLlm();
-  const innerModel = CompletionModel.custom(stub, "stub-extract");
+  const innerModel = Model.custom(stub, "stub-extract");
   const provider = new BaseProvider(innerModel);
 
   const schema = {

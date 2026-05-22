@@ -1,6 +1,6 @@
 //! JavaScript wrapper for LLM completion models.
 //!
-//! Provides [`JsCompletionModel`] with factory constructors for each
+//! Provides [`JsModel`] with factory constructors for each
 //! supported provider (`OpenAI`, Anthropic, Gemini, etc.), plus decorator
 //! methods for retry, fallback, and caching.
 
@@ -11,15 +11,15 @@ use napi::threadsafe_function::{ThreadsafeFunction, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
 use tokio_stream::StreamExt;
 
-use blazen_llm::CompletionModel;
 use blazen_llm::CustomProvider as CustomProviderTrait;
-use blazen_llm::cache::{CacheConfig, CachedCompletionModel};
+use blazen_llm::Model;
+use blazen_llm::cache::{CacheConfig, CachedModel};
 use blazen_llm::fallback::FallbackModel;
 use blazen_llm::providers::custom::CustomProviderHandle;
 use blazen_llm::providers::openai_compat::OpenAiCompatConfig;
-use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
+use blazen_llm::retry::{RetryConfig, RetryModel};
 use blazen_llm::types::provider_options::ProviderOptions;
-use blazen_llm::types::{ChatMessage, CompletionRequest, ToolDefinition};
+use blazen_llm::types::{ChatMessage, ModelRequest, ToolDefinition};
 
 use crate::error::{blazen_error_to_napi, llm_error_to_napi};
 use crate::generated::{
@@ -28,7 +28,7 @@ use crate::generated::{
 use crate::providers::custom::JsCustomProviderAdapter;
 use crate::providers::openai_compat::JsOpenAiCompatConfig;
 use crate::types::{
-    JsChatMessage, JsCompletionOptions, JsCompletionResponse, JsStreamChunk, build_response,
+    JsChatMessage, JsModelOptions, JsModelResponse, JsStreamChunk, build_response,
     build_stream_chunk,
 };
 
@@ -49,7 +49,7 @@ fn js_to_provider_options(options: Option<JsProviderOptions>) -> ProviderOptions
 /// All other fields are optional.
 ///
 /// ```javascript
-/// const model = CompletionModel.mistralrs({
+/// const model = Model.mistralrs({
 ///   modelId: "mistralai/Mistral-7B-Instruct-v0.3",
 ///   device: "cuda:0",
 ///   quantization: "q4_k_m",
@@ -106,24 +106,24 @@ pub(crate) type StreamChunkCallbackTsfn =
     ThreadsafeFunction<JsStreamChunk, Unknown<'static>, JsStreamChunk, napi::Status, false, true>;
 
 // ---------------------------------------------------------------------------
-// CompletionModel wrapper
+// Model wrapper
 // ---------------------------------------------------------------------------
 
-/// Configuration for subclassed `CompletionModel` instances.
+/// Configuration for subclassed `Model` instances.
 ///
-/// When extending `CompletionModel` from JavaScript/TypeScript, pass this
+/// When extending `Model` from JavaScript/TypeScript, pass this
 /// to `super()` so the base class can report `modelId` and other metadata
 /// without a concrete provider.
 ///
 /// ```javascript
-/// class MyLLM extends CompletionModel {
+/// class MyLLM extends Model {
 ///   constructor() {
 ///     super({ modelId: "my-custom-model", contextLength: 8192 });
 ///   }
 /// }
 /// ```
 #[napi(object)]
-pub struct CompletionModelConfig {
+pub struct ModelConfig {
     /// Model identifier (e.g. `"my-org/custom-llama"`).
     #[napi(js_name = "modelId")]
     pub model_id: Option<String>,
@@ -147,7 +147,7 @@ pub struct CompletionModelConfig {
 /// Use the static factory methods to create an instance for your provider:
 ///
 /// ```javascript
-/// const model = CompletionModel.openai({ apiKey: "sk-..." });
+/// const model = Model.openai({ apiKey: "sk-..." });
 /// const response = await model.complete([
 ///   ChatMessage.user("What is 2 + 2?")
 /// ]);
@@ -156,19 +156,19 @@ pub struct CompletionModelConfig {
 /// Or extend the class to implement a custom provider:
 ///
 /// ```javascript
-/// class MyLLM extends CompletionModel {
+/// class MyLLM extends Model {
 ///   constructor() {
 ///     super({ modelId: "my-custom-model" });
 ///   }
 ///   async complete(messages) { /* ... */ }
 /// }
 /// ```
-#[napi(js_name = "CompletionModel")]
-pub struct JsCompletionModel {
-    /// The underlying Rust `CompletionModel` implementation.
+#[napi(js_name = "Model")]
+pub struct JsModel {
+    /// The underlying Rust `Model` implementation.
     /// `None` when the instance was constructed by a JavaScript subclass
-    /// (via `new CompletionModel(config)` / `super(config)`).
-    pub(crate) inner: Option<Arc<dyn CompletionModel>>,
+    /// (via `new Model(config)` / `super(config)`).
+    pub(crate) inner: Option<Arc<dyn Model>>,
     /// Present iff the underlying provider is a local in-process model
     /// (mistral.rs, llama.cpp, candle) that implements
     /// [`blazen_llm::LocalModel`]. `None` for remote HTTP providers and
@@ -182,12 +182,12 @@ pub struct JsCompletionModel {
 
 #[napi]
 #[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
-impl JsCompletionModel {
+impl JsModel {
     // -----------------------------------------------------------------
     // Constructor (for JavaScript subclasses)
     // -----------------------------------------------------------------
 
-    /// Construct a base `CompletionModel`.
+    /// Construct a base `Model`.
     ///
     /// Called by JavaScript subclasses via `super(config)`. The `config`
     /// parameter is optional and carries metadata such as `modelId`.
@@ -196,7 +196,7 @@ impl JsCompletionModel {
     /// `complete()` or `stream()` without overriding them in the subclass
     /// will throw.
     #[napi(constructor)]
-    pub fn new(config: Option<CompletionModelConfig>) -> Self {
+    pub fn new(config: Option<ModelConfig>) -> Self {
         Self {
             inner: None,
             local_model: None,
@@ -452,7 +452,7 @@ impl JsCompletionModel {
     /// No API key is required.
     ///
     /// ```javascript
-    /// const model = CompletionModel.ollama("localhost", 11434, "llama3.1:8b");
+    /// const model = Model.ollama("localhost", 11434, "llama3.1:8b");
     /// ```
     #[napi(factory)]
     pub fn ollama(host: String, port: u16, model: String) -> Result<Self> {
@@ -469,7 +469,7 @@ impl JsCompletionModel {
     /// Talks to a running LM Studio server's OpenAI-compatible endpoint.
     ///
     /// ```javascript
-    /// const model = CompletionModel.lmStudio("localhost", 1234, "my-model");
+    /// const model = Model.lmStudio("localhost", 1234, "my-model");
     /// ```
     #[napi(factory, js_name = "lmStudio")]
     pub fn lm_studio(host: String, port: u16, model: String) -> Result<Self> {
@@ -487,7 +487,7 @@ impl JsCompletionModel {
     /// supplied [`JsOpenAiCompatConfig`].
     ///
     /// ```javascript
-    /// const model = CompletionModel.openaiCompat("my-host", {
+    /// const model = Model.openaiCompat("my-host", {
     ///   providerName: "my-host",
     ///   baseUrl: "https://api.example.com/v1",
     ///   apiKey: "sk-...",
@@ -516,7 +516,7 @@ impl JsCompletionModel {
     /// class MyProvider {
     ///   async complete(request) { /* ... */ }
     /// }
-    /// const model = CompletionModel.custom(new MyProvider(), "my-provider");
+    /// const model = Model.custom(new MyProvider(), "my-provider");
     /// ```
     #[napi(factory)]
     pub fn custom(host_object: Object<'_>, provider_id: Option<String>) -> Result<Self> {
@@ -555,23 +555,21 @@ impl JsCompletionModel {
     /// Wrap this model with automatic retry on transient failures.
     ///
     /// ```javascript
-    /// const model = CompletionModel.openrouter({ apiKey: key });
+    /// const model = Model.openrouter({ apiKey: key });
     /// const withRetry = model.withRetry({ maxRetries: 3, initialDelayMs: 1000 });
     /// ```
     #[napi(js_name = "withRetry")]
-    pub fn with_retry(&self, config: Option<JsRetryConfig>) -> Result<JsCompletionModel> {
+    pub fn with_retry(&self, config: Option<JsRetryConfig>) -> Result<JsModel> {
         let inner = self.inner.as_ref().ok_or_else(|| {
-            napi::Error::from_reason(
-                "withRetry() is not supported on subclassed CompletionModel instances",
-            )
+            napi::Error::from_reason("withRetry() is not supported on subclassed Model instances")
         })?;
         // `config.map(Into::into)` uses the auto-generated `From<JsRetryConfig>`
         // impl for explicit configs, and falls back to `RetryConfig::default()`
         // when no config was supplied. This avoids requiring `Default` on the
         // generated `JsRetryConfig` type.
         let retry_config: RetryConfig = config.map(Into::into).unwrap_or_default();
-        Ok(JsCompletionModel {
-            inner: Some(Arc::new(RetryCompletionModel::from_arc(
+        Ok(JsModel {
+            inner: Some(Arc::new(RetryModel::from_arc(
                 Arc::clone(inner),
                 retry_config,
             ))),
@@ -591,16 +589,14 @@ impl JsCompletionModel {
     /// const cached = model.withCache({ ttlSeconds: 300, maxEntries: 1000 });
     /// ```
     #[napi(js_name = "withCache")]
-    pub fn with_cache(&self, config: Option<JsCacheConfig>) -> Result<JsCompletionModel> {
+    pub fn with_cache(&self, config: Option<JsCacheConfig>) -> Result<JsModel> {
         let inner = self.inner.as_ref().ok_or_else(|| {
-            napi::Error::from_reason(
-                "withCache() is not supported on subclassed CompletionModel instances",
-            )
+            napi::Error::from_reason("withCache() is not supported on subclassed Model instances")
         })?;
         // See `with_retry` for why we use `config.map(Into::into).unwrap_or_default()`.
         let cache_config: CacheConfig = config.map(Into::into).unwrap_or_default();
-        Ok(JsCompletionModel {
-            inner: Some(Arc::new(CachedCompletionModel::from_arc(
+        Ok(JsModel {
+            inner: Some(Arc::new(CachedModel::from_arc(
                 Arc::clone(inner),
                 cache_config,
             ))),
@@ -618,27 +614,27 @@ impl JsCompletionModel {
     /// next provider. Non-retryable errors short-circuit immediately.
     ///
     /// ```javascript
-    /// const model = CompletionModel.withFallback([modelA, modelB]);
+    /// const model = Model.withFallback([modelA, modelB]);
     /// ```
     #[napi(factory, js_name = "withFallback")]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn with_fallback(models: Vec<&JsCompletionModel>) -> Result<JsCompletionModel> {
+    pub fn with_fallback(models: Vec<&JsModel>) -> Result<JsModel> {
         if models.is_empty() {
             return Err(napi::Error::new(
                 napi::Status::InvalidArg,
                 "withFallback requires at least one model",
             ));
         }
-        let mut providers: Vec<Arc<dyn CompletionModel>> = Vec::with_capacity(models.len());
+        let mut providers: Vec<Arc<dyn Model>> = Vec::with_capacity(models.len());
         for m in &models {
             let inner = m.inner.as_ref().ok_or_else(|| {
                 napi::Error::from_reason(
-                    "withFallback() is not supported on subclassed CompletionModel instances",
+                    "withFallback() is not supported on subclassed Model instances",
                 )
             })?;
             providers.push(Arc::clone(inner));
         }
-        Ok(JsCompletionModel {
+        Ok(JsModel {
             inner: Some(Arc::new(FallbackModel::new(providers))),
             // Fallback combines heterogeneous providers (potentially a mix of
             // local and remote). There is no single `LocalModel` to forward
@@ -660,7 +656,7 @@ impl JsCompletionModel {
     /// Returns a typed response with `content`, `toolCalls`, `usage`, `model`,
     /// and `finishReason` fields.
     #[napi]
-    pub async fn complete(&self, messages: Vec<&JsChatMessage>) -> Result<JsCompletionResponse> {
+    pub async fn complete(&self, messages: Vec<&JsChatMessage>) -> Result<JsModelResponse> {
         let inner = self
             .inner
             .as_ref()
@@ -668,7 +664,7 @@ impl JsCompletionModel {
             .clone();
 
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let request = CompletionRequest::new(chat_messages);
+        let request = ModelRequest::new(chat_messages);
 
         let response = inner.complete(request).await.map_err(llm_error_to_napi)?;
 
@@ -688,8 +684,8 @@ impl JsCompletionModel {
     pub async fn complete_with_options(
         &self,
         messages: Vec<&JsChatMessage>,
-        options: JsCompletionOptions,
-    ) -> Result<JsCompletionResponse> {
+        options: JsModelOptions,
+    ) -> Result<JsModelResponse> {
         let inner = self
             .inner
             .as_ref()
@@ -699,7 +695,7 @@ impl JsCompletionModel {
             .clone();
 
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let mut request = CompletionRequest::new(chat_messages);
+        let mut request = ModelRequest::new(chat_messages);
 
         // Apply options.
         if let Some(temp) = options.temperature {
@@ -757,7 +753,7 @@ impl JsCompletionModel {
             .clone();
 
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let request = CompletionRequest::new(chat_messages);
+        let request = ModelRequest::new(chat_messages);
 
         let stream = inner.stream(request).await.map_err(llm_error_to_napi)?;
 
@@ -792,7 +788,7 @@ impl JsCompletionModel {
         &self,
         messages: Vec<&JsChatMessage>,
         on_chunk: StreamChunkCallbackTsfn,
-        options: JsCompletionOptions,
+        options: JsModelOptions,
     ) -> Result<()> {
         let inner = self
             .inner
@@ -801,7 +797,7 @@ impl JsCompletionModel {
             .clone();
 
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let mut request = CompletionRequest::new(chat_messages);
+        let mut request = ModelRequest::new(chat_messages);
 
         if let Some(temp) = options.temperature {
             request.temperature = Some(temp as f32);
@@ -928,20 +924,20 @@ impl JsCompletionModel {
 #[cfg(feature = "mistralrs")]
 #[napi]
 #[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
-impl JsCompletionModel {
+impl JsModel {
     /// Create a local mistral.rs completion model.
     ///
     /// Runs LLM inference entirely on-device -- no API key required.
     ///
     /// ```javascript
-    /// const model = CompletionModel.mistralrs({
+    /// const model = Model.mistralrs({
     ///   modelId: "mistralai/Mistral-7B-Instruct-v0.3",
     /// });
     /// ```
     #[napi(factory)]
     pub fn mistralrs(options: JsMistralRsOptions) -> Result<Self> {
         let opts: blazen_llm::MistralRsOptions = options.into();
-        // `MistralRsProvider` implements both `CompletionModel` and
+        // `MistralRsProvider` implements both `Model` and
         // `LocalModel`, so we construct a single concrete `Arc` and clone
         // it into both trait-object storages. Both clones share the same
         // allocation.
@@ -961,26 +957,24 @@ impl JsCompletionModel {
 // arc_from_js_model — bridge for run_agent and friends
 // ---------------------------------------------------------------------------
 
-/// Extract an `Arc<dyn CompletionModel>` from a [`JsCompletionModel`].
+/// Extract an `Arc<dyn Model>` from a [`JsModel`].
 ///
 /// - If the model carries a Rust-side `inner` (built via one of the
 ///   factory constructors), the inner `Arc` is cloned and returned.
 /// - Otherwise the model was constructed as a JavaScript subclass via
-///   `new CompletionModel(config)` / `super(config)` — the
-///   subclass-as-CompletionModel path is not wired through to the Rust
+///   `new Model(config)` / `super(config)` — the
+///   subclass-as-Model path is not wired through to the Rust
 ///   side here because the JavaScript instance handle is not retained on
-///   `JsCompletionModel`. Callers should use the
-///   [`JsCompletionModel::custom`] factory which accepts a host object
+///   `JsModel`. Callers should use the
+///   [`JsModel::custom`] factory which accepts a host object
 ///   directly, or subclass [`crate::providers::custom::JsCustomProvider`]
 ///   instead.
-pub(crate) fn arc_from_js_model(
-    model: &JsCompletionModel,
-) -> napi::Result<Arc<dyn CompletionModel>> {
+pub(crate) fn arc_from_js_model(model: &JsModel) -> napi::Result<Arc<dyn Model>> {
     if let Some(inner) = &model.inner {
         return Ok(Arc::clone(inner));
     }
     Err(napi::Error::from_reason(
-        "CompletionModel subclass support in Node is not yet implemented. \
-         Use CompletionModel.custom(hostObject) factory instead.",
+        "Model subclass support in Node is not yet implemented. \
+         Use Model.custom(hostObject) factory instead.",
     ))
 }

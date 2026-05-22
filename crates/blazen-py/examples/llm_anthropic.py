@@ -1,13 +1,13 @@
 """Anthropic (Claude) LLM integration with a Blazen Q&A + fact-check workflow.
 
-Demonstrates real Anthropic API calls through Blazen's CompletionModel
+Demonstrates real Anthropic API calls through Blazen's Model
 abstraction.  Two workflow steps form a question-answering pipeline:
 
   1. ask_question  -- sends the user's question to Claude and gets an answer
   2. fact_check    -- sends the answer back to Claude for verification
 
 Key points:
-  - CompletionModel.anthropic() creates an Anthropic-backed model.
+  - Model.anthropic() creates an Anthropic-backed model.
   - model.complete() is async and returns a dict with content, model, usage,
     finish_reason, and tool_calls.
   - Anthropic requires max_tokens (Blazen defaults to 4096, but you can set
@@ -23,7 +23,7 @@ import sys
 
 from blazen import (
     ChatMessage,
-    CompletionModel,
+    Model,
     Context,
     Event,
     ProviderOptions,
@@ -38,13 +38,13 @@ from blazen import (
 # Create the Anthropic-backed model (module-level so both steps share it).
 # Using claude-haiku-3-5 -- fast and cheap, ideal for examples.
 # ---------------------------------------------------------------------------
-def get_model() -> CompletionModel:
+def get_model() -> Model:
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
         print("ERROR: Set the ANTHROPIC_API_KEY environment variable.")
         print("  ANTHROPIC_API_KEY=sk-ant-... python llm_anthropic.py")
         sys.exit(1)
-    return CompletionModel.anthropic(options=ProviderOptions(api_key=api_key, model="claude-haiku-4-5-20251001"))
+    return Model.anthropic(options=ProviderOptions(api_key=api_key, model="claude-haiku-4-5-20251001"))
 
 
 MODEL = get_model()

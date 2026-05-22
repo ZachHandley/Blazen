@@ -4,7 +4,7 @@
 //! offline LLM inference with no API keys required.
 //!
 //! When used through `blazen-llm` with the `candle-llm` feature flag, this
-//! crate's [`CandleLlmProvider`] will implement `blazen_llm::CompletionModel`.
+//! crate's [`CandleLlmProvider`] will implement `blazen_llm::Model`.
 //!
 //! # Feature flags
 //!

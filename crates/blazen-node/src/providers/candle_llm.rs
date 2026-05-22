@@ -14,16 +14,14 @@ use napi::threadsafe_function::ThreadsafeFunctionCallMode;
 use napi_derive::napi;
 use tokio_stream::StreamExt;
 
-use blazen_llm::traits::{CompletionModel, LocalModel};
-use blazen_llm::types::{ChatMessage, CompletionRequest, ToolDefinition};
-use blazen_llm::{
-    CandleInferenceResult, CandleLlmCompletionModel, CandleLlmOptions, CandleLlmProvider,
-};
+use blazen_llm::traits::{LocalModel, Model};
+use blazen_llm::types::{ChatMessage, ModelRequest, ToolDefinition};
+use blazen_llm::{CandleInferenceResult, CandleLlmModel, CandleLlmOptions, CandleLlmProvider};
 
 use crate::error::{llm_error_to_napi, to_napi_error};
-use crate::providers::completion_model::StreamChunkCallbackTsfn;
+use crate::providers::model::StreamChunkCallbackTsfn;
 use crate::types::{
-    JsChatMessage, JsCompletionOptions, JsCompletionResponse, build_response, build_stream_chunk,
+    JsChatMessage, JsModelOptions, JsModelResponse, build_response, build_stream_chunk,
 };
 
 // ---------------------------------------------------------------------------
@@ -93,10 +91,10 @@ impl From<JsCandleLlmOptions> for CandleLlmOptions {
 #[napi(js_name = "CandleLlmProvider")]
 pub struct JsCandleLlmProvider {
     /// The completion-capable wrapper -- `CandleLlmProvider` itself does
-    /// not implement `CompletionModel`; `CandleLlmCompletionModel` does.
-    completion: Arc<CandleLlmCompletionModel>,
+    /// not implement `Model`; `CandleLlmModel` does.
+    completion: Arc<CandleLlmModel>,
     /// A second instance of the underlying `CandleLlmProvider` used for
-    /// `LocalModel` lifecycle controls. `CandleLlmCompletionModel` owns
+    /// `LocalModel` lifecycle controls. `CandleLlmModel` owns
     /// its provider by value and exposes no accessor, so we construct two
     /// providers from the same options at factory time and let candle's
     /// internal model cache deduplicate the weights download.
@@ -120,13 +118,13 @@ impl JsCandleLlmProvider {
     #[napi(factory)]
     pub fn create(options: Option<JsCandleLlmOptions>) -> Result<Self> {
         let opts: CandleLlmOptions = options.map(Into::into).unwrap_or_default();
-        let provider = CandleLlmProvider::from_options(opts.clone())
+        let model_provider = CandleLlmProvider::from_options(opts.clone())
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
-        let completion_provider = CandleLlmProvider::from_options(opts)
+        let lifecycle_provider = CandleLlmProvider::from_options(opts)
             .map_err(|e| napi::Error::new(napi::Status::GenericFailure, e.to_string()))?;
         Ok(Self {
-            completion: Arc::new(CandleLlmCompletionModel::new(completion_provider)),
-            lifecycle: Arc::new(provider),
+            completion: Arc::new(CandleLlmModel::new(model_provider)),
+            lifecycle: Arc::new(lifecycle_provider),
         })
     }
 
@@ -146,9 +144,9 @@ impl JsCandleLlmProvider {
 
     /// Perform a chat completion.
     #[napi]
-    pub async fn complete(&self, messages: Vec<&JsChatMessage>) -> Result<JsCompletionResponse> {
+    pub async fn complete(&self, messages: Vec<&JsChatMessage>) -> Result<JsModelResponse> {
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let request = CompletionRequest::new(chat_messages);
+        let request = ModelRequest::new(chat_messages);
 
         let response = self
             .completion
@@ -164,10 +162,10 @@ impl JsCandleLlmProvider {
     pub async fn complete_with_options(
         &self,
         messages: Vec<&JsChatMessage>,
-        options: JsCompletionOptions,
-    ) -> Result<JsCompletionResponse> {
+        options: JsModelOptions,
+    ) -> Result<JsModelResponse> {
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let mut request = CompletionRequest::new(chat_messages);
+        let mut request = ModelRequest::new(chat_messages);
 
         if let Some(temp) = options.temperature {
             request.temperature = Some(temp as f32);
@@ -212,7 +210,7 @@ impl JsCandleLlmProvider {
         on_chunk: StreamChunkCallbackTsfn,
     ) -> Result<()> {
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let request = CompletionRequest::new(chat_messages);
+        let request = ModelRequest::new(chat_messages);
 
         let stream = self
             .completion

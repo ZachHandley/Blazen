@@ -454,7 +454,7 @@ fn build_local_model_wrapper(
     // Validate `load` and `unload` exist and are callable.
     let load_attr = obj.getattr("load").map_err(|_| {
         pyo3::exceptions::PyTypeError::new_err(
-            "model object must have a callable `load` method (or be a CompletionModel with local model support)",
+            "model object must have a callable `load` method (or be a Model with local model support)",
         )
     })?;
     if !load_attr.is_callable() {
@@ -709,8 +709,8 @@ impl PyModelManager {
     ///
     /// The `model` argument can be either:
     ///
-    /// * A :class:`CompletionModel` produced by a local factory (e.g.
-    ///   ``CompletionModel.mistralrs(...)``), in which case its built-in
+    /// * A :class:`Model` produced by a local factory (e.g.
+    ///   ``Model.mistralrs(...)``), in which case its built-in
     ///   ``LocalModel`` implementation is used.
     /// * Any Python object exposing callable ``load`` and ``unload``
     ///   attributes (sync or async). It does *not* need to subclass
@@ -721,7 +721,7 @@ impl PyModelManager {
     ///
     /// Args:
     ///     id: A unique identifier for this model.
-    ///     model: A CompletionModel with local model support, or a duck-typed
+    ///     model: A Model with local model support, or a duck-typed
     ///         object with ``load`` and ``unload`` methods.
     ///     memory_estimate_bytes: Estimated memory footprint in bytes (host
     ///         RAM if the model targets CPU, GPU VRAM otherwise).
@@ -736,15 +736,15 @@ impl PyModelManager {
     ) -> PyResult<Bound<'py, PyAny>> {
         let memory_estimate = memory_estimate_bytes.unwrap_or(0);
 
-        // First, see if the user passed a CompletionModel that already carries
+        // First, see if the user passed a Model that already carries
         // a LocalModel impl. If so, use it directly (its device() is already
         // implemented in Rust).
         let local_model: Arc<dyn blazen_llm::LocalModel> =
-            if let Ok(cm) = model.extract::<PyRef<'_, crate::providers::PyCompletionModel>>() {
+            if let Ok(cm) = model.extract::<PyRef<'_, crate::providers::PyModel>>() {
                 if let Some(lm) = cm.local_model.clone() {
                     lm
                 } else {
-                    // CompletionModel without local support -- fall back to duck
+                    // Model without local support -- fall back to duck
                     // typing on the same object (rare, but harmless).
                     drop(cm);
                     Arc::new(build_local_model_wrapper(

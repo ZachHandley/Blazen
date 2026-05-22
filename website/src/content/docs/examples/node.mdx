@@ -63,13 +63,13 @@ npx tsx examples/branching_workflow.ts
 
 ## LLM RAG Workflow
 
-Multi-step RAG pipeline using context for shared state between steps. Uses typed `ChatMessage` and `CompletionResponse`:
+Multi-step RAG pipeline using context for shared state between steps. Uses typed `ChatMessage` and `ModelResponse`:
 
 ```javascript
-import { CompletionModel, ChatMessage } from "blazen";
+import { Model, ChatMessage } from "blazen";
 
 // Reads OPENAI_API_KEY from the environment by default.
-const model = CompletionModel.openai();
+const model = Model.openai();
 const response = await model.complete([
   ChatMessage.system("Answer based on the provided documents."),
   ChatMessage.user(query),
@@ -124,30 +124,30 @@ npx tsx examples/stateful_workflow.ts
 
 ---
 
-## Example 7: Subclassing CompletionModel (Custom Provider)
+## Example 7: Subclassing Model (Custom Provider)
 
-Extend `CompletionModel` in TypeScript/JavaScript to build a custom provider. Override `complete()` and/or `stream()` with any backend -- local inference, a proxy, a mock, etc. Subclass instances work with `runAgent`, `withRetry()`, `withCache()`, and every other helper.
+Extend `Model` in TypeScript/JavaScript to build a custom provider. Override `complete()` and/or `stream()` with any backend -- local inference, a proxy, a mock, etc. Subclass instances work with `runAgent`, `withRetry()`, `withCache()`, and every other helper.
 
 ```typescript
 import {
   ChatMessage,
-  CompletionModel,
+  Model,
   runAgent,
-  type CompletionResponse,
+  type ModelResponse,
 } from "blazen";
 
-class EchoLLM extends CompletionModel {
+class EchoLLM extends Model {
   constructor() {
     super({ modelId: "echo-llm", contextLength: 4096 });
   }
 
-  async complete(messages: ChatMessage[]): Promise<CompletionResponse> {
+  async complete(messages: ChatMessage[]): Promise<ModelResponse> {
     const last = [...messages].reverse().find((m) => m.role === "user");
     return {
       content: `echo: ${last?.content ?? ""}`,
       model: this.modelId,
       toolCalls: [],
-    } as CompletionResponse;
+    } as ModelResponse;
   }
 
   // Override stream() when you want incremental output.
@@ -170,7 +170,7 @@ console.log(result.response.content); // -> "echo: hello world"
 ```
 
 ```sh
-npx tsx examples/subclass_completion_model.ts
+npx tsx examples/subclass_model.ts
 ```
 
 ---
@@ -244,18 +244,18 @@ Track memory across multiple local models. Each model is charged to a pool (CPU 
 > **Note:** `poolBudgets` values, `memoryEstimateBytes`, `usedBytes`, `availableBytes`, and the `memoryEstimateBytes` field on `ModelStatus` are JS `bigint`s (since the Rust side uses `u64` and `>4 GiB` budgets used to silently truncate). `cpuRamGb` / `gpuVramGb` are still regular `number`s. `pool` is a plain string (`"cpu"`, `"gpu:0"`, ...).
 
 ```typescript
-import { CompletionModel, ModelManager } from "blazen";
+import { Model, ModelManager } from "blazen";
 
 // 64 GB host RAM pool + 24 GB GPU pool (GPU-typical for a consumer card).
 const manager = new ModelManager({ cpuRamGb: 64, gpuVramGb: 24 });
 
-const llama8b = CompletionModel.mistralrs({
+const llama8b = Model.mistralrs({
   modelId: "meta-llama/Llama-3.1-8B-Instruct",
 });
-const qwen14b = CompletionModel.mistralrs({
+const qwen14b = Model.mistralrs({
   modelId: "Qwen/Qwen2.5-14B-Instruct",
 });
-const mistral24b = CompletionModel.mistralrs({
+const mistral24b = Model.mistralrs({
   modelId: "mistralai/Mistral-Small-24B",
 });
 
@@ -290,29 +290,29 @@ npx tsx examples/model_manager_budget.ts
 
 ## Example 10: Pricing Registration and Cost Tracking
 
-Register pricing for any model ID (your own model, a local finetune, a custom deployment). Every `CompletionResponse` then carries a `cost` field computed from the registered rate.
+Register pricing for any model ID (your own model, a local finetune, a custom deployment). Every `ModelResponse` then carries a `cost` field computed from the registered rate.
 
 ```typescript
 import {
   ChatMessage,
-  CompletionModel,
+  Model,
   lookupPricing,
   registerPricing,
-  type CompletionResponse,
+  type ModelResponse,
 } from "blazen";
 
-class MyFinetune extends CompletionModel {
+class MyFinetune extends Model {
   constructor() {
     super({ modelId: "my-finetuned-model" });
   }
 
-  async complete(messages: ChatMessage[]): Promise<CompletionResponse> {
+  async complete(messages: ChatMessage[]): Promise<ModelResponse> {
     return {
       content: "Rust is a systems language with memory safety without GC.",
       model: this.modelId,
       toolCalls: [],
       usage: { promptTokens: 150, completionTokens: 80, totalTokens: 230 },
-    } as CompletionResponse;
+    } as ModelResponse;
   }
 }
 
@@ -396,14 +396,14 @@ Blazen exports a typed error hierarchy so you can branch on failure modes with `
 
 ```typescript
 import {
-  CompletionModel,
+  Model,
   ChatMessage,
   RateLimitError,
   ProviderError,
   BlazenError,
 } from "blazen";
 
-const model = CompletionModel.openai();
+const model = Model.openai();
 try {
   const response = await model.complete([ChatMessage.user("Hello")]);
   console.log(response.content);

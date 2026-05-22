@@ -113,7 +113,7 @@ async fn generate(event: RetrievalEvent, ctx: Context) -> Result<StopEvent, Work
     // In a real application you would do something like:
     //
     //   let model = OpenAiProvider::new(&api_key);
-    //   let response = model.complete(CompletionRequest::new(vec![
+    //   let response = model.complete(ModelRequest::new(vec![
     //       ChatMessage::system("Answer based on the following context:"),
     //       ChatMessage::user(&format!("{context_str}\n\nQuestion: {}", event.query)),
     //   ])).await?;

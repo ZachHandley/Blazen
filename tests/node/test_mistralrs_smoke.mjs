@@ -10,7 +10,7 @@
 
 import test from "ava";
 
-import { CompletionModel, ChatMessage } from "../../crates/blazen-node/index.js";
+import { Model, ChatMessage } from "../../crates/blazen-node/index.js";
 
 const BLAZEN_TEST_MISTRALRS = process.env.BLAZEN_TEST_MISTRALRS;
 
@@ -20,12 +20,12 @@ const T = BLAZEN_TEST_MISTRALRS ? test : test.skip;
 
 T("mistral.rs local LLM · completes a prompt and returns non-empty content", async (t) => {
   // Feature gate: if mistralrs factory is not available, skip gracefully.
-  if (typeof CompletionModel.mistralrs !== "function") {
+  if (typeof Model.mistralrs !== "function") {
     t.pass("mistralrs feature not built");
     return; // not built with mistralrs feature
   }
 
-  const model = CompletionModel.mistralrs({ modelId: MODEL_ID });
+  const model = Model.mistralrs({ modelId: MODEL_ID });
 
   const response = await model.complete([
     ChatMessage.user("What is 2+2? Answer with just the number."),
@@ -36,24 +36,24 @@ T("mistral.rs local LLM · completes a prompt and returns non-empty content", as
 });
 
 T("mistral.rs local LLM · exposes model_id on the constructed model", async (t) => {
-  if (typeof CompletionModel.mistralrs !== "function") {
+  if (typeof Model.mistralrs !== "function") {
     t.pass("mistralrs feature not built");
     return;
   }
 
-  const model = CompletionModel.mistralrs({ modelId: MODEL_ID });
+  const model = Model.mistralrs({ modelId: MODEL_ID });
 
   t.truthy(model.modelId, "expected a non-empty model ID");
   t.truthy(model.modelId.length > 0, "modelId should not be empty");
 });
 
 T("mistral.rs local LLM · handles system + user message pairs", async (t) => {
-  if (typeof CompletionModel.mistralrs !== "function") {
+  if (typeof Model.mistralrs !== "function") {
     t.pass("mistralrs feature not built");
     return;
   }
 
-  const model = CompletionModel.mistralrs({ modelId: MODEL_ID });
+  const model = Model.mistralrs({ modelId: MODEL_ID });
 
   const response = await model.complete([
     ChatMessage.system("You are a helpful assistant. Be concise."),

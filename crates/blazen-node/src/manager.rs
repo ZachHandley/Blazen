@@ -12,7 +12,7 @@ use blazen_manager::ModelManager;
 #[cfg(feature = "hf-loader")]
 use blazen_manager::hf_loader::{BackendHint, HfLoadOptions};
 
-use crate::providers::completion_model::JsCompletionModel;
+use crate::providers::model::JsModel;
 
 // ---------------------------------------------------------------------------
 // ThreadsafeFunction type aliases for the JS-callback `LocalModel` adapter.
@@ -342,7 +342,7 @@ impl JsModelManager {
         })
     }
 
-    /// Register a `CompletionModel`-backed local model with the manager.
+    /// Register a `Model`-backed local model with the manager.
     ///
     /// The model starts in the unloaded state. An optional
     /// `memoryEstimateBytes` overrides the model's self-reported
@@ -357,7 +357,7 @@ impl JsModelManager {
     pub async fn register(
         &self,
         id: String,
-        model: &JsCompletionModel,
+        model: &JsModel,
         memory_estimate_bytes: Option<BigInt>,
     ) -> napi::Result<()> {
         let local_model = model
@@ -371,7 +371,7 @@ impl JsModelManager {
 
     /// Register an arbitrary JS-managed local model with the manager.
     ///
-    /// Unlike [`Self::register`] — which expects a [`JsCompletionModel`]
+    /// Unlike [`Self::register`] — which expects a [`JsModel`]
     /// backed by an in-process provider — this entrypoint takes raw
     /// lifecycle callbacks. The manager will invoke `load()` when the
     /// model is brought into memory (potentially after evicting an LRU

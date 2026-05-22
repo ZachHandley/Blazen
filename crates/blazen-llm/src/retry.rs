@@ -1,14 +1,14 @@
-//! Retry-with-exponential-backoff decorator for [`CompletionModel`].
+//! Retry-with-exponential-backoff decorator for [`Model`].
 //!
-//! Wrap any model with [`RetryCompletionModel`] to automatically retry
+//! Wrap any model with [`RetryModel`] to automatically retry
 //! transient failures (rate limits, timeouts, server errors) with
 //! configurable exponential backoff, jitter, and `Retry-After` support.
 //!
 //! ```rust,ignore
-//! use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
+//! use blazen_llm::retry::{RetryModel, RetryConfig};
 //!
-//! let inner = /* any CompletionModel */;
-//! let model = RetryCompletionModel::new(inner, RetryConfig::default());
+//! let inner = /* any Model */;
+//! let model = RetryModel::new(inner, RetryConfig::default());
 //! let response = model.complete(request).await?;
 //! ```
 
@@ -22,8 +22,8 @@ use futures_util::Stream;
 use serde::{Deserialize, Serialize};
 
 use crate::error::BlazenError;
-use crate::traits::CompletionModel;
-use crate::types::{CompletionRequest, CompletionResponse, StreamChunk};
+use crate::traits::Model;
+use crate::types::{ModelRequest, ModelResponse, StreamChunk};
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -86,16 +86,16 @@ impl Default for RetryConfig {
 // Decorator
 // ---------------------------------------------------------------------------
 
-/// A [`CompletionModel`] decorator that retries transient errors with
+/// A [`Model`] decorator that retries transient errors with
 /// exponential backoff.
-pub struct RetryCompletionModel {
-    inner: Arc<dyn CompletionModel>,
+pub struct RetryModel {
+    inner: Arc<dyn Model>,
     config: RetryConfig,
 }
 
-impl RetryCompletionModel {
+impl RetryModel {
     /// Wrap `inner` with the given retry configuration.
-    pub fn new(inner: impl CompletionModel + 'static, config: RetryConfig) -> Self {
+    pub fn new(inner: impl Model + 'static, config: RetryConfig) -> Self {
         Self {
             inner: Arc::new(inner),
             config,
@@ -103,7 +103,7 @@ impl RetryCompletionModel {
     }
 
     /// Wrap an already-`Arc`'d model.
-    pub fn from_arc(inner: Arc<dyn CompletionModel>, config: RetryConfig) -> Self {
+    pub fn from_arc(inner: Arc<dyn Model>, config: RetryConfig) -> Self {
         Self { inner, config }
     }
 
@@ -172,19 +172,16 @@ fn retry_after_from_error(err: &BlazenError) -> Option<u64> {
 }
 
 // ---------------------------------------------------------------------------
-// CompletionModel impl
+// Model impl
 // ---------------------------------------------------------------------------
 
 #[async_trait]
-impl CompletionModel for RetryCompletionModel {
+impl Model for RetryModel {
     fn model_id(&self) -> &str {
         self.inner.model_id()
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         let max = self.config.max_retries;
         let mut last_err: Option<BlazenError> = None;
 
@@ -219,7 +216,7 @@ impl CompletionModel for RetryCompletionModel {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         // Retry only the initial connection, not mid-stream failures.
@@ -365,7 +362,7 @@ impl crate::traits::EmbeddingModel for RetryEmbeddingModel {
 /// When all scopes are `None`, returns `Arc::new(RetryConfig::default())`.
 ///
 /// The returned value is `Arc`-shared so callers can pass it through to a
-/// [`RetryCompletionModel`] / `RetryEmbeddingModel` decorator without
+/// [`RetryModel`] / `RetryEmbeddingModel` decorator without
 /// cloning the underlying config.
 #[must_use]
 pub fn resolve_retry(
@@ -589,21 +586,21 @@ fn parse_retry_after_header(resp: &crate::http::HttpResponse) -> Option<u64> {
 mod tests {
     use super::*;
     use crate::traits::EmbeddingModel as _;
-    use crate::types::{ChatMessage, CompletionResponse, StreamChunk};
+    use crate::types::{ChatMessage, ModelResponse, StreamChunk};
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     // -- Mock model --------------------------------------------------------
 
     /// A configurable mock that returns pre-defined results based on a call
     /// counter.
-    struct MockCompletionModel {
+    struct MockModel {
         model_id: String,
-        results: Vec<Result<CompletionResponse, BlazenError>>,
+        results: Vec<Result<ModelResponse, BlazenError>>,
         call_count: AtomicUsize,
     }
 
-    impl MockCompletionModel {
-        fn new(results: Vec<Result<CompletionResponse, BlazenError>>) -> Self {
+    impl MockModel {
+        fn new(results: Vec<Result<ModelResponse, BlazenError>>) -> Self {
             Self {
                 model_id: "mock-model".to_string(),
                 results,
@@ -616,8 +613,8 @@ mod tests {
         }
     }
 
-    fn ok_response() -> CompletionResponse {
-        CompletionResponse {
+    fn ok_response() -> ModelResponse {
+        ModelResponse {
             content: Some("hello".to_string()),
             tool_calls: vec![],
             reasoning: None,
@@ -636,15 +633,12 @@ mod tests {
     }
 
     #[async_trait]
-    impl CompletionModel for MockCompletionModel {
+    impl Model for MockModel {
         fn model_id(&self) -> &str {
             &self.model_id
         }
 
-        async fn complete(
-            &self,
-            _request: CompletionRequest,
-        ) -> Result<CompletionResponse, BlazenError> {
+        async fn complete(&self, _request: ModelRequest) -> Result<ModelResponse, BlazenError> {
             let idx = self.call_count.fetch_add(1, Ordering::SeqCst);
             if idx < self.results.len() {
                 // We can't clone BlazenError, so we reconstruct from the
@@ -661,7 +655,7 @@ mod tests {
 
         async fn stream(
             &self,
-            _request: CompletionRequest,
+            _request: ModelRequest,
         ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
         {
             let idx = self.call_count.fetch_add(1, Ordering::SeqCst);
@@ -720,8 +714,8 @@ mod tests {
         }
     }
 
-    fn simple_request() -> CompletionRequest {
-        CompletionRequest::new(vec![ChatMessage::user("hi")])
+    fn simple_request() -> ModelRequest {
+        ModelRequest::new(vec![ChatMessage::user("hi")])
     }
 
     /// Retry config with zero delays so tests are fast.
@@ -739,8 +733,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_no_retry_on_success() {
-        let mock = MockCompletionModel::new(vec![Ok(ok_response())]);
-        let model = RetryCompletionModel::new(mock, fast_config(3));
+        let mock = MockModel::new(vec![Ok(ok_response())]);
+        let model = RetryModel::new(mock, fast_config(3));
 
         let resp = model.complete(simple_request()).await.unwrap();
         assert_eq!(resp.content.as_deref(), Some("hello"));
@@ -753,7 +747,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_retries_on_rate_limit() {
-        let mock = Arc::new(MockCompletionModel::new(vec![
+        let mock = Arc::new(MockModel::new(vec![
             Err(BlazenError::RateLimit {
                 retry_after_ms: None,
             }),
@@ -763,7 +757,7 @@ mod tests {
             Ok(ok_response()),
         ]));
 
-        let model = RetryCompletionModel::from_arc(mock.clone(), fast_config(3));
+        let model = RetryModel::from_arc(mock.clone(), fast_config(3));
         let resp = model.complete(simple_request()).await.unwrap();
 
         assert_eq!(resp.content.as_deref(), Some("hello"));
@@ -772,11 +766,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_no_retry_on_auth_error() {
-        let mock = Arc::new(MockCompletionModel::new(vec![Err(BlazenError::Auth {
+        let mock = Arc::new(MockModel::new(vec![Err(BlazenError::Auth {
             message: "bad key".to_string(),
         })]));
 
-        let model = RetryCompletionModel::from_arc(mock.clone(), fast_config(3));
+        let model = RetryModel::from_arc(mock.clone(), fast_config(3));
         let result = model.complete(simple_request()).await;
 
         assert!(result.is_err());
@@ -785,7 +779,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_max_retries_exhausted() {
-        let mock = Arc::new(MockCompletionModel::new(vec![
+        let mock = Arc::new(MockModel::new(vec![
             Err(BlazenError::RateLimit {
                 retry_after_ms: None,
             }),
@@ -797,7 +791,7 @@ mod tests {
             }),
         ]));
 
-        let model = RetryCompletionModel::from_arc(mock.clone(), fast_config(2));
+        let model = RetryModel::from_arc(mock.clone(), fast_config(2));
         let result = model.complete(simple_request()).await;
 
         assert!(result.is_err());
@@ -817,8 +811,8 @@ mod tests {
             jitter: false,
         };
 
-        let mock = MockCompletionModel::new(vec![]);
-        let model = RetryCompletionModel::new(mock, config);
+        let mock = MockModel::new(vec![]);
+        let model = RetryModel::new(mock, config);
 
         // When a retry_after_ms is present, the delay should use it
         // instead of exponential backoff.
@@ -850,8 +844,8 @@ mod tests {
             jitter: true,
         };
 
-        let mock = MockCompletionModel::new(vec![]);
-        let model = RetryCompletionModel::new(mock, config);
+        let mock = MockModel::new(vec![]);
+        let model = RetryModel::new(mock, config);
 
         let delay = model.compute_delay(0, None);
         // With jitter the delay should be >= 1s and <= 1.25s.
@@ -861,7 +855,7 @@ mod tests {
 
     #[tokio::test]
     async fn test_stream_retries_on_connection_error() {
-        let mock = Arc::new(MockCompletionModel::new(vec![
+        let mock = Arc::new(MockModel::new(vec![
             Err(BlazenError::Request {
                 message: "connection reset".to_string(),
                 source: None,
@@ -869,7 +863,7 @@ mod tests {
             Ok(ok_response()), // stream returns empty on Ok
         ]));
 
-        let model = RetryCompletionModel::from_arc(mock.clone(), fast_config(3));
+        let model = RetryModel::from_arc(mock.clone(), fast_config(3));
         let stream = model.stream(simple_request()).await;
 
         assert!(stream.is_ok());

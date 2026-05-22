@@ -12,7 +12,7 @@
 //! - `POST  /api/v0/models/unload`  — unload a model
 //!
 //! Bodies are `serde_json::Value` rather than typed structs because
-//! Blazen's provider-agnostic [`CompletionRequest`] / [`CompletionResponse`]
+//! Blazen's provider-agnostic [`ModelRequest`] / [`ModelResponse`]
 //! types live in `blazen-llm` (which this crate cannot depend on without
 //! creating a cycle). The `backends/lmstudio.rs` bridge does the typed
 //! conversion.

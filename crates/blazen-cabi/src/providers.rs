@@ -1,4 +1,4 @@
-//! Provider factory functions for [`BlazenCompletionModel`] and
+//! Provider factory functions for [`BlazenModel`] and
 //! [`BlazenEmbeddingModel`].
 //!
 //! Each factory is a thin shim over the matching
@@ -21,8 +21,8 @@
 //!   `max_batch_size`, `dimensions`) come across as `i32` with `-1` meaning
 //!   "not set" — see [`opt_u32_from_i32`].
 //! - **On success**, `*out_model` receives a caller-owned
-//!   `*mut BlazenCompletionModel` (or `*mut BlazenEmbeddingModel`). Free with
-//!   [`crate::llm::blazen_completion_model_free`] /
+//!   `*mut BlazenModel` (or `*mut BlazenEmbeddingModel`). Free with
+//!   [`crate::llm::blazen_model_free`] /
 //!   [`crate::llm::blazen_embedding_model_free`].
 //! - **On failure**, `*out_err` receives a caller-owned `*mut BlazenError`.
 //!   Free with [`crate::error::blazen_error_free`].
@@ -35,7 +35,7 @@ use std::ffi::c_char;
 use blazen_uniffi::errors::BlazenError as InnerError;
 
 use crate::error::BlazenError;
-use crate::llm::{BlazenCompletionModel, BlazenEmbeddingModel};
+use crate::llm::{BlazenEmbeddingModel, BlazenModel};
 use crate::string::{cstr_to_opt_string, cstr_to_str};
 
 // ---------------------------------------------------------------------------
@@ -105,7 +105,7 @@ fn opt_u32_from_i32(v: i32) -> Option<u32> {
 /// `api_key` is required (NUL-terminated UTF-8). `model` and `base_url` are
 /// optional — pass null to use the upstream default.
 ///
-/// On success returns `0` and writes a caller-owned `*mut BlazenCompletionModel`
+/// On success returns `0` and writes a caller-owned `*mut BlazenModel`
 /// into `*out_model`. On error returns `-1` and writes a `*mut BlazenError`
 /// into `*out_err`. Either out-parameter may be null to discard.
 ///
@@ -116,11 +116,11 @@ fn opt_u32_from_i32(v: i32) -> Option<u32> {
 /// `out_model` / `out_err` must each be null OR a valid destination for one
 /// pointer write.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_openai(
+pub unsafe extern "C" fn blazen_model_new_openai(
     api_key: *const c_char,
     model: *const c_char,
     base_url: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -132,13 +132,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_openai(
     let model = unsafe { cstr_to_opt_string(model) };
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let base_url = unsafe { cstr_to_opt_string(base_url) };
-    match blazen_uniffi::providers::new_openai_completion_model(api_key.to_owned(), model, base_url)
-    {
+    match blazen_uniffi::providers::new_openai_model(api_key.to_owned(), model, base_url) {
         Ok(arc) => {
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -150,18 +149,18 @@ pub unsafe extern "C" fn blazen_completion_model_new_openai(
 
 /// Constructs an Anthropic Messages-API chat-completion model.
 ///
-/// See [`blazen_completion_model_new_openai`] for the argument and ownership
+/// See [`blazen_model_new_openai`] for the argument and ownership
 /// conventions — identical shape.
 ///
 /// # Safety
 ///
-/// Same contracts as [`blazen_completion_model_new_openai`].
+/// Same contracts as [`blazen_model_new_openai`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_anthropic(
+pub unsafe extern "C" fn blazen_model_new_anthropic(
     api_key: *const c_char,
     model: *const c_char,
     base_url: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -173,16 +172,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_anthropic(
     let model = unsafe { cstr_to_opt_string(model) };
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let base_url = unsafe { cstr_to_opt_string(base_url) };
-    match blazen_uniffi::providers::new_anthropic_completion_model(
-        api_key.to_owned(),
-        model,
-        base_url,
-    ) {
+    match blazen_uniffi::providers::new_anthropic_model(api_key.to_owned(), model, base_url) {
         Ok(arc) => {
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -196,13 +191,13 @@ pub unsafe extern "C" fn blazen_completion_model_new_anthropic(
 ///
 /// # Safety
 ///
-/// Same contracts as [`blazen_completion_model_new_openai`].
+/// Same contracts as [`blazen_model_new_openai`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_gemini(
+pub unsafe extern "C" fn blazen_model_new_gemini(
     api_key: *const c_char,
     model: *const c_char,
     base_url: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -214,13 +209,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_gemini(
     let model = unsafe { cstr_to_opt_string(model) };
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let base_url = unsafe { cstr_to_opt_string(base_url) };
-    match blazen_uniffi::providers::new_gemini_completion_model(api_key.to_owned(), model, base_url)
-    {
+    match blazen_uniffi::providers::new_gemini_model(api_key.to_owned(), model, base_url) {
         Ok(arc) => {
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -234,13 +228,13 @@ pub unsafe extern "C" fn blazen_completion_model_new_gemini(
 ///
 /// # Safety
 ///
-/// Same contracts as [`blazen_completion_model_new_openai`].
+/// Same contracts as [`blazen_model_new_openai`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_openrouter(
+pub unsafe extern "C" fn blazen_model_new_openrouter(
     api_key: *const c_char,
     model: *const c_char,
     base_url: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -252,16 +246,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_openrouter(
     let model = unsafe { cstr_to_opt_string(model) };
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let base_url = unsafe { cstr_to_opt_string(base_url) };
-    match blazen_uniffi::providers::new_openrouter_completion_model(
-        api_key.to_owned(),
-        model,
-        base_url,
-    ) {
+    match blazen_uniffi::providers::new_openrouter_model(api_key.to_owned(), model, base_url) {
         Ok(arc) => {
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -275,13 +265,13 @@ pub unsafe extern "C" fn blazen_completion_model_new_openrouter(
 ///
 /// # Safety
 ///
-/// Same contracts as [`blazen_completion_model_new_openai`].
+/// Same contracts as [`blazen_model_new_openai`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_groq(
+pub unsafe extern "C" fn blazen_model_new_groq(
     api_key: *const c_char,
     model: *const c_char,
     base_url: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -293,12 +283,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_groq(
     let model = unsafe { cstr_to_opt_string(model) };
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let base_url = unsafe { cstr_to_opt_string(base_url) };
-    match blazen_uniffi::providers::new_groq_completion_model(api_key.to_owned(), model, base_url) {
+    match blazen_uniffi::providers::new_groq_model(api_key.to_owned(), model, base_url) {
         Ok(arc) => {
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -312,13 +302,13 @@ pub unsafe extern "C" fn blazen_completion_model_new_groq(
 ///
 /// # Safety
 ///
-/// Same contracts as [`blazen_completion_model_new_openai`].
+/// Same contracts as [`blazen_model_new_openai`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_together(
+pub unsafe extern "C" fn blazen_model_new_together(
     api_key: *const c_char,
     model: *const c_char,
     base_url: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -330,16 +320,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_together(
     let model = unsafe { cstr_to_opt_string(model) };
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let base_url = unsafe { cstr_to_opt_string(base_url) };
-    match blazen_uniffi::providers::new_together_completion_model(
-        api_key.to_owned(),
-        model,
-        base_url,
-    ) {
+    match blazen_uniffi::providers::new_together_model(api_key.to_owned(), model, base_url) {
         Ok(arc) => {
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -353,13 +339,13 @@ pub unsafe extern "C" fn blazen_completion_model_new_together(
 ///
 /// # Safety
 ///
-/// Same contracts as [`blazen_completion_model_new_openai`].
+/// Same contracts as [`blazen_model_new_openai`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_mistral(
+pub unsafe extern "C" fn blazen_model_new_mistral(
     api_key: *const c_char,
     model: *const c_char,
     base_url: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -371,16 +357,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_mistral(
     let model = unsafe { cstr_to_opt_string(model) };
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let base_url = unsafe { cstr_to_opt_string(base_url) };
-    match blazen_uniffi::providers::new_mistral_completion_model(
-        api_key.to_owned(),
-        model,
-        base_url,
-    ) {
+    match blazen_uniffi::providers::new_mistral_model(api_key.to_owned(), model, base_url) {
         Ok(arc) => {
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -394,13 +376,13 @@ pub unsafe extern "C" fn blazen_completion_model_new_mistral(
 ///
 /// # Safety
 ///
-/// Same contracts as [`blazen_completion_model_new_openai`].
+/// Same contracts as [`blazen_model_new_openai`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_deepseek(
+pub unsafe extern "C" fn blazen_model_new_deepseek(
     api_key: *const c_char,
     model: *const c_char,
     base_url: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -412,16 +394,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_deepseek(
     let model = unsafe { cstr_to_opt_string(model) };
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let base_url = unsafe { cstr_to_opt_string(base_url) };
-    match blazen_uniffi::providers::new_deepseek_completion_model(
-        api_key.to_owned(),
-        model,
-        base_url,
-    ) {
+    match blazen_uniffi::providers::new_deepseek_model(api_key.to_owned(), model, base_url) {
         Ok(arc) => {
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -435,13 +413,13 @@ pub unsafe extern "C" fn blazen_completion_model_new_deepseek(
 ///
 /// # Safety
 ///
-/// Same contracts as [`blazen_completion_model_new_openai`].
+/// Same contracts as [`blazen_model_new_openai`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_fireworks(
+pub unsafe extern "C" fn blazen_model_new_fireworks(
     api_key: *const c_char,
     model: *const c_char,
     base_url: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -453,16 +431,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_fireworks(
     let model = unsafe { cstr_to_opt_string(model) };
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let base_url = unsafe { cstr_to_opt_string(base_url) };
-    match blazen_uniffi::providers::new_fireworks_completion_model(
-        api_key.to_owned(),
-        model,
-        base_url,
-    ) {
+    match blazen_uniffi::providers::new_fireworks_model(api_key.to_owned(), model, base_url) {
         Ok(arc) => {
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -476,13 +450,13 @@ pub unsafe extern "C" fn blazen_completion_model_new_fireworks(
 ///
 /// # Safety
 ///
-/// Same contracts as [`blazen_completion_model_new_openai`].
+/// Same contracts as [`blazen_model_new_openai`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_perplexity(
+pub unsafe extern "C" fn blazen_model_new_perplexity(
     api_key: *const c_char,
     model: *const c_char,
     base_url: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -494,16 +468,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_perplexity(
     let model = unsafe { cstr_to_opt_string(model) };
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let base_url = unsafe { cstr_to_opt_string(base_url) };
-    match blazen_uniffi::providers::new_perplexity_completion_model(
-        api_key.to_owned(),
-        model,
-        base_url,
-    ) {
+    match blazen_uniffi::providers::new_perplexity_model(api_key.to_owned(), model, base_url) {
         Ok(arc) => {
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -517,13 +487,13 @@ pub unsafe extern "C" fn blazen_completion_model_new_perplexity(
 ///
 /// # Safety
 ///
-/// Same contracts as [`blazen_completion_model_new_openai`].
+/// Same contracts as [`blazen_model_new_openai`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_xai(
+pub unsafe extern "C" fn blazen_model_new_xai(
     api_key: *const c_char,
     model: *const c_char,
     base_url: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -535,12 +505,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_xai(
     let model = unsafe { cstr_to_opt_string(model) };
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let base_url = unsafe { cstr_to_opt_string(base_url) };
-    match blazen_uniffi::providers::new_xai_completion_model(api_key.to_owned(), model, base_url) {
+    match blazen_uniffi::providers::new_xai_model(api_key.to_owned(), model, base_url) {
         Ok(arc) => {
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -554,13 +524,13 @@ pub unsafe extern "C" fn blazen_completion_model_new_xai(
 ///
 /// # Safety
 ///
-/// Same contracts as [`blazen_completion_model_new_openai`].
+/// Same contracts as [`blazen_model_new_openai`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_cohere(
+pub unsafe extern "C" fn blazen_model_new_cohere(
     api_key: *const c_char,
     model: *const c_char,
     base_url: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -572,13 +542,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_cohere(
     let model = unsafe { cstr_to_opt_string(model) };
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let base_url = unsafe { cstr_to_opt_string(base_url) };
-    match blazen_uniffi::providers::new_cohere_completion_model(api_key.to_owned(), model, base_url)
-    {
+    match blazen_uniffi::providers::new_cohere_model(api_key.to_owned(), model, base_url) {
         Ok(arc) => {
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -606,12 +575,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_cohere(
 /// NUL-terminated UTF-8 buffer. `out_model` / `out_err` must each be null OR
 /// a valid destination for one pointer write.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_azure(
+pub unsafe extern "C" fn blazen_model_new_azure(
     api_key: *const c_char,
     resource_name: *const c_char,
     deployment_name: *const c_char,
     api_version: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -631,7 +600,7 @@ pub unsafe extern "C" fn blazen_completion_model_new_azure(
     };
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let api_version = unsafe { cstr_to_opt_string(api_version) };
-    match blazen_uniffi::providers::new_azure_completion_model(
+    match blazen_uniffi::providers::new_azure_model(
         api_key.to_owned(),
         resource_name.to_owned(),
         deployment_name.to_owned(),
@@ -641,7 +610,7 @@ pub unsafe extern "C" fn blazen_completion_model_new_azure(
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -663,12 +632,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_azure(
 /// buffer. `out_model` / `out_err` must each be null OR a valid destination
 /// for one pointer write.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_bedrock(
+pub unsafe extern "C" fn blazen_model_new_bedrock(
     api_key: *const c_char,
     region: *const c_char,
     model: *const c_char,
     base_url: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -685,7 +654,7 @@ pub unsafe extern "C" fn blazen_completion_model_new_bedrock(
     let model = unsafe { cstr_to_opt_string(model) };
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let base_url = unsafe { cstr_to_opt_string(base_url) };
-    match blazen_uniffi::providers::new_bedrock_completion_model(
+    match blazen_uniffi::providers::new_bedrock_model(
         api_key.to_owned(),
         region.to_owned(),
         model,
@@ -695,7 +664,7 @@ pub unsafe extern "C" fn blazen_completion_model_new_bedrock(
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -721,14 +690,14 @@ pub unsafe extern "C" fn blazen_completion_model_new_bedrock(
 /// UTF-8 buffer. `out_model` / `out_err` must each be null OR a valid
 /// destination for one pointer write.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_fal(
+pub unsafe extern "C" fn blazen_model_new_fal(
     api_key: *const c_char,
     model: *const c_char,
     endpoint: *const c_char,
     enterprise: bool,
     auto_route_modality: bool,
     base_url: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -742,7 +711,7 @@ pub unsafe extern "C" fn blazen_completion_model_new_fal(
     let endpoint = unsafe { cstr_to_opt_string(endpoint) };
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let base_url = unsafe { cstr_to_opt_string(base_url) };
-    match blazen_uniffi::providers::new_fal_completion_model(
+    match blazen_uniffi::providers::new_fal_model(
         api_key.to_owned(),
         model,
         base_url,
@@ -754,7 +723,7 @@ pub unsafe extern "C" fn blazen_completion_model_new_fal(
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -776,12 +745,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_fal(
 /// NUL-terminated UTF-8 buffer. `out_model` / `out_err` must each be null OR
 /// a valid destination for one pointer write.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_openai_compat(
+pub unsafe extern "C" fn blazen_model_new_openai_compat(
     provider_name: *const c_char,
     base_url: *const c_char,
     api_key: *const c_char,
     model: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -804,7 +773,7 @@ pub unsafe extern "C" fn blazen_completion_model_new_openai_compat(
         // SAFETY: caller upholds the out-param contract on `out_err`.
         return unsafe { write_internal_error(out_err, "model must not be null") };
     };
-    match blazen_uniffi::providers::new_openai_compat_completion_model(
+    match blazen_uniffi::providers::new_openai_compat_model(
         provider_name.to_owned(),
         base_url.to_owned(),
         api_key.to_owned(),
@@ -814,7 +783,7 @@ pub unsafe extern "C" fn blazen_completion_model_new_openai_compat(
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -824,12 +793,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_openai_compat(
     }
 }
 
-/// Constructs a `CompletionModel` for an Ollama server.
+/// Constructs a `Model` for an Ollama server.
 ///
 /// Convenience wrapper around the OpenAI-compatible factory with
 /// `base_url = format!("http://{host}:{port}/v1")` and no API key.
 ///
-/// On success returns `0` and writes a caller-owned `*mut BlazenCompletionModel`
+/// On success returns `0` and writes a caller-owned `*mut BlazenModel`
 /// into `*out_model`. On error returns `-1` and writes a `*mut BlazenError`
 /// into `*out_err`. Either out-parameter may be null to discard.
 ///
@@ -839,11 +808,11 @@ pub unsafe extern "C" fn blazen_completion_model_new_openai_compat(
 /// `out_model` / `out_err` must each be null OR a valid destination for one
 /// pointer write.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_ollama(
+pub unsafe extern "C" fn blazen_model_new_ollama(
     host: *const c_char,
     port: u16,
     model: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -856,16 +825,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_ollama(
         // SAFETY: caller upholds the out-param contract on `out_err`.
         return unsafe { write_internal_error(out_err, "model must not be null") };
     };
-    match blazen_uniffi::providers::new_ollama_completion_model(
-        host.to_owned(),
-        port,
-        model.to_owned(),
-    ) {
+    match blazen_uniffi::providers::new_ollama_model(host.to_owned(), port, model.to_owned()) {
         Ok(arc) => {
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -875,20 +840,20 @@ pub unsafe extern "C" fn blazen_completion_model_new_ollama(
     }
 }
 
-/// Constructs a `CompletionModel` for an LM Studio server.
+/// Constructs a `Model` for an LM Studio server.
 ///
-/// See [`blazen_completion_model_new_ollama`] for argument and ownership
+/// See [`blazen_model_new_ollama`] for argument and ownership
 /// conventions — identical shape.
 ///
 /// # Safety
 ///
-/// Same contracts as [`blazen_completion_model_new_ollama`].
+/// Same contracts as [`blazen_model_new_ollama`].
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_lm_studio(
+pub unsafe extern "C" fn blazen_model_new_lm_studio(
     host: *const c_char,
     port: u16,
     model: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -901,16 +866,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_lm_studio(
         // SAFETY: caller upholds the out-param contract on `out_err`.
         return unsafe { write_internal_error(out_err, "model must not be null") };
     };
-    match blazen_uniffi::providers::new_lm_studio_completion_model(
-        host.to_owned(),
-        port,
-        model.to_owned(),
-    ) {
+    match blazen_uniffi::providers::new_lm_studio_model(host.to_owned(), port, model.to_owned()) {
         Ok(arc) => {
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -920,7 +881,7 @@ pub unsafe extern "C" fn blazen_completion_model_new_lm_studio(
     }
 }
 
-/// Constructs a `CompletionModel` wrapping an arbitrary OpenAI-compatible
+/// Constructs a `Model` wrapping an arbitrary OpenAI-compatible
 /// server via the universal `CustomProvider`.
 ///
 /// Pass `api_key = null` if the server does not require authentication
@@ -933,12 +894,12 @@ pub unsafe extern "C" fn blazen_completion_model_new_lm_studio(
 /// NUL-terminated UTF-8 buffer. `out_model` / `out_err` must each be null
 /// OR a valid destination for one pointer write.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_custom_with_openai_protocol(
+pub unsafe extern "C" fn blazen_model_new_custom_with_openai_protocol(
     provider_id: *const c_char,
     base_url: *const c_char,
     model: *const c_char,
     api_key: *const c_char,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -958,7 +919,7 @@ pub unsafe extern "C" fn blazen_completion_model_new_custom_with_openai_protocol
     };
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let api_key = unsafe { cstr_to_opt_string(api_key) };
-    match blazen_uniffi::providers::new_custom_completion_model_with_openai_protocol(
+    match blazen_uniffi::providers::new_custom_model_with_openai_protocol(
         provider_id.to_owned(),
         base_url.to_owned(),
         model.to_owned(),
@@ -968,7 +929,7 @@ pub unsafe extern "C" fn blazen_completion_model_new_custom_with_openai_protocol
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -1001,13 +962,13 @@ pub unsafe extern "C" fn blazen_completion_model_new_custom_with_openai_protocol
 /// pointer write.
 #[cfg(feature = "mistralrs")]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_mistralrs(
+pub unsafe extern "C" fn blazen_model_new_mistralrs(
     model_id: *const c_char,
     device: *const c_char,
     quantization: *const c_char,
     context_length: i32,
     vision: bool,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -1020,7 +981,7 @@ pub unsafe extern "C" fn blazen_completion_model_new_mistralrs(
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let quantization = unsafe { cstr_to_opt_string(quantization) };
     let context_length = opt_u32_from_i32(context_length);
-    match blazen_uniffi::providers::new_mistralrs_completion_model(
+    match blazen_uniffi::providers::new_mistralrs_model(
         model_id.to_owned(),
         device,
         quantization,
@@ -1031,7 +992,7 @@ pub unsafe extern "C" fn blazen_completion_model_new_mistralrs(
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -1059,13 +1020,13 @@ pub unsafe extern "C" fn blazen_completion_model_new_mistralrs(
 /// pointer write.
 #[cfg(feature = "llamacpp")]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_llamacpp(
+pub unsafe extern "C" fn blazen_model_new_llamacpp(
     model_path: *const c_char,
     device: *const c_char,
     quantization: *const c_char,
     context_length: i32,
     n_gpu_layers: i32,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -1079,7 +1040,7 @@ pub unsafe extern "C" fn blazen_completion_model_new_llamacpp(
     let quantization = unsafe { cstr_to_opt_string(quantization) };
     let context_length = opt_u32_from_i32(context_length);
     let n_gpu_layers = opt_u32_from_i32(n_gpu_layers);
-    match blazen_uniffi::providers::new_llamacpp_completion_model(
+    match blazen_uniffi::providers::new_llamacpp_model(
         model_path.to_owned(),
         device,
         quantization,
@@ -1090,7 +1051,7 @@ pub unsafe extern "C" fn blazen_completion_model_new_llamacpp(
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0
@@ -1102,8 +1063,8 @@ pub unsafe extern "C" fn blazen_completion_model_new_llamacpp(
 
 /// Constructs a local candle chat-completion model.
 ///
-/// Wraps `CandleLlmProvider` through the `CandleLlmCompletionModel` trait
-/// bridge so it satisfies the same `CompletionModel` trait as remote
+/// Wraps `CandleLlmProvider` through the `CandleLlmModel` trait
+/// bridge so it satisfies the same `Model` trait as remote
 /// providers. `context_length` of `-1` means "use the model's default".
 ///
 /// Feature-gated on `candle-llm`.
@@ -1116,13 +1077,13 @@ pub unsafe extern "C" fn blazen_completion_model_new_llamacpp(
 /// a valid destination for one pointer write.
 #[cfg(feature = "candle-llm")]
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_new_candle(
+pub unsafe extern "C" fn blazen_model_new_candle(
     model_id: *const c_char,
     device: *const c_char,
     quantization: *const c_char,
     revision: *const c_char,
     context_length: i32,
-    out_model: *mut *mut BlazenCompletionModel,
+    out_model: *mut *mut BlazenModel,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
@@ -1137,7 +1098,7 @@ pub unsafe extern "C" fn blazen_completion_model_new_candle(
     // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
     let revision = unsafe { cstr_to_opt_string(revision) };
     let context_length = opt_u32_from_i32(context_length);
-    match blazen_uniffi::providers::new_candle_completion_model(
+    match blazen_uniffi::providers::new_candle_model(
         model_id.to_owned(),
         device,
         quantization,
@@ -1148,7 +1109,7 @@ pub unsafe extern "C" fn blazen_completion_model_new_candle(
             if !out_model.is_null() {
                 // SAFETY: caller upholds the out-param contract on `out_model`.
                 unsafe {
-                    *out_model = BlazenCompletionModel::from(arc).into_ptr();
+                    *out_model = BlazenModel::from(arc).into_ptr();
                 }
             }
             0

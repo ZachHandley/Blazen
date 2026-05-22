@@ -1,6 +1,6 @@
 """OpenAI-powered content pipeline with Blazen.
 
-Demonstrates using Blazen's CompletionModel with OpenAI to build a real
+Demonstrates using Blazen's Model with OpenAI to build a real
 3-step content generation workflow:
 
   1. generate_outline  -- GPT creates a blog post outline from a topic
@@ -19,7 +19,7 @@ import sys
 
 from blazen import (
     ChatMessage,
-    CompletionModel,
+    Model,
     Context,
     Event,
     ProviderOptions,
@@ -50,9 +50,9 @@ def track_usage(ctx: Context, usage: dict) -> None:
 # ---------------------------------------------------------------------------
 # Step 1: Generate an outline
 # ---------------------------------------------------------------------------
-# Module-level model reference. CompletionModel is a native PyO3 object and
+# Module-level model reference. Model is a native PyO3 object and
 # cannot be serialised to JSON, so we store it here instead of in context.
-MODEL: CompletionModel | None = None
+MODEL: Model | None = None
 
 
 @step
@@ -174,10 +174,10 @@ async def main() -> None:
         sys.exit(1)
 
     # Create the OpenAI completion model (gpt-5.3-chat-latest is cheap for examples).
-    # Stored at module level because CompletionModel is a native object that
+    # Stored at module level because Model is a native object that
     # cannot be serialised into the JSON-based workflow context.
     global MODEL
-    MODEL = CompletionModel.openai(options=ProviderOptions(api_key=api_key, model="gpt-5.3-chat-latest"))
+    MODEL = Model.openai(options=ProviderOptions(api_key=api_key, model="gpt-5.3-chat-latest"))
 
     # Build the 3-step content pipeline.
     wf = Workflow("content-pipeline", [generate_outline, write_draft, review])

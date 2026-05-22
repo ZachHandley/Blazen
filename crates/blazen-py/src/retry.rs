@@ -2,10 +2,10 @@
 //!
 //! Wraps [`RetryStack`](blazen_llm::retry::RetryStack), [`RetryEmbeddingModel`],
 //! and [`RetryHttpClient`] so callers can layer retries onto every Blazen
-//! surface, not just `CompletionModel`.
+//! surface, not just `Model`.
 //!
 //! `PyRetryConfig` itself (the typed config struct) lives next door in
-//! `providers::config` because that is where `RetryCompletionModel` /
+//! `providers::config` because that is where `RetryModel` /
 //! `with_retry` and the cache config already sit.
 
 use std::sync::Arc;

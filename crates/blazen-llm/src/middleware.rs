@@ -1,4 +1,4 @@
-//! Composable middleware system for [`CompletionModel`].
+//! Composable middleware system for [`Model`].
 //!
 //! The [`Middleware`] trait and [`MiddlewareStack`] builder formalize the
 //! existing decorator pattern (retry, cache, fallback) into a composable
@@ -32,25 +32,25 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 
-use crate::cache::{CacheConfig, CachedCompletionModel};
-use crate::retry::{RetryCompletionModel, RetryConfig};
-use crate::traits::CompletionModel;
+use crate::cache::{CacheConfig, CachedModel};
+use crate::retry::{RetryConfig, RetryModel};
+use crate::traits::Model;
 
 // ---------------------------------------------------------------------------
 // Middleware trait
 // ---------------------------------------------------------------------------
 
-/// A middleware that wraps a [`CompletionModel`], adding behaviour
+/// A middleware that wraps a [`Model`], adding behaviour
 /// before/after completion calls.
 ///
-/// Implementors produce a new `Arc<dyn CompletionModel>` that decorates the
+/// Implementors produce a new `Arc<dyn Model>` that decorates the
 /// provided inner model. This is intentionally identical to the decorator
-/// pattern already used by [`RetryCompletionModel`] and
-/// [`CachedCompletionModel`], but expressed as a composable unit.
+/// pattern already used by [`RetryModel`] and
+/// [`CachedModel`], but expressed as a composable unit.
 #[async_trait]
 pub trait Middleware: Send + Sync {
     /// Wrap the inner model with this middleware's behaviour.
-    fn wrap(&self, inner: Arc<dyn CompletionModel>) -> Arc<dyn CompletionModel>;
+    fn wrap(&self, inner: Arc<dyn Model>) -> Arc<dyn Model>;
 }
 
 // ---------------------------------------------------------------------------
@@ -58,7 +58,7 @@ pub trait Middleware: Send + Sync {
 // ---------------------------------------------------------------------------
 
 /// A builder for composing multiple [`Middleware`] layers around a
-/// [`CompletionModel`].
+/// [`Model`].
 ///
 /// Layers are applied in reverse insertion order so that the first layer
 /// added ends up as the outermost wrapper (executed first).
@@ -94,7 +94,7 @@ impl MiddlewareStack {
     ///
     /// Layers are applied in reverse order so that the first layer added
     /// becomes the outermost wrapper.
-    pub fn apply(self, model: Arc<dyn CompletionModel>) -> Arc<dyn CompletionModel> {
+    pub fn apply(self, model: Arc<dyn Model>) -> Arc<dyn Model> {
         let mut wrapped = model;
         for layer in self.layers.into_iter().rev() {
             wrapped = layer.wrap(wrapped);
@@ -133,7 +133,7 @@ impl MiddlewareStack {
 // Built-in middleware: Retry
 // ---------------------------------------------------------------------------
 
-/// Middleware that wraps a model with [`RetryCompletionModel`] for automatic
+/// Middleware that wraps a model with [`RetryModel`] for automatic
 /// retry-with-exponential-backoff on transient failures.
 pub struct RetryMiddleware {
     /// The retry configuration to apply.
@@ -141,8 +141,8 @@ pub struct RetryMiddleware {
 }
 
 impl Middleware for RetryMiddleware {
-    fn wrap(&self, inner: Arc<dyn CompletionModel>) -> Arc<dyn CompletionModel> {
-        Arc::new(RetryCompletionModel::from_arc(inner, self.config.clone()))
+    fn wrap(&self, inner: Arc<dyn Model>) -> Arc<dyn Model> {
+        Arc::new(RetryModel::from_arc(inner, self.config.clone()))
     }
 }
 
@@ -150,7 +150,7 @@ impl Middleware for RetryMiddleware {
 // Built-in middleware: Cache
 // ---------------------------------------------------------------------------
 
-/// Middleware that wraps a model with [`CachedCompletionModel`] for
+/// Middleware that wraps a model with [`CachedModel`] for
 /// content-hash-based response caching.
 pub struct CacheMiddleware {
     /// The cache configuration to apply.
@@ -158,8 +158,8 @@ pub struct CacheMiddleware {
 }
 
 impl Middleware for CacheMiddleware {
-    fn wrap(&self, inner: Arc<dyn CompletionModel>) -> Arc<dyn CompletionModel> {
-        Arc::new(CachedCompletionModel::from_arc(inner, self.config.clone()))
+    fn wrap(&self, inner: Arc<dyn Model>) -> Arc<dyn Model> {
+        Arc::new(CachedModel::from_arc(inner, self.config.clone()))
     }
 }
 
@@ -178,18 +178,18 @@ mod tests {
 
     use super::*;
     use crate::error::BlazenError;
-    use crate::types::{ChatMessage, CompletionRequest, CompletionResponse, StreamChunk};
+    use crate::types::{ChatMessage, ModelRequest, ModelResponse, StreamChunk};
 
     // -- Mock model ----------------------------------------------------------
 
-    /// A mock [`CompletionModel`] that counts invocations and returns a
+    /// A mock [`Model`] that counts invocations and returns a
     /// configurable model id.
-    struct MockCompletionModel {
+    struct MockModel {
         id: String,
         call_count: Arc<AtomicUsize>,
     }
 
-    impl MockCompletionModel {
+    impl MockModel {
         fn new(id: &str) -> Self {
             Self {
                 id: id.to_owned(),
@@ -203,22 +203,19 @@ mod tests {
     }
 
     #[async_trait]
-    impl CompletionModel for MockCompletionModel {
+    impl Model for MockModel {
         fn model_id(&self) -> &str {
             &self.id
         }
 
-        async fn complete(
-            &self,
-            _request: CompletionRequest,
-        ) -> Result<CompletionResponse, BlazenError> {
+        async fn complete(&self, _request: ModelRequest) -> Result<ModelResponse, BlazenError> {
             self.call_count.fetch_add(1, Ordering::SeqCst);
             Ok(ok_response())
         }
 
         async fn stream(
             &self,
-            _request: CompletionRequest,
+            _request: ModelRequest,
         ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
         {
             self.call_count.fetch_add(1, Ordering::SeqCst);
@@ -226,8 +223,8 @@ mod tests {
         }
     }
 
-    fn ok_response() -> CompletionResponse {
-        CompletionResponse {
+    fn ok_response() -> ModelResponse {
+        ModelResponse {
             content: Some("hello".to_string()),
             tool_calls: vec![],
             reasoning: None,
@@ -245,8 +242,8 @@ mod tests {
         }
     }
 
-    fn simple_request() -> CompletionRequest {
-        CompletionRequest::new(vec![ChatMessage::user("hi")])
+    fn simple_request() -> ModelRequest {
+        ModelRequest::new(vec![ChatMessage::user("hi")])
     }
 
     // -- Tracking middleware for ordering tests ------------------------------
@@ -263,7 +260,7 @@ mod tests {
     /// records calls.
     struct TrackingModel {
         label: String,
-        inner: Arc<dyn CompletionModel>,
+        inner: Arc<dyn Model>,
         call_order: Arc<std::sync::Mutex<Vec<String>>>,
     }
 
@@ -277,7 +274,7 @@ mod tests {
     }
 
     impl Middleware for TrackingMiddleware {
-        fn wrap(&self, inner: Arc<dyn CompletionModel>) -> Arc<dyn CompletionModel> {
+        fn wrap(&self, inner: Arc<dyn Model>) -> Arc<dyn Model> {
             self.wrap_order.lock().unwrap().push(self.label.clone());
             Arc::new(TrackingModel {
                 label: self.label.clone(),
@@ -288,15 +285,12 @@ mod tests {
     }
 
     #[async_trait]
-    impl CompletionModel for TrackingModel {
+    impl Model for TrackingModel {
         fn model_id(&self) -> &str {
             self.inner.model_id()
         }
 
-        async fn complete(
-            &self,
-            request: CompletionRequest,
-        ) -> Result<CompletionResponse, BlazenError> {
+        async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
             self.call_order
                 .lock()
                 .unwrap()
@@ -306,7 +300,7 @@ mod tests {
 
         async fn stream(
             &self,
-            request: CompletionRequest,
+            request: ModelRequest,
         ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
         {
             self.call_order
@@ -321,9 +315,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_empty_stack() {
-        let mock = MockCompletionModel::new("base-model");
+        let mock = MockModel::new("base-model");
         let counter = mock.call_count();
-        let model: Arc<dyn CompletionModel> = Arc::new(mock);
+        let model: Arc<dyn Model> = Arc::new(mock);
 
         let wrapped = MiddlewareStack::new().apply(model);
 
@@ -338,9 +332,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_single_layer() {
-        let mock = MockCompletionModel::new("inner");
+        let mock = MockModel::new("inner");
         let counter = mock.call_count();
-        let model: Arc<dyn CompletionModel> = Arc::new(mock);
+        let model: Arc<dyn Model> = Arc::new(mock);
 
         let wrapped = MiddlewareStack::new()
             .with_retry(RetryConfig::default())
@@ -364,7 +358,7 @@ mod tests {
             .layer(TrackingMiddleware::new("outer", Arc::clone(&order)))
             .layer(TrackingMiddleware::new("inner", Arc::clone(&order)));
 
-        let model: Arc<dyn CompletionModel> = Arc::new(MockCompletionModel::new("base"));
+        let model: Arc<dyn Model> = Arc::new(MockModel::new("base"));
         let wrapped = stack.apply(model);
 
         // During apply, layers are iterated in reverse (inner first, then
@@ -387,9 +381,9 @@ mod tests {
 
     #[tokio::test]
     async fn test_convenience_methods() {
-        let mock = MockCompletionModel::new("test-model");
+        let mock = MockModel::new("test-model");
         let counter = mock.call_count();
-        let model: Arc<dyn CompletionModel> = Arc::new(mock);
+        let model: Arc<dyn Model> = Arc::new(mock);
 
         let wrapped = MiddlewareStack::new()
             .with_retry(RetryConfig::default())
@@ -414,8 +408,8 @@ mod tests {
     #[tokio::test]
     async fn test_with_retry_arc_accepts_pre_built_arc() {
         let cfg = std::sync::Arc::new(RetryConfig::default());
-        let mock = MockCompletionModel::new("inner");
-        let model: Arc<dyn CompletionModel> = Arc::new(mock);
+        let mock = MockModel::new("inner");
+        let model: Arc<dyn Model> = Arc::new(mock);
         let wrapped = MiddlewareStack::new().with_retry_arc(cfg).apply(model);
         assert_eq!(wrapped.model_id(), "inner");
     }

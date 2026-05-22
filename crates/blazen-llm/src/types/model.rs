@@ -144,7 +144,7 @@ impl FinishReason {
 ///
 /// The on-the-wire JSON shape (returned by `From<ResponseFormat> for serde_json::Value`)
 /// matches `OpenAI`'s chat completions `response_format` field. The existing
-/// `CompletionRequest::response_format: Option<serde_json::Value>` keeps
+/// `ModelRequest::response_format: Option<serde_json::Value>` keeps
 /// raw JSON for backwards compatibility; the typed enum is opt-in.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
@@ -196,7 +196,7 @@ impl From<ResponseFormat> for serde_json::Value {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-pub struct CompletionRequest {
+pub struct ModelRequest {
     /// The conversation history.
     pub messages: Vec<ChatMessage>,
     /// Tools available for the model to invoke.
@@ -227,7 +227,7 @@ pub struct CompletionRequest {
     pub audio_config: Option<serde_json::Value>,
 }
 
-impl CompletionRequest {
+impl ModelRequest {
     /// Create a new request from a list of messages.
     #[must_use]
     pub fn new(messages: Vec<ChatMessage>) -> Self {
@@ -437,7 +437,7 @@ async fn resolve_image_source(
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "tsify", derive(tsify_next::Tsify))]
 #[cfg_attr(feature = "tsify", tsify(into_wasm_abi, from_wasm_abi))]
-pub struct CompletionResponse {
+pub struct ModelResponse {
     /// The text content of the assistant's reply, if any.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub content: Option<String>,
@@ -479,7 +479,7 @@ pub struct CompletionResponse {
     pub metadata: serde_json::Value,
 }
 
-impl CompletionResponse {
+impl ModelResponse {
     /// Lazily map the raw `finish_reason` string into a normalized [`FinishReason`].
     ///
     /// Returns `None` if the response carries no finish reason.
@@ -676,7 +676,7 @@ mod resolve_handles_tests {
             tool_calls: Vec::new(),
             tool_result: None,
         };
-        let mut req = CompletionRequest::new(vec![msg]);
+        let mut req = ModelRequest::new(vec![msg]);
 
         let n = req.resolve_handles_with(&store).await.unwrap();
         assert_eq!(n, 1);
@@ -696,7 +696,7 @@ mod resolve_handles_tests {
     #[tokio::test]
     async fn no_handles_returns_zero() {
         let store = InMemoryContentStore::new();
-        let mut req = CompletionRequest::new(vec![ChatMessage::user("plain text")]);
+        let mut req = ModelRequest::new(vec![ChatMessage::user("plain text")]);
         assert_eq!(req.resolve_handles_with(&store).await.unwrap(), 0);
     }
 
@@ -729,7 +729,7 @@ mod resolve_handles_tests {
                 },
             ),
         );
-        let mut req = CompletionRequest::new(vec![tool_msg]);
+        let mut req = ModelRequest::new(vec![tool_msg]);
 
         let n = req.resolve_handles_with(&store).await.unwrap();
         assert_eq!(n, 1);

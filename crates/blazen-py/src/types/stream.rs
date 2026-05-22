@@ -20,7 +20,7 @@ pub use blazen_llm::types::StreamChunk;
 
 /// A single chunk from a streaming completion response.
 ///
-/// Yielded by ``CompletionModel.stream(...)`` either via async iteration or
+/// Yielded by ``Model.stream(...)`` either via async iteration or
 /// the ``on_chunk`` callback. Carries an incremental text ``delta`` plus any
 /// tool calls, reasoning deltas, citations, or artifacts that landed in this
 /// chunk. The ``finish_reason`` is set on the terminal chunk.

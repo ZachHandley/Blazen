@@ -2,7 +2,7 @@
 
 use napi_derive::napi;
 
-use blazen_llm::types::CompletionResponse;
+use blazen_llm::types::ModelResponse;
 
 use super::artifact::JsArtifact;
 use super::citation::JsCitation;
@@ -14,7 +14,7 @@ use crate::generated::{
 
 /// The result of a chat completion.
 #[napi(object)]
-pub struct JsCompletionResponse {
+pub struct JsModelResponse {
     pub content: Option<String>,
     #[napi(js_name = "toolCalls")]
     pub tool_calls: Vec<JsToolCall>,
@@ -35,7 +35,7 @@ pub struct JsCompletionResponse {
 
 /// Options for a chat completion request.
 #[napi(object)]
-pub struct JsCompletionOptions {
+pub struct JsModelOptions {
     pub temperature: Option<f64>,
     #[napi(js_name = "maxTokens")]
     pub max_tokens: Option<i64>,
@@ -49,11 +49,11 @@ pub struct JsCompletionOptions {
 }
 
 // ---------------------------------------------------------------------------
-// Helper: build a JsCompletionResponse from the internal type
+// Helper: build a JsModelResponse from the internal type
 // ---------------------------------------------------------------------------
 
-pub(crate) fn build_response(response: CompletionResponse) -> JsCompletionResponse {
-    JsCompletionResponse {
+pub(crate) fn build_response(response: ModelResponse) -> JsModelResponse {
+    JsModelResponse {
         content: response.content,
         tool_calls: response.tool_calls.into_iter().map(Into::into).collect(),
         usage: response.usage.map(Into::into),

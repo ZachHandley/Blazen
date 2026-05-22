@@ -25,7 +25,7 @@ use std::ffi::c_char;
 
 use blazen_uniffi::batch::{BatchItem as InnerBatchItem, BatchResult as InnerBatchResult};
 
-use crate::llm_records::{BlazenCompletionResponse, BlazenTokenUsage};
+use crate::llm_records::{BlazenModelResponse, BlazenTokenUsage};
 use crate::string::alloc_cstring;
 
 /// Variant tag for [`InnerBatchItem::Success`]: the request returned a
@@ -76,10 +76,10 @@ pub unsafe extern "C" fn blazen_batch_item_kind(handle: *const BlazenBatchItem) 
     }
 }
 
-/// Returns a fresh `BlazenCompletionResponse` cloned from the
+/// Returns a fresh `BlazenModelResponse` cloned from the
 /// [`InnerBatchItem::Success`] variant's payload. Returns null if `handle` is
 /// null or the variant is `Failure`. Caller frees with
-/// `blazen_completion_response_free`.
+/// `blazen_model_response_free`.
 ///
 /// # Safety
 ///
@@ -88,16 +88,14 @@ pub unsafe extern "C" fn blazen_batch_item_kind(handle: *const BlazenBatchItem) 
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_batch_item_success_response(
     handle: *const BlazenBatchItem,
-) -> *mut BlazenCompletionResponse {
+) -> *mut BlazenModelResponse {
     if handle.is_null() {
         return std::ptr::null_mut();
     }
     // SAFETY: caller has guaranteed `handle` is a live `BlazenBatchItem`.
     let item = unsafe { &*handle };
     match &item.0 {
-        InnerBatchItem::Success { response } => {
-            BlazenCompletionResponse(response.clone()).into_ptr()
-        }
+        InnerBatchItem::Success { response } => BlazenModelResponse(response.clone()).into_ptr(),
         InnerBatchItem::Failure { .. } => std::ptr::null_mut(),
     }
 }

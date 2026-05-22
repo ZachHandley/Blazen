@@ -20,7 +20,7 @@ Returns a `Promise<void>`. Subsequent calls are no-ops.
 
 ---
 
-## CompletionModel
+## Model
 
 A chat completion model. Created via static factory methods for each provider.
 
@@ -32,38 +32,38 @@ Azure additionally requires `resourceName` and `deploymentName` as arguments (th
 
 | Method | Signature |
 |---|---|
-| `CompletionModel.openai` | `()` |
-| `CompletionModel.anthropic` | `()` |
-| `CompletionModel.gemini` | `()` |
-| `CompletionModel.azure` | `(resourceName: string, deploymentName: string)` |
-| `CompletionModel.fal` | `()` |
-| `CompletionModel.openrouter` | `()` |
-| `CompletionModel.groq` | `()` |
-| `CompletionModel.together` | `()` |
-| `CompletionModel.mistral` | `()` |
-| `CompletionModel.deepseek` | `()` |
-| `CompletionModel.fireworks` | `()` |
-| `CompletionModel.perplexity` | `()` |
-| `CompletionModel.xai` | `()` |
-| `CompletionModel.cohere` | `()` |
-| `CompletionModel.bedrock` | `(region: string)` |
+| `Model.openai` | `()` |
+| `Model.anthropic` | `()` |
+| `Model.gemini` | `()` |
+| `Model.azure` | `(resourceName: string, deploymentName: string)` |
+| `Model.fal` | `()` |
+| `Model.openrouter` | `()` |
+| `Model.groq` | `()` |
+| `Model.together` | `()` |
+| `Model.mistral` | `()` |
+| `Model.deepseek` | `()` |
+| `Model.fireworks` | `()` |
+| `Model.perplexity` | `()` |
+| `Model.xai` | `()` |
+| `Model.cohere` | `()` |
+| `Model.bedrock` | `(region: string)` |
 
 ```typescript
-const model = CompletionModel.openai();
-const claude = CompletionModel.anthropic();
-const gemini = CompletionModel.gemini();
-const azure = CompletionModel.azure('my-resource', 'my-deployment');
-const fal = CompletionModel.fal();
-const groq = CompletionModel.groq().withModel('llama-3.3-70b-versatile');
-const bedrock = CompletionModel.bedrock('us-east-1');
+const model = Model.openai();
+const claude = Model.anthropic();
+const gemini = Model.gemini();
+const azure = Model.azure('my-resource', 'my-deployment');
+const fal = Model.fal();
+const groq = Model.groq().withModel('llama-3.3-70b-versatile');
+const bedrock = Model.bedrock('us-east-1');
 ```
 
-#### `model.withModel(modelId: string): CompletionModel`
+#### `model.withModel(modelId: string): Model`
 
-Override the default model ID for this provider instance. Returns a new `CompletionModel` (WASM does not mutate in place).
+Override the default model ID for this provider instance. Returns a new `Model` (WASM does not mutate in place).
 
 ```typescript
-const model = CompletionModel.openai().withModel('gpt-4o-mini');
+const model = Model.openai().withModel('gpt-4o-mini');
 ```
 
 ### Properties
@@ -72,7 +72,7 @@ const model = CompletionModel.openai().withModel('gpt-4o-mini');
 |---|---|---|
 | `.modelId` | `string` | The model identifier string |
 
-### `await model.complete(messages: ChatMessage[]): CompletionResponse`
+### `await model.complete(messages: ChatMessage[]): ModelResponse`
 
 Perform a chat completion.
 
@@ -84,7 +84,7 @@ const response = await model.complete([
 console.log(response.content);
 ```
 
-### `await model.completeWithOptions(messages: ChatMessage[], options: CompletionOptions): CompletionResponse`
+### `await model.completeWithOptions(messages: ChatMessage[], options: ModelOptions): ModelResponse`
 
 Perform a chat completion with additional options.
 
@@ -120,9 +120,9 @@ Each chunk has the shape:
 
 ### Middleware Decorators
 
-Each decorator returns a new `CompletionModel` wrapping the original.
+Each decorator returns a new `Model` wrapping the original.
 
-#### `model.withRetry(maxRetries?: number): CompletionModel`
+#### `model.withRetry(maxRetries?: number): Model`
 
 Automatic retry with exponential backoff on transient failures. Defaults to 3 retries.
 
@@ -130,7 +130,7 @@ Automatic retry with exponential backoff on transient failures. Defaults to 3 re
 const resilient = model.withRetry(5);
 ```
 
-#### `model.withCache(ttlSeconds?: number, maxEntries?: number): CompletionModel`
+#### `model.withCache(ttlSeconds?: number, maxEntries?: number): Model`
 
 In-memory response cache. Streaming requests bypass the cache.
 
@@ -143,14 +143,14 @@ const cached = model.withCache(600, 500);
 | `ttlSeconds` | `300` | Cache entry TTL in seconds. |
 | `maxEntries` | `1000` | Maximum entries before eviction. |
 
-#### `CompletionModel.withFallback(models: CompletionModel[]): CompletionModel`
+#### `Model.withFallback(models: Model[]): Model`
 
 Static method. Tries providers in order; falls back on transient errors.
 
 ```typescript
-const model = CompletionModel.withFallback([
-  CompletionModel.openai(),
-  CompletionModel.groq(),
+const model = Model.withFallback([
+  Model.openai(),
+  Model.groq(),
 ]);
 ```
 
@@ -347,12 +347,12 @@ return {
 
 ---
 
-## CompletionResponse
+## ModelResponse
 
 Returned by `model.complete()` and `model.completeWithOptions()`.
 
 ```typescript
-interface CompletionResponse {
+interface ModelResponse {
   content?: string;                // The generated text
   toolCalls: ToolCall[];           // Tool calls requested by the model
   usage?: TokenUsage;              // Token usage statistics
@@ -366,12 +366,12 @@ interface CompletionResponse {
 
 ---
 
-## CompletionOptions
+## ModelOptions
 
 Options for `completeWithOptions()`.
 
 ```typescript
-interface CompletionOptions {
+interface ModelOptions {
   temperature?: number;        // Sampling temperature (0.0 - 2.0)
   maxTokens?: number;          // Maximum tokens to generate
   topP?: number;               // Nucleus sampling parameter
@@ -643,7 +643,7 @@ const result = await runAgent(model, messages, tools, options?);
 
 | Parameter | Type | Description |
 |---|---|---|
-| `model` | `CompletionModel` | The completion model to use |
+| `model` | `Model` | The completion model to use |
 | `messages` | `ChatMessage[]` | Initial conversation messages |
 | `tools` | `ToolDef[]` | Tool definitions. Each tool object has `name`, `description`, `parameters` (JSON Schema), and a `handler(args) => any \| Promise<any>` that returns either a bare JSON-serializable value or a structured [`ToolOutput`](#tooloutput) (an object with a `data` key, plus an optional `llm_override` / `llmOverride`). See the [tool handler return shapes](#tool-handler-return-shapes) above. |
 | `options` | `AgentRunOptions?` | Optional configuration |
@@ -1212,12 +1212,12 @@ const count = countMessageTokens([
 
 ## Custom Providers via JS Handlers
 
-`CompletionModel` and `EmbeddingModel` can be created from JavaScript handler functions using static factory methods. This lets you implement custom providers without subclassing.
+`Model` and `EmbeddingModel` can be created from JavaScript handler functions using static factory methods. This lets you implement custom providers without subclassing.
 
-### CompletionModel.fromJsHandler
+### Model.fromJsHandler
 
 ```typescript
-const model = CompletionModel.fromJsHandler("my-llm", async (request) => {
+const model = Model.fromJsHandler("my-llm", async (request) => {
   // request contains messages, tools, temperature, etc.
   return {
     content: "Hello from my custom model",
@@ -1228,7 +1228,7 @@ const model = CompletionModel.fromJsHandler("my-llm", async (request) => {
 const response = await model.complete([ChatMessage.user("Hi")]);
 ```
 
-The handler receives a request object and should return a `CompletionResponse`-shaped object.
+The handler receives a request object and should return a `ModelResponse`-shaped object.
 
 ### EmbeddingModel.fromJsHandler
 

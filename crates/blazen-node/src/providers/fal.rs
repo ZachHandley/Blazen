@@ -9,13 +9,13 @@ use std::sync::Arc;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
-use blazen_llm::CompletionModel;
+use blazen_llm::Model;
 use blazen_llm::compute::{
     AudioGeneration, BackgroundRemoval, ComputeProvider, ImageGeneration, ThreeDGeneration,
     Transcription, VideoGeneration,
 };
 use blazen_llm::providers::fal::{FalEmbeddingModel, FalProvider};
-use blazen_llm::types::{ChatMessage, CompletionRequest};
+use blazen_llm::types::{ChatMessage, ModelRequest};
 
 use crate::compute::JsJobStatus;
 use crate::error::blazen_error_to_napi;
@@ -25,7 +25,7 @@ use crate::generated::{
     JsThreeDResult, JsTranscriptionRequest, JsTranscriptionResult, JsUpscaleRequest,
     JsVideoRequest, JsVideoResult,
 };
-use crate::types::{JsChatMessage, JsCompletionResponse, build_response};
+use crate::types::{JsChatMessage, JsModelResponse, build_response};
 
 // ---------------------------------------------------------------------------
 // FalProvider NAPI class
@@ -362,9 +362,9 @@ impl JsFalProvider {
 
     /// Perform a chat completion via fal.ai's `any-llm` proxy.
     #[napi]
-    pub async fn complete(&self, messages: Vec<&JsChatMessage>) -> Result<JsCompletionResponse> {
+    pub async fn complete(&self, messages: Vec<&JsChatMessage>) -> Result<JsModelResponse> {
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let request = CompletionRequest::new(chat_messages);
+        let request = ModelRequest::new(chat_messages);
 
         let response = self
             .inner

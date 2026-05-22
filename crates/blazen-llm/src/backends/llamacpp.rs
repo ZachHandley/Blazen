@@ -1,7 +1,7 @@
 //! Bridge between [`blazen_llm_llamacpp::LlamaCppProvider`] and
-//! [`crate::CompletionModel`].
+//! [`crate::Model`].
 //!
-//! This module implements the `CompletionModel` trait for `LlamaCppProvider`,
+//! This module implements the `Model` trait for `LlamaCppProvider`,
 //! mapping Blazen's provider-agnostic request/response types to and from the
 //! llama.cpp engine's own types.
 //!
@@ -26,9 +26,7 @@ use blazen_llm_llamacpp::{ChatMessageInput, ChatRole, LlamaCppProvider, MountedA
 use futures_util::Stream;
 
 use crate::error::BlazenError;
-use crate::types::{
-    ChatMessage, CompletionRequest, CompletionResponse, ContentPart, Role, StreamChunk,
-};
+use crate::types::{ChatMessage, ContentPart, ModelRequest, ModelResponse, Role, StreamChunk};
 
 // ---------------------------------------------------------------------------
 // Message conversion
@@ -75,19 +73,16 @@ fn convert_messages(messages: &[ChatMessage]) -> Vec<ChatMessageInput> {
 }
 
 // ---------------------------------------------------------------------------
-// CompletionModel implementation
+// Model implementation
 // ---------------------------------------------------------------------------
 
 #[async_trait]
-impl crate::traits::CompletionModel for LlamaCppProvider {
+impl crate::traits::Model for LlamaCppProvider {
     fn model_id(&self) -> &str {
         LlamaCppProvider::model_id(self)
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         let messages = convert_messages(&request.messages);
 
         let result = self
@@ -110,7 +105,7 @@ impl crate::traits::CompletionModel for LlamaCppProvider {
             total_ms: Some(total_ms),
         });
 
-        Ok(CompletionResponse {
+        Ok(ModelResponse {
             content: result.content,
             tool_calls: Vec::new(),
             reasoning: None,
@@ -130,7 +125,7 @@ impl crate::traits::CompletionModel for LlamaCppProvider {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         use futures_util::StreamExt;

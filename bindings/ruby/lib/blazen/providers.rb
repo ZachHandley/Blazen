@@ -15,7 +15,7 @@ module Blazen
   # 4. Runs {Blazen::FFI.check_error!}, which decodes any populated error
   #    pointer into the matching {Blazen::Error} subclass and raises it.
   # 5. Wraps the resulting raw model pointer in the corresponding Ruby
-  #    wrapper class ({Blazen::Llm::CompletionModel} /
+  #    wrapper class ({Blazen::Llm::Model} /
   #    {Blazen::Llm::EmbeddingModel}, etc.). For TTS / STT / image-gen models
   #    the wrapper classes live in {Blazen::Compute}; the constants are
   #    expected to exist by the time these factories are first called (the
@@ -55,18 +55,18 @@ module Blazen
     # @param api_key [String]
     # @param model [String, nil]
     # @param base_url [String, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def openai(api_key:, model: nil, base_url: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
       Blazen::FFI.with_cstring(api_key) do |k|
         Blazen::FFI.with_cstring(model) do |m|
           Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_completion_model_new_openai(k, m, b, out_model, out_err)
+            Blazen::FFI.blazen_model_new_openai(k, m, b, out_model, out_err)
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # Anthropic Claude completion model.
@@ -74,18 +74,18 @@ module Blazen
     # @param api_key [String]
     # @param model [String, nil]
     # @param base_url [String, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def anthropic(api_key:, model: nil, base_url: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
       Blazen::FFI.with_cstring(api_key) do |k|
         Blazen::FFI.with_cstring(model) do |m|
           Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_completion_model_new_anthropic(k, m, b, out_model, out_err)
+            Blazen::FFI.blazen_model_new_anthropic(k, m, b, out_model, out_err)
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # Google Gemini completion model.
@@ -93,18 +93,18 @@ module Blazen
     # @param api_key [String]
     # @param model [String, nil]
     # @param base_url [String, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def gemini(api_key:, model: nil, base_url: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
       Blazen::FFI.with_cstring(api_key) do |k|
         Blazen::FFI.with_cstring(model) do |m|
           Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_completion_model_new_gemini(k, m, b, out_model, out_err)
+            Blazen::FFI.blazen_model_new_gemini(k, m, b, out_model, out_err)
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # OpenRouter completion model.
@@ -112,18 +112,18 @@ module Blazen
     # @param api_key [String]
     # @param model [String, nil]
     # @param base_url [String, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def openrouter(api_key:, model: nil, base_url: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
       Blazen::FFI.with_cstring(api_key) do |k|
         Blazen::FFI.with_cstring(model) do |m|
           Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_completion_model_new_openrouter(k, m, b, out_model, out_err)
+            Blazen::FFI.blazen_model_new_openrouter(k, m, b, out_model, out_err)
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # Groq completion model.
@@ -131,18 +131,18 @@ module Blazen
     # @param api_key [String]
     # @param model [String, nil]
     # @param base_url [String, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def groq(api_key:, model: nil, base_url: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
       Blazen::FFI.with_cstring(api_key) do |k|
         Blazen::FFI.with_cstring(model) do |m|
           Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_completion_model_new_groq(k, m, b, out_model, out_err)
+            Blazen::FFI.blazen_model_new_groq(k, m, b, out_model, out_err)
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # Together AI completion model.
@@ -150,18 +150,18 @@ module Blazen
     # @param api_key [String]
     # @param model [String, nil]
     # @param base_url [String, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def together(api_key:, model: nil, base_url: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
       Blazen::FFI.with_cstring(api_key) do |k|
         Blazen::FFI.with_cstring(model) do |m|
           Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_completion_model_new_together(k, m, b, out_model, out_err)
+            Blazen::FFI.blazen_model_new_together(k, m, b, out_model, out_err)
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # Mistral cloud completion model.
@@ -169,18 +169,18 @@ module Blazen
     # @param api_key [String]
     # @param model [String, nil]
     # @param base_url [String, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def mistral(api_key:, model: nil, base_url: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
       Blazen::FFI.with_cstring(api_key) do |k|
         Blazen::FFI.with_cstring(model) do |m|
           Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_completion_model_new_mistral(k, m, b, out_model, out_err)
+            Blazen::FFI.blazen_model_new_mistral(k, m, b, out_model, out_err)
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # DeepSeek completion model.
@@ -188,18 +188,18 @@ module Blazen
     # @param api_key [String]
     # @param model [String, nil]
     # @param base_url [String, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def deepseek(api_key:, model: nil, base_url: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
       Blazen::FFI.with_cstring(api_key) do |k|
         Blazen::FFI.with_cstring(model) do |m|
           Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_completion_model_new_deepseek(k, m, b, out_model, out_err)
+            Blazen::FFI.blazen_model_new_deepseek(k, m, b, out_model, out_err)
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # Fireworks AI completion model.
@@ -207,18 +207,18 @@ module Blazen
     # @param api_key [String]
     # @param model [String, nil]
     # @param base_url [String, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def fireworks(api_key:, model: nil, base_url: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
       Blazen::FFI.with_cstring(api_key) do |k|
         Blazen::FFI.with_cstring(model) do |m|
           Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_completion_model_new_fireworks(k, m, b, out_model, out_err)
+            Blazen::FFI.blazen_model_new_fireworks(k, m, b, out_model, out_err)
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # Perplexity completion model.
@@ -226,18 +226,18 @@ module Blazen
     # @param api_key [String]
     # @param model [String, nil]
     # @param base_url [String, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def perplexity(api_key:, model: nil, base_url: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
       Blazen::FFI.with_cstring(api_key) do |k|
         Blazen::FFI.with_cstring(model) do |m|
           Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_completion_model_new_perplexity(k, m, b, out_model, out_err)
+            Blazen::FFI.blazen_model_new_perplexity(k, m, b, out_model, out_err)
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # xAI Grok completion model.
@@ -245,18 +245,18 @@ module Blazen
     # @param api_key [String]
     # @param model [String, nil]
     # @param base_url [String, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def xai(api_key:, model: nil, base_url: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
       Blazen::FFI.with_cstring(api_key) do |k|
         Blazen::FFI.with_cstring(model) do |m|
           Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_completion_model_new_xai(k, m, b, out_model, out_err)
+            Blazen::FFI.blazen_model_new_xai(k, m, b, out_model, out_err)
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # Cohere completion model.
@@ -264,18 +264,18 @@ module Blazen
     # @param api_key [String]
     # @param model [String, nil]
     # @param base_url [String, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def cohere(api_key:, model: nil, base_url: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
       Blazen::FFI.with_cstring(api_key) do |k|
         Blazen::FFI.with_cstring(model) do |m|
           Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_completion_model_new_cohere(k, m, b, out_model, out_err)
+            Blazen::FFI.blazen_model_new_cohere(k, m, b, out_model, out_err)
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # --------------- Completion: cloud (provider-specific shapes) ---------------
@@ -288,7 +288,7 @@ module Blazen
     # @param resource_name [String]
     # @param deployment_name [String]
     # @param api_version [String, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def azure(api_key:, resource_name:, deployment_name:, api_version: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
@@ -296,12 +296,12 @@ module Blazen
         Blazen::FFI.with_cstring(resource_name) do |r|
           Blazen::FFI.with_cstring(deployment_name) do |d|
             Blazen::FFI.with_cstring(api_version) do |v|
-              Blazen::FFI.blazen_completion_model_new_azure(k, r, d, v, out_model, out_err)
+              Blazen::FFI.blazen_model_new_azure(k, r, d, v, out_model, out_err)
             end
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # AWS Bedrock completion model. +api_key+ may be an empty string to
@@ -311,7 +311,7 @@ module Blazen
     # @param region [String] e.g. +"us-east-1"+
     # @param model [String, nil]
     # @param base_url [String, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def bedrock(api_key:, region:, model: nil, base_url: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
@@ -319,12 +319,12 @@ module Blazen
         Blazen::FFI.with_cstring(region) do |r|
           Blazen::FFI.with_cstring(model) do |m|
             Blazen::FFI.with_cstring(base_url) do |b|
-              Blazen::FFI.blazen_completion_model_new_bedrock(k, r, m, b, out_model, out_err)
+              Blazen::FFI.blazen_model_new_bedrock(k, r, m, b, out_model, out_err)
             end
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # Fal.ai chat-completion model.
@@ -337,7 +337,7 @@ module Blazen
     # @param enterprise [Boolean] use the enterprise endpoint variant
     # @param auto_route_modality [Boolean] auto-route by request modality
     # @param base_url [String, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def fal(api_key:, model: nil, endpoint: nil,
             enterprise: false, auto_route_modality: false, base_url: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
@@ -346,14 +346,14 @@ module Blazen
         Blazen::FFI.with_cstring(model) do |m|
           Blazen::FFI.with_cstring(endpoint) do |e|
             Blazen::FFI.with_cstring(base_url) do |b|
-              Blazen::FFI.blazen_completion_model_new_fal(
+              Blazen::FFI.blazen_model_new_fal(
                 k, m, e, enterprise, auto_route_modality, b, out_model, out_err
               )
             end
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # Generic OpenAI-compatible completion model (vLLM, llama-server, LM
@@ -363,7 +363,7 @@ module Blazen
     # @param base_url [String]
     # @param api_key [String]
     # @param model [String]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def openai_compat(provider_name:, base_url:, api_key:, model:)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
@@ -371,17 +371,17 @@ module Blazen
         Blazen::FFI.with_cstring(base_url) do |b|
           Blazen::FFI.with_cstring(api_key) do |k|
             Blazen::FFI.with_cstring(model) do |m|
-              Blazen::FFI.blazen_completion_model_new_openai_compat(
+              Blazen::FFI.blazen_model_new_openai_compat(
                 p, b, k, m, out_model, out_err
               )
             end
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
-    # CompletionModel for an Ollama server.
+    # Model for an Ollama server.
     #
     # Convenience wrapper around {openai_compat}: builds
     # +base_url = "http://#{host}:#{port}/v1"+ with no API key.
@@ -389,40 +389,40 @@ module Blazen
     # @param host [String] e.g. +"localhost"+, +"192.168.1.50"+
     # @param port [Integer] TCP port (Ollama default 11434)
     # @param model [String] e.g. +"llama3.1"+
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def ollama(host:, port: 11_434, model:)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
       Blazen::FFI.with_cstring(host) do |h|
         Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.blazen_completion_model_new_ollama(
+          Blazen::FFI.blazen_model_new_ollama(
             h, port.to_i, m, out_model, out_err
           )
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
-    # CompletionModel for an LM Studio server.
+    # Model for an LM Studio server.
     #
     # @param host [String]
     # @param port [Integer] LM Studio default 1234
     # @param model [String]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def lm_studio(host:, port: 1234, model:)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
       Blazen::FFI.with_cstring(host) do |h|
         Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.blazen_completion_model_new_lm_studio(
+          Blazen::FFI.blazen_model_new_lm_studio(
             h, port.to_i, m, out_model, out_err
           )
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
-    # Universal CompletionModel speaking the OpenAI chat-completions protocol
+    # Universal Model speaking the OpenAI chat-completions protocol
     # against an arbitrary base URL. Pass +api_key: nil+ for unauthenticated
     # local servers.
     #
@@ -430,7 +430,7 @@ module Blazen
     # @param base_url [String]
     # @param model [String]
     # @param api_key [String, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def custom_with_openai_protocol(provider_id:, base_url:, model:, api_key: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
       out_err   = ::FFI::MemoryPointer.new(:pointer)
@@ -438,14 +438,14 @@ module Blazen
         Blazen::FFI.with_cstring(base_url) do |b|
           Blazen::FFI.with_cstring(model) do |m|
             Blazen::FFI.with_cstring(api_key) do |k|
-              Blazen::FFI.blazen_completion_model_new_custom_with_openai_protocol(
+              Blazen::FFI.blazen_model_new_custom_with_openai_protocol(
                 p, b, m, k, out_model, out_err
               )
             end
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # ------------------- Completion: local -------------------
@@ -457,7 +457,7 @@ module Blazen
     # @param quantization [String, nil] e.g. +"q4_k_m"+
     # @param context_length [Integer, nil] override context window
     # @param vision [Boolean] enable vision capabilities
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def mistralrs(model_id:, device: nil, quantization: nil,
                   context_length: nil, vision: false)
       out_model = ::FFI::MemoryPointer.new(:pointer)
@@ -466,13 +466,13 @@ module Blazen
       Blazen::FFI.with_cstring(model_id) do |mid|
         Blazen::FFI.with_cstring(device) do |d|
           Blazen::FFI.with_cstring(quantization) do |q|
-            Blazen::FFI.blazen_completion_model_new_mistralrs(
+            Blazen::FFI.blazen_model_new_mistralrs(
               mid, d, q, ctx_len, vision, out_model, out_err
             )
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # Local llama.cpp completion model.
@@ -482,7 +482,7 @@ module Blazen
     # @param quantization [String, nil]
     # @param context_length [Integer, nil]
     # @param n_gpu_layers [Integer, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def llamacpp(model_path:, device: nil, quantization: nil,
                  context_length: nil, n_gpu_layers: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
@@ -492,13 +492,13 @@ module Blazen
       Blazen::FFI.with_cstring(model_path) do |mp|
         Blazen::FFI.with_cstring(device) do |d|
           Blazen::FFI.with_cstring(quantization) do |q|
-            Blazen::FFI.blazen_completion_model_new_llamacpp(
+            Blazen::FFI.blazen_model_new_llamacpp(
               mp, d, q, ctx_len, gpu_layers, out_model, out_err
             )
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # Local Candle (Rust-native) completion model.
@@ -508,7 +508,7 @@ module Blazen
     # @param quantization [String, nil]
     # @param revision [String, nil]
     # @param context_length [Integer, nil]
-    # @return [Blazen::Llm::CompletionModel]
+    # @return [Blazen::Llm::Model]
     def candle(model_id:, device: nil, quantization: nil, revision: nil,
                context_length: nil)
       out_model = ::FFI::MemoryPointer.new(:pointer)
@@ -518,14 +518,14 @@ module Blazen
         Blazen::FFI.with_cstring(device) do |d|
           Blazen::FFI.with_cstring(quantization) do |q|
             Blazen::FFI.with_cstring(revision) do |r|
-              Blazen::FFI.blazen_completion_model_new_candle(
+              Blazen::FFI.blazen_model_new_candle(
                 mid, d, q, r, ctx_len, out_model, out_err
               )
             end
           end
         end
       end
-      _wrap_model(out_model, out_err, Blazen::Llm::CompletionModel)
+      _wrap_model(out_model, out_err, Blazen::Llm::Model)
     end
 
     # ------------------- Embedding -------------------

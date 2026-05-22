@@ -19,7 +19,7 @@ Every blocking entry point on the Go binding accepts a `context.Context` and hon
 | Method | Cancellation behavior |
 |---|---|
 | `Workflow.Run(ctx, input)` | Returns `ctx.Err()` on cancellation; Rust run continues. |
-| `CompletionModel.Complete(ctx, req)` | Returns `ctx.Err()` on cancellation; provider request continues. |
+| `Model.Complete(ctx, req)` | Returns `ctx.Err()` on cancellation; provider request continues. |
 | `EmbeddingModel.Embed(ctx, inputs)` | Returns `ctx.Err()` on cancellation; provider request continues. |
 | `Agent.Run(ctx, userInput)` | Returns `ctx.Err()` on cancellation; agent loop continues. |
 | `blazen.Stream(ctx, model, req)` | Channel receives a `*StreamErrorEvent` carrying `ctx.Err()` and closes. |
@@ -85,7 +85,7 @@ The binding has a small lifecycle surface:
 |---|---|
 | `blazen.Init()` | Boots the embedded Tokio runtime + tracing subscriber. Idempotent; called lazily by every entry point. |
 | `blazen.Shutdown()` | Flushes telemetry exporters. Safe to `defer` from `main`. |
-| `Workflow.Close()` / `CompletionModel.Close()` / `EmbeddingModel.Close()` / `Agent.Close()` | Releases the underlying native handle. Idempotent and safe to call from multiple goroutines. |
+| `Workflow.Close()` / `Model.Close()` / `EmbeddingModel.Close()` / `Agent.Close()` | Releases the underlying native handle. Idempotent and safe to call from multiple goroutines. |
 
 All handles install a `runtime.SetFinalizer` as a safety net, so a forgotten `Close()` does not leak native memory across a GC -- but explicit `defer handle.Close()` is preferred for predictable release.
 

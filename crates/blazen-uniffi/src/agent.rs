@@ -35,7 +35,7 @@ use blazen_llm::types::{
 use crate::errors::{
     BlazenError, BlazenError as UniffiBlazenError, BlazenResult, UniffiCallerErrorPayload,
 };
-use crate::llm::{CompletionModel, TokenUsage, Tool};
+use crate::llm::{Model, TokenUsage, Tool};
 use crate::runtime::runtime;
 
 // ---------------------------------------------------------------------------
@@ -223,7 +223,7 @@ impl CoreTool for ToolHandlerAdapter {
 /// underlying model handle is reference-counted, so cloning is cheap.
 #[derive(uniffi::Object)]
 pub struct Agent {
-    model: Arc<CompletionModel>,
+    model: Arc<Model>,
     system_prompt: Option<String>,
     tools: Vec<Tool>,
     handler: Arc<dyn ToolHandler>,
@@ -245,7 +245,7 @@ impl Agent {
     #[uniffi::constructor]
     #[must_use]
     pub fn new(
-        model: Arc<CompletionModel>,
+        model: Arc<Model>,
         system_prompt: Option<String>,
         tools: Vec<Tool>,
         tool_handler: Arc<dyn ToolHandler>,

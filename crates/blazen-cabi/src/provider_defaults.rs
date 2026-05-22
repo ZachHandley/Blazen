@@ -1,7 +1,7 @@
 //! C ABI wrappers for the provider-defaults hierarchy:
 //!
 //! - [`BlazenBaseProviderDefaults`]
-//! - [`BlazenCompletionProviderDefaults`]
+//! - [`BlazenProviderDefaults`]
 //! - [`BlazenEmbeddingProviderDefaults`]
 //! - 9 role-specific defaults:
 //!   [`BlazenAudioSpeechProviderDefaults`],
@@ -16,13 +16,13 @@
 //!
 //! V1 surface: constructors, free, getters/setters for plain data fields, and
 //! base composition (`set_base` / `base` accessors). Hooks (`before_request`,
-//! `before_completion`, role-specific `before` hooks) are intentionally not
+//! `before_model`, role-specific `before` hooks) are intentionally not
 //! exposed here — those need a callback-vtable mechanism similar to
 //! `step_handler.rs` / `stream_sink.rs` and land in Phase C.
 //!
 //! ## JSON-blob fields
 //!
-//! `CompletionProviderDefaults::tools` is a `Vec<ToolDefinition>` and
+//! `ProviderDefaults::tools` is a `Vec<ToolDefinition>` and
 //! `response_format` is `Option<serde_json::Value>`. The cabi exposes these
 //! via opaque JSON strings on the boundary — the Ruby wrapper marshals to
 //! JSON before set and parses on get. Invalid JSON on set is silently
@@ -37,10 +37,10 @@ use blazen_llm::providers::defaults::{
     AudioSpeechProviderDefaults as InnerAudioSpeechProviderDefaults,
     BackgroundRemovalProviderDefaults as InnerBackgroundRemovalProviderDefaults,
     BaseProviderDefaults as InnerBaseProviderDefaults,
-    CompletionProviderDefaults as InnerCompletionProviderDefaults,
     EmbeddingProviderDefaults as InnerEmbeddingProviderDefaults,
     ImageGenerationProviderDefaults as InnerImageGenerationProviderDefaults,
     ImageUpscaleProviderDefaults as InnerImageUpscaleProviderDefaults,
+    ProviderDefaults as InnerProviderDefaults,
     ThreeDProviderDefaults as InnerThreeDProviderDefaults,
     TranscriptionProviderDefaults as InnerTranscriptionProviderDefaults,
     VideoProviderDefaults as InnerVideoProviderDefaults,
@@ -170,41 +170,40 @@ pub unsafe extern "C" fn blazen_base_provider_defaults_free(
 }
 
 // ===========================================================================
-// BlazenCompletionProviderDefaults
+// BlazenProviderDefaults
 // ===========================================================================
 
-/// Opaque wrapper around [`blazen_llm::providers::CompletionProviderDefaults`].
+/// Opaque wrapper around [`blazen_llm::providers::ProviderDefaults`].
 #[repr(C)]
-pub struct BlazenCompletionProviderDefaults(pub(crate) InnerCompletionProviderDefaults);
+pub struct BlazenProviderDefaults(pub(crate) InnerProviderDefaults);
 
-impl BlazenCompletionProviderDefaults {
-    pub(crate) fn into_ptr(self) -> *mut BlazenCompletionProviderDefaults {
+impl BlazenProviderDefaults {
+    pub(crate) fn into_ptr(self) -> *mut BlazenProviderDefaults {
         Box::into_raw(Box::new(self))
     }
 }
 
-impl From<InnerCompletionProviderDefaults> for BlazenCompletionProviderDefaults {
-    fn from(inner: InnerCompletionProviderDefaults) -> Self {
+impl From<InnerProviderDefaults> for BlazenProviderDefaults {
+    fn from(inner: InnerProviderDefaults) -> Self {
         Self(inner)
     }
 }
 
-/// Constructs an empty `CompletionProviderDefaults`.
+/// Constructs an empty `ProviderDefaults`.
 #[unsafe(no_mangle)]
-pub extern "C" fn blazen_completion_provider_defaults_new() -> *mut BlazenCompletionProviderDefaults
-{
-    BlazenCompletionProviderDefaults(InnerCompletionProviderDefaults::default()).into_ptr()
+pub extern "C" fn blazen_completion_provider_defaults_new() -> *mut BlazenProviderDefaults {
+    BlazenProviderDefaults(InnerProviderDefaults::default()).into_ptr()
 }
 
 /// Sets the optional `system_prompt`. Null `prompt` clears it.
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+/// `handle` must be null OR a live `BlazenProviderDefaults`.
 /// `prompt` must be null OR a valid NUL-terminated UTF-8 buffer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_completion_provider_defaults_set_system_prompt(
-    handle: *mut BlazenCompletionProviderDefaults,
+    handle: *mut BlazenProviderDefaults,
     prompt: *const c_char,
 ) {
     if handle.is_null() {
@@ -221,10 +220,10 @@ pub unsafe extern "C" fn blazen_completion_provider_defaults_set_system_prompt(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+/// `handle` must be null OR a live `BlazenProviderDefaults`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_completion_provider_defaults_system_prompt(
-    handle: *const BlazenCompletionProviderDefaults,
+    handle: *const BlazenProviderDefaults,
 ) -> *mut c_char {
     if handle.is_null() {
         return std::ptr::null_mut();
@@ -241,11 +240,11 @@ pub unsafe extern "C" fn blazen_completion_provider_defaults_system_prompt(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionProviderDefaults`. `json`
+/// `handle` must be null OR a live `BlazenProviderDefaults`. `json`
 /// must be null OR a valid NUL-terminated UTF-8 buffer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_completion_provider_defaults_set_tools_json(
-    handle: *mut BlazenCompletionProviderDefaults,
+    handle: *mut BlazenProviderDefaults,
     json: *const c_char,
 ) {
     if handle.is_null() {
@@ -262,10 +261,10 @@ pub unsafe extern "C" fn blazen_completion_provider_defaults_set_tools_json(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+/// `handle` must be null OR a live `BlazenProviderDefaults`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_completion_provider_defaults_tools_json(
-    handle: *const BlazenCompletionProviderDefaults,
+    handle: *const BlazenProviderDefaults,
 ) -> *mut c_char {
     if handle.is_null() {
         return std::ptr::null_mut();
@@ -280,11 +279,11 @@ pub unsafe extern "C" fn blazen_completion_provider_defaults_tools_json(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionProviderDefaults`. `json`
+/// `handle` must be null OR a live `BlazenProviderDefaults`. `json`
 /// must be null OR a valid NUL-terminated UTF-8 buffer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_completion_provider_defaults_set_response_format_json(
-    handle: *mut BlazenCompletionProviderDefaults,
+    handle: *mut BlazenProviderDefaults,
     json: *const c_char,
 ) {
     if handle.is_null() {
@@ -301,10 +300,10 @@ pub unsafe extern "C" fn blazen_completion_provider_defaults_set_response_format
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+/// `handle` must be null OR a live `BlazenProviderDefaults`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_completion_provider_defaults_response_format_json(
-    handle: *const BlazenCompletionProviderDefaults,
+    handle: *const BlazenProviderDefaults,
 ) -> *mut c_char {
     if handle.is_null() {
         return std::ptr::null_mut();
@@ -319,11 +318,11 @@ pub unsafe extern "C" fn blazen_completion_provider_defaults_response_format_jso
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionProviderDefaults`. `base`
+/// `handle` must be null OR a live `BlazenProviderDefaults`. `base`
 /// must be null OR a live `BlazenBaseProviderDefaults`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_completion_provider_defaults_set_base(
-    handle: *mut BlazenCompletionProviderDefaults,
+    handle: *mut BlazenProviderDefaults,
     base: *const BlazenBaseProviderDefaults,
 ) {
     if handle.is_null() || base.is_null() {
@@ -341,10 +340,10 @@ pub unsafe extern "C" fn blazen_completion_provider_defaults_set_base(
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+/// `handle` must be null OR a live `BlazenProviderDefaults`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_completion_provider_defaults_base(
-    handle: *const BlazenCompletionProviderDefaults,
+    handle: *const BlazenProviderDefaults,
 ) -> *mut BlazenBaseProviderDefaults {
     if handle.is_null() {
         return std::ptr::null_mut();
@@ -354,25 +353,25 @@ pub unsafe extern "C" fn blazen_completion_provider_defaults_base(
     BlazenBaseProviderDefaults(r.0.base.clone()).into_ptr()
 }
 
-/// Returns whether a `before_completion` hook is set. V1 always returns
+/// Returns whether a `before_model` hook is set. V1 always returns
 /// `false` (hooks land in Phase C).
 ///
 /// # Safety
 ///
-/// `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+/// `handle` must be null OR a live `BlazenProviderDefaults`.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_provider_defaults_has_before_completion(
-    handle: *const BlazenCompletionProviderDefaults,
+pub unsafe extern "C" fn blazen_provider_defaults_has_before_model(
+    handle: *const BlazenProviderDefaults,
 ) -> bool {
     if handle.is_null() {
         return false;
     }
     // SAFETY: caller guarantees live handle.
     let r = unsafe { &*handle };
-    r.0.before_completion.is_some()
+    r.0.before_model.is_some()
 }
 
-/// Frees a `BlazenCompletionProviderDefaults`. No-op on null.
+/// Frees a `BlazenProviderDefaults`. No-op on null.
 ///
 /// # Safety
 ///
@@ -380,7 +379,7 @@ pub unsafe extern "C" fn blazen_completion_provider_defaults_has_before_completi
 /// [`blazen_completion_provider_defaults_new`] or a clone getter.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_completion_provider_defaults_free(
-    handle: *mut BlazenCompletionProviderDefaults,
+    handle: *mut BlazenProviderDefaults,
 ) {
     if handle.is_null() {
         return;

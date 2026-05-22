@@ -271,7 +271,7 @@ The practical implication: if you mix providers in a single agent or workflow, w
 
 ## Pre-resolving handles before the wire call
 
-Inside the agent runner, two things need to happen before a `CompletionRequest` goes out: every `ImageSource::Handle` in the message history needs to be resolved against the store (so the wire payload carries actual base64 / URL / file-id values), and the model needs a system note describing every handle in scope (so it knows which ids it can pass as tool arguments). Both pieces are wrapped into a single helper:
+Inside the agent runner, two things need to happen before a `ModelRequest` goes out: every `ImageSource::Handle` in the message history needs to be resolved against the store (so the wire payload carries actual base64 / URL / file-id values), and the model needs a system note describing every handle in scope (so it knows which ids it can pass as tool arguments). Both pieces are wrapped into a single helper:
 
 ```rust
 use blazen_llm::content::visibility::prepare_request_with_store;
@@ -282,7 +282,7 @@ println!("resolved {resolved} handle(s)");
 
 `prepare_request_with_store` snapshots the visible handles via `collect_visible_handles`, calls `request.resolve_handles_with(store)`, and prepends a system message built by `build_handle_directory_system_note`. Use the individual functions if you only need one half -- for example, `resolve_handles_with` alone if you do not want a directory system note (because you embed handle ids elsewhere in your prompt template).
 
-In the Python and Node bindings, the agent runner calls the equivalent code automatically when an agent has a content store wired in -- you do not need to invoke it by hand. Drop down to the Rust helpers when you are running a `CompletionRequest` directly without going through the agent runner, or when you want to inspect the resolved request before dispatch.
+In the Python and Node bindings, the agent runner calls the equivalent code automatically when an agent has a content store wired in -- you do not need to invoke it by hand. Drop down to the Rust helpers when you are running a `ModelRequest` directly without going through the agent runner, or when you want to inspect the resolved request before dispatch.
 
 ## Streaming large content
 

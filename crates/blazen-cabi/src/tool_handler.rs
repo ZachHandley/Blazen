@@ -42,7 +42,7 @@ use blazen_uniffi::errors::{BlazenError as InnerError, BlazenResult};
 
 use crate::agent::BlazenAgent;
 use crate::error::BlazenError;
-use crate::llm::BlazenCompletionModel;
+use crate::llm::BlazenModel;
 use crate::llm_records::BlazenTool;
 use crate::string::cstr_to_opt_string;
 
@@ -271,7 +271,7 @@ impl ToolHandler for CToolHandler {
 ///
 /// ## Ownership
 ///
-/// - `model` is BORROWED — the underlying `Arc<CompletionModel>` is cloned
+/// - `model` is BORROWED — the underlying `Arc<Model>` is cloned
 ///   into the agent. The caller retains its handle and is still responsible
 ///   for freeing it.
 /// - `system_prompt` is BORROWED for the duration of this call (it is copied
@@ -290,7 +290,7 @@ impl ToolHandler for CToolHandler {
 ///
 /// # Safety
 ///
-/// `model` must be null OR a live `BlazenCompletionModel` produced by the
+/// `model` must be null OR a live `BlazenModel` produced by the
 /// cabi surface. `system_prompt` must be null OR a NUL-terminated UTF-8
 /// buffer valid for the duration of this call. When `tools_count > 0`,
 /// `tools` must point to an array of exactly `tools_count` valid
@@ -302,7 +302,7 @@ impl ToolHandler for CToolHandler {
 /// OR a writable slot for a single `*mut` write.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_agent_new(
-    model: *const BlazenCompletionModel,
+    model: *const BlazenModel,
     system_prompt: *const c_char,
     tools: *const *mut BlazenTool,
     tools_count: usize,
@@ -355,7 +355,7 @@ pub unsafe extern "C" fn blazen_agent_new(
 
     // ---- Borrow / copy remaining inputs --------------------------------
 
-    // SAFETY: caller has guaranteed `model` is a live `BlazenCompletionModel`.
+    // SAFETY: caller has guaranteed `model` is a live `BlazenModel`.
     let model_handle = unsafe { &*model };
     let model_arc = Arc::clone(&model_handle.0);
 

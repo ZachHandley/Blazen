@@ -10,7 +10,7 @@ export type JsActiveWorkflowSnapshot = ActiveWorkflowSnapshot
 /** The result of an agent run. */
 export declare class AgentResult {
   /** The final completion response from the model. */
-  get response(): JsCompletionResponse
+  get response(): JsModelResponse
   /** Full message history including all tool calls and results. */
   get messages(): Array<any>
   /** Number of tool-calling iterations that occurred. */
@@ -42,13 +42,13 @@ export declare class AnthropicProvider {
   /** Get the model ID. */
   get modelId(): string
   /** Perform a chat completion. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with additional options. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /** Stream a chat completion. */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Stream a chat completion with additional options. */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
 }
 export type JsAnthropicProvider = AnthropicProvider
 
@@ -151,13 +151,13 @@ export declare class AzureOpenAiProvider {
   /** Get the model ID. */
   get modelId(): string
   /** Perform a chat completion. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with additional options. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /** Stream a chat completion. */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Stream a chat completion with additional options. */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
 }
 export type JsAzureOpenAiProvider = AzureOpenAiProvider
 
@@ -195,17 +195,17 @@ export type JsBackgroundRemovalProviderDefaults = BackgroundRemovalProviderDefau
 
 /**
  * A completion provider wrapper that applies a
- * [`JsCompletionProviderDefaults`] to every completion request before
+ * [`JsProviderDefaults`] to every completion request before
  * delegating to the inner model.
  *
  * `BaseProvider` is intended to be subclassed from JavaScript:
  *
  * ```javascript
- * import { BaseProvider, CompletionModel } from "blazen";
+ * import { BaseProvider, Model } from "blazen";
  *
  * class TerseLlm extends BaseProvider {
  *   constructor() {
- *     const inner = CompletionModel.openai({ apiKey: "sk-..." });
+ *     const inner = Model.openai({ apiKey: "sk-..." });
  *     super(inner);
  *     this.withSystemPrompt("Be terse.");
  *   }
@@ -221,16 +221,16 @@ export declare class BaseProvider {
    * Construct a new [`BaseProvider`].
    *
    * `inner` is the underlying completion model — pass a
-   * [`JsCompletionModel`] instance. JS subclasses that fully
+   * [`JsModel`] instance. JS subclasses that fully
    * override `complete` may pass `null` here (Phase D will wire
    * subclass dispatch end-to-end; today calls to `complete` on a
    * subclass-only provider report unsupported).
    *
    * `defaults` optionally seeds the
-   * [`JsCompletionProviderDefaults`]; when omitted, an empty
+   * [`JsProviderDefaults`]; when omitted, an empty
    * defaults bag is created.
    */
-  constructor(inner?: JsCompletionModel | undefined | null, defaults?: JsCompletionProviderDefaults | undefined | null)
+  constructor(inner?: JsModel | undefined | null, defaults?: JsProviderDefaults | undefined | null)
   /**
    * Set the default system prompt prepended to requests when no
    * system message is already present.
@@ -246,15 +246,15 @@ export declare class BaseProvider {
    */
   withBeforeRequest(hook: BeforeRequestTsfn): BaseProvider
   /**
-   * Set the typed `beforeCompletion` hook (fires after the universal
+   * Set the typed `beforeModel` hook (fires after the universal
    * hook, with a typed completion request). V1: stored only — Phase
    * B wires dispatch.
    */
-  withBeforeCompletion(hook: BeforeCompletionTsfn): BaseProvider
+  withBeforeModel(hook: BeforeModelTsfn): BaseProvider
   /** Replace the entire defaults bag. */
-  withDefaults(defaults: JsCompletionProviderDefaults): BaseProvider
+  withDefaults(defaults: JsProviderDefaults): BaseProvider
   /** The currently-configured defaults. */
-  get defaults(): JsCompletionProviderDefaults
+  get defaults(): JsProviderDefaults
   /**
    * The inner model's `modelId`. Returns the empty string when the
    * provider was constructed without a Rust-side `inner` (JS subclass
@@ -372,7 +372,7 @@ export type JsBatchConfig = BatchConfig
  */
 export declare class BatchResult {
   /** One response per input request. `null` for failed requests. */
-  get responses(): Array<JsCompletionResponse | undefined | null>
+  get responses(): Array<JsModelResponse | undefined | null>
   /** One error message per input request. `null` for successful requests. */
   get errors(): Array<string | undefined | null>
   /** Aggregated token usage across all successful responses. */
@@ -408,13 +408,13 @@ export declare class BedrockProvider {
   /** Get the model ID. */
   get modelId(): string
   /** Perform a chat completion. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with additional options. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /** Stream a chat completion. */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Stream a chat completion with additional options. */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
 }
 export type JsBedrockProvider = BedrockProvider
 
@@ -505,27 +505,27 @@ export type JsBytesWrapper = BytesWrapper
  * inner model.
  *
  * ```javascript
- * const cached = new CachedCompletionModel(
- *     CompletionModel.openai(),
+ * const cached = new CachedModel(
+ *     Model.openai(),
  *     { ttlSeconds: 300, maxEntries: 1000 },
  * );
  * ```
  */
-export declare class CachedCompletionModel {
+export declare class CachedModel {
   /** Wrap `model` with an in-memory response cache. */
-  constructor(model: CompletionModel, config?: JsCacheConfig | undefined | null)
+  constructor(model: Model, config?: JsCacheConfig | undefined | null)
   /** The wrapped model's id. */
   get modelId(): string
   /**
    * Perform a chat completion, returning a cached response on a
    * hit and otherwise delegating to the inner model.
    */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /**
    * Perform a chat completion with options. The full options object
    * is included in the cache key.
    */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /**
    * Stream a chat completion. Streaming requests bypass the cache
    * entirely.
@@ -535,19 +535,19 @@ export declare class CachedCompletionModel {
    * Stream a chat completion with options. Streaming requests bypass
    * the cache entirely.
    */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
   /**
-   * Convert this cache wrapper into a plain [`JsCompletionModel`] so
+   * Convert this cache wrapper into a plain [`JsModel`] so
    * it can be passed to APIs that expect the base type.
    */
-  toCompletionModel(): CompletionModel
+  toModel(): Model
 }
-export type JsCachedCompletionModel = CachedCompletionModel
+export type JsCachedModel = CachedModel
 
 /**
  * Built-in middleware that wraps the inner model with an in-memory
  * response cache. Equivalent to constructing a
- * [`super::wrappers::JsCachedCompletionModel`] but composable inside a
+ * [`super::wrappers::JsCachedModel`] but composable inside a
  * [`JsMiddlewareStack`].
  *
  * ```javascript
@@ -659,9 +659,9 @@ export declare class CandleLlmProvider {
   /** Get the model ID. */
   get modelId(): string
   /** Perform a chat completion. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with additional options. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /** Stream a chat completion. */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Explicitly load the model weights into memory / `VRAM`. */
@@ -879,7 +879,7 @@ export type JsCheckpointStore = CheckpointStore
 export declare class Citation {
   /**
    * Construct a citation. Most callers receive these via
-   * `CompletionResponse.citations` rather than building them by hand.
+   * `ModelResponse.citations` rather than building them by hand.
    */
   constructor(options: CitationOptions)
   /** The cited URL. */
@@ -912,330 +912,15 @@ export declare class CohereProvider {
    */
   static embeddingModel(options?: JsProviderOptions | undefined | null): JsOpenAiCompatEmbeddingModel
   /** Perform a chat completion. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with additional options. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /** Stream a chat completion. */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Stream a chat completion with additional options. */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
 }
 export type JsCohereProvider = CohereProvider
-
-/**
- * A chat completion model.
- *
- * Use the static factory methods to create an instance for your provider:
- *
- * ```javascript
- * const model = CompletionModel.openai({ apiKey: "sk-..." });
- * const response = await model.complete([
- *   ChatMessage.user("What is 2 + 2?")
- * ]);
- * ```
- *
- * Or extend the class to implement a custom provider:
- *
- * ```javascript
- * class MyLLM extends CompletionModel {
- *   constructor() {
- *     super({ modelId: "my-custom-model" });
- *   }
- *   async complete(messages) { /* ... *\/ }
- * }
- * ```
- */
-export declare class CompletionModel {
-  /**
-   * Construct a base `CompletionModel`.
-   *
-   * Called by JavaScript subclasses via `super(config)`. The `config`
-   * parameter is optional and carries metadata such as `modelId`.
-   *
-   * Instances created this way have no inner Rust provider -- calling
-   * `complete()` or `stream()` without overriding them in the subclass
-   * will throw.
-   */
-  constructor(config?: CompletionModelConfig | undefined | null)
-  /** Create an `OpenAI` completion model. */
-  static openai(options?: JsProviderOptions | undefined | null): CompletionModel
-  /** Create an Anthropic completion model. */
-  static anthropic(options?: JsProviderOptions | undefined | null): CompletionModel
-  /** Create a Google Gemini completion model. */
-  static gemini(options?: JsProviderOptions | undefined | null): CompletionModel
-  /** Create an Azure `OpenAI` completion model. */
-  static azure(options: JsAzureOptions): CompletionModel
-  /**
-   * Create a fal.ai completion model.
-   *
-   * `options` optionally configures the LLM model, endpoint family,
-   * enterprise tier, and modality auto-routing. Defaults to the
-   * OpenAI-compatible chat-completions endpoint.
-   */
-  static fal(options?: JsFalOptions | undefined | null): CompletionModel
-  /** Create an `OpenRouter` completion model. */
-  static openrouter(options?: JsProviderOptions | undefined | null): CompletionModel
-  /** Create a Groq completion model. */
-  static groq(options?: JsProviderOptions | undefined | null): CompletionModel
-  /** Create a Together AI completion model. */
-  static together(options?: JsProviderOptions | undefined | null): CompletionModel
-  /** Create a Mistral AI completion model. */
-  static mistral(options?: JsProviderOptions | undefined | null): CompletionModel
-  /** Create a `DeepSeek` completion model. */
-  static deepseek(options?: JsProviderOptions | undefined | null): CompletionModel
-  /** Create a Fireworks AI completion model. */
-  static fireworks(options?: JsProviderOptions | undefined | null): CompletionModel
-  /** Create a Perplexity completion model. */
-  static perplexity(options?: JsProviderOptions | undefined | null): CompletionModel
-  /** Create an xAI (Grok) completion model. */
-  static xai(options?: JsProviderOptions | undefined | null): CompletionModel
-  /** Create a Cohere completion model. */
-  static cohere(options?: JsProviderOptions | undefined | null): CompletionModel
-  /** Create an AWS Bedrock completion model. */
-  static bedrock(options: JsBedrockOptions): CompletionModel
-  /**
-   * Create a local Ollama completion model.
-   *
-   * Talks to a running Ollama server (defaults to `http://host:port/v1`).
-   * No API key is required.
-   *
-   * ```javascript
-   * const model = CompletionModel.ollama("localhost", 11434, "llama3.1:8b");
-   * ```
-   */
-  static ollama(host: string, port: number, model: string): CompletionModel
-  /**
-   * Create a local LM Studio completion model.
-   *
-   * Talks to a running LM Studio server's OpenAI-compatible endpoint.
-   *
-   * ```javascript
-   * const model = CompletionModel.lmStudio("localhost", 1234, "my-model");
-   * ```
-   */
-  static lmStudio(host: string, port: number, model: string): CompletionModel
-  /**
-   * Create a generic OpenAI-compatible completion model.
-   *
-   * Drives any OpenAI-compatible chat-completions endpoint with the
-   * supplied [`JsOpenAiCompatConfig`].
-   *
-   * ```javascript
-   * const model = CompletionModel.openaiCompat("my-host", {
-   *   providerName: "my-host",
-   *   baseUrl: "https://api.example.com/v1",
-   *   apiKey: "sk-...",
-   *   defaultModel: "my-model",
-   * });
-   * ```
-   */
-  static openaiCompat(providerId: string, config: JsOpenAiCompatConfig): CompletionModel
-  /**
-   * Create a fully user-defined completion model backed by a JavaScript
-   * host object.
-   *
-   * `hostObject` must expose Blazen capability methods (e.g.
-   * `complete`, `stream`) using the camelCase trait-method names. The
-   * optional `providerId` is used for logging; defaults to `"custom"`.
-   *
-   * ```javascript
-   * class MyProvider {
-   *   async complete(request) { /* ... *\/ }
-   * }
-   * const model = CompletionModel.custom(new MyProvider(), "my-provider");
-   * ```
-   */
-  static custom(hostObject: object, providerId?: string | undefined | null): CompletionModel
-  /** Get the model ID. */
-  get modelId(): string
-  /**
-   * Wrap this model with automatic retry on transient failures.
-   *
-   * ```javascript
-   * const model = CompletionModel.openrouter({ apiKey: key });
-   * const withRetry = model.withRetry({ maxRetries: 3, initialDelayMs: 1000 });
-   * ```
-   */
-  withRetry(config?: JsRetryConfig | undefined | null): CompletionModel
-  /**
-   * Wrap this model with an in-memory response cache.
-   *
-   * Streaming requests are never cached and always delegate directly to the
-   * underlying model.
-   *
-   * ```javascript
-   * const cached = model.withCache({ ttlSeconds: 300, maxEntries: 1000 });
-   * ```
-   */
-  withCache(config?: JsCacheConfig | undefined | null): CompletionModel
-  /**
-   * Create a fallback model that tries multiple providers in order.
-   *
-   * When the primary provider fails with a transient error (rate limit,
-   * timeout, server error) the request is automatically forwarded to the
-   * next provider. Non-retryable errors short-circuit immediately.
-   *
-   * ```javascript
-   * const model = CompletionModel.withFallback([modelA, modelB]);
-   * ```
-   */
-  static withFallback(models: Array<CompletionModel>): CompletionModel
-  /**
-   * Perform a chat completion.
-   *
-   * Messages should be an array of `ChatMessage` instances.
-   *
-   * Returns a typed response with `content`, `toolCalls`, `usage`, `model`,
-   * and `finishReason` fields.
-   */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
-  /**
-   * Perform a chat completion with additional options.
-   *
-   * Options object may include:
-   * - `temperature` (number): Sampling temperature (0.0 - 2.0)
-   * - `maxTokens` (number): Maximum tokens to generate
-   * - `topP` (number): Nucleus sampling parameter
-   * - `model` (string): Override the default model
-   * - `tools` (array): Tool definitions for function calling
-   */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
-  /**
-   * Stream a chat completion.
-   *
-   * The `onChunk` callback receives each chunk as a typed `StreamChunk` with
-   * `delta`, `finishReason`, and `toolCalls` fields.
-   *
-   * ```javascript
-   * await model.stream(
-   *   [ChatMessage.user("Tell me a story")],
-   *   (chunk) => { if (chunk.delta) process.stdout.write(chunk.delta); }
-   * );
-   * ```
-   */
-  stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
-  /**
-   * Stream a chat completion with additional options.
-   *
-   * Options object may include:
-   * - `temperature` (number): Sampling temperature (0.0 - 2.0)
-   * - `maxTokens` (number): Maximum tokens to generate
-   * - `topP` (number): Nucleus sampling parameter
-   * - `model` (string): Override the default model
-   * - `tools` (array): Tool definitions for function calling
-   */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
-  /**
-   * Explicitly load the model weights into memory / `VRAM`.
-   *
-   * For remote providers (`OpenAI`, Anthropic, fal, etc.) this throws --
-   * there is no local model to load. For local providers (mistral.rs,
-   * llama.cpp, candle) this triggers the download + load synchronously,
-   * so the next inference call does not pay the startup cost.
-   *
-   * Idempotent: calling `load` on an already-loaded model is a no-op
-   * that resolves immediately.
-   */
-  load(): Promise<void>
-  /**
-   * Drop the loaded model and free its memory / `VRAM`.
-   *
-   * For remote providers this throws. For local providers this frees
-   * `GPU` memory so the process can load a different model. Idempotent.
-   */
-  unload(): Promise<void>
-  /**
-   * Whether the model is currently loaded in memory / `VRAM`.
-   *
-   * Always returns `false` for remote providers (they have no local
-   * model to load). Returns the real state for local providers.
-   */
-  isLoaded(): Promise<boolean>
-  /**
-   * Approximate memory footprint in bytes (host RAM if the
-   * provider targets the CPU, GPU VRAM otherwise), if the
-   * implementation can report it. Returns `null` for remote
-   * providers or for local providers that do not expose memory
-   * usage.
-   *
-   * Note: napi-rs exposes this as a JS `number`. The underlying
-   * [`blazen_llm::LocalModel::memory_bytes`] returns `u64`; we clamp
-   * to `i64::MAX` (~9.2 exabytes) when surfacing through
-   * `JSON`-compatible types, which is effectively lossless for any
-   * realistic footprint.
-   */
-  memoryBytes(): Promise<number | null>
-  /**
-   * Create a local mistral.rs completion model.
-   *
-   * Runs LLM inference entirely on-device -- no API key required.
-   *
-   * ```javascript
-   * const model = CompletionModel.mistralrs({
-   *   modelId: "mistralai/Mistral-7B-Instruct-v0.3",
-   * });
-   * ```
-   */
-  static mistralrs(options: JsMistralRsOptions): CompletionModel
-  /**
-   * Wrap this model in a [`TracingCompletionModel`] that emits a
-   * structured `tracing` span around every `complete` and `stream`
-   * call.
-   *
-   * `name` is recorded on the span as the `provider` field. It is
-   * leaked into a `&'static str` because the underlying span macro
-   * captures it by reference for the process lifetime; this is
-   * intentional and bounded by the small set of distinct provider
-   * names a typical application uses.
-   *
-   * ```javascript
-   * const traced = CompletionModel.openai({ apiKey }).withTracing("openai");
-   * ```
-   */
-  withTracing(name: string): CompletionModel
-}
-export type JsCompletionModel = CompletionModel
-
-/**
- * Completion-role provider defaults: system prompt, default tools,
- * `responseFormat`, and a typed `beforeCompletion` hook.
- *
- * ```javascript
- * import { BaseProviderDefaults, CompletionProviderDefaults } from "blazen";
- *
- * const d = new CompletionProviderDefaults(
- *   new BaseProviderDefaults(),
- *   "Be terse.",
- *   [], // default tools
- *   { type: "json_object" },
- *   async (request) => { /* mutate request *\/ },
- * );
- * ```
- */
-export declare class CompletionProviderDefaults {
-  /** Construct completion-role defaults. */
-  constructor(base?: BaseProviderDefaults | undefined | null, systemPrompt?: string | undefined | null, tools?: Array<JsToolDefinition> | undefined | null, responseFormat?: any | undefined | null, beforeCompletion?: BeforeCompletionTsfn | undefined | null)
-  /**
-   * The system prompt prepended to requests when the request itself
-   * carries no system message.
-   */
-  get systemPrompt(): string | null
-  /** Replace the system prompt. Pass `null` to clear. */
-  set systemPrompt(value: string | undefined | null)
-  /** The default tools appended to every completion request. */
-  get tools(): Array<JsToolDefinition>
-  /** Replace the default tools. */
-  set tools(value: Array<JsToolDefinition> | undefined | null)
-  /** Default `response_format` (JSON Schema or similar object). */
-  get responseFormat(): any | null
-  /** Replace the default `responseFormat`. Pass `null` to clear. */
-  set responseFormat(value: any | undefined | null)
-  /** Returns `true` when a `beforeCompletion` hook is configured. */
-  get hasBeforeCompletion(): boolean
-  /** Replace the typed `beforeCompletion` hook. Pass `null` to clear. */
-  set beforeCompletion(hook: BeforeCompletionTsfn | undefined | null)
-}
-export type JsCompletionProviderDefaults = CompletionProviderDefaults
 
 /**
  * Pluggable registry for multimodal content. Wraps
@@ -1784,13 +1469,13 @@ export declare class DeepSeekProvider {
   /** Get the model ID. */
   get modelId(): string
   /** Perform a chat completion. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with additional options. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /** Stream a chat completion. */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Stream a chat completion with additional options. */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
 }
 export type JsDeepSeekProvider = DeepSeekProvider
 
@@ -2046,26 +1731,26 @@ export declare class FallbackModel {
    * degenerate -- prefer using the underlying model directly in that
    * case.
    */
-  constructor(models: Array<CompletionModel>)
+  constructor(models: Array<Model>)
   /** The model id of the primary provider. */
   get modelId(): string
   /** Perform a chat completion, falling back across providers. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with options, falling back across providers. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /**
    * Stream a chat completion, falling back across providers on
    * retryable initial-stream failures.
    */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Stream a chat completion with options. */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
   /**
-   * Convert this fallback wrapper into a plain [`JsCompletionModel`]
+   * Convert this fallback wrapper into a plain [`JsModel`]
    * so it can be passed to APIs that expect the base type
    * (`Agent`, `Batch`, further wrappers, etc.).
    */
-  toCompletionModel(): CompletionModel
+  toModel(): Model
 }
 export type JsFallbackModel = FallbackModel
 
@@ -2141,7 +1826,7 @@ export declare class FalProvider {
   /** Alias for [`awaitCompletion`](Self::await_completion). */
   result(handle: JsJobHandle): Promise<JsComputeResult>
   /** Perform a chat completion via fal.ai's `any-llm` proxy. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
 }
 export type JsFalProvider = FalProvider
 
@@ -2196,13 +1881,13 @@ export declare class FireworksProvider {
    */
   static embeddingModel(options?: JsProviderOptions | undefined | null): OpenAiCompatEmbeddingModel
   /** Perform a chat completion. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with additional options. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /** Stream a chat completion. */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Stream a chat completion with additional options. */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
 }
 export type JsFireworksProvider = FireworksProvider
 
@@ -2220,13 +1905,13 @@ export declare class GeminiProvider {
   /** Get the model ID. */
   get modelId(): string
   /** Perform a chat completion. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with additional options. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /** Stream a chat completion. */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Stream a chat completion with additional options. */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
 }
 export type JsGeminiProvider = GeminiProvider
 
@@ -2237,13 +1922,13 @@ export declare class GroqProvider {
   /** Get the model ID. */
   get modelId(): string
   /** Perform a chat completion. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with additional options. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /** Stream a chat completion. */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Stream a chat completion with additional options. */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
 }
 export type JsGroqProvider = GroqProvider
 
@@ -2851,9 +2536,9 @@ export declare class LlamaCppProvider {
   /** Get the model ID. */
   get modelId(): string
   /** Perform a chat completion. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with additional options. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /** Stream a chat completion. */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Explicitly load the model weights into memory / `VRAM`. */
@@ -3159,7 +2844,7 @@ export type JsMiddleware = Middleware
  * const stack = new MiddlewareStack();
  * stack.withRetry({ maxRetries: 3 });
  * stack.withCache({ ttlSeconds: 300 });
- * const wrapped = stack.apply(CompletionModel.openai());
+ * const wrapped = stack.apply(Model.openai());
  * ```
  */
 export declare class MiddlewareStack {
@@ -3191,12 +2876,12 @@ export declare class MiddlewareStack {
   get length(): number
   /**
    * Apply every registered layer to `model` and return the wrapped
-   * model as a fresh [`JsCompletionModel`].
+   * model as a fresh [`JsModel`].
    *
    * The stack itself is left intact and can be re-applied to other
    * models.
    */
-  apply(model: CompletionModel): CompletionModel
+  apply(model: JsModel): JsModel
 }
 export type JsMiddlewareStack = MiddlewareStack
 
@@ -3207,13 +2892,13 @@ export declare class MistralProvider {
   /** Get the model ID. */
   get modelId(): string
   /** Perform a chat completion. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with additional options. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /** Stream a chat completion. */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Stream a chat completion with additional options. */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
 }
 export type JsMistralProvider = MistralProvider
 
@@ -3236,9 +2921,9 @@ export declare class MistralRsProvider {
   /** Get the model ID. */
   get modelId(): string
   /** Perform a chat completion. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with additional options. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /** Stream a chat completion. */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Explicitly load the model weights into memory / `VRAM`. */
@@ -3254,6 +2939,280 @@ export declare class MistralRsProvider {
   memoryBytes(): Promise<number | null>
 }
 export type JsMistralRsProvider = MistralRsProvider
+
+/**
+ * A chat completion model.
+ *
+ * Use the static factory methods to create an instance for your provider:
+ *
+ * ```javascript
+ * const model = Model.openai({ apiKey: "sk-..." });
+ * const response = await model.complete([
+ *   ChatMessage.user("What is 2 + 2?")
+ * ]);
+ * ```
+ *
+ * Or extend the class to implement a custom provider:
+ *
+ * ```javascript
+ * class MyLLM extends Model {
+ *   constructor() {
+ *     super({ modelId: "my-custom-model" });
+ *   }
+ *   async complete(messages) { /* ... *\/ }
+ * }
+ * ```
+ */
+export declare class Model {
+  /**
+   * Construct a base `Model`.
+   *
+   * Called by JavaScript subclasses via `super(config)`. The `config`
+   * parameter is optional and carries metadata such as `modelId`.
+   *
+   * Instances created this way have no inner Rust provider -- calling
+   * `complete()` or `stream()` without overriding them in the subclass
+   * will throw.
+   */
+  constructor(config?: ModelConfig | undefined | null)
+  /** Create an `OpenAI` completion model. */
+  static openai(options?: JsProviderOptions | undefined | null): Model
+  /** Create an Anthropic completion model. */
+  static anthropic(options?: JsProviderOptions | undefined | null): Model
+  /** Create a Google Gemini completion model. */
+  static gemini(options?: JsProviderOptions | undefined | null): Model
+  /** Create an Azure `OpenAI` completion model. */
+  static azure(options: JsAzureOptions): Model
+  /**
+   * Create a fal.ai completion model.
+   *
+   * `options` optionally configures the LLM model, endpoint family,
+   * enterprise tier, and modality auto-routing. Defaults to the
+   * OpenAI-compatible chat-completions endpoint.
+   */
+  static fal(options?: JsFalOptions | undefined | null): Model
+  /** Create an `OpenRouter` completion model. */
+  static openrouter(options?: JsProviderOptions | undefined | null): Model
+  /** Create a Groq completion model. */
+  static groq(options?: JsProviderOptions | undefined | null): Model
+  /** Create a Together AI completion model. */
+  static together(options?: JsProviderOptions | undefined | null): Model
+  /** Create a Mistral AI completion model. */
+  static mistral(options?: JsProviderOptions | undefined | null): Model
+  /** Create a `DeepSeek` completion model. */
+  static deepseek(options?: JsProviderOptions | undefined | null): Model
+  /** Create a Fireworks AI completion model. */
+  static fireworks(options?: JsProviderOptions | undefined | null): Model
+  /** Create a Perplexity completion model. */
+  static perplexity(options?: JsProviderOptions | undefined | null): Model
+  /** Create an xAI (Grok) completion model. */
+  static xai(options?: JsProviderOptions | undefined | null): Model
+  /** Create a Cohere completion model. */
+  static cohere(options?: JsProviderOptions | undefined | null): Model
+  /** Create an AWS Bedrock completion model. */
+  static bedrock(options: JsBedrockOptions): Model
+  /**
+   * Create a local Ollama completion model.
+   *
+   * Talks to a running Ollama server (defaults to `http://host:port/v1`).
+   * No API key is required.
+   *
+   * ```javascript
+   * const model = Model.ollama("localhost", 11434, "llama3.1:8b");
+   * ```
+   */
+  static ollama(host: string, port: number, model: string): Model
+  /**
+   * Create a local LM Studio completion model.
+   *
+   * Talks to a running LM Studio server's OpenAI-compatible endpoint.
+   *
+   * ```javascript
+   * const model = Model.lmStudio("localhost", 1234, "my-model");
+   * ```
+   */
+  static lmStudio(host: string, port: number, model: string): Model
+  /**
+   * Create a generic OpenAI-compatible completion model.
+   *
+   * Drives any OpenAI-compatible chat-completions endpoint with the
+   * supplied [`JsOpenAiCompatConfig`].
+   *
+   * ```javascript
+   * const model = Model.openaiCompat("my-host", {
+   *   providerName: "my-host",
+   *   baseUrl: "https://api.example.com/v1",
+   *   apiKey: "sk-...",
+   *   defaultModel: "my-model",
+   * });
+   * ```
+   */
+  static openaiCompat(providerId: string, config: JsOpenAiCompatConfig): Model
+  /**
+   * Create a fully user-defined completion model backed by a JavaScript
+   * host object.
+   *
+   * `hostObject` must expose Blazen capability methods (e.g.
+   * `complete`, `stream`) using the camelCase trait-method names. The
+   * optional `providerId` is used for logging; defaults to `"custom"`.
+   *
+   * ```javascript
+   * class MyProvider {
+   *   async complete(request) { /* ... *\/ }
+   * }
+   * const model = Model.custom(new MyProvider(), "my-provider");
+   * ```
+   */
+  static custom(hostObject: object, providerId?: string | undefined | null): Model
+  /** Get the model ID. */
+  get modelId(): string
+  /**
+   * Wrap this model with automatic retry on transient failures.
+   *
+   * ```javascript
+   * const model = Model.openrouter({ apiKey: key });
+   * const withRetry = model.withRetry({ maxRetries: 3, initialDelayMs: 1000 });
+   * ```
+   */
+  withRetry(config?: JsRetryConfig | undefined | null): Model
+  /**
+   * Wrap this model with an in-memory response cache.
+   *
+   * Streaming requests are never cached and always delegate directly to the
+   * underlying model.
+   *
+   * ```javascript
+   * const cached = model.withCache({ ttlSeconds: 300, maxEntries: 1000 });
+   * ```
+   */
+  withCache(config?: JsCacheConfig | undefined | null): Model
+  /**
+   * Create a fallback model that tries multiple providers in order.
+   *
+   * When the primary provider fails with a transient error (rate limit,
+   * timeout, server error) the request is automatically forwarded to the
+   * next provider. Non-retryable errors short-circuit immediately.
+   *
+   * ```javascript
+   * const model = Model.withFallback([modelA, modelB]);
+   * ```
+   */
+  static withFallback(models: Array<Model>): Model
+  /**
+   * Perform a chat completion.
+   *
+   * Messages should be an array of `ChatMessage` instances.
+   *
+   * Returns a typed response with `content`, `toolCalls`, `usage`, `model`,
+   * and `finishReason` fields.
+   */
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
+  /**
+   * Perform a chat completion with additional options.
+   *
+   * Options object may include:
+   * - `temperature` (number): Sampling temperature (0.0 - 2.0)
+   * - `maxTokens` (number): Maximum tokens to generate
+   * - `topP` (number): Nucleus sampling parameter
+   * - `model` (string): Override the default model
+   * - `tools` (array): Tool definitions for function calling
+   */
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
+  /**
+   * Stream a chat completion.
+   *
+   * The `onChunk` callback receives each chunk as a typed `StreamChunk` with
+   * `delta`, `finishReason`, and `toolCalls` fields.
+   *
+   * ```javascript
+   * await model.stream(
+   *   [ChatMessage.user("Tell me a story")],
+   *   (chunk) => { if (chunk.delta) process.stdout.write(chunk.delta); }
+   * );
+   * ```
+   */
+  stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
+  /**
+   * Stream a chat completion with additional options.
+   *
+   * Options object may include:
+   * - `temperature` (number): Sampling temperature (0.0 - 2.0)
+   * - `maxTokens` (number): Maximum tokens to generate
+   * - `topP` (number): Nucleus sampling parameter
+   * - `model` (string): Override the default model
+   * - `tools` (array): Tool definitions for function calling
+   */
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
+  /**
+   * Explicitly load the model weights into memory / `VRAM`.
+   *
+   * For remote providers (`OpenAI`, Anthropic, fal, etc.) this throws --
+   * there is no local model to load. For local providers (mistral.rs,
+   * llama.cpp, candle) this triggers the download + load synchronously,
+   * so the next inference call does not pay the startup cost.
+   *
+   * Idempotent: calling `load` on an already-loaded model is a no-op
+   * that resolves immediately.
+   */
+  load(): Promise<void>
+  /**
+   * Drop the loaded model and free its memory / `VRAM`.
+   *
+   * For remote providers this throws. For local providers this frees
+   * `GPU` memory so the process can load a different model. Idempotent.
+   */
+  unload(): Promise<void>
+  /**
+   * Whether the model is currently loaded in memory / `VRAM`.
+   *
+   * Always returns `false` for remote providers (they have no local
+   * model to load). Returns the real state for local providers.
+   */
+  isLoaded(): Promise<boolean>
+  /**
+   * Approximate memory footprint in bytes (host RAM if the
+   * provider targets the CPU, GPU VRAM otherwise), if the
+   * implementation can report it. Returns `null` for remote
+   * providers or for local providers that do not expose memory
+   * usage.
+   *
+   * Note: napi-rs exposes this as a JS `number`. The underlying
+   * [`blazen_llm::LocalModel::memory_bytes`] returns `u64`; we clamp
+   * to `i64::MAX` (~9.2 exabytes) when surfacing through
+   * `JSON`-compatible types, which is effectively lossless for any
+   * realistic footprint.
+   */
+  memoryBytes(): Promise<number | null>
+  /**
+   * Create a local mistral.rs completion model.
+   *
+   * Runs LLM inference entirely on-device -- no API key required.
+   *
+   * ```javascript
+   * const model = Model.mistralrs({
+   *   modelId: "mistralai/Mistral-7B-Instruct-v0.3",
+   * });
+   * ```
+   */
+  static mistralrs(options: JsMistralRsOptions): Model
+  /**
+   * Wrap this model in a [`TracingModel`] that emits a
+   * structured `tracing` span around every `complete` and `stream`
+   * call.
+   *
+   * `name` is recorded on the span as the `provider` field. It is
+   * leaked into a `&'static str` because the underlying span macro
+   * captures it by reference for the process lifetime; this is
+   * intentional and bounded by the small set of distinct provider
+   * names a typical application uses.
+   *
+   * ```javascript
+   * const traced = Model.openai({ apiKey }).withTracing("openai");
+   * ```
+   */
+  withTracing(name: string): Model
+}
+export type JsModel = Model
 
 /**
  * Local cache for ML models downloaded from `HuggingFace` Hub.
@@ -3351,7 +3310,7 @@ export declare class ModelManager {
    */
   constructor(config?: ModelManagerConfig | undefined | null)
   /**
-   * Register a `CompletionModel`-backed local model with the manager.
+   * Register a `Model`-backed local model with the manager.
    *
    * The model starts in the unloaded state. An optional
    * `memoryEstimateBytes` overrides the model's self-reported
@@ -3363,11 +3322,11 @@ export declare class ModelManager {
    * tokenizer, custom runtime, …), use
    * [`Self::register_local_model`] instead.
    */
-  register(id: string, model: JsCompletionModel, memoryEstimateBytes?: bigint | undefined | null): Promise<void>
+  register(id: string, model: JsModel, memoryEstimateBytes?: bigint | undefined | null): Promise<void>
   /**
    * Register an arbitrary JS-managed local model with the manager.
    *
-   * Unlike [`Self::register`] — which expects a [`JsCompletionModel`]
+   * Unlike [`Self::register`] — which expects a [`JsModel`]
    * backed by an in-process provider — this entrypoint takes raw
    * lifecycle callbacks. The manager will invoke `load()` when the
    * model is brought into memory (potentially after evicting an LRU
@@ -3658,7 +3617,7 @@ export type JsMusicProvider = MusicProvider
  * Useful as a default when no downstream observer is wired up:
  *
  * ```javascript
- * const model = new UsageRecordingCompletionModel(base, new NoopUsageEmitter(), "openai");
+ * const model = new UsageRecordingModel(base, new NoopUsageEmitter(), "openai");
  * ```
  */
 export declare class NoopUsageEmitter {
@@ -3702,13 +3661,13 @@ export declare class OpenAiCompatProvider {
   /** Get the model ID. */
   get modelId(): string
   /** Perform a chat completion. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with additional options. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /** Stream a chat completion. */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Stream a chat completion with additional options. */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
 }
 export type JsOpenAiCompatProvider = OpenAiCompatProvider
 
@@ -3740,7 +3699,7 @@ export type JsOpenAiEmbeddingModel = OpenAiEmbeddingModel
  * An `OpenAI` compute provider exposing text-to-speech.
  *
  * For chat completions and embeddings, use
- * [`CompletionModel.openai`](crate::providers::completion_model::JsCompletionModel::openai)
+ * [`Model.openai`](crate::providers::model::JsModel::openai)
  * instead — this class is the standalone entry point for the compute
  * capabilities (currently text-to-speech) that the `OpenAI` provider
  * implements directly.
@@ -3775,13 +3734,13 @@ export declare class OpenRouterProvider {
   /** Get the model ID. */
   get modelId(): string
   /** Perform a chat completion. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with additional options. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /** Stream a chat completion. */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Stream a chat completion with additional options. */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
 }
 export type JsOpenRouterProvider = OpenRouterProvider
 
@@ -3901,13 +3860,13 @@ export declare class PerplexityProvider {
   /** Get the model ID. */
   get modelId(): string
   /** Perform a chat completion. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with additional options. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /** Stream a chat completion. */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Stream a chat completion with additional options. */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
 }
 export type JsPerplexityProvider = PerplexityProvider
 
@@ -4277,6 +4236,47 @@ export declare class PromptTemplate {
 export type JsPromptTemplate = PromptTemplate
 
 /**
+ * Completion-role provider defaults: system prompt, default tools,
+ * `responseFormat`, and a typed `beforeModel` hook.
+ *
+ * ```javascript
+ * import { BaseProviderDefaults, ProviderDefaults } from "blazen";
+ *
+ * const d = new ProviderDefaults(
+ *   new BaseProviderDefaults(),
+ *   "Be terse.",
+ *   [], // default tools
+ *   { type: "json_object" },
+ *   async (request) => { /* mutate request *\/ },
+ * );
+ * ```
+ */
+export declare class ProviderDefaults {
+  /** Construct completion-role defaults. */
+  constructor(base?: BaseProviderDefaults | undefined | null, systemPrompt?: string | undefined | null, tools?: Array<JsToolDefinition> | undefined | null, responseFormat?: any | undefined | null, beforeModel?: BeforeModelTsfn | undefined | null)
+  /**
+   * The system prompt prepended to requests when the request itself
+   * carries no system message.
+   */
+  get systemPrompt(): string | null
+  /** Replace the system prompt. Pass `null` to clear. */
+  set systemPrompt(value: string | undefined | null)
+  /** The default tools appended to every completion request. */
+  get tools(): Array<JsToolDefinition>
+  /** Replace the default tools. */
+  set tools(value: Array<JsToolDefinition> | undefined | null)
+  /** Default `response_format` (JSON Schema or similar object). */
+  get responseFormat(): any | null
+  /** Replace the default `responseFormat`. Pass `null` to clear. */
+  set responseFormat(value: any | undefined | null)
+  /** Returns `true` when a `beforeModel` hook is configured. */
+  get hasBeforeCompletion(): boolean
+  /** Replace the typed `beforeModel` hook. Pass `null` to clear. */
+  set beforeModel(hook: BeforeModelTsfn | undefined | null)
+}
+export type JsProviderDefaults = ProviderDefaults
+
+/**
  * Rated JSONL dataset for KTO.
  *
  * Each line of the input file must deserialize to
@@ -4383,52 +4383,10 @@ export declare class RequestTiming {
 export type JsRequestTimingClass = RequestTiming
 
 /**
- * A completion model that retries transient failures with exponential
- * backoff.
- *
- * ```javascript
- * const model = new RetryCompletionModel(
- *     CompletionModel.openrouter(),
- *     { maxRetries: 5, initialDelayMs: 500 },
- * );
- * const response = await model.complete([ChatMessage.user("hi")]);
- * ```
- */
-export declare class RetryCompletionModel {
-  /**
-   * Wrap `model` with retry-on-transient-error behaviour.
-   *
-   * `config` defaults to [`RetryConfig::default()`] (3 retries, 1s
-   * initial delay, 30s cap, jitter on, `Retry-After` honoured) when
-   * omitted.
-   */
-  constructor(model: CompletionModel, config?: JsRetryConfig | undefined | null)
-  /** The wrapped model's id. */
-  get modelId(): string
-  /** Perform a chat completion with automatic retries. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
-  /** Perform a chat completion with options and automatic retries. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
-  /**
-   * Stream a chat completion. Retries the initial request on transient
-   * failures; mid-stream errors are not retried.
-   */
-  stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
-  /** Stream a chat completion with options. */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
-  /**
-   * Convert this retry wrapper into a plain [`JsCompletionModel`] so
-   * it can be passed to APIs that expect the base type.
-   */
-  toCompletionModel(): CompletionModel
-}
-export type JsRetryCompletionModel = RetryCompletionModel
-
-/**
  * A `MemoryBackend` decorator that retries transient errors with
  * exponential backoff.
  *
- * Mirrors `RetryCompletionModel` for `MemoryBackend`. Use one of the
+ * Mirrors `RetryModel` for `MemoryBackend`. Use one of the
  * `wrapInMemory` / `wrapJsonl` / `wrapValkey` factories to wrap the
  * matching backend.
  *
@@ -4457,7 +4415,7 @@ export type JsRetryMemoryBackend = RetryMemoryBackend
 /**
  * Built-in middleware that wraps the inner model with retry-on-transient-
  * error behaviour. Equivalent to constructing a
- * [`super::wrappers::JsRetryCompletionModel`] but composable inside a
+ * [`super::wrappers::JsRetryModel`] but composable inside a
  * [`JsMiddlewareStack`].
  *
  * ```javascript
@@ -4479,6 +4437,48 @@ export declare class RetryMiddleware {
   toMiddleware(): Middleware
 }
 export type JsRetryMiddleware = RetryMiddleware
+
+/**
+ * A completion model that retries transient failures with exponential
+ * backoff.
+ *
+ * ```javascript
+ * const model = new RetryModel(
+ *     Model.openrouter(),
+ *     { maxRetries: 5, initialDelayMs: 500 },
+ * );
+ * const response = await model.complete([ChatMessage.user("hi")]);
+ * ```
+ */
+export declare class RetryModel {
+  /**
+   * Wrap `model` with retry-on-transient-error behaviour.
+   *
+   * `config` defaults to [`RetryConfig::default()`] (3 retries, 1s
+   * initial delay, 30s cap, jitter on, `Retry-After` honoured) when
+   * omitted.
+   */
+  constructor(model: Model, config?: JsRetryConfig | undefined | null)
+  /** The wrapped model's id. */
+  get modelId(): string
+  /** Perform a chat completion with automatic retries. */
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
+  /** Perform a chat completion with options and automatic retries. */
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
+  /**
+   * Stream a chat completion. Retries the initial request on transient
+   * failures; mid-stream errors are not retried.
+   */
+  stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
+  /** Stream a chat completion with options. */
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
+  /**
+   * Convert this retry wrapper into a plain [`JsModel`] so
+   * it can be passed to APIs that expect the base type.
+   */
+  toModel(): Model
+}
+export type JsRetryModel = RetryModel
 
 /**
  * Namespace for in-process-only workflow values.
@@ -4885,7 +4885,7 @@ export type JsStopEventClass = StopEvent
  * Base class for the structured-output extraction surface.
  *
  * Mirrors [`blazen_llm::traits::StructuredOutput`]. Most callers should
- * use [`crate::providers::JsCompletionModel`]'s built-in structured
+ * use [`crate::providers::JsModel`]'s built-in structured
  * output (every completion model supports it via the blanket impl);
  * this class exists so users can write a custom `extract` that does
  * something different (e.g. multi-pass extraction, retries, custom
@@ -5011,13 +5011,13 @@ export declare class TogetherProvider {
    */
   static embeddingModel(options?: JsProviderOptions | undefined | null): OpenAiCompatEmbeddingModel
   /** Perform a chat completion. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with additional options. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /** Stream a chat completion. */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Stream a chat completion with additional options. */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
 }
 export type JsTogetherProvider = TogetherProvider
 
@@ -5421,7 +5421,7 @@ export type JsUpstashBackend = UpstashBackend
  * ```javascript
  * const events: UsageEvent[] = [];
  * const emitter = new UsageEmitter((event) => { events.push(event); });
- * const model = new UsageRecordingCompletionModel(base, emitter, "openai");
+ * const model = new UsageRecordingModel(base, emitter, "openai");
  * ```
  */
 export declare class UsageEmitter {
@@ -5432,32 +5432,6 @@ export declare class UsageEmitter {
   constructor(callback: ((arg: UsageEvent) => void))
 }
 export type JsUsageEmitter = UsageEmitter
-
-/**
- * A `CompletionModel` decorator that emits a `UsageEvent` after each
- * successful `complete` call. Mirrors
- * `blazen_llm::usage_recording::UsageRecordingCompletionModel`.
- *
- * ```javascript
- * const base = CompletionModel.openai();
- * const events = [];
- * const emitter = new UsageEmitter((e) => events.push(e));
- * const model = new UsageRecordingCompletionModel(base, emitter, "openai");
- * const response = await model.complete([ChatMessage.user("hi")]);
- * ```
- */
-export declare class UsageRecordingCompletionModel {
-  /** Wrap a `CompletionModel` with a usage-recording layer. */
-  constructor(model: CompletionModel, emitter: AnyEmitter, providerLabel: string, runId?: string | undefined | null)
-  /** The underlying provider's model id. */
-  get modelId(): string
-  /**
-   * Convert this decorator into a `CompletionModel` so it can be passed to
-   * APIs that expect the base type (`runAgent`, further decorators, …).
-   */
-  toCompletionModel(): CompletionModel
-}
-export type JsUsageRecordingCompletionModel = UsageRecordingCompletionModel
 
 /**
  * An `EmbeddingModel` decorator that emits a `UsageEvent` after each
@@ -5472,6 +5446,32 @@ export declare class UsageRecordingEmbeddingModel {
   get dimensions(): number
 }
 export type JsUsageRecordingEmbeddingModel = UsageRecordingEmbeddingModel
+
+/**
+ * A `Model` decorator that emits a `UsageEvent` after each
+ * successful `complete` call. Mirrors
+ * `blazen_llm::usage_recording::UsageRecordingModel`.
+ *
+ * ```javascript
+ * const base = Model.openai();
+ * const events = [];
+ * const emitter = new UsageEmitter((e) => events.push(e));
+ * const model = new UsageRecordingModel(base, emitter, "openai");
+ * const response = await model.complete([ChatMessage.user("hi")]);
+ * ```
+ */
+export declare class UsageRecordingModel {
+  /** Wrap a `Model` with a usage-recording layer. */
+  constructor(model: Model, emitter: AnyEmitter, providerLabel: string, runId?: string | undefined | null)
+  /** The underlying provider's model id. */
+  get modelId(): string
+  /**
+   * Convert this decorator into a `Model` so it can be passed to
+   * APIs that expect the base type (`runAgent`, further decorators, …).
+   */
+  toModel(): Model
+}
+export type JsUsageRecordingModel = UsageRecordingModel
 
 /**
  * A Valkey/Redis-backed backend for the memory store.
@@ -6147,13 +6147,13 @@ export declare class XaiProvider {
   /** Get the model ID. */
   get modelId(): string
   /** Perform a chat completion. */
-  complete(messages: Array<JsChatMessage>): Promise<JsCompletionResponse>
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
   /** Perform a chat completion with additional options. */
-  completeWithOptions(messages: Array<JsChatMessage>, options: JsCompletionOptions): Promise<JsCompletionResponse>
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
   /** Stream a chat completion. */
   stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
   /** Stream a chat completion with additional options. */
-  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsCompletionOptions): Promise<void>
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
 }
 export type JsXaiProvider = XaiProvider
 
@@ -6320,9 +6320,9 @@ export interface CitationOptions {
  * order as the input.
  *
  * ```typescript
- * import { CompletionModel, ChatMessage, completeBatch } from 'blazen';
+ * import { Model, ChatMessage, completeBatch } from 'blazen';
  *
- * const model = CompletionModel.openai({ apiKey: "sk-..." });
+ * const model = Model.openai({ apiKey: "sk-..." });
  *
  * const result = await completeBatch(
  *   model,
@@ -6343,7 +6343,7 @@ export interface CitationOptions {
  * }
  * ```
  */
-export declare function completeBatch(model: JsCompletionModel, messageSets: Array<Array<JsChatMessage>>, options?: JsBatchOptions | undefined | null): Promise<BatchResult>
+export declare function completeBatch(model: JsModel, messageSets: Array<Array<JsChatMessage>>, options?: JsBatchOptions | undefined | null): Promise<BatchResult>
 
 /**
  * Run a batch using a typed [`JsBatchConfig`] instance instead of an options
@@ -6354,85 +6354,13 @@ export declare function completeBatch(model: JsCompletionModel, messageSets: Arr
  * multiple calls.
  *
  * ```typescript
- * import { CompletionModel, ChatMessage, BatchConfig, completeBatchConfig } from 'blazen';
+ * import { Model, ChatMessage, BatchConfig, completeBatchConfig } from 'blazen';
  *
  * const cfg = new BatchConfig(4);
  * const result = await completeBatchConfig(model, messageSets, cfg);
  * ```
  */
-export declare function completeBatchConfig(model: JsCompletionModel, messageSets: Array<Array<JsChatMessage>>, config: BatchConfig): Promise<BatchResult>
-
-/**
- * Configuration for subclassed `CompletionModel` instances.
- *
- * When extending `CompletionModel` from JavaScript/TypeScript, pass this
- * to `super()` so the base class can report `modelId` and other metadata
- * without a concrete provider.
- *
- * ```javascript
- * class MyLLM extends CompletionModel {
- *   constructor() {
- *     super({ modelId: "my-custom-model", contextLength: 8192 });
- *   }
- * }
- * ```
- */
-export interface CompletionModelConfig {
-  /** Model identifier (e.g. `"my-org/custom-llama"`). */
-  modelId?: string
-  /** Maximum context window in tokens. */
-  contextLength?: number
-  /** Base URL for HTTP-based providers. */
-  baseUrl?: string
-  /**
-   * Estimated memory footprint in bytes when loaded (host RAM if
-   * the provider targets the CPU, GPU VRAM otherwise).
-   */
-  memoryEstimateBytes?: number
-  /** Maximum output tokens the model supports. */
-  maxOutputTokens?: number
-}
-
-/**
- * Provider-agnostic request for a chat completion.
- *
- * Mirrors [`blazen_llm::CompletionRequest`]. Most callers reach for the
- * [`crate::providers::JsCompletionModel`] factory + per-call options
- * path; this typed shape exists for callers who need to build a request
- * envelope explicitly (e.g. forwarding the same request through multiple
- * middleware layers).
- */
-export interface CompletionRequest {
-  /**
-   * The conversation history as JSON-serialized `ChatMessage` values.
-   *
-   * Each entry must round-trip through `serde_json` into a Rust
-   * [`blazen_llm::ChatMessage`]. Use the `ChatMessage` class to build
-   * these in JS.
-   */
-  messages: Array<any>
-  /** Tools available for the model to invoke. */
-  tools?: Array<JsToolDefinition>
-  /** Sampling temperature. */
-  temperature?: number
-  /** Maximum number of tokens to generate. */
-  maxTokens?: number
-  /** Nucleus sampling parameter. */
-  topP?: number
-  /**
-   * JSON-encoded response format hint (raw, matching the `OpenAI` shape
-   * or the typed [`crate::types::JsResponseFormat`] when serialized).
-   */
-  responseFormat?: any
-  /** Override the provider's default model for this request. */
-  model?: string
-  /** Output modalities (e.g., `["text"]`, `["image", "text"]`). */
-  modalities?: Array<string>
-  /** Image generation configuration (model-specific). */
-  imageConfig?: any
-  /** Audio output configuration (voice, format, etc.). */
-  audioConfig?: any
-}
+export declare function completeBatchConfig(model: JsModel, messageSets: Array<Array<JsChatMessage>>, config: BatchConfig): Promise<BatchResult>
 
 /**
  * Compute the cost in USD for an audio call (TTS / STT) given the model id
@@ -7258,35 +7186,6 @@ export interface JsClientConnectOptions {
   mtls?: JsMtlsOptions
 }
 
-/** Options for a chat completion request. */
-export interface JsCompletionOptions {
-  temperature?: number
-  maxTokens?: number
-  topP?: number
-  model?: string
-  tools?: Array<JsToolDefinition>
-  /** JSON Schema for structured output / response format. */
-  responseFormat?: any
-}
-
-/** The result of a chat completion. */
-export interface JsCompletionResponse {
-  content?: string
-  toolCalls: Array<JsToolCall>
-  usage?: JsTokenUsage
-  model: string
-  finishReason?: string
-  cost?: number
-  timing?: JsRequestTiming
-  images: Array<JsGeneratedImage>
-  audio: Array<JsGeneratedAudio>
-  videos: Array<JsGeneratedVideo>
-  reasoning?: JsReasoningTrace
-  citations: Array<JsCitation>
-  artifacts: Array<JsArtifact>
-  metadata: any
-}
-
 export interface JsComputeRequest {
   model: string
   input: any
@@ -7367,7 +7266,7 @@ export interface JsContentPart {
   image?: JsImageContent
   audio?: JsAudioContent
   video?: JsVideoContent
-  file?: FileContent
+  file?: JsFileContent
 }
 
 /** Request to dereference a remote session ref. */
@@ -7892,7 +7791,7 @@ export interface JsMiddlewareConfig {
  * All other fields are optional.
  *
  * ```javascript
- * const model = CompletionModel.mistralrs({
+ * const model = Model.mistralrs({
  *   modelId: "mistralai/Mistral-7B-Instruct-v0.3",
  *   device: "cuda:0",
  *   quantization: "q4_k_m",
@@ -7922,6 +7821,17 @@ export declare const enum JsMixedPrecision {
   Bf16 = 'bf16'
 }
 
+/** Options for a chat completion request. */
+export interface JsModelOptions {
+  temperature?: number
+  maxTokens?: number
+  topP?: number
+  model?: string
+  tools?: Array<JsToolDefinition>
+  /** JSON Schema for structured output / response format. */
+  responseFormat?: any
+}
+
 /**
  * Pricing information for a model in USD per million tokens.
  *
@@ -7937,6 +7847,24 @@ export interface JsModelPricing {
   perImage?: number
   /** USD per second (for audio/video models). */
   perSecond?: number
+}
+
+/** The result of a chat completion. */
+export interface JsModelResponse {
+  content?: string
+  toolCalls: Array<JsToolCall>
+  usage?: JsTokenUsage
+  model: string
+  finishReason?: string
+  cost?: number
+  timing?: JsRequestTiming
+  images: Array<JsGeneratedImage>
+  audio: Array<JsGeneratedAudio>
+  videos: Array<JsGeneratedVideo>
+  reasoning?: JsReasoningTrace
+  citations: Array<JsCitation>
+  artifacts: Array<JsArtifact>
+  metadata: any
 }
 
 /** Status snapshot for a single registered model. */
@@ -9018,6 +8946,37 @@ export interface ModelCapabilities {
 }
 
 /**
+ * Configuration for subclassed `Model` instances.
+ *
+ * When extending `Model` from JavaScript/TypeScript, pass this
+ * to `super()` so the base class can report `modelId` and other metadata
+ * without a concrete provider.
+ *
+ * ```javascript
+ * class MyLLM extends Model {
+ *   constructor() {
+ *     super({ modelId: "my-custom-model", contextLength: 8192 });
+ *   }
+ * }
+ * ```
+ */
+export interface ModelConfig {
+  /** Model identifier (e.g. `"my-org/custom-llama"`). */
+  modelId?: string
+  /** Maximum context window in tokens. */
+  contextLength?: number
+  /** Base URL for HTTP-based providers. */
+  baseUrl?: string
+  /**
+   * Estimated memory footprint in bytes when loaded (host RAM if
+   * the provider targets the CPU, GPU VRAM otherwise).
+   */
+  memoryEstimateBytes?: number
+  /** Maximum output tokens the model supports. */
+  maxOutputTokens?: number
+}
+
+/**
  * Information about a model offered by a provider.
  *
  * Mirrors [`blazen_llm::traits::ModelInfo`].
@@ -9056,6 +9015,47 @@ export interface ModelManagerConfig {
    * `cpuRamGb` / `gpuVramGb`.
    */
   poolBudgets?: Record<string, bigint>
+}
+
+/**
+ * Provider-agnostic request for a chat completion.
+ *
+ * Mirrors [`blazen_llm::ModelRequest`]. Most callers reach for the
+ * [`crate::providers::JsModel`] factory + per-call options
+ * path; this typed shape exists for callers who need to build a request
+ * envelope explicitly (e.g. forwarding the same request through multiple
+ * middleware layers).
+ */
+export interface ModelRequest {
+  /**
+   * The conversation history as JSON-serialized `ChatMessage` values.
+   *
+   * Each entry must round-trip through `serde_json` into a Rust
+   * [`blazen_llm::ChatMessage`]. Use the `ChatMessage` class to build
+   * these in JS.
+   */
+  messages: Array<any>
+  /** Tools available for the model to invoke. */
+  tools?: Array<JsToolDefinition>
+  /** Sampling temperature. */
+  temperature?: number
+  /** Maximum number of tokens to generate. */
+  maxTokens?: number
+  /** Nucleus sampling parameter. */
+  topP?: number
+  /**
+   * JSON-encoded response format hint (raw, matching the `OpenAI` shape
+   * or the typed [`crate::types::JsResponseFormat`] when serialized).
+   */
+  responseFormat?: any
+  /** Override the provider's default model for this request. */
+  model?: string
+  /** Output modalities (e.g., `["text"]`, `["image", "text"]`). */
+  modalities?: Array<string>
+  /** Image generation configuration (model-specific). */
+  imageConfig?: any
+  /** Audio output configuration (voice, format, etc.). */
+  audioConfig?: any
 }
 
 /** Build an empty [`JsRetryStack`] with every scope set to `null`. */
@@ -9535,9 +9535,9 @@ export interface RetryStack {
  * that resolves to one).
  *
  * ```typescript
- * import { CompletionModel, ChatMessage, runAgent } from 'blazen';
+ * import { Model, ChatMessage, runAgent } from 'blazen';
  *
- * const model = CompletionModel.openai({ apiKey: "sk-..." });
+ * const model = Model.openai({ apiKey: "sk-..." });
  *
  * const result = await runAgent(
  *   model,
@@ -9551,7 +9551,7 @@ export interface RetryStack {
  * );
  * ```
  */
-export declare function runAgent(model: JsCompletionModel, messages: Array<JsChatMessage>, tools: Array<JsToolDef>, toolHandler: ToolHandlerTsfn, options?: JsAgentRunOptions | undefined | null): Promise<AgentResult>
+export declare function runAgent(model: JsModel, messages: Array<JsChatMessage>, tools: Array<JsToolDef>, toolHandler: ToolHandlerTsfn, options?: JsAgentRunOptions | undefined | null): Promise<AgentResult>
 
 /**
  * Run an agent loop with an event-observer callback.
@@ -9562,9 +9562,9 @@ export declare function runAgent(model: JsCompletionModel, messages: Array<JsCha
  * abort the loop.
  *
  * ```typescript
- * import { CompletionModel, ChatMessage, runAgentWithCallback } from 'blazen';
+ * import { Model, ChatMessage, runAgentWithCallback } from 'blazen';
  *
- * const model = CompletionModel.openai({ apiKey: "sk-..." });
+ * const model = Model.openai({ apiKey: "sk-..." });
  *
  * const result = await runAgentWithCallback(
  *   model,
@@ -9578,7 +9578,7 @@ export declare function runAgent(model: JsCompletionModel, messages: Array<JsCha
  * );
  * ```
  */
-export declare function runAgentWithCallback(model: JsCompletionModel, messages: Array<JsChatMessage>, tools: Array<JsToolDef>, toolHandler: ToolHandlerTsfn, onEvent: AgentEventCallbackTsfn, options?: JsAgentRunOptions | undefined | null): Promise<AgentResult>
+export declare function runAgentWithCallback(model: JsModel, messages: Array<JsChatMessage>, tools: Array<JsToolDef>, toolHandler: ToolHandlerTsfn, onEvent: AgentEventCallbackTsfn, options?: JsAgentRunOptions | undefined | null): Promise<AgentResult>
 
 /**
  * Payload returned by [`JsContext::get_session_ref_serializable`].

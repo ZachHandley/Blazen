@@ -8,7 +8,7 @@ order: 7
 
 # Agent
 
-`Agent` drives the canonical LLM tool-execution loop end-to-end: completion → execute tool calls → feed results back → repeat, until either the model emits a plain-text answer (no more tool calls) or the `maxIterations` budget is exhausted. You hand it a `CompletionModel`, the `Tool` definitions the model may invoke, a `ToolHandler` that executes those tools, and an iteration cap. `run(userInput:)` does the rest.
+`Agent` drives the canonical LLM tool-execution loop end-to-end: completion → execute tool calls → feed results back → repeat, until either the model emits a plain-text answer (no more tool calls) or the `maxIterations` budget is exhausted. You hand it a `Model`, the `Tool` definitions the model may invoke, a `ToolHandler` that executes those tools, and an iteration cap. `run(userInput:)` does the rest.
 
 ## Constructing an agent
 
@@ -177,6 +177,6 @@ Prefer the async `run(userInput:)` in any context that already supports `await` 
 
 ## See also
 
-- [LLM](/guides/swift/llm/) -- the underlying `CompletionModel` and `Tool` shapes.
+- [LLM](/guides/swift/llm/) -- the underlying `Model` and `Tool` shapes.
 - [Streaming](/guides/swift/streaming/) -- the agent's internal loop drives streaming completions; the same cancellation rules apply.
 - [Multimodal](/guides/swift/multimodal/) -- pass images / audio / video into the user input the agent receives.

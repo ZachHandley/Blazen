@@ -67,7 +67,7 @@ use blazen_llm::error::BlazenError;
 use blazen_llm::providers::custom::{ApiProtocol, CustomProviderHandle};
 use blazen_llm::providers::openai_compat::OpenAiCompatConfig;
 use blazen_llm::types::{
-    CompletionRequest, CompletionResponse, EmbeddingResponse, StreamChunk, ToolDefinition,
+    EmbeddingResponse, ModelRequest, ModelResponse, StreamChunk, ToolDefinition,
 };
 
 use crate::error::blazen_error_to_napi;
@@ -334,14 +334,14 @@ impl CustomProvider for JsCustomProviderAdapter {
 
     async fn complete(
         &self,
-        request: CompletionRequest,
-    ) -> std::result::Result<CompletionResponse, BlazenError> {
+        request: ModelRequest,
+    ) -> std::result::Result<ModelResponse, BlazenError> {
         self.dispatch("complete", &request).await
     }
 
     async fn stream(
         &self,
-        _request: CompletionRequest,
+        _request: ModelRequest,
     ) -> std::result::Result<
         Pin<Box<dyn Stream<Item = std::result::Result<StreamChunk, BlazenError>> + Send>>,
         BlazenError,

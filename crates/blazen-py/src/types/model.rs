@@ -3,7 +3,7 @@
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
-use blazen_llm::CompletionResponse;
+use blazen_llm::ModelResponse;
 
 use super::{
     PyArtifact, PyCitation, PyGeneratedAudio, PyGeneratedImage, PyGeneratedVideo, PyReasoningTrace,
@@ -11,7 +11,7 @@ use super::{
 };
 
 // ---------------------------------------------------------------------------
-// PyCompletionResponse
+// PyModelResponse
 // ---------------------------------------------------------------------------
 
 /// The result of a chat completion.
@@ -21,15 +21,15 @@ use super::{
 ///     >>> response.content        # attribute
 ///     >>> response["content"]     # dict-style
 #[gen_stub_pyclass]
-#[pyclass(name = "CompletionResponse", from_py_object)]
+#[pyclass(name = "ModelResponse", from_py_object)]
 #[derive(Clone)]
-pub struct PyCompletionResponse {
-    pub(crate) inner: CompletionResponse,
+pub struct PyModelResponse {
+    pub(crate) inner: ModelResponse,
 }
 
 #[gen_stub_pymethods]
 #[pymethods]
-impl PyCompletionResponse {
+impl PyModelResponse {
     #[getter]
     fn content(&self) -> Option<&str> {
         self.inner.content.as_deref()
@@ -239,7 +239,7 @@ impl PyCompletionResponse {
 
     fn __repr__(&self) -> String {
         format!(
-            "CompletionResponse(model='{}', content='{}')",
+            "ModelResponse(model='{}', content='{}')",
             self.inner.model,
             self.inner.content.as_deref().unwrap_or(""),
         )

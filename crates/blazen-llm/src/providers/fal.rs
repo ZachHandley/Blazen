@@ -28,7 +28,7 @@
 //! enterprise/SOC2 path.
 //!
 //! This module implements all media generation traits:
-//! - [`CompletionModel`] for LLM chat completions (default:
+//! - [`Model`] for LLM chat completions (default:
 //!   `openrouter/router/openai/v1/chat/completions` via
 //!   [`FalLlmEndpoint::OpenAiChat`])
 //! - [`ComputeProvider`] for generic compute job submission/polling
@@ -68,8 +68,7 @@ use crate::media::{
 };
 use crate::retry::RetryConfig;
 use crate::types::{
-    CompletionRequest, CompletionResponse, EmbeddingResponse, RequestTiming, StreamChunk,
-    TokenUsage,
+    EmbeddingResponse, ModelRequest, ModelResponse, RequestTiming, StreamChunk, TokenUsage,
 };
 
 // ---------------------------------------------------------------------------
@@ -172,7 +171,7 @@ pub enum FalLlmEndpoint {
     OpenAiResponses,
     /// `openrouter/router/openai/v1/embeddings` — `OpenAI` embeddings (consumed
     /// by `FalEmbeddingModel` via fal's queue API at `https://queue.fal.run/...`,
-    /// not by `CompletionModel`'s sync executor).
+    /// not by `Model`'s sync executor).
     OpenAiEmbeddings,
     /// `openrouter/router` (or `openrouter/router/enterprise`) — fal's own
     /// `OpenRouter` wrapper that takes `prompt`+`system_prompt` strings.
@@ -528,7 +527,7 @@ impl FalQueueExecutor {
     /// Poll until a queue job completes and return the result JSON plus timing.
     ///
     /// This is the shared polling logic used by both [`ComputeProvider::result`]
-    /// and [`CompletionModel::complete`] (queue mode).
+    /// and [`Model::complete`] (queue mode).
     ///
     /// When `status_url` and `response_url` are provided (from the queue submit
     /// response), they are used directly instead of constructing URLs from the
@@ -741,7 +740,7 @@ pub struct FalProvider {
     retry_config: Option<Arc<RetryConfig>>,
     /// LLM endpoint family. Default: [`FalLlmEndpoint::OpenAiChat`].
     llm_endpoint: FalLlmEndpoint,
-    /// Default model id when `CompletionRequest::model` is `None`.
+    /// Default model id when `ModelRequest::model` is `None`.
     llm_model: String,
     /// Auto-switch to a vision/audio/video endpoint when the request
     /// contains matching content. Default: `true`.
@@ -1250,7 +1249,7 @@ impl FalProvider {
     /// limits enforced by fal are honoured via [`collapse_messages`].
     fn build_prompt_string_body(
         &self,
-        request: &CompletionRequest,
+        request: &ModelRequest,
         media_kind: Option<MediaKind>,
     ) -> serde_json::Value {
         let llm_model = request.model.as_deref().unwrap_or(&self.llm_model);
@@ -1307,7 +1306,7 @@ impl FalProvider {
     ///
     /// Produces a true `OpenAI` chat completions request body with a
     /// `messages` array, multimodal content blocks, and tool calls.
-    fn build_openai_chat_body(&self, request: &CompletionRequest) -> serde_json::Value {
+    fn build_openai_chat_body(&self, request: &ModelRequest) -> serde_json::Value {
         use crate::providers::openai_format::{
             content_part_to_openai, content_to_openai_value, split_tool_result_parts,
         };
@@ -1417,7 +1416,7 @@ impl FalProvider {
     /// The Responses API uses an `input` array of role-tagged content blocks
     /// rather than a `messages` array, and represents tool calls as separate
     /// `function_call` / `function_call_output` blocks.
-    fn build_openai_responses_body(&self, request: &CompletionRequest) -> serde_json::Value {
+    fn build_openai_responses_body(&self, request: &ModelRequest) -> serde_json::Value {
         let llm_model = request.model.as_deref().unwrap_or(&self.llm_model);
         let input =
             crate::providers::responses_format::messages_to_responses_input(&request.messages);
@@ -1460,7 +1459,7 @@ impl FalProvider {
     ///
     /// This is the single entry point that `complete()` will call once
     /// streaming + sync dispatch is wired up in Phase 4.6.
-    fn build_body(&self, request: &CompletionRequest, ep: &FalLlmEndpoint) -> serde_json::Value {
+    fn build_body(&self, request: &ModelRequest, ep: &FalLlmEndpoint) -> serde_json::Value {
         match ep.body_format() {
             FalBodyFormat::OpenAiMessages => self.build_openai_chat_body(request),
             FalBodyFormat::OpenAiResponses => self.build_openai_responses_body(request),
@@ -1485,7 +1484,7 @@ impl FalProvider {
         &self,
         ep: &FalLlmEndpoint,
         raw: serde_json::Value,
-    ) -> Result<CompletionResponse, BlazenError> {
+    ) -> Result<ModelResponse, BlazenError> {
         match ep.body_format() {
             FalBodyFormat::OpenAiMessages => parse_openai_chat_response(raw, &self.llm_model),
             FalBodyFormat::OpenAiResponses => parse_openai_responses_response(raw, &self.llm_model),
@@ -1506,7 +1505,7 @@ impl FalProvider {
     ///
     /// [`auto_route_modality`]: Self::auto_route_modality
     #[allow(clippy::match_same_arms)] // Arm grouping is documentation: distinct semantic categories collapse to the same fall-through.
-    fn resolve_endpoint_for_request(&self, request: &CompletionRequest) -> FalLlmEndpoint {
+    fn resolve_endpoint_for_request(&self, request: &ModelRequest) -> FalLlmEndpoint {
         if !self.auto_route_modality {
             return self.llm_endpoint.clone();
         }
@@ -1567,7 +1566,7 @@ impl FalProvider {
     }
 
     // -----------------------------------------------------------------------
-    // Sync execution (for CompletionModel)
+    // Sync execution (for Model)
     // -----------------------------------------------------------------------
 
     /// Execute synchronously: POST to fal.run and wait for the response.
@@ -1599,7 +1598,7 @@ impl FalProvider {
     }
 
     // -----------------------------------------------------------------------
-    // Webhook execution (for CompletionModel)
+    // Webhook execution (for Model)
     // -----------------------------------------------------------------------
 
     /// Execute via webhook: submit with webhook URL.
@@ -1636,7 +1635,7 @@ impl FalProvider {
             .map_err(|e| BlazenError::invalid_response(e.to_string()))
     }
 
-    /// Execute via queue: submit, poll, return result. Used by `CompletionModel`.
+    /// Execute via queue: submit, poll, return result. Used by `Model`.
     async fn execute_queue_llm(
         &self,
         path: &str,
@@ -1706,14 +1705,14 @@ impl FalProvider {
     }
 
     // -----------------------------------------------------------------------
-    // Streaming execution (for CompletionModel)
+    // Streaming execution (for Model)
     // -----------------------------------------------------------------------
 
     /// Stream an OpenAI-compat chat completions endpoint via inline SSE
     /// (`stream: true` in the request body).
     async fn stream_openai_chat(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
         ep: &FalLlmEndpoint,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
@@ -1741,7 +1740,7 @@ impl FalProvider {
     /// converting fal's cumulative-output SSE into incremental delta chunks.
     async fn stream_prompt_string(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
         ep: &FalLlmEndpoint,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
@@ -2163,7 +2162,7 @@ struct FalUpscaleOutput {
 fn parse_openai_chat_response(
     raw: serde_json::Value,
     fallback_model: &str,
-) -> Result<CompletionResponse, BlazenError> {
+) -> Result<ModelResponse, BlazenError> {
     use crate::types::{ReasoningTrace, ToolCall};
     let parsed: FalOpenAiChatResponse = serde_json::from_value(raw)
         .map_err(|e| BlazenError::Serialization(format!("fal openai chat parse: {e}")))?;
@@ -2204,7 +2203,7 @@ fn parse_openai_chat_response(
             .map_or(0, |d| d.reasoning_tokens),
         ..Default::default()
     });
-    Ok(CompletionResponse {
+    Ok(ModelResponse {
         content: message.content,
         tool_calls,
         reasoning,
@@ -2226,7 +2225,7 @@ fn parse_openai_chat_response(
 fn parse_openai_responses_response(
     raw: serde_json::Value,
     fallback_model: &str,
-) -> Result<CompletionResponse, BlazenError> {
+) -> Result<ModelResponse, BlazenError> {
     use crate::types::ReasoningTrace;
     let parsed: FalOpenAiResponsesResponse = serde_json::from_value(raw)
         .map_err(|e| BlazenError::Serialization(format!("fal openai responses parse: {e}")))?;
@@ -2289,7 +2288,7 @@ fn parse_openai_responses_response(
             .map_or(0, |d| d.reasoning_tokens),
         ..Default::default()
     });
-    Ok(CompletionResponse {
+    Ok(ModelResponse {
         content: if content_text.is_empty() {
             None
         } else {
@@ -2315,13 +2314,13 @@ fn parse_openai_responses_response(
 fn parse_prompt_string_response(
     raw: serde_json::Value,
     fallback_model: &str,
-) -> Result<CompletionResponse, BlazenError> {
+) -> Result<ModelResponse, BlazenError> {
     let parsed: FalLlmResponse = serde_json::from_value(raw)
         .map_err(|e| BlazenError::Serialization(format!("fal prompt-string parse: {e}")))?;
     if let Some(err) = parsed.error {
         return Err(BlazenError::request(format!("fal: {err}")));
     }
-    Ok(CompletionResponse {
+    Ok(ModelResponse {
         content: parsed.output,
         tool_calls: Vec::new(),
         reasoning: None,
@@ -2340,11 +2339,11 @@ fn parse_prompt_string_response(
 }
 
 // ---------------------------------------------------------------------------
-// CompletionModel implementation
+// Model implementation
 // ---------------------------------------------------------------------------
 
 #[async_trait]
-impl crate::traits::CompletionModel for FalProvider {
+impl crate::traits::Model for FalProvider {
     fn model_id(&self) -> &str {
         &self.llm_model
     }
@@ -2357,10 +2356,7 @@ impl crate::traits::CompletionModel for FalProvider {
         Some(Self::http_client(self))
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         let model_id = request.model.as_deref().unwrap_or(&self.llm_model);
         let span = tracing::info_span!(
             "llm.complete",
@@ -2436,7 +2432,7 @@ impl crate::traits::CompletionModel for FalProvider {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         let model_id = request.model.as_deref().unwrap_or(&self.llm_model);
@@ -3721,7 +3717,7 @@ mod tests {
     #[ignore = "Phase 4: rewrite for new body builders"]
     fn build_body_basic() {
         let provider = FalProvider::new("fal-test");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello world")]);
+        let request = ModelRequest::new(vec![ChatMessage::user("Hello world")]);
 
         let body = provider.build_body(&request, &provider.llm_endpoint);
         assert_eq!(body["model"], "anthropic/claude-sonnet-4.5");
@@ -3732,7 +3728,7 @@ mod tests {
     #[ignore = "Phase 4: rewrite for new body builders"]
     fn build_body_with_system() {
         let provider = FalProvider::new("fal-test");
-        let request = CompletionRequest::new(vec![
+        let request = ModelRequest::new(vec![
             ChatMessage::system("Be helpful"),
             ChatMessage::user("Hello"),
         ]);
@@ -3746,8 +3742,7 @@ mod tests {
     #[ignore = "Phase 4: rewrite for new body builders"]
     fn build_body_model_override() {
         let provider = FalProvider::new("fal-test");
-        let request =
-            CompletionRequest::new(vec![ChatMessage::user("Hi")]).with_model("openai/gpt-4o");
+        let request = ModelRequest::new(vec![ChatMessage::user("Hi")]).with_model("openai/gpt-4o");
 
         let body = provider.build_body(&request, &provider.llm_endpoint);
         assert_eq!(body["model"], "openai/gpt-4o");
@@ -3757,7 +3752,7 @@ mod tests {
     #[ignore = "Phase 4: rewrite for new body builders"]
     fn build_body_with_temperature() {
         let provider = FalProvider::new("fal-test");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hi")]).with_temperature(0.7);
+        let request = ModelRequest::new(vec![ChatMessage::user("Hi")]).with_temperature(0.7);
 
         let body = provider.build_body(&request, &provider.llm_endpoint);
         let temp = body["temperature"].as_f64().unwrap();
@@ -3768,7 +3763,7 @@ mod tests {
     #[ignore = "Phase 4: rewrite for new body builders"]
     fn build_body_with_max_tokens() {
         let provider = FalProvider::new("fal-test");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hi")]).with_max_tokens(1024);
+        let request = ModelRequest::new(vec![ChatMessage::user("Hi")]).with_max_tokens(1024);
 
         let body = provider.build_body(&request, &provider.llm_endpoint);
         assert_eq!(body["max_tokens"], 1024);
@@ -3778,7 +3773,7 @@ mod tests {
     #[ignore = "Phase 4: rewrite for new body builders"]
     fn build_body_with_top_p() {
         let provider = FalProvider::new("fal-test");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hi")]).with_top_p(0.9);
+        let request = ModelRequest::new(vec![ChatMessage::user("Hi")]).with_top_p(0.9);
 
         let body = provider.build_body(&request, &provider.llm_endpoint);
         assert_eq!(body["top_p"], serde_json::json!(0.9_f32));
@@ -3789,8 +3784,8 @@ mod tests {
     fn build_body_with_response_format() {
         let provider = FalProvider::new("fal-test");
         let schema = serde_json::json!({"type": "object"});
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hi")])
-            .with_response_format(schema.clone());
+        let request =
+            ModelRequest::new(vec![ChatMessage::user("Hi")]).with_response_format(schema.clone());
 
         let body = provider.build_body(&request, &provider.llm_endpoint);
         assert_eq!(body["response_format"], schema);
@@ -3800,7 +3795,7 @@ mod tests {
     #[ignore = "Phase 4: rewrite for new body builders"]
     fn test_text_backward_compat() {
         let provider = FalProvider::new("fal-test");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]);
+        let request = ModelRequest::new(vec![ChatMessage::user("Hello")]);
 
         let body = provider.build_body(&request, &provider.llm_endpoint);
         assert!(body["prompt"].as_str().unwrap().contains("Hello"));
@@ -3810,7 +3805,7 @@ mod tests {
     #[ignore = "Phase 4: rewrite for new body builders"]
     fn test_build_body_image_url_drops_image() {
         let provider = FalProvider::new("fal-test");
-        let request = CompletionRequest::new(vec![ChatMessage::user_image_url(
+        let request = ModelRequest::new(vec![ChatMessage::user_image_url(
             "Describe this",
             "https://example.com/cat.jpg",
             None,
@@ -3827,7 +3822,7 @@ mod tests {
     #[ignore = "Phase 4: rewrite for new body builders"]
     fn test_build_body_base64_image_drops_image() {
         let provider = FalProvider::new("fal-test");
-        let request = CompletionRequest::new(vec![ChatMessage::user_image_base64(
+        let request = ModelRequest::new(vec![ChatMessage::user_image_base64(
             "What is this",
             "abc123",
             "image/png",
@@ -3845,7 +3840,7 @@ mod tests {
         use crate::types::{ContentPart, ImageContent, ImageSource};
 
         let provider = FalProvider::new("fal-test");
-        let request = CompletionRequest::new(vec![ChatMessage::user_parts(vec![
+        let request = ModelRequest::new(vec![ChatMessage::user_parts(vec![
             ContentPart::Text {
                 text: "First".into(),
             },
@@ -3874,7 +3869,7 @@ mod tests {
     #[test]
     fn test_build_openai_chat_body_basic_user() {
         let provider = FalProvider::new("fal-test");
-        let request = CompletionRequest::new(vec![
+        let request = ModelRequest::new(vec![
             ChatMessage::system("be helpful"),
             ChatMessage::user("Hello"),
         ]);
@@ -3890,7 +3885,7 @@ mod tests {
     #[test]
     fn test_build_openai_chat_body_with_tools() {
         let provider = FalProvider::new("fal-test");
-        let mut request = CompletionRequest::new(vec![ChatMessage::user("calc 2+2")]);
+        let mut request = ModelRequest::new(vec![ChatMessage::user("calc 2+2")]);
         request.tools = vec![crate::types::ToolDefinition {
             name: "calculator".to_owned(),
             description: "do math".to_owned(),
@@ -3906,7 +3901,7 @@ mod tests {
     #[test]
     fn test_build_openai_chat_body_image_part_passes_through() {
         let provider = FalProvider::new("fal-test");
-        let request = CompletionRequest::new(vec![ChatMessage::user_image_url(
+        let request = ModelRequest::new(vec![ChatMessage::user_image_url(
             "Describe",
             "https://i.com/a.png",
             Some("image/png"),
@@ -3936,7 +3931,7 @@ mod tests {
                 },
             ),
         );
-        let request = CompletionRequest::new(vec![tool_msg]);
+        let request = ModelRequest::new(vec![tool_msg]);
         let body = provider.build_openai_chat_body(&request);
         let messages = body["messages"].as_array().unwrap();
         assert_eq!(messages.len(), 2);
@@ -3949,7 +3944,7 @@ mod tests {
     #[test]
     fn test_build_openai_responses_body_basic() {
         let provider = FalProvider::new("fal-test");
-        let request = CompletionRequest::new(vec![ChatMessage::user("hello")]);
+        let request = ModelRequest::new(vec![ChatMessage::user("hello")]);
         let body = provider.build_openai_responses_body(&request);
         assert_eq!(body["model"], "anthropic/claude-sonnet-4.5");
         let input = body["input"].as_array().expect("input array");
@@ -3991,7 +3986,7 @@ mod tests {
     #[test]
     fn test_build_prompt_string_body_extracts_image_urls() {
         let provider = FalProvider::new("fal-test");
-        let request = CompletionRequest::new(vec![ChatMessage::user_image_url(
+        let request = ModelRequest::new(vec![ChatMessage::user_image_url(
             "describe",
             "https://i.com/a.png",
             Some("image/png"),
@@ -4005,7 +4000,7 @@ mod tests {
     #[test]
     fn test_build_prompt_string_body_extracts_audio_url() {
         let provider = FalProvider::new("fal-test");
-        let request = CompletionRequest::new(vec![ChatMessage::user_audio(
+        let request = ModelRequest::new(vec![ChatMessage::user_audio(
             "transcribe",
             "https://a.com/c.mp3",
         )]);
@@ -4016,7 +4011,7 @@ mod tests {
     #[test]
     fn test_build_prompt_string_body_extracts_video_url() {
         let provider = FalProvider::new("fal-test");
-        let request = CompletionRequest::new(vec![ChatMessage::user_video(
+        let request = ModelRequest::new(vec![ChatMessage::user_video(
             "describe",
             "https://v.com/c.mp4",
         )]);
@@ -4031,7 +4026,7 @@ mod tests {
     #[test]
     fn test_router_keeps_openai_chat_for_text_only() {
         let provider = FalProvider::new("fal-test");
-        let request = CompletionRequest::new(vec![ChatMessage::user("hi")]);
+        let request = ModelRequest::new(vec![ChatMessage::user("hi")]);
         let ep = provider.resolve_endpoint_for_request(&request);
         assert_eq!(ep, FalLlmEndpoint::OpenAiChat);
     }
@@ -4040,7 +4035,7 @@ mod tests {
     fn test_router_promotes_to_vision_when_anyllm_and_image_present() {
         let provider = FalProvider::new("fal-test")
             .with_llm_endpoint(FalLlmEndpoint::AnyLlm { enterprise: false });
-        let request = CompletionRequest::new(vec![ChatMessage::user_image_url(
+        let request = ModelRequest::new(vec![ChatMessage::user_image_url(
             "describe",
             "https://i.com/a.png",
             Some("image/png"),
@@ -4059,7 +4054,7 @@ mod tests {
     fn test_router_promotes_to_audio_when_anyllm_and_audio_present() {
         let provider = FalProvider::new("fal-test")
             .with_llm_endpoint(FalLlmEndpoint::AnyLlm { enterprise: true });
-        let request = CompletionRequest::new(vec![ChatMessage::user_audio(
+        let request = ModelRequest::new(vec![ChatMessage::user_audio(
             "transcribe",
             "https://a.com/c.mp3",
         )]);
@@ -4077,7 +4072,7 @@ mod tests {
     fn test_router_promotes_to_video_when_openrouter_and_video_present() {
         let provider = FalProvider::new("fal-test")
             .with_llm_endpoint(FalLlmEndpoint::OpenRouter { enterprise: false });
-        let request = CompletionRequest::new(vec![ChatMessage::user_video(
+        let request = ModelRequest::new(vec![ChatMessage::user_video(
             "describe",
             "https://v.com/c.mp4",
         )]);
@@ -4096,7 +4091,7 @@ mod tests {
         let provider = FalProvider::new("fal-test")
             .with_llm_endpoint(FalLlmEndpoint::AnyLlm { enterprise: false })
             .with_auto_route_modality(false);
-        let request = CompletionRequest::new(vec![ChatMessage::user_image_url(
+        let request = ModelRequest::new(vec![ChatMessage::user_image_url(
             "describe",
             "https://i.com/a.png",
             Some("image/png"),

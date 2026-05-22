@@ -12,10 +12,10 @@ use std::time::Instant;
 use web_time::Instant;
 
 use crate::error::BlazenError;
-use crate::traits::{CompletionModel, Tool};
+use crate::traits::{Model, Tool};
 use crate::types::{
-    ChatMessage, CompletionRequest, CompletionResponse, RequestTiming, TokenUsage, ToolCall,
-    ToolDefinition, ToolOutput,
+    ChatMessage, ModelRequest, ModelResponse, RequestTiming, TokenUsage, ToolCall, ToolDefinition,
+    ToolOutput,
 };
 
 /// Default name of the built-in `finish_workflow` exit tool.
@@ -243,7 +243,7 @@ pub fn finish_workflow_tool() -> Arc<dyn Tool> {
 /// Result of an agent run.
 pub struct AgentResult {
     /// The final completion response.
-    pub response: CompletionResponse,
+    pub response: ModelResponse,
     /// Full message history including all tool calls and results.
     pub messages: Vec<ChatMessage>,
     /// Number of tool call rounds that occurred.
@@ -292,7 +292,7 @@ pub enum AgentEvent {
 /// Returns [`BlazenError`] if any model completion call fails, if a tool call
 /// references an unknown tool, or if a tool execution itself fails.
 pub async fn run_agent(
-    model: &dyn CompletionModel,
+    model: &dyn Model,
     messages: Vec<ChatMessage>,
     config: AgentConfig,
 ) -> Result<AgentResult, BlazenError> {
@@ -303,7 +303,7 @@ pub async fn run_agent(
 ///
 /// The loop works as follows:
 ///
-/// 1. Build a [`CompletionRequest`] containing the full message history and
+/// 1. Build a [`ModelRequest`] containing the full message history and
 ///    all tool definitions.
 /// 2. Call the model.
 /// 3. If the model responds with no tool calls, return immediately.
@@ -320,7 +320,7 @@ pub async fn run_agent(
 /// references an unknown tool, or if a tool execution itself fails.
 #[allow(clippy::too_many_lines)]
 pub async fn run_agent_with_callback(
-    model: &dyn CompletionModel,
+    model: &dyn Model,
     messages: Vec<ChatMessage>,
     config: AgentConfig,
     on_event: impl Fn(AgentEvent) + Send + Sync,
@@ -475,13 +475,13 @@ pub async fn run_agent_with_callback(
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Build a [`CompletionRequest`] with tools and optional sampling parameters.
+/// Build a [`ModelRequest`] with tools and optional sampling parameters.
 fn build_request(
     messages: &[ChatMessage],
     tool_defs: &[ToolDefinition],
     config: &AgentConfig,
-) -> CompletionRequest {
-    let mut request = CompletionRequest::new(messages.to_vec()).with_tools(tool_defs.to_vec());
+) -> ModelRequest {
+    let mut request = ModelRequest::new(messages.to_vec()).with_tools(tool_defs.to_vec());
     if let Some(temp) = config.temperature {
         request = request.with_temperature(temp);
     }
@@ -491,9 +491,9 @@ fn build_request(
     request
 }
 
-/// Build a [`CompletionRequest`] **without** tools (for the final forced call).
-fn build_request_no_tools(messages: &[ChatMessage], config: &AgentConfig) -> CompletionRequest {
-    let mut request = CompletionRequest::new(messages.to_vec());
+/// Build a [`ModelRequest`] **without** tools (for the final forced call).
+fn build_request_no_tools(messages: &[ChatMessage], config: &AgentConfig) -> ModelRequest {
+    let mut request = ModelRequest::new(messages.to_vec());
     if let Some(temp) = config.temperature {
         request = request.with_temperature(temp);
     }
@@ -506,7 +506,7 @@ fn build_request_no_tools(messages: &[ChatMessage], config: &AgentConfig) -> Com
 /// Check whether the model called the built-in "finish" tool. If so, build
 /// and return the final [`AgentResult`].
 fn check_finish_tool(
-    response: &CompletionResponse,
+    response: &ModelResponse,
     messages: &[ChatMessage],
     iteration: u32,
     total_usage: Option<&TokenUsage>,
@@ -525,7 +525,7 @@ fn check_finish_tool(
         .unwrap_or("")
         .to_owned();
 
-    let final_response = CompletionResponse {
+    let final_response = ModelResponse {
         content: Some(answer),
         tool_calls: vec![],
         reasoning: None,
@@ -651,7 +651,7 @@ fn find_exit_call<'a>(
 /// final response.
 fn build_exit_result(
     exit_call: &ToolCall,
-    response: &CompletionResponse,
+    response: &ModelResponse,
     messages: &[ChatMessage],
     iteration: u32,
     total_usage: Option<TokenUsage>,
@@ -664,7 +664,7 @@ fn build_exit_result(
         .and_then(|v| v.as_str())
         .map(str::to_owned);
 
-    let final_response = CompletionResponse {
+    let final_response = ModelResponse {
         content: summary,
         tool_calls: vec![],
         reasoning: None,

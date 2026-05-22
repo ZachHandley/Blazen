@@ -7,7 +7,7 @@
 //! `Fiber.scheduler`) can wrap this call in a thread / fiber themselves.
 //!
 //! Cost lookup itself flows through the existing
-//! `BlazenCompletionResponse.usage.cost_usd` field which is computed from
+//! `BlazenModelResponse.usage.cost_usd` field which is computed from
 //! the global pricing registry — calling this function populates that
 //! registry with the latest catalog from blazen.dev.
 

@@ -16,8 +16,8 @@ import pytest
 from blazen import (
     BackgroundRemovalRequest,
     ChatMessage,
-    CompletionModel,
-    CompletionOptions,
+    Model,
+    ModelOptions,
     ComputeRequest,
     FalLlmEndpointKind,
     FalOptions,
@@ -71,10 +71,10 @@ async def _fal_or_skip(coro):
 @pytest.mark.asyncio
 async def test_fal_completion_openai_chat():
     """Default endpoint (OpenAiChat) with temperature, max_tokens, and response field checks."""
-    model = CompletionModel.fal(options=FalOptions(api_key=FAL_API_KEY)).with_retry(RetryConfig(max_retries=2))
+    model = Model.fal(options=FalOptions(api_key=FAL_API_KEY)).with_retry(RetryConfig(max_retries=2))
     response = await model.complete(
         [ChatMessage.user("What is 2+2? Reply with just the number.")],
-        CompletionOptions(temperature=0.1, max_tokens=10),
+        ModelOptions(temperature=0.1, max_tokens=10),
     )
     assert response.content is not None
     assert "4" in response.content
@@ -89,10 +89,10 @@ async def test_fal_completion_openai_chat():
 @pytest.mark.asyncio
 async def test_fal_basic_completion_enterprise():
     """Enterprise mode promotes OpenAiChat -> AnyLlm{enterprise:true}."""
-    model = CompletionModel.fal(options=FalOptions(api_key=FAL_API_KEY, enterprise=True)).with_retry(RetryConfig(max_retries=2))
+    model = Model.fal(options=FalOptions(api_key=FAL_API_KEY, enterprise=True)).with_retry(RetryConfig(max_retries=2))
     response = await model.complete(
         [ChatMessage.user("Say hello.")],
-        CompletionOptions(max_tokens=10),
+        ModelOptions(max_tokens=10),
     )
     assert response.content is not None
 
@@ -101,12 +101,12 @@ async def test_fal_basic_completion_enterprise():
 @pytest.mark.asyncio
 async def test_fal_responses_api_endpoint():
     """OpenAiResponses endpoint targets openrouter/router/openai/v1/responses."""
-    model = CompletionModel.fal(
+    model = Model.fal(
         options=FalOptions(api_key=FAL_API_KEY, endpoint=FalLlmEndpointKind.OpenAiResponses),
     ).with_retry(RetryConfig(max_retries=2))
     response = await model.complete(
         [ChatMessage.user("Say hi.")],
-        CompletionOptions(max_tokens=10),
+        ModelOptions(max_tokens=10),
     )
     assert response.content is not None
 
@@ -121,7 +121,7 @@ async def test_fal_responses_api_endpoint():
 async def test_fal_vision_auto_routes_when_anyllm_and_image_present():
     """When AnyLlm endpoint is configured and a message has an image part,
     the request should auto-route to fal-ai/any-llm/vision."""
-    model = CompletionModel.fal(
+    model = Model.fal(
         options=FalOptions(api_key=FAL_API_KEY, endpoint=FalLlmEndpointKind.AnyLlm),
     ).with_retry(RetryConfig(max_retries=2))
     msg = ChatMessage.user_image_url(
@@ -129,7 +129,7 @@ async def test_fal_vision_auto_routes_when_anyllm_and_image_present():
         url="https://blazen.dev/test-fixtures/transparency.png",
         media_type="image/png",
     )
-    response = await model.complete([msg], CompletionOptions(max_tokens=20))
+    response = await model.complete([msg], ModelOptions(max_tokens=20))
     assert response.content is not None
 
 
@@ -143,7 +143,7 @@ async def test_fal_audio_auto_routes_when_openrouter_and_audio_present():
     the error is specifically a fal file-download failure (which proves
     routing landed at the audio endpoint correctly).
     """
-    model = CompletionModel.fal(
+    model = Model.fal(
         options=FalOptions(api_key=FAL_API_KEY, endpoint=FalLlmEndpointKind.OpenRouter),
     )
     msg = ChatMessage.user_audio(
@@ -151,7 +151,7 @@ async def test_fal_audio_auto_routes_when_openrouter_and_audio_present():
         url="https://blazen.dev/test-fixtures/example.ogg",
     )
     try:
-        response = await model.complete([msg], CompletionOptions(max_tokens=30))
+        response = await model.complete([msg], ModelOptions(max_tokens=30))
         assert response.content is not None
     except Exception as e:
         err = str(e)
@@ -180,7 +180,7 @@ async def test_fal_video_auto_routes_when_openrouter_and_video_present():
     the error is specifically a fal file-download failure (which proves
     routing landed at the video endpoint correctly).
     """
-    model = CompletionModel.fal(
+    model = Model.fal(
         options=FalOptions(api_key=FAL_API_KEY, endpoint=FalLlmEndpointKind.OpenRouter),
     )
     msg = ChatMessage.user_video(
@@ -188,7 +188,7 @@ async def test_fal_video_auto_routes_when_openrouter_and_video_present():
         url="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
     )
     try:
-        response = await model.complete([msg], CompletionOptions(max_tokens=40))
+        response = await model.complete([msg], ModelOptions(max_tokens=40))
         assert response.content is not None
     except Exception as e:
         err = str(e)
@@ -211,11 +211,11 @@ async def test_fal_video_auto_routes_when_openrouter_and_video_present():
 @skip_without_key
 @pytest.mark.asyncio
 async def test_fal_streaming_yields_multiple_chunks():
-    model = CompletionModel.fal(options=FalOptions(api_key=FAL_API_KEY)).with_retry(RetryConfig(max_retries=2))
+    model = Model.fal(options=FalOptions(api_key=FAL_API_KEY)).with_retry(RetryConfig(max_retries=2))
     chunks = []
     async for chunk in model.stream(
         [ChatMessage.user("Count from 1 to 5, one number per line.")],
-        options=CompletionOptions(max_tokens=50),
+        options=ModelOptions(max_tokens=50),
     ):
         chunks.append(chunk)
     assert len(chunks) > 1, f"expected multiple chunks, got {len(chunks)}"

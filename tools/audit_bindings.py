@@ -126,7 +126,7 @@ WHITELIST: frozenset[str] = frozenset(
         "FastEmbedError",
         "WorkflowError",
         "SessionRefError",
-        "CompletionErrorKind",
+        "ModelErrorKind",
         "ComputeErrorKind",
         "MediaErrorKind",
         # --- Closure type aliases -- not bindable as standalone types ---
@@ -178,8 +178,8 @@ WHITELIST: frozenset[str] = frozenset(
         "MediaSource",
         "FetchHttpClient",
         "ReqwestHttpClient",
-        "TracingCompletionModel",
-        "CandleLlmCompletionModel",
+        "TracingModel",
+        "CandleLlmModel",
         "CandleEmbedModel",
         "FastEmbedResponse",
         "MetricsLayer",
@@ -318,7 +318,7 @@ WHITELIST: frozenset[str] = frozenset(
         # expose them as callback parameters on the `*ProviderDefaults` classes,
         # not as standalone bindable types.
         "BeforeRequestHook",
-        "BeforeCompletionRequestHook",
+        "BeforeModelRequestHook",
         "BeforeSpeechRequestHook",
         "BeforeMusicRequestHook",
         "BeforeImageRequestHook",
@@ -379,7 +379,7 @@ WASM_SKIP: frozenset[str] = frozenset(
         "CandleEmbedOptions",
         # --- Candle LLM ---
         "CandleLlmProvider",
-        "CandleLlmCompletionModel",
+        "CandleLlmModel",
         "CandleLlmOptions",
         "CandleLlmError",
         "CandleInferenceResult",
@@ -502,7 +502,7 @@ WASM_SKIP: frozenset[str] = frozenset(
         # `class BatchResult` on the WASM side because wasm-bindgen cannot
         # auto-derive a class with arbitrary nested `JsValue` payloads
         # (tool calls, per-call usage, citations, etc.). The Python and
-        # Node bindings use the umbrella `CompletionResponse` / a typed
+        # Node bindings use the umbrella `ModelResponse` / a typed
         # batch-result class instead.
         "AgentResult",
         "BatchResult",
@@ -530,8 +530,8 @@ WASM_SKIP: frozenset[str] = frozenset(
         "PricingEntry",
         # `StructuredResponse` carries a typed payload + the raw
         # completion. The WASM SDK exposes structured output via the
-        # `responseFormat` field on `CompletionRequest` and returns the
-        # parsed JSON inline on `CompletionResponse.content` -- a separate
+        # `responseFormat` field on `ModelRequest` and returns the
+        # parsed JSON inline on `ModelResponse.content` -- a separate
         # `StructuredResponse` class would duplicate state.
         "StructuredResponse",
         # --- blazen-prompts (template registry / file loader) ---
@@ -576,7 +576,7 @@ WHITELIST_REASONS: dict[str, str] = {
             "FastEmbedError",
             "WorkflowError",
             "SessionRefError",
-            "CompletionErrorKind",
+            "ModelErrorKind",
             "ComputeErrorKind",
             "MediaErrorKind",
         )
@@ -597,7 +597,7 @@ WHITELIST_REASONS: dict[str, str] = {
             "SubWorkflowInputMapper",
             "SubWorkflowOutputMapper",
             "BeforeRequestHook",
-            "BeforeCompletionRequestHook",
+            "BeforeModelRequestHook",
             "BeforeSpeechRequestHook",
             "BeforeMusicRequestHook",
             "BeforeImageRequestHook",
@@ -647,8 +647,8 @@ WHITELIST_REASONS: dict[str, str] = {
     "MediaSource": "type alias for ImageSource (already bound)",
     "FetchHttpClient": "wasm32-only HTTP client; native bindings use ReqwestHttpClient via PyHttpClient",
     "ReqwestHttpClient": "internal reqwest HTTP client; surfaced via PyHttpClient",
-    "TracingCompletionModel": "wrapper class -- surfaced via the wrap_with_tracing free fn",
-    "CandleLlmCompletionModel": "candle-llm trait-bridge wrapper -- exposed via PyCandleLlmProvider",
+    "TracingModel": "wrapper class -- surfaced via the wrap_with_tracing free fn",
+    "CandleLlmModel": "candle-llm trait-bridge wrapper -- exposed via PyCandleLlmProvider",
     "CandleEmbedModel": "candle-embed type bound as CandleEmbedProvider in node",
     "FastEmbedResponse": "internal -- exposed via PyEmbeddingResponse umbrella",
     "MetricsLayer": "tracing-subscriber Layer -- internal, surfaced via init_prometheus",

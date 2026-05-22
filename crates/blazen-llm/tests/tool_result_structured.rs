@@ -1,7 +1,7 @@
 //! Integration tests for the agent loop's handling of structured tool results.
 //!
 //! These tests drive [`blazen_llm::run_agent`] with a tiny in-memory
-//! [`MockCompletionModel`] that returns pre-canned responses on each turn. The
+//! [`MockModel`] that returns pre-canned responses on each turn. The
 //! goal is to verify that the agent loop preserves the full `ToolOutput`
 //! structure on `Role::Tool` messages (data + optional `llm_override`) instead
 //! of stringifying everything into `content`.
@@ -15,10 +15,10 @@ use futures_util::Stream;
 use serde_json::json;
 
 use blazen_llm::error::BlazenError;
-use blazen_llm::traits::{CompletionModel, Tool};
+use blazen_llm::traits::{Model, Tool};
 use blazen_llm::types::{
-    ChatMessage, CompletionRequest, CompletionResponse, LlmPayload, MessageContent, Role,
-    StreamChunk, ToolCall, ToolDefinition, ToolOutput,
+    ChatMessage, LlmPayload, MessageContent, ModelRequest, ModelResponse, Role, StreamChunk,
+    ToolCall, ToolDefinition, ToolOutput,
 };
 use blazen_llm::{AgentConfig, run_agent};
 
@@ -26,16 +26,16 @@ use blazen_llm::{AgentConfig, run_agent};
 // Mock completion model
 // ---------------------------------------------------------------------------
 
-/// A `CompletionModel` whose `complete` calls return successive pre-canned
+/// A `Model` whose `complete` calls return successive pre-canned
 /// responses from an internal queue. `stream` is not exercised by `run_agent`,
 /// so it returns an error if ever invoked.
-struct MockCompletionModel {
-    responses: Mutex<Vec<CompletionResponse>>,
+struct MockModel {
+    responses: Mutex<Vec<ModelResponse>>,
     cursor: Mutex<usize>,
 }
 
-impl MockCompletionModel {
-    fn new(responses: Vec<CompletionResponse>) -> Self {
+impl MockModel {
+    fn new(responses: Vec<ModelResponse>) -> Self {
         Self {
             responses: Mutex::new(responses),
             cursor: Mutex::new(0),
@@ -44,16 +44,13 @@ impl MockCompletionModel {
 }
 
 #[async_trait]
-impl CompletionModel for MockCompletionModel {
+impl Model for MockModel {
     #[allow(clippy::unnecessary_literal_bound)]
     fn model_id(&self) -> &str {
         "mock-model"
     }
 
-    async fn complete(
-        &self,
-        _request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, _request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         let mut idx = self.cursor.lock().unwrap();
         let responses = self.responses.lock().unwrap();
         let response = responses
@@ -66,7 +63,7 @@ impl CompletionModel for MockCompletionModel {
 
     async fn stream(
         &self,
-        _request: CompletionRequest,
+        _request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         Err(BlazenError::tool_error(
@@ -75,13 +72,13 @@ impl CompletionModel for MockCompletionModel {
     }
 }
 
-/// Build a [`CompletionResponse`] with only the fields the agent loop reads.
+/// Build a [`ModelResponse`] with only the fields the agent loop reads.
 fn make_response(
     content: Option<&str>,
     tool_calls: Vec<ToolCall>,
     finish_reason: Option<&str>,
-) -> CompletionResponse {
-    CompletionResponse {
+) -> ModelResponse {
+    ModelResponse {
         content: content.map(str::to_owned),
         tool_calls,
         reasoning: None,
@@ -148,7 +145,7 @@ impl Tool for CannedTool {
 
 /// Build the standard two-turn pre-canned sequence: turn 1 invokes `search`,
 /// turn 2 returns a final `"done"` message with `finish_reason: stop`.
-fn standard_responses() -> Vec<CompletionResponse> {
+fn standard_responses() -> Vec<ModelResponse> {
     vec![
         make_response(
             None,
@@ -177,7 +174,7 @@ fn find_tool_message(messages: &[ChatMessage]) -> &ChatMessage {
 
 #[tokio::test]
 async fn agent_loop_preserves_structured_data() {
-    let model = MockCompletionModel::new(standard_responses());
+    let model = MockModel::new(standard_responses());
     let tool = Arc::new(CannedTool::new(ToolOutput::new(
         json!({ "items": [1, 2, 3] }),
     ))) as Arc<dyn Tool>;
@@ -211,7 +208,7 @@ async fn agent_loop_preserves_structured_data() {
 
 #[tokio::test]
 async fn agent_loop_string_result_lives_in_content() {
-    let model = MockCompletionModel::new(standard_responses());
+    let model = MockModel::new(standard_responses());
     let tool = Arc::new(CannedTool::new(ToolOutput::new(json!("hello")))) as Arc<dyn Tool>;
 
     let result = run_agent(
@@ -233,7 +230,7 @@ async fn agent_loop_string_result_lives_in_content() {
 
 #[tokio::test]
 async fn agent_loop_preserves_llm_override() {
-    let model = MockCompletionModel::new(standard_responses());
+    let model = MockModel::new(standard_responses());
     let output = ToolOutput::with_override(
         json!({ "items": [1, 2, 3], "_debug": "..." }),
         LlmPayload::Text {

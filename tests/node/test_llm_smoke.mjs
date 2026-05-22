@@ -9,7 +9,7 @@ import test from "ava";
 
 import {
   Workflow,
-  CompletionModel,
+  Model,
   ChatMessage,
 } from "../../crates/blazen-node/index.js";
 
@@ -18,7 +18,7 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const T = OPENROUTER_API_KEY ? test : test.skip;
 
 T("OpenRouter LLM smoke tests · completes a basic prompt", async (t) => {
-  const model = CompletionModel.openrouter({ apiKey: OPENROUTER_API_KEY });
+  const model = Model.openrouter({ apiKey: OPENROUTER_API_KEY });
   const response = await model.complete([
     ChatMessage.user("What is 2+2? Reply with just the number."),
   ]);
@@ -32,7 +32,7 @@ T("OpenRouter LLM smoke tests · uses LLM inside a workflow step", async (t) => 
   const wf = new Workflow("llm-smoke");
 
   wf.addStep("ask", ["blazen::StartEvent"], async (event, ctx) => {
-    const model = CompletionModel.openrouter({ apiKey: OPENROUTER_API_KEY });
+    const model = Model.openrouter({ apiKey: OPENROUTER_API_KEY });
     const response = await model.completeWithOptions(
       [
         ChatMessage.system("You are a math tutor. Reply with just the number."),

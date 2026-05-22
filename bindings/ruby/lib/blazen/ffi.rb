@@ -284,7 +284,7 @@ module Blazen
                     [:pointer, :pointer, :pointer], :int32
     attach_function :blazen_future_take_image_gen_result,
                     [:pointer, :pointer, :pointer], :int32
-    attach_function :blazen_future_take_completion_response,
+    attach_function :blazen_future_take_model_response,
                     [:pointer, :pointer, :pointer], :int32
     attach_function :blazen_future_take_embedding_response,
                     [:pointer, :pointer, :pointer], :int32
@@ -414,15 +414,15 @@ module Blazen
     attach_function :blazen_image_gen_result_free,         [:pointer], :void
 
     # -------------------------------------------------------------------
-    # LLM — CompletionModel / EmbeddingModel
+    # LLM — Model / EmbeddingModel
     # -------------------------------------------------------------------
-    attach_function :blazen_completion_model_model_id, [:pointer], :pointer
-    attach_function :blazen_completion_model_complete_blocking,
+    attach_function :blazen_model_model_id, [:pointer], :pointer
+    attach_function :blazen_model_complete_blocking,
                     [:pointer, :pointer, :pointer, :pointer], :int32,
                     blocking: true
-    attach_function :blazen_completion_model_complete,
+    attach_function :blazen_model_complete,
                     [:pointer, :pointer], :pointer
-    attach_function :blazen_completion_model_free, [:pointer], :void
+    attach_function :blazen_model_free, [:pointer], :void
 
     attach_function :blazen_embedding_model_model_id,   [:pointer], :pointer
     attach_function :blazen_embedding_model_dimensions, [:pointer], :uint32
@@ -435,7 +435,7 @@ module Blazen
 
     # -------------------------------------------------------------------
     # LLM records — Media / ToolCall / Tool / TokenUsage / ChatMessage /
-    #               CompletionRequest / CompletionResponse / EmbeddingResponse
+    #               ModelRequest / ModelResponse / EmbeddingResponse
     # -------------------------------------------------------------------
     attach_function :blazen_media_new,
                     [:pointer, :pointer, :pointer], :pointer
@@ -483,39 +483,39 @@ module Blazen
     attach_function :blazen_chat_message_name,              [:pointer], :pointer
     attach_function :blazen_chat_message_free,              [:pointer], :void
 
-    attach_function :blazen_completion_request_new, [], :pointer
-    attach_function :blazen_completion_request_messages_push,
+    attach_function :blazen_model_request_new, [], :pointer
+    attach_function :blazen_model_request_messages_push,
                     [:pointer, :pointer], :void
-    attach_function :blazen_completion_request_tools_push,
+    attach_function :blazen_model_request_tools_push,
                     [:pointer, :pointer], :void
-    attach_function :blazen_completion_request_set_temperature,
+    attach_function :blazen_model_request_set_temperature,
                     [:pointer, :double], :void
-    attach_function :blazen_completion_request_clear_temperature,
+    attach_function :blazen_model_request_clear_temperature,
                     [:pointer], :void
-    attach_function :blazen_completion_request_set_max_tokens,
+    attach_function :blazen_model_request_set_max_tokens,
                     [:pointer, :uint32], :void
-    attach_function :blazen_completion_request_clear_max_tokens,
+    attach_function :blazen_model_request_clear_max_tokens,
                     [:pointer], :void
-    attach_function :blazen_completion_request_set_top_p,
+    attach_function :blazen_model_request_set_top_p,
                     [:pointer, :double], :void
-    attach_function :blazen_completion_request_clear_top_p,
+    attach_function :blazen_model_request_clear_top_p,
                     [:pointer], :void
-    attach_function :blazen_completion_request_set_model,
+    attach_function :blazen_model_request_set_model,
                     [:pointer, :pointer], :void
-    attach_function :blazen_completion_request_set_response_format_json,
+    attach_function :blazen_model_request_set_response_format_json,
                     [:pointer, :pointer], :void
-    attach_function :blazen_completion_request_set_system,
+    attach_function :blazen_model_request_set_system,
                     [:pointer, :pointer], :void
-    attach_function :blazen_completion_request_free, [:pointer], :void
+    attach_function :blazen_model_request_free, [:pointer], :void
 
-    attach_function :blazen_completion_response_content,          [:pointer], :pointer
-    attach_function :blazen_completion_response_finish_reason,    [:pointer], :pointer
-    attach_function :blazen_completion_response_model,            [:pointer], :pointer
-    attach_function :blazen_completion_response_tool_calls_count, [:pointer], :size_t
-    attach_function :blazen_completion_response_tool_calls_get,
+    attach_function :blazen_model_response_content,          [:pointer], :pointer
+    attach_function :blazen_model_response_finish_reason,    [:pointer], :pointer
+    attach_function :blazen_model_response_model,            [:pointer], :pointer
+    attach_function :blazen_model_response_tool_calls_count, [:pointer], :size_t
+    attach_function :blazen_model_response_tool_calls_get,
                     [:pointer, :size_t], :pointer
-    attach_function :blazen_completion_response_usage,            [:pointer], :pointer
-    attach_function :blazen_completion_response_free,             [:pointer], :void
+    attach_function :blazen_model_response_usage,            [:pointer], :pointer
+    attach_function :blazen_model_response_free,             [:pointer], :void
 
     attach_function :blazen_embedding_response_embeddings_count, [:pointer], :size_t
     attach_function :blazen_embedding_response_embedding_dim,
@@ -562,7 +562,7 @@ module Blazen
     attach_function :blazen_voice_handle_array_len,         [:pointer],           :size_t
     attach_function :blazen_voice_handle_array_take,        [:pointer, :size_t],  :pointer
     attach_function :blazen_voice_handle_array_free,        [:pointer],           :void
-    attach_function :blazen_completion_response_from_json,  [:pointer, :pointer], :pointer
+    attach_function :blazen_model_response_from_json,  [:pointer, :pointer], :pointer
     attach_function :blazen_embedding_response_from_json,   [:pointer, :pointer], :pointer
     attach_function :blazen_error_from_json,                [:pointer],           :pointer
 
@@ -579,55 +579,55 @@ module Blazen
     attach_function :blazen_voice_handle_free,              [:pointer], :void
 
     # -------------------------------------------------------------------
-    # CompletionModel provider factories
+    # Model provider factories
     # -------------------------------------------------------------------
-    attach_function :blazen_completion_model_new_openai,
+    attach_function :blazen_model_new_openai,
                     [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_anthropic,
+    attach_function :blazen_model_new_anthropic,
                     [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_gemini,
+    attach_function :blazen_model_new_gemini,
                     [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_openrouter,
+    attach_function :blazen_model_new_openrouter,
                     [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_groq,
+    attach_function :blazen_model_new_groq,
                     [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_together,
+    attach_function :blazen_model_new_together,
                     [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_mistral,
+    attach_function :blazen_model_new_mistral,
                     [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_deepseek,
+    attach_function :blazen_model_new_deepseek,
                     [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_fireworks,
+    attach_function :blazen_model_new_fireworks,
                     [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_perplexity,
+    attach_function :blazen_model_new_perplexity,
                     [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_xai,
+    attach_function :blazen_model_new_xai,
                     [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_cohere,
+    attach_function :blazen_model_new_cohere,
                     [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_azure,
+    attach_function :blazen_model_new_azure,
                     [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_bedrock,
+    attach_function :blazen_model_new_bedrock,
                     [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_fal,
+    attach_function :blazen_model_new_fal,
                     [:pointer, :pointer, :pointer, :bool, :bool, :pointer,
                      :pointer, :pointer],
                     :int32
-    attach_function :blazen_completion_model_new_openai_compat,
+    attach_function :blazen_model_new_openai_compat,
                     [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_ollama,
+    attach_function :blazen_model_new_ollama,
                     [:pointer, :uint16, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_lm_studio,
+    attach_function :blazen_model_new_lm_studio,
                     [:pointer, :uint16, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_custom_with_openai_protocol,
+    attach_function :blazen_model_new_custom_with_openai_protocol,
                     [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_completion_model_new_mistralrs,
+    attach_function :blazen_model_new_mistralrs,
                     [:pointer, :pointer, :pointer, :int32, :bool, :pointer, :pointer],
                     :int32
-    attach_function :blazen_completion_model_new_llamacpp,
+    attach_function :blazen_model_new_llamacpp,
                     [:pointer, :pointer, :pointer, :int32, :int32, :pointer, :pointer],
                     :int32
-    attach_function :blazen_completion_model_new_candle,
+    attach_function :blazen_model_new_candle,
                     [:pointer, :pointer, :pointer, :pointer, :int32, :pointer, :pointer],
                     :int32
 
@@ -696,7 +696,7 @@ module Blazen
     attach_function :blazen_base_provider_defaults_free, [:pointer], :void
 
     # -------------------------------------------------------------------
-    # CompletionProviderDefaults
+    # ProviderDefaults
     # -------------------------------------------------------------------
     attach_function :blazen_completion_provider_defaults_new, [], :pointer
     attach_function :blazen_completion_provider_defaults_set_system_prompt,
@@ -715,7 +715,7 @@ module Blazen
                     [:pointer, :pointer], :void
     attach_function :blazen_completion_provider_defaults_base,
                     [:pointer], :pointer
-    attach_function :blazen_completion_provider_defaults_has_before_completion,
+    attach_function :blazen_provider_defaults_has_before_model,
                     [:pointer], :bool
     attach_function :blazen_completion_provider_defaults_free, [:pointer], :void
 

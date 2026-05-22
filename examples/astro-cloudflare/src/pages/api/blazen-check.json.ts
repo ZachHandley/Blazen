@@ -1,7 +1,7 @@
 // Smoke test for the `blazen/workers` subpath entry on Cloudflare Workers.
 //
 // We import a representative spread across Blazen's surface area -- not just
-// CompletionModel. Blazen ships ~400 napi exports covering providers, models,
+// Model. Blazen ships ~400 napi exports covering providers, models,
 // embeddings, image gen, audio/video gen, background removal, workflows,
 // agents, document loaders, etc. The workers entry re-exports every one of
 // them, identical to `blazen`'s normal entry; the only difference is the
@@ -16,7 +16,7 @@
 //      init, so each export resolves to a real class constructor.
 import type { APIRoute } from "astro";
 import {
-  CompletionModel,
+  Model,
   EmbeddingModel,
   ImageModel,
   AnthropicProvider,
@@ -28,7 +28,7 @@ import {
 export const GET: APIRoute = () =>
   new Response(
     JSON.stringify({
-      CompletionModel: typeof CompletionModel,
+      Model: typeof Model,
       EmbeddingModel: typeof EmbeddingModel,
       ImageModel: typeof ImageModel,
       AnthropicProvider: typeof AnthropicProvider,

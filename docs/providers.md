@@ -4,7 +4,7 @@
 
 ## Architecture
 
-Every provider implements the `CompletionModel` trait (`complete()` + `stream()`) and optionally `ModelRegistry` (`list_models()` + `get_model()`) and `ProviderInfo` (`provider_name()`, `base_url()`, `capabilities()`).
+Every provider implements the `Model` trait (`complete()` + `stream()`) and optionally `ModelRegistry` (`list_models()` + `get_model()`) and `ProviderInfo` (`provider_name()`, `base_url()`, `capabilities()`).
 
 Providers fall into two categories:
 
@@ -184,7 +184,7 @@ sub-endpoint for the duration of that call. This is on by default;
 disable with `.with_auto_route_modality(false)`.
 
 ```rust
-use blazen_llm::{CompletionModel, CompletionRequest, ContentPart};
+use blazen_llm::{Model, ModelRequest, ContentPart};
 use blazen_llm::providers::fal::{FalProvider, FalLlmEndpoint};
 
 let model = FalProvider::new("fal-...")
@@ -412,7 +412,7 @@ In the WASM component, custom providers can be registered at runtime via `POST /
 
 ## Text-to-Speech providers
 
-Blazen exposes text-to-speech through the `OpenAiProvider` compute class (separate from `CompletionModel.openai()`, which is the chat completions entry point). Because `OpenAiProvider` speaks the stock `/v1/audio/speech` wire format, the **same class** works against real OpenAI and against any OpenAI-compatible TTS service — including a local [zvoice](https://github.com/zachhandley/zvoice) instance wrapping the [VoxCPM2](https://github.com/OpenBMB/VoxCPM2) model.
+Blazen exposes text-to-speech through the `OpenAiProvider` compute class (separate from `Model.openai()`, which is the chat completions entry point). Because `OpenAiProvider` speaks the stock `/v1/audio/speech` wire format, the **same class** works against real OpenAI and against any OpenAI-compatible TTS service — including a local [zvoice](https://github.com/zachhandley/zvoice) instance wrapping the [VoxCPM2](https://github.com/OpenBMB/VoxCPM2) model.
 
 Setting `api_key` to an empty string makes the provider omit the `Authorization` header entirely, which is required for most local services.
 
@@ -472,7 +472,7 @@ The same base-URL override pattern works with `OpenAiCompatProvider` for any oth
 
 Blazen's local in-process LLM backends (`mistral.rs`, `llama.cpp`, `candle`) load model weights into memory or VRAM on the current process. Unlike remote providers, these models are a finite resource — you only want one (or a few) loaded at once, and you want explicit control over when the GPU memory is freed.
 
-Every `CompletionModel` exposes four lifecycle methods:
+Every `Model` exposes four lifecycle methods:
 
 | Method | Returns | Behaviour |
 |---|---|---|
@@ -483,14 +483,14 @@ Every `CompletionModel` exposes four lifecycle methods:
 
 Inference methods (`complete`, `stream`) still auto-load the model on first call if you never called `load()` explicitly — the explicit calls are only there when you need deterministic timing or want to unload between runs.
 
-Today the Python and Node factories only expose `CompletionModel.mistralrs()`; `llama.cpp` and `candle` are Rust-only until their host-language factories land, but all three already implement the load/unload plumbing in Rust.
+Today the Python and Node factories only expose `Model.mistralrs()`; `llama.cpp` and `candle` are Rust-only until their host-language factories land, but all three already implement the load/unload plumbing in Rust.
 
 ### Python
 
 ```python
-from blazen import CompletionModel, MistralRsOptions, ChatMessage
+from blazen import Model, MistralRsOptions, ChatMessage
 
-model = CompletionModel.mistralrs(options=MistralRsOptions(
+model = Model.mistralrs(options=MistralRsOptions(
     model_id="mistralai/Mistral-7B-Instruct-v0.3",
 ))
 
@@ -506,7 +506,7 @@ await model.unload()
 assert not await model.is_loaded()
 
 # Remote providers raise NotImplementedError on load.
-openai = CompletionModel.openai()
+openai = Model.openai()
 try:
     await openai.load()
 except NotImplementedError:
@@ -516,9 +516,9 @@ except NotImplementedError:
 ### Node.js / TypeScript
 
 ```typescript
-import { CompletionModel } from "blazen";
+import { Model } from "blazen";
 
-const model = CompletionModel.mistralrs({
+const model = Model.mistralrs({
     modelId: "mistralai/Mistral-7B-Instruct-v0.3",
 });
 
@@ -531,7 +531,7 @@ await model.unload();
 console.log(await model.isLoaded()); // false
 
 // Remote providers throw on load.
-const openai = CompletionModel.openai({});
+const openai = Model.openai({});
 try {
     await openai.load();
 } catch (e) {
@@ -553,9 +553,9 @@ Notes:
 ### Python
 
 ```python
-from blazen import CompletionModel, ProviderOptions
+from blazen import Model, ProviderOptions
 
-model = CompletionModel.groq(options=ProviderOptions(api_key="gsk-..."))
+model = Model.groq(options=ProviderOptions(api_key="gsk-..."))
 # Or: .openai(), .anthropic(), .gemini(), .azure(), .fal(),
 #     .openrouter(), .together(), .mistral(), .deepseek(),
 #     .fireworks(), .perplexity(), .xai(), .cohere(), .bedrock()
@@ -573,10 +573,10 @@ response = await model.complete(
 For `fal.ai`, pass a `FalOptions` instead of loose kwargs:
 
 ```python
-from blazen import CompletionModel, FalOptions, FalLlmEndpoint, FalProvider
+from blazen import Model, FalOptions, FalLlmEndpoint, FalProvider
 
-# LLM completion model via CompletionModel.fal():
-model = CompletionModel.fal(
+# LLM completion model via Model.fal():
+model = Model.fal(
     options=FalOptions(
         api_key="fal-...",
         model="openai/gpt-4o",
@@ -607,9 +607,9 @@ await fal.upscale_image_creative(request)
 ### Node.js / TypeScript
 
 ```typescript
-import { CompletionModel } from 'blazen';
+import { Model } from 'blazen';
 
-const model = CompletionModel.groq({ apiKey: 'gsk-...' });
+const model = Model.groq({ apiKey: 'gsk-...' });
 
 const response = await model.completeWithOptions(
     [{ role: 'user', content: 'Hello' }],

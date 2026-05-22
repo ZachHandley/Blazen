@@ -1,5 +1,5 @@
 //! Bridge between [`blazen_llm_ollama::OllamaProvider`] and the Blazen
-//! [`CompletionModel`](crate::CompletionModel) +
+//! [`Model`](crate::Model) +
 //! [`LocalModel`](crate::LocalModel) traits.
 //!
 //! Ollama exposes its own request/response shapes (not OpenAI-compat),
@@ -20,10 +20,9 @@ use serde::Deserialize;
 use serde_json::Value;
 
 use crate::error::BlazenError;
-use crate::traits::CompletionModel;
+use crate::traits::Model;
 use crate::types::{
-    ChatMessage, CompletionRequest, CompletionResponse, RequestTiming, Role, StreamChunk,
-    TokenUsage,
+    ChatMessage, ModelRequest, ModelResponse, RequestTiming, Role, StreamChunk, TokenUsage,
 };
 
 // ---------------------------------------------------------------------------
@@ -82,13 +81,13 @@ fn message_to_value(msg: &ChatMessage) -> Value {
     })
 }
 
-/// Translate a Blazen `CompletionRequest` into an Ollama `/api/chat` body.
+/// Translate a Blazen `ModelRequest` into an Ollama `/api/chat` body.
 ///
 /// Sampling knobs map into the `options` sub-object Ollama uses for
 /// generation parameters (`temperature`, `top_p`, `num_predict` — the
 /// `max_tokens` analogue). Streaming is controlled by the caller (the
 /// proxy client forces the flag onto the body either way).
-fn build_body(default_model: &str, req: &CompletionRequest, stream: bool) -> Value {
+fn build_body(default_model: &str, req: &ModelRequest, stream: bool) -> Value {
     let model = req.model.as_deref().unwrap_or(default_model);
     let messages: Vec<Value> = req.messages.iter().map(message_to_value).collect();
     let mut body = serde_json::json!({
@@ -116,7 +115,7 @@ fn build_body(default_model: &str, req: &CompletionRequest, stream: bool) -> Val
     body
 }
 
-fn decode_response(value: Value) -> Result<CompletionResponse, BlazenError> {
+fn decode_response(value: Value) -> Result<ModelResponse, BlazenError> {
     let parsed: WireChatResponse = serde_json::from_value(value)
         .map_err(|e| BlazenError::provider("ollama", format!("decode response: {e}")))?;
     let content = parsed.message.map(|m| m.content);
@@ -126,7 +125,7 @@ fn decode_response(value: Value) -> Result<CompletionResponse, BlazenError> {
         total_tokens: parsed.prompt_eval_count.unwrap_or(0) + parsed.eval_count.unwrap_or(0),
         ..Default::default()
     };
-    Ok(CompletionResponse {
+    Ok(ModelResponse {
         content,
         tool_calls: Vec::new(),
         reasoning: None,
@@ -277,19 +276,16 @@ fn pop_line(buffer: &mut String) -> Option<String> {
 }
 
 // ---------------------------------------------------------------------------
-// CompletionModel
+// Model
 // ---------------------------------------------------------------------------
 
 #[async_trait]
-impl CompletionModel for OllamaProvider {
+impl Model for OllamaProvider {
     fn model_id(&self) -> &str {
         OllamaProvider::model_id(self)
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         let body = build_body(self.model_id(), &request, false);
         let value = self.chat(body).await.map_err(ollama_to_blazen)?;
         decode_response(value)
@@ -297,7 +293,7 @@ impl CompletionModel for OllamaProvider {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         let body = build_body(self.model_id(), &request, true);
@@ -397,8 +393,8 @@ mod tests {
     use super::*;
     use crate::types::{ChatMessage, MessageContent};
 
-    fn make_req(text: &str) -> CompletionRequest {
-        CompletionRequest {
+    fn make_req(text: &str) -> ModelRequest {
+        ModelRequest {
             messages: vec![ChatMessage {
                 role: Role::User,
                 content: MessageContent::Text(text.into()),

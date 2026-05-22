@@ -13,7 +13,7 @@ use blazen_llm::ResponseFormat;
 ///
 /// Example:
 ///     >>> rf = ResponseFormat.json_schema("Person", {"type": "object", ...})
-///     >>> options = CompletionOptions(response_format=rf.to_dict())
+///     >>> options = ModelOptions(response_format=rf.to_dict())
 #[gen_stub_pyclass]
 #[pyclass(name = "ResponseFormat", frozen, from_py_object)]
 #[derive(Clone)]
@@ -67,7 +67,7 @@ impl PyResponseFormat {
     }
 
     /// Serialize this response format to a JSON-compatible dict suitable for
-    /// passing to ``CompletionOptions.response_format``.
+    /// passing to ``ModelOptions.response_format``.
     #[gen_stub(override_return_type(type_repr = "dict[str, typing.Any]", imports = ("typing",)))]
     fn to_dict(&self, py: Python<'_>) -> PyResult<Py<PyAny>> {
         let value = serde_json::to_value(&self.inner)

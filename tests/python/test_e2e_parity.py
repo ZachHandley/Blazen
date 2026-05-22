@@ -5,7 +5,7 @@ cross-binding behavioral parity.
 
 Covers:
 - A 2-stage Pipeline built via PipelineBuilder.
-- A custom CompletionModel subclass (sync override of complete) that
+- A custom Model subclass (sync override of complete) that
   returns a deterministic response without touching the network.
 - A PromptTemplate rendered with the previous stage's output.
 - A Memory store backed by InMemoryBackend, written to and queried.
@@ -17,7 +17,7 @@ import pytest
 
 from blazen import (
     ChatMessage,
-    CompletionModel,
+    Model,
     Context,
     Event,
     InMemoryBackend,
@@ -37,7 +37,7 @@ from blazen import (
 
 
 # Deterministic mock provider used in stage 1.
-class HelloWorldLLM(CompletionModel):
+class HelloWorldLLM(Model):
     """A CustomProvider subclass that always returns 'Hello World'."""
 
     def __new__(cls):

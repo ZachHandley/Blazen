@@ -40,7 +40,7 @@ import dev.zorpx.blazen.uniffi.Event
 import dev.zorpx.blazen.uniffi.StepHandler
 import dev.zorpx.blazen.uniffi.StepOutput
 import dev.zorpx.blazen.uniffi.WorkflowBuilder
-import dev.zorpx.blazen.uniffi.newOpenaiCompletionModel
+import dev.zorpx.blazen.uniffi.newOpenaiModel
 ```
 
 Every example on the Kotlin docs uses the `dev.zorpx.blazen.uniffi.*` import path. When the wrapper layer is wired up later, both paths will coexist and the wrapper will re-export the same names — existing code that imports from `dev.zorpx.blazen.uniffi.*` will keep working.
@@ -145,7 +145,7 @@ class GreetHandler : StepHandler {
 
 ## Lifecycle and `close()`
 
-Every UniFFI handle (`WorkflowBuilder`, `Workflow`, `CompletionModel`, `Agent`, `Pipeline`, ...) implements `AutoCloseable`. Use Kotlin's `use { }` block or wrap construction in `try { ... } finally { it.close() }` to release the native handle deterministically:
+Every UniFFI handle (`WorkflowBuilder`, `Workflow`, `Model`, `Agent`, `Pipeline`, ...) implements `AutoCloseable`. Use Kotlin's `use { }` block or wrap construction in `try { ... } finally { it.close() }` to release the native handle deterministically:
 
 ```kotlin
 WorkflowBuilder("greeter").use { builder ->

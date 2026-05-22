@@ -13,17 +13,17 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyclass_enum, gen_stub_py
 use tokio::sync::Mutex;
 
 use crate::error::blazen_error_to_pyerr;
-use crate::providers::completion_model::{
-    LazyStreamState, PendingStream, PyCompletionOptions, PyLazyCompletionStream, build_request,
-};
 use crate::providers::config::PyRetryConfig;
+use crate::providers::model::{
+    LazyStreamState, PendingStream, PyLazyCompletionStream, PyModelOptions, build_request,
+};
 use crate::types::embedding::PyEmbeddingModel;
-use crate::types::{PyChatMessage, PyCompletionResponse, PyHttpClientHandle};
+use crate::types::{PyChatMessage, PyHttpClientHandle, PyModelResponse};
 use blazen_llm::ChatMessage;
 use blazen_llm::providers::openai_compat::{
     AuthMethod, OpenAiCompatConfig, OpenAiCompatEmbeddingModel, OpenAiCompatProvider,
 };
-use blazen_llm::traits::CompletionModel;
+use blazen_llm::traits::Model;
 
 // ---------------------------------------------------------------------------
 // PyAuthMethod
@@ -203,25 +203,25 @@ impl PyOpenAiCompatProvider {
 
     #[getter]
     fn model_id(&self) -> &str {
-        CompletionModel::model_id(self.inner.as_ref())
+        Model::model_id(self.inner.as_ref())
     }
 
-    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, CompletionResponse]", imports = ("typing",)))]
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ModelResponse]", imports = ("typing",)))]
     #[pyo3(signature = (messages, options=None))]
     fn complete<'py>(
         &self,
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
         let request = build_request(py, rust_messages, options.as_deref())?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let response = CompletionModel::complete(inner.as_ref(), request)
+            let response = Model::complete(inner.as_ref(), request)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            Ok(PyCompletionResponse { inner: response })
+            Ok(PyModelResponse { inner: response })
         })
     }
 
@@ -230,11 +230,11 @@ impl PyOpenAiCompatProvider {
         &self,
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyLazyCompletionStream>> {
         let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
         let request = build_request(py, rust_messages, options.as_deref())?;
-        let inner: Arc<dyn CompletionModel> = self.inner.clone();
+        let inner: Arc<dyn Model> = self.inner.clone();
         let stream = PyLazyCompletionStream {
             state: Arc::new(Mutex::new(LazyStreamState::NotStarted(Box::new(
                 PendingStream {
@@ -277,7 +277,7 @@ impl PyOpenAiCompatProvider {
         format!(
             "OpenAiCompatProvider(provider_name={:?}, model_id='{}')",
             self.config.provider_name,
-            CompletionModel::model_id(self.inner.as_ref())
+            Model::model_id(self.inner.as_ref())
         )
     }
 }

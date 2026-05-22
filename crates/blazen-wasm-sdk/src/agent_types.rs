@@ -25,7 +25,7 @@ use blazen_llm::types::{ToolCall, ToolDefinition};
 
 use crate::agent::blazen_error_to_jsvalue;
 use crate::chat_message::js_messages_to_vec;
-use crate::completion_model::WasmCompletionModel;
+use crate::model::WasmModel;
 
 // ---------------------------------------------------------------------------
 // WasmAgentConfig (Tsify)
@@ -392,7 +392,7 @@ fn parse_tools(tools: &JsValue) -> Result<Vec<Arc<dyn Tool>>, JsValue> {
 /// [`crate::agent::run_agent`].
 #[wasm_bindgen(js_name = "runAgentWithCallback")]
 pub fn run_agent_with_callback(
-    model: &WasmCompletionModel,
+    model: &WasmModel,
     messages: JsValue,
     tools: JsValue,
     options: JsValue,

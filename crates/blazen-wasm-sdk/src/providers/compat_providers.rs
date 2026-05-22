@@ -7,13 +7,13 @@ use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 
-use blazen_llm::traits::CompletionModel;
+use blazen_llm::traits::Model;
 
 use super::{
     apply_request_options, as_dyn_completion, complete_promise, fetch_client, resolve_key,
     stream_promise,
 };
-use crate::completion_model::WasmCompletionModel;
+use crate::model::WasmModel;
 
 fn read_string(obj: &JsValue, key: &str) -> Option<String> {
     if !obj.is_object() {
@@ -30,7 +30,7 @@ fn read_string(obj: &JsValue, key: &str) -> Option<String> {
 /// Each generated class exposes:
 /// - constructor `new(options?)` accepting `{ apiKey?, model? }`
 /// - `modelId` getter
-/// - `toCompletionModel()`
+/// - `toModel()`
 /// - `complete(messages)`, `completeWithOptions(messages, options)`,
 ///   `stream(messages, callback)`
 macro_rules! impl_compat_provider {
@@ -78,10 +78,10 @@ macro_rules! impl_compat_provider {
                 self.inner.model_id().to_owned()
             }
 
-            /// Convert into a generic [`CompletionModel`].
-            #[wasm_bindgen(js_name = "toCompletionModel")]
-            pub fn to_completion_model(&self) -> WasmCompletionModel {
-                WasmCompletionModel::from_arc(as_dyn_completion(Arc::clone(&self.inner)))
+            /// Convert into a generic [`Model`].
+            #[wasm_bindgen(js_name = "toModel")]
+            pub fn to_model(&self) -> WasmModel {
+                WasmModel::from_arc(as_dyn_completion(Arc::clone(&self.inner)))
             }
 
             /// Perform a non-streaming chat completion.
@@ -100,7 +100,7 @@ macro_rules! impl_compat_provider {
                 let model = as_dyn_completion(Arc::clone(&self.inner));
                 future_to_promise(async move {
                     let msgs = crate::chat_message::js_messages_to_vec(&messages)?;
-                    let request = blazen_llm::types::CompletionRequest::new(msgs);
+                    let request = blazen_llm::types::ModelRequest::new(msgs);
                     let request = apply_request_options(request, options)?;
                     let response = model
                         .complete(request)

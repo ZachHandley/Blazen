@@ -18,7 +18,7 @@ Usage:
 
 import asyncio
 
-from blazen import ChatMessage, CompletionModel, CompletionOptions, MistralRsOptions
+from blazen import ChatMessage, Model, ModelOptions, MistralRsOptions
 
 
 async def main() -> None:
@@ -28,7 +28,7 @@ async def main() -> None:
     # Uses a small GGUF-quantised model suitable for quick demos.
     # Replace with any HuggingFace model ID or local GGUF path.
     opts = MistralRsOptions("TheBloke/Mistral-7B-Instruct-v0.2-GGUF")
-    model = CompletionModel.mistralrs(options=opts)
+    model = Model.mistralrs(options=opts)
 
     print(f"Model ID: {model.model_id}")
     print()
@@ -59,7 +59,7 @@ async def main() -> None:
             ChatMessage.system("You are a creative storyteller."),
             ChatMessage.user("Tell me a very short story about a robot learning to cook."),
         ],
-        CompletionOptions(temperature=0.9, max_tokens=256),
+        ModelOptions(temperature=0.9, max_tokens=256),
     )
 
     print(f"Response: {response.content}")

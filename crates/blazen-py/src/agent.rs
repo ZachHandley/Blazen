@@ -20,8 +20,8 @@ use blazen_llm::error::BlazenError;
 use blazen_llm::traits::Tool;
 use blazen_llm::types::{ChatMessage, ToolDefinition};
 
-use crate::providers::PyCompletionModel;
-use crate::types::{PyChatMessage, PyCompletionResponse, PyToolCall, PyToolOutput};
+use crate::providers::PyModel;
+use crate::types::{PyChatMessage, PyModelResponse, PyToolCall, PyToolOutput};
 
 /// Convert a Python tool-handler return value into a Rust [`ToolOutput`].
 ///
@@ -250,8 +250,8 @@ pub struct PyAgentResult {
 impl PyAgentResult {
     /// The final completion response from the model.
     #[getter]
-    fn response(&self) -> PyCompletionResponse {
-        PyCompletionResponse {
+    fn response(&self) -> PyModelResponse {
+        PyModelResponse {
             inner: self.inner.response.clone(),
         }
     }
@@ -629,7 +629,7 @@ pub fn finish_workflow_tool(py: Python<'_>) -> PyResult<Py<PyToolDef>> {
 #[pyo3(signature = (model, messages, *, tools, config, callback))]
 pub fn run_agent_with_callback<'py>(
     py: Python<'py>,
-    model: Bound<'py, PyCompletionModel>,
+    model: Bound<'py, PyModel>,
     messages: Vec<PyRef<'py, PyChatMessage>>,
     tools: Vec<PyRef<'py, PyToolDef>>,
     config: PyRef<'py, PyAgentConfig>,
@@ -660,7 +660,7 @@ pub fn run_agent_with_callback<'py>(
         .collect();
 
     let rust_config = config.to_rust(rust_tools);
-    let inner_model = crate::providers::completion_model::arc_from_bound(&model);
+    let inner_model = crate::providers::model::arc_from_bound(&model);
     let cb = Arc::new(callback);
 
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
@@ -712,7 +712,7 @@ pub fn run_agent_with_callback<'py>(
 #[allow(clippy::too_many_arguments)]
 pub fn run_agent<'py>(
     py: Python<'py>,
-    model: Bound<'py, PyCompletionModel>,
+    model: Bound<'py, PyModel>,
     messages: Vec<PyRef<'py, PyChatMessage>>,
     tools: Vec<PyRef<'py, PyToolDef>>,
     max_iterations: u32,
@@ -764,7 +764,7 @@ pub fn run_agent<'py>(
         config = config.with_tool_concurrency(tool_concurrency);
     }
 
-    let inner_model = crate::providers::completion_model::arc_from_bound(&model);
+    let inner_model = crate::providers::model::arc_from_bound(&model);
 
     pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
         let result = rust_run_agent(inner_model.as_ref(), rust_messages, config)

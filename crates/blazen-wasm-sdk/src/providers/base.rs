@@ -23,33 +23,33 @@ use std::sync::Arc;
 use js_sys::{Array, Function};
 use wasm_bindgen::prelude::*;
 
-use blazen_llm::traits::CompletionModel;
-use blazen_llm::types::CompletionRequest;
+use blazen_llm::traits::Model;
+use blazen_llm::types::ModelRequest;
 
-use super::defaults::WasmCompletionProviderDefaults;
+use super::defaults::WasmProviderDefaults;
 
 /// Provider wrapper that carries instance-level
-/// [`WasmCompletionProviderDefaults`] applied to every completion call.
+/// [`WasmProviderDefaults`] applied to every completion call.
 ///
 /// JS does not construct this directly. Phase B exposes factories on
 /// `CustomProvider` (and other providers) that return a `BaseProvider`
 /// handle which the user then configures via the builder methods below.
 #[wasm_bindgen(js_name = "BaseProvider")]
 pub struct WasmBaseProvider {
-    defaults: Rc<RefCell<WasmCompletionProviderDefaults>>,
+    defaults: Rc<RefCell<WasmProviderDefaults>>,
     model_id: Rc<RefCell<String>>,
     provider_id: Rc<RefCell<String>>,
     /// Inner completion model. `None` when the wrapper is built bare (no
     /// associated provider), `Some` when a Phase B factory on
     /// `WasmCustomProvider` (or another provider) constructs the wrapper
     /// from a concrete provider. Drives [`WasmBaseProvider::extract`].
-    inner: Rc<RefCell<Option<Arc<dyn CompletionModel>>>>,
+    inner: Rc<RefCell<Option<Arc<dyn Model>>>>,
 }
 
 impl Default for WasmBaseProvider {
     fn default() -> Self {
         Self {
-            defaults: Rc::new(RefCell::new(WasmCompletionProviderDefaults::default())),
+            defaults: Rc::new(RefCell::new(WasmProviderDefaults::default())),
             model_id: Rc::new(RefCell::new(String::new())),
             provider_id: Rc::new(RefCell::new(String::new())),
             inner: Rc::new(RefCell::new(None)),
@@ -103,18 +103,18 @@ impl WasmBaseProvider {
         self
     }
 
-    /// Set the typed `before_completion` hook. Chainable.
-    #[wasm_bindgen(js_name = "withBeforeCompletion")]
+    /// Set the typed `before_model` hook. Chainable.
+    #[wasm_bindgen(js_name = "withBeforeModel")]
     #[must_use]
-    pub fn with_before_completion(self, hook: Function) -> WasmBaseProvider {
+    pub fn with_before_model(self, hook: Function) -> WasmBaseProvider {
         self.defaults.borrow().set_before_completion(Some(hook));
         self
     }
 
-    /// Replace the entire [`WasmCompletionProviderDefaults`]. Chainable.
+    /// Replace the entire [`WasmProviderDefaults`]. Chainable.
     #[wasm_bindgen(js_name = "withDefaults")]
     #[must_use]
-    pub fn with_defaults(self, d: WasmCompletionProviderDefaults) -> WasmBaseProvider {
+    pub fn with_defaults(self, d: WasmProviderDefaults) -> WasmBaseProvider {
         *self.defaults.borrow_mut() = d;
         self
     }
@@ -122,7 +122,7 @@ impl WasmBaseProvider {
     /// Inspect the configured defaults.
     #[wasm_bindgen(getter)]
     #[must_use]
-    pub fn defaults(&self) -> WasmCompletionProviderDefaults {
+    pub fn defaults(&self) -> WasmProviderDefaults {
         self.defaults.borrow().clone()
     }
 
@@ -167,7 +167,7 @@ impl WasmBaseProvider {
         // Mirror Phase 0's blanket StructuredOutput::extract: temperature
         // pinned to 0, schema fed into response_format directly. This is
         // the same envelope blazen_llm uses internally.
-        let mut request = CompletionRequest::new(msgs);
+        let mut request = ModelRequest::new(msgs);
         request.temperature = Some(0.0);
         request = request.with_response_format(schema_json);
 
@@ -193,7 +193,7 @@ impl WasmBaseProvider {
     #[must_use]
     #[allow(dead_code)] // Used by Phase B factories (CustomProvider.withDispatch, etc).
     pub(crate) fn new_internal(
-        defaults: WasmCompletionProviderDefaults,
+        defaults: WasmProviderDefaults,
         model_id: String,
         provider_id: String,
     ) -> Self {
@@ -210,10 +210,10 @@ impl WasmBaseProvider {
     /// `WasmBaseProvider` handle can power [`Self::extract`].
     #[must_use]
     pub(crate) fn new_with_inner(
-        defaults: WasmCompletionProviderDefaults,
+        defaults: WasmProviderDefaults,
         model_id: String,
         provider_id: String,
-        inner: Arc<dyn CompletionModel>,
+        inner: Arc<dyn Model>,
     ) -> Self {
         Self {
             defaults: Rc::new(RefCell::new(defaults)),
@@ -226,7 +226,7 @@ impl WasmBaseProvider {
     /// Crate-internal accessor returning the wrapped completion model,
     /// when one is configured.
     #[allow(dead_code)] // Used by Phase B WasmCustomProvider.
-    pub(crate) fn inner_completion_model(&self) -> Option<Arc<dyn CompletionModel>> {
+    pub(crate) fn inner_model(&self) -> Option<Arc<dyn Model>> {
         self.inner.borrow().clone()
     }
 }

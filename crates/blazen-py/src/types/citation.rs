@@ -22,7 +22,7 @@ pub struct PyCitation {
 #[pymethods]
 impl PyCitation {
     /// Construct a citation explicitly. Most users get these from
-    /// `CompletionResponse.citations` rather than building them.
+    /// `ModelResponse.citations` rather than building them.
     #[new]
     #[pyo3(signature = (
         *,

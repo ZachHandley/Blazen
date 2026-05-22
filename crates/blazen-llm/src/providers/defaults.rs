@@ -1,6 +1,6 @@
 //! Provider-defaults hierarchy. A `BaseProviderDefaults` carries universal
 //! fields applicable to ANY provider role (completion, embedding, compute,
-//! media). Role-specific subtypes (`CompletionProviderDefaults`, etc.)
+//! media). Role-specific subtypes (`ProviderDefaults`, etc.)
 //! compose `BaseProviderDefaults` and add role-specific fields.
 //!
 //! These are applied by `BaseProvider` (for completion) and by the trait
@@ -17,7 +17,7 @@ use crate::compute::requests::{
     TranscriptionRequest, UpscaleRequest, VideoRequest, VoiceCloneRequest,
 };
 use crate::error::BlazenError;
-use crate::types::{CompletionRequest, ToolDefinition};
+use crate::types::{ModelRequest, ToolDefinition};
 
 /// Universal before-request hook. Fires for ANY provider request — receives
 /// the Rust method name (e.g. `"complete"`, `"text_to_speech"`) and a
@@ -32,14 +32,13 @@ pub type BeforeRequestHook = Arc<
 /// Typed completion-side before-request hook. Fires AFTER the universal
 /// `before_request` hook on the base defaults, with a typed view of the
 /// completion request the caller can mutate.
-pub type BeforeCompletionRequestHook = Arc<
-    dyn Fn(&mut CompletionRequest) -> BoxFuture<'static, Result<(), BlazenError>> + Send + Sync,
->;
+pub type BeforeModelRequestHook =
+    Arc<dyn Fn(&mut ModelRequest) -> BoxFuture<'static, Result<(), BlazenError>> + Send + Sync>;
 
 /// Universal provider defaults applicable across every provider role.
 ///
 /// Carries cross-cutting fields like a JSON-level `before_request` hook.
-/// Role-specific defaults (`CompletionProviderDefaults` etc.) embed this
+/// Role-specific defaults (`ProviderDefaults` etc.) embed this
 /// struct as a `base` field.
 #[derive(Default, Clone)]
 pub struct BaseProviderDefaults {
@@ -88,27 +87,27 @@ impl BaseProviderDefaults {
 /// Completion-role defaults. System prompt, default tools, default
 /// `response_format`, plus a typed before-completion hook.
 #[derive(Default, Clone)]
-pub struct CompletionProviderDefaults {
+pub struct ProviderDefaults {
     pub base: BaseProviderDefaults,
     pub system_prompt: Option<String>,
     pub tools: Vec<ToolDefinition>,
     pub response_format: Option<serde_json::Value>,
-    pub before_completion: Option<BeforeCompletionRequestHook>,
+    pub before_model: Option<BeforeModelRequestHook>,
 }
 
-impl std::fmt::Debug for CompletionProviderDefaults {
+impl std::fmt::Debug for ProviderDefaults {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CompletionProviderDefaults")
+        f.debug_struct("ProviderDefaults")
             .field("base", &self.base)
             .field("system_prompt", &self.system_prompt.is_some())
             .field("tools_len", &self.tools.len())
             .field("has_response_format", &self.response_format.is_some())
-            .field("has_before_completion", &self.before_completion.is_some())
+            .field("has_before_model", &self.before_model.is_some())
             .finish()
     }
 }
 
-impl CompletionProviderDefaults {
+impl ProviderDefaults {
     #[must_use]
     pub fn new() -> Self {
         Self::default()
@@ -133,8 +132,8 @@ impl CompletionProviderDefaults {
     }
 
     #[must_use]
-    pub fn with_before_completion(mut self, hook: BeforeCompletionRequestHook) -> Self {
-        self.before_completion = Some(hook);
+    pub fn with_before_model(mut self, hook: BeforeModelRequestHook) -> Self {
+        self.before_model = Some(hook);
         self
     }
 
@@ -144,7 +143,7 @@ impl CompletionProviderDefaults {
         self
     }
 
-    /// Apply defaults to a `CompletionRequest`:
+    /// Apply defaults to a `ModelRequest`:
     ///
     /// 1. Run universal `before_request` hook (JSON view).
     /// 2. Prepend a system message if no system message is present and
@@ -152,15 +151,15 @@ impl CompletionProviderDefaults {
     /// 3. Append `tools` to the request's tool list (request additions win
     ///    on name collisions).
     /// 4. Set `response_format` if request has none.
-    /// 5. Run the typed `before_completion` hook.
+    /// 5. Run the typed `before_model` hook.
     ///
     /// # Errors
     ///
     /// Returns [`BlazenError::Serialization`] if the request cannot be
     /// round-tripped through `serde_json` for the universal hook (this
-    /// should never happen for a well-formed `CompletionRequest`), or
+    /// should never happen for a well-formed `ModelRequest`), or
     /// whatever error the user-supplied hooks return.
-    pub async fn apply(&self, req: &mut CompletionRequest) -> Result<(), BlazenError> {
+    pub async fn apply(&self, req: &mut ModelRequest) -> Result<(), BlazenError> {
         // 1. JSON-level universal hook.
         if self.base.before_request.is_some() {
             let mut json = serde_json::to_value(&*req)
@@ -192,7 +191,7 @@ impl CompletionProviderDefaults {
             req.response_format = Some(rf.clone());
         }
         // 5. Typed completion hook.
-        if let Some(hook) = &self.before_completion {
+        if let Some(hook) = &self.before_model {
             hook(req).await?;
         }
         Ok(())
@@ -345,18 +344,18 @@ mod tests {
     use crate::types::ChatMessage;
 
     #[tokio::test]
-    async fn completion_defaults_prepend_system_when_absent() {
-        let d = CompletionProviderDefaults::new().with_system_prompt("be terse");
-        let mut req = CompletionRequest::new(vec![ChatMessage::user("hi")]);
+    async fn provider_defaults_prepend_system_when_absent() {
+        let d = ProviderDefaults::new().with_system_prompt("be terse");
+        let mut req = ModelRequest::new(vec![ChatMessage::user("hi")]);
         d.apply(&mut req).await.unwrap();
         assert_eq!(req.messages.len(), 2);
         assert!(matches!(req.messages[0].role, crate::types::Role::System));
     }
 
     #[tokio::test]
-    async fn completion_defaults_skip_system_when_present() {
-        let d = CompletionProviderDefaults::new().with_system_prompt("ignored");
-        let mut req = CompletionRequest::new(vec![
+    async fn provider_defaults_skip_system_when_present() {
+        let d = ProviderDefaults::new().with_system_prompt("ignored");
+        let mut req = ModelRequest::new(vec![
             ChatMessage::system("existing"),
             ChatMessage::user("hi"),
         ]);
@@ -366,7 +365,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn completion_defaults_universal_hook_runs() {
+    async fn provider_defaults_universal_hook_runs() {
         use std::sync::atomic::{AtomicUsize, Ordering};
         let counter = Arc::new(AtomicUsize::new(0));
         let counter_clone = Arc::clone(&counter);
@@ -377,9 +376,9 @@ mod tests {
                 Ok(())
             })
         });
-        let d = CompletionProviderDefaults::new()
+        let d = ProviderDefaults::new()
             .with_base(BaseProviderDefaults::new().with_before_request(hook));
-        let mut req = CompletionRequest::new(vec![ChatMessage::user("hi")]);
+        let mut req = ModelRequest::new(vec![ChatMessage::user("hi")]);
         d.apply(&mut req).await.unwrap();
         assert_eq!(counter.load(Ordering::SeqCst), 1);
     }

@@ -35,7 +35,7 @@ public typealias ImageGenResult = UniFFIBlazen.ImageGenResult
 
 /// Factory namespace for non-LLM compute modalities (TTS, STT, image
 /// generation). Mirrors `Providers` but for the modalities that don't fit
-/// the `CompletionModel` / `EmbeddingModel` shape.
+/// the `Model` / `EmbeddingModel` shape.
 public enum Compute {
     /// Build a local Piper text-to-speech model. Available when the
     /// underlying native library was built with the `piper` feature.

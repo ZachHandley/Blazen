@@ -9,8 +9,8 @@
 //! overriding `apply(model, messages, options) -> response` (async). At
 //! `apply(model)` time the stack constructs a Rust adapter that, on
 //! every `complete()` call, dispatches into the Python subclass with
-//! the inner model wrapped as a `CompletionModel` and the incoming
-//! request reified as a list of `ChatMessage` and a `CompletionOptions`.
+//! the inner model wrapped as a `Model` and the incoming
+//! request reified as a list of `ChatMessage` and a `ModelOptions`.
 
 use std::pin::Pin;
 use std::sync::{Arc, Mutex as StdMutex};
@@ -21,22 +21,17 @@ use pyo3_async_runtimes::TaskLocals;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use tokio_stream::Stream;
 
-use blazen_llm::cache::{CacheConfig, CachedCompletionModel};
+use blazen_llm::cache::{CacheConfig, CachedModel};
 use blazen_llm::middleware::{
     CacheMiddleware as RsCacheMiddleware, Middleware as RsMiddleware,
     RetryMiddleware as RsRetryMiddleware,
 };
-use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
-use blazen_llm::{
-    BlazenError, CompletionModel, CompletionRequest, CompletionResponse, ProviderConfig,
-    StreamChunk,
-};
+use blazen_llm::retry::{RetryConfig, RetryModel};
+use blazen_llm::{BlazenError, Model, ModelRequest, ModelResponse, ProviderConfig, StreamChunk};
 
-use crate::providers::completion_model::{
-    PyCompletionModel, arc_from_bound, build_py_options_from_request_helper,
-};
 use crate::providers::config::{PyCacheConfig, PyRetryConfig};
-use crate::types::{PyChatMessage, PyCompletionResponse};
+use crate::providers::model::{PyModel, arc_from_bound, build_py_options_from_request_helper};
+use crate::types::{PyChatMessage, PyModelResponse};
 
 // ---------------------------------------------------------------------------
 // Trait object enum: lets us hold heterogeneous middlewares in a Vec.
@@ -58,10 +53,10 @@ impl LayerKind {
     ///
     /// Takes a `Python<'_>` token because the `Custom` variant must
     /// clone its `Py<PyAny>` reference, which requires the GIL.
-    fn wrap(&self, py: Python<'_>, inner: Arc<dyn CompletionModel>) -> Arc<dyn CompletionModel> {
+    fn wrap(&self, py: Python<'_>, inner: Arc<dyn Model>) -> Arc<dyn Model> {
         match self {
-            Self::Retry(cfg) => Arc::new(RetryCompletionModel::from_arc(inner, cfg.clone())),
-            Self::Cache(cfg) => Arc::new(CachedCompletionModel::from_arc(inner, cfg.clone())),
+            Self::Retry(cfg) => Arc::new(RetryModel::from_arc(inner, cfg.clone())),
+            Self::Cache(cfg) => Arc::new(CachedModel::from_arc(inner, cfg.clone())),
             Self::Custom(py_obj) => Arc::new(PyMiddlewareAdapter::new(py_obj.clone_ref(py), inner)),
         }
     }
@@ -74,8 +69,8 @@ impl LayerKind {
 /// Abstract base class for Python-implemented LLM middleware.
 ///
 /// Subclass and override `apply(model, messages, options)` (async) to
-/// add custom behaviour around a `CompletionModel`. The `model`
-/// argument is the inner `CompletionModel` produced by the rest of the
+/// add custom behaviour around a `Model`. The `model`
+/// argument is the inner `Model` produced by the rest of the
 /// middleware chain; call `await model.complete(messages, options)` to
 /// forward the request, optionally inspecting or modifying the result
 /// before returning it.
@@ -89,7 +84,7 @@ impl LayerKind {
 ///     ...         return response
 ///     >>>
 ///     >>> stack = MiddlewareStack().layer(LoggingMiddleware())
-///     >>> wrapped = stack.apply(CompletionModel.openai())
+///     >>> wrapped = stack.apply(Model.openai())
 #[gen_stub_pyclass]
 #[pyclass(name = "Middleware", subclass)]
 #[derive(Default)]
@@ -109,13 +104,13 @@ impl PyMiddleware {
     /// raises `NotImplementedError`.
     ///
     /// Args:
-    ///     model: The inner `CompletionModel` to forward to.
+    ///     model: The inner `Model` to forward to.
     ///     messages: The list of `ChatMessage` objects from the request.
-    ///     options: Optional `CompletionOptions` (sampling parameters,
+    ///     options: Optional `ModelOptions` (sampling parameters,
     ///         tools, response format).
     ///
     /// Returns:
-    ///     A `CompletionResponse`.
+    ///     A `ModelResponse`.
     #[pyo3(signature = (model, messages, options=None))]
     #[allow(unused_variables)]
     fn apply<'py>(
@@ -132,48 +127,45 @@ impl PyMiddleware {
 }
 
 // ---------------------------------------------------------------------------
-// Adapter: bridges a Python Middleware subclass into a CompletionModel.
+// Adapter: bridges a Python Middleware subclass into a Model.
 // ---------------------------------------------------------------------------
 
 /// Wraps a Python `Middleware` subclass instance and the inner
-/// `CompletionModel` so the resulting object satisfies `CompletionModel`.
+/// `Model` so the resulting object satisfies `Model`.
 ///
 /// On every `complete()` call the adapter:
-///   1. Wraps the inner `Arc<dyn CompletionModel>` as a `PyCompletionModel`.
-///   2. Reifies the request into Python `ChatMessage` / `CompletionOptions`.
+///   1. Wraps the inner `Arc<dyn Model>` as a `PyModel`.
+///   2. Reifies the request into Python `ChatMessage` / `ModelOptions`.
 ///   3. Calls `subclass.apply(model, messages, options)`.
 ///   4. Awaits the returned coroutine on the Python event loop.
-///   5. Decodes the resulting `CompletionResponse`.
+///   5. Decodes the resulting `ModelResponse`.
 ///
 /// `stream()` and `provider_config()` always pass through to the inner
 /// model -- Python middleware can only intercept `complete()`.
 struct PyMiddlewareAdapter {
     py_obj: Py<PyAny>,
-    inner: Arc<dyn CompletionModel>,
+    inner: Arc<dyn Model>,
 }
 
 impl PyMiddlewareAdapter {
-    fn new(py_obj: Py<PyAny>, inner: Arc<dyn CompletionModel>) -> Self {
+    fn new(py_obj: Py<PyAny>, inner: Arc<dyn Model>) -> Self {
         Self { py_obj, inner }
     }
 }
 
 #[async_trait]
-impl CompletionModel for PyMiddlewareAdapter {
+impl Model for PyMiddlewareAdapter {
     fn model_id(&self) -> &str {
         self.inner.model_id()
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         // Phase 1: under the GIL, wrap inputs and invoke `apply`.
         let (fut, locals) = tokio::task::block_in_place(|| {
             Python::attach(|py| -> PyResult<(_, TaskLocals)> {
                 let model_py = Py::new(
                     py,
-                    PyCompletionModel {
+                    PyModel {
                         inner: Some(self.inner.clone()),
                         local_model: None,
                         config: None,
@@ -220,16 +212,16 @@ impl CompletionModel for PyMiddlewareAdapter {
                 BlazenError::provider("middleware", format!("Middleware.apply() raised: {e}"))
             })?;
 
-        // Phase 3: decode result back into CompletionResponse.
+        // Phase 3: decode result back into ModelResponse.
         tokio::task::block_in_place(|| {
-            Python::attach(|py| -> PyResult<CompletionResponse> {
+            Python::attach(|py| -> PyResult<ModelResponse> {
                 let bound = py_result.bind(py);
-                if let Ok(resp) = bound.extract::<PyRef<'_, PyCompletionResponse>>() {
+                if let Ok(resp) = bound.extract::<PyRef<'_, PyModelResponse>>() {
                     return Ok(resp.inner.clone());
                 }
-                let response: CompletionResponse = pythonize::depythonize(bound).map_err(|e| {
+                let response: ModelResponse = pythonize::depythonize(bound).map_err(|e| {
                     pyo3::exceptions::PyValueError::new_err(format!(
-                        "Middleware.apply() must return CompletionResponse or a compatible dict: {e}"
+                        "Middleware.apply() must return ModelResponse or a compatible dict: {e}"
                     ))
                 })?;
                 Ok(response)
@@ -245,7 +237,7 @@ impl CompletionModel for PyMiddlewareAdapter {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         // Streaming bypasses Python middleware -- the inner model handles it.
@@ -261,7 +253,7 @@ impl CompletionModel for PyMiddlewareAdapter {
 // PyRetryMiddleware -- concrete Rust RetryMiddleware wrapper.
 // ---------------------------------------------------------------------------
 
-/// Middleware that wraps a model with `RetryCompletionModel`.
+/// Middleware that wraps a model with `RetryModel`.
 ///
 /// This is the standalone Python-facing equivalent of
 /// `blazen_llm::middleware::RetryMiddleware`.
@@ -287,15 +279,15 @@ impl PyRetryMiddleware {
         }
     }
 
-    /// Apply this middleware directly to a `CompletionModel`, returning
-    /// a new `CompletionModel` with retry behaviour.
-    fn wrap(&self, model: Bound<'_, PyCompletionModel>) -> PyCompletionModel {
+    /// Apply this middleware directly to a `Model`, returning
+    /// a new `Model` with retry behaviour.
+    fn wrap(&self, model: Bound<'_, PyModel>) -> PyModel {
         let local_model = model.borrow().local_model.clone();
         let inner = arc_from_bound(&model);
         let mw = RsRetryMiddleware {
             config: self.config.clone(),
         };
-        PyCompletionModel {
+        PyModel {
             inner: Some(mw.wrap(inner)),
             local_model,
             config: None,
@@ -314,7 +306,7 @@ impl PyRetryMiddleware {
 // PyCacheMiddleware -- concrete Rust CacheMiddleware wrapper.
 // ---------------------------------------------------------------------------
 
-/// Middleware that wraps a model with `CachedCompletionModel`.
+/// Middleware that wraps a model with `CachedModel`.
 ///
 /// This is the standalone Python-facing equivalent of
 /// `blazen_llm::middleware::CacheMiddleware`.
@@ -341,15 +333,15 @@ impl PyCacheMiddleware {
         }
     }
 
-    /// Apply this middleware directly to a `CompletionModel`, returning
-    /// a new `CompletionModel` with caching behaviour.
-    fn wrap(&self, model: Bound<'_, PyCompletionModel>) -> PyCompletionModel {
+    /// Apply this middleware directly to a `Model`, returning
+    /// a new `Model` with caching behaviour.
+    fn wrap(&self, model: Bound<'_, PyModel>) -> PyModel {
         let local_model = model.borrow().local_model.clone();
         let inner = arc_from_bound(&model);
         let mw = RsCacheMiddleware {
             config: self.config.clone(),
         };
-        PyCompletionModel {
+        PyModel {
             inner: Some(mw.wrap(inner)),
             local_model,
             config: None,
@@ -373,14 +365,14 @@ impl PyCacheMiddleware {
 /// Layers are added with `layer()` (or the convenience helpers
 /// `with_retry()` / `with_cache()`); the first layer added becomes the
 /// outermost wrapper at `apply_to()` time. Calling `apply_to(model)`
-/// returns a new `CompletionModel` that runs every layer around the
+/// returns a new `Model` that runs every layer around the
 /// supplied model.
 ///
 /// Example:
 ///     >>> stack = (MiddlewareStack()
 ///     ...     .with_retry(RetryConfig(max_retries=5))
 ///     ...     .with_cache(CacheConfig(ttl_seconds=600)))
-///     >>> wrapped = stack.apply(CompletionModel.openai())
+///     >>> wrapped = stack.apply(Model.openai())
 #[gen_stub_pyclass]
 #[pyclass(name = "MiddlewareStack")]
 pub struct PyMiddlewareStack {
@@ -468,18 +460,14 @@ impl PyMiddlewareStack {
     }
 
     /// Apply every registered layer to `model` and return the fully
-    /// wrapped `CompletionModel`.
+    /// wrapped `Model`.
     ///
     /// The first layer added becomes the outermost wrapper. Layers are
     /// applied in reverse insertion order so that the first layer added
     /// runs first on the request path.
-    fn apply<'py>(
-        &self,
-        py: Python<'py>,
-        model: Bound<'py, PyCompletionModel>,
-    ) -> PyResult<PyCompletionModel> {
+    fn apply<'py>(&self, py: Python<'py>, model: Bound<'py, PyModel>) -> PyResult<PyModel> {
         let local_model = model.borrow().local_model.clone();
-        let mut wrapped: Arc<dyn CompletionModel> = arc_from_bound(&model);
+        let mut wrapped: Arc<dyn Model> = arc_from_bound(&model);
         let layers = self
             .layers
             .lock()
@@ -489,7 +477,7 @@ impl PyMiddlewareStack {
         for layer in layers.iter().rev() {
             wrapped = layer.wrap(py, wrapped);
         }
-        Ok(PyCompletionModel {
+        Ok(PyModel {
             inner: Some(wrapped),
             local_model,
             config: None,

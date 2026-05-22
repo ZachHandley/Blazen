@@ -1,7 +1,7 @@
 //! Batch completion surface for the UniFFI bindings.
 //!
 //! Thin wrapper around upstream [`blazen_llm::batch::complete_batch`], which
-//! runs N [`CompletionRequest`]s through a single [`CompletionModel`] with
+//! runs N [`ModelRequest`]s through a single [`Model`] with
 //! bounded concurrency and aggregates usage / cost across the successful
 //! responses.
 //!
@@ -11,7 +11,7 @@
 //! requests may fail without short-circuiting the rest of the batch — each
 //! slot in [`BatchResult::responses`] is a [`BatchItem::Success`] or
 //! [`BatchItem::Failure`] independent of its siblings. This matches the
-//! upstream contract (`Vec<Result<CompletionResponse, _>>` with per-slot
+//! upstream contract (`Vec<Result<ModelResponse, _>>` with per-slot
 //! errors).
 //!
 //! ## Reused upstream API
@@ -26,10 +26,10 @@ use blazen_llm::batch::{
     BatchConfig as CoreBatchConfig, BatchResult as CoreBatchResult,
     complete_batch as core_complete_batch,
 };
-use blazen_llm::types::CompletionRequest as CoreCompletionRequest;
+use blazen_llm::types::ModelRequest as CoreModelRequest;
 
 use crate::errors::{BlazenError, BlazenResult};
-use crate::llm::{CompletionModel, CompletionRequest, CompletionResponse, TokenUsage};
+use crate::llm::{Model, ModelRequest, ModelResponse, TokenUsage};
 use crate::runtime::runtime;
 
 // ---------------------------------------------------------------------------
@@ -39,7 +39,7 @@ use crate::runtime::runtime;
 /// Per-request outcome within a [`BatchResult`].
 ///
 /// Slot `i` of [`BatchResult::responses`] corresponds to input request `i`.
-/// Successful slots carry the [`CompletionResponse`]; failed slots carry an
+/// Successful slots carry the [`ModelResponse`]; failed slots carry an
 /// `error_message` only (the structured `BlazenError` variant doesn't survive
 /// nesting inside a `uniffi::Enum` cleanly across all four target languages,
 /// so the message is flattened to a string here — foreign callers wanting
@@ -47,7 +47,7 @@ use crate::runtime::runtime;
 #[derive(Debug, Clone, uniffi::Enum)]
 pub enum BatchItem {
     /// The request completed and the model returned a response.
-    Success { response: CompletionResponse },
+    Success { response: ModelResponse },
     /// The request failed. The message mirrors the `Display` form of the
     /// underlying [`BlazenError`].
     Failure { error_message: String },
@@ -95,8 +95,8 @@ pub struct BatchResult {
 /// `response_format_json` payload).
 #[uniffi::export(async_runtime = "tokio")]
 pub async fn complete_batch(
-    model: Arc<CompletionModel>,
-    requests: Vec<CompletionRequest>,
+    model: Arc<Model>,
+    requests: Vec<ModelRequest>,
     max_concurrency: u32,
 ) -> BlazenResult<BatchResult> {
     let core_requests = build_core_requests(requests)?;
@@ -113,8 +113,8 @@ pub async fn complete_batch(
 /// Same as [`complete_batch`].
 #[uniffi::export]
 pub fn complete_batch_blocking(
-    model: Arc<CompletionModel>,
-    requests: Vec<CompletionRequest>,
+    model: Arc<Model>,
+    requests: Vec<ModelRequest>,
     max_concurrency: u32,
 ) -> BlazenResult<BatchResult> {
     runtime().block_on(async move { complete_batch(model, requests, max_concurrency).await })
@@ -124,16 +124,14 @@ pub fn complete_batch_blocking(
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Convert wire [`CompletionRequest`]s into upstream [`CoreCompletionRequest`]s.
+/// Convert wire [`ModelRequest`]s into upstream [`CoreModelRequest`]s.
 ///
 /// Errors out as soon as any request fails to convert — a malformed request
 /// in the middle of a batch usually means the entire batch is misconfigured.
-fn build_core_requests(
-    requests: Vec<CompletionRequest>,
-) -> BlazenResult<Vec<CoreCompletionRequest>> {
+fn build_core_requests(requests: Vec<ModelRequest>) -> BlazenResult<Vec<CoreModelRequest>> {
     requests
         .into_iter()
-        .map(CoreCompletionRequest::try_from)
+        .map(CoreModelRequest::try_from)
         .collect()
 }
 
@@ -144,7 +142,7 @@ fn batch_result_from_core(core: CoreBatchResult) -> BatchResult {
         .into_iter()
         .map(|slot| match slot {
             Ok(resp) => BatchItem::Success {
-                response: CompletionResponse::from(resp),
+                response: ModelResponse::from(resp),
             },
             Err(err) => BatchItem::Failure {
                 error_message: BlazenError::from(err).to_string(),

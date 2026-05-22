@@ -7,19 +7,19 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use tokio::sync::Mutex;
 
 use crate::error::blazen_error_to_pyerr;
-use crate::providers::completion_model::{
-    LazyStreamState, PendingStream, PyCompletionOptions, PyLazyCompletionStream, build_request,
-};
 use crate::providers::config::PyRetryConfig;
+use crate::providers::model::{
+    LazyStreamState, PendingStream, PyLazyCompletionStream, PyModelOptions, build_request,
+};
 use crate::providers::options::PyProviderOptions;
-use crate::types::{PyChatMessage, PyCompletionResponse, PyHttpClientHandle};
+use crate::types::{PyChatMessage, PyHttpClientHandle, PyModelResponse};
 use blazen_llm::ChatMessage;
 use blazen_llm::providers::openrouter::OpenRouterProvider;
-use blazen_llm::traits::CompletionModel;
+use blazen_llm::traits::Model;
 
 /// An OpenRouter provider — gives unified access to 400+ models.
 ///
-/// Standalone class form of `CompletionModel.openrouter(...)`.
+/// Standalone class form of `Model.openrouter(...)`.
 #[gen_stub_pyclass]
 #[pyclass(name = "OpenRouterProvider", from_py_object)]
 #[derive(Clone)]
@@ -42,25 +42,25 @@ impl PyOpenRouterProvider {
 
     #[getter]
     fn model_id(&self) -> &str {
-        CompletionModel::model_id(self.inner.as_ref())
+        Model::model_id(self.inner.as_ref())
     }
 
-    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, CompletionResponse]", imports = ("typing",)))]
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ModelResponse]", imports = ("typing",)))]
     #[pyo3(signature = (messages, options=None))]
     fn complete<'py>(
         &self,
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
         let request = build_request(py, rust_messages, options.as_deref())?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let response = CompletionModel::complete(inner.as_ref(), request)
+            let response = Model::complete(inner.as_ref(), request)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            Ok(PyCompletionResponse { inner: response })
+            Ok(PyModelResponse { inner: response })
         })
     }
 
@@ -69,11 +69,11 @@ impl PyOpenRouterProvider {
         &self,
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyLazyCompletionStream>> {
         let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
         let request = build_request(py, rust_messages, options.as_deref())?;
-        let inner: Arc<dyn CompletionModel> = self.inner.clone();
+        let inner: Arc<dyn Model> = self.inner.clone();
         let stream = PyLazyCompletionStream {
             state: Arc::new(Mutex::new(LazyStreamState::NotStarted(Box::new(
                 PendingStream {
@@ -103,7 +103,7 @@ impl PyOpenRouterProvider {
     fn __repr__(&self) -> String {
         format!(
             "OpenRouterProvider(model_id='{}')",
-            CompletionModel::model_id(self.inner.as_ref())
+            Model::model_id(self.inner.as_ref())
         )
     }
 }

@@ -12,10 +12,8 @@ use super::openai_compat::{AuthMethod, OpenAiCompatConfig, OpenAiCompatProvider}
 use crate::error::BlazenError;
 use crate::http::HttpClient;
 use crate::retry::RetryConfig;
-use crate::traits::{
-    CompletionModel, ModelInfo, ModelRegistry, ProviderCapabilities, ProviderInfo,
-};
-use crate::types::{CompletionRequest, CompletionResponse, StreamChunk};
+use crate::traits::{Model, ModelInfo, ModelRegistry, ProviderCapabilities, ProviderInfo};
+use crate::types::{ModelRequest, ModelResponse, StreamChunk};
 
 // ---------------------------------------------------------------------------
 // Provider
@@ -173,11 +171,11 @@ impl BedrockProvider {
 }
 
 // ---------------------------------------------------------------------------
-// CompletionModel implementation
+// Model implementation
 // ---------------------------------------------------------------------------
 
 #[async_trait]
-impl CompletionModel for BedrockProvider {
+impl Model for BedrockProvider {
     fn model_id(&self) -> &str {
         self.inner.model_id()
     }
@@ -190,16 +188,13 @@ impl CompletionModel for BedrockProvider {
         Some(Self::http_client(self))
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         self.inner.complete(request).await
     }
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         self.inner.stream(request).await

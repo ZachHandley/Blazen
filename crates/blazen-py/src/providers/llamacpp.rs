@@ -3,7 +3,7 @@
 //! Exposes [`LlamaCppProvider`](blazen_llm::LlamaCppProvider) to Python with
 //! ``complete``, ``stream``, and load/unload control. For the unified
 //! provider-agnostic factory, see
-//! :meth:`CompletionModel.llamacpp <crate::providers::completion_model::PyCompletionModel>`
+//! :meth:`Model.llamacpp <crate::providers::model::PyModel>`
 //! (when wired up); this class is the typed standalone wrapper.
 
 use std::sync::Arc;
@@ -14,12 +14,12 @@ use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 
 use crate::error::LlamaCppError;
-use crate::providers::completion_model::{PyCompletionOptions, build_request};
+use crate::providers::model::{PyModelOptions, build_request};
 use crate::providers::options::PyLlamaCppOptions;
-use crate::types::{PyChatMessage, PyCompletionResponse};
+use crate::types::{PyChatMessage, PyModelResponse};
 use blazen_llm::ChatMessage;
 use blazen_llm::LlamaCppProvider;
-use blazen_llm::traits::{CompletionModel, LocalModel};
+use blazen_llm::traits::{LocalModel, Model};
 use blazen_llm::{
     LlamaCppChatMessageInput, LlamaCppChatRole, LlamaCppInferenceChunk,
     LlamaCppInferenceChunkStream, LlamaCppInferenceResult, LlamaCppInferenceUsage,
@@ -69,25 +69,25 @@ impl PyLlamaCppProvider {
     /// Get the model identifier (typically the GGUF path or HF model id).
     #[getter]
     fn model_id(&self) -> String {
-        CompletionModel::model_id(self.inner.as_ref()).to_owned()
+        Model::model_id(self.inner.as_ref()).to_owned()
     }
 
     /// Perform a chat completion.
     ///
     /// Args:
     ///     messages: A list of :class:`ChatMessage` objects.
-    ///     options: Optional :class:`CompletionOptions` for sampling params.
+    ///     options: Optional :class:`ModelOptions` for sampling params.
     ///
     /// Returns:
-    ///     A :class:`CompletionResponse` with content, model, usage,
+    ///     A :class:`ModelResponse` with content, model, usage,
     ///     finish_reason, and timing.
-    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, CompletionResponse]", imports = ("typing",)))]
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ModelResponse]", imports = ("typing",)))]
     #[pyo3(signature = (messages, options=None))]
     fn complete<'py>(
         &self,
         py: Python<'py>,
         messages: Vec<PyChatMessage>,
-        options: Option<Py<PyCompletionOptions>>,
+        options: Option<Py<PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let rust_messages: Vec<ChatMessage> = messages.into_iter().map(|m| m.inner).collect();
         let opts_borrow = options.as_ref().map(|o| o.borrow(py));
@@ -95,10 +95,10 @@ impl PyLlamaCppProvider {
 
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let response = CompletionModel::complete(inner.as_ref(), request)
+            let response = Model::complete(inner.as_ref(), request)
                 .await
                 .map_err(|e| LlamaCppError::new_err(e.to_string()))?;
-            Ok(PyCompletionResponse { inner: response })
+            Ok(PyModelResponse { inner: response })
         })
     }
 
@@ -107,7 +107,7 @@ impl PyLlamaCppProvider {
     /// Args:
     ///     messages: A list of :class:`ChatMessage` objects.
     ///     on_chunk: Callback function receiving each chunk as a dict.
-    ///     options: Optional :class:`CompletionOptions` for sampling params.
+    ///     options: Optional :class:`ModelOptions` for sampling params.
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, None]", imports = ("typing",)))]
     #[pyo3(signature = (messages, on_chunk, options=None))]
     fn stream<'py>(
@@ -115,14 +115,14 @@ impl PyLlamaCppProvider {
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
         on_chunk: Py<PyAny>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
         let request = build_request(py, rust_messages, options.as_deref())?;
         let inner = self.inner.clone();
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let stream = CompletionModel::stream(inner.as_ref(), request)
+            let stream = Model::stream(inner.as_ref(), request)
                 .await
                 .map_err(|e| LlamaCppError::new_err(e.to_string()))?;
 
@@ -191,7 +191,7 @@ impl PyLlamaCppProvider {
     fn __repr__(&self) -> String {
         format!(
             "LlamaCppProvider(model_id='{}')",
-            CompletionModel::model_id(self.inner.as_ref())
+            Model::model_id(self.inner.as_ref())
         )
     }
 }

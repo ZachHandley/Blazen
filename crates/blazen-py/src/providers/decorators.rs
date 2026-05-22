@@ -1,13 +1,13 @@
 //! Standalone Python wrappers for the LLM decorator types.
 //!
-//! These classes mirror the `CompletionModel.with_retry` /
+//! These classes mirror the `Model.with_retry` /
 //! `with_fallback` / `with_cache` decorator methods but are exposed as
 //! first-class Python types so that users who prefer explicit
 //! construction can build them directly.
 //!
-//! Each wrapper holds an `Arc<dyn CompletionModel>` over the underlying
+//! Each wrapper holds an `Arc<dyn Model>` over the underlying
 //! Rust decorator and implements `complete()` / `stream()` /
-//! `model_id` so it behaves like a fully-fledged `CompletionModel`.
+//! `model_id` so it behaves like a fully-fledged `Model`.
 
 use std::pin::Pin;
 use std::sync::Arc;
@@ -17,70 +17,70 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use tokio::sync::Mutex;
 use tokio_stream::{Stream, StreamExt};
 
-use blazen_llm::cache::CachedCompletionModel;
+use blazen_llm::cache::CachedModel;
 use blazen_llm::fallback::FallbackModel;
-use blazen_llm::retry::RetryCompletionModel;
-use blazen_llm::{BlazenError, ChatMessage, CompletionModel, StreamChunk};
+use blazen_llm::retry::RetryModel;
+use blazen_llm::{BlazenError, ChatMessage, Model, StreamChunk};
 
 use crate::error::BlazenPyError;
-use crate::providers::completion_model::{
-    LazyStreamState, PendingStream, PyCompletionModel, PyCompletionOptions, PyLazyCompletionStream,
+use crate::providers::model::{
+    LazyStreamState, PendingStream, PyLazyCompletionStream, PyModel, PyModelOptions,
     arc_from_bound, build_request,
 };
-use crate::types::{PyChatMessage, PyCompletionResponse};
+use crate::types::{PyChatMessage, PyModelResponse};
 
-/// Type alias for the pinned boxed stream returned by `CompletionModel::stream`.
+/// Type alias for the pinned boxed stream returned by `Model::stream`.
 type PinnedChunkStream = Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>;
 
 // ---------------------------------------------------------------------------
-// PyRetryCompletionModel
+// PyRetryModel
 // ---------------------------------------------------------------------------
 
-/// A `CompletionModel` decorator that retries transient failures with
+/// A `Model` decorator that retries transient failures with
 /// exponential backoff.
 ///
 /// This is the standalone equivalent of
-/// `CompletionModel.with_retry(config)` and exposes the same
+/// `Model.with_retry(config)` and exposes the same
 /// `complete()` / `stream()` surface.
 ///
 /// Example:
-///     >>> base = CompletionModel.openai()
-///     >>> model = RetryCompletionModel(base, RetryConfig(max_retries=5))
+///     >>> base = Model.openai()
+///     >>> model = RetryModel(base, RetryConfig(max_retries=5))
 ///     >>> response = await model.complete([ChatMessage.user("Hi")])
 #[gen_stub_pyclass]
-#[pyclass(name = "RetryCompletionModel")]
-pub struct PyRetryCompletionModel {
-    inner: Arc<dyn CompletionModel>,
+#[pyclass(name = "RetryModel")]
+pub struct PyRetryModel {
+    inner: Arc<dyn Model>,
 }
 
 #[gen_stub_pymethods]
 #[pymethods]
-impl PyRetryCompletionModel {
-    /// Wrap a `CompletionModel` with automatic retry on transient failures.
+impl PyRetryModel {
+    /// Wrap a `Model` with automatic retry on transient failures.
     ///
     /// Args:
-    ///     model: The `CompletionModel` to wrap.
+    ///     model: The `Model` to wrap.
     ///     config: Optional typed `RetryConfig`. Defaults to
     ///         `RetryConfig()` (3 retries, 1s initial, 30s max).
     #[new]
     #[pyo3(signature = (model, config=None))]
     fn new(
-        model: Bound<'_, PyCompletionModel>,
+        model: Bound<'_, PyModel>,
         config: Option<PyRef<'_, crate::providers::config::PyRetryConfig>>,
     ) -> Self {
         let retry_config = config.map(|c| c.inner.clone()).unwrap_or_default();
         let inner = arc_from_bound(&model);
-        let wrapped = RetryCompletionModel::from_arc(inner, retry_config);
+        let wrapped = RetryModel::from_arc(inner, retry_config);
         Self {
             inner: Arc::new(wrapped),
         }
     }
 
-    /// Convert this decorator into a `CompletionModel` so it can be passed
-    /// to APIs that expect a `CompletionModel` (`run_agent`,
+    /// Convert this decorator into a `Model` so it can be passed
+    /// to APIs that expect a `Model` (`run_agent`,
     /// `complete_batch`, further decorators, etc.).
-    fn as_model(&self) -> PyCompletionModel {
-        PyCompletionModel {
+    fn as_model(&self) -> PyModel {
+        PyModel {
             inner: Some(self.inner.clone()),
             local_model: None,
             config: None,
@@ -95,12 +95,12 @@ impl PyRetryCompletionModel {
 
     /// Perform a chat completion, retrying transient failures.
     #[pyo3(signature = (messages, options=None))]
-    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, CompletionResponse]", imports = ("typing",)))]
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ModelResponse]", imports = ("typing",)))]
     fn complete<'py>(
         &self,
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         complete_via_arc(py, self.inner.clone(), messages, options)
     }
@@ -113,62 +113,62 @@ impl PyRetryCompletionModel {
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
         on_chunk: Option<Py<PyAny>>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         stream_via_arc(py, self.inner.clone(), messages, on_chunk, options)
     }
 
     fn __repr__(&self) -> String {
-        format!("RetryCompletionModel(model_id='{}')", self.inner.model_id())
+        format!("RetryModel(model_id='{}')", self.inner.model_id())
     }
 }
 
 // ---------------------------------------------------------------------------
-// PyCachedCompletionModel
+// PyCachedModel
 // ---------------------------------------------------------------------------
 
-/// A `CompletionModel` decorator that caches non-streaming responses.
+/// A `Model` decorator that caches non-streaming responses.
 ///
-/// Standalone equivalent of `CompletionModel.with_cache(config)`.
+/// Standalone equivalent of `Model.with_cache(config)`.
 /// Streaming requests are never cached and always pass through.
 ///
 /// Example:
-///     >>> base = CompletionModel.openai()
-///     >>> model = CachedCompletionModel(base, CacheConfig(ttl_seconds=600))
+///     >>> base = Model.openai()
+///     >>> model = CachedModel(base, CacheConfig(ttl_seconds=600))
 ///     >>> response = await model.complete([ChatMessage.user("Hi")])
 #[gen_stub_pyclass]
-#[pyclass(name = "CachedCompletionModel")]
-pub struct PyCachedCompletionModel {
-    inner: Arc<dyn CompletionModel>,
+#[pyclass(name = "CachedModel")]
+pub struct PyCachedModel {
+    inner: Arc<dyn Model>,
 }
 
 #[gen_stub_pymethods]
 #[pymethods]
-impl PyCachedCompletionModel {
-    /// Wrap a `CompletionModel` with response caching.
+impl PyCachedModel {
+    /// Wrap a `Model` with response caching.
     ///
     /// Args:
-    ///     model: The `CompletionModel` to wrap.
+    ///     model: The `Model` to wrap.
     ///     config: Optional typed `CacheConfig`. Defaults to
     ///         `CacheConfig()` (content-hash strategy, 300s TTL,
     ///         1000 entries).
     #[new]
     #[pyo3(signature = (model, config=None))]
     fn new(
-        model: Bound<'_, PyCompletionModel>,
+        model: Bound<'_, PyModel>,
         config: Option<PyRef<'_, crate::providers::config::PyCacheConfig>>,
     ) -> Self {
         let cache_config = config.map(|c| c.inner.clone()).unwrap_or_default();
         let inner = arc_from_bound(&model);
-        let wrapped = CachedCompletionModel::from_arc(inner, cache_config);
+        let wrapped = CachedModel::from_arc(inner, cache_config);
         Self {
             inner: Arc::new(wrapped),
         }
     }
 
-    /// Convert this decorator into a `CompletionModel`.
-    fn as_model(&self) -> PyCompletionModel {
-        PyCompletionModel {
+    /// Convert this decorator into a `Model`.
+    fn as_model(&self) -> PyModel {
+        PyModel {
             inner: Some(self.inner.clone()),
             local_model: None,
             config: None,
@@ -183,12 +183,12 @@ impl PyCachedCompletionModel {
 
     /// Perform a chat completion, served from cache when possible.
     #[pyo3(signature = (messages, options=None))]
-    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, CompletionResponse]", imports = ("typing",)))]
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ModelResponse]", imports = ("typing",)))]
     fn complete<'py>(
         &self,
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         complete_via_arc(py, self.inner.clone(), messages, options)
     }
@@ -200,16 +200,13 @@ impl PyCachedCompletionModel {
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
         on_chunk: Option<Py<PyAny>>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         stream_via_arc(py, self.inner.clone(), messages, on_chunk, options)
     }
 
     fn __repr__(&self) -> String {
-        format!(
-            "CachedCompletionModel(model_id='{}')",
-            self.inner.model_id()
-        )
+        format!("CachedModel(model_id='{}')", self.inner.model_id())
     }
 }
 
@@ -217,23 +214,23 @@ impl PyCachedCompletionModel {
 // PyFallbackModel
 // ---------------------------------------------------------------------------
 
-/// A `CompletionModel` that tries a primary provider and falls back to a
+/// A `Model` that tries a primary provider and falls back to a
 /// secondary on retryable failures.
 ///
 /// Standalone equivalent of
-/// `CompletionModel.with_fallback([primary, fallback])` for the common
+/// `Model.with_fallback([primary, fallback])` for the common
 /// two-provider case. For chains of three or more providers use
-/// `CompletionModel.with_fallback(...)`.
+/// `Model.with_fallback(...)`.
 ///
 /// Example:
-///     >>> primary = CompletionModel.openai()
-///     >>> backup = CompletionModel.anthropic()
+///     >>> primary = Model.openai()
+///     >>> backup = Model.anthropic()
 ///     >>> model = FallbackModel(primary, backup)
 ///     >>> response = await model.complete([ChatMessage.user("Hi")])
 #[gen_stub_pyclass]
 #[pyclass(name = "FallbackModel")]
 pub struct PyFallbackModel {
-    inner: Arc<dyn CompletionModel>,
+    inner: Arc<dyn Model>,
 }
 
 #[gen_stub_pymethods]
@@ -246,8 +243,8 @@ impl PyFallbackModel {
     ///     fallback: The provider to invoke when `primary` fails with
     ///         a retryable error.
     #[new]
-    fn new(primary: Bound<'_, PyCompletionModel>, fallback: Bound<'_, PyCompletionModel>) -> Self {
-        let providers: Vec<Arc<dyn CompletionModel>> =
+    fn new(primary: Bound<'_, PyModel>, fallback: Bound<'_, PyModel>) -> Self {
+        let providers: Vec<Arc<dyn Model>> =
             vec![arc_from_bound(&primary), arc_from_bound(&fallback)];
         let model = FallbackModel::new(providers);
         Self {
@@ -255,9 +252,9 @@ impl PyFallbackModel {
         }
     }
 
-    /// Convert this decorator into a `CompletionModel`.
-    fn as_model(&self) -> PyCompletionModel {
-        PyCompletionModel {
+    /// Convert this decorator into a `Model`.
+    fn as_model(&self) -> PyModel {
+        PyModel {
             inner: Some(self.inner.clone()),
             local_model: None,
             config: None,
@@ -273,12 +270,12 @@ impl PyFallbackModel {
     /// Perform a chat completion against the primary provider, falling
     /// back to the secondary on retryable failures.
     #[pyo3(signature = (messages, options=None))]
-    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, CompletionResponse]", imports = ("typing",)))]
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ModelResponse]", imports = ("typing",)))]
     fn complete<'py>(
         &self,
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         complete_via_arc(py, self.inner.clone(), messages, options)
     }
@@ -292,7 +289,7 @@ impl PyFallbackModel {
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
         on_chunk: Option<Py<PyAny>>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         stream_via_arc(py, self.inner.clone(), messages, on_chunk, options)
     }
@@ -306,29 +303,29 @@ impl PyFallbackModel {
 // Shared helpers for invoking complete()/stream() through an Arc.
 // ---------------------------------------------------------------------------
 
-/// Drive `complete()` on an `Arc<dyn CompletionModel>`.
+/// Drive `complete()` on an `Arc<dyn Model>`.
 fn complete_via_arc<'py>(
     py: Python<'py>,
-    inner: Arc<dyn CompletionModel>,
+    inner: Arc<dyn Model>,
     messages: Vec<PyRef<'py, PyChatMessage>>,
-    options: Option<PyRef<'py, PyCompletionOptions>>,
+    options: Option<PyRef<'py, PyModelOptions>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
     let request = build_request(py, rust_messages, options.as_deref())?;
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
         let response = inner.complete(request).await.map_err(BlazenPyError::from)?;
-        Ok(PyCompletionResponse { inner: response })
+        Ok(PyModelResponse { inner: response })
     })
 }
 
-/// Drive `stream()` on an `Arc<dyn CompletionModel>` with the same
-/// callback / async-iterator semantics as `PyCompletionModel::stream`.
+/// Drive `stream()` on an `Arc<dyn Model>` with the same
+/// callback / async-iterator semantics as `PyModel::stream`.
 fn stream_via_arc<'py>(
     py: Python<'py>,
-    inner: Arc<dyn CompletionModel>,
+    inner: Arc<dyn Model>,
     messages: Vec<PyRef<'py, PyChatMessage>>,
     on_chunk: Option<Py<PyAny>>,
-    options: Option<PyRef<'py, PyCompletionOptions>>,
+    options: Option<PyRef<'py, PyModelOptions>>,
 ) -> PyResult<Bound<'py, PyAny>> {
     let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
     let request = build_request(py, rust_messages, options.as_deref())?;

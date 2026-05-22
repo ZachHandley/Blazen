@@ -60,13 +60,13 @@ async def counter(ctx: Context, ev: StartEvent) -> StopEvent:
 ## LLM Integration
 
 ```python
-from blazen import CompletionModel, ChatMessage, ProviderOptions
+from blazen import Model, ChatMessage, ProviderOptions
 
 # Pass an explicit key via typed options...
-model = CompletionModel.openai(options=ProviderOptions(api_key="your-api-key"))
+model = Model.openai(options=ProviderOptions(api_key="your-api-key"))
 
 # ...or omit options to pick up the standard env var (OPENAI_API_KEY):
-# model = CompletionModel.openai()
+# model = Model.openai()
 
 @step
 async def ask_llm(ctx: Context, ev: StartEvent) -> StopEvent:
@@ -86,12 +86,12 @@ variable (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`).
 
 | Provider | Factory |
 |----------|---------|
-| OpenAI | `CompletionModel.openai(options=ProviderOptions(api_key="..."))` |
-| Anthropic | `CompletionModel.anthropic(options=ProviderOptions(api_key="..."))` |
-| Google Gemini | `CompletionModel.gemini(options=ProviderOptions(api_key="..."))` |
-| Azure OpenAI | `CompletionModel.azure(options=AzureOptions(resource_name="...", deployment_name="...", api_key="..."))` |
-| OpenRouter | `CompletionModel.openrouter(options=ProviderOptions(api_key="..."))` |
-| Groq | `CompletionModel.groq(options=ProviderOptions(api_key="..."))` |
+| OpenAI | `Model.openai(options=ProviderOptions(api_key="..."))` |
+| Anthropic | `Model.anthropic(options=ProviderOptions(api_key="..."))` |
+| Google Gemini | `Model.gemini(options=ProviderOptions(api_key="..."))` |
+| Azure OpenAI | `Model.azure(options=AzureOptions(resource_name="...", deployment_name="...", api_key="..."))` |
+| OpenRouter | `Model.openrouter(options=ProviderOptions(api_key="..."))` |
+| Groq | `Model.groq(options=ProviderOptions(api_key="..."))` |
 
 ## Package Structure
 
@@ -102,7 +102,7 @@ variable (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`).
 | `Event` | Generic event with type field |
 | `StartEvent` | Kicks off a workflow |
 | `StopEvent` | Terminates a workflow with a result |
-| `CompletionModel` | LLM provider interface |
+| `Model` | LLM provider interface |
 | `ChatMessage` | Message for LLM requests |
 | `ProviderOptions` | Typed options (api_key, model, base_url) for most providers |
 | `AzureOptions` | Typed options for Azure OpenAI |

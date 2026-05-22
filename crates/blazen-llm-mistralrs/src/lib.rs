@@ -4,7 +4,7 @@
 //! offline LLM inference with no API keys required.
 //!
 //! When used through `blazen-llm` with the `mistralrs` feature flag, this
-//! crate's [`MistralRsProvider`] will implement `blazen_llm::CompletionModel`.
+//! crate's [`MistralRsProvider`] will implement `blazen_llm::Model`.
 //!
 //! # Feature flags
 //!

@@ -62,7 +62,7 @@ impl PyWhisperCppProvider {
         blazen_llm::compute::ComputeProvider::provider_id(self.inner.as_ref()).to_owned()
     }
 
-    /// Alias for :attr:`provider_id` to mirror :class:`CompletionModel`.
+    /// Alias for :attr:`provider_id` to mirror :class:`Model`.
     #[getter]
     fn model_id(&self) -> String {
         self.provider_id()

@@ -58,7 +58,7 @@ Every provider lives behind a keyword-arg factory on `Blazen::Providers`. Models
 
 ```ruby
 model = Blazen::Providers.openai(api_key: ENV.fetch("OPENAI_API_KEY"))
-req = Blazen::Llm.completion_request(
+req = Blazen::Llm.model_request(
   messages: [Blazen::Llm.user("Hello!")],
   max_tokens: 64,
 )
@@ -68,7 +68,7 @@ puts response.content
 
 ## Async with the `async` gem
 
-The non-`_blocking` variants of `Workflow#run`, `Pipeline#run`, `CompletionModel#complete`, and friends yield via `Fiber.scheduler`. Under [`async`](https://github.com/socketry/async), three concurrent workflow runs overlap without spawning extra threads:
+The non-`_blocking` variants of `Workflow#run`, `Pipeline#run`, `Model#complete`, and friends yield via `Fiber.scheduler`. Under [`async`](https://github.com/socketry/async), three concurrent workflow runs overlap without spawning extra threads:
 
 ```ruby
 require "async"

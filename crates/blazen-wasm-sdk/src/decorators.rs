@@ -1,16 +1,16 @@
 //! Standalone `wasm-bindgen` wrappers for the [`blazen_llm`] decorator
 //! types: [`blazen_llm::fallback::FallbackModel`],
-//! [`blazen_llm::retry::RetryCompletionModel`], and
-//! [`blazen_llm::cache::CachedCompletionModel`].
+//! [`blazen_llm::retry::RetryModel`], and
+//! [`blazen_llm::cache::CachedModel`].
 //!
 //! These classes provide an explicit, constructor-style alternative to the
 //! decorator builder methods (`withRetry`, `withFallback`, `withCache`) on
-//! [`crate::completion_model::WasmCompletionModel`]. They are particularly
+//! [`crate::model::WasmModel`]. They are particularly
 //! useful when the configuration is built up dynamically or when callers
 //! prefer to name the wrapper type explicitly.
 //!
-//! Each class is itself a `CompletionModel` -- call `.toCompletionModel()`
-//! to obtain a generic [`crate::completion_model::WasmCompletionModel`]
+//! Each class is itself a `Model` -- call `.toModel()`
+//! to obtain a generic [`crate::model::WasmModel`]
 //! that can be passed to `runAgent`, `batchComplete`, etc.
 
 use std::sync::Arc;
@@ -19,19 +19,19 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 
 use blazen_events::UsageEvent;
-use blazen_llm::cache::{CacheConfig, CacheStrategy, CachedCompletionModel};
+use blazen_llm::cache::{CacheConfig, CacheStrategy, CachedModel};
 use blazen_llm::fallback::FallbackModel;
 use blazen_llm::http::HttpClient;
-use blazen_llm::retry::{RetryCompletionModel, RetryConfig, RetryEmbeddingModel, RetryHttpClient};
-use blazen_llm::traits::{CompletionModel, EmbeddingModel};
-use blazen_llm::types::CompletionRequest;
+use blazen_llm::retry::{RetryModel, RetryConfig, RetryEmbeddingModel, RetryHttpClient};
+use blazen_llm::traits::{Model, EmbeddingModel};
+use blazen_llm::types::ModelRequest;
 use blazen_llm::usage_recording::{
-    UsageEmitter, UsageRecordingCompletionModel, UsageRecordingEmbeddingModel,
+    UsageEmitter, UsageRecordingModel, UsageRecordingEmbeddingModel,
 };
 use uuid::Uuid;
 
 use crate::chat_message::js_messages_to_vec;
-use crate::completion_model::WasmCompletionModel;
+use crate::model::WasmModel;
 use crate::embedding::WasmEmbeddingModel;
 use crate::http_client::WasmHttpClient;
 
@@ -134,7 +134,7 @@ pub(crate) fn build_cache_config(options: &JsValue) -> CacheConfig {
 // FallbackModel
 // ---------------------------------------------------------------------------
 
-/// A `CompletionModel` that tries multiple providers in order, falling back
+/// A `Model` that tries multiple providers in order, falling back
 /// on retryable failures.
 ///
 /// Non-retryable errors (auth, validation, content policy) short-circuit
@@ -142,14 +142,14 @@ pub(crate) fn build_cache_config(options: &JsValue) -> CacheConfig {
 /// attempt.
 ///
 /// ```js
-/// const primary = CompletionModel.openai();
-/// const backup = CompletionModel.groq();
+/// const primary = Model.openai();
+/// const backup = Model.groq();
 /// const resilient = new FallbackModel([primary, backup]);
 /// const response = await resilient.complete([ChatMessage.user('Hi')]);
 /// ```
 #[wasm_bindgen(js_name = "FallbackModel")]
 pub struct WasmFallbackModel {
-    inner: Arc<dyn CompletionModel>,
+    inner: Arc<dyn Model>,
 }
 
 // SAFETY: WASM is single-threaded.
@@ -158,20 +158,20 @@ unsafe impl Sync for WasmFallbackModel {}
 
 #[wasm_bindgen(js_class = "FallbackModel")]
 impl WasmFallbackModel {
-    /// Create a fallback model from an ordered list of `CompletionModel`s.
+    /// Create a fallback model from an ordered list of `Model`s.
     ///
     /// The first provider is tried first; subsequent providers are tried
     /// only when the previous one fails with a retryable error.
     ///
     /// Throws if `models` is empty.
     #[wasm_bindgen(constructor)]
-    pub fn new(models: Vec<WasmCompletionModel>) -> Result<WasmFallbackModel, JsValue> {
+    pub fn new(models: Vec<WasmModel>) -> Result<WasmFallbackModel, JsValue> {
         if models.is_empty() {
             return Err(JsValue::from_str(
                 "FallbackModel requires at least one provider",
             ));
         }
-        let providers: Vec<Arc<dyn CompletionModel>> =
+        let providers: Vec<Arc<dyn Model>> =
             models.into_iter().map(|m| m.inner_arc()).collect();
         Ok(Self {
             inner: Arc::new(FallbackModel::new(providers)),
@@ -184,11 +184,11 @@ impl WasmFallbackModel {
         self.inner.model_id().to_owned()
     }
 
-    /// Convert this fallback wrapper into a generic `CompletionModel` so it
+    /// Convert this fallback wrapper into a generic `Model` so it
     /// can be passed to `runAgent`, `batchComplete`, or further decorators.
-    #[wasm_bindgen(js_name = "toCompletionModel")]
-    pub fn to_completion_model(&self) -> WasmCompletionModel {
-        WasmCompletionModel::from_arc(Arc::clone(&self.inner))
+    #[wasm_bindgen(js_name = "toModel")]
+    pub fn to_model(&self) -> WasmModel {
+        WasmModel::from_arc(Arc::clone(&self.inner))
     }
 
     /// Perform a non-streaming chat completion through the fallback chain.
@@ -197,7 +197,7 @@ impl WasmFallbackModel {
         let model = Arc::clone(&self.inner);
         future_to_promise(async move {
             let msgs = js_messages_to_vec(&messages)?;
-            let request = CompletionRequest::new(msgs);
+            let request = ModelRequest::new(msgs);
             let response = model
                 .complete(request)
                 .await
@@ -212,7 +212,7 @@ impl WasmFallbackModel {
         let model = Arc::clone(&self.inner);
         future_to_promise(async move {
             let msgs = js_messages_to_vec(&messages)?;
-            let request = CompletionRequest::new(msgs);
+            let request = ModelRequest::new(msgs);
             let mut stream = model
                 .stream(request)
                 .await
@@ -231,31 +231,31 @@ impl WasmFallbackModel {
 }
 
 // ---------------------------------------------------------------------------
-// RetryCompletionModel
+// RetryModel
 // ---------------------------------------------------------------------------
 
-/// A `CompletionModel` that retries transient failures with exponential
+/// A `Model` that retries transient failures with exponential
 /// backoff and optional `Retry-After` honouring.
 ///
 /// ```js
-/// const model = CompletionModel.openai();
-/// const resilient = new RetryCompletionModel(model, {
+/// const model = Model.openai();
+/// const resilient = new RetryModel(model, {
 ///   maxRetries: 5,
 ///   initialDelayMs: 500,
 ///   jitter: true,
 /// });
 /// ```
-#[wasm_bindgen(js_name = "RetryCompletionModel")]
-pub struct WasmRetryCompletionModel {
-    inner: Arc<dyn CompletionModel>,
+#[wasm_bindgen(js_name = "RetryModel")]
+pub struct WasmRetryModel {
+    inner: Arc<dyn Model>,
 }
 
 // SAFETY: WASM is single-threaded.
-unsafe impl Send for WasmRetryCompletionModel {}
-unsafe impl Sync for WasmRetryCompletionModel {}
+unsafe impl Send for WasmRetryModel {}
+unsafe impl Sync for WasmRetryModel {}
 
-#[wasm_bindgen(js_class = "RetryCompletionModel")]
-impl WasmRetryCompletionModel {
+#[wasm_bindgen(js_class = "RetryModel")]
+impl WasmRetryModel {
     /// Wrap `model` with the given retry options.
     ///
     /// `options` is an optional plain JS object with the following fields
@@ -267,10 +267,10 @@ impl WasmRetryCompletionModel {
     /// - `honorRetryAfter` (boolean) -- default true
     /// - `jitter` (boolean) -- default true
     #[wasm_bindgen(constructor)]
-    pub fn new(model: &WasmCompletionModel, options: JsValue) -> WasmRetryCompletionModel {
+    pub fn new(model: &WasmModel, options: JsValue) -> WasmRetryModel {
         let config = build_retry_config(&options);
         Self {
-            inner: Arc::new(RetryCompletionModel::from_arc(model.inner_arc(), config)),
+            inner: Arc::new(RetryModel::from_arc(model.inner_arc(), config)),
         }
     }
 
@@ -280,11 +280,11 @@ impl WasmRetryCompletionModel {
         self.inner.model_id().to_owned()
     }
 
-    /// Convert this retry wrapper into a generic `CompletionModel` so it
+    /// Convert this retry wrapper into a generic `Model` so it
     /// can be passed to `runAgent`, `batchComplete`, or further decorators.
-    #[wasm_bindgen(js_name = "toCompletionModel")]
-    pub fn to_completion_model(&self) -> WasmCompletionModel {
-        WasmCompletionModel::from_arc(Arc::clone(&self.inner))
+    #[wasm_bindgen(js_name = "toModel")]
+    pub fn to_model(&self) -> WasmModel {
+        WasmModel::from_arc(Arc::clone(&self.inner))
     }
 
     /// Perform a non-streaming chat completion with retry.
@@ -293,7 +293,7 @@ impl WasmRetryCompletionModel {
         let model = Arc::clone(&self.inner);
         future_to_promise(async move {
             let msgs = js_messages_to_vec(&messages)?;
-            let request = CompletionRequest::new(msgs);
+            let request = ModelRequest::new(msgs);
             let response = model
                 .complete(request)
                 .await
@@ -309,7 +309,7 @@ impl WasmRetryCompletionModel {
         let model = Arc::clone(&self.inner);
         future_to_promise(async move {
             let msgs = js_messages_to_vec(&messages)?;
-            let request = CompletionRequest::new(msgs);
+            let request = ModelRequest::new(msgs);
             let mut stream = model
                 .stream(request)
                 .await
@@ -328,33 +328,33 @@ impl WasmRetryCompletionModel {
 }
 
 // ---------------------------------------------------------------------------
-// CachedCompletionModel
+// CachedModel
 // ---------------------------------------------------------------------------
 
-/// A `CompletionModel` decorator that caches non-streaming responses keyed
+/// A `Model` decorator that caches non-streaming responses keyed
 /// on a hash of the full request (messages, parameters, tools, model).
 ///
 /// Streaming requests are never cached and always delegate directly to the
 /// inner model.
 ///
 /// ```js
-/// const cached = new CachedCompletionModel(model, {
+/// const cached = new CachedModel(model, {
 ///   strategy: 'contentHash',
 ///   ttlSeconds: 600,
 ///   maxEntries: 500,
 /// });
 /// ```
-#[wasm_bindgen(js_name = "CachedCompletionModel")]
-pub struct WasmCachedCompletionModel {
-    inner: Arc<CachedCompletionModel>,
+#[wasm_bindgen(js_name = "CachedModel")]
+pub struct WasmCachedModel {
+    inner: Arc<CachedModel>,
 }
 
 // SAFETY: WASM is single-threaded.
-unsafe impl Send for WasmCachedCompletionModel {}
-unsafe impl Sync for WasmCachedCompletionModel {}
+unsafe impl Send for WasmCachedModel {}
+unsafe impl Sync for WasmCachedModel {}
 
-#[wasm_bindgen(js_class = "CachedCompletionModel")]
-impl WasmCachedCompletionModel {
+#[wasm_bindgen(js_class = "CachedModel")]
+impl WasmCachedModel {
     /// Wrap `model` with the given cache options.
     ///
     /// `options` is an optional plain JS object with the following fields:
@@ -363,10 +363,10 @@ impl WasmCachedCompletionModel {
     /// - `ttlSeconds` (number) -- default 300
     /// - `maxEntries` (number) -- default 1000
     #[wasm_bindgen(constructor)]
-    pub fn new(model: &WasmCompletionModel, options: JsValue) -> WasmCachedCompletionModel {
+    pub fn new(model: &WasmModel, options: JsValue) -> WasmCachedModel {
         let config = build_cache_config(&options);
         Self {
-            inner: Arc::new(CachedCompletionModel::from_arc(model.inner_arc(), config)),
+            inner: Arc::new(CachedModel::from_arc(model.inner_arc(), config)),
         }
     }
 
@@ -394,21 +394,21 @@ impl WasmCachedCompletionModel {
         self.inner.clear();
     }
 
-    /// Convert this cache wrapper into a generic `CompletionModel` so it
+    /// Convert this cache wrapper into a generic `Model` so it
     /// can be passed to `runAgent`, `batchComplete`, or further decorators.
-    #[wasm_bindgen(js_name = "toCompletionModel")]
-    pub fn to_completion_model(&self) -> WasmCompletionModel {
-        let inner: Arc<dyn CompletionModel> = self.inner.clone();
-        WasmCompletionModel::from_arc(inner)
+    #[wasm_bindgen(js_name = "toModel")]
+    pub fn to_model(&self) -> WasmModel {
+        let inner: Arc<dyn Model> = self.inner.clone();
+        WasmModel::from_arc(inner)
     }
 
     /// Perform a non-streaming chat completion through the cache.
     #[wasm_bindgen]
     pub fn complete(&self, messages: JsValue) -> js_sys::Promise {
-        let model: Arc<dyn CompletionModel> = self.inner.clone();
+        let model: Arc<dyn Model> = self.inner.clone();
         future_to_promise(async move {
             let msgs = js_messages_to_vec(&messages)?;
-            let request = CompletionRequest::new(msgs);
+            let request = ModelRequest::new(msgs);
             let response = model
                 .complete(request)
                 .await
@@ -421,10 +421,10 @@ impl WasmCachedCompletionModel {
     /// entirely and always delegates to the underlying model.
     #[wasm_bindgen]
     pub fn stream(&self, messages: JsValue, callback: js_sys::Function) -> js_sys::Promise {
-        let model: Arc<dyn CompletionModel> = self.inner.clone();
+        let model: Arc<dyn Model> = self.inner.clone();
         future_to_promise(async move {
             let msgs = js_messages_to_vec(&messages)?;
-            let request = CompletionRequest::new(msgs);
+            let request = ModelRequest::new(msgs);
             let mut stream = model
                 .stream(request)
                 .await
@@ -466,7 +466,7 @@ unsafe impl Sync for WasmRetryEmbeddingModel {}
 #[wasm_bindgen(js_class = "RetryEmbeddingModel")]
 impl WasmRetryEmbeddingModel {
     /// Wrap `model` with the given retry options. `options` accepts the same
-    /// keys as [`WasmRetryCompletionModel::new`].
+    /// keys as [`WasmRetryModel::new`].
     #[wasm_bindgen(constructor)]
     pub fn new(model: &WasmEmbeddingModel, options: JsValue) -> WasmRetryEmbeddingModel {
         let config = build_retry_config(&options);
@@ -521,7 +521,7 @@ unsafe impl Sync for WasmRetryHttpClient {}
 #[wasm_bindgen(js_class = "RetryHttpClient")]
 impl WasmRetryHttpClient {
     /// Wrap `client` with the given retry options. `options` accepts the same
-    /// keys as [`WasmRetryCompletionModel::new`].
+    /// keys as [`WasmRetryModel::new`].
     #[wasm_bindgen(constructor)]
     pub fn new(client: &WasmHttpClient, options: JsValue) -> WasmRetryHttpClient {
         let config = build_retry_config(&options);
@@ -570,11 +570,11 @@ impl UsageEmitter for JsUsageEmitter {
 ///
 /// Mirrors `blazen_llm::usage_recording::UsageEmitter` for cross-binding
 /// parity. The constructor takes a JS callback that receives every
-/// `UsageEvent`. Pass an instance to `UsageRecordingCompletionModel.fromEmitter`
+/// `UsageEvent`. Pass an instance to `UsageRecordingModel.fromEmitter`
 /// (etc.) when you want to share one emitter across multiple decorators.
 ///
 /// ```js
-/// import { UsageEmitter, UsageRecordingCompletionModel, CompletionModel } from '@blazen-dev/wasm';
+/// import { UsageEmitter, UsageRecordingModel, Model } from '@blazen-dev/wasm';
 ///
 /// const emitter = new UsageEmitter((event) => console.log('usage', event));
 /// // pass through the JS-callback constructor today; an Emitter-aware
@@ -616,7 +616,7 @@ impl WasmUsageEmitter {
 /// Useful as a default when no downstream observer is wired up:
 ///
 /// ```js
-/// const model = UsageRecordingCompletionModel.fromEmitter(base, new NoopUsageEmitter(), {});
+/// const model = UsageRecordingModel.fromEmitter(base, new NoopUsageEmitter(), {});
 /// ```
 #[wasm_bindgen(js_name = "NoopUsageEmitter")]
 pub struct WasmNoopUsageEmitter;
@@ -656,27 +656,27 @@ fn parse_run_id(value: &JsValue) -> Uuid {
     }
 }
 
-/// A [`CompletionModel`] decorator that emits a [`UsageEvent`] after each
+/// A [`Model`] decorator that emits a [`UsageEvent`] after each
 /// successful `complete` / `stream` call.
 ///
 /// ```js
-/// const observed = new UsageRecordingCompletionModel(
+/// const observed = new UsageRecordingModel(
 ///     model,
 ///     (event) => console.log('usage', event),
 ///     { providerLabel: 'openai', runId: '00000000-0000-0000-0000-000000000000' },
 /// );
 /// ```
-#[wasm_bindgen(js_name = "UsageRecordingCompletionModel")]
-pub struct WasmUsageRecordingCompletionModel {
-    inner: Arc<dyn CompletionModel>,
+#[wasm_bindgen(js_name = "UsageRecordingModel")]
+pub struct WasmUsageRecordingModel {
+    inner: Arc<dyn Model>,
 }
 
 // SAFETY: WASM is single-threaded.
-unsafe impl Send for WasmUsageRecordingCompletionModel {}
-unsafe impl Sync for WasmUsageRecordingCompletionModel {}
+unsafe impl Send for WasmUsageRecordingModel {}
+unsafe impl Sync for WasmUsageRecordingModel {}
 
-#[wasm_bindgen(js_class = "UsageRecordingCompletionModel")]
-impl WasmUsageRecordingCompletionModel {
+#[wasm_bindgen(js_class = "UsageRecordingModel")]
+impl WasmUsageRecordingModel {
     /// Wrap `model` so each successful call emits a [`UsageEvent`] to the JS
     /// `emitter` callback.
     ///
@@ -685,10 +685,10 @@ impl WasmUsageRecordingCompletionModel {
     /// - `runId` (string, UUID) -- defaults to a freshly generated UUID v4.
     #[wasm_bindgen(constructor)]
     pub fn new(
-        model: &WasmCompletionModel,
+        model: &WasmModel,
         emitter: js_sys::Function,
         options: JsValue,
-    ) -> WasmUsageRecordingCompletionModel {
+    ) -> WasmUsageRecordingModel {
         let provider_label = if options.is_object() {
             js_sys::Reflect::get(&options, &JsValue::from_str("providerLabel"))
                 .ok()
@@ -705,7 +705,7 @@ impl WasmUsageRecordingCompletionModel {
             Uuid::new_v4()
         };
         let emitter_arc: Arc<dyn UsageEmitter> = Arc::new(JsUsageEmitter { callback: emitter });
-        let wrapped = UsageRecordingCompletionModel::from_arc(
+        let wrapped = UsageRecordingModel::from_arc(
             model.inner_arc(),
             emitter_arc,
             provider_label,
@@ -722,10 +722,10 @@ impl WasmUsageRecordingCompletionModel {
         self.inner.model_id().to_owned()
     }
 
-    /// Convert this usage-recording wrapper into a generic `CompletionModel`.
-    #[wasm_bindgen(js_name = "toCompletionModel")]
-    pub fn to_completion_model(&self) -> WasmCompletionModel {
-        WasmCompletionModel::from_arc(Arc::clone(&self.inner))
+    /// Convert this usage-recording wrapper into a generic `Model`.
+    #[wasm_bindgen(js_name = "toModel")]
+    pub fn to_model(&self) -> WasmModel {
+        WasmModel::from_arc(Arc::clone(&self.inner))
     }
 }
 
@@ -744,7 +744,7 @@ unsafe impl Sync for WasmUsageRecordingEmbeddingModel {}
 impl WasmUsageRecordingEmbeddingModel {
     /// Wrap `model` so each successful embed call emits a [`UsageEvent`] to
     /// the JS `emitter` callback. See
-    /// [`WasmUsageRecordingCompletionModel::new`] for `options` keys.
+    /// [`WasmUsageRecordingModel::new`] for `options` keys.
     #[wasm_bindgen(constructor)]
     pub fn new(
         model: &WasmEmbeddingModel,

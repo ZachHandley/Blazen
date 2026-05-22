@@ -75,7 +75,7 @@ impl LmStudioProvider {
     /// Send a chat-completion request to LM Studio. The body must
     /// already be shaped for LM Studio's OpenAI-compat surface — the
     /// bridge in `blazen-llm/src/backends/lmstudio.rs` performs the
-    /// typed translation from `CompletionRequest`.
+    /// typed translation from `ModelRequest`.
     ///
     /// # Errors
     /// Propagates [`LmStudioError`] from the underlying client.

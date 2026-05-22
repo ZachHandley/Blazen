@@ -16,8 +16,8 @@ use napi_derive::napi;
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 
-use blazen_llm::traits::{CompletionModel, LocalModel};
-use blazen_llm::types::{ChatMessage, CompletionRequest, ToolDefinition};
+use blazen_llm::traits::{LocalModel, Model};
+use blazen_llm::types::{ChatMessage, ModelRequest, ToolDefinition};
 use blazen_llm::{
     ChatMessageInput, ChatRole, InferenceChunk, InferenceChunkStream, InferenceImage,
     InferenceImageSource, InferenceResult, InferenceToolCall, InferenceUsage, MistralRsOptions,
@@ -25,9 +25,9 @@ use blazen_llm::{
 };
 
 use crate::error::{llm_error_to_napi, mistralrs_error_to_napi, to_napi_error};
-use crate::providers::completion_model::{JsMistralRsOptions, StreamChunkCallbackTsfn};
+use crate::providers::model::{JsMistralRsOptions, StreamChunkCallbackTsfn};
 use crate::types::{
-    JsChatMessage, JsCompletionOptions, JsCompletionResponse, build_response, build_stream_chunk,
+    JsChatMessage, JsModelOptions, JsModelResponse, build_response, build_stream_chunk,
 };
 
 // ---------------------------------------------------------------------------
@@ -90,9 +90,9 @@ impl JsMistralRsProvider {
 
     /// Perform a chat completion.
     #[napi]
-    pub async fn complete(&self, messages: Vec<&JsChatMessage>) -> Result<JsCompletionResponse> {
+    pub async fn complete(&self, messages: Vec<&JsChatMessage>) -> Result<JsModelResponse> {
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let request = CompletionRequest::new(chat_messages);
+        let request = ModelRequest::new(chat_messages);
 
         let response = self
             .inner
@@ -108,10 +108,10 @@ impl JsMistralRsProvider {
     pub async fn complete_with_options(
         &self,
         messages: Vec<&JsChatMessage>,
-        options: JsCompletionOptions,
-    ) -> Result<JsCompletionResponse> {
+        options: JsModelOptions,
+    ) -> Result<JsModelResponse> {
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let mut request = CompletionRequest::new(chat_messages);
+        let mut request = ModelRequest::new(chat_messages);
 
         if let Some(temp) = options.temperature {
             request.temperature = Some(temp as f32);
@@ -156,7 +156,7 @@ impl JsMistralRsProvider {
         on_chunk: StreamChunkCallbackTsfn,
     ) -> Result<()> {
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let request = CompletionRequest::new(chat_messages);
+        let request = ModelRequest::new(chat_messages);
 
         let stream = self
             .inner

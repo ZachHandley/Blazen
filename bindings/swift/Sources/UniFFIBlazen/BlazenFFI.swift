@@ -663,11 +663,11 @@ open class Agent: AgentProtocol, @unchecked Sendable {
      * - `max_iterations`: hard cap on LLM round-trips before the loop is
      * forced to produce a final answer.
      */
-public convenience init(model: CompletionModel, systemPrompt: String?, tools: [Tool], toolHandler: ToolHandler, maxIterations: UInt32) {
+public convenience init(model: Model, systemPrompt: String?, tools: [Tool], toolHandler: ToolHandler, maxIterations: UInt32) {
     let handle =
         try! rustCall() {
     uniffi_blazen_uniffi_fn_constructor_agent_new(
-        FfiConverterTypeCompletionModel_lower(model),
+        FfiConverterTypeModel_lower(model),
         FfiConverterOptionString.lower(systemPrompt),
         FfiConverterSequenceTypeTool.lower(tools),
         FfiConverterTypeToolHandler_lower(toolHandler),
@@ -777,34 +777,34 @@ public func FfiConverterTypeAgent_lower(_ value: Agent) -> UInt64 {
 
 
 /**
- * A [`crate::llm::CompletionModel`] wrapped with applied
- * [`CompletionProviderDefaults`].
+ * A [`crate::llm::Model`] wrapped with applied
+ * [`ProviderDefaults`].
  *
- * Construct via [`BaseProvider::from_completion_model`] (wraps an existing
- * model with no defaults) or [`BaseProvider::with_completion_defaults`]
+ * Construct via [`BaseProvider::from_model`] (wraps an existing
+ * model with no defaults) or [`BaseProvider::with_defaults`]
  * (wraps with explicit defaults). Mutate via the `with_*` builder methods.
  *
  * Phase B's `CustomProvider` factories will return `Arc<BaseProvider>`
  * directly; for Phase A this class is reachable by lifting any existing
- * `CompletionModel` factory result.
+ * `Model` factory result.
  */
 public protocol BaseProviderProtocol: AnyObject, Sendable {
     
     /**
-     * Unwrap to a plain [`CompletionModel`] handle that applies the
+     * Unwrap to a plain [`Model`] handle that applies the
      * configured defaults on every call.
      *
      * Use this when you want to pass the wrapped provider to an API that
-     * takes a generic `CompletionModel` (the agent runner, workflow
+     * takes a generic `Model` (the agent runner, workflow
      * steps, etc.).
      */
-    func asCompletionModel()  -> CompletionModel
+    func asModel()  -> Model
     
     /**
      * Inspect the currently-configured defaults (data only — hooks are
      * not surfaced in Phase A).
      */
-    func defaults()  -> CompletionProviderDefaults
+    func defaults()  -> ProviderDefaults
     
     /**
      * Extract structured output from the model by constraining its
@@ -824,15 +824,15 @@ public protocol BaseProviderProtocol: AnyObject, Sendable {
     func extract(schemaJson: String, messages: [ChatMessage]) async throws  -> String
     
     /**
-     * The model id of the wrapped inner `CompletionModel`.
+     * The model id of the wrapped inner `Model`.
      */
     func modelId()  -> String
     
     /**
-     * Replace the entire [`CompletionProviderDefaults`] on this provider,
+     * Replace the entire [`ProviderDefaults`] on this provider,
      * returning a new `Arc<BaseProvider>` (clone-with-mutation).
      */
-    func withDefaults(defaults: CompletionProviderDefaults)  -> BaseProvider
+    func withDefaults(defaults: ProviderDefaults)  -> BaseProvider
     
     /**
      * Set the default `response_format` (JSON-encoded `serde_json::Value`).
@@ -857,16 +857,16 @@ public protocol BaseProviderProtocol: AnyObject, Sendable {
     
 }
 /**
- * A [`crate::llm::CompletionModel`] wrapped with applied
- * [`CompletionProviderDefaults`].
+ * A [`crate::llm::Model`] wrapped with applied
+ * [`ProviderDefaults`].
  *
- * Construct via [`BaseProvider::from_completion_model`] (wraps an existing
- * model with no defaults) or [`BaseProvider::with_completion_defaults`]
+ * Construct via [`BaseProvider::from_model`] (wraps an existing
+ * model with no defaults) or [`BaseProvider::with_defaults`]
  * (wraps with explicit defaults). Mutate via the `with_*` builder methods.
  *
  * Phase B's `CustomProvider` factories will return `Arc<BaseProvider>`
  * directly; for Phase A this class is reachable by lifting any existing
- * `CompletionModel` factory result.
+ * `Model` factory result.
  */
 open class BaseProvider: BaseProviderProtocol, @unchecked Sendable {
     fileprivate let handle: UInt64
@@ -920,28 +920,28 @@ open class BaseProvider: BaseProviderProtocol, @unchecked Sendable {
 
     
     /**
-     * Wrap an existing [`CompletionModel`] with empty defaults.
+     * Wrap an existing [`Model`] with empty defaults.
      *
      * Equivalent to using the wrapped model directly, but lets callers
      * attach defaults later via the `with_*` methods.
      */
-public static func fromCompletionModel(model: CompletionModel) -> BaseProvider  {
+public static func fromModel(model: Model) -> BaseProvider  {
     return try!  FfiConverterTypeBaseProvider_lift(try! rustCall() {
-    uniffi_blazen_uniffi_fn_constructor_baseprovider_from_completion_model(
-        FfiConverterTypeCompletionModel_lower(model),$0
+    uniffi_blazen_uniffi_fn_constructor_baseprovider_from_model(
+        FfiConverterTypeModel_lower(model),$0
     )
 })
 }
     
     /**
-     * Wrap a [`CompletionModel`] with explicit
-     * [`CompletionProviderDefaults`].
+     * Wrap a [`Model`] with explicit
+     * [`ProviderDefaults`].
      */
-public static func withCompletionDefaults(model: CompletionModel, defaults: CompletionProviderDefaults) -> BaseProvider  {
+public static func fromModelWithDefaults(model: Model, defaults: ProviderDefaults) -> BaseProvider  {
     return try!  FfiConverterTypeBaseProvider_lift(try! rustCall() {
-    uniffi_blazen_uniffi_fn_constructor_baseprovider_with_completion_defaults(
-        FfiConverterTypeCompletionModel_lower(model),
-        FfiConverterTypeCompletionProviderDefaults_lower(defaults),$0
+    uniffi_blazen_uniffi_fn_constructor_baseprovider_from_model_with_defaults(
+        FfiConverterTypeModel_lower(model),
+        FfiConverterTypeProviderDefaults_lower(defaults),$0
     )
 })
 }
@@ -949,16 +949,16 @@ public static func withCompletionDefaults(model: CompletionModel, defaults: Comp
 
     
     /**
-     * Unwrap to a plain [`CompletionModel`] handle that applies the
+     * Unwrap to a plain [`Model`] handle that applies the
      * configured defaults on every call.
      *
      * Use this when you want to pass the wrapped provider to an API that
-     * takes a generic `CompletionModel` (the agent runner, workflow
+     * takes a generic `Model` (the agent runner, workflow
      * steps, etc.).
      */
-open func asCompletionModel() -> CompletionModel  {
-    return try!  FfiConverterTypeCompletionModel_lift(try! rustCall() {
-    uniffi_blazen_uniffi_fn_method_baseprovider_as_completion_model(
+open func asModel() -> Model  {
+    return try!  FfiConverterTypeModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_baseprovider_as_model(
             self.uniffiCloneHandle(),$0
     )
 })
@@ -968,8 +968,8 @@ open func asCompletionModel() -> CompletionModel  {
      * Inspect the currently-configured defaults (data only — hooks are
      * not surfaced in Phase A).
      */
-open func defaults() -> CompletionProviderDefaults  {
-    return try!  FfiConverterTypeCompletionProviderDefaults_lift(try! rustCall() {
+open func defaults() -> ProviderDefaults  {
+    return try!  FfiConverterTypeProviderDefaults_lift(try! rustCall() {
     uniffi_blazen_uniffi_fn_method_baseprovider_defaults(
             self.uniffiCloneHandle(),$0
     )
@@ -1009,7 +1009,7 @@ open func extract(schemaJson: String, messages: [ChatMessage])async throws  -> S
 }
     
     /**
-     * The model id of the wrapped inner `CompletionModel`.
+     * The model id of the wrapped inner `Model`.
      */
 open func modelId() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
@@ -1020,14 +1020,14 @@ open func modelId() -> String  {
 }
     
     /**
-     * Replace the entire [`CompletionProviderDefaults`] on this provider,
+     * Replace the entire [`ProviderDefaults`] on this provider,
      * returning a new `Arc<BaseProvider>` (clone-with-mutation).
      */
-open func withDefaults(defaults: CompletionProviderDefaults) -> BaseProvider  {
+open func withDefaults(defaults: ProviderDefaults) -> BaseProvider  {
     return try!  FfiConverterTypeBaseProvider_lift(try! rustCall() {
     uniffi_blazen_uniffi_fn_method_baseprovider_with_defaults(
             self.uniffiCloneHandle(),
-        FfiConverterTypeCompletionProviderDefaults_lower(defaults),$0
+        FfiConverterTypeProviderDefaults_lower(defaults),$0
     )
 })
 }
@@ -1477,196 +1477,6 @@ public func FfiConverterTypeCheckpointStore_lift(_ handle: UInt64) throws -> Che
 #endif
 public func FfiConverterTypeCheckpointStore_lower(_ value: CheckpointStore) -> UInt64 {
     return FfiConverterTypeCheckpointStore.lower(value)
-}
-
-
-
-
-
-
-/**
- * A chat completion model.
- *
- * Construct one via the per-provider factories in `providers.rs` (e.g.
- * `CompletionModel::openai(options)` from the foreign-language side).
- * Once obtained, call [`complete`](Self::complete) (async) or
- * [`complete_blocking`](Self::complete_blocking) (sync) to generate
- * responses.
- */
-public protocol CompletionModelProtocol: AnyObject, Sendable {
-    
-    /**
-     * Perform a chat completion. Async on Swift / Kotlin; blocking on Go
-     * (UniFFI's Go bindgen wraps the future in a goroutine-friendly call).
-     */
-    func complete(request: CompletionRequest) async throws  -> CompletionResponse
-    
-    /**
-     * Synchronous variant of [`complete`](Self::complete) — blocks the
-     * current thread on the shared Tokio runtime. Handy for Ruby scripts
-     * and quick Go `main` functions where async machinery is overkill.
-     * Prefer the async [`complete`](Self::complete) in long-running services.
-     */
-    func completeBlocking(request: CompletionRequest) throws  -> CompletionResponse
-    
-    /**
-     * The model's identifier (e.g. `"gpt-4o"`, `"claude-3-5-sonnet"`).
-     */
-    func modelId()  -> String
-    
-}
-/**
- * A chat completion model.
- *
- * Construct one via the per-provider factories in `providers.rs` (e.g.
- * `CompletionModel::openai(options)` from the foreign-language side).
- * Once obtained, call [`complete`](Self::complete) (async) or
- * [`complete_blocking`](Self::complete_blocking) (sync) to generate
- * responses.
- */
-open class CompletionModel: CompletionModelProtocol, @unchecked Sendable {
-    fileprivate let handle: UInt64
-
-    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public struct NoHandle {
-        public init() {}
-    }
-
-    // TODO: We'd like this to be `private` but for Swifty reasons,
-    // we can't implement `FfiConverter` without making this `required` and we can't
-    // make it `required` without making it `public`.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    required public init(unsafeFromHandle handle: UInt64) {
-        self.handle = handle
-    }
-
-    // This constructor can be used to instantiate a fake object.
-    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
-    //
-    // - Warning:
-    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public init(noHandle: NoHandle) {
-        self.handle = 0
-    }
-
-#if swift(>=5.8)
-    @_documentation(visibility: private)
-#endif
-    public func uniffiCloneHandle() -> UInt64 {
-        return try! rustCall { uniffi_blazen_uniffi_fn_clone_completionmodel(self.handle, $0) }
-    }
-    // No primary constructor declared for this class.
-
-    deinit {
-        if handle == 0 {
-            // Mock objects have handle=0 don't try to free them
-            return
-        }
-
-        try! rustCall { uniffi_blazen_uniffi_fn_free_completionmodel(handle, $0) }
-    }
-
-    
-
-    
-    /**
-     * Perform a chat completion. Async on Swift / Kotlin; blocking on Go
-     * (UniFFI's Go bindgen wraps the future in a goroutine-friendly call).
-     */
-open func complete(request: CompletionRequest)async throws  -> CompletionResponse  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_blazen_uniffi_fn_method_completionmodel_complete(
-                    self.uniffiCloneHandle(),
-                    FfiConverterTypeCompletionRequest_lower(request)
-                )
-            },
-            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
-            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
-            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterTypeCompletionResponse_lift,
-            errorHandler: FfiConverterTypeBlazenError_lift
-        )
-}
-    
-    /**
-     * Synchronous variant of [`complete`](Self::complete) — blocks the
-     * current thread on the shared Tokio runtime. Handy for Ruby scripts
-     * and quick Go `main` functions where async machinery is overkill.
-     * Prefer the async [`complete`](Self::complete) in long-running services.
-     */
-open func completeBlocking(request: CompletionRequest)throws  -> CompletionResponse  {
-    return try  FfiConverterTypeCompletionResponse_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_method_completionmodel_complete_blocking(
-            self.uniffiCloneHandle(),
-        FfiConverterTypeCompletionRequest_lower(request),$0
-    )
-})
-}
-    
-    /**
-     * The model's identifier (e.g. `"gpt-4o"`, `"claude-3-5-sonnet"`).
-     */
-open func modelId() -> String  {
-    return try!  FfiConverterString.lift(try! rustCall() {
-    uniffi_blazen_uniffi_fn_method_completionmodel_model_id(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-
-    
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeCompletionModel: FfiConverter {
-    typealias FfiType = UInt64
-    typealias SwiftType = CompletionModel
-
-    public static func lift(_ handle: UInt64) throws -> CompletionModel {
-        return CompletionModel(unsafeFromHandle: handle)
-    }
-
-    public static func lower(_ value: CompletionModel) -> UInt64 {
-        return value.uniffiCloneHandle()
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CompletionModel {
-        let handle: UInt64 = try readInt(&buf)
-        return try lift(handle)
-    }
-
-    public static func write(_ value: CompletionModel, into buf: inout [UInt8]) {
-        writeInt(&buf, lower(value))
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCompletionModel_lift(_ handle: UInt64) throws -> CompletionModel {
-    return try FfiConverterTypeCompletionModel.lift(handle)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCompletionModel_lower(_ value: CompletionModel) -> UInt64 {
-    return FfiConverterTypeCompletionModel.lower(value)
 }
 
 
@@ -3527,14 +3337,14 @@ public protocol CustomProvider: AnyObject, Sendable {
     /**
      * Perform a non-streaming chat completion.
      */
-    func complete(request: CompletionRequest) async throws  -> CompletionResponse
+    func complete(request: ModelRequest) async throws  -> ModelResponse
     
     /**
      * Perform a streaming chat completion, pushing chunks into the supplied
      * sink. The implementation must call `sink.on_done` exactly once on
      * success or `sink.on_error` exactly once on failure.
      */
-    func stream(request: CompletionRequest, sink: CompletionStreamSink) async throws 
+    func stream(request: ModelRequest, sink: CompletionStreamSink) async throws 
     
     /**
      * Embed one or more texts.
@@ -3709,19 +3519,19 @@ open func providerId() -> String  {
     /**
      * Perform a non-streaming chat completion.
      */
-open func complete(request: CompletionRequest)async throws  -> CompletionResponse  {
+open func complete(request: ModelRequest)async throws  -> ModelResponse  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_blazen_uniffi_fn_method_customprovider_complete(
                     self.uniffiCloneHandle(),
-                    FfiConverterTypeCompletionRequest_lower(request)
+                    FfiConverterTypeModelRequest_lower(request)
                 )
             },
             pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterTypeCompletionResponse_lift,
+            liftFunc: FfiConverterTypeModelResponse_lift,
             errorHandler: FfiConverterTypeBlazenError_lift
         )
 }
@@ -3731,13 +3541,13 @@ open func complete(request: CompletionRequest)async throws  -> CompletionRespons
      * sink. The implementation must call `sink.on_done` exactly once on
      * success or `sink.on_error` exactly once on failure.
      */
-open func stream(request: CompletionRequest, sink: CompletionStreamSink)async throws   {
+open func stream(request: ModelRequest, sink: CompletionStreamSink)async throws   {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_blazen_uniffi_fn_method_customprovider_stream(
                     self.uniffiCloneHandle(),
-                    FfiConverterTypeCompletionRequest_lower(request),FfiConverterTypeCompletionStreamSink_lower(sink)
+                    FfiConverterTypeModelRequest_lower(request),FfiConverterTypeCompletionStreamSink_lower(sink)
                 )
             },
             pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
@@ -4086,20 +3896,20 @@ fileprivate struct UniffiCallbackInterfaceCustomProvider {
             uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
         ) in
             let makeCall = {
-                () async throws -> CompletionResponse in
+                () async throws -> ModelResponse in
                 guard let uniffiObj = try? FfiConverterTypeCustomProvider.handleMap.get(handle: uniffiHandle) else {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
                 return try await uniffiObj.complete(
-                     request: try FfiConverterTypeCompletionRequest_lift(request)
+                     request: try FfiConverterTypeModelRequest_lift(request)
                 )
             }
 
-            let uniffiHandleSuccess = { (returnValue: CompletionResponse) in
+            let uniffiHandleSuccess = { (returnValue: ModelResponse) in
                 uniffiFutureCallback(
                     uniffiCallbackData,
                     UniffiForeignFutureResultRustBuffer(
-                        returnValue: FfiConverterTypeCompletionResponse_lower(returnValue),
+                        returnValue: FfiConverterTypeModelResponse_lower(returnValue),
                         callStatus: RustCallStatus()
                     )
                 )
@@ -4135,7 +3945,7 @@ fileprivate struct UniffiCallbackInterfaceCustomProvider {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
                 return try await uniffiObj.stream(
-                     request: try FfiConverterTypeCompletionRequest_lift(request),
+                     request: try FfiConverterTypeModelRequest_lift(request),
                      sink: try FfiConverterTypeCompletionStreamSink_lift(sink)
                 )
             }
@@ -4858,7 +4668,7 @@ public protocol CustomProviderHandleProtocol: AnyObject, Sendable {
      *
      * Use for `.with_system_prompt(...)`, `.with_tools_json(...)`,
      * `.with_response_format_json(...)`, or to hand the provider to an API
-     * expecting an opaque `CompletionModel`-shaped handle.
+     * expecting an opaque `Model`-shaped handle.
      */
     func asBase()  -> BaseProvider
     
@@ -4872,7 +4682,7 @@ public protocol CustomProviderHandleProtocol: AnyObject, Sendable {
      * completion defaults (system prompt, tools, response format) before
      * dispatching to the inner provider.
      */
-    func complete(request: CompletionRequest) async throws  -> CompletionResponse
+    func complete(request: ModelRequest) async throws  -> ModelResponse
     
     /**
      * Delete a previously-cloned voice. Takes the voice id as a string so
@@ -4933,7 +4743,7 @@ public protocol CustomProviderHandleProtocol: AnyObject, Sendable {
      * failure are both delivered via the sink; the function itself only
      * returns `Err` if the initial request conversion fails.
      */
-    func stream(request: CompletionRequest, sink: CompletionStreamSink) async throws 
+    func stream(request: ModelRequest, sink: CompletionStreamSink) async throws 
     
     /**
      * Synthesize speech from text. Applies the configured speech defaults
@@ -5054,7 +4864,7 @@ open class CustomProviderHandle: CustomProviderHandleProtocol, @unchecked Sendab
      *
      * Use for `.with_system_prompt(...)`, `.with_tools_json(...)`,
      * `.with_response_format_json(...)`, or to hand the provider to an API
-     * expecting an opaque `CompletionModel`-shaped handle.
+     * expecting an opaque `Model`-shaped handle.
      */
 open func asBase() -> BaseProvider  {
     return try!  FfiConverterTypeBaseProvider_lift(try! rustCall() {
@@ -5089,19 +4899,19 @@ open func cloneVoice(request: VoiceCloneRequest)async throws  -> VoiceHandle  {
      * completion defaults (system prompt, tools, response format) before
      * dispatching to the inner provider.
      */
-open func complete(request: CompletionRequest)async throws  -> CompletionResponse  {
+open func complete(request: ModelRequest)async throws  -> ModelResponse  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_blazen_uniffi_fn_method_customproviderhandle_complete(
                     self.uniffiCloneHandle(),
-                    FfiConverterTypeCompletionRequest_lower(request)
+                    FfiConverterTypeModelRequest_lower(request)
                 )
             },
             pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
             completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterTypeCompletionResponse_lift,
+            liftFunc: FfiConverterTypeModelResponse_lift,
             errorHandler: FfiConverterTypeBlazenError_lift
         )
 }
@@ -5306,13 +5116,13 @@ open func removeBackground(request: BackgroundRemovalRequest)async throws  -> Im
      * failure are both delivered via the sink; the function itself only
      * returns `Err` if the initial request conversion fails.
      */
-open func stream(request: CompletionRequest, sink: CompletionStreamSink)async throws   {
+open func stream(request: ModelRequest, sink: CompletionStreamSink)async throws   {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_blazen_uniffi_fn_method_customproviderhandle_stream(
                     self.uniffiCloneHandle(),
-                    FfiConverterTypeCompletionRequest_lower(request),FfiConverterTypeCompletionStreamSink_lower(sink)
+                    FfiConverterTypeModelRequest_lower(request),FfiConverterTypeCompletionStreamSink_lower(sink)
                 )
             },
             pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
@@ -6715,6 +6525,196 @@ public func FfiConverterTypeImageGenModel_lift(_ handle: UInt64) throws -> Image
 #endif
 public func FfiConverterTypeImageGenModel_lower(_ value: ImageGenModel) -> UInt64 {
     return FfiConverterTypeImageGenModel.lower(value)
+}
+
+
+
+
+
+
+/**
+ * A chat completion model.
+ *
+ * Construct one via the per-provider factories in `providers.rs` (e.g.
+ * `Model::openai(options)` from the foreign-language side).
+ * Once obtained, call [`complete`](Self::complete) (async) or
+ * [`complete_blocking`](Self::complete_blocking) (sync) to generate
+ * responses.
+ */
+public protocol ModelProtocol: AnyObject, Sendable {
+    
+    /**
+     * Perform a chat completion. Async on Swift / Kotlin; blocking on Go
+     * (UniFFI's Go bindgen wraps the future in a goroutine-friendly call).
+     */
+    func complete(request: ModelRequest) async throws  -> ModelResponse
+    
+    /**
+     * Synchronous variant of [`complete`](Self::complete) — blocks the
+     * current thread on the shared Tokio runtime. Handy for Ruby scripts
+     * and quick Go `main` functions where async machinery is overkill.
+     * Prefer the async [`complete`](Self::complete) in long-running services.
+     */
+    func completeBlocking(request: ModelRequest) throws  -> ModelResponse
+    
+    /**
+     * The model's identifier (e.g. `"gpt-4o"`, `"claude-3-5-sonnet"`).
+     */
+    func modelId()  -> String
+    
+}
+/**
+ * A chat completion model.
+ *
+ * Construct one via the per-provider factories in `providers.rs` (e.g.
+ * `Model::openai(options)` from the foreign-language side).
+ * Once obtained, call [`complete`](Self::complete) (async) or
+ * [`complete_blocking`](Self::complete_blocking) (sync) to generate
+ * responses.
+ */
+open class Model: ModelProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_model(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_model(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Perform a chat completion. Async on Swift / Kotlin; blocking on Go
+     * (UniFFI's Go bindgen wraps the future in a goroutine-friendly call).
+     */
+open func complete(request: ModelRequest)async throws  -> ModelResponse  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_model_complete(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeModelRequest_lower(request)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeModelResponse_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`complete`](Self::complete) — blocks the
+     * current thread on the shared Tokio runtime. Handy for Ruby scripts
+     * and quick Go `main` functions where async machinery is overkill.
+     * Prefer the async [`complete`](Self::complete) in long-running services.
+     */
+open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
+    return try  FfiConverterTypeModelResponse_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_model_complete_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * The model's identifier (e.g. `"gpt-4o"`, `"claude-3-5-sonnet"`).
+     */
+open func modelId() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_model_model_id(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeModel: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = Model
+
+    public static func lift(_ handle: UInt64) throws -> Model {
+        return Model(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: Model) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Model {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: Model, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModel_lift(_ handle: UInt64) throws -> Model {
+    return try FfiConverterTypeModel.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModel_lower(_ value: Model) -> UInt64 {
+    return FfiConverterTypeModel.lower(value)
 }
 
 
@@ -11039,275 +11039,6 @@ public func FfiConverterTypeChatMessage_lower(_ value: ChatMessage) -> RustBuffe
 
 
 /**
- * Completion-role defaults: system prompt, default tools, default
- * `response_format`. Hooks (`before_completion`) deferred to Phase C.
- */
-public struct CompletionProviderDefaults: Equatable, Hashable {
-    public var base: BaseProviderDefaults?
-    /**
-     * Prepended as a system message if the request lacks one.
-     */
-    public var systemPrompt: String?
-    /**
-     * JSON-encoded `Vec<ToolDefinition>`. Merged into the request's tool
-     * list — request-supplied tools win on name collision.
-     */
-    public var toolsJson: String?
-    /**
-     * JSON-encoded `serde_json::Value` for the OpenAI-style
-     * `response_format` field. Set only if the request lacks one.
-     */
-    public var responseFormatJson: String?
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(base: BaseProviderDefaults? = nil, 
-        /**
-         * Prepended as a system message if the request lacks one.
-         */systemPrompt: String? = nil, 
-        /**
-         * JSON-encoded `Vec<ToolDefinition>`. Merged into the request's tool
-         * list — request-supplied tools win on name collision.
-         */toolsJson: String? = nil, 
-        /**
-         * JSON-encoded `serde_json::Value` for the OpenAI-style
-         * `response_format` field. Set only if the request lacks one.
-         */responseFormatJson: String? = nil) {
-        self.base = base
-        self.systemPrompt = systemPrompt
-        self.toolsJson = toolsJson
-        self.responseFormatJson = responseFormatJson
-    }
-
-    
-
-    
-}
-
-#if compiler(>=6)
-extension CompletionProviderDefaults: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeCompletionProviderDefaults: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CompletionProviderDefaults {
-        return
-            try CompletionProviderDefaults(
-                base: FfiConverterOptionTypeBaseProviderDefaults.read(from: &buf), 
-                systemPrompt: FfiConverterOptionString.read(from: &buf), 
-                toolsJson: FfiConverterOptionString.read(from: &buf), 
-                responseFormatJson: FfiConverterOptionString.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: CompletionProviderDefaults, into buf: inout [UInt8]) {
-        FfiConverterOptionTypeBaseProviderDefaults.write(value.base, into: &buf)
-        FfiConverterOptionString.write(value.systemPrompt, into: &buf)
-        FfiConverterOptionString.write(value.toolsJson, into: &buf)
-        FfiConverterOptionString.write(value.responseFormatJson, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCompletionProviderDefaults_lift(_ buf: RustBuffer) throws -> CompletionProviderDefaults {
-    return try FfiConverterTypeCompletionProviderDefaults.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCompletionProviderDefaults_lower(_ value: CompletionProviderDefaults) -> RustBuffer {
-    return FfiConverterTypeCompletionProviderDefaults.lower(value)
-}
-
-
-/**
- * A provider-agnostic chat completion request.
- *
- * `system`, when set, is prepended as a `Role::System` message — equivalent
- * to building the message list with a leading system entry. Provided as a
- * convenience because most foreign callers think of the system prompt as a
- * request-level field, not a message.
- */
-public struct CompletionRequest: Equatable, Hashable {
-    public var messages: [ChatMessage]
-    public var tools: [Tool]
-    public var temperature: Double?
-    public var maxTokens: UInt32?
-    public var topP: Double?
-    /**
-     * Optional model identifier to use for this request, overriding the
-     * provider's default model.
-     */
-    public var model: String?
-    /**
-     * Optional JSON Schema (encoded as a string) constraining the model's
-     * output. Passed through to upstream's `response_format` slot.
-     */
-    public var responseFormatJson: String?
-    /**
-     * Optional system prompt, prepended as a `system`-role message.
-     */
-    public var system: String?
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(messages: [ChatMessage], tools: [Tool], temperature: Double?, maxTokens: UInt32?, topP: Double?, 
-        /**
-         * Optional model identifier to use for this request, overriding the
-         * provider's default model.
-         */model: String?, 
-        /**
-         * Optional JSON Schema (encoded as a string) constraining the model's
-         * output. Passed through to upstream's `response_format` slot.
-         */responseFormatJson: String?, 
-        /**
-         * Optional system prompt, prepended as a `system`-role message.
-         */system: String?) {
-        self.messages = messages
-        self.tools = tools
-        self.temperature = temperature
-        self.maxTokens = maxTokens
-        self.topP = topP
-        self.model = model
-        self.responseFormatJson = responseFormatJson
-        self.system = system
-    }
-
-    
-
-    
-}
-
-#if compiler(>=6)
-extension CompletionRequest: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeCompletionRequest: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CompletionRequest {
-        return
-            try CompletionRequest(
-                messages: FfiConverterSequenceTypeChatMessage.read(from: &buf), 
-                tools: FfiConverterSequenceTypeTool.read(from: &buf), 
-                temperature: FfiConverterOptionDouble.read(from: &buf), 
-                maxTokens: FfiConverterOptionUInt32.read(from: &buf), 
-                topP: FfiConverterOptionDouble.read(from: &buf), 
-                model: FfiConverterOptionString.read(from: &buf), 
-                responseFormatJson: FfiConverterOptionString.read(from: &buf), 
-                system: FfiConverterOptionString.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: CompletionRequest, into buf: inout [UInt8]) {
-        FfiConverterSequenceTypeChatMessage.write(value.messages, into: &buf)
-        FfiConverterSequenceTypeTool.write(value.tools, into: &buf)
-        FfiConverterOptionDouble.write(value.temperature, into: &buf)
-        FfiConverterOptionUInt32.write(value.maxTokens, into: &buf)
-        FfiConverterOptionDouble.write(value.topP, into: &buf)
-        FfiConverterOptionString.write(value.model, into: &buf)
-        FfiConverterOptionString.write(value.responseFormatJson, into: &buf)
-        FfiConverterOptionString.write(value.system, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCompletionRequest_lift(_ buf: RustBuffer) throws -> CompletionRequest {
-    return try FfiConverterTypeCompletionRequest.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCompletionRequest_lower(_ value: CompletionRequest) -> RustBuffer {
-    return FfiConverterTypeCompletionRequest.lower(value)
-}
-
-
-/**
- * The result of a non-streaming chat completion.
- *
- * `content` is the empty string when the provider returned no text (e.g.
- * the model emitted only tool calls). `finish_reason` is the empty string
- * when the provider didn't report one.
- */
-public struct CompletionResponse: Equatable, Hashable {
-    public var content: String
-    public var toolCalls: [ToolCall]
-    public var finishReason: String
-    public var model: String
-    public var usage: TokenUsage
-
-    // Default memberwise initializers are never public by default, so we
-    // declare one manually.
-    public init(content: String, toolCalls: [ToolCall], finishReason: String, model: String, usage: TokenUsage) {
-        self.content = content
-        self.toolCalls = toolCalls
-        self.finishReason = finishReason
-        self.model = model
-        self.usage = usage
-    }
-
-    
-
-    
-}
-
-#if compiler(>=6)
-extension CompletionResponse: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeCompletionResponse: FfiConverterRustBuffer {
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CompletionResponse {
-        return
-            try CompletionResponse(
-                content: FfiConverterString.read(from: &buf), 
-                toolCalls: FfiConverterSequenceTypeToolCall.read(from: &buf), 
-                finishReason: FfiConverterString.read(from: &buf), 
-                model: FfiConverterString.read(from: &buf), 
-                usage: FfiConverterTypeTokenUsage.read(from: &buf)
-        )
-    }
-
-    public static func write(_ value: CompletionResponse, into buf: inout [UInt8]) {
-        FfiConverterString.write(value.content, into: &buf)
-        FfiConverterSequenceTypeToolCall.write(value.toolCalls, into: &buf)
-        FfiConverterString.write(value.finishReason, into: &buf)
-        FfiConverterString.write(value.model, into: &buf)
-        FfiConverterTypeTokenUsage.write(value.usage, into: &buf)
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCompletionResponse_lift(_ buf: RustBuffer) throws -> CompletionResponse {
-    return try FfiConverterTypeCompletionResponse.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeCompletionResponse_lower(_ value: CompletionResponse) -> RustBuffer {
-    return FfiConverterTypeCompletionResponse.lower(value)
-}
-
-
-/**
  * Bundle of admission-policy fields for a worker.
  *
  * `max_in_flight` is meaningful when `mode == Fixed`, `total_mb` when
@@ -13221,6 +12952,187 @@ public func FfiConverterTypeMediaOutput_lower(_ value: MediaOutput) -> RustBuffe
 
 
 /**
+ * A provider-agnostic chat completion request.
+ *
+ * `system`, when set, is prepended as a `Role::System` message — equivalent
+ * to building the message list with a leading system entry. Provided as a
+ * convenience because most foreign callers think of the system prompt as a
+ * request-level field, not a message.
+ */
+public struct ModelRequest: Equatable, Hashable {
+    public var messages: [ChatMessage]
+    public var tools: [Tool]
+    public var temperature: Double?
+    public var maxTokens: UInt32?
+    public var topP: Double?
+    /**
+     * Optional model identifier to use for this request, overriding the
+     * provider's default model.
+     */
+    public var model: String?
+    /**
+     * Optional JSON Schema (encoded as a string) constraining the model's
+     * output. Passed through to upstream's `response_format` slot.
+     */
+    public var responseFormatJson: String?
+    /**
+     * Optional system prompt, prepended as a `system`-role message.
+     */
+    public var system: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(messages: [ChatMessage], tools: [Tool], temperature: Double?, maxTokens: UInt32?, topP: Double?, 
+        /**
+         * Optional model identifier to use for this request, overriding the
+         * provider's default model.
+         */model: String?, 
+        /**
+         * Optional JSON Schema (encoded as a string) constraining the model's
+         * output. Passed through to upstream's `response_format` slot.
+         */responseFormatJson: String?, 
+        /**
+         * Optional system prompt, prepended as a `system`-role message.
+         */system: String?) {
+        self.messages = messages
+        self.tools = tools
+        self.temperature = temperature
+        self.maxTokens = maxTokens
+        self.topP = topP
+        self.model = model
+        self.responseFormatJson = responseFormatJson
+        self.system = system
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ModelRequest: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeModelRequest: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ModelRequest {
+        return
+            try ModelRequest(
+                messages: FfiConverterSequenceTypeChatMessage.read(from: &buf), 
+                tools: FfiConverterSequenceTypeTool.read(from: &buf), 
+                temperature: FfiConverterOptionDouble.read(from: &buf), 
+                maxTokens: FfiConverterOptionUInt32.read(from: &buf), 
+                topP: FfiConverterOptionDouble.read(from: &buf), 
+                model: FfiConverterOptionString.read(from: &buf), 
+                responseFormatJson: FfiConverterOptionString.read(from: &buf), 
+                system: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ModelRequest, into buf: inout [UInt8]) {
+        FfiConverterSequenceTypeChatMessage.write(value.messages, into: &buf)
+        FfiConverterSequenceTypeTool.write(value.tools, into: &buf)
+        FfiConverterOptionDouble.write(value.temperature, into: &buf)
+        FfiConverterOptionUInt32.write(value.maxTokens, into: &buf)
+        FfiConverterOptionDouble.write(value.topP, into: &buf)
+        FfiConverterOptionString.write(value.model, into: &buf)
+        FfiConverterOptionString.write(value.responseFormatJson, into: &buf)
+        FfiConverterOptionString.write(value.system, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModelRequest_lift(_ buf: RustBuffer) throws -> ModelRequest {
+    return try FfiConverterTypeModelRequest.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModelRequest_lower(_ value: ModelRequest) -> RustBuffer {
+    return FfiConverterTypeModelRequest.lower(value)
+}
+
+
+/**
+ * The result of a non-streaming chat completion.
+ *
+ * `content` is the empty string when the provider returned no text (e.g.
+ * the model emitted only tool calls). `finish_reason` is the empty string
+ * when the provider didn't report one.
+ */
+public struct ModelResponse: Equatable, Hashable {
+    public var content: String
+    public var toolCalls: [ToolCall]
+    public var finishReason: String
+    public var model: String
+    public var usage: TokenUsage
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(content: String, toolCalls: [ToolCall], finishReason: String, model: String, usage: TokenUsage) {
+        self.content = content
+        self.toolCalls = toolCalls
+        self.finishReason = finishReason
+        self.model = model
+        self.usage = usage
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ModelResponse: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeModelResponse: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ModelResponse {
+        return
+            try ModelResponse(
+                content: FfiConverterString.read(from: &buf), 
+                toolCalls: FfiConverterSequenceTypeToolCall.read(from: &buf), 
+                finishReason: FfiConverterString.read(from: &buf), 
+                model: FfiConverterString.read(from: &buf), 
+                usage: FfiConverterTypeTokenUsage.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ModelResponse, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.content, into: &buf)
+        FfiConverterSequenceTypeToolCall.write(value.toolCalls, into: &buf)
+        FfiConverterString.write(value.finishReason, into: &buf)
+        FfiConverterString.write(value.model, into: &buf)
+        FfiConverterTypeTokenUsage.write(value.usage, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModelResponse_lift(_ buf: RustBuffer) throws -> ModelResponse {
+    return try FfiConverterTypeModelResponse.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeModelResponse_lower(_ value: ModelResponse) -> RustBuffer {
+    return FfiConverterTypeModelResponse.lower(value)
+}
+
+
+/**
  * Per-model state snapshot returned by [`UniffiModelManager::status`].
  */
 public struct ModelStatusRecord: Equatable, Hashable {
@@ -13766,6 +13678,94 @@ public func FfiConverterTypePoolStatusRecord_lift(_ buf: RustBuffer) throws -> P
 #endif
 public func FfiConverterTypePoolStatusRecord_lower(_ value: PoolStatusRecord) -> RustBuffer {
     return FfiConverterTypePoolStatusRecord.lower(value)
+}
+
+
+/**
+ * Completion-role defaults: system prompt, default tools, default
+ * `response_format`. Hooks (`before_model`) deferred to Phase C.
+ */
+public struct ProviderDefaults: Equatable, Hashable {
+    public var base: BaseProviderDefaults?
+    /**
+     * Prepended as a system message if the request lacks one.
+     */
+    public var systemPrompt: String?
+    /**
+     * JSON-encoded `Vec<ToolDefinition>`. Merged into the request's tool
+     * list — request-supplied tools win on name collision.
+     */
+    public var toolsJson: String?
+    /**
+     * JSON-encoded `serde_json::Value` for the OpenAI-style
+     * `response_format` field. Set only if the request lacks one.
+     */
+    public var responseFormatJson: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(base: BaseProviderDefaults? = nil, 
+        /**
+         * Prepended as a system message if the request lacks one.
+         */systemPrompt: String? = nil, 
+        /**
+         * JSON-encoded `Vec<ToolDefinition>`. Merged into the request's tool
+         * list — request-supplied tools win on name collision.
+         */toolsJson: String? = nil, 
+        /**
+         * JSON-encoded `serde_json::Value` for the OpenAI-style
+         * `response_format` field. Set only if the request lacks one.
+         */responseFormatJson: String? = nil) {
+        self.base = base
+        self.systemPrompt = systemPrompt
+        self.toolsJson = toolsJson
+        self.responseFormatJson = responseFormatJson
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ProviderDefaults: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeProviderDefaults: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ProviderDefaults {
+        return
+            try ProviderDefaults(
+                base: FfiConverterOptionTypeBaseProviderDefaults.read(from: &buf), 
+                systemPrompt: FfiConverterOptionString.read(from: &buf), 
+                toolsJson: FfiConverterOptionString.read(from: &buf), 
+                responseFormatJson: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ProviderDefaults, into buf: inout [UInt8]) {
+        FfiConverterOptionTypeBaseProviderDefaults.write(value.base, into: &buf)
+        FfiConverterOptionString.write(value.systemPrompt, into: &buf)
+        FfiConverterOptionString.write(value.toolsJson, into: &buf)
+        FfiConverterOptionString.write(value.responseFormatJson, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProviderDefaults_lift(_ buf: RustBuffer) throws -> ProviderDefaults {
+    return try FfiConverterTypeProviderDefaults.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeProviderDefaults_lower(_ value: ProviderDefaults) -> RustBuffer {
+    return FfiConverterTypeProviderDefaults.lower(value)
 }
 
 
@@ -16313,7 +16313,7 @@ public func FfiConverterTypeBackendHintEnum_lower(_ value: BackendHintEnum) -> R
  * Per-request outcome within a [`BatchResult`].
  *
  * Slot `i` of [`BatchResult::responses`] corresponds to input request `i`.
- * Successful slots carry the [`CompletionResponse`]; failed slots carry an
+ * Successful slots carry the [`ModelResponse`]; failed slots carry an
  * `error_message` only (the structured `BlazenError` variant doesn't survive
  * nesting inside a `uniffi::Enum` cleanly across all four target languages,
  * so the message is flattened to a string here — foreign callers wanting
@@ -16325,7 +16325,7 @@ public enum BatchItem: Equatable, Hashable {
     /**
      * The request completed and the model returned a response.
      */
-    case success(response: CompletionResponse
+    case success(response: ModelResponse
     )
     /**
      * The request failed. The message mirrors the `Display` form of the
@@ -16354,7 +16354,7 @@ public struct FfiConverterTypeBatchItem: FfiConverterRustBuffer {
         let variant: Int32 = try readInt(&buf)
         switch variant {
         
-        case 1: return .success(response: try FfiConverterTypeCompletionResponse.read(from: &buf)
+        case 1: return .success(response: try FfiConverterTypeModelResponse.read(from: &buf)
         )
         
         case 2: return .failure(errorMessage: try FfiConverterString.read(from: &buf)
@@ -16370,7 +16370,7 @@ public struct FfiConverterTypeBatchItem: FfiConverterRustBuffer {
         
         case let .success(response):
             writeInt(&buf, Int32(1))
-            FfiConverterTypeCompletionResponse.write(response, into: &buf)
+            FfiConverterTypeModelResponse.write(response, into: &buf)
             
         
         case let .failure(errorMessage):
@@ -17722,31 +17722,6 @@ fileprivate struct FfiConverterSequenceTypeChatMessage: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
-fileprivate struct FfiConverterSequenceTypeCompletionRequest: FfiConverterRustBuffer {
-    typealias SwiftType = [CompletionRequest]
-
-    public static func write(_ value: [CompletionRequest], into buf: inout [UInt8]) {
-        let len = Int32(value.count)
-        writeInt(&buf, len)
-        for item in value {
-            FfiConverterTypeCompletionRequest.write(item, into: &buf)
-        }
-    }
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [CompletionRequest] {
-        let len: Int32 = try readInt(&buf)
-        var seq = [CompletionRequest]()
-        seq.reserveCapacity(Int(len))
-        for _ in 0 ..< len {
-            seq.append(try FfiConverterTypeCompletionRequest.read(from: &buf))
-        }
-        return seq
-    }
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
 fileprivate struct FfiConverterSequenceTypeControlPlaneWorkerCapability: FfiConverterRustBuffer {
     typealias SwiftType = [ControlPlaneWorkerCapability]
 
@@ -17964,6 +17939,31 @@ fileprivate struct FfiConverterSequenceTypeMedia: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeMedia.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceTypeModelRequest: FfiConverterRustBuffer {
+    typealias SwiftType = [ModelRequest]
+
+    public static func write(_ value: [ModelRequest], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeModelRequest.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [ModelRequest] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [ModelRequest]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeModelRequest.read(from: &buf))
         }
         return seq
     }
@@ -18462,11 +18462,11 @@ public func version() -> String  {
  * to the upstream wire format (typically a malformed `parameters_json` or
  * `response_format_json` payload).
  */
-public func completeBatch(model: CompletionModel, requests: [CompletionRequest], maxConcurrency: UInt32)async throws  -> BatchResult  {
+public func completeBatch(model: Model, requests: [ModelRequest], maxConcurrency: UInt32)async throws  -> BatchResult  {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_blazen_uniffi_fn_func_complete_batch(FfiConverterTypeCompletionModel_lower(model),FfiConverterSequenceTypeCompletionRequest.lower(requests),FfiConverterUInt32.lower(maxConcurrency)
+                uniffi_blazen_uniffi_fn_func_complete_batch(FfiConverterTypeModel_lower(model),FfiConverterSequenceTypeModelRequest.lower(requests),FfiConverterUInt32.lower(maxConcurrency)
                 )
             },
             pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
@@ -18484,11 +18484,11 @@ public func completeBatch(model: CompletionModel, requests: [CompletionRequest],
  *
  * Same as [`complete_batch`].
  */
-public func completeBatchBlocking(model: CompletionModel, requests: [CompletionRequest], maxConcurrency: UInt32)throws  -> BatchResult  {
+public func completeBatchBlocking(model: Model, requests: [ModelRequest], maxConcurrency: UInt32)throws  -> BatchResult  {
     return try  FfiConverterTypeBatchResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
     uniffi_blazen_uniffi_fn_func_complete_batch_blocking(
-        FfiConverterTypeCompletionModel_lower(model),
-        FfiConverterSequenceTypeCompletionRequest.lower(requests),
+        FfiConverterTypeModel_lower(model),
+        FfiConverterSequenceTypeModelRequest.lower(requests),
         FfiConverterUInt32.lower(maxConcurrency),$0
     )
 })
@@ -18764,9 +18764,9 @@ public func openaiCompat(providerId: String, config: OpenAiCompatConfig) -> Cust
 /**
  * Build an Anthropic Messages-API chat-completion model.
  */
-public func newAnthropicCompletionModel(apiKey: String, model: String?, baseUrl: String?)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_anthropic_completion_model(
+public func newAnthropicModel(apiKey: String, model: String?, baseUrl: String?)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_anthropic_model(
         FfiConverterString.lower(apiKey),
         FfiConverterOptionString.lower(model),
         FfiConverterOptionString.lower(baseUrl),$0
@@ -18781,9 +18781,9 @@ public func newAnthropicCompletionModel(apiKey: String, model: String?, baseUrl:
  * exposed here. `api_version` defaults to the provider's pinned API
  * version when `None`.
  */
-public func newAzureCompletionModel(apiKey: String, resourceName: String, deploymentName: String, apiVersion: String?)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_azure_completion_model(
+public func newAzureModel(apiKey: String, resourceName: String, deploymentName: String, apiVersion: String?)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_azure_model(
         FfiConverterString.lower(apiKey),
         FfiConverterString.lower(resourceName),
         FfiConverterString.lower(deploymentName),
@@ -18798,32 +18798,13 @@ public func newAzureCompletionModel(apiKey: String, resourceName: String, deploy
  * Bedrock API key (which can be obtained via `aws bedrock` IAM keys or
  * passed as an empty string to resolve from `AWS_BEARER_TOKEN_BEDROCK`).
  */
-public func newBedrockCompletionModel(apiKey: String, region: String, model: String?, baseUrl: String?)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_bedrock_completion_model(
+public func newBedrockModel(apiKey: String, region: String, model: String?, baseUrl: String?)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_bedrock_model(
         FfiConverterString.lower(apiKey),
         FfiConverterString.lower(region),
         FfiConverterOptionString.lower(model),
         FfiConverterOptionString.lower(baseUrl),$0
-    )
-})
-}
-/**
- * Build a local candle chat-completion model.
- *
- * Wraps [`CandleLlmProvider`](blazen_llm::CandleLlmProvider) through the
- * [`CandleLlmCompletionModel`](blazen_llm::CandleLlmCompletionModel) trait
- * bridge so it satisfies the same `CompletionModel` trait as remote
- * providers.
- */
-public func newCandleCompletionModel(modelId: String, device: String?, quantization: String?, revision: String?, contextLength: UInt32?)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_candle_completion_model(
-        FfiConverterString.lower(modelId),
-        FfiConverterOptionString.lower(device),
-        FfiConverterOptionString.lower(quantization),
-        FfiConverterOptionString.lower(revision),
-        FfiConverterOptionUInt32.lower(contextLength),$0
     )
 })
 }
@@ -18843,11 +18824,30 @@ public func newCandleEmbeddingModel(modelId: String?, device: String?, revision:
 })
 }
 /**
+ * Build a local candle chat-completion model.
+ *
+ * Wraps [`CandleLlmProvider`](blazen_llm::CandleLlmProvider) through the
+ * [`CandleLlmModel`](blazen_llm::CandleLlmModel) trait
+ * bridge so it satisfies the same `Model` trait as remote
+ * providers.
+ */
+public func newCandleModel(modelId: String, device: String?, quantization: String?, revision: String?, contextLength: UInt32?)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_candle_model(
+        FfiConverterString.lower(modelId),
+        FfiConverterOptionString.lower(device),
+        FfiConverterOptionString.lower(quantization),
+        FfiConverterOptionString.lower(revision),
+        FfiConverterOptionUInt32.lower(contextLength),$0
+    )
+})
+}
+/**
  * Build a Cohere chat-completion model.
  */
-public func newCohereCompletionModel(apiKey: String, model: String?, baseUrl: String?)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_cohere_completion_model(
+public func newCohereModel(apiKey: String, model: String?, baseUrl: String?)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_cohere_model(
         FfiConverterString.lower(apiKey),
         FfiConverterOptionString.lower(model),
         FfiConverterOptionString.lower(baseUrl),$0
@@ -18855,19 +18855,19 @@ public func newCohereCompletionModel(apiKey: String, model: String?, baseUrl: St
 })
 }
 /**
- * Construct a [`CompletionModel`] that speaks the `OpenAI` chat-completions
+ * Construct a [`Model`] that speaks the `OpenAI` chat-completions
  * protocol against an arbitrary base URL.
  *
  * This is the same wire format as
- * [`new_openai_compat_completion_model`], but wrapped in a
+ * [`new_openai_compat_model`], but wrapped in a
  * [`blazen_llm::CustomProviderHandle`] for consistent ergonomics with the
- * `new_ollama_completion_model` / `new_lm_studio_completion_model`
+ * `new_ollama_model` / `new_lm_studio_model`
  * factories. `api_key` is optional: passing `None` (or an empty `Some`)
  * omits the `Authorization` header entirely.
  */
-public func newCustomCompletionModelWithOpenaiProtocol(providerId: String, baseUrl: String, model: String, apiKey: String?)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_custom_completion_model_with_openai_protocol(
+public func newCustomModelWithOpenaiProtocol(providerId: String, baseUrl: String, model: String, apiKey: String?)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_custom_model_with_openai_protocol(
         FfiConverterString.lower(providerId),
         FfiConverterString.lower(baseUrl),
         FfiConverterString.lower(model),
@@ -18878,34 +18878,12 @@ public func newCustomCompletionModelWithOpenaiProtocol(providerId: String, baseU
 /**
  * Build a `DeepSeek` chat-completion model.
  */
-public func newDeepseekCompletionModel(apiKey: String, model: String?, baseUrl: String?)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_deepseek_completion_model(
+public func newDeepseekModel(apiKey: String, model: String?, baseUrl: String?)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_deepseek_model(
         FfiConverterString.lower(apiKey),
         FfiConverterOptionString.lower(model),
         FfiConverterOptionString.lower(baseUrl),$0
-    )
-})
-}
-/**
- * Build a fal.ai chat-completion model.
- *
- * `endpoint` selects the fal endpoint family — one of
- * `"openai_chat"` (default), `"openai_responses"`, `"openai_embeddings"`,
- * `"openrouter"`, `"any_llm"`. Unrecognised values fall back to
- * `OpenAiChat`. `enterprise` promotes the endpoint to its enterprise /
- * SOC2-eligible variant; `auto_route_modality` toggles automatic routing
- * to a vision/audio/video endpoint when the request carries media.
- */
-public func newFalCompletionModel(apiKey: String, model: String?, baseUrl: String?, endpoint: String?, enterprise: Bool, autoRouteModality: Bool)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_fal_completion_model(
-        FfiConverterString.lower(apiKey),
-        FfiConverterOptionString.lower(model),
-        FfiConverterOptionString.lower(baseUrl),
-        FfiConverterOptionString.lower(endpoint),
-        FfiConverterBool.lower(enterprise),
-        FfiConverterBool.lower(autoRouteModality),$0
     )
 })
 }
@@ -18923,6 +18901,28 @@ public func newFalEmbeddingModel(apiKey: String, model: String?, dimensions: UIn
         FfiConverterString.lower(apiKey),
         FfiConverterOptionString.lower(model),
         FfiConverterOptionUInt32.lower(dimensions),$0
+    )
+})
+}
+/**
+ * Build a fal.ai chat-completion model.
+ *
+ * `endpoint` selects the fal endpoint family — one of
+ * `"openai_chat"` (default), `"openai_responses"`, `"openai_embeddings"`,
+ * `"openrouter"`, `"any_llm"`. Unrecognised values fall back to
+ * `OpenAiChat`. `enterprise` promotes the endpoint to its enterprise /
+ * SOC2-eligible variant; `auto_route_modality` toggles automatic routing
+ * to a vision/audio/video endpoint when the request carries media.
+ */
+public func newFalModel(apiKey: String, model: String?, baseUrl: String?, endpoint: String?, enterprise: Bool, autoRouteModality: Bool)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_fal_model(
+        FfiConverterString.lower(apiKey),
+        FfiConverterOptionString.lower(model),
+        FfiConverterOptionString.lower(baseUrl),
+        FfiConverterOptionString.lower(endpoint),
+        FfiConverterBool.lower(enterprise),
+        FfiConverterBool.lower(autoRouteModality),$0
     )
 })
 }
@@ -18945,9 +18945,9 @@ public func newFastembedEmbeddingModel(modelName: String?, maxBatchSize: UInt32?
 /**
  * Build a Fireworks AI chat-completion model.
  */
-public func newFireworksCompletionModel(apiKey: String, model: String?, baseUrl: String?)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_fireworks_completion_model(
+public func newFireworksModel(apiKey: String, model: String?, baseUrl: String?)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_fireworks_model(
         FfiConverterString.lower(apiKey),
         FfiConverterOptionString.lower(model),
         FfiConverterOptionString.lower(baseUrl),$0
@@ -18957,9 +18957,9 @@ public func newFireworksCompletionModel(apiKey: String, model: String?, baseUrl:
 /**
  * Build a Google Gemini chat-completion model.
  */
-public func newGeminiCompletionModel(apiKey: String, model: String?, baseUrl: String?)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_gemini_completion_model(
+public func newGeminiModel(apiKey: String, model: String?, baseUrl: String?)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_gemini_model(
         FfiConverterString.lower(apiKey),
         FfiConverterOptionString.lower(model),
         FfiConverterOptionString.lower(baseUrl),$0
@@ -18969,9 +18969,9 @@ public func newGeminiCompletionModel(apiKey: String, model: String?, baseUrl: St
 /**
  * Build a Groq chat-completion model.
  */
-public func newGroqCompletionModel(apiKey: String, model: String?, baseUrl: String?)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_groq_completion_model(
+public func newGroqModel(apiKey: String, model: String?, baseUrl: String?)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_groq_model(
         FfiConverterString.lower(apiKey),
         FfiConverterOptionString.lower(model),
         FfiConverterOptionString.lower(baseUrl),$0
@@ -18985,9 +18985,9 @@ public func newGroqCompletionModel(apiKey: String, model: String?, baseUrl: Stri
  * id; `n_gpu_layers` offloads the given number of layers to the GPU when
  * the device supports it.
  */
-public func newLlamacppCompletionModel(modelPath: String, device: String?, quantization: String?, contextLength: UInt32?, nGpuLayers: UInt32?)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_llamacpp_completion_model(
+public func newLlamacppModel(modelPath: String, device: String?, quantization: String?, contextLength: UInt32?, nGpuLayers: UInt32?)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_llamacpp_model(
         FfiConverterString.lower(modelPath),
         FfiConverterOptionString.lower(device),
         FfiConverterOptionString.lower(quantization),
@@ -18997,14 +18997,14 @@ public func newLlamacppCompletionModel(modelPath: String, device: String?, quant
 })
 }
 /**
- * Construct a [`CompletionModel`] for an LM Studio server.
+ * Construct a [`Model`] for an LM Studio server.
  *
  * Convenience wrapper around [`blazen_llm::lm_studio`] — targets LM Studio's
  * local `OpenAI`-compatible endpoint on `http://{host}:{port}/v1`.
  */
-public func newLmStudioCompletionModel(host: String, port: UInt16, model: String)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_lm_studio_completion_model(
+public func newLmStudioModel(host: String, port: UInt16, model: String)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_lm_studio_model(
         FfiConverterString.lower(host),
         FfiConverterUInt16.lower(port),
         FfiConverterString.lower(model),$0
@@ -19014,9 +19014,9 @@ public func newLmStudioCompletionModel(host: String, port: UInt16, model: String
 /**
  * Build a Mistral chat-completion model.
  */
-public func newMistralCompletionModel(apiKey: String, model: String?, baseUrl: String?)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_mistral_completion_model(
+public func newMistralModel(apiKey: String, model: String?, baseUrl: String?)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_mistral_model(
         FfiConverterString.lower(apiKey),
         FfiConverterOptionString.lower(model),
         FfiConverterOptionString.lower(baseUrl),$0
@@ -19032,9 +19032,9 @@ public func newMistralCompletionModel(apiKey: String, model: String?, baseUrl: S
  * (`"cpu"`, `"cuda:0"`, `"metal"`, `"q4_k_m"`, ...). Set `vision = true`
  * for multimodal models like LLaVA / Qwen2-VL.
  */
-public func newMistralrsCompletionModel(modelId: String, device: String?, quantization: String?, contextLength: UInt32?, vision: Bool)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_mistralrs_completion_model(
+public func newMistralrsModel(modelId: String, device: String?, quantization: String?, contextLength: UInt32?, vision: Bool)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_mistralrs_model(
         FfiConverterString.lower(modelId),
         FfiConverterOptionString.lower(device),
         FfiConverterOptionString.lower(quantization),
@@ -19044,16 +19044,16 @@ public func newMistralrsCompletionModel(modelId: String, device: String?, quanti
 })
 }
 /**
- * Construct a [`CompletionModel`] for an Ollama server.
+ * Construct a [`Model`] for an Ollama server.
  *
- * Convenience for [`new_custom_completion_model_with_openai_protocol`] with
+ * Convenience for [`new_custom_model_with_openai_protocol`] with
  * `base_url = format!("http://{host}:{port}/v1")` and no API key. Delegates
  * to [`blazen_llm::ollama`], which knows how to speak Ollama's flavour of
  * the `OpenAI` chat-completions protocol.
  */
-public func newOllamaCompletionModel(host: String, port: UInt16, model: String)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_ollama_completion_model(
+public func newOllamaModel(host: String, port: UInt16, model: String)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_ollama_model(
         FfiConverterString.lower(host),
         FfiConverterUInt16.lower(port),
         FfiConverterString.lower(model),$0
@@ -19067,28 +19067,13 @@ public func newOllamaCompletionModel(host: String, port: UInt16, model: String)t
  * wire format (vLLM, llama-server, LM Studio, local proxies, ...). Uses
  * `Authorization: Bearer <api_key>` auth.
  */
-public func newOpenaiCompatCompletionModel(providerName: String, baseUrl: String, apiKey: String, model: String)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_openai_compat_completion_model(
+public func newOpenaiCompatModel(providerName: String, baseUrl: String, apiKey: String, model: String)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_openai_compat_model(
         FfiConverterString.lower(providerName),
         FfiConverterString.lower(baseUrl),
         FfiConverterString.lower(apiKey),
         FfiConverterString.lower(model),$0
-    )
-})
-}
-/**
- * Build an `OpenAI` chat-completion model.
- *
- * `base_url` defaults to `https://api.openai.com/v1`; override it to target
- * any OpenAI-compatible proxy that uses the official-OpenAI request shape.
- */
-public func newOpenaiCompletionModel(apiKey: String, model: String?, baseUrl: String?)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_openai_completion_model(
-        FfiConverterString.lower(apiKey),
-        FfiConverterOptionString.lower(model),
-        FfiConverterOptionString.lower(baseUrl),$0
     )
 })
 }
@@ -19110,11 +19095,26 @@ public func newOpenaiEmbeddingModel(apiKey: String, model: String?, baseUrl: Str
 })
 }
 /**
+ * Build an `OpenAI` chat-completion model.
+ *
+ * `base_url` defaults to `https://api.openai.com/v1`; override it to target
+ * any OpenAI-compatible proxy that uses the official-OpenAI request shape.
+ */
+public func newOpenaiModel(apiKey: String, model: String?, baseUrl: String?)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_openai_model(
+        FfiConverterString.lower(apiKey),
+        FfiConverterOptionString.lower(model),
+        FfiConverterOptionString.lower(baseUrl),$0
+    )
+})
+}
+/**
  * Build an `OpenRouter` chat-completion model.
  */
-public func newOpenrouterCompletionModel(apiKey: String, model: String?, baseUrl: String?)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_openrouter_completion_model(
+public func newOpenrouterModel(apiKey: String, model: String?, baseUrl: String?)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_openrouter_model(
         FfiConverterString.lower(apiKey),
         FfiConverterOptionString.lower(model),
         FfiConverterOptionString.lower(baseUrl),$0
@@ -19124,9 +19124,9 @@ public func newOpenrouterCompletionModel(apiKey: String, model: String?, baseUrl
 /**
  * Build a Perplexity chat-completion model.
  */
-public func newPerplexityCompletionModel(apiKey: String, model: String?, baseUrl: String?)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_perplexity_completion_model(
+public func newPerplexityModel(apiKey: String, model: String?, baseUrl: String?)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_perplexity_model(
         FfiConverterString.lower(apiKey),
         FfiConverterOptionString.lower(model),
         FfiConverterOptionString.lower(baseUrl),$0
@@ -19136,9 +19136,9 @@ public func newPerplexityCompletionModel(apiKey: String, model: String?, baseUrl
 /**
  * Build a Together AI chat-completion model.
  */
-public func newTogetherCompletionModel(apiKey: String, model: String?, baseUrl: String?)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_together_completion_model(
+public func newTogetherModel(apiKey: String, model: String?, baseUrl: String?)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_together_model(
         FfiConverterString.lower(apiKey),
         FfiConverterOptionString.lower(model),
         FfiConverterOptionString.lower(baseUrl),$0
@@ -19165,9 +19165,9 @@ public func newTractEmbeddingModel(modelName: String?, maxBatchSize: UInt32?, sh
 /**
  * Build an xAI (Grok) chat-completion model.
  */
-public func newXaiCompletionModel(apiKey: String, model: String?, baseUrl: String?)throws  -> CompletionModel  {
-    return try  FfiConverterTypeCompletionModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
-    uniffi_blazen_uniffi_fn_func_new_xai_completion_model(
+public func newXaiModel(apiKey: String, model: String?, baseUrl: String?)throws  -> Model  {
+    return try  FfiConverterTypeModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_xai_model(
         FfiConverterString.lower(apiKey),
         FfiConverterOptionString.lower(model),
         FfiConverterOptionString.lower(baseUrl),$0
@@ -19203,11 +19203,11 @@ public func `init`()  {try! rustCall() {
  * when the upstream `stream()` call fails to *start* the stream. Sink
  * callback failures are surfaced via `on_error`.
  */
-public func completeStreaming(model: CompletionModel, request: CompletionRequest, sink: CompletionStreamSink)async throws   {
+public func completeStreaming(model: Model, request: ModelRequest, sink: CompletionStreamSink)async throws   {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
-                uniffi_blazen_uniffi_fn_func_complete_streaming(FfiConverterTypeCompletionModel_lower(model),FfiConverterTypeCompletionRequest_lower(request),FfiConverterTypeCompletionStreamSink_lower(sink)
+                uniffi_blazen_uniffi_fn_func_complete_streaming(FfiConverterTypeModel_lower(model),FfiConverterTypeModelRequest_lower(request),FfiConverterTypeCompletionStreamSink_lower(sink)
                 )
             },
             pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
@@ -19225,10 +19225,10 @@ public func completeStreaming(model: CompletionModel, request: CompletionRequest
  * overkill. The sink's `async` methods still run on the shared runtime
  * (they're just driven synchronously from the caller's thread).
  */
-public func completeStreamingBlocking(model: CompletionModel, request: CompletionRequest, sink: CompletionStreamSink)throws   {try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+public func completeStreamingBlocking(model: Model, request: ModelRequest, sink: CompletionStreamSink)throws   {try rustCallWithError(FfiConverterTypeBlazenError_lift) {
     uniffi_blazen_uniffi_fn_func_complete_streaming_blocking(
-        FfiConverterTypeCompletionModel_lower(model),
-        FfiConverterTypeCompletionRequest_lower(request),
+        FfiConverterTypeModel_lower(model),
+        FfiConverterTypeModelRequest_lower(request),
         FfiConverterTypeCompletionStreamSink_lower(sink),$0
     )
 }
@@ -19389,10 +19389,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_func_version() != 61949) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_complete_batch() != 21646) {
+    if (uniffi_blazen_uniffi_checksum_func_complete_batch() != 26653) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_complete_batch_blocking() != 63435) {
+    if (uniffi_blazen_uniffi_checksum_func_complete_batch_blocking() != 12966) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_func_new_diffusion_model() != 18747) {
@@ -19437,94 +19437,94 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_func_openai_compat() != 1651) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_anthropic_completion_model() != 51033) {
+    if (uniffi_blazen_uniffi_checksum_func_new_anthropic_model() != 63174) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_azure_completion_model() != 44043) {
+    if (uniffi_blazen_uniffi_checksum_func_new_azure_model() != 41519) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_bedrock_completion_model() != 8513) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_blazen_uniffi_checksum_func_new_candle_completion_model() != 50089) {
+    if (uniffi_blazen_uniffi_checksum_func_new_bedrock_model() != 25844) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_func_new_candle_embedding_model() != 49772) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_cohere_completion_model() != 22601) {
+    if (uniffi_blazen_uniffi_checksum_func_new_candle_model() != 59984) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_custom_completion_model_with_openai_protocol() != 52541) {
+    if (uniffi_blazen_uniffi_checksum_func_new_cohere_model() != 47421) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_deepseek_completion_model() != 51214) {
+    if (uniffi_blazen_uniffi_checksum_func_new_custom_model_with_openai_protocol() != 35849) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_fal_completion_model() != 56790) {
+    if (uniffi_blazen_uniffi_checksum_func_new_deepseek_model() != 60107) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_func_new_fal_embedding_model() != 50719) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_func_new_fal_model() != 6726) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_func_new_fastembed_embedding_model() != 27141) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_fireworks_completion_model() != 60773) {
+    if (uniffi_blazen_uniffi_checksum_func_new_fireworks_model() != 25660) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_gemini_completion_model() != 4509) {
+    if (uniffi_blazen_uniffi_checksum_func_new_gemini_model() != 5451) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_groq_completion_model() != 2438) {
+    if (uniffi_blazen_uniffi_checksum_func_new_groq_model() != 63063) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_llamacpp_completion_model() != 2285) {
+    if (uniffi_blazen_uniffi_checksum_func_new_llamacpp_model() != 62567) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_lm_studio_completion_model() != 21338) {
+    if (uniffi_blazen_uniffi_checksum_func_new_lm_studio_model() != 54376) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_mistral_completion_model() != 22583) {
+    if (uniffi_blazen_uniffi_checksum_func_new_mistral_model() != 18547) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_mistralrs_completion_model() != 26159) {
+    if (uniffi_blazen_uniffi_checksum_func_new_mistralrs_model() != 56474) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_ollama_completion_model() != 4717) {
+    if (uniffi_blazen_uniffi_checksum_func_new_ollama_model() != 51199) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_openai_compat_completion_model() != 63435) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_blazen_uniffi_checksum_func_new_openai_completion_model() != 45922) {
+    if (uniffi_blazen_uniffi_checksum_func_new_openai_compat_model() != 1505) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_func_new_openai_embedding_model() != 64561) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_openrouter_completion_model() != 43812) {
+    if (uniffi_blazen_uniffi_checksum_func_new_openai_model() != 52484) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_perplexity_completion_model() != 57728) {
+    if (uniffi_blazen_uniffi_checksum_func_new_openrouter_model() != 25099) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_together_completion_model() != 20330) {
+    if (uniffi_blazen_uniffi_checksum_func_new_perplexity_model() != 49956) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_func_new_together_model() != 60884) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_func_new_tract_embedding_model() != 32866) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_xai_completion_model() != 397) {
+    if (uniffi_blazen_uniffi_checksum_func_new_xai_model() != 50122) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_func_init() != 33802) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_complete_streaming() != 3202) {
+    if (uniffi_blazen_uniffi_checksum_func_complete_streaming() != 22515) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_complete_streaming_blocking() != 29923) {
+    if (uniffi_blazen_uniffi_checksum_func_complete_streaming_blocking() != 64487) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_func_init_langfuse() != 16496) {
@@ -19614,15 +19614,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_controlplaneworker_shutdown() != 13840) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_completionmodel_complete() != 52439) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_blazen_uniffi_checksum_method_completionmodel_complete_blocking() != 23180) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_blazen_uniffi_checksum_method_completionmodel_model_id() != 47193) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_blazen_uniffi_checksum_method_embeddingmodel_dimensions() != 11198) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -19633,6 +19624,15 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_embeddingmodel_model_id() != 36076) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_model_complete() != 48637) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_model_complete_blocking() != 36439) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_model_model_id() != 39325) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_load() != 57606) {
@@ -19815,19 +19815,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_pipelinebuilder_total_timeout_ms() != 53032) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_baseprovider_as_completion_model() != 16167) {
+    if (uniffi_blazen_uniffi_checksum_method_baseprovider_as_model() != 58666) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_baseprovider_defaults() != 34325) {
+    if (uniffi_blazen_uniffi_checksum_method_baseprovider_defaults() != 21474) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_baseprovider_extract() != 47282) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_baseprovider_model_id() != 18871) {
+    if (uniffi_blazen_uniffi_checksum_method_baseprovider_model_id() != 18282) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_baseprovider_with_defaults() != 59299) {
+    if (uniffi_blazen_uniffi_checksum_method_baseprovider_with_defaults() != 47332) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_baseprovider_with_response_format_json() != 25582) {
@@ -19842,10 +19842,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_customprovider_provider_id() != 63939) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_customprovider_complete() != 50396) {
+    if (uniffi_blazen_uniffi_checksum_method_customprovider_complete() != 59926) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_customprovider_stream() != 43804) {
+    if (uniffi_blazen_uniffi_checksum_method_customprovider_stream() != 9479) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_customprovider_embed() != 11956) {
@@ -19890,13 +19890,13 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_customprovider_remove_background() != 5224) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_customproviderhandle_as_base() != 14798) {
+    if (uniffi_blazen_uniffi_checksum_method_customproviderhandle_as_base() != 43943) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_customproviderhandle_clone_voice() != 62032) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_customproviderhandle_complete() != 8359) {
+    if (uniffi_blazen_uniffi_checksum_method_customproviderhandle_complete() != 24656) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_customproviderhandle_delete_voice() != 40671) {
@@ -19929,7 +19929,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_customproviderhandle_remove_background() != 30856) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_customproviderhandle_stream() != 19661) {
+    if (uniffi_blazen_uniffi_checksum_method_customproviderhandle_stream() != 57273) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_customproviderhandle_text_to_speech() != 20321) {
@@ -19986,7 +19986,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_workflowbuilder_timeout_ms() != 61492) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_constructor_agent_new() != 30307) {
+    if (uniffi_blazen_uniffi_checksum_constructor_agent_new() != 59656) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_constructor_controlplaneclient_connect() != 13355) {
@@ -20025,10 +20025,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_constructor_pipelinebuilder_new() != 61410) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_completion_model() != 9239) {
+    if (uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model() != 28877) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_constructor_baseprovider_with_completion_defaults() != 23775) {
+    if (uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model_with_defaults() != 44881) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_constructor_workflowbuilder_new() != 14241) {

@@ -4,16 +4,16 @@
 //! users can subclass it via `class MyLLM extends BaseProvider`) and
 //! builder methods that mirror the Rust [`BaseProvider`] surface:
 //! `withSystemPrompt`, `withTools`, `withResponseFormat`,
-//! `withBeforeRequest`, `withBeforeCompletion`, `withDefaults`.
+//! `withBeforeRequest`, `withBeforeModel`, `withDefaults`.
 //!
 //! ## V1 status
 //!
 //! For V1, the constructor accepts an `inner` JS object (typically a
-//! [`JsCompletionModel`] handle) and an optional
-//! [`JsCompletionProviderDefaults`]. The `inner` object is stashed for
+//! [`JsModel`] handle) and an optional
+//! [`JsProviderDefaults`]. The `inner` object is stashed for
 //! Phase D's real subclass-detection wiring — today the builder methods
 //! mutate the defaults snapshot, and the `inner` slot lets the
-//! framework recover the underlying Rust [`CompletionModel`] when one
+//! framework recover the underlying Rust [`Model`] when one
 //! is present.
 
 use std::sync::Arc;
@@ -22,16 +22,14 @@ use std::sync::Mutex;
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
-use blazen_llm::CompletionModel;
+use blazen_llm::Model;
 use blazen_llm::providers::base::BaseProvider;
-use blazen_llm::types::{ChatMessage, CompletionRequest, ToolDefinition};
+use blazen_llm::types::{ChatMessage, ModelRequest, ToolDefinition};
 
 use crate::error::llm_error_to_napi;
 use crate::generated::JsToolDefinition;
-use crate::providers::completion_model::JsCompletionModel;
-use crate::providers::defaults::{
-    BeforeCompletionTsfn, BeforeRequestTsfn, JsCompletionProviderDefaults,
-};
+use crate::providers::defaults::{BeforeModelTsfn, BeforeRequestTsfn, JsProviderDefaults};
+use crate::providers::model::JsModel;
 use crate::types::JsChatMessage;
 
 // ---------------------------------------------------------------------------
@@ -39,17 +37,17 @@ use crate::types::JsChatMessage;
 // ---------------------------------------------------------------------------
 
 /// A completion provider wrapper that applies a
-/// [`JsCompletionProviderDefaults`] to every completion request before
+/// [`JsProviderDefaults`] to every completion request before
 /// delegating to the inner model.
 ///
 /// `BaseProvider` is intended to be subclassed from JavaScript:
 ///
 /// ```javascript
-/// import { BaseProvider, CompletionModel } from "blazen";
+/// import { BaseProvider, Model } from "blazen";
 ///
 /// class TerseLlm extends BaseProvider {
 ///   constructor() {
-///     const inner = CompletionModel.openai({ apiKey: "sk-..." });
+///     const inner = Model.openai({ apiKey: "sk-..." });
 ///     super(inner);
 ///     this.withSystemPrompt("Be terse.");
 ///   }
@@ -64,12 +62,12 @@ pub struct JsBaseProvider {
     /// The configured defaults. Stored behind a Mutex so the builder
     /// methods can mutate in place without taking `self` by value (napi
     /// methods take `&self`).
-    pub(crate) defaults: Arc<Mutex<JsCompletionProviderDefaults>>,
+    pub(crate) defaults: Arc<Mutex<JsProviderDefaults>>,
     /// Optional underlying Rust completion model. Populated when the
-    /// constructor receives a [`JsCompletionModel`] with a Rust-side
+    /// constructor receives a [`JsModel`] with a Rust-side
     /// `inner` provider. `None` for fully-subclassed JS-only providers
     /// (Phase D will wire that path).
-    pub(crate) inner: Option<Arc<dyn CompletionModel>>,
+    pub(crate) inner: Option<Arc<dyn Model>>,
     /// The provider ID for logging and introspection. Defaults to the
     /// inner model's ID when present, otherwise `"base"`.
     pub(crate) provider_id: Arc<Mutex<String>>,
@@ -86,20 +84,17 @@ impl JsBaseProvider {
     /// Construct a new [`BaseProvider`].
     ///
     /// `inner` is the underlying completion model — pass a
-    /// [`JsCompletionModel`] instance. JS subclasses that fully
+    /// [`JsModel`] instance. JS subclasses that fully
     /// override `complete` may pass `null` here (Phase D will wire
     /// subclass dispatch end-to-end; today calls to `complete` on a
     /// subclass-only provider report unsupported).
     ///
     /// `defaults` optionally seeds the
-    /// [`JsCompletionProviderDefaults`]; when omitted, an empty
+    /// [`JsProviderDefaults`]; when omitted, an empty
     /// defaults bag is created.
     #[napi(constructor)]
-    pub fn new(
-        inner: Option<&JsCompletionModel>,
-        defaults: Option<&JsCompletionProviderDefaults>,
-    ) -> Result<Self> {
-        let rust_inner: Option<Arc<dyn CompletionModel>> = match inner {
+    pub fn new(inner: Option<&JsModel>, defaults: Option<&JsProviderDefaults>) -> Result<Self> {
+        let rust_inner: Option<Arc<dyn Model>> = match inner {
             Some(model) => model.inner.as_ref().map(Arc::clone),
             None => None,
         };
@@ -109,8 +104,8 @@ impl JsBaseProvider {
             .map_or_else(|| "base".to_owned(), |m| m.model_id().to_owned());
 
         let defaults_owned = defaults.map_or_else(
-            || JsCompletionProviderDefaults::new(None, None, None, None, None),
-            JsCompletionProviderDefaults::clone_shared,
+            || JsProviderDefaults::new(None, None, None, None, None),
+            JsProviderDefaults::clone_shared,
         );
 
         Ok(Self {
@@ -175,13 +170,13 @@ impl JsBaseProvider {
         self.clone_shared()
     }
 
-    /// Set the typed `beforeCompletion` hook (fires after the universal
+    /// Set the typed `beforeModel` hook (fires after the universal
     /// hook, with a typed completion request). V1: stored only — Phase
     /// B wires dispatch.
-    #[napi(js_name = "withBeforeCompletion")]
-    pub fn with_before_completion(&self, hook: BeforeCompletionTsfn) -> Self {
+    #[napi(js_name = "withBeforeModel")]
+    pub fn with_before_model(&self, hook: BeforeModelTsfn) -> Self {
         if let Ok(g) = self.defaults.lock()
-            && let Ok(mut bc) = g.before_completion.lock()
+            && let Ok(mut bc) = g.before_model.lock()
         {
             *bc = Some(hook);
         }
@@ -190,7 +185,7 @@ impl JsBaseProvider {
 
     /// Replace the entire defaults bag.
     #[napi(js_name = "withDefaults")]
-    pub fn with_defaults(&self, defaults: &JsCompletionProviderDefaults) -> Self {
+    pub fn with_defaults(&self, defaults: &JsProviderDefaults) -> Self {
         if let Ok(mut g) = self.defaults.lock() {
             *g = defaults.clone_shared();
         }
@@ -203,9 +198,9 @@ impl JsBaseProvider {
 
     /// The currently-configured defaults.
     #[napi(getter)]
-    pub fn defaults(&self) -> JsCompletionProviderDefaults {
+    pub fn defaults(&self) -> JsProviderDefaults {
         self.defaults.lock().map_or_else(
-            |_| JsCompletionProviderDefaults::new(None, None, None, None, None),
+            |_| JsProviderDefaults::new(None, None, None, None, None),
             |g| g.clone_shared(),
         )
     }
@@ -278,7 +273,7 @@ impl JsBaseProvider {
         // for `complete`; until that lands `extract` is unsupported for them.
         let inner = self.inner.clone().ok_or_else(|| {
             napi::Error::from_reason(
-                "BaseProvider.extract requires a concrete inner CompletionModel; subclass-only providers should override `complete` and call `extract` from there",
+                "BaseProvider.extract requires a concrete inner Model; subclass-only providers should override `complete` and call `extract` from there",
             )
         })?;
 
@@ -308,7 +303,7 @@ impl JsBaseProvider {
         });
 
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let request = CompletionRequest::new(chat_messages).with_response_format(response_format);
+        let request = ModelRequest::new(chat_messages).with_response_format(response_format);
 
         let response = provider
             .complete(request)

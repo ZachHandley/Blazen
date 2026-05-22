@@ -8,7 +8,7 @@ module Blazen
   # +BlazenToolHandlerVTable+ trampoline.
   #
   # Use {Blazen::Agents.new} to construct an {Agent}: supply a backing
-  # {Blazen::Llm::CompletionModel}, a list of {Blazen::Llm::Tool} declarations,
+  # {Blazen::Llm::Model}, a list of {Blazen::Llm::Tool} declarations,
   # a callable +tool_handler+, and (optionally) a +system_prompt+ /
   # +max_iterations+. The handler is invoked by the Rust agent loop every time
   # the model emits a tool call and must return either a +String+ (forwarded
@@ -310,7 +310,7 @@ module Blazen
     # subsequent reads through the original Ruby wrapper raise
     # {Blazen::InternalError}.
     #
-    # @param model [Blazen::Llm::CompletionModel] backing completion model
+    # @param model [Blazen::Llm::Model] backing completion model
     # @param tool_handler [#call] callable taking +(tool_name, args_hash)+
     # @param tools [Array<Blazen::Llm::Tool>] declared tool list shown to the
     #   model (consumed)
@@ -319,8 +319,8 @@ module Blazen
     #   (default: 16)
     # @return [Agent]
     def new(model:, tool_handler:, tools: [], system_prompt: nil, max_iterations: 16)
-      unless model.is_a?(Blazen::Llm::CompletionModel)
-        raise ArgumentError, "model must be a Blazen::Llm::CompletionModel"
+      unless model.is_a?(Blazen::Llm::Model)
+        raise ArgumentError, "model must be a Blazen::Llm::Model"
       end
       unless tool_handler.respond_to?(:call)
         raise ArgumentError, "tool_handler must respond to #call(tool_name, args_hash)"

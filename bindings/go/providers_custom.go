@@ -15,13 +15,13 @@ import (
 //     method, headers, query params, etc.
 //   - [BaseProviderDefaults] — placeholder defaults Record applicable to
 //     every provider role.
-//   - [CompletionProviderDefaults] — defaults applied to every completion
+//   - [ProviderDefaults] — defaults applied to every completion
 //     call (system prompt, default tools, default response_format).
 //   - Nine role-specific defaults wrappers (Embedding, AudioSpeech,
 //     AudioMusic, VoiceCloning, ImageGeneration, ImageUpscale, Video,
 //     Transcription, ThreeD, BackgroundRemoval).
 //   - [BaseProvider] — clone-with-mutation wrapper around an existing
-//     [CompletionModel], exposing builder-style methods for default
+//     [Model], exposing builder-style methods for default
 //     system prompt, default tools, and default response format.
 //   - [CustomProvider] — the typed 16-method interface the host
 //     implements to plug a foreign provider into Blazen. Includes the
@@ -49,24 +49,24 @@ import (
 // `internal/uniffi/blazen` package.
 //
 // Records whose names already exist in [llm.go] or [streaming.go]
-// (CompletionRequest, CompletionResponse, EmbeddingResponse, StreamChunk,
+// (ModelRequest, ModelResponse, EmbeddingResponse, StreamChunk,
 // TokenUsage) are exported with a `Provider` prefix so the wire-format
 // records carried by the [CustomProvider] callback boundary do not clash
 // with the idiomatic Go-side wrapper structs. Inside the alias, Go treats
 // the two names as identical — so passing a wire-shaped value to a
 // blazen.CustomProvider method works without conversion.
 
-// ProviderCompletionRequest is the wire-format record passed to
+// ProviderModelRequest is the wire-format record passed to
 // [CustomProvider.Complete] and [CustomProvider.Stream]. Identical to
-// the UniFFI `CompletionRequest` record; aliased under the `Provider`
-// prefix to avoid colliding with the user-facing [CompletionRequest]
+// the UniFFI `ModelRequest` record; aliased under the `Provider`
+// prefix to avoid colliding with the user-facing [ModelRequest]
 // wrapper struct.
-type ProviderCompletionRequest = uniffiblazen.CompletionRequest
+type ProviderModelRequest = uniffiblazen.ModelRequest
 
-// ProviderCompletionResponse is the wire-format record returned by
+// ProviderModelResponse is the wire-format record returned by
 // [CustomProvider.Complete]. Identical to the UniFFI
-// `CompletionResponse` record.
-type ProviderCompletionResponse = uniffiblazen.CompletionResponse
+// `ModelResponse` record.
+type ProviderModelResponse = uniffiblazen.ModelResponse
 
 // ProviderEmbeddingResponse is the wire-format record returned by
 // [CustomProvider.Embed]. Identical to the UniFFI `EmbeddingResponse`
@@ -483,10 +483,10 @@ func baseProviderDefaultsFromFFI(d *uniffiblazen.BaseProviderDefaults) *BaseProv
 }
 
 // ---------------------------------------------------------------------
-// CompletionProviderDefaults
+// ProviderDefaults
 // ---------------------------------------------------------------------
 
-// CompletionProviderDefaults holds defaults applied to every
+// ProviderDefaults holds defaults applied to every
 // completion call: a default system prompt, default tools, and a
 // default response format.
 //
@@ -499,7 +499,7 @@ func baseProviderDefaultsFromFFI(d *uniffiblazen.BaseProviderDefaults) *BaseProv
 // caller is responsible for serialising via [encoding/json] or any
 // other marshaller. ResponseFormatJSON is the JSON-encoded
 // OpenAI-style `response_format` value.
-type CompletionProviderDefaults struct {
+type ProviderDefaults struct {
 	// Base is the role-agnostic defaults block. nil means "no base
 	// defaults" — equivalent to an empty [BaseProviderDefaults] for
 	// V1.
@@ -517,20 +517,20 @@ type CompletionProviderDefaults struct {
 	ResponseFormatJSON string
 }
 
-// NewCompletionProviderDefaults returns an empty
-// [CompletionProviderDefaults]. Equivalent to the Rust
-// `CompletionProviderDefaults::default()`.
-func NewCompletionProviderDefaults() *CompletionProviderDefaults {
-	return &CompletionProviderDefaults{}
+// NewProviderDefaults returns an empty
+// [ProviderDefaults]. Equivalent to the Rust
+// `ProviderDefaults::default()`.
+func NewProviderDefaults() *ProviderDefaults {
+	return &ProviderDefaults{}
 }
 
 // toFFI lowers the wrapper into the UniFFI record, translating the
 // empty-string convention into FFI optionals.
-func (d *CompletionProviderDefaults) toFFI() uniffiblazen.CompletionProviderDefaults {
+func (d *ProviderDefaults) toFFI() uniffiblazen.ProviderDefaults {
 	if d == nil {
-		return uniffiblazen.CompletionProviderDefaults{}
+		return uniffiblazen.ProviderDefaults{}
 	}
-	return uniffiblazen.CompletionProviderDefaults{
+	return uniffiblazen.ProviderDefaults{
 		Base:               optBaseProviderDefaultsToFFI(d.Base),
 		SystemPrompt:       optString(d.SystemPrompt),
 		ToolsJson:          optString(d.ToolsJSON),
@@ -540,8 +540,8 @@ func (d *CompletionProviderDefaults) toFFI() uniffiblazen.CompletionProviderDefa
 
 // completionProviderDefaultsFromFFI lifts a UniFFI record into the
 // wrapper form.
-func completionProviderDefaultsFromFFI(d uniffiblazen.CompletionProviderDefaults) *CompletionProviderDefaults {
-	return &CompletionProviderDefaults{
+func completionProviderDefaultsFromFFI(d uniffiblazen.ProviderDefaults) *ProviderDefaults {
+	return &ProviderDefaults{
 		Base:               baseProviderDefaultsFromFFI(d.Base),
 		SystemPrompt:       stringOrEmpty(d.SystemPrompt),
 		ToolsJSON:          stringOrEmpty(d.ToolsJson),
@@ -750,8 +750,8 @@ func (d *BackgroundRemovalProviderDefaults) toFFI() uniffiblazen.BackgroundRemov
 // BaseProvider
 // ---------------------------------------------------------------------
 
-// BaseProvider wraps a [CompletionModel] with a
-// [CompletionProviderDefaults] block that is applied before every
+// BaseProvider wraps a [Model] with a
+// [ProviderDefaults] block that is applied before every
 // completion call.
 //
 // On the Rust side the underlying handle is `Arc<RwLock<...>>`, so the
@@ -767,39 +767,39 @@ func (d *BackgroundRemovalProviderDefaults) toFFI() uniffiblazen.BackgroundRemov
 // finalizer as a safety net.
 type BaseProvider = uniffiblazen.BaseProvider
 
-// NewBaseProviderFromCompletionModel wraps an existing
-// [CompletionModel] with an empty [CompletionProviderDefaults]. Use
+// NewBaseProviderFromModel wraps an existing
+// [Model] with an empty [ProviderDefaults]. Use
 // the builder methods on the returned [BaseProvider] to attach
 // defaults afterwards.
 //
-// The supplied [CompletionModel] continues to be usable independently;
+// The supplied [Model] continues to be usable independently;
 // the returned [BaseProvider] holds its own reference to the inner
 // Rust handle.
-func NewBaseProviderFromCompletionModel(model *CompletionModel) (*BaseProvider, error) {
+func NewBaseProviderFromModel(model *Model) (*BaseProvider, error) {
 	ensureInit()
 	if model == nil || model.inner == nil {
 		return nil, &ValidationError{Message: "completion model is nil or closed"}
 	}
-	return uniffiblazen.BaseProviderFromCompletionModel(model.inner), nil
+	return uniffiblazen.BaseProviderFromModel(model.inner), nil
 }
 
-// NewBaseProviderWithDefaults wraps an existing [CompletionModel] with
-// explicit [CompletionProviderDefaults] in a single step. Equivalent
-// to [NewBaseProviderFromCompletionModel] followed by
+// NewBaseProviderWithDefaults wraps an existing [Model] with
+// explicit [ProviderDefaults] in a single step. Equivalent
+// to [NewBaseProviderFromModel] followed by
 // [BaseProvider.WithDefaults], but avoids the intermediate handle.
-func NewBaseProviderWithDefaults(model *CompletionModel, defaults *CompletionProviderDefaults) (*BaseProvider, error) {
+func NewBaseProviderWithDefaults(model *Model, defaults *ProviderDefaults) (*BaseProvider, error) {
 	ensureInit()
 	if model == nil || model.inner == nil {
 		return nil, &ValidationError{Message: "completion model is nil or closed"}
 	}
-	var ffi uniffiblazen.CompletionProviderDefaults
+	var ffi uniffiblazen.ProviderDefaults
 	if defaults != nil {
 		ffi = defaults.toFFI()
 	}
-	return uniffiblazen.BaseProviderWithCompletionDefaults(model.inner, ffi), nil
+	return uniffiblazen.BaseProviderFromModelWithDefaults(model.inner, ffi), nil
 }
 
-// CompletionProviderDefaultsOf returns a snapshot of the
+// ProviderDefaultsOf returns a snapshot of the
 // currently-configured completion defaults on a [BaseProvider]. The
 // returned value is a copy — mutating it has no effect on the
 // provider; use the [BaseProvider.WithDefaults] / [BaseProvider.WithSystemPrompt] /
@@ -808,8 +808,8 @@ func NewBaseProviderWithDefaults(model *CompletionModel, defaults *CompletionPro
 //
 // Companion to the typed [BaseProvider.Defaults] method on the
 // UniFFI handle: this helper lifts the raw FFI defaults into the
-// idiomatic Go-side [CompletionProviderDefaults] struct.
-func CompletionProviderDefaultsOf(p *BaseProvider) *CompletionProviderDefaults {
+// idiomatic Go-side [ProviderDefaults] struct.
+func ProviderDefaultsOf(p *BaseProvider) *ProviderDefaults {
 	if p == nil {
 		return nil
 	}
@@ -839,7 +839,7 @@ func CompletionProviderDefaultsOf(p *BaseProvider) *CompletionProviderDefaults {
 //
 //	func (p *MyProvider) ProviderId() string { return "my-provider" }
 //
-//	func (p *MyProvider) Complete(req blazen.ProviderCompletionRequest) (blazen.ProviderCompletionResponse, error) {
+//	func (p *MyProvider) Complete(req blazen.ProviderModelRequest) (blazen.ProviderModelResponse, error) {
 //	    // ...
 //	}
 //
@@ -876,7 +876,7 @@ type CustomProviderHandle = uniffiblazen.CustomProviderHandle
 // typed method call into a UniFFI-level dispatch back into the
 // supplied provider. Pass the handle wherever Blazen expects a
 // provider — its `AsBase()` returns a [BaseProvider] that plugs into
-// agents, workflow steps, and any API that takes a [CompletionModel].
+// agents, workflow steps, and any API that takes a [Model].
 //
 // Equivalent to the upstream `custom_provider_from_foreign` factory.
 func CustomProviderFrom(provider CustomProvider) *CustomProviderHandle {
@@ -995,8 +995,8 @@ func (UnsupportedCustomProvider) ProviderId() string { return "unsupported" }
 
 // Complete returns a typed [UnsupportedError]. Override this method to
 // implement non-streaming chat completion.
-func (UnsupportedCustomProvider) Complete(_ ProviderCompletionRequest) (ProviderCompletionResponse, error) {
-	return ProviderCompletionResponse{}, unsupportedMethod("complete")
+func (UnsupportedCustomProvider) Complete(_ ProviderModelRequest) (ProviderModelResponse, error) {
+	return ProviderModelResponse{}, unsupportedMethod("complete")
 }
 
 // Stream returns a typed [UnsupportedError]. Override this method to
@@ -1007,7 +1007,7 @@ func (UnsupportedCustomProvider) Complete(_ ProviderCompletionRequest) (Provider
 // returning an error from `Stream` itself is reserved for the case
 // where the initial request conversion fails before any chunks are
 // produced.
-func (UnsupportedCustomProvider) Stream(_ ProviderCompletionRequest, _ CompletionStreamSink) error {
+func (UnsupportedCustomProvider) Stream(_ ProviderModelRequest, _ CompletionStreamSink) error {
 	return unsupportedMethod("stream")
 }
 

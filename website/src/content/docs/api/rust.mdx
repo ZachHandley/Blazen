@@ -25,7 +25,7 @@ order: 1
 |---------|---------------------------------|
 | `mistralrs` | `MistralRsProvider`, `ChatMessageInput`, `ChatRole`, `InferenceChunk`, `InferenceChunkStream`, `InferenceImage`, `InferenceImageSource`, `InferenceResult`, `InferenceToolCall`, `InferenceUsage`, `MistralRsError`, `MistralRsOptions` |
 | `llamacpp` | `LlamaCppProvider`, `LlamaCppChatMessageInput`, `LlamaCppChatRole`, `LlamaCppInferenceChunk`, `LlamaCppInferenceChunkStream`, `LlamaCppInferenceResult`, `LlamaCppInferenceUsage`, `LlamaCppError`, `LlamaCppOptions` |
-| `candle-llm` | `CandleLlmProvider`, `CandleLlmCompletionModel`, `CandleInferenceResult`, `CandleLlmError`, `CandleLlmOptions` |
+| `candle-llm` | `CandleLlmProvider`, `CandleLlmModel`, `CandleInferenceResult`, `CandleLlmError`, `CandleLlmOptions` |
 | `candle-embed` | `CandleEmbedModel`, `CandleEmbedOptions`, `CandleEmbedError` |
 | `embed` | `EmbedModel`, `EmbedOptions`, `EmbedResponse`, `EmbedError` |
 | `whispercpp` | `WhisperCppProvider`, `WhisperModel`, `WhisperOptions`, `WhisperError` |
@@ -36,7 +36,7 @@ order: 1
 
 | Feature | Description |
 |---------|-------------|
-| `spans` (default) | Enables `TracingCompletionModel` and per-span instrumentation hooks |
+| `spans` (default) | Enables `TracingModel` and per-span instrumentation hooks |
 | `history` | Enables `WorkflowHistory`, `HistoryEvent`, `HistoryEventKind`, `PauseReason` |
 | `otlp` | OTLP **gRPC** exporter via `tonic` (`init_otlp` + `OtlpConfig`). Native targets only |
 | `otlp-http` | OTLP **HTTP/protobuf** exporter via a custom `HttpClient` (`init_otlp_http` + `OtlpConfig`). Works on native **and** wasm32 |
@@ -48,23 +48,23 @@ order: 1
 
 ## Core LLM Traits
 
-### `CompletionModel`
+### `Model`
 
 The central trait every LLM provider must implement. Supports both one-shot and streaming completions.
 
 ```rust
 #[async_trait]
-pub trait CompletionModel: Send + Sync {
+pub trait Model: Send + Sync {
     fn model_id(&self) -> &str;
 
     async fn complete(
         &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError>;
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError>;
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<
         Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>,
         BlazenError,
@@ -75,11 +75,11 @@ pub trait CompletionModel: Send + Sync {
 **Usage:**
 
 ```rust
-use blazen_llm::{CompletionModel, CompletionRequest, ChatMessage};
+use blazen_llm::{Model, ModelRequest, ChatMessage};
 use blazen_llm::providers::openai::OpenAiProvider;
 
 let model = OpenAiProvider::new("sk-...");
-let request = CompletionRequest::new(vec![
+let request = ModelRequest::new(vec![
     ChatMessage::user("What is 2 + 2?"),
 ]);
 let response = model.complete(request).await?;
@@ -91,7 +91,7 @@ println!("{}", response.content.unwrap_or_default());
 ```rust
 use futures_util::StreamExt;
 
-let request = CompletionRequest::new(vec![
+let request = ModelRequest::new(vec![
     ChatMessage::user("Tell me a story"),
 ]);
 let mut stream = model.stream(request).await?;
@@ -107,19 +107,19 @@ while let Some(chunk) = stream.next().await {
 
 ### `StructuredOutput`
 
-Extract typed data from a model using JSON Schema constraints. This trait has a **blanket implementation** for every `CompletionModel` -- providers do not need to implement it.
+Extract typed data from a model using JSON Schema constraints. This trait has a **blanket implementation** for every `Model` -- providers do not need to implement it.
 
 ```rust
 #[async_trait]
-pub trait StructuredOutput: CompletionModel {
+pub trait StructuredOutput: Model {
     async fn extract<T: JsonSchema + DeserializeOwned + Send>(
         &self,
         messages: Vec<ChatMessage>,
     ) -> Result<StructuredResponse<T>, BlazenError>;
 }
 
-// Blanket impl: every CompletionModel automatically gets this.
-impl<M: CompletionModel> StructuredOutput for M {}
+// Blanket impl: every Model automatically gets this.
+impl<M: Model> StructuredOutput for M {}
 ```
 
 `T` must implement `schemars::JsonSchema` and `serde::de::DeserializeOwned`. The schema is derived at call time via `schemars::schema_for!` and injected into the request's `response_format`.
@@ -702,7 +702,7 @@ pub type MediaSource = ImageSource;
 | `Base64 { data }` | Inline base64-encoded bytes. Pair with `media_type` on the enclosing [`ImageContent`](#imagecontent) / [`FileContent`](#filecontent). |
 | `File { path }` | Local filesystem path. Use `ImageSource::file(path)` to construct. Resolved at request time by a [`ContentStore`](#contentstore) or by the provider adapter. |
 | `ProviderFile { provider, id }` | Reference to a file already uploaded to a provider's Files API (e.g. an OpenAI `file-xxx` id). Forwarded verbatim only when the active provider matches `provider`. |
-| `Handle { handle }` | Reference to a [`ContentHandle`](#contenthandle) registered with a [`ContentStore`](#contentstore). Resolved into a concrete `Url` / `Base64` / `ProviderFile` by [`CompletionRequest::resolve_handles_with`](#completionrequestresolve_handles_with) before the request hits a provider. |
+| `Handle { handle }` | Reference to a [`ContentHandle`](#contenthandle) registered with a [`ContentStore`](#contentstore). Resolved into a concrete `Url` / `Base64` / `ProviderFile` by [`ModelRequest::resolve_handles_with`](#completionrequestresolve_handles_with) before the request hits a provider. |
 
 ### `FileContent`
 
@@ -714,7 +714,7 @@ pub type MediaSource = ImageSource;
 
 ---
 
-### `CompletionRequest`
+### `ModelRequest`
 
 A provider-agnostic request for a chat completion.
 
@@ -734,7 +734,7 @@ A provider-agnostic request for a chat completion.
 **Builder pattern:**
 
 ```rust
-let request = CompletionRequest::new(vec![ChatMessage::user("Hello")])
+let request = ModelRequest::new(vec![ChatMessage::user("Hello")])
     .with_tools(tool_defs)
     .with_temperature(0.7)
     .with_max_tokens(1024)
@@ -748,7 +748,7 @@ let request = CompletionRequest::new(vec![ChatMessage::user("Hello")])
 
 ---
 
-### `CompletionResponse`
+### `ModelResponse`
 
 The result of a non-streaming chat completion.
 
@@ -958,7 +958,7 @@ pub trait ContentStore: Send + Sync + std::fmt::Debug {
 | Method | Description |
 |--------|-------------|
 | `put` | Ingest a [`ContentBody`](#contentbody) under a [`ContentHint`](#contenthint) and return a fresh handle. |
-| `resolve` | Produce the concrete [`MediaSource`](#imagesource) the provider will see (typically `Url`, `Base64`, or `ProviderFile`). Called by [`CompletionRequest::resolve_handles_with`](#completionrequestresolve_handles_with). |
+| `resolve` | Produce the concrete [`MediaSource`](#imagesource) the provider will see (typically `Url`, `Base64`, or `ProviderFile`). Called by [`ModelRequest::resolve_handles_with`](#completionrequestresolve_handles_with). |
 | `fetch_bytes` | Materialise the underlying bytes. Used when a tool needs to read the payload directly. |
 | `metadata` | Return [`ContentMetadata`](#contentmetadata). The default impl synthesises this from the handle's own fields; stores with richer indices should override. |
 | `fetch_stream` | Stream raw bytes back as a [`ByteStream`](#bytestream). The default impl buffers `fetch_bytes` into a single chunk via `futures::stream::once`, so existing impls keep working unchanged. Stores backed by HTTP / disk / object storage should override for true incremental streaming. Built-in overrides today: [`LocalFileContentStore`](#built-in-stores) (uses `tokio_util::io::ReaderStream`), [`OpenAiFilesStore`](#built-in-stores), [`AnthropicFilesStore`](#built-in-stores), [`FalStorageStore`](#built-in-stores) (all via the `HttpClient` trait's `send_streaming` method). [`InMemoryContentStore`](#built-in-stores) and [`GeminiFilesStore`](#built-in-stores) use the buffered default impl. |
@@ -1238,7 +1238,7 @@ pub fn build_handle_directory_system_note(
 ) -> Option<String>;
 
 pub async fn prepare_request_with_store(
-    request: &mut CompletionRequest,
+    request: &mut ModelRequest,
     store: &dyn ContentStore,
 ) -> Result<usize, BlazenError>;
 ```
@@ -1247,7 +1247,7 @@ pub async fn prepare_request_with_store(
 |--------|-------------|
 | `collect_visible_handles` | Walks `messages` and returns every distinct [`ContentHandle`](#contenthandle) referenced from user/assistant/tool content, deduped first-seen. |
 | `build_handle_directory_system_note` | Returns a system-note string listing the visible handles (id, kind, MIME, name) so the model can name them when calling tools. Returns `None` when `handles` is empty -- callers should not append an empty note. |
-| `prepare_request_with_store` | One-call convenience: runs [`CompletionRequest::resolve_handles_with`](#completionrequestresolve_handles_with), then builds and prepends the system note. Returns the number of resolved handles. This is what the agent loop calls before dispatching a request. |
+| `prepare_request_with_store` | One-call convenience: runs [`ModelRequest::resolve_handles_with`](#completionrequestresolve_handles_with), then builds and prepends the system note. Returns the number of resolved handles. This is what the agent loop calls before dispatching a request. |
 
 ```rust
 use blazen_llm::content::visibility::{
@@ -1299,12 +1299,12 @@ let (kind2, mime2) = detect(None, Some("application/pdf"), Some("report.pdf"));
 
 ---
 
-### `CompletionRequest::resolve_handles_with`
+### `ModelRequest::resolve_handles_with`
 
 The lower-level half of [`prepare_request_with_store`](#visibility-helpers). Walks every message in the request, finds every [`ImageSource::Handle`](#imagesource), and replaces it with the concrete [`MediaSource`](#imagesource) returned by `store.resolve`. Does **not** inject a system note -- prefer `prepare_request_with_store` from the agent loop unless you specifically want to skip the note.
 
 ```rust
-impl CompletionRequest {
+impl ModelRequest {
     pub async fn resolve_handles_with(
         &mut self,
         store: &dyn ContentStore,
@@ -1331,7 +1331,7 @@ Run the agent loop without event callbacks.
 
 ```rust
 pub async fn run_agent(
-    model: &dyn CompletionModel,
+    model: &dyn Model,
     messages: Vec<ChatMessage>,
     config: AgentConfig,
 ) -> Result<AgentResult, BlazenError>
@@ -1343,7 +1343,7 @@ Run the agent loop, emitting `AgentEvent`s to the supplied callback.
 
 ```rust
 pub async fn run_agent_with_callback(
-    model: &dyn CompletionModel,
+    model: &dyn Model,
     messages: Vec<ChatMessage>,
     config: AgentConfig,
     on_event: impl Fn(AgentEvent) + Send + Sync,
@@ -1352,7 +1352,7 @@ pub async fn run_agent_with_callback(
 
 **The loop works as follows:**
 
-1. Build a `CompletionRequest` with the full message history and all tool definitions.
+1. Build a `ModelRequest` with the full message history and all tool definitions.
 2. Call the model.
 3. If the model responds with no tool calls, return immediately.
 4. If the model invoked the built-in "finish" tool (when enabled), extract the answer and return.
@@ -1440,7 +1440,7 @@ Result of an agent run.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `response` | `CompletionResponse` | The final completion response |
+| `response` | `ModelResponse` | The final completion response |
 | `messages` | `Vec<ChatMessage>` | Full message history including all tool calls and results |
 | `iterations` | `u32` | Number of tool call rounds that occurred |
 | `total_usage` | `Option<TokenUsage>` | Aggregated token usage across all rounds |
@@ -2365,20 +2365,20 @@ pub trait LocalModel: Send + Sync {
 | `device()` | Which device the model targets. Determines which pool the `ModelManager` charges this model against. Defaults to `Device::Cpu`. |
 | `memory_bytes()` | Approximate memory footprint in bytes (host RAM if `device()` is `Device::Cpu`, GPU VRAM otherwise), or `None` if unknown. |
 
-A type can implement both `CompletionModel` and `LocalModel`:
+A type can implement both `Model` and `LocalModel`:
 
 ```rust
 struct MyLocalLLM { /* ... */ }
 
 #[async_trait::async_trait]
-impl CompletionModel for MyLocalLLM {
+impl Model for MyLocalLLM {
     fn model_id(&self) -> &str { "my-local-llm" }
-    async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         self.load().await?; // auto-load on first call
         // inference logic
         todo!()
     }
-    async fn stream(&self, request: CompletionRequest) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError> {
+    async fn stream(&self, request: ModelRequest) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError> {
         todo!()
     }
 }
@@ -2623,12 +2623,12 @@ The unified error type for all Blazen LLM and compute operations.
 | `Unsupported` | `message: String` | Requested capability is not supported |
 | `Serialization` | `String` | JSON serialization/deserialization error |
 | `Request` | `message: String, source: Option<Box<dyn Error>>` | Network or request-level failure |
-| `Completion` | `CompletionErrorKind` | LLM completion-specific error |
+| `Model` | `ModelErrorKind` | LLM model-call error |
 | `Compute` | `ComputeErrorKind` | Compute job-specific error |
 | `Media` | `MediaErrorKind` | Media-specific error |
 | `Tool` | `name: Option<String>, message: String` | Tool execution error |
 
-### `CompletionErrorKind`
+### `ModelErrorKind`
 
 | Variant | Description |
 |---------|-------------|
@@ -2687,11 +2687,11 @@ BlazenError::cancelled()
 
 ## Custom Providers
 
-### Implementing `CompletionModel`
+### Implementing `Model`
 
 ```rust
 use blazen_llm::{
-    CompletionModel, CompletionRequest, CompletionResponse, StreamChunk, BlazenError,
+    Model, ModelRequest, ModelResponse, StreamChunk, BlazenError,
 };
 use std::pin::Pin;
 use futures_util::Stream;
@@ -2701,22 +2701,22 @@ struct MyProvider {
 }
 
 #[async_trait::async_trait]
-impl CompletionModel for MyProvider {
+impl Model for MyProvider {
     fn model_id(&self) -> &str {
         "my-custom-model"
     }
 
     async fn complete(
         &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
         // Your HTTP/gRPC/local inference logic here
         todo!()
     }
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<
         Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>,
         BlazenError,
@@ -2785,12 +2785,12 @@ impl ImageGeneration for MyImageProvider {
 
 | Provider | Feature | Traits Implemented |
 |----------|---------|-------------------|
-| `OpenAiProvider` | `openai` | `CompletionModel`, `StructuredOutput` |
-| `OpenAiCompatProvider` | `openai` | `CompletionModel`, `StructuredOutput`, `ModelRegistry` |
-| `AnthropicProvider` | `anthropic` | `CompletionModel`, `StructuredOutput` |
-| `GeminiProvider` | `gemini` | `CompletionModel`, `StructuredOutput`, `ModelRegistry` |
-| `AzureOpenAiProvider` | `azure` | `CompletionModel`, `StructuredOutput` |
-| `FalProvider` | `fal` | `CompletionModel`, `StructuredOutput`, `ComputeProvider`, `ImageGeneration`, `VideoGeneration`, `AudioGeneration`, `Transcription` |
+| `OpenAiProvider` | `openai` | `Model`, `StructuredOutput` |
+| `OpenAiCompatProvider` | `openai` | `Model`, `StructuredOutput`, `ModelRegistry` |
+| `AnthropicProvider` | `anthropic` | `Model`, `StructuredOutput` |
+| `GeminiProvider` | `gemini` | `Model`, `StructuredOutput`, `ModelRegistry` |
+| `AzureOpenAiProvider` | `azure` | `Model`, `StructuredOutput` |
+| `FalProvider` | `fal` | `Model`, `StructuredOutput`, `ComputeProvider`, `ImageGeneration`, `VideoGeneration`, `AudioGeneration`, `Transcription` |
 
 ### `OpenAiCompatProvider` Presets
 
@@ -3007,12 +3007,12 @@ use blazen_llm::{
 
 ### `candle-llm` feature
 
-Candle exposes its result type as `CandleInferenceResult` (already prefixed upstream). The `CandleLlmCompletionModel` adapter wraps the raw provider in the `CompletionModel` trait:
+Candle exposes its result type as `CandleInferenceResult` (already prefixed upstream). The `CandleLlmModel` adapter wraps the raw provider in the `Model` trait:
 
 ```rust
 #[cfg(feature = "candle-llm")]
 use blazen_llm::{
-    CandleLlmProvider, CandleLlmCompletionModel,
+    CandleLlmProvider, CandleLlmModel,
     CandleLlmOptions, CandleLlmError,
     CandleInferenceResult,
 };

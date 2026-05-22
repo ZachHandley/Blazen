@@ -30,7 +30,7 @@ val agent = Agent(
 
 The arguments:
 
-- `model` — a `CompletionModel` from any provider factory (see [LLM](/guides/kotlin/llm/)).
+- `model` — a `Model` from any provider factory (see [LLM](/guides/kotlin/llm/)).
 - `systemPrompt` — the system message prepended to every turn; pass `null` to omit.
 - `tools` — the catalogue exposed to the model. Each `Tool.name` must match the names your handler dispatches on.
 - `toolHandler` — any object satisfying the `ToolHandler` interface.
@@ -141,13 +141,13 @@ A complete example wiring an OpenAI model to a single tool:
 import dev.zorpx.blazen.uniffi.Agent
 import dev.zorpx.blazen.uniffi.Tool
 import dev.zorpx.blazen.uniffi.ToolHandler
-import dev.zorpx.blazen.uniffi.newOpenaiCompletionModel
+import dev.zorpx.blazen.uniffi.newOpenaiModel
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import java.time.Instant
 
 fun main() = runBlocking {
-    val model = newOpenaiCompletionModel(
+    val model = newOpenaiModel(
         apiKey = System.getenv("OPENAI_API_KEY") ?: "",
         model = "gpt-4o",
         baseUrl = null,

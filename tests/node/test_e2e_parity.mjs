@@ -19,7 +19,7 @@ import test from "ava";
 
 import {
   ChatMessage,
-  CompletionModel,
+  Model,
   CustomProvider,
   EmbeddingModel,
   InMemoryBackend,
@@ -35,9 +35,9 @@ import {
 // Helpers -- minimal stub subclasses used purely for shape wiring.
 // ===========================================================================
 
-// A trivial CompletionModel subclass. complete() is never invoked from this
+// A trivial Model subclass. complete() is never invoked from this
 // file so the default "subclass must override" body is fine.
-class StubLLM extends CompletionModel {
+class StubLLM extends Model {
   constructor() {
     super({ modelId: "stub-llm", contextLength: 4096 });
   }

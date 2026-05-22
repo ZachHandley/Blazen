@@ -1,29 +1,27 @@
-//! Tracing instrumentation for [`CompletionModel`] implementations.
+//! Tracing instrumentation for [`Model`] implementations.
 //!
-//! Wraps any `CompletionModel` in a [`TracingCompletionModel`] that emits
+//! Wraps any `Model` in a [`TracingModel`] that emits
 //! structured `tracing` spans for every LLM call.
 
 use std::pin::Pin;
 
 use async_trait::async_trait;
-use blazen_llm::{
-    BlazenError, CompletionModel, CompletionRequest, CompletionResponse, StreamChunk,
-};
+use blazen_llm::{BlazenError, Model, ModelRequest, ModelResponse, StreamChunk};
 use futures_util::Stream;
 use tracing::Instrument;
 
-/// A wrapper around any [`CompletionModel`] that adds tracing spans.
+/// A wrapper around any [`Model`] that adds tracing spans.
 ///
-/// Each call to [`complete`](CompletionModel::complete) or
-/// [`stream`](CompletionModel::stream) is wrapped in an `info_span!` that
+/// Each call to [`complete`](Model::complete) or
+/// [`stream`](Model::stream) is wrapped in an `info_span!` that
 /// records the provider name, model id, token usage, duration, and finish
 /// reason.
-pub struct TracingCompletionModel<M> {
+pub struct TracingModel<M> {
     inner: M,
     provider_name: &'static str,
 }
 
-impl<M> TracingCompletionModel<M> {
+impl<M> TracingModel<M> {
     /// Create a new tracing wrapper around an existing model.
     pub fn new(inner: M, provider_name: &'static str) -> Self {
         Self {
@@ -44,15 +42,12 @@ impl<M> TracingCompletionModel<M> {
 }
 
 #[async_trait]
-impl<M: CompletionModel> CompletionModel for TracingCompletionModel<M> {
+impl<M: Model> Model for TracingModel<M> {
     fn model_id(&self) -> &str {
         self.inner.model_id()
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         let span = tracing::info_span!(
             "llm.complete",
             provider = self.provider_name,
@@ -86,7 +81,7 @@ impl<M: CompletionModel> CompletionModel for TracingCompletionModel<M> {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         let span = tracing::info_span!(

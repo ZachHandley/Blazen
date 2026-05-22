@@ -308,8 +308,8 @@ cover those capabilities.
 
 | Method | Argument | Return | Role |
 |---|---|---|---|
-| `complete` | `CompletionRequest` (messages + options) | `CompletionResponse` | chat completion |
-| `stream` | `CompletionRequest` + sink | `void` (streaming chunks via sink / callback) | chat completion |
+| `complete` | `ModelRequest` (messages + options) | `ModelResponse` | chat completion |
+| `stream` | `ModelRequest` + sink | `void` (streaming chunks via sink / callback) | chat completion |
 | `embed` | `List<String>` | `EmbeddingResponse` | embeddings |
 | `text_to_speech` | `SpeechRequest` | `AudioResult` | speech synthesis |
 | `generate_music` | `MusicRequest` | `AudioResult` | music generation |
@@ -345,7 +345,7 @@ builders are:
   Rust method name (`"complete"`, `"text_to_speech"`, ...) and the
   request body for mutation
 
-A completion-specific `with_before_completion(hook)` typed-request hook
+A completion-specific `with_before_model(hook)` typed-request hook
 is also available; nine role-specific `*ProviderDefaults` types
 (`AudioSpeechProviderDefaults`, `AudioMusicProviderDefaults`,
 `VoiceCloningProviderDefaults`, `ImageGenerationProviderDefaults`,
@@ -405,7 +405,7 @@ provider = my_tts_provider.with_speech_defaults(defaults)
 
 ```kotlin
 val provider = Blazen.ollama(model = "llama3.1")
-    .withDefaults(CompletionProviderDefaults(systemPrompt = "Be terse."))
+    .withDefaults(ProviderDefaults(systemPrompt = "Be terse."))
 ```
 
 ## Typed `extract<T>` extraction

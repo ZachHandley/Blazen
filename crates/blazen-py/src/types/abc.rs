@@ -122,7 +122,7 @@ impl PyLocalModel {
 
 /// Subclassable ABC mirroring [`blazen_llm::traits::StructuredOutput`].
 ///
-/// The Rust trait has a blanket implementation for every `CompletionModel`,
+/// The Rust trait has a blanket implementation for every `Model`,
 /// so most callers just call ``model.complete(messages, options)`` with a
 /// [`ResponseFormat.json_schema(...)`](crate::types::PyResponseFormat) hint.
 /// This ABC lets a Python provider explicitly opt in to a typed

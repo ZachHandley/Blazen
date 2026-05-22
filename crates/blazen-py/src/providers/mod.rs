@@ -7,7 +7,6 @@ pub mod base;
 pub mod bedrock;
 pub mod capability_providers;
 pub mod cohere;
-pub mod completion_model;
 pub mod config;
 pub mod custom;
 pub mod decorators;
@@ -20,6 +19,7 @@ pub mod gemini;
 pub mod groq;
 pub mod middleware;
 pub mod mistral;
+pub mod model;
 pub mod openai;
 pub mod openai_compat;
 pub mod openai_embedding;
@@ -56,6 +56,6 @@ pub mod fastembed;
 #[cfg(feature = "tract")]
 pub mod tract;
 
-pub use completion_model::PyCompletionModel;
-pub use decorators::{PyCachedCompletionModel, PyFallbackModel, PyRetryCompletionModel};
+pub use decorators::{PyCachedModel, PyFallbackModel, PyRetryModel};
 pub use middleware::{PyCacheMiddleware, PyMiddleware, PyMiddlewareStack, PyRetryMiddleware};
+pub use model::PyModel;

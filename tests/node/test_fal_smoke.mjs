@@ -14,7 +14,7 @@
 import test from "ava";
 
 import {
-  CompletionModel,
+  Model,
   ChatMessage,
   FalProvider,
 } from "../../crates/blazen-node/index.js";
@@ -40,7 +40,7 @@ const TStream = FAL_API_KEY ? test : test.skip;
 const TCompute = FAL_API_KEY && FAL_COMPUTE ? test : test.skip;
 
 TLlm("fal.ai LLM smoke tests · completes a basic prompt via OpenAiChat default", async (t) => {
-  const model = CompletionModel.fal({ apiKey: FAL_API_KEY });
+  const model = Model.fal({ apiKey: FAL_API_KEY });
   const response = await model.complete([
     ChatMessage.user("What is 2+2? Reply with just the number."),
   ]);
@@ -51,7 +51,7 @@ TLlm("fal.ai LLM smoke tests · completes a basic prompt via OpenAiChat default"
 });
 
 TLlm("fal.ai LLM smoke tests · completes a basic prompt with enterprise=true", async (t) => {
-  const model = CompletionModel.fal({ apiKey: FAL_API_KEY, enterprise: true });
+  const model = Model.fal({ apiKey: FAL_API_KEY, enterprise: true });
   const response = await model.complete([
     ChatMessage.user("What is 3+3? Reply with just the number."),
   ]);
@@ -61,7 +61,7 @@ TLlm("fal.ai LLM smoke tests · completes a basic prompt with enterprise=true", 
 });
 
 TLlm("fal.ai LLM smoke tests · completes a basic prompt via OpenAiResponses endpoint", async (t) => {
-  const model = CompletionModel.fal({
+  const model = Model.fal({
     apiKey: FAL_API_KEY,
     endpoint: "open_ai_responses",
   });
@@ -74,7 +74,7 @@ TLlm("fal.ai LLM smoke tests · completes a basic prompt via OpenAiResponses end
 });
 
 TLlm("fal.ai LLM smoke tests · returns timing metadata", async (t) => {
-  const model = CompletionModel.fal({ apiKey: FAL_API_KEY });
+  const model = Model.fal({ apiKey: FAL_API_KEY });
   const response = await model.complete([
     ChatMessage.user("Say hello."),
   ]);
@@ -92,7 +92,7 @@ TLlm("fal.ai LLM smoke tests · returns timing metadata", async (t) => {
 });
 
 TLlm("fal.ai LLM smoke tests · passes temperature and max_tokens", async (t) => {
-  const model = CompletionModel.fal({ apiKey: FAL_API_KEY });
+  const model = Model.fal({ apiKey: FAL_API_KEY });
   const response = await model.completeWithOptions(
     [ChatMessage.user("Write a one-word greeting.")],
     { temperature: 0.1, maxTokens: 10 }
@@ -103,8 +103,8 @@ TLlm("fal.ai LLM smoke tests · passes temperature and max_tokens", async (t) =>
   t.truthy(response.content.length < 200, "response should be short with maxTokens=10");
 });
 
-TLlm("fal.ai LLM smoke tests · exposes new typed CompletionResponse fields (reasoning/citations/artifacts)", async (t) => {
-  const model = CompletionModel.fal({ apiKey: FAL_API_KEY });
+TLlm("fal.ai LLM smoke tests · exposes new typed ModelResponse fields (reasoning/citations/artifacts)", async (t) => {
+  const model = Model.fal({ apiKey: FAL_API_KEY });
   const response = await model.complete([
     ChatMessage.user("Say hi."),
   ]);
@@ -119,16 +119,16 @@ TLlm("fal.ai LLM smoke tests · exposes new typed CompletionResponse fields (rea
   );
   t.truthy(
     Array.isArray(response.citations),
-    "expected 'citations' field on CompletionResponse"
+    "expected 'citations' field on ModelResponse"
   );
   t.truthy(
     Array.isArray(response.artifacts),
-    "expected 'artifacts' field on CompletionResponse"
+    "expected 'artifacts' field on ModelResponse"
   );
 });
 
 TRoute("fal.ai modality auto-routing tests · auto-routes to vision when AnyLlm and image part present", async (t) => {
-  const model = CompletionModel.fal({
+  const model = Model.fal({
     apiKey: FAL_API_KEY,
     endpoint: "any_llm",
     autoRouteModality: true,
@@ -142,7 +142,7 @@ TRoute("fal.ai modality auto-routing tests · auto-routes to vision when AnyLlm 
 });
 
 TRoute("fal.ai modality auto-routing tests · auto-routes to audio when OpenRouter and audio part present", async (t) => {
-  const model = CompletionModel.fal({
+  const model = Model.fal({
     apiKey: FAL_API_KEY,
     endpoint: "open_router",
     autoRouteModality: true,
@@ -165,7 +165,7 @@ TRoute("fal.ai modality auto-routing tests · auto-routes to audio when OpenRout
 });
 
 TRoute("fal.ai modality auto-routing tests · auto-routes to video when OpenRouter and video part present", async (t) => {
-  const model = CompletionModel.fal({
+  const model = Model.fal({
     apiKey: FAL_API_KEY,
     endpoint: "open_router",
     autoRouteModality: true,
@@ -184,7 +184,7 @@ TRoute("fal.ai modality auto-routing tests · auto-routes to video when OpenRout
 });
 
 TStream("fal.ai streaming + embeddings + utilities · streaming yields multiple chunks", async (t) => {
-  const model = CompletionModel.fal({ apiKey: FAL_API_KEY });
+  const model = Model.fal({ apiKey: FAL_API_KEY });
   const chunks = [];
 
   await model.stream(

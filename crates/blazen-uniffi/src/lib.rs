@@ -71,8 +71,8 @@ pub use controlplane::{
 };
 pub use errors::{BlazenError, BlazenResult};
 pub use llm::{
-    ChatMessage, CompletionModel, CompletionRequest, CompletionResponse, EmbeddingModel,
-    EmbeddingResponse, Media, TokenUsage, Tool, ToolCall,
+    ChatMessage, EmbeddingModel, EmbeddingResponse, Media, Model, ModelRequest, ModelResponse,
+    TokenUsage, Tool, ToolCall,
 };
 pub use local_model::{
     AdapterHandleRecord, AdapterOptionsRecord, AdapterStatusRecord, ForeignLocalModel,
@@ -93,8 +93,8 @@ pub use provider_custom::{
 };
 pub use provider_defaults::{
     AudioMusicProviderDefaults, AudioSpeechProviderDefaults, BackgroundRemovalProviderDefaults,
-    BaseProviderDefaults, CompletionProviderDefaults, EmbeddingProviderDefaults,
-    ImageGenerationProviderDefaults, ImageUpscaleProviderDefaults, ThreeDProviderDefaults,
+    BaseProviderDefaults, EmbeddingProviderDefaults, ImageGenerationProviderDefaults,
+    ImageUpscaleProviderDefaults, ProviderDefaults, ThreeDProviderDefaults,
     TranscriptionProviderDefaults, VideoProviderDefaults, VoiceCloningProviderDefaults,
 };
 pub use runtime::init;

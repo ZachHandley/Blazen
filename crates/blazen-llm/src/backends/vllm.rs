@@ -1,5 +1,5 @@
 //! Bridge between [`blazen_llm_vllm::VllmProvider`] and the Blazen
-//! [`CompletionModel`](crate::CompletionModel) + [`LocalModel`](crate::LocalModel)
+//! [`Model`](crate::Model) + [`LocalModel`](crate::LocalModel)
 //! traits.
 //!
 //! vLLM exposes the `OpenAI` chat-completion shape on the wire, so the
@@ -20,10 +20,10 @@ use serde_json::Value;
 
 use crate::AdapterTransport;
 use crate::error::BlazenError;
-use crate::traits::CompletionModel;
+use crate::traits::Model;
 use crate::types::{
-    ChatMessage, CompletionRequest, CompletionResponse, RequestTiming, Role, StreamChunk,
-    TokenUsage, ToolCall,
+    ChatMessage, ModelRequest, ModelResponse, RequestTiming, Role, StreamChunk, TokenUsage,
+    ToolCall,
 };
 
 // ---------------------------------------------------------------------------
@@ -161,8 +161,8 @@ fn message_to_value(msg: &ChatMessage) -> Value {
     m
 }
 
-/// Translate a Blazen `CompletionRequest` into a vLLM OpenAI-compat body.
-fn build_body(default_model: &str, req: &CompletionRequest, stream: bool) -> Value {
+/// Translate a Blazen `ModelRequest` into a vLLM OpenAI-compat body.
+fn build_body(default_model: &str, req: &ModelRequest, stream: bool) -> Value {
     let model = req.model.as_deref().unwrap_or(default_model);
     let messages: Vec<Value> = req.messages.iter().map(message_to_value).collect();
     let mut body = serde_json::json!({
@@ -206,7 +206,7 @@ fn build_body(default_model: &str, req: &CompletionRequest, stream: bool) -> Val
 }
 
 fn parse_finish_reason(reason: &str) -> String {
-    // `CompletionResponse::finish_reason` and `StreamChunk::finish_reason`
+    // `ModelResponse::finish_reason` and `StreamChunk::finish_reason`
     // are both `Option<String>`. The bridge keeps the upstream wire string
     // verbatim — downstream consumers do the semantic mapping via the
     // separate `FinishReason` enum exported from `blazen-llm`. Caller
@@ -215,7 +215,7 @@ fn parse_finish_reason(reason: &str) -> String {
     reason.to_string()
 }
 
-fn decode_response(value: Value) -> Result<CompletionResponse, BlazenError> {
+fn decode_response(value: Value) -> Result<ModelResponse, BlazenError> {
     let parsed: WireResponse = serde_json::from_value(value)
         .map_err(|e| BlazenError::provider("vllm", format!("decode response: {e}")))?;
     let first = parsed.choices.into_iter().next();
@@ -248,7 +248,7 @@ fn decode_response(value: Value) -> Result<CompletionResponse, BlazenError> {
         ..Default::default()
     });
 
-    Ok(CompletionResponse {
+    Ok(ModelResponse {
         content,
         tool_calls,
         reasoning: None,
@@ -426,19 +426,16 @@ fn wire_to_chunk(parsed: WireStreamChunk) -> StreamChunk {
 }
 
 // ---------------------------------------------------------------------------
-// CompletionModel
+// Model
 // ---------------------------------------------------------------------------
 
 #[async_trait]
-impl CompletionModel for VllmProvider {
+impl Model for VllmProvider {
     fn model_id(&self) -> &str {
         VllmProvider::model_id(self)
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         let body = build_body(self.model_id(), &request, false);
         let value = self.complete(body).await.map_err(vllm_to_blazen)?;
         decode_response(value)
@@ -446,7 +443,7 @@ impl CompletionModel for VllmProvider {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         let body = build_body(self.model_id(), &request, true);
@@ -546,8 +543,8 @@ mod tests {
     use super::*;
     use crate::types::{ChatMessage, MessageContent, ToolDefinition};
 
-    fn make_req(text: &str) -> CompletionRequest {
-        CompletionRequest {
+    fn make_req(text: &str) -> ModelRequest {
+        ModelRequest {
             messages: vec![ChatMessage {
                 role: Role::User,
                 content: MessageContent::Text(text.into()),

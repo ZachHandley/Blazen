@@ -137,7 +137,7 @@
   -->
 
   <script type="module">
-    import init, { CompletionModel, ChatMessage } from '@blazen-dev/wasm';
+    import init, { Model, ChatMessage } from '@blazen-dev/wasm';
     import * as webllm from '@mlc-ai/web-llm';
 
     // ----- Configuration -----
@@ -190,11 +190,11 @@
         },
       });
 
-      // 3. Wrap it as a Blazen CompletionModel via fromJsHandler
-      model = CompletionModel.fromJsHandler(
+      // 3. Wrap it as a Blazen Model via fromJsHandler
+      model = Model.fromJsHandler(
         MODEL_ID,
         async (request) => {
-          // `request` is a CompletionRequest-shaped object from Blazen.
+          // `request` is a ModelRequest-shaped object from Blazen.
           // Convert Blazen messages to OpenAI chat format for WebLLM.
           const messages = (request.messages || []).map((m) => ({
             role: m.role,
@@ -242,8 +242,8 @@
       // your API key via a proxy or environment variable.
       // -------------------------------------------------------------------
       // try {
-      //   const apiModel = CompletionModel.openrouter();
-      //   model = CompletionModel.withFallback([model, apiModel]);
+      //   const apiModel = Model.openrouter();
+      //   model = Model.withFallback([model, apiModel]);
       //   statusEl.textContent = 'WebLLM unavailable. Using hosted API fallback.';
       //   statusEl.className = 'ready';
       //   userInput.disabled = false;

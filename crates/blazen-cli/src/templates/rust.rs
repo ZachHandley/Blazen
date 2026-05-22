@@ -99,13 +99,13 @@ cargo add blazen --registry forgejo --features openai
 ```
 
 Each provider is a concrete struct under `blazen::llm::providers::<name>`
-that implements the `blazen::llm::CompletionModel` trait. Construct one
+that implements the `blazen::llm::Model` trait. Construct one
 directly with `ProviderName::new("your-api-key")` and fluently configure
 the default model via `.with_model("...")`.
 
 ```rust
 use blazen::llm::providers::openai::OpenAiProvider;
-use blazen::llm::{CompletionModel, CompletionRequest, ChatMessage, Role};
+use blazen::llm::{Model, ModelRequest, ChatMessage, Role};
 
 #[step]
 async fn ask_llm(event: StartEvent, _ctx: Context) -> Result<StopEvent, WorkflowError> {
@@ -113,7 +113,7 @@ async fn ask_llm(event: StartEvent, _ctx: Context) -> Result<StopEvent, Workflow
     let model = OpenAiProvider::new("your-api-key")
         .with_model("gpt-4.1-mini");
 
-    let request = CompletionRequest {
+    let request = ModelRequest {
         messages: vec![
             ChatMessage { role: Role::User, content: "What is 2 + 2?".into() },
         ],

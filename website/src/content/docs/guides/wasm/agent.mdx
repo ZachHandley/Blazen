@@ -15,12 +15,12 @@ The `runAgent` function executes an agentic tool-calling loop entirely within th
 Each tool object is `{ name, description, parameters, handler }`. The `handler` is called with the parsed argument object and may be sync or async.
 
 ```typescript
-import init, { CompletionModel, ChatMessage, runAgent } from '@blazen/sdk';
+import init, { Model, ChatMessage, runAgent } from '@blazen/sdk';
 
 await init();
 
 // The WASM SDK reads OPENAI_API_KEY from the runtime environment.
-const model = CompletionModel.openai();
+const model = Model.openai();
 
 const tools = [
   {

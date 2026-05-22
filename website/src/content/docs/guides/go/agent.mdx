@@ -16,7 +16,7 @@ agent := blazen.NewAgent(model, systemPrompt, tools, handler, maxIterations)
 
 The arguments:
 
-- `model` -- a `*blazen.CompletionModel` from any provider factory (see [LLM](/guides/go/llm/)).
+- `model` -- a `*blazen.Model` from any provider factory (see [LLM](/guides/go/llm/)).
 - `systemPrompt` -- the system message prepended to every turn; pass `""` to omit.
 - `tools` -- the catalogue exposed to the model. Each `Tool.Name` must match the names your handler dispatches on.
 - `handler` -- a value satisfying `blazen.ToolHandler` (or a `blazen.ToolHandlerFunc` for closures).
@@ -106,7 +106,7 @@ handler := blazen.ToolHandlerFunc(func(_ context.Context, name, args string) (st
 
 ## Running the loop
 
-`Agent` exposes the same `(ctx, blocking)` pair as `CompletionModel`:
+`Agent` exposes the same `(ctx, blocking)` pair as `Model`:
 
 ```go
 // Cancellable: returns ctx.Err() if ctx fires before the loop finishes.
@@ -135,7 +135,7 @@ func main() {
     blazen.Init()
     defer blazen.Shutdown()
 
-    model, err := blazen.NewOpenAICompletion(os.Getenv("OPENAI_API_KEY"), "gpt-4o", "")
+    model, err := blazen.NewOpenAIModel(os.Getenv("OPENAI_API_KEY"), "gpt-4o", "")
     if err != nil {
         panic(err)
     }

@@ -85,7 +85,7 @@ pub fn router(state: Arc<RestState>) -> Router {
 /// OpenAI-shaped chat-completions request. Unknown fields are tolerated
 /// because `OpenAI` clients routinely send provider-specific extras.
 #[derive(Debug, Deserialize)]
-pub struct ChatCompletionRequest {
+pub struct ChatModelRequest {
     pub model: String,
     pub messages: Vec<ChatMessage>,
     #[serde(default)]
@@ -134,7 +134,7 @@ impl StopSpec {
 
 /// OpenAI-shaped non-stream response.
 #[derive(Debug, Serialize)]
-struct ChatCompletionResponse {
+struct ChatModelResponse {
     id: String,
     object: &'static str,
     created: u64,
@@ -168,7 +168,7 @@ struct Usage {
 
 async fn chat_completions(
     State(state): State<Arc<RestState>>,
-    Json(req): Json<ChatCompletionRequest>,
+    Json(req): Json<ChatModelRequest>,
 ) -> Result<Response, HttpError> {
     let stream = req.stream.unwrap_or(false);
     let model = req.model.clone();
@@ -191,7 +191,7 @@ async fn chat_completions(
         total_tokens: resp.prompt_tokens.unwrap_or(0) + resp.completion_tokens.unwrap_or(0),
     };
     let tool_calls = parse_optional_json(&resp.tool_calls_json)?;
-    let body = ChatCompletionResponse {
+    let body = ChatModelResponse {
         id: format!("chatcmpl-{}", Uuid::new_v4()),
         object: "chat.completion",
         created: unix_seconds(),
@@ -210,7 +210,7 @@ async fn chat_completions(
     Ok((StatusCode::OK, Json(body)).into_response())
 }
 
-fn build_complete_request(req: &ChatCompletionRequest) -> Result<CompleteRequest, HttpError> {
+fn build_complete_request(req: &ChatModelRequest) -> Result<CompleteRequest, HttpError> {
     let messages: Vec<ChatMessageWire> = req
         .messages
         .iter()
@@ -365,7 +365,7 @@ fn sse_chat_stream(
 // ---------------------------------------------------------------------------
 
 #[derive(Debug, Deserialize)]
-pub struct LegacyCompletionRequest {
+pub struct LegacyModelRequest {
     pub model: String,
     pub prompt: String,
     #[serde(default)]
@@ -381,7 +381,7 @@ pub struct LegacyCompletionRequest {
 }
 
 #[derive(Debug, Serialize)]
-struct LegacyCompletionResponse {
+struct LegacyModelResponse {
     id: String,
     object: &'static str,
     created: u64,
@@ -399,7 +399,7 @@ struct LegacyChoice {
 
 async fn legacy_completions(
     State(state): State<Arc<RestState>>,
-    Json(req): Json<LegacyCompletionRequest>,
+    Json(req): Json<LegacyModelRequest>,
 ) -> Result<Response, HttpError> {
     if req.stream.unwrap_or(false) {
         return Err(HttpError::unprocessable(
@@ -430,7 +430,7 @@ async fn legacy_completions(
         completion_tokens: resp.completion_tokens.unwrap_or(0),
         total_tokens: resp.prompt_tokens.unwrap_or(0) + resp.completion_tokens.unwrap_or(0),
     };
-    let body = LegacyCompletionResponse {
+    let body = LegacyModelResponse {
         id: format!("cmpl-{}", Uuid::new_v4()),
         object: "text_completion",
         created: unix_seconds(),

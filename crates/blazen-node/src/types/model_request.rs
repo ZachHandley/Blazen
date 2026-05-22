@@ -1,9 +1,9 @@
-//! Typed mirrors of [`blazen_llm::CompletionRequest`],
+//! Typed mirrors of [`blazen_llm::ModelRequest`],
 //! [`blazen_llm::StructuredResponse`], [`blazen_llm::types::MessageContent`],
 //! and [`blazen_llm::types::FileContent`].
 //!
 //! Adds plain-data shapes for callers who want to construct request
-//! envelopes outside the [`crate::providers::JsCompletionModel`] factory
+//! envelopes outside the [`crate::providers::JsModel`] factory
 //! methods, plus the file-content variant the existing
 //! [`crate::types::message`] module did not surface.
 
@@ -70,18 +70,18 @@ pub struct JsMessageContent {
 }
 
 // ---------------------------------------------------------------------------
-// JsCompletionRequest
+// JsModelRequest
 // ---------------------------------------------------------------------------
 
 /// Provider-agnostic request for a chat completion.
 ///
-/// Mirrors [`blazen_llm::CompletionRequest`]. Most callers reach for the
-/// [`crate::providers::JsCompletionModel`] factory + per-call options
+/// Mirrors [`blazen_llm::ModelRequest`]. Most callers reach for the
+/// [`crate::providers::JsModel`] factory + per-call options
 /// path; this typed shape exists for callers who need to build a request
 /// envelope explicitly (e.g. forwarding the same request through multiple
 /// middleware layers).
-#[napi(object, js_name = "CompletionRequest")]
-pub struct JsCompletionRequest {
+#[napi(object, js_name = "ModelRequest")]
+pub struct JsModelRequest {
     /// The conversation history as JSON-serialized `ChatMessage` values.
     ///
     /// Each entry must round-trip through `serde_json` into a Rust

@@ -5,7 +5,7 @@
 //! 1. The auto-registered built-in `finish_workflow` tool.
 //! 2. Any user-supplied tool whose [`Tool::is_exit`] returns `true`.
 //!
-//! These tests drive [`run_agent`] with a tiny in-memory `MockCompletionModel`
+//! These tests drive [`run_agent`] with a tiny in-memory `MockModel`
 //! that emits a single tool-call on the first turn, then verify that the loop
 //! returned immediately and that the tool's arguments survive in the result.
 
@@ -18,10 +18,9 @@ use futures_util::Stream;
 use serde_json::json;
 
 use blazen_llm::error::BlazenError;
-use blazen_llm::traits::{CompletionModel, Tool};
+use blazen_llm::traits::{Model, Tool};
 use blazen_llm::types::{
-    ChatMessage, CompletionRequest, CompletionResponse, StreamChunk, ToolCall, ToolDefinition,
-    ToolOutput,
+    ChatMessage, ModelRequest, ModelResponse, StreamChunk, ToolCall, ToolDefinition, ToolOutput,
 };
 use blazen_llm::{AgentConfig, FINISH_WORKFLOW_TOOL_NAME, finish_workflow_tool, run_agent};
 
@@ -29,16 +28,16 @@ use blazen_llm::{AgentConfig, FINISH_WORKFLOW_TOOL_NAME, finish_workflow_tool, r
 // Mock completion model
 // ---------------------------------------------------------------------------
 
-/// A `CompletionModel` whose `complete` calls return successive pre-canned
+/// A `Model` whose `complete` calls return successive pre-canned
 /// responses from an internal queue.
-struct MockCompletionModel {
-    responses: Mutex<Vec<CompletionResponse>>,
+struct MockModel {
+    responses: Mutex<Vec<ModelResponse>>,
     cursor: Mutex<usize>,
     calls: Mutex<u32>,
 }
 
-impl MockCompletionModel {
-    fn new(responses: Vec<CompletionResponse>) -> Self {
+impl MockModel {
+    fn new(responses: Vec<ModelResponse>) -> Self {
         Self {
             responses: Mutex::new(responses),
             cursor: Mutex::new(0),
@@ -52,15 +51,12 @@ impl MockCompletionModel {
 }
 
 #[async_trait]
-impl CompletionModel for MockCompletionModel {
+impl Model for MockModel {
     fn model_id(&self) -> &'static str {
         "mock-model"
     }
 
-    async fn complete(
-        &self,
-        _request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, _request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         *self.calls.lock().unwrap() += 1;
         let mut idx = self.cursor.lock().unwrap();
         let responses = self.responses.lock().unwrap();
@@ -74,7 +70,7 @@ impl CompletionModel for MockCompletionModel {
 
     async fn stream(
         &self,
-        _request: CompletionRequest,
+        _request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         Err(BlazenError::tool_error(
@@ -83,9 +79,9 @@ impl CompletionModel for MockCompletionModel {
     }
 }
 
-/// Build a minimal [`CompletionResponse`].
-fn make_response(content: Option<&str>, tool_calls: Vec<ToolCall>) -> CompletionResponse {
-    CompletionResponse {
+/// Build a minimal [`ModelResponse`].
+fn make_response(content: Option<&str>, tool_calls: Vec<ToolCall>) -> ModelResponse {
+    ModelResponse {
         content: content.map(str::to_owned),
         tool_calls,
         reasoning: None,
@@ -157,7 +153,7 @@ async fn builtin_finish_workflow_terminates_agent() {
         "result": { "score": 42, "label": "ok" },
         "summary": "found the answer"
     });
-    let model = MockCompletionModel::new(vec![make_response(
+    let model = MockModel::new(vec![make_response(
         None,
         vec![tool_call(
             "call_1",
@@ -196,7 +192,7 @@ async fn user_marked_is_exit_tool_terminates_agent() {
     // A user-defined tool with `is_exit() == true` must also short-circuit
     // the loop and return its arguments as the result.
     let exit_args = json!({ "answer": "the rain in spain" });
-    let model = MockCompletionModel::new(vec![make_response(
+    let model = MockModel::new(vec![make_response(
         None,
         vec![tool_call("call_1", "submit_answer", exit_args.clone())],
     )]);
@@ -219,7 +215,7 @@ async fn agent_with_no_finish_tool_uses_normal_completion() {
     // With `no_finish_tool()`, the built-in must be absent. A response that
     // emits no tool calls (just plain text) should be returned via the normal
     // completion path -- no exit-tool synthesis.
-    let model = MockCompletionModel::new(vec![make_response(Some("plain answer"), vec![])]);
+    let model = MockModel::new(vec![make_response(Some("plain answer"), vec![])]);
 
     let config = AgentConfig::new(vec![]).no_finish_tool();
     let result = run_agent(&model, vec![ChatMessage::user("hi")], config)
@@ -241,7 +237,7 @@ async fn custom_finish_tool_name_is_respected() {
     // new name. A model call that targets that name must still trigger the
     // exit-tool early-return.
     let exit_args = json!({ "result": "done", "summary": "ok" });
-    let model = MockCompletionModel::new(vec![make_response(
+    let model = MockModel::new(vec![make_response(
         None,
         vec![tool_call("call_1", "all_done", exit_args.clone())],
     )]);

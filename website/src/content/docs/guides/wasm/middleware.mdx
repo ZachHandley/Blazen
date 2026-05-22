@@ -6,20 +6,20 @@ section: "guides"
 order: 7
 ---
 
-The WASM SDK supports the same middleware patterns as the Node.js SDK. Each decorator method returns a **new** `CompletionModel`, keeping the original unchanged.
+The WASM SDK supports the same middleware patterns as the Node.js SDK. Each decorator method returns a **new** `Model`, keeping the original unchanged.
 
 ## Retry
 
 Wrap a model with automatic retry on transient failures. The WASM `withRetry()` takes an optional `maxRetries` number (default 3).
 
 ```typescript
-import init, { CompletionModel } from "@blazen/sdk";
+import init, { Model } from "@blazen/sdk";
 
 await init();
 
 // The WASM SDK reads OPENAI_API_KEY from the runtime environment;
 // factory methods do not accept arguments.
-const model = CompletionModel.openai().withRetry(5);
+const model = Model.openai().withRetry(5);
 ```
 
 ## Cache
@@ -28,7 +28,7 @@ Cache identical non-streaming requests in memory.
 
 ```typescript
 // ttlSeconds (default 300), maxEntries (default 1000)
-const model = CompletionModel.openai().withCache(600, 500);
+const model = Model.openai().withCache(600, 500);
 ```
 
 Streaming requests always bypass the cache.
@@ -38,10 +38,10 @@ Streaming requests always bypass the cache.
 Route requests through multiple providers in order.
 
 ```typescript
-const primary = CompletionModel.openai(); // reads OPENAI_API_KEY
-const backup = CompletionModel.groq();   // reads GROQ_API_KEY
+const primary = Model.openai(); // reads OPENAI_API_KEY
+const backup = Model.groq();   // reads GROQ_API_KEY
 
-const model = CompletionModel.withFallback([primary, backup]);
+const model = Model.withFallback([primary, backup]);
 ```
 
 When the first provider fails with a transient error (rate limit, timeout, server error), the next provider is tried. Non-retryable errors short-circuit immediately.
@@ -51,7 +51,7 @@ When the first provider fails with a transient error (rate limit, timeout, serve
 Chain decorators to layer multiple behaviours:
 
 ```typescript
-const model = CompletionModel.openai()
+const model = Model.openai()
   .withCache(300, 1000)
   .withRetry(3);
 ```
@@ -61,10 +61,10 @@ For maximum resilience, combine all three:
 ```typescript
 // The WASM SDK exposes OpenAI-compatible providers only.
 // Use OpenRouter for Claude/Gemini/etc. via a single key.
-const primary = CompletionModel.openai().withCache().withRetry();
-const backup = CompletionModel.openrouter().withRetry();
+const primary = Model.openai().withCache().withRetry();
+const backup = Model.openrouter().withRetry();
 
-const model = CompletionModel.withFallback([primary, backup]);
+const model = Model.withFallback([primary, backup]);
 ```
 
 ## Using Decorated Models

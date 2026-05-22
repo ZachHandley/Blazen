@@ -45,7 +45,7 @@ my-blazen-edge/
 Your entry point exports a handler function that receives HTTP requests:
 
 ```typescript
-import init, { CompletionModel, ChatMessage, runAgent } from '@blazen/sdk';
+import init, { Model, ChatMessage, runAgent } from '@blazen/sdk';
 
 await init();
 
@@ -53,7 +53,7 @@ export async function handler(request: Request): Promise<Response> {
   const { prompt } = await request.json();
   // The WASM SDK reads OPENROUTER_API_KEY from the runtime env.
   // Set it via your platform's secret store before invoking the handler.
-  const model = CompletionModel.openrouter();
+  const model = Model.openrouter();
 
   const result = await runAgent(
     model,
@@ -111,12 +111,12 @@ zlayer secret set OPENAI_API_KEY edge-token
 // The WASM SDK reads OPENAI_API_KEY from the runtime environment.
 // The proxy at proxy.yourcompany.com intercepts requests,
 // swaps 'edge-token' for the real API key, and forwards upstream.
-const model = CompletionModel.openai();
+const model = Model.openai();
 ```
 
 ### Runtime injection
 
-The WASM SDK does **not** accept API keys as constructor arguments -- every `CompletionModel` factory reads from the runtime environment only. If you need to swap keys per-request, point the SDK at a proxy (see above) and have the proxy decide which upstream key to use based on per-request metadata such as a header:
+The WASM SDK does **not** accept API keys as constructor arguments -- every `Model` factory reads from the runtime environment only. If you need to swap keys per-request, point the SDK at a proxy (see above) and have the proxy decide which upstream key to use based on per-request metadata such as a header:
 
 ```typescript
 const callerToken = request.headers.get('X-Caller-Token');

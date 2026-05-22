@@ -111,7 +111,7 @@ public typealias BaseProviderDefaults = UniFFIBlazen.BaseProviderDefaults
 
 /// Completion-role defaults: default system prompt, default tools, default
 /// `response_format`.
-public typealias CompletionProviderDefaults = UniFFIBlazen.CompletionProviderDefaults
+public typealias ProviderDefaults = UniFFIBlazen.ProviderDefaults
 
 /// Embedding-role defaults. V1 composes only `base`.
 public typealias EmbeddingProviderDefaults = UniFFIBlazen.EmbeddingProviderDefaults
@@ -153,12 +153,12 @@ public extension BaseProviderDefaults {
     }
 }
 
-// MARK: - CompletionProviderDefaults ergonomics
+// MARK: - ProviderDefaults ergonomics
 
-public extension CompletionProviderDefaults {
+public extension ProviderDefaults {
     /// Build completion defaults from individual fields with sensible
     /// `nil` defaults. Matches the most common call shape:
-    /// `CompletionProviderDefaults(systemPrompt: "...")`.
+    /// `ProviderDefaults(systemPrompt: "...")`.
     ///
     /// - Parameters:
     ///   - base: Universal defaults; defaults to an empty record.
@@ -170,8 +170,8 @@ public extension CompletionProviderDefaults {
         systemPrompt: String? = nil,
         toolsJson: String? = nil,
         responseFormatJson: String? = nil
-    ) -> CompletionProviderDefaults {
-        CompletionProviderDefaults(
+    ) -> ProviderDefaults {
+        ProviderDefaults(
             base: base,
             systemPrompt: systemPrompt,
             toolsJson: toolsJson,
@@ -182,11 +182,11 @@ public extension CompletionProviderDefaults {
 
 // MARK: - BaseProvider
 
-/// A `CompletionModel` wrapped with applied `CompletionProviderDefaults`.
+/// A `Model` wrapped with applied `ProviderDefaults`.
 ///
-/// Construct via the static factories `BaseProvider.fromCompletionModel(model:)`
+/// Construct via the static factories `BaseProvider.fromModel(model:)`
 /// (wraps an existing model with no defaults) or
-/// `BaseProvider.withCompletionDefaults(model:defaults:)` (wraps with explicit
+/// `BaseProvider.withDefaults(model:defaults:)` (wraps with explicit
 /// defaults). Mutate via the chainable `with*` builder methods, each of
 /// which returns a fresh `BaseProvider` so the original handle is never
 /// mutated in place.
@@ -221,10 +221,10 @@ public extension BaseProvider {
         withResponseFormatJson(fmtJson: formatJson)
     }
 
-    /// Replace the entire `CompletionProviderDefaults` record on this
+    /// Replace the entire `ProviderDefaults` record on this
     /// provider in one call. Returns a fresh `BaseProvider`.
     @discardableResult
-    func withDefaults(_ defaults: CompletionProviderDefaults) -> BaseProvider {
+    func withDefaults(_ defaults: ProviderDefaults) -> BaseProvider {
         withDefaults(defaults: defaults)
     }
 }
@@ -273,12 +273,12 @@ public typealias CustomProviderHandle = UniFFIBlazen.CustomProviderHandle
 /// `CustomProviderBase` and Node's `CustomProviderBase` class — there is
 /// no need for a separate base class.
 public extension CustomProvider {
-    func complete(request: UniFFIBlazen.CompletionRequest) async throws -> UniFFIBlazen.CompletionResponse {
+    func complete(request: UniFFIBlazen.ModelRequest) async throws -> UniFFIBlazen.ModelResponse {
         throw BlazenError.Unsupported(message: "CustomProvider.complete not implemented by \(providerId())")
     }
 
     func stream(
-        request: UniFFIBlazen.CompletionRequest,
+        request: UniFFIBlazen.ModelRequest,
         sink: UniFFIBlazen.CompletionStreamSink
     ) async throws {
         throw BlazenError.Unsupported(message: "CustomProvider.stream not implemented by \(providerId())")

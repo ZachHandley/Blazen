@@ -43,7 +43,7 @@ let imagePart = Media(
 )
 
 let model = try Providers.openAI(apiKey: "", model: "gpt-4o-mini")
-let request = CompletionRequest(messages: [
+let request = ModelRequest(messages: [
     .system("You describe images concisely."),
     .user("What is in this image?", media: [imagePart]),
 ])
@@ -63,7 +63,7 @@ let audioPart = Media(
     mediaType: "audio/mpeg",
     dataBase64: audioData.base64EncodedString()
 )
-let request = CompletionRequest(messages: [
+let request = ModelRequest(messages: [
     .user("Transcribe this clip.", media: [audioPart]),
 ])
 ```
@@ -80,7 +80,7 @@ let docPart = Media(
     mediaType: "application/pdf",
     dataBase64: pdfData.base64EncodedString()
 )
-let request = CompletionRequest(messages: [
+let request = ModelRequest(messages: [
     .user("Summarize this document.", media: [docPart]),
 ])
 ```
@@ -90,7 +90,7 @@ let request = CompletionRequest(messages: [
 A single message can carry as many media parts as the upstream provider allows. They are attached in array order, and providers that lay out media inline (Anthropic, Gemini) preserve that order in the rendered prompt:
 
 ```swift
-let request = CompletionRequest(messages: [
+let request = ModelRequest(messages: [
     .user(
         "Compare these two images.",
         media: [

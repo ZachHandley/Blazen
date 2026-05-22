@@ -161,7 +161,7 @@ var errStreamConsumerGone = &ValidationError{Message: "stream consumer no longer
 // terminal event, and is then closed.
 //
 // The model handle must be alive for the duration of the stream — do not
-// call [CompletionModel.Close] until the channel has been drained.
+// call [Model.Close] until the channel has been drained.
 //
 // If ctx is cancelled the channel receives a [StreamErrorEvent] carrying
 // ctx.Err() and is closed; the underlying Rust stream observes the
@@ -172,7 +172,7 @@ var errStreamConsumerGone = &ValidationError{Message: "stream consumer no longer
 // Always drain the channel. A buffered consumer that stops reading
 // before the terminal event will prevent the background goroutine from
 // exiting and pin the model handle in memory.
-func Stream(ctx context.Context, model *CompletionModel, req CompletionRequest) <-chan StreamEvent {
+func Stream(ctx context.Context, model *Model, req ModelRequest) <-chan StreamEvent {
 	ensureInit()
 	ch := make(chan StreamEvent, streamChannelBuffer)
 

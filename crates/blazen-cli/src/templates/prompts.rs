@@ -92,7 +92,7 @@ let latest = registry.get("greet").unwrap();
 let v1 = registry.get_version("greet", "1.0").unwrap();
 ```
 
-### Building CompletionRequests
+### Building ModelRequests
 
 ```rust
 use blazen::prompts::PromptRegistry;
@@ -104,7 +104,7 @@ let request = registry.build_request(&[
     ("user_query", [("question".into(), "What causes headaches?".into())].into()),
 ])?;
 
-// Pass request.messages to your CompletionModel
+// Pass request.messages to your Model
 ```
 
 ## YAML File Format

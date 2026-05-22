@@ -9,19 +9,19 @@ order: 27
 
 ## Overview
 
-Most chat applications accumulate conversation history indefinitely. That works until the token count hits the model's context limit, at which point completions silently truncate or fail. `ChatWindow` handles the bookkeeping for you: set a budget, append messages as they arrive, and hand the buffer to `CompletionModel.complete()` without worrying about overflow.
+Most chat applications accumulate conversation history indefinitely. That works until the token count hits the model's context limit, at which point completions silently truncate or fail. `ChatWindow` handles the bookkeeping for you: set a budget, append messages as they arrive, and hand the buffer to `Model.complete()` without worrying about overflow.
 
 Token counting uses a characters-per-token heuristic (3.5 chars/token by default, tunable). This is an estimate, not a tokenizer -- budget ~10% headroom below the model's hard context limit for safety.
 
 ## Basic usage
 
 ```python
-from blazen import ChatWindow, ChatMessage, CompletionModel
+from blazen import ChatWindow, ChatMessage, Model
 
 window = ChatWindow(max_tokens=4000)
 window.add(ChatMessage.system("You are a terse, helpful assistant."))
 
-model = CompletionModel.openai()
+model = Model.openai()
 
 async def turn(user_input: str) -> str:
     window.add(ChatMessage.user(user_input))
@@ -37,12 +37,12 @@ await turn("And 3 + 3?")
 ```
 
 ```typescript
-import { ChatWindow, ChatMessage, CompletionModel } from "blazen";
+import { ChatWindow, ChatMessage, Model } from "blazen";
 
 const window = new ChatWindow(4000);
 window.add(ChatMessage.system("You are a terse, helpful assistant."));
 
-const model = CompletionModel.openai({ apiKey: process.env.OPENAI_API_KEY });
+const model = Model.openai({ apiKey: process.env.OPENAI_API_KEY });
 
 async function turn(userInput: string): Promise<string> {
   window.add(ChatMessage.user(userInput));
@@ -57,9 +57,9 @@ await turn("And 3 + 3?");
 
 ```rust
 use blazen_llm::chat_window::ChatWindow;
-use blazen_llm::{ChatMessage, CompletionRequest};
+use blazen_llm::{ChatMessage, ModelRequest};
 use blazen_llm::providers::openai::OpenAiProvider;
-use blazen_llm::traits::CompletionModel;
+use blazen_llm::traits::Model;
 
 let mut window = ChatWindow::new(4000);
 window.add(ChatMessage::system("You are a terse, helpful assistant."));
@@ -72,7 +72,7 @@ async fn turn(
     user_input: &str,
 ) -> anyhow::Result<String> {
     window.add(ChatMessage::user(user_input));
-    let request = CompletionRequest::new(window.messages().to_vec());
+    let request = ModelRequest::new(window.messages().to_vec());
     let response = model.complete(request).await?;
     let content = response.content.unwrap_or_default();
     window.add(ChatMessage::assistant(&content));

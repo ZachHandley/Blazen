@@ -22,7 +22,7 @@ public object Providers {
      * OpenAI-compatible gateway (vLLM, llama.cpp server, OpenRouter, etc.).
      */
     @Serializable
-    public data class CompletionProviderConfig(
+    public data class ProviderConfig(
         val providerName: String,
         val apiKey: String,
         val model: String,
@@ -30,28 +30,28 @@ public object Providers {
     )
 
     /** OpenAI (or OpenAI-compatible) chat completion provider config. */
-    public fun openAI(apiKey: String, model: String, baseUrl: String? = null): CompletionProviderConfig =
-        CompletionProviderConfig("openai", apiKey, model, baseUrl)
+    public fun openAI(apiKey: String, model: String, baseUrl: String? = null): ProviderConfig =
+        ProviderConfig("openai", apiKey, model, baseUrl)
 
     /** Anthropic chat completion provider config. */
-    public fun anthropic(apiKey: String, model: String, baseUrl: String? = null): CompletionProviderConfig =
-        CompletionProviderConfig("anthropic", apiKey, model, baseUrl)
+    public fun anthropic(apiKey: String, model: String, baseUrl: String? = null): ProviderConfig =
+        ProviderConfig("anthropic", apiKey, model, baseUrl)
 
     /** Google Gemini chat completion provider config. */
-    public fun google(apiKey: String, model: String, baseUrl: String? = null): CompletionProviderConfig =
-        CompletionProviderConfig("google", apiKey, model, baseUrl)
+    public fun google(apiKey: String, model: String, baseUrl: String? = null): ProviderConfig =
+        ProviderConfig("google", apiKey, model, baseUrl)
 
     /** Mistral chat completion provider config. */
-    public fun mistral(apiKey: String, model: String, baseUrl: String? = null): CompletionProviderConfig =
-        CompletionProviderConfig("mistral", apiKey, model, baseUrl)
+    public fun mistral(apiKey: String, model: String, baseUrl: String? = null): ProviderConfig =
+        ProviderConfig("mistral", apiKey, model, baseUrl)
 
     /** Groq (OpenAI-compatible) chat completion provider config. */
-    public fun groq(apiKey: String, model: String, baseUrl: String? = null): CompletionProviderConfig =
-        CompletionProviderConfig("groq", apiKey, model, baseUrl)
+    public fun groq(apiKey: String, model: String, baseUrl: String? = null): ProviderConfig =
+        ProviderConfig("groq", apiKey, model, baseUrl)
 
     /** xAI (Grok) chat completion provider config. */
-    public fun xai(apiKey: String, model: String, baseUrl: String? = null): CompletionProviderConfig =
-        CompletionProviderConfig("xai", apiKey, model, baseUrl)
+    public fun xai(apiKey: String, model: String, baseUrl: String? = null): ProviderConfig =
+        ProviderConfig("xai", apiKey, model, baseUrl)
 
     /** Identifier + base-URL bundle for an HTTP-backed embedding provider. */
     @Serializable

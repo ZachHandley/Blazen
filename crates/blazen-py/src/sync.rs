@@ -18,13 +18,11 @@ use std::sync::OnceLock;
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
-use blazen_llm::{ChatMessage, CompletionModel};
+use blazen_llm::{ChatMessage, Model};
 
 use crate::error::BlazenPyError;
-use crate::providers::completion_model::{
-    PyCompletionModel, PyCompletionOptions, arc_from_bound, build_request,
-};
-use crate::types::{PyChatMessage, PyCompletionResponse, PyEmbeddingModel, PyEmbeddingResponse};
+use crate::providers::model::{PyModel, PyModelOptions, arc_from_bound, build_request};
+use crate::types::{PyChatMessage, PyEmbeddingModel, PyEmbeddingResponse, PyModelResponse};
 
 /// Shared multi-thread Tokio runtime used to drive every blocking method.
 fn shared_runtime() -> &'static tokio::runtime::Runtime {
@@ -39,28 +37,28 @@ fn shared_runtime() -> &'static tokio::runtime::Runtime {
 }
 
 // ---------------------------------------------------------------------------
-// PyBlockingCompletionModel
+// PyBlockingModel
 // ---------------------------------------------------------------------------
 
-/// Blocking sibling of [`CompletionModel`].
+/// Blocking sibling of [`Model`].
 ///
-/// Wrap any `CompletionModel` with `BlockingCompletionModel(model)` to drive
+/// Wrap any `Model` with `BlockingModel(model)` to drive
 /// `complete()` synchronously from non-async Python contexts (CLIs, REPLs,
 /// scripts, sync libraries). Streaming is not exposed here — use the async
 /// API or pass an `on_chunk` callback to the regular model when you need
 /// partial chunks.
 #[gen_stub_pyclass]
-#[pyclass(name = "BlockingCompletionModel")]
-pub struct PyBlockingCompletionModel {
-    inner: Arc<dyn CompletionModel>,
+#[pyclass(name = "BlockingModel")]
+pub struct PyBlockingModel {
+    inner: Arc<dyn Model>,
 }
 
 #[gen_stub_pymethods]
 #[pymethods]
-impl PyBlockingCompletionModel {
-    /// Wrap a `CompletionModel` for synchronous dispatch.
+impl PyBlockingModel {
+    /// Wrap a `Model` for synchronous dispatch.
     #[new]
-    fn new(model: Bound<'_, PyCompletionModel>) -> Self {
+    fn new(model: Bound<'_, PyModel>) -> Self {
         Self {
             inner: arc_from_bound(&model),
         }
@@ -78,22 +76,19 @@ impl PyBlockingCompletionModel {
         &self,
         py: Python<'_>,
         messages: Vec<PyRef<'_, PyChatMessage>>,
-        options: Option<PyRef<'_, PyCompletionOptions>>,
-    ) -> PyResult<PyCompletionResponse> {
+        options: Option<PyRef<'_, PyModelOptions>>,
+    ) -> PyResult<PyModelResponse> {
         let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
         let request = build_request(py, rust_messages, options.as_deref())?;
         let inner = self.inner.clone();
         let response = py
             .detach(|| shared_runtime().block_on(async move { inner.complete(request).await }))
             .map_err(BlazenPyError::from)?;
-        Ok(PyCompletionResponse { inner: response })
+        Ok(PyModelResponse { inner: response })
     }
 
     fn __repr__(&self) -> String {
-        format!(
-            "BlockingCompletionModel(model_id='{}')",
-            self.inner.model_id()
-        )
+        format!("BlockingModel(model_id='{}')", self.inner.model_id())
     }
 }
 

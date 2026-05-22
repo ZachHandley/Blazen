@@ -30,8 +30,8 @@ public typealias BatchResult = UniFFIBlazen.BatchResult
 /// to the upstream wire format (typically a malformed
 /// `parameters_json` / `response_format_json` payload).
 public func completeBatch(
-    model: CompletionModel,
-    requests: [CompletionRequest],
+    model: Model,
+    requests: [ModelRequest],
     maxConcurrency: UInt32 = 8
 ) async throws -> BatchResult {
     try await UniFFIBlazen.completeBatch(

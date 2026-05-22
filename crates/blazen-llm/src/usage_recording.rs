@@ -1,7 +1,7 @@
 //! Auto-emit `UsageEvent`s on every successful provider call.
 //!
-//! `UsageRecordingCompletionModel` and `UsageRecordingEmbeddingModel` wrap any
-//! `CompletionModel` / `EmbeddingModel`, capturing the response's `usage` and
+//! `UsageRecordingModel` and `UsageRecordingEmbeddingModel` wrap any
+//! `Model` / `EmbeddingModel`, capturing the response's `usage` and
 //! `cost` fields and emitting a typed `blazen_events::UsageEvent` via a
 //! pluggable `UsageEmitter` after each successful call.
 
@@ -16,10 +16,8 @@ use uuid::Uuid;
 use blazen_events::{Modality, UsageEvent};
 
 use crate::error::BlazenError;
-use crate::traits::{CompletionModel, EmbeddingModel};
-use crate::types::{
-    CompletionRequest, CompletionResponse, EmbeddingResponse, StreamChunk, TokenUsage,
-};
+use crate::traits::{EmbeddingModel, Model};
+use crate::types::{EmbeddingResponse, ModelRequest, ModelResponse, StreamChunk, TokenUsage};
 
 // ---------------------------------------------------------------------------
 // Emitter trait
@@ -44,22 +42,22 @@ impl UsageEmitter for NoopUsageEmitter {
 }
 
 // ---------------------------------------------------------------------------
-// CompletionModel decorator
+// Model decorator
 // ---------------------------------------------------------------------------
 
-/// Decorator that wraps a `CompletionModel` and emits `UsageEvent` after each
+/// Decorator that wraps a `Model` and emits `UsageEvent` after each
 /// successful `complete` / `stream` call.
-pub struct UsageRecordingCompletionModel {
-    inner: Arc<dyn CompletionModel>,
+pub struct UsageRecordingModel {
+    inner: Arc<dyn Model>,
     emitter: Arc<dyn UsageEmitter>,
     provider_label: String,
     run_id: Uuid,
 }
 
-impl UsageRecordingCompletionModel {
+impl UsageRecordingModel {
     /// Wrap `inner` with a usage-recording layer.
     pub fn new(
-        inner: impl CompletionModel + 'static,
+        inner: impl Model + 'static,
         emitter: Arc<dyn UsageEmitter>,
         provider_label: impl Into<String>,
         run_id: Uuid,
@@ -75,7 +73,7 @@ impl UsageRecordingCompletionModel {
     /// Wrap an already-`Arc`'d completion model.
     #[must_use]
     pub fn from_arc(
-        inner: Arc<dyn CompletionModel>,
+        inner: Arc<dyn Model>,
         emitter: Arc<dyn UsageEmitter>,
         provider_label: impl Into<String>,
         run_id: Uuid,
@@ -90,15 +88,12 @@ impl UsageRecordingCompletionModel {
 }
 
 #[async_trait]
-impl CompletionModel for UsageRecordingCompletionModel {
+impl Model for UsageRecordingModel {
     fn model_id(&self) -> &str {
         self.inner.model_id()
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         let start = Instant::now();
         let resp = self.inner.complete(request).await?;
         let elapsed_ms = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
@@ -116,7 +111,7 @@ impl CompletionModel for UsageRecordingCompletionModel {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         // Streaming path: only emit the initial connect timing as latency_ms;
@@ -286,15 +281,15 @@ mod tests {
         }
     }
 
-    struct MockCompletionModel;
+    struct MockModel;
     #[async_trait]
-    impl CompletionModel for MockCompletionModel {
+    impl Model for MockModel {
         #[allow(clippy::unnecessary_literal_bound)]
         fn model_id(&self) -> &str {
             "mock-model"
         }
-        async fn complete(&self, _: CompletionRequest) -> Result<CompletionResponse, BlazenError> {
-            Ok(CompletionResponse {
+        async fn complete(&self, _: ModelRequest) -> Result<ModelResponse, BlazenError> {
+            Ok(ModelResponse {
                 content: Some("hi".into()),
                 tool_calls: vec![],
                 reasoning: None,
@@ -318,7 +313,7 @@ mod tests {
         }
         async fn stream(
             &self,
-            _: CompletionRequest,
+            _: ModelRequest,
         ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
         {
             Ok(Box::pin(futures_util::stream::empty()))
@@ -326,17 +321,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn completion_decorator_emits_usage_event_with_cost() {
+    async fn model_decorator_emits_usage_event_with_cost() {
         let emitter = Arc::new(CapturingEmitter::default());
         let dyn_emitter: Arc<dyn UsageEmitter> = emitter.clone();
         let run_id = Uuid::new_v4();
-        let model = UsageRecordingCompletionModel::new(
-            MockCompletionModel,
-            dyn_emitter,
-            "test-provider",
-            run_id,
-        );
-        let req = CompletionRequest::new(vec![ChatMessage::user("hi")]);
+        let model = UsageRecordingModel::new(MockModel, dyn_emitter, "test-provider", run_id);
+        let req = ModelRequest::new(vec![ChatMessage::user("hi")]);
         let _ = model.complete(req).await.unwrap();
 
         let events = emitter.events.lock().unwrap();

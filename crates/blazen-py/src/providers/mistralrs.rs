@@ -9,12 +9,12 @@ use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 
 use crate::error::MistralRsError;
-use crate::providers::completion_model::{PyCompletionOptions, build_request};
+use crate::providers::model::{PyModelOptions, build_request};
 use crate::providers::options::PyMistralRsOptions;
-use crate::types::{PyChatMessage, PyCompletionResponse};
+use crate::types::{PyChatMessage, PyModelResponse};
 use blazen_llm::ChatMessage;
 use blazen_llm::MistralRsProvider;
-use blazen_llm::traits::{CompletionModel, LocalModel};
+use blazen_llm::traits::{LocalModel, Model};
 use blazen_llm::{
     ChatMessageInput, ChatRole, InferenceChunk, InferenceChunkStream, InferenceImage,
     InferenceImageSource, InferenceResult, InferenceToolCall, InferenceUsage,
@@ -62,17 +62,17 @@ impl PyMistralRsProvider {
     /// Get the model identifier.
     #[getter]
     fn model_id(&self) -> String {
-        CompletionModel::model_id(self.inner.as_ref()).to_owned()
+        Model::model_id(self.inner.as_ref()).to_owned()
     }
 
     /// Perform a chat completion.
-    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, CompletionResponse]", imports = ("typing",)))]
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ModelResponse]", imports = ("typing",)))]
     #[pyo3(signature = (messages, options=None))]
     fn complete<'py>(
         &self,
         py: Python<'py>,
         messages: Vec<PyChatMessage>,
-        options: Option<Py<PyCompletionOptions>>,
+        options: Option<Py<PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let rust_messages: Vec<ChatMessage> = messages.into_iter().map(|m| m.inner).collect();
         let opts_borrow = options.as_ref().map(|o| o.borrow(py));
@@ -80,10 +80,10 @@ impl PyMistralRsProvider {
 
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let response = CompletionModel::complete(inner.as_ref(), request)
+            let response = Model::complete(inner.as_ref(), request)
                 .await
                 .map_err(|e| MistralRsError::new_err(e.to_string()))?;
-            Ok(PyCompletionResponse { inner: response })
+            Ok(PyModelResponse { inner: response })
         })
     }
 
@@ -95,14 +95,14 @@ impl PyMistralRsProvider {
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
         on_chunk: Py<PyAny>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
         let request = build_request(py, rust_messages, options.as_deref())?;
         let inner = self.inner.clone();
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let stream = CompletionModel::stream(inner.as_ref(), request)
+            let stream = Model::stream(inner.as_ref(), request)
                 .await
                 .map_err(|e| MistralRsError::new_err(e.to_string()))?;
 
@@ -166,7 +166,7 @@ impl PyMistralRsProvider {
     fn __repr__(&self) -> String {
         format!(
             "MistralRsProvider(model_id='{}')",
-            CompletionModel::model_id(self.inner.as_ref())
+            Model::model_id(self.inner.as_ref())
         )
     }
 }

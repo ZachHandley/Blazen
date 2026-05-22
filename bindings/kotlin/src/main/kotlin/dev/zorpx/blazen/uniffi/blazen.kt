@@ -1450,59 +1450,59 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_func_openai_compat(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_anthropic_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_anthropic_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_azure_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_azure_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_bedrock_completion_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_candle_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_bedrock_model(): Short
 
     external fun uniffi_blazen_uniffi_checksum_func_new_candle_embedding_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_cohere_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_candle_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_custom_completion_model_with_openai_protocol(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_cohere_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_deepseek_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_custom_model_with_openai_protocol(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_fal_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_deepseek_model(): Short
 
     external fun uniffi_blazen_uniffi_checksum_func_new_fal_embedding_model(): Short
 
+    external fun uniffi_blazen_uniffi_checksum_func_new_fal_model(): Short
+
     external fun uniffi_blazen_uniffi_checksum_func_new_fastembed_embedding_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_fireworks_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_fireworks_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_gemini_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_gemini_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_groq_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_groq_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_llamacpp_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_llamacpp_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_lm_studio_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_lm_studio_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_mistral_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_mistral_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_mistralrs_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_mistralrs_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_ollama_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_ollama_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_openai_compat_completion_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_openai_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_openai_compat_model(): Short
 
     external fun uniffi_blazen_uniffi_checksum_func_new_openai_embedding_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_openrouter_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_openai_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_perplexity_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_openrouter_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_together_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_perplexity_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_together_model(): Short
 
     external fun uniffi_blazen_uniffi_checksum_func_new_tract_embedding_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_xai_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_new_xai_model(): Short
 
     external fun uniffi_blazen_uniffi_checksum_func_init(): Short
 
@@ -1568,12 +1568,6 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_method_controlplaneworker_shutdown(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_method_completionmodel_complete(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_completionmodel_complete_blocking(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_completionmodel_model_id(): Short
-
     external fun uniffi_blazen_uniffi_checksum_method_embeddingmodel_dimensions(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_embeddingmodel_embed(): Short
@@ -1581,6 +1575,12 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_blazen_uniffi_checksum_method_embeddingmodel_embed_blocking(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_embeddingmodel_model_id(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_model_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_model_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_model_model_id(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_load(): Short
 
@@ -1702,7 +1702,7 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_total_timeout_ms(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_method_baseprovider_as_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_method_baseprovider_as_model(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_baseprovider_defaults(): Short
 
@@ -1842,9 +1842,9 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_constructor_pipelinebuilder_new(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_completion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_constructor_baseprovider_with_completion_defaults(): Short
+    external fun uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model_with_defaults(): Short
 
     external fun uniffi_blazen_uniffi_checksum_constructor_workflowbuilder_new(): Short
 
@@ -2149,32 +2149,6 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
-    external fun uniffi_blazen_uniffi_fn_clone_completionmodel(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_free_completionmodel(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    external fun uniffi_blazen_uniffi_fn_method_completionmodel_complete(
-        `ptr`: Long,
-        `request`: RustBuffer.ByValue,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_method_completionmodel_complete_blocking(
-        `ptr`: Long,
-        `request`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    external fun uniffi_blazen_uniffi_fn_method_completionmodel_model_id(
-        `ptr`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
     external fun uniffi_blazen_uniffi_fn_clone_embeddingmodel(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
@@ -2202,6 +2176,32 @@ internal object UniffiLib {
     ): RustBuffer.ByValue
 
     external fun uniffi_blazen_uniffi_fn_method_embeddingmodel_model_id(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_model(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_model(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_model_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_model_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_model_model_id(
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
@@ -2713,18 +2713,18 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
-    external fun uniffi_blazen_uniffi_fn_constructor_baseprovider_from_completion_model(
+    external fun uniffi_blazen_uniffi_fn_constructor_baseprovider_from_model(
         `model`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_constructor_baseprovider_with_completion_defaults(
+    external fun uniffi_blazen_uniffi_fn_constructor_baseprovider_from_model_with_defaults(
         `model`: Long,
         `defaults`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_method_baseprovider_as_completion_model(
+    external fun uniffi_blazen_uniffi_fn_method_baseprovider_as_model(
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
@@ -3200,14 +3200,14 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_anthropic_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_anthropic_model(
         `apiKey`: RustBuffer.ByValue,
         `model`: RustBuffer.ByValue,
         `baseUrl`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_azure_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_azure_model(
         `apiKey`: RustBuffer.ByValue,
         `resourceName`: RustBuffer.ByValue,
         `deploymentName`: RustBuffer.ByValue,
@@ -3215,20 +3215,11 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_bedrock_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_bedrock_model(
         `apiKey`: RustBuffer.ByValue,
         `region`: RustBuffer.ByValue,
         `model`: RustBuffer.ByValue,
         `baseUrl`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_candle_completion_model(
-        `modelId`: RustBuffer.ByValue,
-        `device`: RustBuffer.ByValue,
-        `quantization`: RustBuffer.ByValue,
-        `revision`: RustBuffer.ByValue,
-        `contextLength`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
@@ -3239,14 +3230,23 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_cohere_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_candle_model(
+        `modelId`: RustBuffer.ByValue,
+        `device`: RustBuffer.ByValue,
+        `quantization`: RustBuffer.ByValue,
+        `revision`: RustBuffer.ByValue,
+        `contextLength`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_cohere_model(
         `apiKey`: RustBuffer.ByValue,
         `model`: RustBuffer.ByValue,
         `baseUrl`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_custom_completion_model_with_openai_protocol(
+    external fun uniffi_blazen_uniffi_fn_func_new_custom_model_with_openai_protocol(
         `providerId`: RustBuffer.ByValue,
         `baseUrl`: RustBuffer.ByValue,
         `model`: RustBuffer.ByValue,
@@ -3254,20 +3254,10 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_deepseek_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_deepseek_model(
         `apiKey`: RustBuffer.ByValue,
         `model`: RustBuffer.ByValue,
         `baseUrl`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_fal_completion_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        `endpoint`: RustBuffer.ByValue,
-        `enterprise`: Byte,
-        `autoRouteModality`: Byte,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
@@ -3278,6 +3268,16 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
+    external fun uniffi_blazen_uniffi_fn_func_new_fal_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        `endpoint`: RustBuffer.ByValue,
+        `enterprise`: Byte,
+        `autoRouteModality`: Byte,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
     external fun uniffi_blazen_uniffi_fn_func_new_fastembed_embedding_model(
         `modelName`: RustBuffer.ByValue,
         `maxBatchSize`: RustBuffer.ByValue,
@@ -3285,28 +3285,28 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_fireworks_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_fireworks_model(
         `apiKey`: RustBuffer.ByValue,
         `model`: RustBuffer.ByValue,
         `baseUrl`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_gemini_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_gemini_model(
         `apiKey`: RustBuffer.ByValue,
         `model`: RustBuffer.ByValue,
         `baseUrl`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_groq_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_groq_model(
         `apiKey`: RustBuffer.ByValue,
         `model`: RustBuffer.ByValue,
         `baseUrl`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_llamacpp_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_llamacpp_model(
         `modelPath`: RustBuffer.ByValue,
         `device`: RustBuffer.ByValue,
         `quantization`: RustBuffer.ByValue,
@@ -3315,21 +3315,21 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_lm_studio_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_lm_studio_model(
         `host`: RustBuffer.ByValue,
         `port`: Short,
         `model`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_mistral_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_mistral_model(
         `apiKey`: RustBuffer.ByValue,
         `model`: RustBuffer.ByValue,
         `baseUrl`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_mistralrs_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_mistralrs_model(
         `modelId`: RustBuffer.ByValue,
         `device`: RustBuffer.ByValue,
         `quantization`: RustBuffer.ByValue,
@@ -3338,25 +3338,18 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_ollama_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_ollama_model(
         `host`: RustBuffer.ByValue,
         `port`: Short,
         `model`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_openai_compat_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_openai_compat_model(
         `providerName`: RustBuffer.ByValue,
         `baseUrl`: RustBuffer.ByValue,
         `apiKey`: RustBuffer.ByValue,
         `model`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_openai_completion_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
@@ -3367,21 +3360,28 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_openrouter_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_openai_model(
         `apiKey`: RustBuffer.ByValue,
         `model`: RustBuffer.ByValue,
         `baseUrl`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_perplexity_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_openrouter_model(
         `apiKey`: RustBuffer.ByValue,
         `model`: RustBuffer.ByValue,
         `baseUrl`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_together_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_perplexity_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_together_model(
         `apiKey`: RustBuffer.ByValue,
         `model`: RustBuffer.ByValue,
         `baseUrl`: RustBuffer.ByValue,
@@ -3395,7 +3395,7 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_xai_completion_model(
+    external fun uniffi_blazen_uniffi_fn_func_new_xai_model(
         `apiKey`: RustBuffer.ByValue,
         `model`: RustBuffer.ByValue,
         `baseUrl`: RustBuffer.ByValue,
@@ -3659,10 +3659,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_func_version() != 61949.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_complete_batch() != 21646.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_complete_batch() != 26653.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_complete_batch_blocking() != 63435.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_complete_batch_blocking() != 12966.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_diffusion_model() != 18747.toShort()) {
@@ -3707,94 +3707,94 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_func_openai_compat() != 1651.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_anthropic_completion_model() != 51033.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_anthropic_model() != 63174.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_azure_completion_model() != 44043.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_azure_model() != 41519.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_bedrock_completion_model() != 8513.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_candle_completion_model() != 50089.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_bedrock_model() != 25844.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_candle_embedding_model() != 49772.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_cohere_completion_model() != 22601.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_candle_model() != 59984.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_custom_completion_model_with_openai_protocol() != 52541.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_cohere_model() != 47421.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_deepseek_completion_model() != 51214.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_custom_model_with_openai_protocol() != 35849.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_fal_completion_model() != 56790.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_deepseek_model() != 60107.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_fal_embedding_model() != 50719.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_fal_model() != 6726.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_fastembed_embedding_model() != 27141.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_fireworks_completion_model() != 60773.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_fireworks_model() != 25660.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_gemini_completion_model() != 4509.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_gemini_model() != 5451.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_groq_completion_model() != 2438.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_groq_model() != 63063.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_llamacpp_completion_model() != 2285.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_llamacpp_model() != 62567.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_lm_studio_completion_model() != 21338.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_lm_studio_model() != 54376.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_mistral_completion_model() != 22583.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_mistral_model() != 18547.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_mistralrs_completion_model() != 26159.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_mistralrs_model() != 56474.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_ollama_completion_model() != 4717.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_ollama_model() != 51199.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_openai_compat_completion_model() != 63435.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_openai_completion_model() != 45922.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_openai_compat_model() != 1505.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_openai_embedding_model() != 64561.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_openrouter_completion_model() != 43812.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_openai_model() != 52484.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_perplexity_completion_model() != 57728.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_openrouter_model() != 25099.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_together_completion_model() != 20330.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_perplexity_model() != 49956.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_together_model() != 60884.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_tract_embedding_model() != 32866.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_xai_completion_model() != 397.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_xai_model() != 50122.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_func_init() != 33802.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_complete_streaming() != 3202.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_complete_streaming() != 22515.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_complete_streaming_blocking() != 29923.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_complete_streaming_blocking() != 64487.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_func_init_langfuse() != 16496.toShort()) {
@@ -3884,15 +3884,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_controlplaneworker_shutdown() != 13840.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_completionmodel_complete() != 52439.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_completionmodel_complete_blocking() != 23180.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_completionmodel_model_id() != 47193.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
     if (lib.uniffi_blazen_uniffi_checksum_method_embeddingmodel_dimensions() != 11198.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3903,6 +3894,15 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_embeddingmodel_model_id() != 36076.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_model_complete() != 48637.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_model_complete_blocking() != 36439.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_model_model_id() != 39325.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_load() != 57606.toShort()) {
@@ -4085,19 +4085,19 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_pipelinebuilder_total_timeout_ms() != 53032.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_as_completion_model() != 16167.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_as_model() != 58666.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_defaults() != 34325.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_defaults() != 21474.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_extract() != 47282.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_model_id() != 18871.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_model_id() != 18282.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_with_defaults() != 59299.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_with_defaults() != 47332.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_baseprovider_with_response_format_json() != 25582.toShort()) {
@@ -4112,10 +4112,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_provider_id() != 63939.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_complete() != 50396.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_complete() != 59926.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_stream() != 43804.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_stream() != 9479.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_embed() != 11956.toShort()) {
@@ -4160,13 +4160,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_customprovider_remove_background() != 5224.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_as_base() != 14798.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_as_base() != 43943.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_clone_voice() != 62032.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_complete() != 8359.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_complete() != 24656.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_delete_voice() != 40671.toShort()) {
@@ -4199,7 +4199,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_remove_background() != 30856.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_stream() != 19661.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_stream() != 57273.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_customproviderhandle_text_to_speech() != 20321.toShort()) {
@@ -4256,7 +4256,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_workflowbuilder_timeout_ms() != 61492.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_constructor_agent_new() != 30307.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_agent_new() != 59656.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_constructor_controlplaneclient_connect() != 13355.toShort()) {
@@ -4295,10 +4295,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_constructor_pipelinebuilder_new() != 61410.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_completion_model() != 9239.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model() != 28877.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_constructor_baseprovider_with_completion_defaults() != 23775.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model_with_defaults() != 44881.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_constructor_workflowbuilder_new() != 14241.toShort()) {
@@ -5005,7 +5005,7 @@ open class Agent :
      * forced to produce a final answer.
      */
     constructor(
-        `model`: CompletionModel,
+        `model`: Model,
         `systemPrompt`: kotlin.String?,
         `tools`: List<Tool>,
         `toolHandler`: ToolHandler,
@@ -5015,7 +5015,7 @@ open class Agent :
             UniffiWithHandle,
             uniffiRustCall { _status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_constructor_agent_new(
-                    FfiConverterTypeCompletionModel.lower(`model`),
+                    FfiConverterTypeModel.lower(`model`),
                     FfiConverterOptionalString.lower(`systemPrompt`),
                     FfiConverterSequenceTypeTool.lower(`tools`),
                     FfiConverterTypeToolHandler.lower(`toolHandler`),
@@ -5263,33 +5263,33 @@ public object FfiConverterTypeAgent : FfiConverter<Agent, Long> {
 //
 
 /**
- * A [`crate::llm::CompletionModel`] wrapped with applied
- * [`CompletionProviderDefaults`].
+ * A [`crate::llm::Model`] wrapped with applied
+ * [`ProviderDefaults`].
  *
- * Construct via [`BaseProvider::from_completion_model`] (wraps an existing
- * model with no defaults) or [`BaseProvider::with_completion_defaults`]
+ * Construct via [`BaseProvider::from_model`] (wraps an existing
+ * model with no defaults) or [`BaseProvider::with_defaults`]
  * (wraps with explicit defaults). Mutate via the `with_*` builder methods.
  *
  * Phase B's `CustomProvider` factories will return `Arc<BaseProvider>`
  * directly; for Phase A this class is reachable by lifting any existing
- * `CompletionModel` factory result.
+ * `Model` factory result.
  */
 public interface BaseProviderInterface {
     /**
-     * Unwrap to a plain [`CompletionModel`] handle that applies the
+     * Unwrap to a plain [`Model`] handle that applies the
      * configured defaults on every call.
      *
      * Use this when you want to pass the wrapped provider to an API that
-     * takes a generic `CompletionModel` (the agent runner, workflow
+     * takes a generic `Model` (the agent runner, workflow
      * steps, etc.).
      */
-    fun `asCompletionModel`(): CompletionModel
+    fun `asModel`(): Model
 
     /**
      * Inspect the currently-configured defaults (data only — hooks are
      * not surfaced in Phase A).
      */
-    fun `defaults`(): CompletionProviderDefaults
+    fun `defaults`(): ProviderDefaults
 
     /**
      * Extract structured output from the model by constraining its
@@ -5312,15 +5312,15 @@ public interface BaseProviderInterface {
     ): kotlin.String
 
     /**
-     * The model id of the wrapped inner `CompletionModel`.
+     * The model id of the wrapped inner `Model`.
      */
     fun `modelId`(): kotlin.String
 
     /**
-     * Replace the entire [`CompletionProviderDefaults`] on this provider,
+     * Replace the entire [`ProviderDefaults`] on this provider,
      * returning a new `Arc<BaseProvider>` (clone-with-mutation).
      */
-    fun `withDefaults`(`defaults`: CompletionProviderDefaults): BaseProvider
+    fun `withDefaults`(`defaults`: ProviderDefaults): BaseProvider
 
     /**
      * Set the default `response_format` (JSON-encoded `serde_json::Value`).
@@ -5347,16 +5347,16 @@ public interface BaseProviderInterface {
 }
 
 /**
- * A [`crate::llm::CompletionModel`] wrapped with applied
- * [`CompletionProviderDefaults`].
+ * A [`crate::llm::Model`] wrapped with applied
+ * [`ProviderDefaults`].
  *
- * Construct via [`BaseProvider::from_completion_model`] (wraps an existing
- * model with no defaults) or [`BaseProvider::with_completion_defaults`]
+ * Construct via [`BaseProvider::from_model`] (wraps an existing
+ * model with no defaults) or [`BaseProvider::with_defaults`]
  * (wraps with explicit defaults). Mutate via the `with_*` builder methods.
  *
  * Phase B's `CustomProvider` factories will return `Arc<BaseProvider>`
  * directly; for Phase A this class is reachable by lifting any existing
- * `CompletionModel` factory result.
+ * `Model` factory result.
  */
 open class BaseProvider :
     Disposable,
@@ -5458,18 +5458,18 @@ open class BaseProvider :
     }
 
     /**
-     * Unwrap to a plain [`CompletionModel`] handle that applies the
+     * Unwrap to a plain [`Model`] handle that applies the
      * configured defaults on every call.
      *
      * Use this when you want to pass the wrapped provider to an API that
-     * takes a generic `CompletionModel` (the agent runner, workflow
+     * takes a generic `Model` (the agent runner, workflow
      * steps, etc.).
      */
-    override fun `asCompletionModel`(): CompletionModel =
-        FfiConverterTypeCompletionModel.lift(
+    override fun `asModel`(): Model =
+        FfiConverterTypeModel.lift(
             callWithHandle {
                 uniffiRustCall { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_method_baseprovider_as_completion_model(
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_baseprovider_as_model(
                         it,
                         _status,
                     )
@@ -5481,8 +5481,8 @@ open class BaseProvider :
      * Inspect the currently-configured defaults (data only — hooks are
      * not surfaced in Phase A).
      */
-    override fun `defaults`(): CompletionProviderDefaults =
-        FfiConverterTypeCompletionProviderDefaults.lift(
+    override fun `defaults`(): ProviderDefaults =
+        FfiConverterTypeProviderDefaults.lift(
             callWithHandle {
                 uniffiRustCall { _status ->
                     UniffiLib.uniffi_blazen_uniffi_fn_method_baseprovider_defaults(
@@ -5532,7 +5532,7 @@ open class BaseProvider :
         )
 
     /**
-     * The model id of the wrapped inner `CompletionModel`.
+     * The model id of the wrapped inner `Model`.
      */
     override fun `modelId`(): kotlin.String =
         FfiConverterString.lift(
@@ -5547,16 +5547,16 @@ open class BaseProvider :
         )
 
     /**
-     * Replace the entire [`CompletionProviderDefaults`] on this provider,
+     * Replace the entire [`ProviderDefaults`] on this provider,
      * returning a new `Arc<BaseProvider>` (clone-with-mutation).
      */
-    override fun `withDefaults`(`defaults`: CompletionProviderDefaults): BaseProvider =
+    override fun `withDefaults`(`defaults`: ProviderDefaults): BaseProvider =
         FfiConverterTypeBaseProvider.lift(
             callWithHandle {
                 uniffiRustCall { _status ->
                     UniffiLib.uniffi_blazen_uniffi_fn_method_baseprovider_with_defaults(
                         it,
-                        FfiConverterTypeCompletionProviderDefaults.lower(`defaults`),
+                        FfiConverterTypeProviderDefaults.lower(`defaults`),
                         _status,
                     )
                 }
@@ -5619,34 +5619,31 @@ open class BaseProvider :
 
     companion object {
         /**
-         * Wrap an existing [`CompletionModel`] with empty defaults.
+         * Wrap an existing [`Model`] with empty defaults.
          *
          * Equivalent to using the wrapped model directly, but lets callers
          * attach defaults later via the `with_*` methods.
          */
-        fun `fromCompletionModel`(`model`: CompletionModel): BaseProvider =
+        fun `fromModel`(`model`: Model): BaseProvider =
             FfiConverterTypeBaseProvider.lift(
                 uniffiRustCall { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_constructor_baseprovider_from_completion_model(
-                        FfiConverterTypeCompletionModel.lower(`model`),
-                        _status,
-                    )
+                    UniffiLib.uniffi_blazen_uniffi_fn_constructor_baseprovider_from_model(FfiConverterTypeModel.lower(`model`), _status)
                 },
             )
 
         /**
-         * Wrap a [`CompletionModel`] with explicit
-         * [`CompletionProviderDefaults`].
+         * Wrap a [`Model`] with explicit
+         * [`ProviderDefaults`].
          */
-        fun `withCompletionDefaults`(
-            `model`: CompletionModel,
-            `defaults`: CompletionProviderDefaults,
+        fun `fromModelWithDefaults`(
+            `model`: Model,
+            `defaults`: ProviderDefaults,
         ): BaseProvider =
             FfiConverterTypeBaseProvider.lift(
                 uniffiRustCall { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_constructor_baseprovider_with_completion_defaults(
-                        FfiConverterTypeCompletionModel.lower(`model`),
-                        FfiConverterTypeCompletionProviderDefaults.lower(`defaults`),
+                    UniffiLib.uniffi_blazen_uniffi_fn_constructor_baseprovider_from_model_with_defaults(
+                        FfiConverterTypeModel.lower(`model`),
+                        FfiConverterTypeProviderDefaults.lower(`defaults`),
                         _status,
                     )
                 },
@@ -6176,324 +6173,6 @@ public object FfiConverterTypeCheckpointStore : FfiConverter<CheckpointStore, Lo
 
     override fun write(
         value: CheckpointStore,
-        buf: ByteBuffer,
-    ) {
-        buf.putLong(lower(value))
-    }
-}
-
-// This template implements a class for working with a Rust struct via a handle
-// to the live Rust struct on the other side of the FFI.
-//
-// There's some subtlety here, because we have to be careful not to operate on a Rust
-// struct after it has been dropped, and because we must expose a public API for freeing
-// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
-//
-//   * Each instance holds an opaque handle to the underlying Rust struct.
-//     Method calls need to read this handle from the object's state and pass it in to
-//     the Rust FFI.
-//
-//   * When an instance is no longer needed, its handle should be passed to a
-//     special destructor function provided by the Rust FFI, which will drop the
-//     underlying Rust struct.
-//
-//   * Given an instance, calling code is expected to call the special
-//     `destroy` method in order to free it after use, either by calling it explicitly
-//     or by using a higher-level helper like the `use` method. Failing to do so risks
-//     leaking the underlying Rust struct.
-//
-//   * We can't assume that calling code will do the right thing, and must be prepared
-//     to handle Kotlin method calls executing concurrently with or even after a call to
-//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
-//
-//   * We must never allow Rust code to operate on the underlying Rust struct after
-//     the destructor has been called, and must never call the destructor more than once.
-//     Doing so may trigger memory unsafety.
-//
-//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
-//     is implemented to call the destructor when the Kotlin object becomes unreachable.
-//     This is done in a background thread. This is not a panacea, and client code should be aware that
-//      1. the thread may starve if some there are objects that have poorly performing
-//     `drop` methods or do significant work in their `drop` methods.
-//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
-//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
-//
-// If we try to implement this with mutual exclusion on access to the handle, there is the
-// possibility of a race between a method call and a concurrent call to `destroy`:
-//
-//    * Thread A starts a method call, reads the value of the handle, but is interrupted
-//      before it can pass the handle over the FFI to Rust.
-//    * Thread B calls `destroy` and frees the underlying Rust struct.
-//    * Thread A resumes, passing the already-read handle value to Rust and triggering
-//      a use-after-free.
-//
-// One possible solution would be to use a `ReadWriteLock`, with each method call taking
-// a read lock (and thus allowed to run concurrently) and the special `destroy` method
-// taking a write lock (and thus blocking on live method calls). However, we aim not to
-// generate methods with any hidden blocking semantics, and a `destroy` method that might
-// block if called incorrectly seems to meet that bar.
-//
-// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
-// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
-// has been called. These are updated according to the following rules:
-//
-//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
-//      The initial value for the flag is false.
-//
-//    * At the start of each method call, we atomically check the counter.
-//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
-//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
-//
-//    * At the end of each method call, we atomically decrement and check the counter.
-//      If it has reached zero then we destroy the underlying Rust struct.
-//
-//    * When `destroy` is called, we atomically flip the flag from false to true.
-//      If the flag was already true we silently fail.
-//      Otherwise we atomically decrement and check the counter.
-//      If it has reached zero then we destroy the underlying Rust struct.
-//
-// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
-// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
-//
-// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
-// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
-// of the underlying Rust code.
-//
-// This makes a cleaner a better alternative to _not_ calling `destroy()` as
-// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
-// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
-// thread may be starved, and the app will leak memory.
-//
-// In this case, `destroy`ing manually may be a better solution.
-//
-// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
-// with Rust peers are reclaimed:
-//
-// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
-// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
-// 3. The memory is reclaimed when the process terminates.
-//
-// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
-//
-
-/**
- * A chat completion model.
- *
- * Construct one via the per-provider factories in `providers.rs` (e.g.
- * `CompletionModel::openai(options)` from the foreign-language side).
- * Once obtained, call [`complete`](Self::complete) (async) or
- * [`complete_blocking`](Self::complete_blocking) (sync) to generate
- * responses.
- */
-public interface CompletionModelInterface {
-    /**
-     * Perform a chat completion. Async on Swift / Kotlin; blocking on Go
-     * (UniFFI's Go bindgen wraps the future in a goroutine-friendly call).
-     */
-    suspend fun `complete`(`request`: CompletionRequest): CompletionResponse
-
-    /**
-     * Synchronous variant of [`complete`](Self::complete) — blocks the
-     * current thread on the shared Tokio runtime. Handy for Ruby scripts
-     * and quick Go `main` functions where async machinery is overkill.
-     * Prefer the async [`complete`](Self::complete) in long-running services.
-     */
-    fun `completeBlocking`(`request`: CompletionRequest): CompletionResponse
-
-    /**
-     * The model's identifier (e.g. `"gpt-4o"`, `"claude-3-5-sonnet"`).
-     */
-    fun `modelId`(): kotlin.String
-
-    companion object
-}
-
-/**
- * A chat completion model.
- *
- * Construct one via the per-provider factories in `providers.rs` (e.g.
- * `CompletionModel::openai(options)` from the foreign-language side).
- * Once obtained, call [`complete`](Self::complete) (async) or
- * [`complete_blocking`](Self::complete_blocking) (sync) to generate
- * responses.
- */
-open class CompletionModel :
-    Disposable,
-    AutoCloseable,
-    CompletionModelInterface {
-    /**
-     * @suppress
-     */
-    @Suppress("UNUSED_PARAMETER")
-    constructor(withHandle: UniffiWithHandle, handle: Long) {
-        this.handle = handle
-        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
-    }
-
-    /**
-     * @suppress
-     *
-     * This constructor can be used to instantiate a fake object. Only used for tests. Any
-     * attempt to actually use an object constructed this way will fail as there is no
-     * connected Rust object.
-     */
-    @Suppress("UNUSED_PARAMETER")
-    constructor(noHandle: NoHandle) {
-        this.handle = 0
-        this.cleanable = null
-    }
-
-    protected val handle: Long
-    protected val cleanable: UniffiCleaner.Cleanable?
-
-    private val wasDestroyed = AtomicBoolean(false)
-    private val callCounter = AtomicLong(1)
-
-    override fun destroy() {
-        // Only allow a single call to this method.
-        // TODO: maybe we should log a warning if called more than once?
-        if (this.wasDestroyed.compareAndSet(false, true)) {
-            // This decrement always matches the initial count of 1 given at creation time.
-            if (this.callCounter.decrementAndGet() == 0L) {
-                cleanable?.clean()
-            }
-        }
-    }
-
-    @Synchronized
-    override fun close() {
-        this.destroy()
-    }
-
-    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
-        // Check and increment the call counter, to keep the object alive.
-        // This needs a compare-and-set retry loop in case of concurrent updates.
-        do {
-            val c = this.callCounter.get()
-            if (c == 0L) {
-                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
-            }
-            if (c == Long.MAX_VALUE) {
-                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
-            }
-        } while (!this.callCounter.compareAndSet(c, c + 1L))
-        // Now we can safely do the method call without the handle being freed concurrently.
-        try {
-            return block(this.uniffiCloneHandle())
-        } finally {
-            // This decrement always matches the increment we performed above.
-            if (this.callCounter.decrementAndGet() == 0L) {
-                cleanable?.clean()
-            }
-        }
-    }
-
-    // Use a static inner class instead of a closure so as not to accidentally
-    // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(
-        private val handle: Long,
-    ) : Runnable {
-        override fun run() {
-            if (handle == 0.toLong()) {
-                // Fake object created with `NoHandle`, don't try to free.
-                return
-            }
-            uniffiRustCall { status ->
-                UniffiLib.uniffi_blazen_uniffi_fn_free_completionmodel(handle, status)
-            }
-        }
-    }
-
-    /**
-     * @suppress
-     */
-    fun uniffiCloneHandle(): Long {
-        if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object")
-        }
-        return uniffiRustCall { status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_clone_completionmodel(handle, status)
-        }
-    }
-
-    /**
-     * Perform a chat completion. Async on Swift / Kotlin; blocking on Go
-     * (UniFFI's Go bindgen wraps the future in a goroutine-friendly call).
-     */
-    @Throws(BlazenException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `complete`(`request`: CompletionRequest): CompletionResponse =
-        uniffiRustCallAsync(
-            callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_blazen_uniffi_fn_method_completionmodel_complete(
-                    uniffiHandle,
-                    FfiConverterTypeCompletionRequest.lower(`request`),
-                )
-            },
-            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-            // lift function
-            { FfiConverterTypeCompletionResponse.lift(it) },
-            // Error FFI converter
-            BlazenException.ErrorHandler,
-        )
-
-    /**
-     * Synchronous variant of [`complete`](Self::complete) — blocks the
-     * current thread on the shared Tokio runtime. Handy for Ruby scripts
-     * and quick Go `main` functions where async machinery is overkill.
-     * Prefer the async [`complete`](Self::complete) in long-running services.
-     */
-    @Throws(BlazenException::class)
-    override fun `completeBlocking`(`request`: CompletionRequest): CompletionResponse =
-        FfiConverterTypeCompletionResponse.lift(
-            callWithHandle {
-                uniffiRustCallWithError(BlazenException) { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_method_completionmodel_complete_blocking(
-                        it,
-                        FfiConverterTypeCompletionRequest.lower(`request`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    /**
-     * The model's identifier (e.g. `"gpt-4o"`, `"claude-3-5-sonnet"`).
-     */
-    override fun `modelId`(): kotlin.String =
-        FfiConverterString.lift(
-            callWithHandle {
-                uniffiRustCall { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_method_completionmodel_model_id(
-                        it,
-                        _status,
-                    )
-                }
-            },
-        )
-
-    /**
-     * @suppress
-     */
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeCompletionModel : FfiConverter<CompletionModel, Long> {
-    override fun lower(value: CompletionModel): Long = value.uniffiCloneHandle()
-
-    override fun lift(value: Long): CompletionModel = CompletionModel(UniffiWithHandle, value)
-
-    override fun read(buf: ByteBuffer): CompletionModel = lift(buf.getLong())
-
-    override fun allocationSize(value: CompletionModel) = 8UL
-
-    override fun write(
-        value: CompletionModel,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -9162,7 +8841,7 @@ public interface CustomProvider {
     /**
      * Perform a non-streaming chat completion.
      */
-    suspend fun `complete`(`request`: CompletionRequest): CompletionResponse
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
 
     /**
      * Perform a streaming chat completion, pushing chunks into the supplied
@@ -9170,7 +8849,7 @@ public interface CustomProvider {
      * success or `sink.on_error` exactly once on failure.
      */
     suspend fun `stream`(
-        `request`: CompletionRequest,
+        `request`: ModelRequest,
         `sink`: CompletionStreamSink,
     )
 
@@ -9401,19 +9080,19 @@ open class CustomProviderImpl :
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `complete`(`request`: CompletionRequest): CompletionResponse =
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_complete(
                     uniffiHandle,
-                    FfiConverterTypeCompletionRequest.lower(`request`),
+                    FfiConverterTypeModelRequest.lower(`request`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
             { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
             { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
             // lift function
-            { FfiConverterTypeCompletionResponse.lift(it) },
+            { FfiConverterTypeModelResponse.lift(it) },
             // Error FFI converter
             BlazenException.ErrorHandler,
         )
@@ -9426,13 +9105,13 @@ open class CustomProviderImpl :
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `stream`(
-        `request`: CompletionRequest,
+        `request`: ModelRequest,
         `sink`: CompletionStreamSink,
     ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_blazen_uniffi_fn_method_customprovider_stream(
                 uniffiHandle,
-                FfiConverterTypeCompletionRequest.lower(`request`),
+                FfiConverterTypeModelRequest.lower(`request`),
                 FfiConverterTypeCompletionStreamSink.lower(`sink`),
             )
         },
@@ -9784,13 +9463,13 @@ internal object uniffiCallbackInterfaceCustomProvider {
             val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
             val makeCall =
                 suspend {  uniffiObj.`complete`(
-                    FfiConverterTypeCompletionRequest.lift(`request`),
+                    FfiConverterTypeModelRequest.lift(`request`),
                 )
                 }
-            val uniffiHandleSuccess = { returnValue: CompletionResponse ->
+            val uniffiHandleSuccess = { returnValue: ModelResponse ->
                 val uniffiResult =
                     UniffiForeignFutureResultRustBuffer.UniffiByValue(
-                        FfiConverterTypeCompletionResponse.lower(returnValue),
+                        FfiConverterTypeModelResponse.lower(returnValue),
                         UniffiRustCallStatus.ByValue(),
                     )
                 uniffiResult.write()
@@ -9827,7 +9506,7 @@ internal object uniffiCallbackInterfaceCustomProvider {
             val uniffiObj = FfiConverterTypeCustomProvider.handleMap.get(uniffiHandle)
             val makeCall =
                 suspend {  uniffiObj.`stream`(
-                    FfiConverterTypeCompletionRequest.lift(`request`),
+                    FfiConverterTypeModelRequest.lift(`request`),
                     FfiConverterTypeCompletionStreamSink.lift(`sink`),
                 )
                 }
@@ -10632,7 +10311,7 @@ public interface CustomProviderHandleInterface {
      *
      * Use for `.with_system_prompt(...)`, `.with_tools_json(...)`,
      * `.with_response_format_json(...)`, or to hand the provider to an API
-     * expecting an opaque `CompletionModel`-shaped handle.
+     * expecting an opaque `Model`-shaped handle.
      */
     fun `asBase`(): BaseProvider
 
@@ -10646,7 +10325,7 @@ public interface CustomProviderHandleInterface {
      * completion defaults (system prompt, tools, response format) before
      * dispatching to the inner provider.
      */
-    suspend fun `complete`(`request`: CompletionRequest): CompletionResponse
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
 
     /**
      * Delete a previously-cloned voice. Takes the voice id as a string so
@@ -10708,7 +10387,7 @@ public interface CustomProviderHandleInterface {
      * returns `Err` if the initial request conversion fails.
      */
     suspend fun `stream`(
-        `request`: CompletionRequest,
+        `request`: ModelRequest,
         `sink`: CompletionStreamSink,
     )
 
@@ -10879,7 +10558,7 @@ open class CustomProviderHandle :
      *
      * Use for `.with_system_prompt(...)`, `.with_tools_json(...)`,
      * `.with_response_format_json(...)`, or to hand the provider to an API
-     * expecting an opaque `CompletionModel`-shaped handle.
+     * expecting an opaque `Model`-shaped handle.
      */
     override fun `asBase`(): BaseProvider =
         FfiConverterTypeBaseProvider.lift(
@@ -10922,19 +10601,19 @@ open class CustomProviderHandle :
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `complete`(`request`: CompletionRequest): CompletionResponse =
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_complete(
                     uniffiHandle,
-                    FfiConverterTypeCompletionRequest.lower(`request`),
+                    FfiConverterTypeModelRequest.lower(`request`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
             { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
             { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
             // lift function
-            { FfiConverterTypeCompletionResponse.lift(it) },
+            { FfiConverterTypeModelResponse.lift(it) },
             // Error FFI converter
             BlazenException.ErrorHandler,
         )
@@ -11163,13 +10842,13 @@ open class CustomProviderHandle :
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `stream`(
-        `request`: CompletionRequest,
+        `request`: ModelRequest,
         `sink`: CompletionStreamSink,
     ) = uniffiRustCallAsync(
         callWithHandle { uniffiHandle ->
             UniffiLib.uniffi_blazen_uniffi_fn_method_customproviderhandle_stream(
                 uniffiHandle,
-                FfiConverterTypeCompletionRequest.lower(`request`),
+                FfiConverterTypeModelRequest.lower(`request`),
                 FfiConverterTypeCompletionStreamSink.lower(`sink`),
             )
         },
@@ -13074,6 +12753,324 @@ public object FfiConverterTypeImageGenModel : FfiConverter<ImageGenModel, Long> 
 
     override fun write(
         value: ImageGenModel,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * A chat completion model.
+ *
+ * Construct one via the per-provider factories in `providers.rs` (e.g.
+ * `Model::openai(options)` from the foreign-language side).
+ * Once obtained, call [`complete`](Self::complete) (async) or
+ * [`complete_blocking`](Self::complete_blocking) (sync) to generate
+ * responses.
+ */
+public interface ModelInterface {
+    /**
+     * Perform a chat completion. Async on Swift / Kotlin; blocking on Go
+     * (UniFFI's Go bindgen wraps the future in a goroutine-friendly call).
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete) — blocks the
+     * current thread on the shared Tokio runtime. Handy for Ruby scripts
+     * and quick Go `main` functions where async machinery is overkill.
+     * Prefer the async [`complete`](Self::complete) in long-running services.
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * The model's identifier (e.g. `"gpt-4o"`, `"claude-3-5-sonnet"`).
+     */
+    fun `modelId`(): kotlin.String
+
+    companion object
+}
+
+/**
+ * A chat completion model.
+ *
+ * Construct one via the per-provider factories in `providers.rs` (e.g.
+ * `Model::openai(options)` from the foreign-language side).
+ * Once obtained, call [`complete`](Self::complete) (async) or
+ * [`complete_blocking`](Self::complete_blocking) (sync) to generate
+ * responses.
+ */
+open class Model :
+    Disposable,
+    AutoCloseable,
+    ModelInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_model(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_model(handle, status)
+        }
+    }
+
+    /**
+     * Perform a chat completion. Async on Swift / Kotlin; blocking on Go
+     * (UniFFI's Go bindgen wraps the future in a goroutine-friendly call).
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_model_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete) — blocks the
+     * current thread on the shared Tokio runtime. Handy for Ruby scripts
+     * and quick Go `main` functions where async machinery is overkill.
+     * Prefer the async [`complete`](Self::complete) in long-running services.
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_model_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * The model's identifier (e.g. `"gpt-4o"`, `"claude-3-5-sonnet"`).
+     */
+    override fun `modelId`(): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_model_model_id(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeModel : FfiConverter<Model, Long> {
+    override fun lower(value: Model): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): Model = Model(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): Model = lift(buf.getLong())
+
+    override fun allocationSize(value: Model) = 8UL
+
+    override fun write(
+        value: Model,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -19111,187 +19108,6 @@ public object FfiConverterTypeChatMessage : FfiConverterRustBuffer<ChatMessage> 
 }
 
 /**
- * Completion-role defaults: system prompt, default tools, default
- * `response_format`. Hooks (`before_completion`) deferred to Phase C.
- */
-data class CompletionProviderDefaults(
-    var `base`: BaseProviderDefaults? = null,
-    /**
-     * Prepended as a system message if the request lacks one.
-     */
-    var `systemPrompt`: kotlin.String? = null,
-    /**
-     * JSON-encoded `Vec<ToolDefinition>`. Merged into the request's tool
-     * list — request-supplied tools win on name collision.
-     */
-    var `toolsJson`: kotlin.String? = null,
-    /**
-     * JSON-encoded `serde_json::Value` for the OpenAI-style
-     * `response_format` field. Set only if the request lacks one.
-     */
-    var `responseFormatJson`: kotlin.String? = null,
-) {
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeCompletionProviderDefaults : FfiConverterRustBuffer<CompletionProviderDefaults> {
-    override fun read(buf: ByteBuffer): CompletionProviderDefaults =
-        CompletionProviderDefaults(
-            FfiConverterOptionalTypeBaseProviderDefaults.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterOptionalString.read(buf),
-        )
-
-    override fun allocationSize(value: CompletionProviderDefaults) =
-        (
-            FfiConverterOptionalTypeBaseProviderDefaults.allocationSize(value.`base`) +
-                FfiConverterOptionalString.allocationSize(value.`systemPrompt`) +
-                FfiConverterOptionalString.allocationSize(value.`toolsJson`) +
-                FfiConverterOptionalString.allocationSize(value.`responseFormatJson`)
-        )
-
-    override fun write(
-        value: CompletionProviderDefaults,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterOptionalTypeBaseProviderDefaults.write(value.`base`, buf)
-        FfiConverterOptionalString.write(value.`systemPrompt`, buf)
-        FfiConverterOptionalString.write(value.`toolsJson`, buf)
-        FfiConverterOptionalString.write(value.`responseFormatJson`, buf)
-    }
-}
-
-/**
- * A provider-agnostic chat completion request.
- *
- * `system`, when set, is prepended as a `Role::System` message — equivalent
- * to building the message list with a leading system entry. Provided as a
- * convenience because most foreign callers think of the system prompt as a
- * request-level field, not a message.
- */
-data class CompletionRequest(
-    var `messages`: List<ChatMessage>,
-    var `tools`: List<Tool>,
-    var `temperature`: kotlin.Double?,
-    var `maxTokens`: kotlin.UInt?,
-    var `topP`: kotlin.Double?,
-    /**
-     * Optional model identifier to use for this request, overriding the
-     * provider's default model.
-     */
-    var `model`: kotlin.String?,
-    /**
-     * Optional JSON Schema (encoded as a string) constraining the model's
-     * output. Passed through to upstream's `response_format` slot.
-     */
-    var `responseFormatJson`: kotlin.String?,
-    /**
-     * Optional system prompt, prepended as a `system`-role message.
-     */
-    var `system`: kotlin.String?,
-) {
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeCompletionRequest : FfiConverterRustBuffer<CompletionRequest> {
-    override fun read(buf: ByteBuffer): CompletionRequest =
-        CompletionRequest(
-            FfiConverterSequenceTypeChatMessage.read(buf),
-            FfiConverterSequenceTypeTool.read(buf),
-            FfiConverterOptionalDouble.read(buf),
-            FfiConverterOptionalUInt.read(buf),
-            FfiConverterOptionalDouble.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterOptionalString.read(buf),
-            FfiConverterOptionalString.read(buf),
-        )
-
-    override fun allocationSize(value: CompletionRequest) =
-        (
-            FfiConverterSequenceTypeChatMessage.allocationSize(value.`messages`) +
-                FfiConverterSequenceTypeTool.allocationSize(value.`tools`) +
-                FfiConverterOptionalDouble.allocationSize(value.`temperature`) +
-                FfiConverterOptionalUInt.allocationSize(value.`maxTokens`) +
-                FfiConverterOptionalDouble.allocationSize(value.`topP`) +
-                FfiConverterOptionalString.allocationSize(value.`model`) +
-                FfiConverterOptionalString.allocationSize(value.`responseFormatJson`) +
-                FfiConverterOptionalString.allocationSize(value.`system`)
-        )
-
-    override fun write(
-        value: CompletionRequest,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterSequenceTypeChatMessage.write(value.`messages`, buf)
-        FfiConverterSequenceTypeTool.write(value.`tools`, buf)
-        FfiConverterOptionalDouble.write(value.`temperature`, buf)
-        FfiConverterOptionalUInt.write(value.`maxTokens`, buf)
-        FfiConverterOptionalDouble.write(value.`topP`, buf)
-        FfiConverterOptionalString.write(value.`model`, buf)
-        FfiConverterOptionalString.write(value.`responseFormatJson`, buf)
-        FfiConverterOptionalString.write(value.`system`, buf)
-    }
-}
-
-/**
- * The result of a non-streaming chat completion.
- *
- * `content` is the empty string when the provider returned no text (e.g.
- * the model emitted only tool calls). `finish_reason` is the empty string
- * when the provider didn't report one.
- */
-data class CompletionResponse(
-    var `content`: kotlin.String,
-    var `toolCalls`: List<ToolCall>,
-    var `finishReason`: kotlin.String,
-    var `model`: kotlin.String,
-    var `usage`: TokenUsage,
-) {
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeCompletionResponse : FfiConverterRustBuffer<CompletionResponse> {
-    override fun read(buf: ByteBuffer): CompletionResponse =
-        CompletionResponse(
-            FfiConverterString.read(buf),
-            FfiConverterSequenceTypeToolCall.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterString.read(buf),
-            FfiConverterTypeTokenUsage.read(buf),
-        )
-
-    override fun allocationSize(value: CompletionResponse) =
-        (
-            FfiConverterString.allocationSize(value.`content`) +
-                FfiConverterSequenceTypeToolCall.allocationSize(value.`toolCalls`) +
-                FfiConverterString.allocationSize(value.`finishReason`) +
-                FfiConverterString.allocationSize(value.`model`) +
-                FfiConverterTypeTokenUsage.allocationSize(value.`usage`)
-        )
-
-    override fun write(
-        value: CompletionResponse,
-        buf: ByteBuffer,
-    ) {
-        FfiConverterString.write(value.`content`, buf)
-        FfiConverterSequenceTypeToolCall.write(value.`toolCalls`, buf)
-        FfiConverterString.write(value.`finishReason`, buf)
-        FfiConverterString.write(value.`model`, buf)
-        FfiConverterTypeTokenUsage.write(value.`usage`, buf)
-    }
-}
-
-/**
  * Bundle of admission-policy fields for a worker.
  *
  * `max_in_flight` is meaningful when `mode == Fixed`, `total_mb` when
@@ -20570,6 +20386,132 @@ public object FfiConverterTypeMediaOutput : FfiConverterRustBuffer<MediaOutput> 
 }
 
 /**
+ * A provider-agnostic chat completion request.
+ *
+ * `system`, when set, is prepended as a `Role::System` message — equivalent
+ * to building the message list with a leading system entry. Provided as a
+ * convenience because most foreign callers think of the system prompt as a
+ * request-level field, not a message.
+ */
+data class ModelRequest(
+    var `messages`: List<ChatMessage>,
+    var `tools`: List<Tool>,
+    var `temperature`: kotlin.Double?,
+    var `maxTokens`: kotlin.UInt?,
+    var `topP`: kotlin.Double?,
+    /**
+     * Optional model identifier to use for this request, overriding the
+     * provider's default model.
+     */
+    var `model`: kotlin.String?,
+    /**
+     * Optional JSON Schema (encoded as a string) constraining the model's
+     * output. Passed through to upstream's `response_format` slot.
+     */
+    var `responseFormatJson`: kotlin.String?,
+    /**
+     * Optional system prompt, prepended as a `system`-role message.
+     */
+    var `system`: kotlin.String?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeModelRequest : FfiConverterRustBuffer<ModelRequest> {
+    override fun read(buf: ByteBuffer): ModelRequest =
+        ModelRequest(
+            FfiConverterSequenceTypeChatMessage.read(buf),
+            FfiConverterSequenceTypeTool.read(buf),
+            FfiConverterOptionalDouble.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterOptionalDouble.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+
+    override fun allocationSize(value: ModelRequest) =
+        (
+            FfiConverterSequenceTypeChatMessage.allocationSize(value.`messages`) +
+                FfiConverterSequenceTypeTool.allocationSize(value.`tools`) +
+                FfiConverterOptionalDouble.allocationSize(value.`temperature`) +
+                FfiConverterOptionalUInt.allocationSize(value.`maxTokens`) +
+                FfiConverterOptionalDouble.allocationSize(value.`topP`) +
+                FfiConverterOptionalString.allocationSize(value.`model`) +
+                FfiConverterOptionalString.allocationSize(value.`responseFormatJson`) +
+                FfiConverterOptionalString.allocationSize(value.`system`)
+        )
+
+    override fun write(
+        value: ModelRequest,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterSequenceTypeChatMessage.write(value.`messages`, buf)
+        FfiConverterSequenceTypeTool.write(value.`tools`, buf)
+        FfiConverterOptionalDouble.write(value.`temperature`, buf)
+        FfiConverterOptionalUInt.write(value.`maxTokens`, buf)
+        FfiConverterOptionalDouble.write(value.`topP`, buf)
+        FfiConverterOptionalString.write(value.`model`, buf)
+        FfiConverterOptionalString.write(value.`responseFormatJson`, buf)
+        FfiConverterOptionalString.write(value.`system`, buf)
+    }
+}
+
+/**
+ * The result of a non-streaming chat completion.
+ *
+ * `content` is the empty string when the provider returned no text (e.g.
+ * the model emitted only tool calls). `finish_reason` is the empty string
+ * when the provider didn't report one.
+ */
+data class ModelResponse(
+    var `content`: kotlin.String,
+    var `toolCalls`: List<ToolCall>,
+    var `finishReason`: kotlin.String,
+    var `model`: kotlin.String,
+    var `usage`: TokenUsage,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeModelResponse : FfiConverterRustBuffer<ModelResponse> {
+    override fun read(buf: ByteBuffer): ModelResponse =
+        ModelResponse(
+            FfiConverterString.read(buf),
+            FfiConverterSequenceTypeToolCall.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterTypeTokenUsage.read(buf),
+        )
+
+    override fun allocationSize(value: ModelResponse) =
+        (
+            FfiConverterString.allocationSize(value.`content`) +
+                FfiConverterSequenceTypeToolCall.allocationSize(value.`toolCalls`) +
+                FfiConverterString.allocationSize(value.`finishReason`) +
+                FfiConverterString.allocationSize(value.`model`) +
+                FfiConverterTypeTokenUsage.allocationSize(value.`usage`)
+        )
+
+    override fun write(
+        value: ModelResponse,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`content`, buf)
+        FfiConverterSequenceTypeToolCall.write(value.`toolCalls`, buf)
+        FfiConverterString.write(value.`finishReason`, buf)
+        FfiConverterString.write(value.`model`, buf)
+        FfiConverterTypeTokenUsage.write(value.`usage`, buf)
+    }
+}
+
+/**
  * Per-model state snapshot returned by [`UniffiModelManager::status`].
  */
 data class ModelStatusRecord(
@@ -20923,6 +20865,61 @@ public object FfiConverterTypePoolStatusRecord : FfiConverterRustBuffer<PoolStat
     ) {
         FfiConverterString.write(value.`pool`, buf)
         FfiConverterULong.write(value.`budgetBytes`, buf)
+    }
+}
+
+/**
+ * Completion-role defaults: system prompt, default tools, default
+ * `response_format`. Hooks (`before_model`) deferred to Phase C.
+ */
+data class ProviderDefaults(
+    var `base`: BaseProviderDefaults? = null,
+    /**
+     * Prepended as a system message if the request lacks one.
+     */
+    var `systemPrompt`: kotlin.String? = null,
+    /**
+     * JSON-encoded `Vec<ToolDefinition>`. Merged into the request's tool
+     * list — request-supplied tools win on name collision.
+     */
+    var `toolsJson`: kotlin.String? = null,
+    /**
+     * JSON-encoded `serde_json::Value` for the OpenAI-style
+     * `response_format` field. Set only if the request lacks one.
+     */
+    var `responseFormatJson`: kotlin.String? = null,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeProviderDefaults : FfiConverterRustBuffer<ProviderDefaults> {
+    override fun read(buf: ByteBuffer): ProviderDefaults =
+        ProviderDefaults(
+            FfiConverterOptionalTypeBaseProviderDefaults.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+
+    override fun allocationSize(value: ProviderDefaults) =
+        (
+            FfiConverterOptionalTypeBaseProviderDefaults.allocationSize(value.`base`) +
+                FfiConverterOptionalString.allocationSize(value.`systemPrompt`) +
+                FfiConverterOptionalString.allocationSize(value.`toolsJson`) +
+                FfiConverterOptionalString.allocationSize(value.`responseFormatJson`)
+        )
+
+    override fun write(
+        value: ProviderDefaults,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalTypeBaseProviderDefaults.write(value.`base`, buf)
+        FfiConverterOptionalString.write(value.`systemPrompt`, buf)
+        FfiConverterOptionalString.write(value.`toolsJson`, buf)
+        FfiConverterOptionalString.write(value.`responseFormatJson`, buf)
     }
 }
 
@@ -22712,7 +22709,7 @@ public object FfiConverterTypeBackendHintEnum : FfiConverterRustBuffer<BackendHi
  * Per-request outcome within a [`BatchResult`].
  *
  * Slot `i` of [`BatchResult::responses`] corresponds to input request `i`.
- * Successful slots carry the [`CompletionResponse`]; failed slots carry an
+ * Successful slots carry the [`ModelResponse`]; failed slots carry an
  * `error_message` only (the structured `BlazenError` variant doesn't survive
  * nesting inside a `uniffi::Enum` cleanly across all four target languages,
  * so the message is flattened to a string here — foreign callers wanting
@@ -22723,7 +22720,7 @@ sealed class BatchItem {
      * The request completed and the model returned a response.
      */
     data class Success(
-        val `response`: dev.zorpx.blazen.uniffi.CompletionResponse,
+        val `response`: dev.zorpx.blazen.uniffi.ModelResponse,
     ) : BatchItem() {
         companion object
     }
@@ -22749,7 +22746,7 @@ public object FfiConverterTypeBatchItem : FfiConverterRustBuffer<BatchItem> {
         when (buf.getInt()) {
             1 -> {
                 BatchItem.Success(
-                    FfiConverterTypeCompletionResponse.read(buf),
+                    FfiConverterTypeModelResponse.read(buf),
                 )
             }
 
@@ -22770,7 +22767,7 @@ public object FfiConverterTypeBatchItem : FfiConverterRustBuffer<BatchItem> {
                 // Add the size for the Int that specifies the variant plus the size needed for all fields
                 (
                     4UL +
-                        FfiConverterTypeCompletionResponse.allocationSize(value.`response`)
+                        FfiConverterTypeModelResponse.allocationSize(value.`response`)
                 )
             }
 
@@ -22790,7 +22787,7 @@ public object FfiConverterTypeBatchItem : FfiConverterRustBuffer<BatchItem> {
         when (value) {
             is BatchItem.Success -> {
                 buf.putInt(1)
-                FfiConverterTypeCompletionResponse.write(value.`response`, buf)
+                FfiConverterTypeModelResponse.write(value.`response`, buf)
                 Unit
             }
 
@@ -24391,34 +24388,6 @@ public object FfiConverterSequenceTypeChatMessage : FfiConverterRustBuffer<List<
 /**
  * @suppress
  */
-public object FfiConverterSequenceTypeCompletionRequest : FfiConverterRustBuffer<List<CompletionRequest>> {
-    override fun read(buf: ByteBuffer): List<CompletionRequest> {
-        val len = buf.getInt()
-        return List<CompletionRequest>(len) {
-            FfiConverterTypeCompletionRequest.read(buf)
-        }
-    }
-
-    override fun allocationSize(value: List<CompletionRequest>): ULong {
-        val sizeForLength = 4UL
-        val sizeForItems = value.map { FfiConverterTypeCompletionRequest.allocationSize(it) }.sum()
-        return sizeForLength + sizeForItems
-    }
-
-    override fun write(
-        value: List<CompletionRequest>,
-        buf: ByteBuffer,
-    ) {
-        buf.putInt(value.size)
-        value.iterator().forEach {
-            FfiConverterTypeCompletionRequest.write(it, buf)
-        }
-    }
-}
-
-/**
- * @suppress
- */
 public object FfiConverterSequenceTypeControlPlaneWorkerCapability : FfiConverterRustBuffer<List<ControlPlaneWorkerCapability>> {
     override fun read(buf: ByteBuffer): List<ControlPlaneWorkerCapability> {
         val len = buf.getInt()
@@ -24664,6 +24633,34 @@ public object FfiConverterSequenceTypeMedia : FfiConverterRustBuffer<List<Media>
         buf.putInt(value.size)
         value.iterator().forEach {
             FfiConverterTypeMedia.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterSequenceTypeModelRequest : FfiConverterRustBuffer<List<ModelRequest>> {
+    override fun read(buf: ByteBuffer): List<ModelRequest> {
+        val len = buf.getInt()
+        return List<ModelRequest>(len) {
+            FfiConverterTypeModelRequest.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<ModelRequest>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeModelRequest.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<ModelRequest>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeModelRequest.write(it, buf)
         }
     }
 }
@@ -25091,14 +25088,14 @@ fun `version`(): kotlin.String =
 @Throws(BlazenException::class)
 @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
 suspend fun `completeBatch`(
-    `model`: CompletionModel,
-    `requests`: List<CompletionRequest>,
+    `model`: Model,
+    `requests`: List<ModelRequest>,
     `maxConcurrency`: kotlin.UInt,
 ): BatchResult =
     uniffiRustCallAsync(
         UniffiLib.uniffi_blazen_uniffi_fn_func_complete_batch(
-            FfiConverterTypeCompletionModel.lower(`model`),
-            FfiConverterSequenceTypeCompletionRequest.lower(`requests`),
+            FfiConverterTypeModel.lower(`model`),
+            FfiConverterSequenceTypeModelRequest.lower(`requests`),
             FfiConverterUInt.lower(`maxConcurrency`),
         ),
         { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
@@ -25120,15 +25117,15 @@ suspend fun `completeBatch`(
  */
 @Throws(BlazenException::class)
 fun `completeBatchBlocking`(
-    `model`: CompletionModel,
-    `requests`: List<CompletionRequest>,
+    `model`: Model,
+    `requests`: List<ModelRequest>,
     `maxConcurrency`: kotlin.UInt,
 ): BatchResult =
     FfiConverterTypeBatchResult.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
             UniffiLib.uniffi_blazen_uniffi_fn_func_complete_batch_blocking(
-                FfiConverterTypeCompletionModel.lower(`model`),
-                FfiConverterSequenceTypeCompletionRequest.lower(`requests`),
+                FfiConverterTypeModel.lower(`model`),
+                FfiConverterSequenceTypeModelRequest.lower(`requests`),
                 FfiConverterUInt.lower(`maxConcurrency`),
                 _status,
             )
@@ -25494,14 +25491,14 @@ fun `openaiCompat`(
  * Build an Anthropic Messages-API chat-completion model.
  */
 @Throws(BlazenException::class)
-fun `newAnthropicCompletionModel`(
+fun `newAnthropicModel`(
     `apiKey`: kotlin.String,
     `model`: kotlin.String?,
     `baseUrl`: kotlin.String?,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_anthropic_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_anthropic_model(
                 FfiConverterString.lower(`apiKey`),
                 FfiConverterOptionalString.lower(`model`),
                 FfiConverterOptionalString.lower(`baseUrl`),
@@ -25519,15 +25516,15 @@ fun `newAnthropicCompletionModel`(
  * version when `None`.
  */
 @Throws(BlazenException::class)
-fun `newAzureCompletionModel`(
+fun `newAzureModel`(
     `apiKey`: kotlin.String,
     `resourceName`: kotlin.String,
     `deploymentName`: kotlin.String,
     `apiVersion`: kotlin.String?,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_azure_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_azure_model(
                 FfiConverterString.lower(`apiKey`),
                 FfiConverterString.lower(`resourceName`),
                 FfiConverterString.lower(`deploymentName`),
@@ -25545,48 +25542,19 @@ fun `newAzureCompletionModel`(
  * passed as an empty string to resolve from `AWS_BEARER_TOKEN_BEDROCK`).
  */
 @Throws(BlazenException::class)
-fun `newBedrockCompletionModel`(
+fun `newBedrockModel`(
     `apiKey`: kotlin.String,
     `region`: kotlin.String,
     `model`: kotlin.String?,
     `baseUrl`: kotlin.String?,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_bedrock_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_bedrock_model(
                 FfiConverterString.lower(`apiKey`),
                 FfiConverterString.lower(`region`),
                 FfiConverterOptionalString.lower(`model`),
                 FfiConverterOptionalString.lower(`baseUrl`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a local candle chat-completion model.
- *
- * Wraps [`CandleLlmProvider`](blazen_llm::CandleLlmProvider) through the
- * [`CandleLlmCompletionModel`](blazen_llm::CandleLlmCompletionModel) trait
- * bridge so it satisfies the same `CompletionModel` trait as remote
- * providers.
- */
-@Throws(BlazenException::class)
-fun `newCandleCompletionModel`(
-    `modelId`: kotlin.String,
-    `device`: kotlin.String?,
-    `quantization`: kotlin.String?,
-    `revision`: kotlin.String?,
-    `contextLength`: kotlin.UInt?,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_candle_completion_model(
-                FfiConverterString.lower(`modelId`),
-                FfiConverterOptionalString.lower(`device`),
-                FfiConverterOptionalString.lower(`quantization`),
-                FfiConverterOptionalString.lower(`revision`),
-                FfiConverterOptionalUInt.lower(`contextLength`),
                 _status,
             )
         },
@@ -25616,17 +25584,46 @@ fun `newCandleEmbeddingModel`(
     )
 
 /**
+ * Build a local candle chat-completion model.
+ *
+ * Wraps [`CandleLlmProvider`](blazen_llm::CandleLlmProvider) through the
+ * [`CandleLlmModel`](blazen_llm::CandleLlmModel) trait
+ * bridge so it satisfies the same `Model` trait as remote
+ * providers.
+ */
+@Throws(BlazenException::class)
+fun `newCandleModel`(
+    `modelId`: kotlin.String,
+    `device`: kotlin.String?,
+    `quantization`: kotlin.String?,
+    `revision`: kotlin.String?,
+    `contextLength`: kotlin.UInt?,
+): Model =
+    FfiConverterTypeModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_candle_model(
+                FfiConverterString.lower(`modelId`),
+                FfiConverterOptionalString.lower(`device`),
+                FfiConverterOptionalString.lower(`quantization`),
+                FfiConverterOptionalString.lower(`revision`),
+                FfiConverterOptionalUInt.lower(`contextLength`),
+                _status,
+            )
+        },
+    )
+
+/**
  * Build a Cohere chat-completion model.
  */
 @Throws(BlazenException::class)
-fun `newCohereCompletionModel`(
+fun `newCohereModel`(
     `apiKey`: kotlin.String,
     `model`: kotlin.String?,
     `baseUrl`: kotlin.String?,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_cohere_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_cohere_model(
                 FfiConverterString.lower(`apiKey`),
                 FfiConverterOptionalString.lower(`model`),
                 FfiConverterOptionalString.lower(`baseUrl`),
@@ -25636,26 +25633,26 @@ fun `newCohereCompletionModel`(
     )
 
 /**
- * Construct a [`CompletionModel`] that speaks the `OpenAI` chat-completions
+ * Construct a [`Model`] that speaks the `OpenAI` chat-completions
  * protocol against an arbitrary base URL.
  *
  * This is the same wire format as
- * [`new_openai_compat_completion_model`], but wrapped in a
+ * [`new_openai_compat_model`], but wrapped in a
  * [`blazen_llm::CustomProviderHandle`] for consistent ergonomics with the
- * `new_ollama_completion_model` / `new_lm_studio_completion_model`
+ * `new_ollama_model` / `new_lm_studio_model`
  * factories. `api_key` is optional: passing `None` (or an empty `Some`)
  * omits the `Authorization` header entirely.
  */
 @Throws(BlazenException::class)
-fun `newCustomCompletionModelWithOpenaiProtocol`(
+fun `newCustomModelWithOpenaiProtocol`(
     `providerId`: kotlin.String,
     `baseUrl`: kotlin.String,
     `model`: kotlin.String,
     `apiKey`: kotlin.String?,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_custom_completion_model_with_openai_protocol(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_custom_model_with_openai_protocol(
                 FfiConverterString.lower(`providerId`),
                 FfiConverterString.lower(`baseUrl`),
                 FfiConverterString.lower(`model`),
@@ -25669,50 +25666,17 @@ fun `newCustomCompletionModelWithOpenaiProtocol`(
  * Build a `DeepSeek` chat-completion model.
  */
 @Throws(BlazenException::class)
-fun `newDeepseekCompletionModel`(
+fun `newDeepseekModel`(
     `apiKey`: kotlin.String,
     `model`: kotlin.String?,
     `baseUrl`: kotlin.String?,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_deepseek_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_deepseek_model(
                 FfiConverterString.lower(`apiKey`),
                 FfiConverterOptionalString.lower(`model`),
                 FfiConverterOptionalString.lower(`baseUrl`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a fal.ai chat-completion model.
- *
- * `endpoint` selects the fal endpoint family — one of
- * `"openai_chat"` (default), `"openai_responses"`, `"openai_embeddings"`,
- * `"openrouter"`, `"any_llm"`. Unrecognised values fall back to
- * `OpenAiChat`. `enterprise` promotes the endpoint to its enterprise /
- * SOC2-eligible variant; `auto_route_modality` toggles automatic routing
- * to a vision/audio/video endpoint when the request carries media.
- */
-@Throws(BlazenException::class)
-fun `newFalCompletionModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-    `baseUrl`: kotlin.String?,
-    `endpoint`: kotlin.String?,
-    `enterprise`: kotlin.Boolean,
-    `autoRouteModality`: kotlin.Boolean,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_completion_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`baseUrl`),
-                FfiConverterOptionalString.lower(`endpoint`),
-                FfiConverterBoolean.lower(`enterprise`),
-                FfiConverterBoolean.lower(`autoRouteModality`),
                 _status,
             )
         },
@@ -25738,6 +25702,39 @@ fun `newFalEmbeddingModel`(
                 FfiConverterString.lower(`apiKey`),
                 FfiConverterOptionalString.lower(`model`),
                 FfiConverterOptionalUInt.lower(`dimensions`),
+                _status,
+            )
+        },
+    )
+
+/**
+ * Build a fal.ai chat-completion model.
+ *
+ * `endpoint` selects the fal endpoint family — one of
+ * `"openai_chat"` (default), `"openai_responses"`, `"openai_embeddings"`,
+ * `"openrouter"`, `"any_llm"`. Unrecognised values fall back to
+ * `OpenAiChat`. `enterprise` promotes the endpoint to its enterprise /
+ * SOC2-eligible variant; `auto_route_modality` toggles automatic routing
+ * to a vision/audio/video endpoint when the request carries media.
+ */
+@Throws(BlazenException::class)
+fun `newFalModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+    `baseUrl`: kotlin.String?,
+    `endpoint`: kotlin.String?,
+    `enterprise`: kotlin.Boolean,
+    `autoRouteModality`: kotlin.Boolean,
+): Model =
+    FfiConverterTypeModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`baseUrl`),
+                FfiConverterOptionalString.lower(`endpoint`),
+                FfiConverterBoolean.lower(`enterprise`),
+                FfiConverterBoolean.lower(`autoRouteModality`),
                 _status,
             )
         },
@@ -25771,14 +25768,14 @@ fun `newFastembedEmbeddingModel`(
  * Build a Fireworks AI chat-completion model.
  */
 @Throws(BlazenException::class)
-fun `newFireworksCompletionModel`(
+fun `newFireworksModel`(
     `apiKey`: kotlin.String,
     `model`: kotlin.String?,
     `baseUrl`: kotlin.String?,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fireworks_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fireworks_model(
                 FfiConverterString.lower(`apiKey`),
                 FfiConverterOptionalString.lower(`model`),
                 FfiConverterOptionalString.lower(`baseUrl`),
@@ -25791,14 +25788,14 @@ fun `newFireworksCompletionModel`(
  * Build a Google Gemini chat-completion model.
  */
 @Throws(BlazenException::class)
-fun `newGeminiCompletionModel`(
+fun `newGeminiModel`(
     `apiKey`: kotlin.String,
     `model`: kotlin.String?,
     `baseUrl`: kotlin.String?,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_gemini_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_gemini_model(
                 FfiConverterString.lower(`apiKey`),
                 FfiConverterOptionalString.lower(`model`),
                 FfiConverterOptionalString.lower(`baseUrl`),
@@ -25811,14 +25808,14 @@ fun `newGeminiCompletionModel`(
  * Build a Groq chat-completion model.
  */
 @Throws(BlazenException::class)
-fun `newGroqCompletionModel`(
+fun `newGroqModel`(
     `apiKey`: kotlin.String,
     `model`: kotlin.String?,
     `baseUrl`: kotlin.String?,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_groq_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_groq_model(
                 FfiConverterString.lower(`apiKey`),
                 FfiConverterOptionalString.lower(`model`),
                 FfiConverterOptionalString.lower(`baseUrl`),
@@ -25835,16 +25832,16 @@ fun `newGroqCompletionModel`(
  * the device supports it.
  */
 @Throws(BlazenException::class)
-fun `newLlamacppCompletionModel`(
+fun `newLlamacppModel`(
     `modelPath`: kotlin.String,
     `device`: kotlin.String?,
     `quantization`: kotlin.String?,
     `contextLength`: kotlin.UInt?,
     `nGpuLayers`: kotlin.UInt?,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_llamacpp_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_llamacpp_model(
                 FfiConverterString.lower(`modelPath`),
                 FfiConverterOptionalString.lower(`device`),
                 FfiConverterOptionalString.lower(`quantization`),
@@ -25856,20 +25853,20 @@ fun `newLlamacppCompletionModel`(
     )
 
 /**
- * Construct a [`CompletionModel`] for an LM Studio server.
+ * Construct a [`Model`] for an LM Studio server.
  *
  * Convenience wrapper around [`blazen_llm::lm_studio`] — targets LM Studio's
  * local `OpenAI`-compatible endpoint on `http://{host}:{port}/v1`.
  */
 @Throws(BlazenException::class)
-fun `newLmStudioCompletionModel`(
+fun `newLmStudioModel`(
     `host`: kotlin.String,
     `port`: kotlin.UShort,
     `model`: kotlin.String,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_lm_studio_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_lm_studio_model(
                 FfiConverterString.lower(`host`),
                 FfiConverterUShort.lower(`port`),
                 FfiConverterString.lower(`model`),
@@ -25882,14 +25879,14 @@ fun `newLmStudioCompletionModel`(
  * Build a Mistral chat-completion model.
  */
 @Throws(BlazenException::class)
-fun `newMistralCompletionModel`(
+fun `newMistralModel`(
     `apiKey`: kotlin.String,
     `model`: kotlin.String?,
     `baseUrl`: kotlin.String?,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_mistral_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_mistral_model(
                 FfiConverterString.lower(`apiKey`),
                 FfiConverterOptionalString.lower(`model`),
                 FfiConverterOptionalString.lower(`baseUrl`),
@@ -25908,16 +25905,16 @@ fun `newMistralCompletionModel`(
  * for multimodal models like LLaVA / Qwen2-VL.
  */
 @Throws(BlazenException::class)
-fun `newMistralrsCompletionModel`(
+fun `newMistralrsModel`(
     `modelId`: kotlin.String,
     `device`: kotlin.String?,
     `quantization`: kotlin.String?,
     `contextLength`: kotlin.UInt?,
     `vision`: kotlin.Boolean,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_mistralrs_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_mistralrs_model(
                 FfiConverterString.lower(`modelId`),
                 FfiConverterOptionalString.lower(`device`),
                 FfiConverterOptionalString.lower(`quantization`),
@@ -25929,22 +25926,22 @@ fun `newMistralrsCompletionModel`(
     )
 
 /**
- * Construct a [`CompletionModel`] for an Ollama server.
+ * Construct a [`Model`] for an Ollama server.
  *
- * Convenience for [`new_custom_completion_model_with_openai_protocol`] with
+ * Convenience for [`new_custom_model_with_openai_protocol`] with
  * `base_url = format!("http://{host}:{port}/v1")` and no API key. Delegates
  * to [`blazen_llm::ollama`], which knows how to speak Ollama's flavour of
  * the `OpenAI` chat-completions protocol.
  */
 @Throws(BlazenException::class)
-fun `newOllamaCompletionModel`(
+fun `newOllamaModel`(
     `host`: kotlin.String,
     `port`: kotlin.UShort,
     `model`: kotlin.String,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_ollama_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_ollama_model(
                 FfiConverterString.lower(`host`),
                 FfiConverterUShort.lower(`port`),
                 FfiConverterString.lower(`model`),
@@ -25961,42 +25958,19 @@ fun `newOllamaCompletionModel`(
  * `Authorization: Bearer <api_key>` auth.
  */
 @Throws(BlazenException::class)
-fun `newOpenaiCompatCompletionModel`(
+fun `newOpenaiCompatModel`(
     `providerName`: kotlin.String,
     `baseUrl`: kotlin.String,
     `apiKey`: kotlin.String,
     `model`: kotlin.String,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_openai_compat_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_openai_compat_model(
                 FfiConverterString.lower(`providerName`),
                 FfiConverterString.lower(`baseUrl`),
                 FfiConverterString.lower(`apiKey`),
                 FfiConverterString.lower(`model`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build an `OpenAI` chat-completion model.
- *
- * `base_url` defaults to `https://api.openai.com/v1`; override it to target
- * any OpenAI-compatible proxy that uses the official-OpenAI request shape.
- */
-@Throws(BlazenException::class)
-fun `newOpenaiCompletionModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-    `baseUrl`: kotlin.String?,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_openai_completion_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`baseUrl`),
                 _status,
             )
         },
@@ -26028,17 +26002,40 @@ fun `newOpenaiEmbeddingModel`(
     )
 
 /**
- * Build an `OpenRouter` chat-completion model.
+ * Build an `OpenAI` chat-completion model.
+ *
+ * `base_url` defaults to `https://api.openai.com/v1`; override it to target
+ * any OpenAI-compatible proxy that uses the official-OpenAI request shape.
  */
 @Throws(BlazenException::class)
-fun `newOpenrouterCompletionModel`(
+fun `newOpenaiModel`(
     `apiKey`: kotlin.String,
     `model`: kotlin.String?,
     `baseUrl`: kotlin.String?,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_openrouter_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_openai_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                FfiConverterOptionalString.lower(`baseUrl`),
+                _status,
+            )
+        },
+    )
+
+/**
+ * Build an `OpenRouter` chat-completion model.
+ */
+@Throws(BlazenException::class)
+fun `newOpenrouterModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+    `baseUrl`: kotlin.String?,
+): Model =
+    FfiConverterTypeModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_openrouter_model(
                 FfiConverterString.lower(`apiKey`),
                 FfiConverterOptionalString.lower(`model`),
                 FfiConverterOptionalString.lower(`baseUrl`),
@@ -26051,14 +26048,14 @@ fun `newOpenrouterCompletionModel`(
  * Build a Perplexity chat-completion model.
  */
 @Throws(BlazenException::class)
-fun `newPerplexityCompletionModel`(
+fun `newPerplexityModel`(
     `apiKey`: kotlin.String,
     `model`: kotlin.String?,
     `baseUrl`: kotlin.String?,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_perplexity_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_perplexity_model(
                 FfiConverterString.lower(`apiKey`),
                 FfiConverterOptionalString.lower(`model`),
                 FfiConverterOptionalString.lower(`baseUrl`),
@@ -26071,14 +26068,14 @@ fun `newPerplexityCompletionModel`(
  * Build a Together AI chat-completion model.
  */
 @Throws(BlazenException::class)
-fun `newTogetherCompletionModel`(
+fun `newTogetherModel`(
     `apiKey`: kotlin.String,
     `model`: kotlin.String?,
     `baseUrl`: kotlin.String?,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_together_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_together_model(
                 FfiConverterString.lower(`apiKey`),
                 FfiConverterOptionalString.lower(`model`),
                 FfiConverterOptionalString.lower(`baseUrl`),
@@ -26116,14 +26113,14 @@ fun `newTractEmbeddingModel`(
  * Build an xAI (Grok) chat-completion model.
  */
 @Throws(BlazenException::class)
-fun `newXaiCompletionModel`(
+fun `newXaiModel`(
     `apiKey`: kotlin.String,
     `model`: kotlin.String?,
     `baseUrl`: kotlin.String?,
-): CompletionModel =
-    FfiConverterTypeCompletionModel.lift(
+): Model =
+    FfiConverterTypeModel.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_xai_completion_model(
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_xai_model(
                 FfiConverterString.lower(`apiKey`),
                 FfiConverterOptionalString.lower(`model`),
                 FfiConverterOptionalString.lower(`baseUrl`),
@@ -26164,13 +26161,13 @@ fun `init`() =
 @Throws(BlazenException::class)
 @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
 suspend fun `completeStreaming`(
-    `model`: CompletionModel,
-    `request`: CompletionRequest,
+    `model`: Model,
+    `request`: ModelRequest,
     `sink`: CompletionStreamSink,
 ) = uniffiRustCallAsync(
     UniffiLib.uniffi_blazen_uniffi_fn_func_complete_streaming(
-        FfiConverterTypeCompletionModel.lower(`model`),
-        FfiConverterTypeCompletionRequest.lower(`request`),
+        FfiConverterTypeModel.lower(`model`),
+        FfiConverterTypeModelRequest.lower(`request`),
         FfiConverterTypeCompletionStreamSink.lower(`sink`),
     ),
     { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
@@ -26192,13 +26189,13 @@ suspend fun `completeStreaming`(
  */
 @Throws(BlazenException::class)
 fun `completeStreamingBlocking`(
-    `model`: CompletionModel,
-    `request`: CompletionRequest,
+    `model`: Model,
+    `request`: ModelRequest,
     `sink`: CompletionStreamSink,
 ) = uniffiRustCallWithError(BlazenException) { _status ->
     UniffiLib.uniffi_blazen_uniffi_fn_func_complete_streaming_blocking(
-        FfiConverterTypeCompletionModel.lower(`model`),
-        FfiConverterTypeCompletionRequest.lower(`request`),
+        FfiConverterTypeModel.lower(`model`),
+        FfiConverterTypeModelRequest.lower(`request`),
         FfiConverterTypeCompletionStreamSink.lower(`sink`),
         _status,
     )

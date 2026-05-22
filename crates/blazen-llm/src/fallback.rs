@@ -1,4 +1,4 @@
-//! Provider fallback wrapper that tries multiple [`CompletionModel`] providers
+//! Provider fallback wrapper that tries multiple [`Model`] providers
 //! in order.
 //!
 //! When the primary provider fails with a *retryable* error (rate limit,
@@ -27,13 +27,13 @@ use async_trait::async_trait;
 use futures_util::Stream;
 
 use crate::error::BlazenError;
-use crate::traits::CompletionModel;
-use crate::types::{CompletionRequest, CompletionResponse, StreamChunk};
+use crate::traits::Model;
+use crate::types::{ModelRequest, ModelResponse, StreamChunk};
 
-/// A [`CompletionModel`] that tries multiple providers in order, falling back
+/// A [`Model`] that tries multiple providers in order, falling back
 /// on retryable failures.
 pub struct FallbackModel {
-    providers: Vec<Arc<dyn CompletionModel>>,
+    providers: Vec<Arc<dyn Model>>,
 }
 
 impl FallbackModel {
@@ -43,7 +43,7 @@ impl FallbackModel {
     ///
     /// Panics if `providers` is empty.
     #[must_use]
-    pub fn new(providers: Vec<Arc<dyn CompletionModel>>) -> Self {
+    pub fn new(providers: Vec<Arc<dyn Model>>) -> Self {
         assert!(
             !providers.is_empty(),
             "FallbackModel requires at least one provider"
@@ -53,16 +53,13 @@ impl FallbackModel {
 }
 
 #[async_trait]
-impl CompletionModel for FallbackModel {
+impl Model for FallbackModel {
     fn model_id(&self) -> &str {
         // Always report the primary provider's model id.
         self.providers[0].model_id()
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         let last_idx = self.providers.len() - 1;
         let mut last_error: Option<BlazenError> = None;
 
@@ -95,7 +92,7 @@ impl CompletionModel for FallbackModel {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         let last_idx = self.providers.len() - 1;
@@ -141,20 +138,20 @@ mod tests {
 
     use super::*;
     use crate::error::BlazenError;
-    use crate::types::{CompletionRequest, CompletionResponse};
+    use crate::types::{ModelRequest, ModelResponse};
 
     // -- Mock provider -------------------------------------------------------
 
-    /// A mock [`CompletionModel`] with a configurable sequence of results and
+    /// A mock [`Model`] with a configurable sequence of results and
     /// an invocation counter.
-    struct MockCompletionModel {
+    struct MockModel {
         id: String,
-        results: Vec<Result<CompletionResponse, BlazenError>>,
+        results: Vec<Result<ModelResponse, BlazenError>>,
         call_count: AtomicUsize,
     }
 
-    impl MockCompletionModel {
-        fn new(id: &str, results: Vec<Result<CompletionResponse, BlazenError>>) -> Self {
+    impl MockModel {
+        fn new(id: &str, results: Vec<Result<ModelResponse, BlazenError>>) -> Self {
             Self {
                 id: id.to_owned(),
                 results,
@@ -168,15 +165,12 @@ mod tests {
     }
 
     #[async_trait]
-    impl CompletionModel for MockCompletionModel {
+    impl Model for MockModel {
         fn model_id(&self) -> &str {
             &self.id
         }
 
-        async fn complete(
-            &self,
-            _request: CompletionRequest,
-        ) -> Result<CompletionResponse, BlazenError> {
+        async fn complete(&self, _request: ModelRequest) -> Result<ModelResponse, BlazenError> {
             let idx = self.call_count.fetch_add(1, Ordering::SeqCst);
             let idx = idx.min(self.results.len() - 1);
 
@@ -189,7 +183,7 @@ mod tests {
 
         async fn stream(
             &self,
-            _request: CompletionRequest,
+            _request: ModelRequest,
         ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
         {
             let idx = self.call_count.fetch_add(1, Ordering::SeqCst);
@@ -255,8 +249,8 @@ mod tests {
         }
     }
 
-    fn ok_response(content: &str) -> CompletionResponse {
-        CompletionResponse {
+    fn ok_response(content: &str) -> ModelResponse {
+        ModelResponse {
             content: Some(content.to_owned()),
             tool_calls: vec![],
             reasoning: None,
@@ -274,19 +268,19 @@ mod tests {
         }
     }
 
-    fn simple_request() -> CompletionRequest {
-        CompletionRequest::new(vec![crate::types::ChatMessage::user("hello")])
+    fn simple_request() -> ModelRequest {
+        ModelRequest::new(vec![crate::types::ChatMessage::user("hello")])
     }
 
     // -- Tests ----------------------------------------------------------------
 
     #[tokio::test]
     async fn test_uses_first_provider_on_success() {
-        let primary = Arc::new(MockCompletionModel::new(
+        let primary = Arc::new(MockModel::new(
             "primary",
             vec![Ok(ok_response("primary-answer"))],
         ));
-        let secondary = Arc::new(MockCompletionModel::new(
+        let secondary = Arc::new(MockModel::new(
             "secondary",
             vec![Ok(ok_response("secondary-answer"))],
         ));
@@ -301,13 +295,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_falls_back_on_retryable_error() {
-        let primary = Arc::new(MockCompletionModel::new(
+        let primary = Arc::new(MockModel::new(
             "primary",
             vec![Err(BlazenError::RateLimit {
                 retry_after_ms: Some(1000),
             })],
         ));
-        let secondary = Arc::new(MockCompletionModel::new(
+        let secondary = Arc::new(MockModel::new(
             "secondary",
             vec![Ok(ok_response("secondary-answer"))],
         ));
@@ -322,11 +316,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_no_fallback_on_auth_error() {
-        let primary = Arc::new(MockCompletionModel::new(
+        let primary = Arc::new(MockModel::new(
             "primary",
             vec![Err(BlazenError::auth("bad api key"))],
         ));
-        let secondary = Arc::new(MockCompletionModel::new(
+        let secondary = Arc::new(MockModel::new(
             "secondary",
             vec![Ok(ok_response("secondary-answer"))],
         ));
@@ -342,13 +336,13 @@ mod tests {
 
     #[tokio::test]
     async fn test_all_providers_fail() {
-        let primary = Arc::new(MockCompletionModel::new(
+        let primary = Arc::new(MockModel::new(
             "primary",
             vec![Err(BlazenError::RateLimit {
                 retry_after_ms: None,
             })],
         ));
-        let secondary = Arc::new(MockCompletionModel::new(
+        let secondary = Arc::new(MockModel::new(
             "secondary",
             vec![Err(BlazenError::Timeout { elapsed_ms: 5000 })],
         ));
@@ -365,14 +359,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_model_id_returns_primary() {
-        let primary = Arc::new(MockCompletionModel::new(
-            "gpt-4o",
-            vec![Ok(ok_response("x"))],
-        ));
-        let secondary = Arc::new(MockCompletionModel::new(
-            "claude-opus",
-            vec![Ok(ok_response("y"))],
-        ));
+        let primary = Arc::new(MockModel::new("gpt-4o", vec![Ok(ok_response("x"))]));
+        let secondary = Arc::new(MockModel::new("claude-opus", vec![Ok(ok_response("y"))]));
 
         let fallback = FallbackModel::new(vec![primary, secondary]);
         assert_eq!(fallback.model_id(), "gpt-4o");

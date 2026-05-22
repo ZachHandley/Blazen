@@ -1,6 +1,6 @@
-//! Smart caching layer for [`CompletionModel`] with content-based hashing.
+//! Smart caching layer for [`Model`] with content-based hashing.
 //!
-//! [`CachedCompletionModel`] is a decorator that wraps any [`CompletionModel`]
+//! [`CachedModel`] is a decorator that wraps any [`Model`]
 //! and caches non-streaming responses keyed on a hash of the full request
 //! (messages, parameters, tools, and model). Repeated identical requests are
 //! served from memory without hitting the underlying provider.
@@ -9,10 +9,10 @@
 //!
 //! ```rust,ignore
 //! use std::sync::Arc;
-//! use blazen_llm::cache::{CachedCompletionModel, CacheConfig, CacheStrategy};
+//! use blazen_llm::cache::{CachedModel, CacheConfig, CacheStrategy};
 //!
-//! let inner = /* any CompletionModel */;
-//! let model = CachedCompletionModel::new(inner, CacheConfig::default());
+//! let inner = /* any Model */;
+//! let model = CachedModel::new(inner, CacheConfig::default());
 //! // First call hits the provider:
 //! let r1 = model.complete(request.clone()).await?;
 //! // Second identical call is served from cache:
@@ -44,8 +44,8 @@ use futures_util::Stream;
 use serde::{Deserialize, Serialize};
 
 use crate::error::BlazenError;
-use crate::traits::CompletionModel;
-use crate::types::{CompletionRequest, CompletionResponse, StreamChunk};
+use crate::traits::Model;
+use crate::types::{ModelRequest, ModelResponse, StreamChunk};
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -120,26 +120,26 @@ impl Default for CacheConfig {
 
 /// A cached response together with its insertion timestamp.
 struct CacheEntry {
-    response: CompletionResponse,
+    response: ModelResponse,
     created_at: Instant,
 }
 
 // ---------------------------------------------------------------------------
-// CachedCompletionModel
+// CachedModel
 // ---------------------------------------------------------------------------
 
-/// A [`CompletionModel`] decorator that caches non-streaming responses.
+/// A [`Model`] decorator that caches non-streaming responses.
 ///
 /// See the [module-level documentation](self) for usage examples.
-pub struct CachedCompletionModel {
-    inner: Arc<dyn CompletionModel>,
+pub struct CachedModel {
+    inner: Arc<dyn Model>,
     config: CacheConfig,
     cache: Arc<RwLock<HashMap<u64, CacheEntry>>>,
 }
 
-impl CachedCompletionModel {
+impl CachedModel {
     /// Wrap `inner` with the given cache configuration.
-    pub fn new(inner: impl CompletionModel + 'static, config: CacheConfig) -> Self {
+    pub fn new(inner: impl Model + 'static, config: CacheConfig) -> Self {
         Self {
             inner: Arc::new(inner),
             config,
@@ -148,7 +148,7 @@ impl CachedCompletionModel {
     }
 
     /// Wrap an already-`Arc`'d model.
-    pub fn from_arc(inner: Arc<dyn CompletionModel>, config: CacheConfig) -> Self {
+    pub fn from_arc(inner: Arc<dyn Model>, config: CacheConfig) -> Self {
         Self {
             inner,
             config,
@@ -186,13 +186,13 @@ impl CachedCompletionModel {
         !matches!(self.config.strategy, CacheStrategy::None)
     }
 
-    /// Compute a deterministic cache key from a [`CompletionRequest`].
+    /// Compute a deterministic cache key from a [`ModelRequest`].
     ///
     /// The key is a 64-bit hash of the model id, serialised messages,
     /// temperature, max tokens, top-p, tools, and response format.  This is
     /// *not* cryptographic -- it is only used as a cache key where collisions
     /// are acceptable (they would simply cause a cache miss/overwrite).
-    fn cache_key(&self, request: &CompletionRequest) -> u64 {
+    fn cache_key(&self, request: &ModelRequest) -> u64 {
         let mut hasher = DefaultHasher::new();
 
         // Model identifier (from the provider, or the request-level override).
@@ -242,7 +242,7 @@ impl CachedCompletionModel {
     }
 
     /// Look up a non-expired entry under `key`.
-    fn get_cached(&self, key: u64) -> Option<CompletionResponse> {
+    fn get_cached(&self, key: u64) -> Option<ModelResponse> {
         let cache = self.cache.read().expect("cache lock poisoned");
         let entry = cache.get(&key)?;
 
@@ -256,7 +256,7 @@ impl CachedCompletionModel {
 
     /// Insert `response` under `key`, evicting the oldest entry if the cache
     /// is at capacity.
-    fn insert(&self, key: u64, response: CompletionResponse) {
+    fn insert(&self, key: u64, response: ModelResponse) {
         let mut cache = self.cache.write().expect("cache lock poisoned");
 
         // Evict oldest if at capacity.
@@ -278,15 +278,12 @@ impl CachedCompletionModel {
 }
 
 #[async_trait]
-impl CompletionModel for CachedCompletionModel {
+impl Model for CachedModel {
     fn model_id(&self) -> &str {
         self.inner.model_id()
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         // If caching is disabled, pass through immediately.
         if !self.caching_enabled() {
             return self.inner.complete(request).await;
@@ -311,7 +308,7 @@ impl CompletionModel for CachedCompletionModel {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         // Streaming is not cacheable; always delegate.
@@ -335,16 +332,16 @@ mod tests {
 
     // -- Mock model ----------------------------------------------------------
 
-    /// A mock [`CompletionModel`] that counts invocations and returns
+    /// A mock [`Model`] that counts invocations and returns
     /// pre-configured responses.
-    struct MockCompletionModel {
+    struct MockModel {
         id: String,
-        responses: Vec<CompletionResponse>,
+        responses: Vec<ModelResponse>,
         call_count: AtomicUsize,
     }
 
-    impl MockCompletionModel {
-        fn new(id: &str, responses: Vec<CompletionResponse>) -> Self {
+    impl MockModel {
+        fn new(id: &str, responses: Vec<ModelResponse>) -> Self {
             Self {
                 id: id.to_owned(),
                 responses,
@@ -358,15 +355,12 @@ mod tests {
     }
 
     #[async_trait]
-    impl CompletionModel for MockCompletionModel {
+    impl Model for MockModel {
         fn model_id(&self) -> &str {
             &self.id
         }
 
-        async fn complete(
-            &self,
-            _request: CompletionRequest,
-        ) -> Result<CompletionResponse, BlazenError> {
+        async fn complete(&self, _request: ModelRequest) -> Result<ModelResponse, BlazenError> {
             let idx = self.call_count.fetch_add(1, Ordering::SeqCst);
             let idx = idx.min(self.responses.len().saturating_sub(1));
             Ok(self.responses[idx].clone())
@@ -374,7 +368,7 @@ mod tests {
 
         async fn stream(
             &self,
-            _request: CompletionRequest,
+            _request: ModelRequest,
         ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
         {
             self.call_count.fetch_add(1, Ordering::SeqCst);
@@ -385,8 +379,8 @@ mod tests {
 
     // -- Helpers -------------------------------------------------------------
 
-    fn ok_response(content: &str) -> CompletionResponse {
-        CompletionResponse {
+    fn ok_response(content: &str) -> ModelResponse {
+        ModelResponse {
             content: Some(content.to_owned()),
             tool_calls: vec![],
             reasoning: None,
@@ -404,19 +398,19 @@ mod tests {
         }
     }
 
-    fn simple_request() -> CompletionRequest {
-        CompletionRequest::new(vec![ChatMessage::user("hello")])
+    fn simple_request() -> ModelRequest {
+        ModelRequest::new(vec![ChatMessage::user("hello")])
     }
 
     // -- Tests ---------------------------------------------------------------
 
     #[tokio::test]
     async fn test_cache_hit() {
-        let mock = Arc::new(MockCompletionModel::new(
+        let mock = Arc::new(MockModel::new(
             "test-model",
             vec![ok_response("first"), ok_response("second")],
         ));
-        let model = CachedCompletionModel::from_arc(mock.clone(), CacheConfig::default());
+        let model = CachedModel::from_arc(mock.clone(), CacheConfig::default());
 
         let r1 = model.complete(simple_request()).await.unwrap();
         let r2 = model.complete(simple_request()).await.unwrap();
@@ -430,16 +424,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_miss_different_params() {
-        let mock = Arc::new(MockCompletionModel::new(
+        let mock = Arc::new(MockModel::new(
             "test-model",
             vec![ok_response("cold"), ok_response("hot")],
         ));
-        let model = CachedCompletionModel::from_arc(mock.clone(), CacheConfig::default());
+        let model = CachedModel::from_arc(mock.clone(), CacheConfig::default());
 
-        let req_cold =
-            CompletionRequest::new(vec![ChatMessage::user("hello")]).with_temperature(0.0);
-        let req_hot =
-            CompletionRequest::new(vec![ChatMessage::user("hello")]).with_temperature(1.5);
+        let req_cold = ModelRequest::new(vec![ChatMessage::user("hello")]).with_temperature(0.0);
+        let req_hot = ModelRequest::new(vec![ChatMessage::user("hello")]).with_temperature(1.5);
 
         let r1 = model.complete(req_cold).await.unwrap();
         let r2 = model.complete(req_hot).await.unwrap();
@@ -452,11 +444,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_expiry() {
-        let mock = Arc::new(MockCompletionModel::new(
+        let mock = Arc::new(MockModel::new(
             "test-model",
             vec![ok_response("first"), ok_response("second")],
         ));
-        let model = CachedCompletionModel::from_arc(
+        let model = CachedModel::from_arc(
             mock.clone(),
             CacheConfig {
                 strategy: CacheStrategy::ContentHash,
@@ -478,11 +470,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_cache_eviction() {
-        let mock = Arc::new(MockCompletionModel::new(
+        let mock = Arc::new(MockModel::new(
             "test-model",
             vec![ok_response("a"), ok_response("b"), ok_response("a-again")],
         ));
-        let model = CachedCompletionModel::from_arc(
+        let model = CachedModel::from_arc(
             mock.clone(),
             CacheConfig {
                 strategy: CacheStrategy::ContentHash,
@@ -492,13 +484,13 @@ mod tests {
         );
 
         // First request caches "a".
-        let req_a = CompletionRequest::new(vec![ChatMessage::user("alpha")]);
+        let req_a = ModelRequest::new(vec![ChatMessage::user("alpha")]);
         let r1 = model.complete(req_a.clone()).await.unwrap();
         assert_eq!(r1.content.as_deref(), Some("a"));
         assert_eq!(model.len(), 1);
 
         // Second request with different content evicts "a", caches "b".
-        let req_b = CompletionRequest::new(vec![ChatMessage::user("bravo")]);
+        let req_b = ModelRequest::new(vec![ChatMessage::user("bravo")]);
         let r2 = model.complete(req_b).await.unwrap();
         assert_eq!(r2.content.as_deref(), Some("b"));
         assert_eq!(model.len(), 1);
@@ -511,11 +503,8 @@ mod tests {
 
     #[tokio::test]
     async fn test_stream_not_cached() {
-        let mock = Arc::new(MockCompletionModel::new(
-            "test-model",
-            vec![ok_response("x")],
-        ));
-        let model = CachedCompletionModel::from_arc(mock.clone(), CacheConfig::default());
+        let mock = Arc::new(MockModel::new("test-model", vec![ok_response("x")]));
+        let model = CachedModel::from_arc(mock.clone(), CacheConfig::default());
 
         // Streaming always delegates, even if called twice.
         let _s1 = model.stream(simple_request()).await.unwrap();
@@ -528,11 +517,11 @@ mod tests {
 
     #[tokio::test]
     async fn test_strategy_none_disables_caching() {
-        let mock = Arc::new(MockCompletionModel::new(
+        let mock = Arc::new(MockModel::new(
             "test-model",
             vec![ok_response("first"), ok_response("second")],
         ));
-        let model = CachedCompletionModel::from_arc(
+        let model = CachedModel::from_arc(
             mock.clone(),
             CacheConfig {
                 strategy: CacheStrategy::None,
@@ -551,14 +540,14 @@ mod tests {
 
     #[tokio::test]
     async fn test_different_messages_produce_different_keys() {
-        let mock = Arc::new(MockCompletionModel::new(
+        let mock = Arc::new(MockModel::new(
             "test-model",
             vec![ok_response("hello-resp"), ok_response("goodbye-resp")],
         ));
-        let model = CachedCompletionModel::from_arc(mock.clone(), CacheConfig::default());
+        let model = CachedModel::from_arc(mock.clone(), CacheConfig::default());
 
-        let req1 = CompletionRequest::new(vec![ChatMessage::user("hello")]);
-        let req2 = CompletionRequest::new(vec![ChatMessage::user("goodbye")]);
+        let req1 = ModelRequest::new(vec![ChatMessage::user("hello")]);
+        let req2 = ModelRequest::new(vec![ChatMessage::user("goodbye")]);
 
         let r1 = model.complete(req1).await.unwrap();
         let r2 = model.complete(req2).await.unwrap();

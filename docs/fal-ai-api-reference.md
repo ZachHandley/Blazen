@@ -86,7 +86,7 @@ Notes:
 ### 0.2 Auto-routing (Vision / Audio / Video)
 
 When `auto_route_modality` is `true` (the default), Blazen inspects
-each `CompletionRequest` before sending it. If the request contains
+each `ModelRequest` before sending it. If the request contains
 any image, audio, or video content parts **and** the configured
 `FalLlmEndpoint` is `OpenRouter` or `AnyLlm`, the provider transparently
 substitutes the matching `Vision` / `Audio` / `Video` sub-endpoint for

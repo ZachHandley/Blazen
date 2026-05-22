@@ -304,24 +304,6 @@ typedef struct BlazenChatMessage BlazenChatMessage;
 typedef struct BlazenCheckpointStore BlazenCheckpointStore;
 
 /**
- * Opaque wrapper around [`blazen_uniffi::llm::CompletionModel`]. Construct
- * via the per-provider factories in Phase R4 (e.g.
- * `blazen_completion_model_openai`).
- */
-typedef struct BlazenCompletionModel BlazenCompletionModel;
-
-/**
- * Opaque wrapper around [`blazen_uniffi::llm::CompletionRequest`].
- */
-typedef struct BlazenCompletionRequest BlazenCompletionRequest;
-
-/**
- * Opaque wrapper around [`blazen_uniffi::llm::CompletionResponse`]. Produced
- * by `complete` / `complete_blocking` in Phase R3; no public constructor.
- */
-typedef struct BlazenCompletionResponse BlazenCompletionResponse;
-
-/**
  * Opaque wrapper around [`blazen_controlplane::Client`]. The inner
  * [`Client`] is cheaply cloneable (it holds an `Arc<Mutex<...>>`
  * internally) so multiple cabi calls on the same handle can run
@@ -426,11 +408,29 @@ typedef struct BlazenJsonlDataset BlazenJsonlDataset;
 typedef struct BlazenMedia BlazenMedia;
 
 /**
+ * Opaque wrapper around [`blazen_uniffi::llm::Model`]. Construct
+ * via the per-provider factories in Phase R4 (e.g.
+ * `blazen_model_openai`).
+ */
+typedef struct BlazenModel BlazenModel;
+
+/**
  * Opaque handle around [`blazen_manager::ModelManager`]. Construct via
  * [`blazen_model_manager_new`] or [`blazen_model_manager_with_budgets_gb`];
  * release with [`blazen_model_manager_free`].
  */
 typedef struct BlazenModelManager BlazenModelManager;
+
+/**
+ * Opaque wrapper around [`blazen_uniffi::llm::ModelRequest`].
+ */
+typedef struct BlazenModelRequest BlazenModelRequest;
+
+/**
+ * Opaque wrapper around [`blazen_uniffi::llm::ModelResponse`]. Produced
+ * by `complete` / `complete_blocking` in Phase R3; no public constructor.
+ */
+typedef struct BlazenModelResponse BlazenModelResponse;
 
 /**
  * Opaque snapshot of one registered model — wraps
@@ -1419,11 +1419,11 @@ typedef struct {
 } BlazenBaseProvider;
 
 /**
- * Opaque wrapper around [`blazen_llm::providers::CompletionProviderDefaults`].
+ * Opaque wrapper around [`blazen_llm::providers::ProviderDefaults`].
  */
 typedef struct {
-    InnerCompletionProviderDefaults _0;
-} BlazenCompletionProviderDefaults;
+    InnerProviderDefaults _0;
+} BlazenProviderDefaults;
 
 /**
  * Opaque handle wrapping an `Arc<blazen_llm::providers::CustomProviderHandle>`.
@@ -1507,8 +1507,8 @@ typedef struct {
      * Non-streaming chat completion.
      */
     int32_t (*complete)(void *user_data,
-                        BlazenCompletionRequest *request,
-                        BlazenCompletionResponse **out_response,
+                        BlazenModelRequest *request,
+                        BlazenModelResponse **out_response,
                         BlazenError **out_err);
     /**
      * Streaming chat completion. The foreign callback receives an opaque
@@ -1521,7 +1521,7 @@ typedef struct {
      * fresh `*mut BlazenError` into `*out_err`).
      */
     int32_t (*stream)(void *user_data,
-                      BlazenCompletionRequest *request,
+                      BlazenModelRequest *request,
                       BlazenStreamPusher *pusher,
                       BlazenError **out_err);
     /**
@@ -2014,26 +2014,26 @@ int32_t blazen_future_take_agent_result(BlazenFuture *fut,
  * `max_concurrency` is a hard cap on in-flight requests; `0` means unlimited
  * (the upstream default — all dispatched in parallel).
  *
- * **Each `BlazenCompletionRequest*` element of `requests` is consumed.** See
+ * **Each `BlazenModelRequest*` element of `requests` is consumed.** See
  * the module-level docs for the full ownership contract; calling
- * [`crate::llm_records::blazen_completion_request_free`] on any element
+ * [`crate::llm_records::blazen_model_request_free`] on any element
  * afterwards is a double-free.
  *
  * # Safety
  *
- * - `model` must be null OR a live `BlazenCompletionModel` produced by the
+ * - `model` must be null OR a live `BlazenModel` produced by the
  *   cabi surface.
  * - When `requests_count > 0`, `requests` must point to an array of exactly
- *   `requests_count` `BlazenCompletionRequest*` entries; each entry must be
- *   a live `BlazenCompletionRequest` produced by the cabi surface, and
+ *   `requests_count` `BlazenModelRequest*` entries; each entry must be
+ *   a live `BlazenModelRequest` produced by the cabi surface, and
  *   ownership of every entry transfers to this function. When
  *   `requests_count == 0`, `requests` may be null.
  * - `out_result` and `out_err` must each be null OR point to a writable slot
  *   of the matching pointer type.
  */
 
-int32_t blazen_complete_batch_blocking(const BlazenCompletionModel *model,
-                                       BlazenCompletionRequest *const *requests,
+int32_t blazen_complete_batch_blocking(const BlazenModel *model,
+                                       BlazenModelRequest *const *requests,
                                        uintptr_t requests_count,
                                        uint32_t max_concurrency,
                                        BlazenBatchResult **out_result,
@@ -2047,12 +2047,12 @@ int32_t blazen_complete_batch_blocking(const BlazenCompletionModel *model,
  * `blazen_future_free`.
  *
  * Returns null if `model` is null, or if `requests` is null when
- * `requests_count > 0`, or if any indexed `BlazenCompletionRequest*` element
+ * `requests_count > 0`, or if any indexed `BlazenModelRequest*` element
  * is null. On every null-return path, ownership of any
- * `BlazenCompletionRequest*` elements that were already reclaimed is
+ * `BlazenModelRequest*` elements that were already reclaimed is
  * dropped (no leaks).
  *
- * **Each `BlazenCompletionRequest*` element of `requests` is consumed** on
+ * **Each `BlazenModelRequest*` element of `requests` is consumed** on
  * the success path AND on the validation-failure path (so the caller is
  * always relieved of ownership of every successfully-passed element). See
  * the module-level docs for the full contract.
@@ -2060,11 +2060,11 @@ int32_t blazen_complete_batch_blocking(const BlazenCompletionModel *model,
  * # Safety
  *
  * Same as [`blazen_complete_batch_blocking`]: `model` must be null OR a live
- * `BlazenCompletionModel`; the `requests` array elements transfer ownership.
+ * `BlazenModel`; the `requests` array elements transfer ownership.
  */
 
-BlazenFuture *blazen_complete_batch(const BlazenCompletionModel *model,
-                                    BlazenCompletionRequest *const *requests,
+BlazenFuture *blazen_complete_batch(const BlazenModel *model,
+                                    BlazenModelRequest *const *requests,
                                     uintptr_t requests_count,
                                     uint32_t max_concurrency);
 
@@ -2077,7 +2077,7 @@ BlazenFuture *blazen_complete_batch(const BlazenCompletionModel *model,
  * Both out-parameters may be null to discard the corresponding side.
  *
  * Calling this against a future produced by any other cabi entry point
- * (e.g. `blazen_completion_model_complete`) yields a `BlazenError::Internal`
+ * (e.g. `blazen_model_complete`) yields a `BlazenError::Internal`
  * with a `type mismatch` message — see `BlazenFuture::take_typed`.
  *
  * # Safety
@@ -2106,17 +2106,17 @@ int32_t blazen_future_take_batch_result(BlazenFuture *fut,
  uint32_t blazen_batch_item_kind(const BlazenBatchItem *handle);
 
 /**
- * Returns a fresh `BlazenCompletionResponse` cloned from the
+ * Returns a fresh `BlazenModelResponse` cloned from the
  * [`InnerBatchItem::Success`] variant's payload. Returns null if `handle` is
  * null or the variant is `Failure`. Caller frees with
- * `blazen_completion_response_free`.
+ * `blazen_model_response_free`.
  *
  * # Safety
  *
  * `handle` must be null OR a live `BlazenBatchItem` produced by the cabi
  * surface.
  */
- BlazenCompletionResponse *blazen_batch_item_success_response(const BlazenBatchItem *handle);
+ BlazenModelResponse *blazen_batch_item_success_response(const BlazenBatchItem *handle);
 
 /**
  * Returns the [`InnerBatchItem::Failure`] variant's `error_message` as a
@@ -5510,15 +5510,15 @@ int32_t blazen_future_take_full_finetune_result(BlazenFuture *fut,
  *
  * # Safety
  *
- * `model` must be null OR a live `BlazenCompletionModel` produced by the
+ * `model` must be null OR a live `BlazenModel` produced by the
  * cabi surface (and not yet freed).
  */
- char *blazen_completion_model_model_id(const BlazenCompletionModel *model);
+ char *blazen_model_model_id(const BlazenModel *model);
 
 /**
  * Synchronously runs a chat completion on the cabi tokio runtime.
  *
- * On success returns `0` and writes a fresh `BlazenCompletionResponse*` into
+ * On success returns `0` and writes a fresh `BlazenModelResponse*` into
  * `*out_response`. On failure returns `-1` and writes a fresh `BlazenError*`
  * into `*out_err`. Either out-parameter may be null to discard that side of
  * the result (typically only meaningful on the error path during a smoke
@@ -5526,54 +5526,52 @@ int32_t blazen_future_take_full_finetune_result(BlazenFuture *fut,
  *
  * **The `request` pointer is consumed.** Internally we `Box::from_raw` it
  * and move its inner record out. Calling
- * [`blazen_completion_request_free`](crate::llm_records::blazen_completion_request_free)
+ * [`blazen_model_request_free`](crate::llm_records::blazen_model_request_free)
  * on the same pointer afterwards is a double-free.
  *
  * # Safety
  *
- * `model` must be null OR a live `BlazenCompletionModel`. `request` must be
- * null OR a live `BlazenCompletionRequest` produced by the cabi surface;
+ * `model` must be null OR a live `BlazenModel`. `request` must be
+ * null OR a live `BlazenModelRequest` produced by the cabi surface;
  * ownership transfers to this function. `out_response` and `out_err` must
  * each be null OR point to a writable slot of the matching pointer type.
  */
 
-int32_t blazen_completion_model_complete_blocking(const BlazenCompletionModel *model,
-                                                  BlazenCompletionRequest *request,
-                                                  BlazenCompletionResponse **out_response,
-                                                  BlazenError **out_err);
+int32_t blazen_model_complete_blocking(const BlazenModel *model,
+                                       BlazenModelRequest *request,
+                                       BlazenModelResponse **out_response,
+                                       BlazenError **out_err);
 
 /**
  * Spawns a chat completion onto the cabi tokio runtime and returns an
  * opaque future handle. The caller observes completion via the future's
  * fd / `blazen_future_poll` / `blazen_future_wait`, then calls
- * [`blazen_future_take_completion_response`] to pop the result. Free the
+ * [`blazen_future_take_model_response`] to pop the result. Free the
  * future with `blazen_future_free`.
  *
  * Returns null if either `model` or `request` is null (in which case the
  * `request`, if non-null, is still consumed and freed to avoid a leak).
  *
  * **The `request` pointer is consumed.** See
- * [`blazen_completion_model_complete_blocking`] for details.
+ * [`blazen_model_complete_blocking`] for details.
  *
  * # Safety
  *
- * `model` must be null OR a live `BlazenCompletionModel`. `request` must be
- * null OR a live `BlazenCompletionRequest`; ownership transfers to this
+ * `model` must be null OR a live `BlazenModel`. `request` must be
+ * null OR a live `BlazenModelRequest`; ownership transfers to this
  * function regardless of whether the call returns null.
  */
-
-BlazenFuture *blazen_completion_model_complete(const BlazenCompletionModel *model,
-                                               BlazenCompletionRequest *request);
+ BlazenFuture *blazen_model_complete(const BlazenModel *model, BlazenModelRequest *request);
 
 /**
- * Frees a `BlazenCompletionModel` handle. No-op on a null pointer.
+ * Frees a `BlazenModel` handle. No-op on a null pointer.
  *
  * # Safety
  *
  * `model` must be null OR a pointer previously produced by a provider
  * factory in the cabi surface. Double-free is undefined behavior.
  */
- void blazen_completion_model_free(BlazenCompletionModel *model);
+ void blazen_model_free(BlazenModel *model);
 
 /**
  * Returns the embedding model's identifier as a caller-owned C string.
@@ -5656,8 +5654,8 @@ BlazenFuture *blazen_embedding_model_embed(const BlazenEmbeddingModel *model,
  void blazen_embedding_model_free(BlazenEmbeddingModel *model);
 
 /**
- * Pops the [`BlazenCompletionResponse`] out of a future produced by
- * [`blazen_completion_model_complete`].
+ * Pops the [`BlazenModelResponse`] out of a future produced by
+ * [`blazen_model_complete`].
  *
  * Returns `0` on success (writes the response into `*out` when non-null) or
  * `-1` on failure (writes a fresh `BlazenError*` into `*err` when non-null).
@@ -5670,14 +5668,14 @@ BlazenFuture *blazen_embedding_model_embed(const BlazenEmbeddingModel *model,
  * # Safety
  *
  * `fut` must be null OR a pointer previously produced by
- * [`blazen_completion_model_complete`] (and not yet freed, not concurrently
+ * [`blazen_model_complete`] (and not yet freed, not concurrently
  * freed from another thread). `out` and `err` must each be null OR point to
  * a writable slot of the matching pointer type.
  */
 
-int32_t blazen_future_take_completion_response(BlazenFuture *fut,
-                                               BlazenCompletionResponse **out,
-                                               BlazenError **err);
+int32_t blazen_future_take_model_response(BlazenFuture *fut,
+                                          BlazenModelResponse **out,
+                                          BlazenError **err);
 
 /**
  * Pops the [`BlazenEmbeddingResponse`] out of a future produced by
@@ -6077,10 +6075,10 @@ BlazenTokenUsage *blazen_token_usage_new(uint64_t prompt_tokens,
  void blazen_chat_message_free(BlazenChatMessage *handle);
 
 /**
- * Constructs a new `CompletionRequest` with empty `messages`/`tools` vecs and
+ * Constructs a new `ModelRequest` with empty `messages`/`tools` vecs and
  * every optional field unset. Always succeeds; caller owns the handle.
  */
- BlazenCompletionRequest *blazen_completion_request_new(void);
+ BlazenModelRequest *blazen_model_request_new(void);
 
 /**
  * Pushes a `BlazenChatMessage` onto the request's `messages` vec. Consumes
@@ -6088,111 +6086,107 @@ BlazenTokenUsage *blazen_token_usage_new(uint64_t prompt_tokens,
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionRequest`. `message` must
+ * `handle` must be null OR a live `BlazenModelRequest`. `message` must
  * be null OR a live `BlazenChatMessage`.
  */
-
-void blazen_completion_request_messages_push(BlazenCompletionRequest *handle,
-                                             BlazenChatMessage *message);
+ void blazen_model_request_messages_push(BlazenModelRequest *handle, BlazenChatMessage *message);
 
 /**
  * Pushes a `BlazenTool` onto the request's `tools` vec. Consumes `tool`.
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionRequest`. `tool` must be
+ * `handle` must be null OR a live `BlazenModelRequest`. `tool` must be
  * null OR a live `BlazenTool`.
  */
- void blazen_completion_request_tools_push(BlazenCompletionRequest *handle, BlazenTool *tool);
+ void blazen_model_request_tools_push(BlazenModelRequest *handle, BlazenTool *tool);
 
 /**
  * Sets `temperature` to `Some(value)`.
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionRequest`.
+ * `handle` must be null OR a live `BlazenModelRequest`.
  */
- void blazen_completion_request_set_temperature(BlazenCompletionRequest *handle, double value);
+ void blazen_model_request_set_temperature(BlazenModelRequest *handle, double value);
 
 /**
  * Clears `temperature` back to `None`.
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionRequest`.
+ * `handle` must be null OR a live `BlazenModelRequest`.
  */
- void blazen_completion_request_clear_temperature(BlazenCompletionRequest *handle);
+ void blazen_model_request_clear_temperature(BlazenModelRequest *handle);
 
 /**
  * Sets `max_tokens` to `Some(value)`.
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionRequest`.
+ * `handle` must be null OR a live `BlazenModelRequest`.
  */
- void blazen_completion_request_set_max_tokens(BlazenCompletionRequest *handle, uint32_t value);
+ void blazen_model_request_set_max_tokens(BlazenModelRequest *handle, uint32_t value);
 
 /**
  * Clears `max_tokens` back to `None`.
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionRequest`.
+ * `handle` must be null OR a live `BlazenModelRequest`.
  */
- void blazen_completion_request_clear_max_tokens(BlazenCompletionRequest *handle);
+ void blazen_model_request_clear_max_tokens(BlazenModelRequest *handle);
 
 /**
  * Sets `top_p` to `Some(value)`.
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionRequest`.
+ * `handle` must be null OR a live `BlazenModelRequest`.
  */
- void blazen_completion_request_set_top_p(BlazenCompletionRequest *handle, double value);
+ void blazen_model_request_set_top_p(BlazenModelRequest *handle, double value);
 
 /**
  * Clears `top_p` back to `None`.
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionRequest`.
+ * `handle` must be null OR a live `BlazenModelRequest`.
  */
- void blazen_completion_request_clear_top_p(BlazenCompletionRequest *handle);
+ void blazen_model_request_clear_top_p(BlazenModelRequest *handle);
 
 /**
  * Sets the optional `model` field. Null `value` clears it.
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionRequest`. `value` must be
+ * `handle` must be null OR a live `BlazenModelRequest`. `value` must be
  * null OR point to a NUL-terminated UTF-8 buffer.
  */
- void blazen_completion_request_set_model(BlazenCompletionRequest *handle, const char *value);
+ void blazen_model_request_set_model(BlazenModelRequest *handle, const char *value);
 
 /**
  * Sets the optional `response_format_json` field. Null `value` clears it.
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionRequest`. `value` must be
+ * `handle` must be null OR a live `BlazenModelRequest`. `value` must be
  * null OR point to a NUL-terminated UTF-8 buffer.
  */
-
-void blazen_completion_request_set_response_format_json(BlazenCompletionRequest *handle,
-                                                        const char *value);
+ void blazen_model_request_set_response_format_json(BlazenModelRequest *handle, const char *value);
 
 /**
  * Sets the optional `system` field. Null `value` clears it.
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionRequest`. `value` must be
+ * `handle` must be null OR a live `BlazenModelRequest`. `value` must be
  * null OR point to a NUL-terminated UTF-8 buffer.
  */
- void blazen_completion_request_set_system(BlazenCompletionRequest *handle, const char *value);
+ void blazen_model_request_set_system(BlazenModelRequest *handle, const char *value);
 
 /**
- * Frees a `BlazenCompletionRequest` handle and all owned contents. No-op on
+ * Frees a `BlazenModelRequest` handle and all owned contents. No-op on
  * a null pointer.
  *
  * # Safety
@@ -6200,7 +6194,7 @@ void blazen_completion_request_set_response_format_json(BlazenCompletionRequest 
  * `handle` must be null OR a pointer previously produced by the cabi
  * surface.
  */
- void blazen_completion_request_free(BlazenCompletionRequest *handle);
+ void blazen_model_request_free(BlazenModelRequest *handle);
 
 /**
  * Returns the `content` text as a caller-owned C string. Returns null on a
@@ -6208,47 +6202,47 @@ void blazen_completion_request_set_response_format_json(BlazenCompletionRequest 
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionResponse`.
+ * `handle` must be null OR a live `BlazenModelResponse`.
  */
- char *blazen_completion_response_content(const BlazenCompletionResponse *handle);
+ char *blazen_model_response_content(const BlazenModelResponse *handle);
 
 /**
  * Returns the `finish_reason` field as a caller-owned C string.
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionResponse`.
+ * `handle` must be null OR a live `BlazenModelResponse`.
  */
- char *blazen_completion_response_finish_reason(const BlazenCompletionResponse *handle);
+ char *blazen_model_response_finish_reason(const BlazenModelResponse *handle);
 
 /**
  * Returns the `model` identifier as a caller-owned C string.
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionResponse`.
+ * `handle` must be null OR a live `BlazenModelResponse`.
  */
- char *blazen_completion_response_model(const BlazenCompletionResponse *handle);
+ char *blazen_model_response_model(const BlazenModelResponse *handle);
 
 /**
  * Returns the number of tool-call entries.
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionResponse`.
+ * `handle` must be null OR a live `BlazenModelResponse`.
  */
- uintptr_t blazen_completion_response_tool_calls_count(const BlazenCompletionResponse *handle);
+ uintptr_t blazen_model_response_tool_calls_count(const BlazenModelResponse *handle);
 
 /**
  * Clones the `idx`-th tool-call entry into a fresh handle.
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionResponse`.
+ * `handle` must be null OR a live `BlazenModelResponse`.
  */
 
-BlazenToolCall *blazen_completion_response_tool_calls_get(const BlazenCompletionResponse *handle,
-                                                          uintptr_t idx);
+BlazenToolCall *blazen_model_response_tool_calls_get(const BlazenModelResponse *handle,
+                                                     uintptr_t idx);
 
 /**
  * Returns a fresh `BlazenTokenUsage` handle cloned from the response's usage
@@ -6256,19 +6250,19 @@ BlazenToolCall *blazen_completion_response_tool_calls_get(const BlazenCompletion
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionResponse`.
+ * `handle` must be null OR a live `BlazenModelResponse`.
  */
- BlazenTokenUsage *blazen_completion_response_usage(const BlazenCompletionResponse *handle);
+ BlazenTokenUsage *blazen_model_response_usage(const BlazenModelResponse *handle);
 
 /**
- * Frees a `BlazenCompletionResponse` handle. No-op on a null pointer.
+ * Frees a `BlazenModelResponse` handle. No-op on a null pointer.
  *
  * # Safety
  *
  * `handle` must be null OR a pointer previously produced by the cabi
  * surface.
  */
- void blazen_completion_response_free(BlazenCompletionResponse *handle);
+ void blazen_model_response_free(BlazenModelResponse *handle);
 
 /**
  * Returns the number of embedding vectors. Returns `0` on a null handle.
@@ -6356,13 +6350,13 @@ uintptr_t blazen_embedding_response_embedding_to_buffer(const BlazenEmbeddingRes
  void blazen_embedding_response_free(BlazenEmbeddingResponse *handle);
 
 /**
- * Constructs a [`BlazenCompletionResponse`] handle from a JSON-encoded
- * [`blazen_llm::CompletionResponse`].
+ * Constructs a [`BlazenModelResponse`] handle from a JSON-encoded
+ * [`blazen_llm::ModelResponse`].
  *
  * # Ownership
  *
  * On success returns a non-null handle owned by the caller — release with
- * [`blazen_completion_response_free`]. On failure returns null and writes a
+ * [`blazen_model_response_free`]. On failure returns null and writes a
  * fresh `BlazenError::Internal { message }` into `*out_err` when `out_err`
  * is non-null (caller frees with [`crate::error::blazen_error_free`]).
  *
@@ -6372,9 +6366,7 @@ uintptr_t blazen_embedding_response_embedding_to_buffer(const BlazenEmbeddingRes
  * the duration of this call. `out_err` must be null OR point to a writable
  * `*mut BlazenError` slot.
  */
-
-BlazenCompletionResponse *blazen_completion_response_from_json(const char *json,
-                                                               BlazenError **out_err);
+ BlazenModelResponse *blazen_model_response_from_json(const char *json, BlazenError **out_err);
 
 /**
  * Constructs a [`BlazenEmbeddingResponse`] handle from a JSON-encoded
@@ -8537,20 +8529,20 @@ char *blazen_openai_compat_config_query_param_value(const BlazenOpenAiCompatConf
  void blazen_base_provider_with_response_format_json(BlazenBaseProvider *handle, const char *json);
 
 /**
- * Replaces the entire `CompletionProviderDefaults` on the provider with a
+ * Replaces the entire `ProviderDefaults` on the provider with a
  * clone of the supplied handle. Null `d` is a no-op.
  *
  * # Safety
  *
  * `handle` must be null OR a live `BlazenBaseProvider`. `d` must be null OR
- * a live `BlazenCompletionProviderDefaults`.
+ * a live `BlazenProviderDefaults`.
  */
 
 void blazen_base_provider_with_defaults(BlazenBaseProvider *handle,
-                                        const BlazenCompletionProviderDefaults *d);
+                                        const BlazenProviderDefaults *d);
 
 /**
- * Returns a clone of the configured `CompletionProviderDefaults`. Caller owns
+ * Returns a clone of the configured `ProviderDefaults`. Caller owns
  * the returned handle and must free with
  * [`crate::provider_defaults::blazen_completion_provider_defaults_free`].
  *
@@ -8558,7 +8550,7 @@ void blazen_base_provider_with_defaults(BlazenBaseProvider *handle,
  *
  * `handle` must be null OR a live `BlazenBaseProvider`.
  */
- BlazenCompletionProviderDefaults *blazen_base_provider_defaults(const BlazenBaseProvider *handle);
+ BlazenProviderDefaults *blazen_base_provider_defaults(const BlazenBaseProvider *handle);
 
 /**
  * Returns the inner model's `model_id` as a caller-owned C string. Free with
@@ -8572,7 +8564,7 @@ void blazen_base_provider_with_defaults(BlazenBaseProvider *handle,
 
 /**
  * Returns the inner model's `provider_id` as a caller-owned C string. The
- * `CompletionModel` trait surfaces this through `model_id()` plus the
+ * `Model` trait surfaces this through `model_id()` plus the
  * provider's own identification; for V1 we return the same string as
  * [`blazen_base_provider_model_id`]. Free with
  * [`crate::string::blazen_string_free`].
@@ -8604,7 +8596,7 @@ void blazen_base_provider_with_defaults(BlazenBaseProvider *handle,
  * The implementation:
  *
  * 1. Parses both JSON inputs.
- * 2. Builds a [`CompletionRequest`] with `response_format = schema`.
+ * 2. Builds a [`ModelRequest`] with `response_format = schema`.
  * 3. Awaits the provider's `complete(...)`.
  * 4. Returns the response's `content` string (the model's JSON output) as
  *    the future's typed result.
@@ -8786,7 +8778,7 @@ BlazenCustomProvider *blazen_custom_provider_lm_studio(const char *model,
  * prompts, default tools, defaults bundles) without reaching into the
  * private `base` field on `CustomProviderHandle`. The returned
  * `BaseProvider` holds an `Arc<CustomProviderHandle>` as its inner
- * `CompletionModel`, so `complete()` / `stream()` on the result delegate
+ * `Model`, so `complete()` / `stream()` on the result delegate
  * back through the `CustomProviderHandle` (including any vtable dispatch).
  *
  * Returns null if `p` is null.
@@ -9167,20 +9159,20 @@ int32_t blazen_future_take_custom_voice_list(BlazenFuture *fut,
  void blazen_base_provider_defaults_free(BlazenBaseProviderDefaults *handle);
 
 /**
- * Constructs an empty `CompletionProviderDefaults`.
+ * Constructs an empty `ProviderDefaults`.
  */
- BlazenCompletionProviderDefaults *blazen_completion_provider_defaults_new(void);
+ BlazenProviderDefaults *blazen_completion_provider_defaults_new(void);
 
 /**
  * Sets the optional `system_prompt`. Null `prompt` clears it.
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+ * `handle` must be null OR a live `BlazenProviderDefaults`.
  * `prompt` must be null OR a valid NUL-terminated UTF-8 buffer.
  */
 
-void blazen_completion_provider_defaults_set_system_prompt(BlazenCompletionProviderDefaults *handle,
+void blazen_completion_provider_defaults_set_system_prompt(BlazenProviderDefaults *handle,
                                                            const char *prompt);
 
 /**
@@ -9189,10 +9181,9 @@ void blazen_completion_provider_defaults_set_system_prompt(BlazenCompletionProvi
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+ * `handle` must be null OR a live `BlazenProviderDefaults`.
  */
-
-char *blazen_completion_provider_defaults_system_prompt(const BlazenCompletionProviderDefaults *handle);
+ char *blazen_completion_provider_defaults_system_prompt(const BlazenProviderDefaults *handle);
 
 /**
  * Replaces the `tools` field by parsing `json` as a JSON array of
@@ -9200,11 +9191,11 @@ char *blazen_completion_provider_defaults_system_prompt(const BlazenCompletionPr
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionProviderDefaults`. `json`
+ * `handle` must be null OR a live `BlazenProviderDefaults`. `json`
  * must be null OR a valid NUL-terminated UTF-8 buffer.
  */
 
-void blazen_completion_provider_defaults_set_tools_json(BlazenCompletionProviderDefaults *handle,
+void blazen_completion_provider_defaults_set_tools_json(BlazenProviderDefaults *handle,
                                                         const char *json);
 
 /**
@@ -9213,10 +9204,9 @@ void blazen_completion_provider_defaults_set_tools_json(BlazenCompletionProvider
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+ * `handle` must be null OR a live `BlazenProviderDefaults`.
  */
-
-char *blazen_completion_provider_defaults_tools_json(const BlazenCompletionProviderDefaults *handle);
+ char *blazen_completion_provider_defaults_tools_json(const BlazenProviderDefaults *handle);
 
 /**
  * Replaces the `response_format` field by parsing `json`. Null clears it;
@@ -9224,11 +9214,11 @@ char *blazen_completion_provider_defaults_tools_json(const BlazenCompletionProvi
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionProviderDefaults`. `json`
+ * `handle` must be null OR a live `BlazenProviderDefaults`. `json`
  * must be null OR a valid NUL-terminated UTF-8 buffer.
  */
 
-void blazen_completion_provider_defaults_set_response_format_json(BlazenCompletionProviderDefaults *handle,
+void blazen_completion_provider_defaults_set_response_format_json(BlazenProviderDefaults *handle,
                                                                   const char *json);
 
 /**
@@ -9237,10 +9227,10 @@ void blazen_completion_provider_defaults_set_response_format_json(BlazenCompleti
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+ * `handle` must be null OR a live `BlazenProviderDefaults`.
  */
 
-char *blazen_completion_provider_defaults_response_format_json(const BlazenCompletionProviderDefaults *handle);
+char *blazen_completion_provider_defaults_response_format_json(const BlazenProviderDefaults *handle);
 
 /**
  * Replaces the `base` field with a clone of the supplied
@@ -9248,11 +9238,11 @@ char *blazen_completion_provider_defaults_response_format_json(const BlazenCompl
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionProviderDefaults`. `base`
+ * `handle` must be null OR a live `BlazenProviderDefaults`. `base`
  * must be null OR a live `BlazenBaseProviderDefaults`.
  */
 
-void blazen_completion_provider_defaults_set_base(BlazenCompletionProviderDefaults *handle,
+void blazen_completion_provider_defaults_set_base(BlazenProviderDefaults *handle,
                                                   const BlazenBaseProviderDefaults *base);
 
 /**
@@ -9262,31 +9252,30 @@ void blazen_completion_provider_defaults_set_base(BlazenCompletionProviderDefaul
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+ * `handle` must be null OR a live `BlazenProviderDefaults`.
  */
 
-BlazenBaseProviderDefaults *blazen_completion_provider_defaults_base(const BlazenCompletionProviderDefaults *handle);
+BlazenBaseProviderDefaults *blazen_completion_provider_defaults_base(const BlazenProviderDefaults *handle);
 
 /**
- * Returns whether a `before_completion` hook is set. V1 always returns
+ * Returns whether a `before_model` hook is set. V1 always returns
  * `false` (hooks land in Phase C).
  *
  * # Safety
  *
- * `handle` must be null OR a live `BlazenCompletionProviderDefaults`.
+ * `handle` must be null OR a live `BlazenProviderDefaults`.
  */
-
-bool blazen_completion_provider_defaults_has_before_completion(const BlazenCompletionProviderDefaults *handle);
+ bool blazen_provider_defaults_has_before_model(const BlazenProviderDefaults *handle);
 
 /**
- * Frees a `BlazenCompletionProviderDefaults`. No-op on null.
+ * Frees a `BlazenProviderDefaults`. No-op on null.
  *
  * # Safety
  *
  * `handle` must be null OR a pointer produced by
  * [`blazen_completion_provider_defaults_new`] or a clone getter.
  */
- void blazen_completion_provider_defaults_free(BlazenCompletionProviderDefaults *handle);
+ void blazen_completion_provider_defaults_free(BlazenProviderDefaults *handle);
 
 /**
  * Constructs an empty `EmbeddingProviderDefaults`.
@@ -9756,7 +9745,7 @@ void blazen_background_removal_provider_defaults_free(BlazenBackgroundRemovalPro
  * `api_key` is required (NUL-terminated UTF-8). `model` and `base_url` are
  * optional — pass null to use the upstream default.
  *
- * On success returns `0` and writes a caller-owned `*mut BlazenCompletionModel`
+ * On success returns `0` and writes a caller-owned `*mut BlazenModel`
  * into `*out_model`. On error returns `-1` and writes a `*mut BlazenError`
  * into `*out_err`. Either out-parameter may be null to discard.
  *
@@ -9768,168 +9757,168 @@ void blazen_background_removal_provider_defaults_free(BlazenBackgroundRemovalPro
  * pointer write.
  */
 
-int32_t blazen_completion_model_new_openai(const char *api_key,
-                                           const char *model,
-                                           const char *base_url,
-                                           BlazenCompletionModel **out_model,
-                                           BlazenError **out_err);
+int32_t blazen_model_new_openai(const char *api_key,
+                                const char *model,
+                                const char *base_url,
+                                BlazenModel **out_model,
+                                BlazenError **out_err);
 
 /**
  * Constructs an Anthropic Messages-API chat-completion model.
  *
- * See [`blazen_completion_model_new_openai`] for the argument and ownership
+ * See [`blazen_model_new_openai`] for the argument and ownership
  * conventions — identical shape.
  *
  * # Safety
  *
- * Same contracts as [`blazen_completion_model_new_openai`].
+ * Same contracts as [`blazen_model_new_openai`].
  */
 
-int32_t blazen_completion_model_new_anthropic(const char *api_key,
-                                              const char *model,
-                                              const char *base_url,
-                                              BlazenCompletionModel **out_model,
-                                              BlazenError **out_err);
+int32_t blazen_model_new_anthropic(const char *api_key,
+                                   const char *model,
+                                   const char *base_url,
+                                   BlazenModel **out_model,
+                                   BlazenError **out_err);
 
 /**
  * Constructs a Google Gemini chat-completion model.
  *
  * # Safety
  *
- * Same contracts as [`blazen_completion_model_new_openai`].
+ * Same contracts as [`blazen_model_new_openai`].
  */
 
-int32_t blazen_completion_model_new_gemini(const char *api_key,
-                                           const char *model,
-                                           const char *base_url,
-                                           BlazenCompletionModel **out_model,
-                                           BlazenError **out_err);
+int32_t blazen_model_new_gemini(const char *api_key,
+                                const char *model,
+                                const char *base_url,
+                                BlazenModel **out_model,
+                                BlazenError **out_err);
 
 /**
  * Constructs an `OpenRouter` chat-completion model.
  *
  * # Safety
  *
- * Same contracts as [`blazen_completion_model_new_openai`].
+ * Same contracts as [`blazen_model_new_openai`].
  */
 
-int32_t blazen_completion_model_new_openrouter(const char *api_key,
-                                               const char *model,
-                                               const char *base_url,
-                                               BlazenCompletionModel **out_model,
-                                               BlazenError **out_err);
+int32_t blazen_model_new_openrouter(const char *api_key,
+                                    const char *model,
+                                    const char *base_url,
+                                    BlazenModel **out_model,
+                                    BlazenError **out_err);
 
 /**
  * Constructs a Groq chat-completion model.
  *
  * # Safety
  *
- * Same contracts as [`blazen_completion_model_new_openai`].
+ * Same contracts as [`blazen_model_new_openai`].
  */
 
-int32_t blazen_completion_model_new_groq(const char *api_key,
-                                         const char *model,
-                                         const char *base_url,
-                                         BlazenCompletionModel **out_model,
-                                         BlazenError **out_err);
+int32_t blazen_model_new_groq(const char *api_key,
+                              const char *model,
+                              const char *base_url,
+                              BlazenModel **out_model,
+                              BlazenError **out_err);
 
 /**
  * Constructs a Together AI chat-completion model.
  *
  * # Safety
  *
- * Same contracts as [`blazen_completion_model_new_openai`].
+ * Same contracts as [`blazen_model_new_openai`].
  */
 
-int32_t blazen_completion_model_new_together(const char *api_key,
-                                             const char *model,
-                                             const char *base_url,
-                                             BlazenCompletionModel **out_model,
-                                             BlazenError **out_err);
+int32_t blazen_model_new_together(const char *api_key,
+                                  const char *model,
+                                  const char *base_url,
+                                  BlazenModel **out_model,
+                                  BlazenError **out_err);
 
 /**
  * Constructs a Mistral chat-completion model.
  *
  * # Safety
  *
- * Same contracts as [`blazen_completion_model_new_openai`].
+ * Same contracts as [`blazen_model_new_openai`].
  */
 
-int32_t blazen_completion_model_new_mistral(const char *api_key,
-                                            const char *model,
-                                            const char *base_url,
-                                            BlazenCompletionModel **out_model,
-                                            BlazenError **out_err);
+int32_t blazen_model_new_mistral(const char *api_key,
+                                 const char *model,
+                                 const char *base_url,
+                                 BlazenModel **out_model,
+                                 BlazenError **out_err);
 
 /**
  * Constructs a `DeepSeek` chat-completion model.
  *
  * # Safety
  *
- * Same contracts as [`blazen_completion_model_new_openai`].
+ * Same contracts as [`blazen_model_new_openai`].
  */
 
-int32_t blazen_completion_model_new_deepseek(const char *api_key,
-                                             const char *model,
-                                             const char *base_url,
-                                             BlazenCompletionModel **out_model,
-                                             BlazenError **out_err);
+int32_t blazen_model_new_deepseek(const char *api_key,
+                                  const char *model,
+                                  const char *base_url,
+                                  BlazenModel **out_model,
+                                  BlazenError **out_err);
 
 /**
  * Constructs a Fireworks AI chat-completion model.
  *
  * # Safety
  *
- * Same contracts as [`blazen_completion_model_new_openai`].
+ * Same contracts as [`blazen_model_new_openai`].
  */
 
-int32_t blazen_completion_model_new_fireworks(const char *api_key,
-                                              const char *model,
-                                              const char *base_url,
-                                              BlazenCompletionModel **out_model,
-                                              BlazenError **out_err);
+int32_t blazen_model_new_fireworks(const char *api_key,
+                                   const char *model,
+                                   const char *base_url,
+                                   BlazenModel **out_model,
+                                   BlazenError **out_err);
 
 /**
  * Constructs a Perplexity chat-completion model.
  *
  * # Safety
  *
- * Same contracts as [`blazen_completion_model_new_openai`].
+ * Same contracts as [`blazen_model_new_openai`].
  */
 
-int32_t blazen_completion_model_new_perplexity(const char *api_key,
-                                               const char *model,
-                                               const char *base_url,
-                                               BlazenCompletionModel **out_model,
-                                               BlazenError **out_err);
+int32_t blazen_model_new_perplexity(const char *api_key,
+                                    const char *model,
+                                    const char *base_url,
+                                    BlazenModel **out_model,
+                                    BlazenError **out_err);
 
 /**
  * Constructs an xAI (Grok) chat-completion model.
  *
  * # Safety
  *
- * Same contracts as [`blazen_completion_model_new_openai`].
+ * Same contracts as [`blazen_model_new_openai`].
  */
 
-int32_t blazen_completion_model_new_xai(const char *api_key,
-                                        const char *model,
-                                        const char *base_url,
-                                        BlazenCompletionModel **out_model,
-                                        BlazenError **out_err);
+int32_t blazen_model_new_xai(const char *api_key,
+                             const char *model,
+                             const char *base_url,
+                             BlazenModel **out_model,
+                             BlazenError **out_err);
 
 /**
  * Constructs a Cohere chat-completion model.
  *
  * # Safety
  *
- * Same contracts as [`blazen_completion_model_new_openai`].
+ * Same contracts as [`blazen_model_new_openai`].
  */
 
-int32_t blazen_completion_model_new_cohere(const char *api_key,
-                                           const char *model,
-                                           const char *base_url,
-                                           BlazenCompletionModel **out_model,
-                                           BlazenError **out_err);
+int32_t blazen_model_new_cohere(const char *api_key,
+                                const char *model,
+                                const char *base_url,
+                                BlazenModel **out_model,
+                                BlazenError **out_err);
 
 /**
  * Constructs an Azure `OpenAI` chat-completion model.
@@ -9947,12 +9936,12 @@ int32_t blazen_completion_model_new_cohere(const char *api_key,
  * a valid destination for one pointer write.
  */
 
-int32_t blazen_completion_model_new_azure(const char *api_key,
-                                          const char *resource_name,
-                                          const char *deployment_name,
-                                          const char *api_version,
-                                          BlazenCompletionModel **out_model,
-                                          BlazenError **out_err);
+int32_t blazen_model_new_azure(const char *api_key,
+                               const char *resource_name,
+                               const char *deployment_name,
+                               const char *api_version,
+                               BlazenModel **out_model,
+                               BlazenError **out_err);
 
 /**
  * Constructs an AWS Bedrock chat-completion model.
@@ -9968,12 +9957,12 @@ int32_t blazen_completion_model_new_azure(const char *api_key,
  * for one pointer write.
  */
 
-int32_t blazen_completion_model_new_bedrock(const char *api_key,
-                                            const char *region,
-                                            const char *model,
-                                            const char *base_url,
-                                            BlazenCompletionModel **out_model,
-                                            BlazenError **out_err);
+int32_t blazen_model_new_bedrock(const char *api_key,
+                                 const char *region,
+                                 const char *model,
+                                 const char *base_url,
+                                 BlazenModel **out_model,
+                                 BlazenError **out_err);
 
 /**
  * Constructs a fal.ai chat-completion model.
@@ -9993,14 +9982,14 @@ int32_t blazen_completion_model_new_bedrock(const char *api_key,
  * destination for one pointer write.
  */
 
-int32_t blazen_completion_model_new_fal(const char *api_key,
-                                        const char *model,
-                                        const char *endpoint,
-                                        bool enterprise,
-                                        bool auto_route_modality,
-                                        const char *base_url,
-                                        BlazenCompletionModel **out_model,
-                                        BlazenError **out_err);
+int32_t blazen_model_new_fal(const char *api_key,
+                             const char *model,
+                             const char *endpoint,
+                             bool enterprise,
+                             bool auto_route_modality,
+                             const char *base_url,
+                             BlazenModel **out_model,
+                             BlazenError **out_err);
 
 /**
  * Constructs a generic OpenAI-compatible chat-completion model.
@@ -10016,20 +10005,20 @@ int32_t blazen_completion_model_new_fal(const char *api_key,
  * a valid destination for one pointer write.
  */
 
-int32_t blazen_completion_model_new_openai_compat(const char *provider_name,
-                                                  const char *base_url,
-                                                  const char *api_key,
-                                                  const char *model,
-                                                  BlazenCompletionModel **out_model,
-                                                  BlazenError **out_err);
+int32_t blazen_model_new_openai_compat(const char *provider_name,
+                                       const char *base_url,
+                                       const char *api_key,
+                                       const char *model,
+                                       BlazenModel **out_model,
+                                       BlazenError **out_err);
 
 /**
- * Constructs a `CompletionModel` for an Ollama server.
+ * Constructs a `Model` for an Ollama server.
  *
  * Convenience wrapper around the OpenAI-compatible factory with
  * `base_url = format!("http://{host}:{port}/v1")` and no API key.
  *
- * On success returns `0` and writes a caller-owned `*mut BlazenCompletionModel`
+ * On success returns `0` and writes a caller-owned `*mut BlazenModel`
  * into `*out_model`. On error returns `-1` and writes a `*mut BlazenError`
  * into `*out_err`. Either out-parameter may be null to discard.
  *
@@ -10040,31 +10029,31 @@ int32_t blazen_completion_model_new_openai_compat(const char *provider_name,
  * pointer write.
  */
 
-int32_t blazen_completion_model_new_ollama(const char *host,
-                                           uint16_t port,
-                                           const char *model,
-                                           BlazenCompletionModel **out_model,
-                                           BlazenError **out_err);
+int32_t blazen_model_new_ollama(const char *host,
+                                uint16_t port,
+                                const char *model,
+                                BlazenModel **out_model,
+                                BlazenError **out_err);
 
 /**
- * Constructs a `CompletionModel` for an LM Studio server.
+ * Constructs a `Model` for an LM Studio server.
  *
- * See [`blazen_completion_model_new_ollama`] for argument and ownership
+ * See [`blazen_model_new_ollama`] for argument and ownership
  * conventions — identical shape.
  *
  * # Safety
  *
- * Same contracts as [`blazen_completion_model_new_ollama`].
+ * Same contracts as [`blazen_model_new_ollama`].
  */
 
-int32_t blazen_completion_model_new_lm_studio(const char *host,
-                                              uint16_t port,
-                                              const char *model,
-                                              BlazenCompletionModel **out_model,
-                                              BlazenError **out_err);
+int32_t blazen_model_new_lm_studio(const char *host,
+                                   uint16_t port,
+                                   const char *model,
+                                   BlazenModel **out_model,
+                                   BlazenError **out_err);
 
 /**
- * Constructs a `CompletionModel` wrapping an arbitrary OpenAI-compatible
+ * Constructs a `Model` wrapping an arbitrary OpenAI-compatible
  * server via the universal `CustomProvider`.
  *
  * Pass `api_key = null` if the server does not require authentication
@@ -10078,12 +10067,12 @@ int32_t blazen_completion_model_new_lm_studio(const char *host,
  * OR a valid destination for one pointer write.
  */
 
-int32_t blazen_completion_model_new_custom_with_openai_protocol(const char *provider_id,
-                                                                const char *base_url,
-                                                                const char *model,
-                                                                const char *api_key,
-                                                                BlazenCompletionModel **out_model,
-                                                                BlazenError **out_err);
+int32_t blazen_model_new_custom_with_openai_protocol(const char *provider_id,
+                                                     const char *base_url,
+                                                     const char *model,
+                                                     const char *api_key,
+                                                     BlazenModel **out_model,
+                                                     BlazenError **out_err);
 
 /**
  * Constructs a local mistral.rs chat-completion model.
@@ -10105,13 +10094,13 @@ int32_t blazen_completion_model_new_custom_with_openai_protocol(const char *prov
  * pointer write.
  */
 
-int32_t blazen_completion_model_new_mistralrs(const char *model_id,
-                                              const char *device,
-                                              const char *quantization,
-                                              int32_t context_length,
-                                              bool vision,
-                                              BlazenCompletionModel **out_model,
-                                              BlazenError **out_err);
+int32_t blazen_model_new_mistralrs(const char *model_id,
+                                   const char *device,
+                                   const char *quantization,
+                                   int32_t context_length,
+                                   bool vision,
+                                   BlazenModel **out_model,
+                                   BlazenError **out_err);
 
 /**
  * Constructs a local llama.cpp chat-completion model.
@@ -10132,19 +10121,19 @@ int32_t blazen_completion_model_new_mistralrs(const char *model_id,
  * pointer write.
  */
 
-int32_t blazen_completion_model_new_llamacpp(const char *model_path,
-                                             const char *device,
-                                             const char *quantization,
-                                             int32_t context_length,
-                                             int32_t n_gpu_layers,
-                                             BlazenCompletionModel **out_model,
-                                             BlazenError **out_err);
+int32_t blazen_model_new_llamacpp(const char *model_path,
+                                  const char *device,
+                                  const char *quantization,
+                                  int32_t context_length,
+                                  int32_t n_gpu_layers,
+                                  BlazenModel **out_model,
+                                  BlazenError **out_err);
 
 /**
  * Constructs a local candle chat-completion model.
  *
- * Wraps `CandleLlmProvider` through the `CandleLlmCompletionModel` trait
- * bridge so it satisfies the same `CompletionModel` trait as remote
+ * Wraps `CandleLlmProvider` through the `CandleLlmModel` trait
+ * bridge so it satisfies the same `Model` trait as remote
  * providers. `context_length` of `-1` means "use the model's default".
  *
  * Feature-gated on `candle-llm`.
@@ -10157,13 +10146,13 @@ int32_t blazen_completion_model_new_llamacpp(const char *model_path,
  * a valid destination for one pointer write.
  */
 
-int32_t blazen_completion_model_new_candle(const char *model_id,
-                                           const char *device,
-                                           const char *quantization,
-                                           const char *revision,
-                                           int32_t context_length,
-                                           BlazenCompletionModel **out_model,
-                                           BlazenError **out_err);
+int32_t blazen_model_new_candle(const char *model_id,
+                                const char *device,
+                                const char *quantization,
+                                const char *revision,
+                                int32_t context_length,
+                                BlazenModel **out_model,
+                                BlazenError **out_err);
 
 /**
  * Constructs an `OpenAI` embedding model.
@@ -10327,10 +10316,10 @@ int32_t blazen_workflow_builder_add_step(BlazenWorkflowBuilder *builder,
  *
  * ## Ownership transfer
  *
- * - `model` is BORROWED — the underlying `Arc<CompletionModel>` is cloned
+ * - `model` is BORROWED — the underlying `Arc<Model>` is cloned
  *   into the streaming call. Caller retains its handle.
  * - `request` is CONSUMED — internally we `Box::from_raw` it and move the
- *   inner record out. Callers must NOT call `blazen_completion_request_free`
+ *   inner record out. Callers must NOT call `blazen_model_request_free`
  *   on the same pointer afterwards (double-free).
  * - `sink` (the vtable) is CONSUMED — ownership of `user_data` transfers to
  *   the wrapping `CStreamSink`, which releases it via `drop_user_data` on
@@ -10340,16 +10329,16 @@ int32_t blazen_workflow_builder_add_step(BlazenWorkflowBuilder *builder,
  *
  * # Safety
  *
- * `model` must be null OR a live `BlazenCompletionModel` produced by the
- * cabi surface. `request` must be null OR a live `BlazenCompletionRequest`
+ * `model` must be null OR a live `BlazenModel` produced by the
+ * cabi surface. `request` must be null OR a live `BlazenModelRequest`
  * produced by the cabi surface; ownership transfers to this function.
  * `sink.user_data` and the four `sink` function pointers must satisfy the
  * contracts documented on [`BlazenCompletionStreamSinkVTable`]. `out_err`
  * must be null OR a writable slot for a single `*mut BlazenError` write.
  */
 
-int32_t blazen_complete_streaming_blocking(const BlazenCompletionModel *model,
-                                           BlazenCompletionRequest *request,
+int32_t blazen_complete_streaming_blocking(const BlazenModel *model,
+                                           BlazenModelRequest *request,
                                            BlazenCompletionStreamSinkVTable sink,
                                            BlazenError **out_err);
 
@@ -10374,15 +10363,15 @@ int32_t blazen_complete_streaming_blocking(const BlazenCompletionModel *model,
  *
  * # Safety
  *
- * `model` must be null OR a live `BlazenCompletionModel`. `request` must be
- * null OR a live `BlazenCompletionRequest`; ownership transfers to this
+ * `model` must be null OR a live `BlazenModel`. `request` must be
+ * null OR a live `BlazenModelRequest`; ownership transfers to this
  * function regardless of whether the call returns null. `sink` satisfies
  * the [`BlazenCompletionStreamSinkVTable`] contract; its `user_data` is
  * consumed.
  */
 
-BlazenFuture *blazen_complete_streaming(const BlazenCompletionModel *model,
-                                        BlazenCompletionRequest *request,
+BlazenFuture *blazen_complete_streaming(const BlazenModel *model,
+                                        BlazenModelRequest *request,
                                         BlazenCompletionStreamSinkVTable sink);
 
 /**
@@ -10773,7 +10762,7 @@ int32_t blazen_parse_workflow_history(const char *history_json,
  *
  * ## Ownership
  *
- * - `model` is BORROWED — the underlying `Arc<CompletionModel>` is cloned
+ * - `model` is BORROWED — the underlying `Arc<Model>` is cloned
  *   into the agent. The caller retains its handle and is still responsible
  *   for freeing it.
  * - `system_prompt` is BORROWED for the duration of this call (it is copied
@@ -10792,7 +10781,7 @@ int32_t blazen_parse_workflow_history(const char *history_json,
  *
  * # Safety
  *
- * `model` must be null OR a live `BlazenCompletionModel` produced by the
+ * `model` must be null OR a live `BlazenModel` produced by the
  * cabi surface. `system_prompt` must be null OR a NUL-terminated UTF-8
  * buffer valid for the duration of this call. When `tools_count > 0`,
  * `tools` must point to an array of exactly `tools_count` valid
@@ -10804,7 +10793,7 @@ int32_t blazen_parse_workflow_history(const char *history_json,
  * OR a writable slot for a single `*mut` write.
  */
 
-int32_t blazen_agent_new(const BlazenCompletionModel *model,
+int32_t blazen_agent_new(const BlazenModel *model,
                          const char *system_prompt,
                          BlazenTool *const *tools,
                          uintptr_t tools_count,

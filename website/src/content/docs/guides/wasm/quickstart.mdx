@@ -27,16 +27,16 @@ yarn add @blazen/sdk
 
 ## Basic usage
 
-Initialize the WASM module, then use `CompletionModel` and `ChatMessage` the same way you would in the Node.js SDK:
+Initialize the WASM module, then use `Model` and `ChatMessage` the same way you would in the Node.js SDK:
 
 ```typescript
-import init, { CompletionModel, ChatMessage } from '@blazen/sdk';
+import init, { Model, ChatMessage } from '@blazen/sdk';
 
 await init();
 
 // The WASM SDK reads API keys from the runtime environment only
 // (OPENROUTER_API_KEY, OPENAI_API_KEY, etc.). No arguments are accepted.
-const model = CompletionModel.openrouter();
+const model = Model.openrouter();
 const response = await model.complete([ChatMessage.user('Hello!')]);
 console.log(response.content);
 ```
@@ -48,11 +48,11 @@ console.log(response.content);
 Stream tokens as they arrive using `model.stream()`:
 
 ```typescript
-import init, { CompletionModel, ChatMessage } from '@blazen/sdk';
+import init, { Model, ChatMessage } from '@blazen/sdk';
 
 await init();
 
-const model = CompletionModel.openai(); // reads OPENAI_API_KEY from env
+const model = Model.openai(); // reads OPENAI_API_KEY from env
 
 await model.stream(
   [ChatMessage.user('Write a haiku about WebAssembly')],

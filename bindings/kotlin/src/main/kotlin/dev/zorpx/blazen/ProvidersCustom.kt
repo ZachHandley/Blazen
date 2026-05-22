@@ -11,9 +11,9 @@ import dev.zorpx.blazen.uniffi.BackgroundRemovalRequest
 import dev.zorpx.blazen.uniffi.BaseProvider as UniffiBaseProvider
 import dev.zorpx.blazen.uniffi.BaseProviderDefaults as UniffiBaseProviderDefaults
 import dev.zorpx.blazen.uniffi.BlazenException
-import dev.zorpx.blazen.uniffi.CompletionProviderDefaults as UniffiCompletionProviderDefaults
-import dev.zorpx.blazen.uniffi.CompletionRequest
-import dev.zorpx.blazen.uniffi.CompletionResponse
+import dev.zorpx.blazen.uniffi.ProviderDefaults as UniffiProviderDefaults
+import dev.zorpx.blazen.uniffi.ModelRequest
+import dev.zorpx.blazen.uniffi.ModelResponse
 import dev.zorpx.blazen.uniffi.CompletionStreamSink
 import dev.zorpx.blazen.uniffi.CustomProvider as UniffiCustomProvider
 import dev.zorpx.blazen.uniffi.CustomProviderHandle as UniffiCustomProviderHandle
@@ -150,18 +150,18 @@ public typealias BaseProviderDefaults = UniffiBaseProviderDefaults
  * Defaults applied to every chat completion call.
  *
  * Per-field semantics:
- * - [`base`][UniffiCompletionProviderDefaults.base] — optional [BaseProviderDefaults]
+ * - [`base`][UniffiProviderDefaults.base] — optional [BaseProviderDefaults]
  *   carried for forward compatibility.
- * - [`systemPrompt`][UniffiCompletionProviderDefaults.systemPrompt] — prepended as a
+ * - [`systemPrompt`][UniffiProviderDefaults.systemPrompt] — prepended as a
  *   `system`-role message if the request lacks one.
- * - [`toolsJson`][UniffiCompletionProviderDefaults.toolsJson] — JSON-encoded
+ * - [`toolsJson`][UniffiProviderDefaults.toolsJson] — JSON-encoded
  *   `Vec<ToolDefinition>`. Merged into the request's tool list — request-
  *   supplied tools win on name collision.
- * - [`responseFormatJson`][UniffiCompletionProviderDefaults.responseFormatJson] —
+ * - [`responseFormatJson`][UniffiProviderDefaults.responseFormatJson] —
  *   JSON-encoded `serde_json::Value` for the OpenAI-style `response_format`
  *   field. Set only if the request lacks one.
  */
-public typealias CompletionProviderDefaults = UniffiCompletionProviderDefaults
+public typealias ProviderDefaults = UniffiProviderDefaults
 
 /** Embedding-role defaults. V1 composes only [BaseProviderDefaults]. */
 public typealias EmbeddingProviderDefaults = UniffiEmbeddingProviderDefaults
@@ -198,13 +198,13 @@ public typealias ThreeDProviderDefaults = UniffiThreeDProviderDefaults
 // ---------------------------------------------------------------------------
 
 /**
- * A [`CompletionModel`][dev.zorpx.blazen.uniffi.CompletionModel] wrapped
- * with applied [CompletionProviderDefaults].
+ * A [`Model`][dev.zorpx.blazen.uniffi.Model] wrapped
+ * with applied [ProviderDefaults].
  *
  * Construct via:
- * - [`BaseProvider.fromCompletionModel(model)`][UniffiBaseProvider.Companion.fromCompletionModel]
+ * - [`BaseProvider.fromModel(model)`][UniffiBaseProvider.Companion.fromModel]
  *   — wrap an existing model with empty defaults.
- * - [`BaseProvider.withCompletionDefaults(model, defaults)`][UniffiBaseProvider.Companion.withCompletionDefaults]
+ * - [`BaseProvider.withDefaults(model, defaults)`][UniffiBaseProvider.Companion.withDefaults]
  *   — wrap with explicit defaults.
  *
  * Mutate via the `with*` builders, each of which returns a fresh
@@ -217,8 +217,8 @@ public typealias ThreeDProviderDefaults = UniffiThreeDProviderDefaults
  *
  * Inspect with [`defaults()`][UniffiBaseProvider.defaults],
  * [`modelId()`][UniffiBaseProvider.modelId], and unwrap with
- * [`asCompletionModel()`][UniffiBaseProvider.asCompletionModel] for use
- * with APIs that take a generic `CompletionModel`.
+ * [`asModel()`][UniffiBaseProvider.asModel] for use
+ * with APIs that take a generic `Model`.
  *
  * `BaseProvider` is [AutoCloseable] — close it (or rely on the JVM
  * cleaner) to release the underlying native handle.
@@ -346,11 +346,11 @@ public abstract class CustomProviderBase : CustomProvider {
     override fun providerId(): String = "custom"
 
     /** Perform a non-streaming chat completion. */
-    override suspend fun complete(request: CompletionRequest): CompletionResponse =
+    override suspend fun complete(request: ModelRequest): ModelResponse =
         throw BlazenException.Unsupported("complete not supported by ${providerId()}")
 
     /** Perform a streaming chat completion, pushing chunks into the sink. */
-    override suspend fun stream(request: CompletionRequest, sink: CompletionStreamSink): Unit =
+    override suspend fun stream(request: ModelRequest, sink: CompletionStreamSink): Unit =
         throw BlazenException.Unsupported("stream not supported by ${providerId()}")
 
     /** Embed one or more texts. */

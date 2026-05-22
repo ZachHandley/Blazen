@@ -1,7 +1,7 @@
 //! TS-facing copies of the streaming-event surface from
 //! [`blazen_llm::events`].
 //!
-//! [`blazen_llm::types::StreamChunk`], [`blazen_llm::types::CompletionRequest`],
+//! [`blazen_llm::types::StreamChunk`], [`blazen_llm::types::ModelRequest`],
 //! and the message-content / media types already cross the WASM ABI as
 //! [`tsify_next::Tsify`]-derived TypeScript interfaces because the
 //! `blazen-llm` dep enables the `tsify` feature. The two streaming workflow

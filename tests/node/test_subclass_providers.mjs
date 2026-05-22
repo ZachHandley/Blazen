@@ -1,7 +1,7 @@
 /**
  * Subclassable provider integration tests.
  *
- * Exercises the subclassing surface for CompletionModel, EmbeddingModel,
+ * Exercises the subclassing surface for Model, EmbeddingModel,
  * capability providers (TTS, Music, Image, Video, 3D, BackgroundRemoval,
  * Voice), MemoryBackend, ModelManager, CustomProvider, and pricing
  * registration/lookup.
@@ -16,7 +16,7 @@ import test from "ava";
 
 import {
   ChatMessage,
-  CompletionModel,
+  Model,
   CustomProvider,
   EmbeddingModel,
   InMemoryBackend,
@@ -35,11 +35,11 @@ import {
 } from "../../crates/blazen-node/index.js";
 
 // ===========================================================================
-// CompletionModel subclassing
+// Model subclassing
 // ===========================================================================
 
-test("CompletionModel subclassing · can be subclassed with modelId via super(config)", (t) => {
-  class MockLLM extends CompletionModel {
+test("Model subclassing · can be subclassed with modelId via super(config)", (t) => {
+  class MockLLM extends Model {
     constructor() {
       super({ modelId: "mock-llm", contextLength: 4096 });
     }
@@ -48,8 +48,8 @@ test("CompletionModel subclassing · can be subclassed with modelId via super(co
   t.is(model.modelId, "mock-llm");
 });
 
-test("CompletionModel subclassing · can be subclassed with no config", (t) => {
-  class BareLLM extends CompletionModel {
+test("Model subclassing · can be subclassed with no config", (t) => {
+  class BareLLM extends Model {
     constructor() {
       super();
     }
@@ -59,8 +59,8 @@ test("CompletionModel subclassing · can be subclassed with no config", (t) => {
   t.is(model.modelId, "");
 });
 
-test("CompletionModel subclassing · can be subclassed with all config fields", (t) => {
-  class FullConfigLLM extends CompletionModel {
+test("Model subclassing · can be subclassed with all config fields", (t) => {
+  class FullConfigLLM extends Model {
     constructor() {
       super({
         modelId: "full-model",
@@ -75,8 +75,8 @@ test("CompletionModel subclassing · can be subclassed with all config fields", 
   t.is(model.modelId, "full-model");
 });
 
-test("CompletionModel subclassing · complete() throws 'subclass must override' for subclassed instances", async (t) => {
-  class NoOverrideLLM extends CompletionModel {
+test("Model subclassing · complete() throws 'subclass must override' for subclassed instances", async (t) => {
+  class NoOverrideLLM extends Model {
     constructor() {
       super({ modelId: "no-override" });
     }
@@ -88,8 +88,8 @@ test("CompletionModel subclassing · complete() throws 'subclass must override' 
   );
 });
 
-test("CompletionModel subclassing · completeWithOptions() throws for subclassed instances without override", async (t) => {
-  class NoOverrideLLM extends CompletionModel {
+test("Model subclassing · completeWithOptions() throws for subclassed instances without override", async (t) => {
+  class NoOverrideLLM extends Model {
     constructor() {
       super({ modelId: "no-override" });
     }
@@ -104,8 +104,8 @@ test("CompletionModel subclassing · completeWithOptions() throws for subclassed
   );
 });
 
-test("CompletionModel subclassing · withRetry() throws for subclassed instances", (t) => {
-  class SubLLM extends CompletionModel {
+test("Model subclassing · withRetry() throws for subclassed instances", (t) => {
+  class SubLLM extends Model {
     constructor() {
       super({ modelId: "sub" });
     }
@@ -117,8 +117,8 @@ test("CompletionModel subclassing · withRetry() throws for subclassed instances
   );
 });
 
-test("CompletionModel subclassing · withCache() throws for subclassed instances", (t) => {
-  class SubLLM extends CompletionModel {
+test("Model subclassing · withCache() throws for subclassed instances", (t) => {
+  class SubLLM extends Model {
     constructor() {
       super({ modelId: "sub" });
     }
@@ -130,8 +130,8 @@ test("CompletionModel subclassing · withCache() throws for subclassed instances
   );
 });
 
-test("CompletionModel subclassing · isLoaded() returns false for subclassed instances", async (t) => {
-  class SubLLM extends CompletionModel {
+test("Model subclassing · isLoaded() returns false for subclassed instances", async (t) => {
+  class SubLLM extends Model {
     constructor() {
       super({ modelId: "sub" });
     }
@@ -141,8 +141,8 @@ test("CompletionModel subclassing · isLoaded() returns false for subclassed ins
   t.is(loaded, false);
 });
 
-test("CompletionModel subclassing · memoryBytes() returns null for subclassed instances", async (t) => {
-  class SubLLM extends CompletionModel {
+test("Model subclassing · memoryBytes() returns null for subclassed instances", async (t) => {
+  class SubLLM extends Model {
     constructor() {
       super({ modelId: "sub" });
     }
@@ -505,7 +505,7 @@ test("ModelManager · status() returns empty array when no models registered", a
 
 test("ModelManager · register() throws for remote (non-local) models", async (t) => {
   const manager = new ModelManager({ cpuRamGb: 8 });
-  const model = CompletionModel.openai({ apiKey: "fake-key" });
+  const model = Model.openai({ apiKey: "fake-key" });
   await t.throwsAsync(
     () => manager.register("gpt-4", model),
     { message: /does not support local loading/ }
@@ -684,8 +684,8 @@ test("registerLocalModel · propagates load() rejection", async (t) => {
   );
 });
 
-test("register (CompletionModel path) · still works", async (t) => {
-  // The legacy `register(id, model)` path requires a `JsCompletionModel`
+test("register (Model path) · still works", async (t) => {
+  // The legacy `register(id, model)` path requires a `JsModel`
   // backed by an in-process local provider (mistral.rs / llama.cpp / candle).
   // Constructing one of those without local model weights on disk isn't
   // feasible in unit tests, so we exercise the negative path: a remote
@@ -693,7 +693,7 @@ test("register (CompletionModel path) · still works", async (t) => {
   // This confirms the legacy entrypoint is wired up and validating its
   // input — registerLocalModel's addition didn't shadow or break it.
   const manager = new ModelManager({ cpuRamGb: 8 });
-  const model = CompletionModel.openai({ apiKey: "fake-key" });
+  const model = Model.openai({ apiKey: "fake-key" });
   await t.throwsAsync(() => manager.register("legacy-openai", model), {
     message: /does not support local loading/,
   });
@@ -799,21 +799,21 @@ test("CustomProvider · subclass without capability overrides constructs with pr
 });
 
 // ===========================================================================
-// CompletionModel factory sanity (no network calls)
+// Model factory sanity (no network calls)
 // ===========================================================================
 
-test("CompletionModel factories (construction only) · openai factory sets modelId", (t) => {
-  const model = CompletionModel.openai({ apiKey: "fake-key" });
+test("Model factories (construction only) · openai factory sets modelId", (t) => {
+  const model = Model.openai({ apiKey: "fake-key" });
   t.truthy(model.modelId, "expected non-empty modelId");
 });
 
-test("CompletionModel factories (construction only) · multiple subclass instances are independent", (t) => {
-  class LLM_A extends CompletionModel {
+test("Model factories (construction only) · multiple subclass instances are independent", (t) => {
+  class LLM_A extends Model {
     constructor() {
       super({ modelId: "model-a" });
     }
   }
-  class LLM_B extends CompletionModel {
+  class LLM_B extends Model {
     constructor() {
       super({ modelId: "model-b" });
     }

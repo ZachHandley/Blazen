@@ -6,8 +6,8 @@ module Blazen
   # LLM record + model wrappers around the cabi opaque handles.
   #
   # Every record (Media, ToolCall, Tool, TokenUsage, ChatMessage,
-  # CompletionRequest) and every response/model (CompletionResponse,
-  # EmbeddingResponse, CompletionModel, EmbeddingModel) is wrapped in a small
+  # ModelRequest) and every response/model (ModelResponse,
+  # EmbeddingResponse, Model, EmbeddingModel) is wrapped in a small
   # Ruby class that owns its underlying +BlazenXxx *+ via
   # {::FFI::AutoPointer}, so Ruby GC reclaims the native allocation
   # automatically.
@@ -137,7 +137,7 @@ module Blazen
       end
 
       # Constructs a ToolCall wrapper around an already-allocated handle.
-      # Used internally when reading tool calls out of a CompletionResponse.
+      # Used internally when reading tool calls out of a ModelResponse.
       #
       # @api private
       # @param raw_ptr [::FFI::Pointer] caller-owned +BlazenToolCall *+
@@ -365,11 +365,11 @@ module Blazen
       end
     end
 
-    # A pending completion request. Wraps +BlazenCompletionRequest *+.
+    # A pending completion request. Wraps +BlazenModelRequest *+.
     #
     # Like {ChatMessage}, this consumes any +ChatMessage+ / +Tool+ wrappers
     # passed in — the cabi +_push+ calls take ownership.
-    class CompletionRequest
+    class ModelRequest
       include Handle
 
       # @param messages [Array<Blazen::Llm::ChatMessage>] conversation
@@ -384,88 +384,88 @@ module Blazen
       # @param system [String, nil] system prompt override
       def initialize(messages:, tools: [], temperature: nil, max_tokens: nil,
                      top_p: nil, model: nil, response_format_json: nil, system: nil)
-        raw = Blazen::FFI.blazen_completion_request_new
-        set_handle!(raw, Blazen::FFI.method(:blazen_completion_request_free))
+        raw = Blazen::FFI.blazen_model_request_new
+        set_handle!(raw, Blazen::FFI.method(:blazen_model_request_free))
 
         messages.each do |msg|
           raise ArgumentError, "messages entries must be Blazen::Llm::ChatMessage" \
             unless msg.is_a?(ChatMessage)
 
-          Blazen::FFI.blazen_completion_request_messages_push(@ptr, msg.consume!)
+          Blazen::FFI.blazen_model_request_messages_push(@ptr, msg.consume!)
         end
 
         tools.each do |tool|
           raise ArgumentError, "tools entries must be Blazen::Llm::Tool" \
             unless tool.is_a?(Tool)
 
-          Blazen::FFI.blazen_completion_request_tools_push(@ptr, tool.consume!)
+          Blazen::FFI.blazen_model_request_tools_push(@ptr, tool.consume!)
         end
 
-        Blazen::FFI.blazen_completion_request_set_temperature(@ptr, temperature.to_f) \
+        Blazen::FFI.blazen_model_request_set_temperature(@ptr, temperature.to_f) \
           unless temperature.nil?
-        Blazen::FFI.blazen_completion_request_set_max_tokens(@ptr, max_tokens.to_i) \
+        Blazen::FFI.blazen_model_request_set_max_tokens(@ptr, max_tokens.to_i) \
           unless max_tokens.nil?
-        Blazen::FFI.blazen_completion_request_set_top_p(@ptr, top_p.to_f) \
+        Blazen::FFI.blazen_model_request_set_top_p(@ptr, top_p.to_f) \
           unless top_p.nil?
 
         unless model.nil?
           Blazen::FFI.with_cstring(model) do |m|
-            Blazen::FFI.blazen_completion_request_set_model(@ptr, m)
+            Blazen::FFI.blazen_model_request_set_model(@ptr, m)
           end
         end
 
         unless response_format_json.nil?
           Blazen::FFI.with_cstring(response_format_json) do |rf|
-            Blazen::FFI.blazen_completion_request_set_response_format_json(@ptr, rf)
+            Blazen::FFI.blazen_model_request_set_response_format_json(@ptr, rf)
           end
         end
 
         return if system.nil?
 
         Blazen::FFI.with_cstring(system) do |s|
-          Blazen::FFI.blazen_completion_request_set_system(@ptr, s)
+          Blazen::FFI.blazen_model_request_set_system(@ptr, s)
         end
       end
     end
 
-    # The result of a completion call. Wraps +BlazenCompletionResponse *+.
-    class CompletionResponse
+    # The result of a completion call. Wraps +BlazenModelResponse *+.
+    class ModelResponse
       include Handle
 
       # @api private
       # @param raw_ptr [::FFI::Pointer] caller-owned
-      #   +BlazenCompletionResponse *+ produced by the cabi surface
+      #   +BlazenModelResponse *+ produced by the cabi surface
       def initialize(raw_ptr)
-        set_handle!(raw_ptr, Blazen::FFI.method(:blazen_completion_response_free))
+        set_handle!(raw_ptr, Blazen::FFI.method(:blazen_model_response_free))
       end
 
       # @return [String, nil]
       def content
-        Blazen::FFI.consume_cstring(Blazen::FFI.blazen_completion_response_content(@ptr))
+        Blazen::FFI.consume_cstring(Blazen::FFI.blazen_model_response_content(@ptr))
       end
 
       # @return [String, nil]
       def finish_reason
-        Blazen::FFI.consume_cstring(Blazen::FFI.blazen_completion_response_finish_reason(@ptr))
+        Blazen::FFI.consume_cstring(Blazen::FFI.blazen_model_response_finish_reason(@ptr))
       end
 
       # @return [String, nil]
       def model
-        Blazen::FFI.consume_cstring(Blazen::FFI.blazen_completion_response_model(@ptr))
+        Blazen::FFI.consume_cstring(Blazen::FFI.blazen_model_response_model(@ptr))
       end
 
       # @return [Array<Blazen::Llm::ToolCall>] freshly-cloned tool calls
       def tool_calls
-        count = Blazen::FFI.blazen_completion_response_tool_calls_count(@ptr)
+        count = Blazen::FFI.blazen_model_response_tool_calls_count(@ptr)
         Array.new(count) do |i|
-          raw = Blazen::FFI.blazen_completion_response_tool_calls_get(@ptr, i)
+          raw = Blazen::FFI.blazen_model_response_tool_calls_get(@ptr, i)
           ToolCall.from_raw(raw)
         end
       end
 
       # @return [Blazen::Llm::TokenUsage, nil]
       def usage
-        raw = Blazen::FFI.blazen_completion_response_usage(@ptr)
+        raw = Blazen::FFI.blazen_model_response_usage(@ptr)
         return nil if raw.nil? || raw.null?
 
         TokenUsage.from_raw(raw)
@@ -531,61 +531,61 @@ module Blazen
     # ---------------------------------------------------------------------
 
     # A configured chat-completion model bound to a specific provider. Wraps
-    # +BlazenCompletionModel *+.
+    # +BlazenModel *+.
     #
     # Instances are constructed via {Blazen::Providers} factory methods
     # (e.g. {Blazen::Providers.openai}); user code shouldn't call +.new+
     # directly.
-    class CompletionModel
+    class Model
       include Handle
 
       # @api private
-      # @param raw_ptr [::FFI::Pointer] caller-owned +BlazenCompletionModel *+
+      # @param raw_ptr [::FFI::Pointer] caller-owned +BlazenModel *+
       def initialize(raw_ptr)
-        set_handle!(raw_ptr, Blazen::FFI.method(:blazen_completion_model_free))
+        set_handle!(raw_ptr, Blazen::FFI.method(:blazen_model_free))
       end
 
       # @return [String, nil] model identifier reported by the provider
       def model_id
-        Blazen::FFI.consume_cstring(Blazen::FFI.blazen_completion_model_model_id(@ptr))
+        Blazen::FFI.consume_cstring(Blazen::FFI.blazen_model_model_id(@ptr))
       end
 
       # Issues a synchronous completion call, blocking the current thread
       # until the provider returns. {Blazen::FFI.check_error!} translates
       # cabi failures into the matching {Blazen::Error} subclass.
       #
-      # @param request [Blazen::Llm::CompletionRequest] consumed by the call
-      # @return [Blazen::Llm::CompletionResponse]
+      # @param request [Blazen::Llm::ModelRequest] consumed by the call
+      # @return [Blazen::Llm::ModelResponse]
       def complete_blocking(request)
-        raise ArgumentError, "request must be Blazen::Llm::CompletionRequest" \
-          unless request.is_a?(CompletionRequest)
+        raise ArgumentError, "request must be Blazen::Llm::ModelRequest" \
+          unless request.is_a?(ModelRequest)
 
         out_resp = ::FFI::MemoryPointer.new(:pointer)
         out_err = ::FFI::MemoryPointer.new(:pointer)
         req_ptr = request.consume!
-        Blazen::FFI.blazen_completion_model_complete_blocking(@ptr, req_ptr, out_resp, out_err)
+        Blazen::FFI.blazen_model_complete_blocking(@ptr, req_ptr, out_resp, out_err)
         Blazen::FFI.check_error!(out_err)
-        CompletionResponse.new(out_resp.read_pointer)
+        ModelResponse.new(out_resp.read_pointer)
       end
 
-      # Issues an asynchronous completion call, returning a {Blazen::Llm::CompletionResponse}
+      # Issues an asynchronous completion call, returning a {Blazen::Llm::ModelResponse}
       # when the future resolves. Composes with +Fiber.scheduler+ when one
       # is active (see {Blazen::FFI.await_future}).
       #
-      # @param request [Blazen::Llm::CompletionRequest] consumed by the call
-      # @return [Blazen::Llm::CompletionResponse]
+      # @param request [Blazen::Llm::ModelRequest] consumed by the call
+      # @return [Blazen::Llm::ModelResponse]
       def complete(request)
-        raise ArgumentError, "request must be Blazen::Llm::CompletionRequest" \
-          unless request.is_a?(CompletionRequest)
+        raise ArgumentError, "request must be Blazen::Llm::ModelRequest" \
+          unless request.is_a?(ModelRequest)
 
         req_ptr = request.consume!
-        fut = Blazen::FFI.blazen_completion_model_complete(@ptr, req_ptr)
+        fut = Blazen::FFI.blazen_model_complete(@ptr, req_ptr)
         Blazen::FFI.await_future(fut) do |f|
           out_resp = ::FFI::MemoryPointer.new(:pointer)
           out_err = ::FFI::MemoryPointer.new(:pointer)
-          Blazen::FFI.blazen_future_take_completion_response(f, out_resp, out_err)
+          Blazen::FFI.blazen_future_take_model_response(f, out_resp, out_err)
           Blazen::FFI.check_error!(out_err)
-          CompletionResponse.new(out_resp.read_pointer)
+          ModelResponse.new(out_resp.read_pointer)
         end
       end
     end
@@ -730,7 +730,7 @@ module Blazen
       message(role: "tool", content: content, tool_call_id: tool_call_id, name: name)
     end
 
-    # Builds a {Blazen::Llm::CompletionRequest}.
+    # Builds a {Blazen::Llm::ModelRequest}.
     #
     # @param messages [Array<Blazen::Llm::ChatMessage>]
     # @param tools [Array<Blazen::Llm::Tool>]
@@ -740,10 +740,10 @@ module Blazen
     # @param model [String, nil]
     # @param response_format_json [String, nil]
     # @param system [String, nil]
-    # @return [Blazen::Llm::CompletionRequest]
-    def completion_request(messages:, tools: [], temperature: nil, max_tokens: nil,
+    # @return [Blazen::Llm::ModelRequest]
+    def model_request(messages:, tools: [], temperature: nil, max_tokens: nil,
                            top_p: nil, model: nil, response_format_json: nil, system: nil)
-      CompletionRequest.new(
+      ModelRequest.new(
         messages: messages,
         tools: tools,
         temperature: temperature,
@@ -804,11 +804,11 @@ module Blazen
   # Aliases at the top-level Blazen namespace mirror the legacy UniFFI-era
   # constant names so existing user code (and helper modules that haven't
   # been rewritten yet) keep working with +Blazen::ChatMessage+,
-  # +Blazen::CompletionModel+, etc.
+  # +Blazen::Model+, etc.
   ChatMessage        = Llm::ChatMessage        unless const_defined?(:ChatMessage, false)
-  CompletionRequest  = Llm::CompletionRequest  unless const_defined?(:CompletionRequest, false)
-  CompletionResponse = Llm::CompletionResponse unless const_defined?(:CompletionResponse, false)
-  CompletionModel    = Llm::CompletionModel    unless const_defined?(:CompletionModel, false)
+  ModelRequest  = Llm::ModelRequest  unless const_defined?(:ModelRequest, false)
+  ModelResponse = Llm::ModelResponse unless const_defined?(:ModelResponse, false)
+  Model    = Llm::Model    unless const_defined?(:Model, false)
   EmbeddingResponse  = Llm::EmbeddingResponse  unless const_defined?(:EmbeddingResponse, false)
   EmbeddingModel     = Llm::EmbeddingModel     unless const_defined?(:EmbeddingModel, false)
   Media              = Llm::Media              unless const_defined?(:Media, false)

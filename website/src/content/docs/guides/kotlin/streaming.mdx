@@ -36,8 +36,8 @@ On a successful run the sink receives zero or more `onChunk` callbacks followed 
 ```kotlin
 import dev.zorpx.blazen.uniffi.BlazenException
 import dev.zorpx.blazen.uniffi.ChatMessage
-import dev.zorpx.blazen.uniffi.CompletionModel
-import dev.zorpx.blazen.uniffi.CompletionRequest
+import dev.zorpx.blazen.uniffi.Model
+import dev.zorpx.blazen.uniffi.ModelRequest
 import dev.zorpx.blazen.uniffi.CompletionStreamSink
 import dev.zorpx.blazen.uniffi.StreamChunk
 import dev.zorpx.blazen.uniffi.TokenUsage
@@ -46,7 +46,7 @@ import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
 
-fun CompletionModel.streamChunks(request: CompletionRequest): Flow<StreamChunk> = callbackFlow {
+fun Model.streamChunks(request: ModelRequest): Flow<StreamChunk> = callbackFlow {
     val sink = object : CompletionStreamSink {
         override suspend fun onChunk(chunk: StreamChunk) {
             send(chunk)
@@ -66,18 +66,18 @@ fun CompletionModel.streamChunks(request: CompletionRequest): Flow<StreamChunk> 
 Now consumers just `collect` the flow:
 
 ```kotlin
-import dev.zorpx.blazen.uniffi.newOpenaiCompletionModel
+import dev.zorpx.blazen.uniffi.newOpenaiModel
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.runBlocking
 
 fun main() = runBlocking {
-    val model = newOpenaiCompletionModel(
+    val model = newOpenaiModel(
         apiKey = System.getenv("OPENAI_API_KEY") ?: "",
         model = "gpt-4o-mini",
         baseUrl = null,
     )
     model.use {
-        val request = CompletionRequest(
+        val request = ModelRequest(
             messages = listOf(
                 ChatMessage(role = "system", content = "You are a helpful assistant.",
                             mediaParts = emptyList(), toolCalls = emptyList(),
@@ -114,8 +114,8 @@ import kotlinx.coroutines.CompletableDeferred
 
 data class StreamSummary(val finishReason: String, val usage: TokenUsage)
 
-fun CompletionModel.streamChunks(
-    request: CompletionRequest,
+fun Model.streamChunks(
+    request: ModelRequest,
     summary: CompletableDeferred<StreamSummary>,
 ): Flow<StreamChunk> = callbackFlow {
     val sink = object : CompletionStreamSink {
@@ -189,10 +189,10 @@ A streaming step that turns model output into a `StopEvent` typically buffers th
 
 ```kotlin
 class StreamingGreetHandler(
-    private val model: CompletionModel,
+    private val model: Model,
 ) : StepHandler {
     override suspend fun invoke(event: Event): StepOutput {
-        val request = CompletionRequest(
+        val request = ModelRequest(
             messages = listOf(
                 ChatMessage(role = "user", content = "Greet the user.",
                             mediaParts = emptyList(), toolCalls = emptyList(),

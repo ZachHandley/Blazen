@@ -30,9 +30,9 @@ Attach a `Media` to a user message. The base64 conversion uses `java.util.Base64
 
 ```kotlin
 import dev.zorpx.blazen.uniffi.ChatMessage
-import dev.zorpx.blazen.uniffi.CompletionRequest
+import dev.zorpx.blazen.uniffi.ModelRequest
 import dev.zorpx.blazen.uniffi.Media
-import dev.zorpx.blazen.uniffi.newOpenaiCompletionModel
+import dev.zorpx.blazen.uniffi.newOpenaiModel
 import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Base64
@@ -46,13 +46,13 @@ fun main() = runBlocking {
         dataBase64 = Base64.getEncoder().encodeToString(bytes),
     )
 
-    val model = newOpenaiCompletionModel(
+    val model = newOpenaiModel(
         apiKey = System.getenv("OPENAI_API_KEY") ?: "",
         model = "gpt-4o-mini",
         baseUrl = null,
     )
     model.use {
-        val request = CompletionRequest(
+        val request = ModelRequest(
             messages = listOf(
                 ChatMessage(role = "system", content = "You describe images concisely.",
                             mediaParts = emptyList(), toolCalls = emptyList(),
@@ -84,7 +84,7 @@ val audioPart = Media(
     dataBase64 = Base64.getEncoder().encodeToString(audioBytes),
 )
 
-val request = CompletionRequest(
+val request = ModelRequest(
     messages = listOf(
         ChatMessage(role = "user", content = "Transcribe this clip.",
                     mediaParts = listOf(audioPart), toolCalls = emptyList(),
@@ -108,7 +108,7 @@ val docPart = Media(
     mimeType = "application/pdf",
     dataBase64 = Base64.getEncoder().encodeToString(pdfBytes),
 )
-val request = CompletionRequest(
+val request = ModelRequest(
     messages = listOf(
         ChatMessage(role = "user", content = "Summarize this document.",
                     mediaParts = listOf(docPart), toolCalls = emptyList(),
@@ -124,7 +124,7 @@ val request = CompletionRequest(
 A single message can carry as many media parts as the upstream provider allows. They are attached in list order, and providers that lay out media inline (Anthropic, Gemini) preserve that order in the rendered prompt:
 
 ```kotlin
-val request = CompletionRequest(
+val request = ModelRequest(
     messages = listOf(
         ChatMessage(
             role = "user",

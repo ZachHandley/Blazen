@@ -9,7 +9,7 @@ use blazen_llm::types::{
     MessageContent, ProviderId, Role, VideoContent,
 };
 
-use crate::types::completion_request::JsFileContent;
+use crate::types::model_request::JsFileContent;
 
 // ---------------------------------------------------------------------------
 // Role string enum

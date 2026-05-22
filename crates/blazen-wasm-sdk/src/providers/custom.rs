@@ -62,11 +62,11 @@ use blazen_llm::compute::{
 };
 use blazen_llm::error::BlazenError;
 use blazen_llm::providers::custom::{self as core_custom, CustomProvider, CustomProviderHandle};
-use blazen_llm::traits::CompletionModel;
-use blazen_llm::types::{CompletionRequest, CompletionResponse, EmbeddingResponse, StreamChunk};
+use blazen_llm::traits::Model;
+use blazen_llm::types::{ModelRequest, ModelResponse, EmbeddingResponse, StreamChunk};
 
 use super::base::WasmBaseProvider;
-use super::defaults::WasmCompletionProviderDefaults;
+use super::defaults::WasmProviderDefaults;
 use super::openai_compat::WasmOpenAiCompatConfig;
 
 // ---------------------------------------------------------------------------
@@ -230,8 +230,8 @@ impl CustomProvider for WasmCustomProviderAdapter {
 
     async fn complete(
         &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
         if !self.has("complete") {
             return Err(BlazenError::unsupported(
                 "CustomProvider::complete not implemented",
@@ -244,7 +244,7 @@ impl CustomProvider for WasmCustomProviderAdapter {
 
     async fn stream(
         &self,
-        _request: CompletionRequest,
+        _request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         // Streaming through a JS callback is non-trivial — the host JS
@@ -467,13 +467,13 @@ impl WasmCustomProvider {
     /// `base` field.
     fn from_handle(provider_id: String, model_id: String, handle: CustomProviderHandle) -> Self {
         let inner_rc = Rc::new(handle);
-        // `CustomProviderHandle` implements `CompletionModel`. Clone it
+        // `CustomProviderHandle` implements `Model`. Clone it
         // (cheap — internal Arcs) and box it as a trait object so the base
-        // provider can drive `extract()` and any other CompletionModel-only
+        // provider can drive `extract()` and any other Model-only
         // entry points.
-        let completion: Arc<dyn CompletionModel> = Arc::new((*inner_rc).clone());
+        let completion: Arc<dyn Model> = Arc::new((*inner_rc).clone());
         let base = WasmBaseProvider::new_with_inner(
-            WasmCompletionProviderDefaults::default(),
+            WasmProviderDefaults::default(),
             model_id,
             provider_id.clone(),
             completion,
@@ -565,7 +565,7 @@ impl WasmCustomProvider {
     /// Return the embedded [`WasmBaseProvider`] handle.
     ///
     /// Use this to configure provider-wide defaults (system prompt,
-    /// tools, response format, `before_request`/`before_completion`
+    /// tools, response format, `before_request`/`before_model`
     /// hooks) and to invoke [`WasmBaseProvider::extract`].
     #[wasm_bindgen(getter, js_name = "base")]
     #[must_use]

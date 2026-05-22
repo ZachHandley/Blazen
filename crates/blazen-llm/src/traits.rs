@@ -5,21 +5,21 @@
 //! own structs:
 //!
 //! ```rust,ignore
-//! use blazen_llm::{CompletionModel, CompletionRequest, CompletionResponse, BlazenError};
+//! use blazen_llm::{Model, ModelRequest, ModelResponse, BlazenError};
 //!
 //! struct MyCustomProvider { /* ... */ }
 //!
 //! #[async_trait::async_trait]
-//! impl CompletionModel for MyCustomProvider {
+//! impl Model for MyCustomProvider {
 //!     fn model_id(&self) -> &str { "my-model" }
-//!     async fn complete(&self, request: CompletionRequest) -> Result<CompletionResponse, BlazenError> {
+//!     async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
 //!         // Your implementation here
 //!         todo!()
 //!     }
 //!     // stream() must also be implemented
 //!     async fn stream(
 //!         &self,
-//!         request: CompletionRequest,
+//!         request: ModelRequest,
 //!     ) -> Result<
 //!         std::pin::Pin<Box<dyn futures_util::Stream<Item = Result<blazen_llm::StreamChunk, BlazenError>> + Send>>,
 //!         BlazenError,
@@ -30,7 +30,7 @@
 //! }
 //! ```
 //!
-//! [`CompletionModel`] is the central trait that every provider must implement.
+//! [`Model`] is the central trait that every provider must implement.
 //! [`StructuredOutput`] and [`EmbeddingModel`] extend the surface area with
 //! schema-constrained extraction and vector embeddings respectively.
 //! [`ModelRegistry`] allows providers to advertise their available models.
@@ -45,30 +45,29 @@ use serde::{Deserialize, Serialize};
 
 use crate::error::BlazenError;
 use crate::types::{
-    ChatMessage, CompletionRequest, CompletionResponse, EmbeddingResponse, StreamChunk,
-    StructuredResponse, ToolDefinition,
+    ChatMessage, EmbeddingResponse, ModelRequest, ModelResponse, StreamChunk, StructuredResponse,
+    ToolDefinition,
 };
 
 // ---------------------------------------------------------------------------
-// CompletionModel
+// Model
 // ---------------------------------------------------------------------------
 
 /// A chat completion model capable of generating text and invoking tools.
 ///
 /// Implementors must handle both one-shot and streaming completions.
 #[async_trait]
-pub trait CompletionModel: Send + Sync {
+pub trait Model: Send + Sync {
     /// The identifier of the default model used by this provider.
     fn model_id(&self) -> &str;
 
     /// Perform a non-streaming chat completion.
-    async fn complete(&self, request: CompletionRequest)
-    -> Result<CompletionResponse, BlazenError>;
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError>;
 
     /// Perform a streaming chat completion, returning an async stream of chunks.
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>;
 
     /// Optional configuration metadata for this provider.
@@ -114,12 +113,12 @@ pub trait CompletionModel: Send + Sync {
 
 /// Extract structured data from a model by providing a JSON Schema.
 ///
-/// This trait has a blanket implementation for every [`CompletionModel`], so
+/// This trait has a blanket implementation for every [`Model`], so
 /// providers do not need to implement it explicitly. It works by injecting the
 /// schema derived from `T` via `schemars` into the `response_format` field of
 /// the completion request.
 #[async_trait]
-pub trait StructuredOutput: CompletionModel {
+pub trait StructuredOutput: Model {
     /// Extract a value of type `T` from the model's response.
     ///
     /// The conversation in `messages` is sent to the model with a JSON Schema
@@ -131,7 +130,7 @@ pub trait StructuredOutput: CompletionModel {
         let schema = schemars::schema_for!(T);
         let schema_json = serde_json::to_value(&schema)?;
 
-        let request = CompletionRequest {
+        let request = ModelRequest {
             messages,
             tools: vec![],
             temperature: Some(0.0),
@@ -161,9 +160,9 @@ pub trait StructuredOutput: CompletionModel {
     }
 }
 
-/// Blanket implementation: every [`CompletionModel`] automatically supports
+/// Blanket implementation: every [`Model`] automatically supports
 /// structured output extraction.
-impl<M: CompletionModel> StructuredOutput for M {}
+impl<M: Model> StructuredOutput for M {}
 
 // ---------------------------------------------------------------------------
 // EmbeddingModel
@@ -420,7 +419,7 @@ pub trait ProviderInfo {
 /// - `load` and `unload` must both be **idempotent**. Calling `load` on
 ///   an already-loaded model is a no-op success; calling `unload` on an
 ///   already-unloaded model is also a no-op success.
-/// - Inference methods (on [`CompletionModel`], [`EmbeddingModel`], etc.)
+/// - Inference methods (on [`Model`], [`EmbeddingModel`], etc.)
 ///   should auto-load on first call to preserve today's lazy-init
 ///   behavior -- this trait only adds explicit control on top.
 /// - After `unload` returns, the provider may be re-loaded; the struct

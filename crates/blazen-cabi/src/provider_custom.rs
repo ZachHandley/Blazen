@@ -53,8 +53,8 @@
 //!   without an extra clone. After the call, the caller must NOT free the
 //!   request handle — ownership transferred.
 //! - [`blazen_custom_provider_as_base_provider`] clones the inner
-//!   `CustomProviderHandle` (which implements `CompletionModel`) into a brand-
-//!   new `BaseProvider` whose inner `CompletionModel` is an
+//!   `CustomProviderHandle` (which implements `Model`) into a brand-
+//!   new `BaseProvider` whose inner `Model` is an
 //!   `Arc<CustomProviderHandle>`. The returned `BlazenBaseProvider` is
 //!   independent of the source handle's lifetime and must be freed with
 //!   [`crate::provider_base::blazen_base_provider_free`].
@@ -89,16 +89,16 @@ use blazen_llm::providers::custom::{
     self as inner_custom, CustomProvider as InnerCustomProviderTrait,
     CustomProviderHandle as InnerCustomProviderHandle,
 };
-use blazen_llm::traits::CompletionModel;
+use blazen_llm::traits::Model;
 use blazen_llm::types::{
-    CompletionRequest as LlmCompletionRequest, CompletionResponse as LlmCompletionResponse,
-    EmbeddingResponse as LlmEmbeddingResponse, StreamChunk as LlmStreamChunk,
+    EmbeddingResponse as LlmEmbeddingResponse, ModelRequest as LlmModelRequest,
+    ModelResponse as LlmModelResponse, StreamChunk as LlmStreamChunk,
 };
 
 use blazen_uniffi::errors::BlazenError as UniffiError;
 use blazen_uniffi::llm::{
-    CompletionRequest as UniffiCompletionRequest, CompletionResponse as UniffiCompletionResponse,
-    EmbeddingResponse as UniffiEmbeddingResponse,
+    EmbeddingResponse as UniffiEmbeddingResponse, ModelRequest as UniffiModelRequest,
+    ModelResponse as UniffiModelResponse,
 };
 use blazen_uniffi::streaming::StreamChunk as UniffiStreamChunk;
 
@@ -113,9 +113,7 @@ use crate::compute_results::{
 };
 use crate::error::BlazenError;
 use crate::future::BlazenFuture;
-use crate::llm_records::{
-    BlazenCompletionRequest, BlazenCompletionResponse, BlazenEmbeddingResponse,
-};
+use crate::llm_records::{BlazenEmbeddingResponse, BlazenModelRequest, BlazenModelResponse};
 use crate::provider_api_protocol::BlazenOpenAiCompatConfig;
 use crate::provider_base::BlazenBaseProvider;
 use crate::streaming_records::BlazenStreamChunk;
@@ -289,8 +287,8 @@ pub struct BlazenCustomProviderVTable {
     /// Non-streaming chat completion.
     pub complete: extern "C" fn(
         user_data: *mut c_void,
-        request: *mut BlazenCompletionRequest,
-        out_response: *mut *mut BlazenCompletionResponse,
+        request: *mut BlazenModelRequest,
+        out_response: *mut *mut BlazenModelResponse,
         out_err: *mut *mut BlazenError,
     ) -> i32,
 
@@ -304,7 +302,7 @@ pub struct BlazenCustomProviderVTable {
     /// fresh `*mut BlazenError` into `*out_err`).
     pub stream: extern "C" fn(
         user_data: *mut c_void,
-        request: *mut BlazenCompletionRequest,
+        request: *mut BlazenModelRequest,
         pusher: *mut BlazenStreamPusher,
         out_err: *mut *mut BlazenError,
     ) -> i32,
@@ -737,14 +735,11 @@ impl InnerCustomProviderTrait for BlazenCabiCustomProviderAdapter {
         &self.model_id_cached
     }
 
-    async fn complete(
-        &self,
-        request: LlmCompletionRequest,
-    ) -> Result<LlmCompletionResponse, LlmError> {
+    async fn complete(&self, request: LlmModelRequest) -> Result<LlmModelResponse, LlmError> {
         // Convert from the blazen_llm typed request into the cabi wire shape
-        // (which the foreign side already understands via `blazen_completion_request_*`).
-        let uniffi_req: UniffiCompletionRequest = llm_to_uniffi_request(request);
-        let req_handle = BlazenCompletionRequest::from(uniffi_req).into_ptr();
+        // (which the foreign side already understands via `blazen_model_request_*`).
+        let uniffi_req: UniffiModelRequest = llm_to_uniffi_request(request);
+        let req_handle = BlazenModelRequest::from(uniffi_req).into_ptr();
 
         let user_data_addr = self.vtable.user_data as usize;
         let complete_fn = self.vtable.complete;
@@ -752,10 +747,10 @@ impl InnerCustomProviderTrait for BlazenCabiCustomProviderAdapter {
 
         // SAFETY: foreign side guarantees thread-safe access; the request
         // pointer was just minted from `Box::into_raw`.
-        let join = tokio::task::spawn_blocking(move || -> Result<LlmCompletionResponse, UniffiError> {
+        let join = tokio::task::spawn_blocking(move || -> Result<LlmModelResponse, UniffiError> {
             let user_data = user_data_addr as *mut c_void;
-            let req_ptr = req_addr as *mut BlazenCompletionRequest;
-            let mut out_response: *mut BlazenCompletionResponse = std::ptr::null_mut();
+            let req_ptr = req_addr as *mut BlazenModelRequest;
+            let mut out_response: *mut BlazenModelResponse = std::ptr::null_mut();
             let mut out_err: *mut BlazenError = std::ptr::null_mut();
 
             let status = complete_fn(user_data, req_ptr, &raw mut out_response, &raw mut out_err);
@@ -792,12 +787,12 @@ impl InnerCustomProviderTrait for BlazenCabiCustomProviderAdapter {
 
     async fn stream(
         &self,
-        request: LlmCompletionRequest,
+        request: LlmModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<LlmStreamChunk, LlmError>> + Send>>, LlmError>
     {
         // Build cabi request handle.
-        let uniffi_req: UniffiCompletionRequest = llm_to_uniffi_request(request);
-        let req_handle = BlazenCompletionRequest::from(uniffi_req).into_ptr();
+        let uniffi_req: UniffiModelRequest = llm_to_uniffi_request(request);
+        let req_handle = BlazenModelRequest::from(uniffi_req).into_ptr();
 
         // Build the pusher: the channel's RX side becomes the returned
         // Stream; the TX side is moved into the BlazenStreamPusher handle
@@ -820,7 +815,7 @@ impl InnerCustomProviderTrait for BlazenCabiCustomProviderAdapter {
         // and pusher pointers were just minted from `Box::into_raw`.
         let start_status = tokio::task::spawn_blocking(move || -> Result<(), UniffiError> {
             let user_data = user_data_addr as *mut c_void;
-            let req_ptr = req_addr as *mut BlazenCompletionRequest;
+            let req_ptr = req_addr as *mut BlazenModelRequest;
             let pusher = pusher_addr as *mut BlazenStreamPusher;
             let mut out_err: *mut BlazenError = std::ptr::null_mut();
 
@@ -1207,14 +1202,14 @@ impl InnerCustomProviderTrait for BlazenCabiCustomProviderAdapter {
 // blazen_llm <-> blazen_uniffi request/response/embedding conversions
 // ---------------------------------------------------------------------------
 
-/// Convert a `blazen_llm::types::CompletionRequest` (core trait input) into
-/// the `blazen_uniffi::llm::CompletionRequest` shape consumed by the cabi
+/// Convert a `blazen_llm::types::ModelRequest` (core trait input) into
+/// the `blazen_uniffi::llm::ModelRequest` shape consumed by the cabi
 /// handle. Loss is bounded to fields that have no first-class slot in the
 /// uniffi wire format (`stop`, `frequency_penalty`, `presence_penalty`,
 /// `seed`, modality / image / audio configs, etc.) — the foreign side that
 /// implements `complete` doesn't see them anyway; if it needs them it can
 /// add them through the framework's existing extensibility.
-fn llm_to_uniffi_request(req: LlmCompletionRequest) -> UniffiCompletionRequest {
+fn llm_to_uniffi_request(req: LlmModelRequest) -> UniffiModelRequest {
     let response_format_json = req.response_format.map(|v| v.to_string());
 
     let messages = req
@@ -1233,7 +1228,7 @@ fn llm_to_uniffi_request(req: LlmCompletionRequest) -> UniffiCompletionRequest {
         })
         .collect();
 
-    UniffiCompletionRequest {
+    UniffiModelRequest {
         messages,
         tools,
         temperature: req.temperature.map(f64::from),
@@ -1336,7 +1331,7 @@ fn image_content_to_media(img: blazen_llm::types::ImageContent) -> blazen_uniffi
 }
 
 /// Convert the uniffi-flavoured response back into the core llm shape.
-fn uniffi_to_llm_response(resp: UniffiCompletionResponse) -> LlmCompletionResponse {
+fn uniffi_to_llm_response(resp: UniffiModelResponse) -> LlmModelResponse {
     let finish_reason = if resp.finish_reason.is_empty() {
         None
     } else {
@@ -1368,7 +1363,7 @@ fn uniffi_to_llm_response(resp: UniffiCompletionResponse) -> LlmCompletionRespon
         })
         .collect();
 
-    LlmCompletionResponse {
+    LlmModelResponse {
         content: if resp.content.is_empty() {
             None
         } else {
@@ -1577,9 +1572,7 @@ pub unsafe extern "C" fn blazen_custom_provider_model_id(
     }
     // SAFETY: caller guarantees live handle.
     let h = unsafe { &*p };
-    alloc_cstring(<InnerCustomProviderHandle as CompletionModel>::model_id(
-        &h.0,
-    ))
+    alloc_cstring(<InnerCustomProviderHandle as Model>::model_id(&h.0))
 }
 
 /// Wraps the underlying [`InnerCustomProviderHandle`] inside a brand-new
@@ -1590,7 +1583,7 @@ pub unsafe extern "C" fn blazen_custom_provider_model_id(
 /// prompts, default tools, defaults bundles) without reaching into the
 /// private `base` field on `CustomProviderHandle`. The returned
 /// `BaseProvider` holds an `Arc<CustomProviderHandle>` as its inner
-/// `CompletionModel`, so `complete()` / `stream()` on the result delegate
+/// `Model`, so `complete()` / `stream()` on the result delegate
 /// back through the `CustomProviderHandle` (including any vtable dispatch).
 ///
 /// Returns null if `p` is null.
@@ -1606,7 +1599,7 @@ pub unsafe extern "C" fn blazen_custom_provider_as_base_provider(
         return std::ptr::null_mut();
     }
     // SAFETY: caller guarantees live handle.
-    let inner: Arc<dyn CompletionModel> = unsafe { (*p).0.clone() };
+    let inner: Arc<dyn Model> = unsafe { (*p).0.clone() };
     let bp = InnerBaseProvider::new(inner);
     BlazenBaseProvider::from(bp).into_ptr()
 }

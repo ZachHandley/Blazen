@@ -1,13 +1,13 @@
 //! Batch completion execution with bounded concurrency.
 //!
-//! Provides [`complete_batch`] for running multiple [`CompletionRequest`]s
-//! through a [`CompletionModel`] with an optional concurrency limit.
+//! Provides [`complete_batch`] for running multiple [`ModelRequest`]s
+//! through a [`Model`] with an optional concurrency limit.
 
 use std::sync::Arc;
 
 use crate::error::BlazenError;
-use crate::traits::CompletionModel;
-use crate::types::{CompletionRequest, CompletionResponse, TokenUsage};
+use crate::traits::Model;
+use crate::types::{ModelRequest, ModelResponse, TokenUsage};
 
 /// Configuration for a batch completion run.
 pub struct BatchConfig {
@@ -40,7 +40,7 @@ impl Default for BatchConfig {
 pub struct BatchResult {
     /// One result per input request, in the same order. Individual requests
     /// may fail independently.
-    pub responses: Vec<Result<CompletionResponse, BlazenError>>,
+    pub responses: Vec<Result<ModelResponse, BlazenError>>,
     /// Aggregated token usage across all successful responses.
     pub total_usage: Option<TokenUsage>,
     /// Aggregated cost across all successful responses.
@@ -61,13 +61,13 @@ pub struct BatchResult {
 /// # Example
 ///
 /// ```rust,ignore
-/// use blazen_llm::{CompletionRequest, ChatMessage};
+/// use blazen_llm::{ModelRequest, ChatMessage};
 /// use blazen_llm::batch::{complete_batch, BatchConfig};
 ///
 /// let requests = vec![
-///     CompletionRequest::new(vec![ChatMessage::user("Question 1")]),
-///     CompletionRequest::new(vec![ChatMessage::user("Question 2")]),
-///     CompletionRequest::new(vec![ChatMessage::user("Question 3")]),
+///     ModelRequest::new(vec![ChatMessage::user("Question 1")]),
+///     ModelRequest::new(vec![ChatMessage::user("Question 2")]),
+///     ModelRequest::new(vec![ChatMessage::user("Question 3")]),
 /// ];
 ///
 /// let result = complete_batch(&model, requests, BatchConfig::new(2)).await;
@@ -79,8 +79,8 @@ pub struct BatchResult {
 /// }
 /// ```
 pub async fn complete_batch(
-    model: &dyn CompletionModel,
-    requests: Vec<CompletionRequest>,
+    model: &dyn Model,
+    requests: Vec<ModelRequest>,
     config: BatchConfig,
 ) -> BatchResult {
     if requests.is_empty() {

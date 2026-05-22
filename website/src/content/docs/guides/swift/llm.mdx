@@ -8,7 +8,7 @@ order: 6
 
 # LLM
 
-`CompletionModel` is the chat-completion handle and `EmbeddingModel` is the embedding handle. Both are constructed via the `Providers` factory namespace and accept the same idiomatic call shapes across every provider Blazen supports.
+`Model` is the chat-completion handle and `EmbeddingModel` is the embedding handle. Both are constructed via the `Providers` factory namespace and accept the same idiomatic call shapes across every provider Blazen supports.
 
 ## Picking a provider
 
@@ -30,10 +30,10 @@ The full list covers OpenAI, Anthropic, Gemini, Azure OpenAI, AWS Bedrock, OpenR
 
 ## Building a request
 
-`CompletionRequest` carries the message list plus the usual knobs. The Swift wrapper ships an ergonomic init with sensible defaults for the rarely-used fields:
+`ModelRequest` carries the message list plus the usual knobs. The Swift wrapper ships an ergonomic init with sensible defaults for the rarely-used fields:
 
 ```swift
-let request = CompletionRequest(
+let request = ModelRequest(
     messages: [
         .system("You are a helpful assistant."),
         .user("What is the capital of France?"),
@@ -61,7 +61,7 @@ The constructors zero-fill every field you don't pass (`mediaParts`, `toolCalls`
 
 ## Non-streaming completions
 
-`CompletionModel.complete(_:)` returns a `CompletionResponse`:
+`Model.complete(_:)` returns a `ModelResponse`:
 
 ```swift
 let response = try await openai.complete(request)
@@ -74,7 +74,7 @@ The response carries the assistant `ChatMessage`, token usage, an estimated USD 
 
 ## Streaming completions
 
-`CompletionModel.completeStream(_:)` returns an `AsyncThrowingStream<StreamEvent, Error>`. See the [Streaming guide](/guides/swift/streaming/) for the full pattern; the short version:
+`Model.completeStream(_:)` returns an `AsyncThrowingStream<StreamEvent, Error>`. See the [Streaming guide](/guides/swift/streaming/) for the full pattern; the short version:
 
 ```swift
 for try await event in openai.completeStream(request) {
@@ -104,7 +104,7 @@ let weatherTool = Tool(
 
 var messages: [ChatMessage] = [.user("Weather in Paris?")]
 let first = try await openai.complete(
-    CompletionRequest(messages: messages, tools: [weatherTool])
+    ModelRequest(messages: messages, tools: [weatherTool])
 )
 messages.append(first.message)
 
@@ -113,7 +113,7 @@ for call in first.message.toolCalls {
     messages.append(.tool(result, toolCallId: call.id))
 }
 
-let second = try await openai.complete(CompletionRequest(messages: messages))
+let second = try await openai.complete(ModelRequest(messages: messages))
 print(second.message.content)
 ```
 
@@ -144,7 +144,7 @@ Both `embedder.id` and `embedder.dimension` are exposed as Swift properties — 
 
 ```swift
 let requests = (1...10).map { i in
-    CompletionRequest(messages: [.user("Tell me fact #\(i)")])
+    ModelRequest(messages: [.user("Tell me fact #\(i)")])
 }
 
 let result = try await completeBatch(

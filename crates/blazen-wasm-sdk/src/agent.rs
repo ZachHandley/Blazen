@@ -16,7 +16,7 @@ use blazen_llm::types::ToolDefinition;
 
 use crate::agent_types::WasmLlmPayload;
 use crate::chat_message::js_messages_to_vec;
-use crate::completion_model::WasmCompletionModel;
+use crate::model::WasmModel;
 
 // ---------------------------------------------------------------------------
 // SendFuture wrapper (same as in http_fetch.rs)
@@ -260,7 +260,7 @@ pub fn blazen_error_to_jsvalue(err: blazen_llm::BlazenError) -> JsValue {
 /// ```
 #[wasm_bindgen(js_name = "runAgent")]
 pub fn run_agent(
-    model: &WasmCompletionModel,
+    model: &WasmModel,
     messages: JsValue,
     tools: JsValue,
     options: JsValue,

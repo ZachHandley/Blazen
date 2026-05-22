@@ -4,7 +4,7 @@ import UniFFIBlazen
 /// A configured LLM agent that drives the standard tool-execution loop
 /// (completion → execute tool calls → feed results back → repeat).
 ///
-/// Construct with a `CompletionModel`, optional system prompt, the
+/// Construct with a `Model`, optional system prompt, the
 /// `Tool` definitions the model may call, a `ToolHandler` to execute
 /// those calls, and a `maxIterations` budget. Then invoke
 /// `run(userInput:)` to drive the loop to completion.

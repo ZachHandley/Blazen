@@ -18,7 +18,7 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 tokio = { version = "1", default-features = false, features = ["sync", "macros"] }
 
-# For TracingCompletionModel + wasi OTLP/Langfuse `Arc<dyn HttpClient>` plumbing.
+# For TracingModel + wasi OTLP/Langfuse `Arc<dyn HttpClient>` plumbing.
 blazen-llm = { workspace = true, optional = true }
 blazen-events = { workspace = true }
 async-trait = { workspace = true }

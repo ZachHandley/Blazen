@@ -1,7 +1,7 @@
 import Foundation
 import UniFFIBlazen
 
-/// Factory namespace for `CompletionModel` and `EmbeddingModel` instances
+/// Factory namespace for `Model` and `EmbeddingModel` instances
 /// across every Blazen-supported provider.
 ///
 /// Each function returns a fully-constructed model handle ready for
@@ -19,8 +19,8 @@ public enum Providers {
         apiKey: String,
         model: String? = nil,
         baseURL: String? = nil
-    ) throws -> CompletionModel {
-        try newOpenaiCompletionModel(apiKey: apiKey, model: model, baseUrl: baseURL)
+    ) throws -> Model {
+        try newOpenaiModel(apiKey: apiKey, model: model, baseUrl: baseURL)
     }
 
     /// Build an Anthropic Messages-API chat-completion model.
@@ -28,8 +28,8 @@ public enum Providers {
         apiKey: String,
         model: String? = nil,
         baseURL: String? = nil
-    ) throws -> CompletionModel {
-        try newAnthropicCompletionModel(apiKey: apiKey, model: model, baseUrl: baseURL)
+    ) throws -> Model {
+        try newAnthropicModel(apiKey: apiKey, model: model, baseUrl: baseURL)
     }
 
     /// Build a Google Gemini chat-completion model.
@@ -37,8 +37,8 @@ public enum Providers {
         apiKey: String,
         model: String? = nil,
         baseURL: String? = nil
-    ) throws -> CompletionModel {
-        try newGeminiCompletionModel(apiKey: apiKey, model: model, baseUrl: baseURL)
+    ) throws -> Model {
+        try newGeminiModel(apiKey: apiKey, model: model, baseUrl: baseURL)
     }
 
     /// Build an Azure OpenAI chat-completion model.
@@ -50,8 +50,8 @@ public enum Providers {
         resourceName: String,
         deploymentName: String,
         apiVersion: String? = nil
-    ) throws -> CompletionModel {
-        try newAzureCompletionModel(
+    ) throws -> Model {
+        try newAzureModel(
             apiKey: apiKey,
             resourceName: resourceName,
             deploymentName: deploymentName,
@@ -67,8 +67,8 @@ public enum Providers {
         region: String,
         model: String? = nil,
         baseURL: String? = nil
-    ) throws -> CompletionModel {
-        try newBedrockCompletionModel(
+    ) throws -> Model {
+        try newBedrockModel(
             apiKey: apiKey,
             region: region,
             model: model,
@@ -81,8 +81,8 @@ public enum Providers {
         apiKey: String,
         model: String? = nil,
         baseURL: String? = nil
-    ) throws -> CompletionModel {
-        try newOpenrouterCompletionModel(apiKey: apiKey, model: model, baseUrl: baseURL)
+    ) throws -> Model {
+        try newOpenrouterModel(apiKey: apiKey, model: model, baseUrl: baseURL)
     }
 
     /// Build a Groq chat-completion model.
@@ -90,8 +90,8 @@ public enum Providers {
         apiKey: String,
         model: String? = nil,
         baseURL: String? = nil
-    ) throws -> CompletionModel {
-        try newGroqCompletionModel(apiKey: apiKey, model: model, baseUrl: baseURL)
+    ) throws -> Model {
+        try newGroqModel(apiKey: apiKey, model: model, baseUrl: baseURL)
     }
 
     /// Build a Together AI chat-completion model.
@@ -99,8 +99,8 @@ public enum Providers {
         apiKey: String,
         model: String? = nil,
         baseURL: String? = nil
-    ) throws -> CompletionModel {
-        try newTogetherCompletionModel(apiKey: apiKey, model: model, baseUrl: baseURL)
+    ) throws -> Model {
+        try newTogetherModel(apiKey: apiKey, model: model, baseUrl: baseURL)
     }
 
     /// Build a Mistral chat-completion model.
@@ -108,8 +108,8 @@ public enum Providers {
         apiKey: String,
         model: String? = nil,
         baseURL: String? = nil
-    ) throws -> CompletionModel {
-        try newMistralCompletionModel(apiKey: apiKey, model: model, baseUrl: baseURL)
+    ) throws -> Model {
+        try newMistralModel(apiKey: apiKey, model: model, baseUrl: baseURL)
     }
 
     /// Build a DeepSeek chat-completion model.
@@ -117,8 +117,8 @@ public enum Providers {
         apiKey: String,
         model: String? = nil,
         baseURL: String? = nil
-    ) throws -> CompletionModel {
-        try newDeepseekCompletionModel(apiKey: apiKey, model: model, baseUrl: baseURL)
+    ) throws -> Model {
+        try newDeepseekModel(apiKey: apiKey, model: model, baseUrl: baseURL)
     }
 
     /// Build a Fireworks AI chat-completion model.
@@ -126,8 +126,8 @@ public enum Providers {
         apiKey: String,
         model: String? = nil,
         baseURL: String? = nil
-    ) throws -> CompletionModel {
-        try newFireworksCompletionModel(apiKey: apiKey, model: model, baseUrl: baseURL)
+    ) throws -> Model {
+        try newFireworksModel(apiKey: apiKey, model: model, baseUrl: baseURL)
     }
 
     /// Build a Perplexity chat-completion model.
@@ -135,8 +135,8 @@ public enum Providers {
         apiKey: String,
         model: String? = nil,
         baseURL: String? = nil
-    ) throws -> CompletionModel {
-        try newPerplexityCompletionModel(apiKey: apiKey, model: model, baseUrl: baseURL)
+    ) throws -> Model {
+        try newPerplexityModel(apiKey: apiKey, model: model, baseUrl: baseURL)
     }
 
     /// Build an xAI (Grok) chat-completion model.
@@ -144,8 +144,8 @@ public enum Providers {
         apiKey: String,
         model: String? = nil,
         baseURL: String? = nil
-    ) throws -> CompletionModel {
-        try newXaiCompletionModel(apiKey: apiKey, model: model, baseUrl: baseURL)
+    ) throws -> Model {
+        try newXaiModel(apiKey: apiKey, model: model, baseUrl: baseURL)
     }
 
     /// Build a Cohere chat-completion model.
@@ -153,8 +153,8 @@ public enum Providers {
         apiKey: String,
         model: String? = nil,
         baseURL: String? = nil
-    ) throws -> CompletionModel {
-        try newCohereCompletionModel(apiKey: apiKey, model: model, baseUrl: baseURL)
+    ) throws -> Model {
+        try newCohereModel(apiKey: apiKey, model: model, baseUrl: baseURL)
     }
 
     /// Build a fal.ai chat-completion model. `endpoint` selects the
@@ -171,8 +171,8 @@ public enum Providers {
         endpoint: String? = nil,
         enterprise: Bool = false,
         autoRouteModality: Bool = false
-    ) throws -> CompletionModel {
-        try newFalCompletionModel(
+    ) throws -> Model {
+        try newFalModel(
             apiKey: apiKey,
             model: model,
             baseUrl: baseURL,
@@ -191,8 +191,8 @@ public enum Providers {
         baseURL: String,
         apiKey: String,
         model: String
-    ) throws -> CompletionModel {
-        try newOpenaiCompatCompletionModel(
+    ) throws -> Model {
+        try newOpenaiCompatModel(
             providerName: providerName,
             baseUrl: baseURL,
             apiKey: apiKey,
@@ -234,8 +234,8 @@ public enum Providers {
         quantization: String? = nil,
         contextLength: UInt32? = nil,
         vision: Bool = false
-    ) throws -> CompletionModel {
-        try newMistralrsCompletionModel(
+    ) throws -> Model {
+        try newMistralrsModel(
             modelId: modelId,
             device: device,
             quantization: quantization,
@@ -252,8 +252,8 @@ public enum Providers {
         quantization: String? = nil,
         contextLength: UInt32? = nil,
         nGpuLayers: UInt32? = nil
-    ) throws -> CompletionModel {
-        try newLlamacppCompletionModel(
+    ) throws -> Model {
+        try newLlamacppModel(
             modelPath: modelPath,
             device: device,
             quantization: quantization,
@@ -270,8 +270,8 @@ public enum Providers {
         quantization: String? = nil,
         revision: String? = nil,
         contextLength: UInt32? = nil
-    ) throws -> CompletionModel {
-        try newCandleCompletionModel(
+    ) throws -> Model {
+        try newCandleModel(
             modelId: modelId,
             device: device,
             quantization: quantization,

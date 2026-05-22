@@ -26,8 +26,8 @@ extern crate napi_build;
 /// Types that are hand-maintained and should NOT be generated.
 const EXCLUDED: &[&str] = &[
     "ChatMessage",
-    "CompletionRequest",
-    "CompletionResponse",
+    "ModelRequest",
+    "ModelResponse",
     "StreamChunk",
     "FinishReason",
     "Artifact",

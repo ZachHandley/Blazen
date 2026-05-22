@@ -1,5 +1,5 @@
-//! [`BaseProvider`] — wraps any [`CompletionModel`] with a
-//! [`CompletionProviderDefaults`] that is applied to every completion request
+//! [`BaseProvider`] — wraps any [`Model`] with a
+//! [`ProviderDefaults`] that is applied to every completion request
 //! before delegating to the inner model.
 //!
 //! Used as the foundation for [`crate::providers::custom::CustomProvider`]
@@ -16,18 +16,17 @@ use futures_util::Stream;
 use crate::error::BlazenError;
 use crate::http::HttpClient;
 use crate::providers::defaults::{
-    BaseProviderDefaults, BeforeCompletionRequestHook, BeforeRequestHook,
-    CompletionProviderDefaults,
+    BaseProviderDefaults, BeforeModelRequestHook, BeforeRequestHook, ProviderDefaults,
 };
 use crate::retry::RetryConfig;
-use crate::traits::CompletionModel;
-use crate::types::{CompletionRequest, CompletionResponse, StreamChunk, ToolDefinition};
+use crate::traits::Model;
+use crate::types::{ModelRequest, ModelResponse, StreamChunk, ToolDefinition};
 
-/// Wraps any `CompletionModel` with instance-level defaults that are
+/// Wraps any `Model` with instance-level defaults that are
 /// applied to every `complete()` / `stream()` call before delegation.
 pub struct BaseProvider {
-    inner: Arc<dyn CompletionModel>,
-    defaults: CompletionProviderDefaults,
+    inner: Arc<dyn Model>,
+    defaults: ProviderDefaults,
 }
 
 impl std::fmt::Debug for BaseProvider {
@@ -52,25 +51,22 @@ impl BaseProvider {
     /// Construct with no defaults — equivalent to using `inner` directly,
     /// but lets the user attach defaults via builder methods.
     #[must_use]
-    pub fn new(inner: Arc<dyn CompletionModel>) -> Self {
+    pub fn new(inner: Arc<dyn Model>) -> Self {
         Self {
             inner,
-            defaults: CompletionProviderDefaults::default(),
+            defaults: ProviderDefaults::default(),
         }
     }
 
     /// Construct with explicit defaults.
     #[must_use]
-    pub fn with_defaults(
-        inner: Arc<dyn CompletionModel>,
-        defaults: CompletionProviderDefaults,
-    ) -> Self {
+    pub fn with_defaults(inner: Arc<dyn Model>, defaults: ProviderDefaults) -> Self {
         Self { inner, defaults }
     }
 
-    /// Replace the entire `CompletionProviderDefaults`.
+    /// Replace the entire `ProviderDefaults`.
     #[must_use]
-    pub fn set_defaults(mut self, defaults: CompletionProviderDefaults) -> Self {
+    pub fn set_defaults(mut self, defaults: ProviderDefaults) -> Self {
         self.defaults = defaults;
         self
     }
@@ -107,26 +103,26 @@ impl BaseProvider {
     }
 
     #[must_use]
-    pub fn with_before_completion(mut self, hook: BeforeCompletionRequestHook) -> Self {
-        self.defaults.before_completion = Some(hook);
+    pub fn with_before_model(mut self, hook: BeforeModelRequestHook) -> Self {
+        self.defaults.before_model = Some(hook);
         self
     }
 
     /// Inspect the configured defaults.
     #[must_use]
-    pub fn defaults(&self) -> &CompletionProviderDefaults {
+    pub fn defaults(&self) -> &ProviderDefaults {
         &self.defaults
     }
 
     /// Inspect the inner model.
     #[must_use]
-    pub fn inner(&self) -> &Arc<dyn CompletionModel> {
+    pub fn inner(&self) -> &Arc<dyn Model> {
         &self.inner
     }
 }
 
 #[async_trait]
-impl CompletionModel for BaseProvider {
+impl Model for BaseProvider {
     fn model_id(&self) -> &str {
         self.inner.model_id()
     }
@@ -139,17 +135,14 @@ impl CompletionModel for BaseProvider {
         self.inner.http_client()
     }
 
-    async fn complete(
-        &self,
-        mut request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, mut request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         self.defaults.apply(&mut request).await?;
         self.inner.complete(request).await
     }
 
     async fn stream(
         &self,
-        mut request: CompletionRequest,
+        mut request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         self.defaults.apply(&mut request).await?;
@@ -162,9 +155,9 @@ mod tests {
     use super::*;
     use crate::types::{ChatMessage, MessageContent, Role};
 
-    /// Build a minimal `CompletionResponse` for tests (the type has no `Default` impl).
-    fn empty_response(model: &str) -> CompletionResponse {
-        CompletionResponse {
+    /// Build a minimal `ModelResponse` for tests (the type has no `Default` impl).
+    fn empty_response(model: &str) -> ModelResponse {
+        ModelResponse {
             content: None,
             tool_calls: Vec::new(),
             reasoning: None,
@@ -186,15 +179,12 @@ mod tests {
     struct EchoModel;
 
     #[async_trait]
-    impl CompletionModel for EchoModel {
+    impl Model for EchoModel {
         fn model_id(&self) -> &'static str {
             "echo"
         }
 
-        async fn complete(
-            &self,
-            request: CompletionRequest,
-        ) -> Result<CompletionResponse, BlazenError> {
+        async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
             let last = request
                 .messages
                 .last()
@@ -210,7 +200,7 @@ mod tests {
 
         async fn stream(
             &self,
-            _request: CompletionRequest,
+            _request: ModelRequest,
         ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
         {
             Err(BlazenError::unsupported("EchoModel does not stream"))
@@ -220,7 +210,7 @@ mod tests {
     #[tokio::test]
     async fn base_provider_prepends_system_prompt() {
         let bp = BaseProvider::new(Arc::new(EchoModel)).with_system_prompt("be terse");
-        let req = CompletionRequest::new(vec![ChatMessage::user("hi")]);
+        let req = ModelRequest::new(vec![ChatMessage::user("hi")]);
         // EchoModel returns the LAST message; since defaults insert the system
         // message at the front, the last message remains "hi".
         let resp = bp.complete(req).await.unwrap();
@@ -231,23 +221,20 @@ mod tests {
     async fn base_provider_applies_defaults_before_delegation() {
         use std::sync::Mutex;
 
-        struct RecordingModel(Arc<Mutex<Vec<CompletionRequest>>>);
+        struct RecordingModel(Arc<Mutex<Vec<ModelRequest>>>);
 
         #[async_trait]
-        impl CompletionModel for RecordingModel {
+        impl Model for RecordingModel {
             fn model_id(&self) -> &'static str {
                 "rec"
             }
-            async fn complete(
-                &self,
-                request: CompletionRequest,
-            ) -> Result<CompletionResponse, BlazenError> {
+            async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
                 self.0.lock().unwrap().push(request);
                 Ok(empty_response("rec"))
             }
             async fn stream(
                 &self,
-                _r: CompletionRequest,
+                _r: ModelRequest,
             ) -> Result<
                 Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>,
                 BlazenError,
@@ -256,12 +243,12 @@ mod tests {
             }
         }
 
-        let recorded: Arc<Mutex<Vec<CompletionRequest>>> = Arc::new(Mutex::new(Vec::new()));
+        let recorded: Arc<Mutex<Vec<ModelRequest>>> = Arc::new(Mutex::new(Vec::new()));
         let bp = BaseProvider::new(Arc::new(RecordingModel(Arc::clone(&recorded))))
             .with_system_prompt("be helpful")
             .with_response_format(serde_json::json!({"type": "json_object"}));
 
-        let req = CompletionRequest::new(vec![ChatMessage::user("hi")]);
+        let req = ModelRequest::new(vec![ChatMessage::user("hi")]);
         bp.complete(req).await.unwrap();
 
         let seen = recorded.lock().unwrap();

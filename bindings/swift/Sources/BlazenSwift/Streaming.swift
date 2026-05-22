@@ -29,7 +29,7 @@ public enum StreamEvent: Sendable, Equatable {
     case done(finishReason: String, usage: TokenUsage)
 }
 
-public extension CompletionModel {
+public extension Model {
     /// Run a streaming completion, surfacing each chunk and the terminal
     /// `done` signal through an `AsyncThrowingStream`.
     ///
@@ -53,7 +53,7 @@ public extension CompletionModel {
     /// the underlying Tokio task observes the cancellation and shuts down
     /// cooperatively.
     func completeStream(
-        _ request: CompletionRequest
+        _ request: ModelRequest
     ) -> AsyncThrowingStream<StreamEvent, Error> {
         let model = self
         return AsyncThrowingStream(StreamEvent.self, bufferingPolicy: .unbounded) { continuation in

@@ -1,7 +1,7 @@
 /**
  * OpenAI-powered content pipeline with Blazen.
  *
- * Demonstrates using Blazen's CompletionModel with OpenAI to build a real
+ * Demonstrates using Blazen's Model with OpenAI to build a real
  * 3-step content generation workflow:
  *
  *   1. generate_outline  -- GPT creates a blog post outline from a topic
@@ -14,7 +14,7 @@
  * Run with: OPENAI_API_KEY=sk-... npx tsx llm_openai.ts
  */
 
-import { Workflow, CompletionModel } from "blazen";
+import { Workflow, Model } from "blazen";
 import type { Context, JsWorkflowResult } from "blazen";
 
 // ---------------------------------------------------------------------------
@@ -55,7 +55,7 @@ if (!apiKey) {
 }
 
 // Create the OpenAI completion model (gpt-5.3-chat-latest is cheap for examples).
-const model: CompletionModel = CompletionModel.openai({ apiKey });
+const model: Model = Model.openai({ apiKey });
 
 // Build the 3-step content pipeline.
 const wf: Workflow = new Workflow("content-pipeline");

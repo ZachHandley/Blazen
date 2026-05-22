@@ -9,13 +9,13 @@
 //! These bases exist so the TypeScript surface advertises the expected
 //! shape (method names, argument types, return types) for user-defined
 //! providers, separately from the concrete provider classes such as
-//! [`crate::providers::JsCompletionModel`].
+//! [`crate::providers::JsModel`].
 
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
-use super::completion_request::JsStructuredResponse;
 use super::message::JsChatMessage;
+use super::model_request::JsStructuredResponse;
 use crate::generated::JsToolDefinition;
 
 // ---------------------------------------------------------------------------
@@ -210,7 +210,7 @@ impl JsModelRegistry {
 /// Base class for the structured-output extraction surface.
 ///
 /// Mirrors [`blazen_llm::traits::StructuredOutput`]. Most callers should
-/// use [`crate::providers::JsCompletionModel`]'s built-in structured
+/// use [`crate::providers::JsModel`]'s built-in structured
 /// output (every completion model supports it via the blanket impl);
 /// this class exists so users can write a custom `extract` that does
 /// something different (e.g. multi-pass extraction, retries, custom

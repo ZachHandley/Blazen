@@ -7,7 +7,7 @@
 //! ## V1 scope: data fields only — no hooks
 //!
 //! The upstream defaults carry async hook closures (`before_request` /
-//! `before_completion` / role-specific `before` hooks). Those hooks are
+//! `before_model` / role-specific `before` hooks). Those hooks are
 //! `Arc<dyn Fn(...) -> BoxFuture<...>>` trait objects, which UniFFI Records
 //! cannot represent. They are deferred to Phase C, which will introduce
 //! foreign-implementable hook callback traits via
@@ -16,7 +16,7 @@
 //!
 //! For Phase A, the defaults Records carry the **data** fields only:
 //!
-//! - [`CompletionProviderDefaults`]: `system_prompt`, `tools_json`,
+//! - [`ProviderDefaults`]: `system_prompt`, `tools_json`,
 //!   `response_format_json`.
 //! - [`EmbeddingProviderDefaults`]: composes `base` only.
 //! - 9 role-specific defaults: compose `base` only (their typed hook is
@@ -42,11 +42,10 @@ use blazen_llm::providers::defaults::{
     AudioSpeechProviderDefaults as CoreAudioSpeechProviderDefaults,
     BackgroundRemovalProviderDefaults as CoreBackgroundRemovalProviderDefaults,
     BaseProviderDefaults as CoreBaseProviderDefaults,
-    CompletionProviderDefaults as CoreCompletionProviderDefaults,
     EmbeddingProviderDefaults as CoreEmbeddingProviderDefaults,
     ImageGenerationProviderDefaults as CoreImageGenerationProviderDefaults,
     ImageUpscaleProviderDefaults as CoreImageUpscaleProviderDefaults,
-    ThreeDProviderDefaults as CoreThreeDProviderDefaults,
+    ProviderDefaults as CoreProviderDefaults, ThreeDProviderDefaults as CoreThreeDProviderDefaults,
     TranscriptionProviderDefaults as CoreTranscriptionProviderDefaults,
     VideoProviderDefaults as CoreVideoProviderDefaults,
     VoiceCloningProviderDefaults as CoreVoiceCloningProviderDefaults,
@@ -137,13 +136,13 @@ impl From<BaseProviderDefaults> for CoreBaseProviderDefaults {
 }
 
 // ---------------------------------------------------------------------------
-// CompletionProviderDefaults
+// ProviderDefaults
 // ---------------------------------------------------------------------------
 
 /// Completion-role defaults: system prompt, default tools, default
-/// `response_format`. Hooks (`before_completion`) deferred to Phase C.
+/// `response_format`. Hooks (`before_model`) deferred to Phase C.
 #[derive(Debug, Clone, Default, uniffi::Record)]
-pub struct CompletionProviderDefaults {
+pub struct ProviderDefaults {
     #[uniffi(default = None)]
     pub base: Option<BaseProviderDefaults>,
     /// Prepended as a system message if the request lacks one.
@@ -159,8 +158,8 @@ pub struct CompletionProviderDefaults {
     pub response_format_json: Option<String>,
 }
 
-impl From<&CoreCompletionProviderDefaults> for CompletionProviderDefaults {
-    fn from(core: &CoreCompletionProviderDefaults) -> Self {
+impl From<&CoreProviderDefaults> for ProviderDefaults {
+    fn from(core: &CoreProviderDefaults) -> Self {
         Self {
             base: Some(BaseProviderDefaults::from(&core.base)),
             system_prompt: core.system_prompt.clone(),
@@ -170,8 +169,8 @@ impl From<&CoreCompletionProviderDefaults> for CompletionProviderDefaults {
     }
 }
 
-impl From<CompletionProviderDefaults> for CoreCompletionProviderDefaults {
-    fn from(ffi: CompletionProviderDefaults) -> Self {
+impl From<ProviderDefaults> for CoreProviderDefaults {
+    fn from(ffi: ProviderDefaults) -> Self {
         let base = ffi
             .base
             .map(CoreBaseProviderDefaults::from)
@@ -181,7 +180,7 @@ impl From<CompletionProviderDefaults> for CoreCompletionProviderDefaults {
             system_prompt: ffi.system_prompt,
             tools: opt_string_to_tools(ffi.tools_json.as_deref()),
             response_format: opt_string_to_json_value(ffi.response_format_json.as_deref()),
-            before_completion: None,
+            before_model: None,
         }
     }
 }

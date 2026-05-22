@@ -1,14 +1,14 @@
 /**
  * Anthropic (Claude) LLM integration with a Blazen Q&A + fact-check workflow.
  *
- * Demonstrates real Anthropic API calls through Blazen's CompletionModel
+ * Demonstrates real Anthropic API calls through Blazen's Model
  * abstraction.  Two workflow steps form a question-answering pipeline:
  *
  *   1. ask_question  -- sends the user's question to Claude and gets an answer
  *   2. fact_check    -- sends the answer back to Claude for verification
  *
  * Key points:
- *   - CompletionModel.anthropic() creates an Anthropic-backed model.
+ *   - Model.anthropic() creates an Anthropic-backed model.
  *   - model.completeWithOptions() is async and returns an object with content,
  *     model, usage, finishReason, and toolCalls.
  *   - Anthropic requires maxTokens (Blazen defaults to 4096, but you can set
@@ -18,7 +18,7 @@
  * Run with: ANTHROPIC_API_KEY=sk-ant-... npx tsx llm_anthropic.ts
  */
 
-import { Workflow, CompletionModel } from "blazen";
+import { Workflow, Model } from "blazen";
 import type { Context, JsWorkflowResult } from "blazen";
 
 // ---------------------------------------------------------------------------
@@ -31,7 +31,7 @@ interface Usage {
   totalTokens: number;
 }
 
-interface CompletionResponse {
+interface ModelResponse {
   content: string;
   toolCalls: Array<{ id: string; name: string; arguments: string }>;
   usage: Usage | null;
@@ -43,17 +43,17 @@ interface CompletionResponse {
 // Create the Anthropic-backed model (module-level so both steps share it).
 // Using claude-haiku-3-5 -- fast and cheap, ideal for examples.
 // ---------------------------------------------------------------------------
-function getModel(): CompletionModel {
+function getModel(): Model {
   const apiKey: string | undefined = process.env.ANTHROPIC_API_KEY;
   if (!apiKey) {
     console.error("ERROR: Set the ANTHROPIC_API_KEY environment variable.");
     console.error("  ANTHROPIC_API_KEY=sk-ant-... npx tsx llm_anthropic.ts");
     process.exit(1);
   }
-  return CompletionModel.anthropic({ apiKey });
+  return Model.anthropic({ apiKey });
 }
 
-const MODEL: CompletionModel = getModel();
+const MODEL: Model = getModel();
 
 // ---------------------------------------------------------------------------
 // Build the workflow.
@@ -71,7 +71,7 @@ wf.addStep(
     const question: string = event.question;
     console.log(`[ask_question] Question: ${question}`);
 
-    const response: CompletionResponse = await MODEL.completeWithOptions(
+    const response: ModelResponse = await MODEL.completeWithOptions(
       [
         { role: "system", content: "You are a helpful assistant. Give concise, factual answers in 2-3 sentences maximum." },
         { role: "user", content: question },
@@ -106,7 +106,7 @@ wf.addStep(
 
     console.log("[fact_check] Verifying answer...");
 
-    const response: CompletionResponse = await MODEL.completeWithOptions(
+    const response: ModelResponse = await MODEL.completeWithOptions(
       [
         {
           role: "system",

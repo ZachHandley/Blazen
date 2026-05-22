@@ -15,8 +15,8 @@ import pytest
 from blazen import (
     BackgroundRemovalProvider,
     ChatMessage,
-    CompletionModel,
-    CompletionOptions,
+    Model,
+    ModelOptions,
     EmbeddingModel,
     ImageProvider,
     InMemoryBackend,
@@ -39,32 +39,32 @@ from blazen import (
 
 
 # ---------------------------------------------------------------------------
-# CompletionModel subclass
+# Model subclass
 # ---------------------------------------------------------------------------
 
 
-class MockLLM(CompletionModel):
-    """A mock CompletionModel subclass for testing."""
+class MockLLM(Model):
+    """A mock Model subclass for testing."""
 
     def __init__(self):
         super().__init__(model_id="mock-llm", context_length=4096)
 
 
-def test_subclass_completion_model_instantiation():
-    """Subclassing CompletionModel creates a valid instance."""
+def test_subclass_model_instantiation():
+    """Subclassing Model creates a valid instance."""
     model = MockLLM()
     assert model.model_id == "mock-llm"
 
 
-def test_subclass_completion_model_is_instance():
+def test_subclass_model_is_instance():
     """Subclass instance passes isinstance check."""
     model = MockLLM()
-    assert isinstance(model, CompletionModel)
+    assert isinstance(model, Model)
     assert isinstance(model, MockLLM)
 
 
 @pytest.mark.asyncio
-async def test_subclass_completion_model_unoverridden_raises():
+async def test_subclass_model_unoverridden_raises():
     """Calling complete() without overriding raises NotImplementedError."""
     model = MockLLM()
     with pytest.raises(NotImplementedError, match="subclass must override complete"):
@@ -72,17 +72,17 @@ async def test_subclass_completion_model_unoverridden_raises():
 
 
 @pytest.mark.asyncio
-async def test_subclass_completion_model_stream_unoverridden_raises():
+async def test_subclass_model_stream_unoverridden_raises():
     """Calling stream() without overriding raises NotImplementedError."""
     model = MockLLM()
     with pytest.raises(NotImplementedError, match="subclass must override stream"):
         model.stream([ChatMessage.user("hello")])
 
 
-def test_subclass_completion_model_with_optional_params():
+def test_subclass_model_with_optional_params():
     """Constructor keyword arguments are passed through."""
 
-    class DetailedLLM(CompletionModel):
+    class DetailedLLM(Model):
         def __init__(self):
             super().__init__(
                 model_id="detailed-llm",
@@ -95,11 +95,11 @@ def test_subclass_completion_model_with_optional_params():
     assert model.model_id == "detailed-llm"
 
 
-def test_subclass_completion_model_with_pricing():
+def test_subclass_model_with_pricing():
     """Pricing can be attached at construction time."""
     pricing = ModelPricing(input_per_million=1.0, output_per_million=2.0)
 
-    class PricedLLM(CompletionModel):
+    class PricedLLM(Model):
         def __init__(self):
             super().__init__(model_id="priced-llm", pricing=pricing)
 
@@ -107,7 +107,7 @@ def test_subclass_completion_model_with_pricing():
     assert model.model_id == "priced-llm"
 
 
-def test_subclass_completion_model_repr():
+def test_subclass_model_repr():
     """repr() works on subclassed instances."""
     model = MockLLM()
     r = repr(model)
@@ -872,28 +872,28 @@ async def test_model_manager_register_propagates_load_errors():
 
 
 @pytest.mark.asyncio
-async def test_model_manager_register_existing_completion_model_path_still_works():
-    """Smoke test: legacy CompletionModel registration path is unchanged.
+async def test_model_manager_register_existing_model_path_still_works():
+    """Smoke test: legacy Model registration path is unchanged.
 
-    Most local CompletionModel factories require model weights / native
+    Most local Model factories require model weights / native
     backends that are not available in CI, so this test skips when the
     factory cannot be constructed. The point is to catch a regression in
-    which the new duck-typing branch swallows the legacy ``PyCompletionModel``
+    which the new duck-typing branch swallows the legacy ``PyModel``
     extraction.
     """
-    factory = getattr(CompletionModel, "mistralrs", None)
+    factory = getattr(Model, "mistralrs", None)
     if factory is None:
-        pytest.skip("no local CompletionModel factory available in this build")
+        pytest.skip("no local Model factory available in this build")
 
     try:
         # Use a clearly-fake path so we do not actually load weights -- we
-        # only need the CompletionModel handle to verify register() accepts it.
+        # only need the Model handle to verify register() accepts it.
         model = factory(
             model_id="local-smoke-test",
             model_path="/nonexistent/path/that/will/fail/to/load",
         )
     except Exception:
-        pytest.skip("local CompletionModel cannot be constructed without weights")
+        pytest.skip("local Model cannot be constructed without weights")
 
     mgr = ModelManager(cpu_ram_gb=8.0)
     # Registration itself should succeed (it does not load the model).
@@ -1012,7 +1012,7 @@ def test_multiple_subclass_types_coexist():
 def test_subclass_with_extra_attributes():
     """Python subclasses can carry extra Python-only attributes."""
 
-    class EnrichedLLM(CompletionModel):
+    class EnrichedLLM(Model):
         def __init__(self, nickname: str):
             super().__init__(model_id="enriched")
             self.nickname = nickname

@@ -1,21 +1,21 @@
 //! Standalone wrapper classes for the retry / fallback / cache decorators.
 //!
 //! These mirror the inline `withRetry` / `withFallback` / `withCache`
-//! decorator methods on [`JsCompletionModel`] but expose each wrapper as
+//! decorator methods on [`JsModel`] but expose each wrapper as
 //! a first-class JavaScript class that can be constructed directly:
 //!
 //! ```javascript
-//! const primary = CompletionModel.openai();
-//! const backup  = CompletionModel.anthropic();
+//! const primary = Model.openai();
+//! const backup  = Model.anthropic();
 //!
 //! const fb       = new FallbackModel([primary, backup]);
-//! const retried  = new RetryCompletionModel(primary, { maxRetries: 5 });
-//! const cached   = new CachedCompletionModel(primary, { ttlSeconds: 600 });
+//! const retried  = new RetryModel(primary, { maxRetries: 5 });
+//! const cached   = new CachedModel(primary, { ttlSeconds: 600 });
 //! ```
 //!
 //! All three classes expose the same `complete` / `stream` /
 //! `completeWithOptions` / `streamWithOptions` / `modelId` surface as
-//! [`JsCompletionModel`]. They hold an `Arc<dyn CompletionModel>` and
+//! [`JsModel`]. They hold an `Arc<dyn Model>` and
 //! delegate every call to it.
 
 use std::sync::Arc;
@@ -25,34 +25,31 @@ use napi::threadsafe_function::ThreadsafeFunctionCallMode;
 use napi_derive::napi;
 use tokio_stream::StreamExt;
 
-use blazen_llm::CompletionModel;
-use blazen_llm::cache::{CacheConfig, CachedCompletionModel};
+use blazen_llm::Model;
+use blazen_llm::cache::{CacheConfig, CachedModel};
 use blazen_llm::fallback::FallbackModel;
-use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
-use blazen_llm::types::{ChatMessage, CompletionRequest, ToolDefinition};
+use blazen_llm::retry::{RetryConfig, RetryModel};
+use blazen_llm::types::{ChatMessage, ModelRequest, ToolDefinition};
 
 use crate::error::llm_error_to_napi;
 use crate::generated::{JsCacheConfig, JsRetryConfig};
-use crate::providers::JsCompletionModel;
-use crate::providers::completion_model::StreamChunkCallbackTsfn;
+use crate::providers::JsModel;
+use crate::providers::model::StreamChunkCallbackTsfn;
 use crate::types::{
-    JsChatMessage, JsCompletionOptions, JsCompletionResponse, build_response, build_stream_chunk,
+    JsChatMessage, JsModelOptions, JsModelResponse, build_response, build_stream_chunk,
 };
 
 // ---------------------------------------------------------------------------
 // Shared helpers
 // ---------------------------------------------------------------------------
 
-/// Apply [`JsCompletionOptions`] to a freshly-built [`CompletionRequest`].
+/// Apply [`JsModelOptions`] to a freshly-built [`ModelRequest`].
 ///
 /// Centralised so the per-class `complete_with_options` / `stream_with_options`
 /// implementations stay in lock-step with the canonical version on
-/// [`JsCompletionModel`].
+/// [`JsModel`].
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn apply_options(
-    mut request: CompletionRequest,
-    options: JsCompletionOptions,
-) -> CompletionRequest {
+fn apply_options(mut request: ModelRequest, options: JsModelOptions) -> ModelRequest {
     if let Some(temp) = options.temperature {
         request.temperature = Some(temp as f32);
     }
@@ -81,27 +78,24 @@ fn apply_options(
     request
 }
 
-/// Resolve a `&JsCompletionModel` argument to its inner provider, rejecting
+/// Resolve a `&JsModel` argument to its inner provider, rejecting
 /// subclassed instances that have no concrete Rust provider.
-fn require_inner(
-    model: &JsCompletionModel,
-    wrapper: &'static str,
-) -> Result<Arc<dyn CompletionModel>> {
+fn require_inner(model: &JsModel, wrapper: &'static str) -> Result<Arc<dyn Model>> {
     model.inner.clone().ok_or_else(|| {
         napi::Error::from_reason(format!(
-            "{wrapper} cannot wrap a subclassed CompletionModel that has no concrete provider",
+            "{wrapper} cannot wrap a subclassed Model that has no concrete provider",
         ))
     })
 }
 
-/// Run a non-streaming completion against an `Arc<dyn CompletionModel>`.
+/// Run a non-streaming completion against an `Arc<dyn Model>`.
 async fn run_complete(
-    inner: Arc<dyn CompletionModel>,
+    inner: Arc<dyn Model>,
     messages: Vec<&JsChatMessage>,
-    options: Option<JsCompletionOptions>,
-) -> Result<JsCompletionResponse> {
+    options: Option<JsModelOptions>,
+) -> Result<JsModelResponse> {
     let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-    let mut request = CompletionRequest::new(chat_messages);
+    let mut request = ModelRequest::new(chat_messages);
     if let Some(opts) = options {
         request = apply_options(request, opts);
     }
@@ -109,16 +103,16 @@ async fn run_complete(
     Ok(build_response(response))
 }
 
-/// Run a streaming completion against an `Arc<dyn CompletionModel>`,
+/// Run a streaming completion against an `Arc<dyn Model>`,
 /// forwarding each chunk to the JavaScript callback.
 async fn run_stream(
-    inner: Arc<dyn CompletionModel>,
+    inner: Arc<dyn Model>,
     messages: Vec<&JsChatMessage>,
     on_chunk: StreamChunkCallbackTsfn,
-    options: Option<JsCompletionOptions>,
+    options: Option<JsModelOptions>,
 ) -> Result<()> {
     let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-    let mut request = CompletionRequest::new(chat_messages);
+    let mut request = ModelRequest::new(chat_messages);
     if let Some(opts) = options {
         request = apply_options(request, opts);
     }
@@ -155,7 +149,7 @@ async fn run_stream(
 /// ```
 #[napi(js_name = "FallbackModel")]
 pub struct JsFallbackModel {
-    inner: Arc<dyn CompletionModel>,
+    inner: Arc<dyn Model>,
 }
 
 #[napi]
@@ -168,14 +162,14 @@ impl JsFallbackModel {
     /// case.
     #[napi(constructor)]
     #[allow(clippy::needless_pass_by_value)]
-    pub fn new(models: Vec<&JsCompletionModel>) -> Result<Self> {
+    pub fn new(models: Vec<&JsModel>) -> Result<Self> {
         if models.is_empty() {
             return Err(napi::Error::new(
                 napi::Status::InvalidArg,
                 "FallbackModel requires at least one model",
             ));
         }
-        let mut providers: Vec<Arc<dyn CompletionModel>> = Vec::with_capacity(models.len());
+        let mut providers: Vec<Arc<dyn Model>> = Vec::with_capacity(models.len());
         for m in &models {
             providers.push(require_inner(m, "FallbackModel")?);
         }
@@ -192,7 +186,7 @@ impl JsFallbackModel {
 
     /// Perform a chat completion, falling back across providers.
     #[napi]
-    pub async fn complete(&self, messages: Vec<&JsChatMessage>) -> Result<JsCompletionResponse> {
+    pub async fn complete(&self, messages: Vec<&JsChatMessage>) -> Result<JsModelResponse> {
         run_complete(Arc::clone(&self.inner), messages, None).await
     }
 
@@ -201,8 +195,8 @@ impl JsFallbackModel {
     pub async fn complete_with_options(
         &self,
         messages: Vec<&JsChatMessage>,
-        options: JsCompletionOptions,
-    ) -> Result<JsCompletionResponse> {
+        options: JsModelOptions,
+    ) -> Result<JsModelResponse> {
         run_complete(Arc::clone(&self.inner), messages, Some(options)).await
     }
 
@@ -223,17 +217,17 @@ impl JsFallbackModel {
         &self,
         messages: Vec<&JsChatMessage>,
         on_chunk: StreamChunkCallbackTsfn,
-        options: JsCompletionOptions,
+        options: JsModelOptions,
     ) -> Result<()> {
         run_stream(Arc::clone(&self.inner), messages, on_chunk, Some(options)).await
     }
 
-    /// Convert this fallback wrapper into a plain [`JsCompletionModel`]
+    /// Convert this fallback wrapper into a plain [`JsModel`]
     /// so it can be passed to APIs that expect the base type
     /// (`Agent`, `Batch`, further wrappers, etc.).
-    #[napi(js_name = "toCompletionModel")]
-    pub fn to_completion_model(&self) -> JsCompletionModel {
-        JsCompletionModel {
+    #[napi(js_name = "toModel")]
+    pub fn to_model(&self) -> JsModel {
+        JsModel {
             inner: Some(Arc::clone(&self.inner)),
             local_model: None,
             config: None,
@@ -242,38 +236,38 @@ impl JsFallbackModel {
 }
 
 // ---------------------------------------------------------------------------
-// JsRetryCompletionModel
+// JsRetryModel
 // ---------------------------------------------------------------------------
 
 /// A completion model that retries transient failures with exponential
 /// backoff.
 ///
 /// ```javascript
-/// const model = new RetryCompletionModel(
-///     CompletionModel.openrouter(),
+/// const model = new RetryModel(
+///     Model.openrouter(),
 ///     { maxRetries: 5, initialDelayMs: 500 },
 /// );
 /// const response = await model.complete([ChatMessage.user("hi")]);
 /// ```
-#[napi(js_name = "RetryCompletionModel")]
-pub struct JsRetryCompletionModel {
-    inner: Arc<dyn CompletionModel>,
+#[napi(js_name = "RetryModel")]
+pub struct JsRetryModel {
+    inner: Arc<dyn Model>,
 }
 
 #[napi]
 #[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
-impl JsRetryCompletionModel {
+impl JsRetryModel {
     /// Wrap `model` with retry-on-transient-error behaviour.
     ///
     /// `config` defaults to [`RetryConfig::default()`] (3 retries, 1s
     /// initial delay, 30s cap, jitter on, `Retry-After` honoured) when
     /// omitted.
     #[napi(constructor)]
-    pub fn new(model: &JsCompletionModel, config: Option<JsRetryConfig>) -> Result<Self> {
-        let inner = require_inner(model, "RetryCompletionModel")?;
+    pub fn new(model: &JsModel, config: Option<JsRetryConfig>) -> Result<Self> {
+        let inner = require_inner(model, "RetryModel")?;
         let retry_config: RetryConfig = config.map(Into::into).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(RetryCompletionModel::from_arc(inner, retry_config)),
+            inner: Arc::new(RetryModel::from_arc(inner, retry_config)),
         })
     }
 
@@ -285,7 +279,7 @@ impl JsRetryCompletionModel {
 
     /// Perform a chat completion with automatic retries.
     #[napi]
-    pub async fn complete(&self, messages: Vec<&JsChatMessage>) -> Result<JsCompletionResponse> {
+    pub async fn complete(&self, messages: Vec<&JsChatMessage>) -> Result<JsModelResponse> {
         run_complete(Arc::clone(&self.inner), messages, None).await
     }
 
@@ -294,8 +288,8 @@ impl JsRetryCompletionModel {
     pub async fn complete_with_options(
         &self,
         messages: Vec<&JsChatMessage>,
-        options: JsCompletionOptions,
-    ) -> Result<JsCompletionResponse> {
+        options: JsModelOptions,
+    ) -> Result<JsModelResponse> {
         run_complete(Arc::clone(&self.inner), messages, Some(options)).await
     }
 
@@ -316,16 +310,16 @@ impl JsRetryCompletionModel {
         &self,
         messages: Vec<&JsChatMessage>,
         on_chunk: StreamChunkCallbackTsfn,
-        options: JsCompletionOptions,
+        options: JsModelOptions,
     ) -> Result<()> {
         run_stream(Arc::clone(&self.inner), messages, on_chunk, Some(options)).await
     }
 
-    /// Convert this retry wrapper into a plain [`JsCompletionModel`] so
+    /// Convert this retry wrapper into a plain [`JsModel`] so
     /// it can be passed to APIs that expect the base type.
-    #[napi(js_name = "toCompletionModel")]
-    pub fn to_completion_model(&self) -> JsCompletionModel {
-        JsCompletionModel {
+    #[napi(js_name = "toModel")]
+    pub fn to_model(&self) -> JsModel {
+        JsModel {
             inner: Some(Arc::clone(&self.inner)),
             local_model: None,
             config: None,
@@ -334,7 +328,7 @@ impl JsRetryCompletionModel {
 }
 
 // ---------------------------------------------------------------------------
-// JsCachedCompletionModel
+// JsCachedModel
 // ---------------------------------------------------------------------------
 
 /// A completion model that caches non-streaming responses keyed on a
@@ -344,26 +338,26 @@ impl JsRetryCompletionModel {
 /// inner model.
 ///
 /// ```javascript
-/// const cached = new CachedCompletionModel(
-///     CompletionModel.openai(),
+/// const cached = new CachedModel(
+///     Model.openai(),
 ///     { ttlSeconds: 300, maxEntries: 1000 },
 /// );
 /// ```
-#[napi(js_name = "CachedCompletionModel")]
-pub struct JsCachedCompletionModel {
-    inner: Arc<dyn CompletionModel>,
+#[napi(js_name = "CachedModel")]
+pub struct JsCachedModel {
+    inner: Arc<dyn Model>,
 }
 
 #[napi]
 #[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
-impl JsCachedCompletionModel {
+impl JsCachedModel {
     /// Wrap `model` with an in-memory response cache.
     #[napi(constructor)]
-    pub fn new(model: &JsCompletionModel, config: Option<JsCacheConfig>) -> Result<Self> {
-        let inner = require_inner(model, "CachedCompletionModel")?;
+    pub fn new(model: &JsModel, config: Option<JsCacheConfig>) -> Result<Self> {
+        let inner = require_inner(model, "CachedModel")?;
         let cache_config: CacheConfig = config.map(Into::into).unwrap_or_default();
         Ok(Self {
-            inner: Arc::new(CachedCompletionModel::from_arc(inner, cache_config)),
+            inner: Arc::new(CachedModel::from_arc(inner, cache_config)),
         })
     }
 
@@ -376,7 +370,7 @@ impl JsCachedCompletionModel {
     /// Perform a chat completion, returning a cached response on a
     /// hit and otherwise delegating to the inner model.
     #[napi]
-    pub async fn complete(&self, messages: Vec<&JsChatMessage>) -> Result<JsCompletionResponse> {
+    pub async fn complete(&self, messages: Vec<&JsChatMessage>) -> Result<JsModelResponse> {
         run_complete(Arc::clone(&self.inner), messages, None).await
     }
 
@@ -386,8 +380,8 @@ impl JsCachedCompletionModel {
     pub async fn complete_with_options(
         &self,
         messages: Vec<&JsChatMessage>,
-        options: JsCompletionOptions,
-    ) -> Result<JsCompletionResponse> {
+        options: JsModelOptions,
+    ) -> Result<JsModelResponse> {
         run_complete(Arc::clone(&self.inner), messages, Some(options)).await
     }
 
@@ -409,16 +403,16 @@ impl JsCachedCompletionModel {
         &self,
         messages: Vec<&JsChatMessage>,
         on_chunk: StreamChunkCallbackTsfn,
-        options: JsCompletionOptions,
+        options: JsModelOptions,
     ) -> Result<()> {
         run_stream(Arc::clone(&self.inner), messages, on_chunk, Some(options)).await
     }
 
-    /// Convert this cache wrapper into a plain [`JsCompletionModel`] so
+    /// Convert this cache wrapper into a plain [`JsModel`] so
     /// it can be passed to APIs that expect the base type.
-    #[napi(js_name = "toCompletionModel")]
-    pub fn to_completion_model(&self) -> JsCompletionModel {
-        JsCompletionModel {
+    #[napi(js_name = "toModel")]
+    pub fn to_model(&self) -> JsModel {
+        JsModel {
             inner: Some(Arc::clone(&self.inner)),
             local_model: None,
             config: None,

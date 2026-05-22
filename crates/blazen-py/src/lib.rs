@@ -16,7 +16,7 @@
 //!
 //! ```python
 //! from blazen import Workflow, step, Event, StartEvent, StopEvent, Context
-//! from blazen import CompletionModel, ChatMessage
+//! from blazen import Model, ChatMessage
 //!
 //! @step
 //! async def echo(ctx: Context, ev: Event) -> Event:
@@ -97,7 +97,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?;
 
     // Synchronous (blocking) wrappers for the most common async surfaces.
-    m.add_class::<sync::PyBlockingCompletionModel>()?;
+    m.add_class::<sync::PyBlockingModel>()?;
     m.add_class::<sync::PyBlockingEmbeddingModel>()?;
 
     // Event classes
@@ -231,8 +231,8 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::PyRole>()?;
     m.add_class::<types::PyContentPart>()?;
     m.add_class::<types::PyChatMessage>()?;
-    m.add_class::<types::PyCompletionResponse>()?;
-    m.add_class::<types::PyCompletionRequest>()?;
+    m.add_class::<types::PyModelResponse>()?;
+    m.add_class::<types::PyModelRequest>()?;
     m.add_class::<types::PyArtifact>()?;
     m.add_class::<types::PyCitation>()?;
     m.add_class::<types::PyReasoningTrace>()?;
@@ -274,9 +274,9 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<types::PyMemoryEntry>()?;
 
     // Completion model (provider)
-    m.add_class::<providers::PyCompletionModel>()?;
-    m.add_class::<providers::completion_model::PyCompletionOptions>()?;
-    m.add_class::<providers::completion_model::PyLazyCompletionStream>()?;
+    m.add_class::<providers::PyModel>()?;
+    m.add_class::<providers::model::PyModelOptions>()?;
+    m.add_class::<providers::model::PyLazyCompletionStream>()?;
 
     // Provider options (typed wrappers)
     m.add_class::<providers::options::PyProviderOptions>()?;
@@ -328,18 +328,18 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<providers::config::PyRetryConfig>()?;
     m.add_class::<providers::config::PyCacheConfig>()?;
 
-    // Standalone decorator wrappers (parity with CompletionModel.with_*)
-    m.add_class::<providers::PyRetryCompletionModel>()?;
-    m.add_class::<providers::PyCachedCompletionModel>()?;
+    // Standalone decorator wrappers (parity with Model.with_*)
+    m.add_class::<providers::PyRetryModel>()?;
+    m.add_class::<providers::PyCachedModel>()?;
     m.add_class::<providers::PyFallbackModel>()?;
 
     // Usage emitter ABC + decorators
     m.add_class::<types::PyUsageEmitter>()?;
     m.add_class::<types::PyNoopUsageEmitter>()?;
-    m.add_class::<types::PyUsageRecordingCompletionModel>()?;
+    m.add_class::<types::PyUsageRecordingModel>()?;
     m.add_class::<types::PyUsageRecordingEmbeddingModel>()?;
 
-    // Retry plumbing exposed to Python beyond CompletionModel.
+    // Retry plumbing exposed to Python beyond Model.
     m.add_class::<retry::PyRetryStack>()?;
     m.add_class::<retry::PyRetryEmbeddingModel>()?;
     m.add_class::<retry::PyRetryHttpClient>()?;
@@ -445,12 +445,12 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<providers::fal::PyFalEmbeddingModel>()?;
 
     // OpenAI provider (for compute capabilities like TTS; LLM completion
-    // lives on `CompletionModel.openai`).
+    // lives on `Model.openai`).
     m.add_class::<providers::openai::PyOpenAiProvider>()?;
     m.add_class::<providers::openai_embedding::PyOpenAiEmbeddingModel>()?;
 
     // Standalone cloud-LLM provider classes (parity with the
-    // `CompletionModel.<provider>(...)` factory methods --- wraps the same
+    // `Model.<provider>(...)` factory methods --- wraps the same
     // Rust providers).
     m.add_class::<providers::anthropic::PyAnthropicProvider>()?;
     m.add_class::<providers::gemini::PyGeminiProvider>()?;
@@ -549,7 +549,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // role-specific defaults). Phase A exposes the structural surface;
     // Phase B wires the before-hooks into actual dispatch.
     m.add_class::<providers::defaults::PyBaseProviderDefaults>()?;
-    m.add_class::<providers::defaults::PyCompletionProviderDefaults>()?;
+    m.add_class::<providers::defaults::PyProviderDefaults>()?;
     m.add_class::<providers::defaults::PyEmbeddingProviderDefaults>()?;
     m.add_class::<providers::defaults::AudioSpeechProviderDefaults>()?;
     m.add_class::<providers::defaults::AudioMusicProviderDefaults>()?;
@@ -561,7 +561,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<providers::defaults::ThreeDProviderDefaults>()?;
     m.add_class::<providers::defaults::BackgroundRemovalProviderDefaults>()?;
 
-    // BaseProvider -- wraps any CompletionModel with defaults applied
+    // BaseProvider -- wraps any Model with defaults applied
     // before delegation.
     m.add_class::<providers::base::PyBaseProvider>()?;
 

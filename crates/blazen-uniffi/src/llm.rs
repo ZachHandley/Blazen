@@ -1,6 +1,6 @@
 //! LLM completion + embedding surface for the UniFFI bindings.
 //!
-//! Mirrors `blazen-py`'s `CompletionModel` / `EmbeddingModel` shape, but using
+//! Mirrors `blazen-py`'s `Model` / `EmbeddingModel` shape, but using
 //! UniFFI's value-record + opaque-object idiom instead of PyO3 classes.
 //!
 //! ## Wire-format shape
@@ -16,7 +16,7 @@
 //! - [`Tool`] / [`ToolCall`] — JSON-Schema parameters and arguments as
 //!   strings on the wire (foreign callers marshal to/from their native JSON
 //!   type just outside this module).
-//! - [`CompletionResponse`] — `content` is always a `String` (empty when the
+//! - [`ModelResponse`] — `content` is always a `String` (empty when the
 //!   provider returned no text); `finish_reason` is also a plain `String`
 //!   (`""` when the provider didn't report one).
 //! - [`TokenUsage`] — every counter is `u64` to keep the binding ergonomic
@@ -27,10 +27,10 @@
 //!
 //! ## Provider construction
 //!
-//! [`CompletionModel`] and [`EmbeddingModel`] are *opaque* — there are no
+//! [`Model`] and [`EmbeddingModel`] are *opaque* — there are no
 //! foreign-side constructors here. Per-provider factories live in
 //! `providers.rs`. This module only handles the dispatch surface (i.e.
-//! "given an Arc<dyn CompletionModel>, here is how `complete` / `embed`
+//! "given an Arc<dyn Model>, here is how `complete` / `embed`
 //! cross the FFI").
 
 use std::sync::Arc;
@@ -44,8 +44,8 @@ use blazen_llm::types::{
     VideoContent as CoreVideoContent,
 };
 use blazen_llm::{
-    CompletionModel as CoreCompletionModel, CompletionRequest as CoreCompletionRequest,
-    CompletionResponse as CoreCompletionResponse, EmbeddingModel as CoreEmbeddingModel,
+    EmbeddingModel as CoreEmbeddingModel, Model as CoreModel, ModelRequest as CoreModelRequest,
+    ModelResponse as CoreModelResponse,
 };
 
 use crate::errors::{BlazenError, BlazenResult};
@@ -129,7 +129,7 @@ pub struct TokenUsage {
 /// convenience because most foreign callers think of the system prompt as a
 /// request-level field, not a message.
 #[derive(Debug, Clone, uniffi::Record)]
-pub struct CompletionRequest {
+pub struct ModelRequest {
     pub messages: Vec<ChatMessage>,
     pub tools: Vec<Tool>,
     pub temperature: Option<f64>,
@@ -151,7 +151,7 @@ pub struct CompletionRequest {
 /// the model emitted only tool calls). `finish_reason` is the empty string
 /// when the provider didn't report one.
 #[derive(Debug, Clone, uniffi::Record)]
-pub struct CompletionResponse {
+pub struct ModelResponse {
     pub content: String,
     pub tool_calls: Vec<ToolCall>,
     pub finish_reason: String,
@@ -388,9 +388,9 @@ impl From<CoreChatMessage> for ChatMessage {
     }
 }
 
-impl TryFrom<CompletionRequest> for CoreCompletionRequest {
+impl TryFrom<ModelRequest> for CoreModelRequest {
     type Error = BlazenError;
-    fn try_from(req: CompletionRequest) -> Result<Self, Self::Error> {
+    fn try_from(req: ModelRequest) -> Result<Self, Self::Error> {
         let mut messages: Vec<CoreChatMessage> = Vec::with_capacity(req.messages.len() + 1);
         if let Some(system) = req.system
             && !system.is_empty()
@@ -426,8 +426,8 @@ impl TryFrom<CompletionRequest> for CoreCompletionRequest {
     }
 }
 
-impl From<CoreCompletionResponse> for CompletionResponse {
-    fn from(resp: CoreCompletionResponse) -> Self {
+impl From<CoreModelResponse> for ModelResponse {
+    fn from(resp: CoreModelResponse) -> Self {
         Self {
             content: resp.content.unwrap_or_default(),
             tool_calls: resp.tool_calls.into_iter().map(ToolCall::from).collect(),
@@ -460,39 +460,36 @@ impl From<CoreEmbeddingResponse> for EmbeddingResponse {
 /// A chat completion model.
 ///
 /// Construct one via the per-provider factories in `providers.rs` (e.g.
-/// `CompletionModel::openai(options)` from the foreign-language side).
+/// `Model::openai(options)` from the foreign-language side).
 /// Once obtained, call [`complete`](Self::complete) (async) or
 /// [`complete_blocking`](Self::complete_blocking) (sync) to generate
 /// responses.
 #[derive(uniffi::Object)]
-pub struct CompletionModel {
-    pub(crate) inner: Arc<dyn CoreCompletionModel>,
+pub struct Model {
+    pub(crate) inner: Arc<dyn CoreModel>,
 }
 
-impl CompletionModel {
+impl Model {
     /// Wrap a `blazen_llm` completion model in the FFI handle.
     ///
     /// Used by `providers.rs` factories; not exposed across the FFI.
-    pub(crate) fn from_arc(inner: Arc<dyn CoreCompletionModel>) -> Arc<Self> {
+    pub(crate) fn from_arc(inner: Arc<dyn CoreModel>) -> Arc<Self> {
         Arc::new(Self { inner })
     }
 }
 
 #[uniffi::export(async_runtime = "tokio")]
-impl CompletionModel {
+impl Model {
     /// Perform a chat completion. Async on Swift / Kotlin; blocking on Go
     /// (UniFFI's Go bindgen wraps the future in a goroutine-friendly call).
-    pub async fn complete(
-        self: Arc<Self>,
-        request: CompletionRequest,
-    ) -> BlazenResult<CompletionResponse> {
-        let core_request = CoreCompletionRequest::try_from(request)?;
+    pub async fn complete(self: Arc<Self>, request: ModelRequest) -> BlazenResult<ModelResponse> {
+        let core_request = CoreModelRequest::try_from(request)?;
         let response = self
             .inner
             .complete(core_request)
             .await
             .map_err(BlazenError::from)?;
-        Ok(CompletionResponse::from(response))
+        Ok(ModelResponse::from(response))
     }
 
     /// The model's identifier (e.g. `"gpt-4o"`, `"claude-3-5-sonnet"`).
@@ -503,15 +500,15 @@ impl CompletionModel {
 }
 
 #[uniffi::export]
-impl CompletionModel {
+impl Model {
     /// Synchronous variant of [`complete`](Self::complete) — blocks the
     /// current thread on the shared Tokio runtime. Handy for Ruby scripts
     /// and quick Go `main` functions where async machinery is overkill.
     /// Prefer the async [`complete`](Self::complete) in long-running services.
     pub fn complete_blocking(
         self: Arc<Self>,
-        request: CompletionRequest,
-    ) -> BlazenResult<CompletionResponse> {
+        request: ModelRequest,
+    ) -> BlazenResult<ModelResponse> {
         let this = Arc::clone(&self);
         runtime().block_on(async move { this.complete(request).await })
     }

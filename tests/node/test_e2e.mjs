@@ -20,7 +20,7 @@ import path from "node:path";
 import {
   ChatMessage,
   ChatWindow,
-  CompletionModel,
+  Model,
   InMemoryBackend,
   Memory,
   PromptRegistry,
@@ -387,8 +387,8 @@ test("ChatWindow · clear removes all messages and resets to baseline", (t) => {
 // Retry / Cache / Fallback (construction only, no API calls)
 // ===========================================================================
 
-test("CompletionModel decorators · withRetry returns a CompletionModel", (t) => {
-  const model = CompletionModel.openai({ apiKey: "fake-key" });
+test("Model decorators · withRetry returns a Model", (t) => {
+  const model = Model.openai({ apiKey: "fake-key" });
   const retried = model.withRetry({
     maxRetries: 3,
     initialDelayMs: 100,
@@ -397,21 +397,21 @@ test("CompletionModel decorators · withRetry returns a CompletionModel", (t) =>
   t.truthy(retried);
 });
 
-test("CompletionModel decorators · withCache returns a CompletionModel", (t) => {
-  const model = CompletionModel.openai({ apiKey: "fake-key" });
+test("Model decorators · withCache returns a Model", (t) => {
+  const model = Model.openai({ apiKey: "fake-key" });
   const cached = model.withCache({ ttlSeconds: 60, maxEntries: 100 });
   t.truthy(cached);
 });
 
-test("CompletionModel decorators · withFallback chains multiple models", (t) => {
-  const m1 = CompletionModel.openai({ apiKey: "fake-key-1" });
-  const m2 = CompletionModel.openai({ apiKey: "fake-key-2" });
-  const fallback = CompletionModel.withFallback([m1, m2]);
+test("Model decorators · withFallback chains multiple models", (t) => {
+  const m1 = Model.openai({ apiKey: "fake-key-1" });
+  const m2 = Model.openai({ apiKey: "fake-key-2" });
+  const fallback = Model.withFallback([m1, m2]);
   t.truthy(fallback);
 });
 
 // ===========================================================================
-// Tools via CompletionOptions (completeWithOptions)
+// Tools via ModelOptions (completeWithOptions)
 // ===========================================================================
 
 function makeSearchTool() {
@@ -440,8 +440,8 @@ function makeCalculatorTool() {
   };
 }
 
-test("tools via CompletionOptions · completeWithOptions accepts a single tool definition", async (t) => {
-  const model = CompletionModel.openai({ apiKey: "fake-key" });
+test("tools via ModelOptions · completeWithOptions accepts a single tool definition", async (t) => {
+  const model = Model.openai({ apiKey: "fake-key" });
   const tool = makeSearchTool();
 
   // The call will fail at the API level (no valid key), but the tool
@@ -457,8 +457,8 @@ test("tools via CompletionOptions · completeWithOptions accepts a single tool d
   );
 });
 
-test("tools via CompletionOptions · completeWithOptions accepts multiple tool definitions", async (t) => {
-  const model = CompletionModel.openai({ apiKey: "fake-key" });
+test("tools via ModelOptions · completeWithOptions accepts multiple tool definitions", async (t) => {
+  const model = Model.openai({ apiKey: "fake-key" });
   const search = makeSearchTool();
   const calc = makeCalculatorTool();
 
@@ -471,8 +471,8 @@ test("tools via CompletionOptions · completeWithOptions accepts multiple tool d
   );
 });
 
-test("tools via CompletionOptions · completeWithOptions accepts options without tools", async (t) => {
-  const model = CompletionModel.openai({ apiKey: "fake-key" });
+test("tools via ModelOptions · completeWithOptions accepts options without tools", async (t) => {
+  const model = Model.openai({ apiKey: "fake-key" });
 
   await t.throwsAsync(
     () =>
@@ -483,7 +483,7 @@ test("tools via CompletionOptions · completeWithOptions accepts options without
   );
 });
 
-test("tools via CompletionOptions · tool definition fields are preserved in the options object", (t) => {
+test("tools via ModelOptions · tool definition fields are preserved in the options object", (t) => {
   const tool = makeSearchTool();
   const options = { tools: [tool] };
 
@@ -499,7 +499,7 @@ test("tools via CompletionOptions · tool definition fields are preserved in the
   t.deepEqual(options.tools[0].parameters.required, ["query"]);
 });
 
-test("tools via CompletionOptions · multiple tools preserve all descriptions and parameters", (t) => {
+test("tools via ModelOptions · multiple tools preserve all descriptions and parameters", (t) => {
   const search = makeSearchTool();
   const calc = makeCalculatorTool();
   const options = { tools: [search, calc] };
@@ -525,13 +525,13 @@ test("tools via CompletionOptions · multiple tools preserve all descriptions an
   t.truthy("expression" in calcTool.parameters.properties);
 });
 
-test("subclassed CompletionModel · constructor accepts config with modelId", (t) => {
-  const model = new CompletionModel({ modelId: "custom-test" });
+test("subclassed Model · constructor accepts config with modelId", (t) => {
+  const model = new Model({ modelId: "custom-test" });
   t.is(model.modelId, "custom-test");
 });
 
-test("subclassed CompletionModel · complete() on subclass without inner throws descriptive error", async (t) => {
-  const model = new CompletionModel({ modelId: "no-provider" });
+test("subclassed Model · complete() on subclass without inner throws descriptive error", async (t) => {
+  const model = new Model({ modelId: "no-provider" });
 
   await t.throwsAsync(
     () => model.complete([ChatMessage.user("Hi")]),
@@ -539,8 +539,8 @@ test("subclassed CompletionModel · complete() on subclass without inner throws 
   );
 });
 
-test("subclassed CompletionModel · completeWithOptions() on subclass without inner throws descriptive error", async (t) => {
-  const model = new CompletionModel({ modelId: "no-provider" });
+test("subclassed Model · completeWithOptions() on subclass without inner throws descriptive error", async (t) => {
+  const model = new Model({ modelId: "no-provider" });
 
   await t.throwsAsync(
     () =>
@@ -552,13 +552,13 @@ test("subclassed CompletionModel · completeWithOptions() on subclass without in
 });
 
 // ===========================================================================
-// Tools passthrough via CompletionOptions (subclassed CompletionModel)
+// Tools passthrough via ModelOptions (subclassed Model)
 // ===========================================================================
 
-test("tools passthrough via CompletionOptions (subclassed) · tools passed via options reach the subclass override with correct name/description", async (t) => {
+test("tools passthrough via ModelOptions (subclassed) · tools passed via options reach the subclass override with correct name/description", async (t) => {
   const captured = [];
 
-  class ToolInspectorLLM extends CompletionModel {
+  class ToolInspectorLLM extends Model {
     constructor() {
       super({ modelId: "tool-inspector" });
     }
@@ -613,10 +613,10 @@ test("tools passthrough via CompletionOptions (subclassed) · tools passed via o
   t.is(captured[1].description, "Add two numbers together.");
 });
 
-test("tools passthrough via CompletionOptions (subclassed) · tools is undefined or empty when CompletionOptions has no tools", async (t) => {
+test("tools passthrough via ModelOptions (subclassed) · tools is undefined or empty when ModelOptions has no tools", async (t) => {
   const captured = { tools_value: "sentinel" };
 
-  class NoToolsLLM extends CompletionModel {
+  class NoToolsLLM extends Model {
     constructor() {
       super({ modelId: "no-tools" });
     }
@@ -643,10 +643,10 @@ test("tools passthrough via CompletionOptions (subclassed) · tools is undefined
   );
 });
 
-test("tools passthrough via CompletionOptions (subclassed) · tool parameters JSON schema is preserved end-to-end", async (t) => {
+test("tools passthrough via ModelOptions (subclassed) · tool parameters JSON schema is preserved end-to-end", async (t) => {
   const capturedParams = [];
 
-  class ParamsCaptureLLM extends CompletionModel {
+  class ParamsCaptureLLM extends Model {
     constructor() {
       super({ modelId: "params-capture" });
     }
@@ -696,10 +696,10 @@ test("tools passthrough via CompletionOptions (subclassed) · tool parameters JS
   t.deepEqual(params.required, ["query"]);
 });
 
-test("tools passthrough via CompletionOptions (subclassed) · multiple tools each reach the subclass override independently", async (t) => {
+test("tools passthrough via ModelOptions (subclassed) · multiple tools each reach the subclass override independently", async (t) => {
   const toolNames = [];
 
-  class MultiToolLLM extends CompletionModel {
+  class MultiToolLLM extends Model {
     constructor() {
       super({ modelId: "multi-tool" });
     }

@@ -2,7 +2,7 @@ package dev.zorpx.blazen.examples
 
 import dev.zorpx.blazen.Blazen
 import dev.zorpx.blazen.ChatMessage
-import dev.zorpx.blazen.CompletionRequest
+import dev.zorpx.blazen.ModelRequest
 import dev.zorpx.blazen.Event
 import dev.zorpx.blazen.StepOutput
 import kotlinx.serialization.json.Json
@@ -43,13 +43,13 @@ public object HelloWorkflow {
         }
         println("emitted event types: $emittedTypes")
 
-        val req = CompletionRequest(
+        val req = ModelRequest(
             messages = listOf(
                 ChatMessage(role = "user", content = "Say hi to Kotlin."),
             ),
             model = "gpt-4o-mini",
             temperature = 0.7,
         )
-        println("request JSON: ${Json.encodeToString(CompletionRequest.serializer(), req)}")
+        println("request JSON: ${Json.encodeToString(ModelRequest.serializer(), req)}")
     }
 }

@@ -164,11 +164,11 @@ You normally do not pick the variant yourself; pass the handle and let the resol
 Tool registrations in the WASM SDK use the same `{ name, description, parameters, handler }` object shape documented in the [WASM Agent guide](/docs/guides/wasm/agent), and tools are passed directly to `runAgent` (or `runAgentWithCallback`). The `imageInput`, `audioInput`, `videoInput`, `fileInput`, `threeDInput`, and `cadInput` helpers build the `parameters` schema for you:
 
 ```typescript
-import init, { CompletionModel, ChatMessage, runAgent, ContentStore, imageInput } from "@blazen/sdk";
+import init, { Model, ChatMessage, runAgent, ContentStore, imageInput } from "@blazen/sdk";
 
 await init();
 
-const model = CompletionModel.openai();
+const model = Model.openai();
 const store = ContentStore.inMemory();
 
 const photoBytes = new Uint8Array(await (await fetch("/photo.jpg")).arrayBuffer());
@@ -226,7 +226,7 @@ A Worker is just a fetch handler, but the same `init()` + `ContentStore` flow ap
 
 ```typescript
 import init, {
-  CompletionModel,
+  Model,
   ChatMessage,
   ContentStore,
   runAgent,
@@ -248,7 +248,7 @@ export default {
     const upload = new Uint8Array(await request.arrayBuffer());
     const handle = await persistent.put(upload, "image", request.headers.get("content-type") ?? undefined);
 
-    const model = CompletionModel.openai();
+    const model = Model.openai();
     const tools = [
       {
         name: "describe",

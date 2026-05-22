@@ -1,7 +1,7 @@
 //! JavaScript bindings for the composable middleware system.
 //!
 //! Mirrors [`blazen_llm::middleware`]: a [`Middleware`] is a unit that
-//! wraps an `Arc<dyn CompletionModel>` with additional behaviour, and a
+//! wraps an `Arc<dyn Model>` with additional behaviour, and a
 //! [`MiddlewareStack`] composes several layers in a predictable order.
 //!
 //! The first layer added to a stack becomes the **outermost** wrapper --
@@ -12,7 +12,7 @@
 //! stack.withRetry({ maxRetries: 3 });
 //! stack.withCache({ ttlSeconds: 300 });
 //!
-//! const wrapped = stack.apply(CompletionModel.openai());
+//! const wrapped = stack.apply(Model.openai());
 //! const response = await wrapped.complete([ChatMessage.user("hi")]);
 //!
 //! // Or, using the concrete middleware classes:
@@ -33,7 +33,7 @@ use std::sync::{Arc, Mutex};
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
-use blazen_llm::CompletionModel;
+use blazen_llm::Model;
 use blazen_llm::cache::CacheConfig;
 use blazen_llm::middleware::{
     CacheMiddleware as CoreCacheMiddleware, Middleware as CoreMiddleware, MiddlewareStack,
@@ -42,7 +42,7 @@ use blazen_llm::middleware::{
 use blazen_llm::retry::RetryConfig;
 
 use crate::generated::{JsCacheConfig, JsRetryConfig};
-use crate::providers::JsCompletionModel;
+use crate::providers::JsModel;
 
 // ---------------------------------------------------------------------------
 // Layer enum (Rust-internal)
@@ -163,7 +163,7 @@ impl JsMiddleware {
 
 /// Built-in middleware that wraps the inner model with retry-on-transient-
 /// error behaviour. Equivalent to constructing a
-/// [`super::wrappers::JsRetryCompletionModel`] but composable inside a
+/// [`super::wrappers::JsRetryModel`] but composable inside a
 /// [`JsMiddlewareStack`].
 ///
 /// ```javascript
@@ -206,7 +206,7 @@ impl JsRetryMiddleware {
 
 /// Built-in middleware that wraps the inner model with an in-memory
 /// response cache. Equivalent to constructing a
-/// [`super::wrappers::JsCachedCompletionModel`] but composable inside a
+/// [`super::wrappers::JsCachedModel`] but composable inside a
 /// [`JsMiddlewareStack`].
 ///
 /// ```javascript
@@ -258,7 +258,7 @@ impl JsCacheMiddleware {
 /// const stack = new MiddlewareStack();
 /// stack.withRetry({ maxRetries: 3 });
 /// stack.withCache({ ttlSeconds: 300 });
-/// const wrapped = stack.apply(CompletionModel.openai());
+/// const wrapped = stack.apply(Model.openai());
 /// ```
 #[napi(js_name = "MiddlewareStack")]
 pub struct JsMiddlewareStack {
@@ -328,15 +328,15 @@ impl JsMiddlewareStack {
     }
 
     /// Apply every registered layer to `model` and return the wrapped
-    /// model as a fresh [`JsCompletionModel`].
+    /// model as a fresh [`JsModel`].
     ///
     /// The stack itself is left intact and can be re-applied to other
     /// models.
     #[napi]
-    pub fn apply(&self, model: &JsCompletionModel) -> Result<JsCompletionModel> {
+    pub fn apply(&self, model: &JsModel) -> Result<JsModel> {
         let inner = model.inner.clone().ok_or_else(|| {
             napi::Error::from_reason(
-                "MiddlewareStack.apply() cannot wrap a subclassed CompletionModel that has no concrete provider",
+                "MiddlewareStack.apply() cannot wrap a subclassed Model that has no concrete provider",
             )
         })?;
 
@@ -360,9 +360,9 @@ impl JsMiddlewareStack {
                 }
             }
         }
-        let wrapped: Arc<dyn CompletionModel> = stack.apply(inner);
+        let wrapped: Arc<dyn Model> = stack.apply(inner);
 
-        Ok(JsCompletionModel {
+        Ok(JsModel {
             inner: Some(wrapped),
             local_model: None,
             config: None,
@@ -390,7 +390,7 @@ impl JsMiddlewareStack {
 struct NoopMiddleware;
 
 impl CoreMiddleware for NoopMiddleware {
-    fn wrap(&self, inner: Arc<dyn CompletionModel>) -> Arc<dyn CompletionModel> {
+    fn wrap(&self, inner: Arc<dyn Model>) -> Arc<dyn Model> {
         inner
     }
 }

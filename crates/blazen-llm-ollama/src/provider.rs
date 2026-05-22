@@ -95,7 +95,7 @@ impl OllamaProvider {
     /// Send a `/api/generate` request to Ollama. The body must already
     /// be shaped for Ollama's native surface; the bridge in
     /// `blazen-llm/src/backends/ollama.rs` performs the typed translation
-    /// from `CompletionRequest`.
+    /// from `ModelRequest`.
     ///
     /// # Errors
     /// Propagates [`OllamaError`] from the underlying client.

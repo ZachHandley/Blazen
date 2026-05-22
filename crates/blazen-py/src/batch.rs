@@ -12,9 +12,9 @@ use blazen_llm::batch::{
 };
 use blazen_llm::types::ChatMessage;
 
-use crate::providers::PyCompletionModel;
-use crate::providers::completion_model::{PyCompletionOptions, build_request};
-use crate::types::{PyChatMessage, PyCompletionResponse, PyTokenUsage};
+use crate::providers::PyModel;
+use crate::providers::model::{PyModelOptions, build_request};
+use crate::types::{PyChatMessage, PyModelResponse, PyTokenUsage};
 
 // ---------------------------------------------------------------------------
 // PyBatchConfig
@@ -75,7 +75,7 @@ impl PyBatchConfig {
 /// Result of a batch completion run.
 ///
 /// Each input request maps to a positional entry in ``responses`` and
-/// ``errors``. A successful request has a ``CompletionResponse`` in
+/// ``errors``. A successful request has a ``ModelResponse`` in
 /// ``responses`` and ``None`` in ``errors``; a failed request has ``None``
 /// in ``responses`` and an error string in ``errors``.
 ///
@@ -97,12 +97,12 @@ pub struct PyBatchResult {
 impl PyBatchResult {
     /// Per-request responses. ``None`` for requests that failed.
     #[getter]
-    fn responses(&self) -> Vec<Option<PyCompletionResponse>> {
+    fn responses(&self) -> Vec<Option<PyModelResponse>> {
         self.inner
             .responses
             .iter()
             .map(|r| {
-                r.as_ref().ok().map(|resp| PyCompletionResponse {
+                r.as_ref().ok().map(|resp| PyModelResponse {
                     inner: resp.clone(),
                 })
             })
@@ -174,14 +174,14 @@ impl PyBatchResult {
 ///     requests: A list of message lists. Each inner list is one conversation.
 ///     concurrency: Maximum number of concurrent requests. ``0`` (the default)
 ///         means unlimited.
-///     options: Optional ``CompletionOptions`` applied to every request
+///     options: Optional ``ModelOptions`` applied to every request
 ///         (temperature, max_tokens, tools, etc.).
 ///
 /// Returns:
 ///     A ``BatchResult`` with per-request responses and aggregated usage/cost.
 ///
 /// Example:
-///     >>> model = CompletionModel.openai()
+///     >>> model = Model.openai()
 ///     >>> conversations = [
 ///     ...     [ChatMessage.user("What is 2+2?")],
 ///     ...     [ChatMessage.user("What is 3+3?")],
@@ -197,14 +197,14 @@ impl PyBatchResult {
 #[allow(clippy::map_unwrap_or)]
 pub fn complete_batch<'py>(
     py: Python<'py>,
-    model: Bound<'py, PyCompletionModel>,
+    model: Bound<'py, PyModel>,
     requests: Vec<Vec<PyRef<'py, PyChatMessage>>>,
     config: Option<PyRef<'py, PyBatchConfig>>,
     concurrency: usize,
-    options: Option<PyRef<'py, PyCompletionOptions>>,
+    options: Option<PyRef<'py, PyModelOptions>>,
 ) -> PyResult<Bound<'py, PyAny>> {
-    // Build all CompletionRequests while we still hold the GIL.
-    let rust_requests: Vec<blazen_llm::CompletionRequest> = requests
+    // Build all ModelRequests while we still hold the GIL.
+    let rust_requests: Vec<blazen_llm::ModelRequest> = requests
         .iter()
         .map(|msgs| {
             let rust_msgs: Vec<ChatMessage> = msgs.iter().map(|m| m.inner.clone()).collect();
@@ -216,7 +216,7 @@ pub fn complete_batch<'py>(
         .as_deref()
         .map(PyBatchConfig::to_rust)
         .unwrap_or_else(|| BatchConfig::new(concurrency));
-    let inner_model = crate::providers::completion_model::arc_from_bound(&model);
+    let inner_model = crate::providers::model::arc_from_bound(&model);
 
     pyo3_async_runtimes::tokio::future_into_py(py, async move {
         let result = rust_complete_batch(inner_model.as_ref(), rust_requests, rust_config).await;

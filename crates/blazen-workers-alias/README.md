@@ -16,7 +16,7 @@ The wasm sidecar (`@blazen-dev/blazen-wasm32-wasi`) is pulled in automatically a
 
 ```js
 import {
-  CompletionModel,
+  Model,
   EmbeddingModel,
   AnthropicProvider,
   Workflow,
@@ -42,7 +42,7 @@ pnpm add blazen @blazen-dev/blazen-wasm32-wasi
 ```
 
 ```js
-import { CompletionModel } from 'blazen/workers';
+import { Model } from 'blazen/workers';
 ```
 
 Both installs are required because the wasm sidecar is an optional peer-dependency on `blazen`. The `blazen/workers` subpath uses the same wrangler-static `import wasm from '@blazen-dev/blazen-wasm32-wasi/blazen.wasm32-wasi.wasm'` loader under the hood as this alias.

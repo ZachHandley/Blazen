@@ -52,13 +52,13 @@ func describeImage(ctx context.Context, path string) (string, error) {
     }
     b64 := base64.StdEncoding.EncodeToString(raw)
 
-    model, err := blazen.NewOpenAICompletion(os.Getenv("OPENAI_API_KEY"), "gpt-4o", "")
+    model, err := blazen.NewOpenAIModel(os.Getenv("OPENAI_API_KEY"), "gpt-4o", "")
     if err != nil {
         return "", err
     }
     defer model.Close()
 
-    req := blazen.CompletionRequest{
+    req := blazen.ModelRequest{
         Messages: []blazen.ChatMessage{
             {
                 Role:    "user",
@@ -108,7 +108,7 @@ video := blazen.Media{
     DataBase64: encodeMp4(frames),
 }
 
-req := blazen.CompletionRequest{
+req := blazen.ModelRequest{
     Messages: []blazen.ChatMessage{
         {Role: "user", Content: "Transcribe this clip.", MediaParts: []blazen.Media{audio}},
     },
@@ -123,7 +123,7 @@ Multimodal messages compose cleanly with the workflow engine. A step that needs 
 
 ```go
 type captionHandler struct {
-    model *blazen.CompletionModel
+    model *blazen.Model
 }
 
 func (h captionHandler) Invoke(ctx context.Context, ev blazen.Event) (blazen.StepOutput, error) {
@@ -137,7 +137,7 @@ func (h captionHandler) Invoke(ctx context.Context, ev blazen.Event) (blazen.Ste
         return nil, err
     }
 
-    res, err := h.model.Complete(ctx, blazen.CompletionRequest{
+    res, err := h.model.Complete(ctx, blazen.ModelRequest{
         Messages: []blazen.ChatMessage{
             {
                 Role:    "user",

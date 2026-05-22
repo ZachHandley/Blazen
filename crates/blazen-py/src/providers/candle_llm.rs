@@ -1,7 +1,7 @@
 //! Python wrapper for the local candle LLM provider.
 //!
 //! Exposes [`CandleLlmProvider`](blazen_llm::CandleLlmProvider) (with the
-//! [`CandleLlmCompletionModel`](blazen_llm::CandleLlmCompletionModel) trait
+//! [`CandleLlmModel`](blazen_llm::CandleLlmModel) trait
 //! bridge) to Python with ``complete``, ``stream``, and load/unload control.
 
 use std::sync::Arc;
@@ -11,12 +11,12 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use tokio_stream::StreamExt;
 
 use crate::error::CandleLlmError;
-use crate::providers::completion_model::{PyCompletionOptions, build_request};
+use crate::providers::model::{PyModelOptions, build_request};
 use crate::providers::options::PyCandleLlmOptions;
-use crate::types::{PyChatMessage, PyCompletionResponse};
+use crate::types::{PyChatMessage, PyModelResponse};
 use blazen_llm::ChatMessage;
-use blazen_llm::traits::{CompletionModel, LocalModel};
-use blazen_llm::{CandleInferenceResult, CandleLlmCompletionModel, CandleLlmProvider};
+use blazen_llm::traits::{LocalModel, Model};
+use blazen_llm::{CandleInferenceResult, CandleLlmModel, CandleLlmProvider};
 
 // ---------------------------------------------------------------------------
 // PyCandleLlmProvider
@@ -38,7 +38,7 @@ pub struct PyCandleLlmProvider {
     /// Trait-object wrapper used for ``complete`` / ``stream`` (it adapts
     /// the inherent ``model_id() -> Option<&str>`` to the trait-required
     /// ``&str``).
-    completion: Arc<CandleLlmCompletionModel>,
+    completion: Arc<CandleLlmModel>,
     /// Direct provider used for ``load`` / ``unload`` / ``is_loaded`` via
     /// the [`LocalModel`] trait impl.
     local: Arc<CandleLlmProvider>,
@@ -58,7 +58,7 @@ impl PyCandleLlmProvider {
         let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
         // `CandleLlmProvider` is not `Clone` and exposes no options accessor,
         // so we keep the options by value and build two independent provider
-        // instances: one for the `CompletionModel` trait bridge wrapper, one
+        // instances: one for the `Model` trait bridge wrapper, one
         // for direct `LocalModel` calls. They each hold their own engine
         // mutex; load/unload on the second is honored by the load/unload
         // methods exposed here.
@@ -66,7 +66,7 @@ impl PyCandleLlmProvider {
             .map_err(|e| CandleLlmError::new_err(e.to_string()))?;
         let for_completion = CandleLlmProvider::from_options(opts)
             .map_err(|e| CandleLlmError::new_err(e.to_string()))?;
-        let completion = Arc::new(CandleLlmCompletionModel::new(for_completion));
+        let completion = Arc::new(CandleLlmModel::new(for_completion));
         Ok(Self {
             completion,
             local: Arc::new(local),
@@ -76,24 +76,24 @@ impl PyCandleLlmProvider {
     /// Get the model identifier.
     #[getter]
     fn model_id(&self) -> String {
-        CompletionModel::model_id(self.completion.as_ref()).to_owned()
+        Model::model_id(self.completion.as_ref()).to_owned()
     }
 
     /// Perform a chat completion.
     ///
     /// Args:
     ///     messages: A list of :class:`ChatMessage` objects.
-    ///     options: Optional :class:`CompletionOptions` for sampling params.
+    ///     options: Optional :class:`ModelOptions` for sampling params.
     ///
     /// Returns:
-    ///     A :class:`CompletionResponse`.
-    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, CompletionResponse]", imports = ("typing",)))]
+    ///     A :class:`ModelResponse`.
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ModelResponse]", imports = ("typing",)))]
     #[pyo3(signature = (messages, options=None))]
     fn complete<'py>(
         &self,
         py: Python<'py>,
         messages: Vec<PyChatMessage>,
-        options: Option<Py<PyCompletionOptions>>,
+        options: Option<Py<PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let rust_messages: Vec<ChatMessage> = messages.into_iter().map(|m| m.inner).collect();
         let opts_borrow = options.as_ref().map(|o| o.borrow(py));
@@ -101,10 +101,10 @@ impl PyCandleLlmProvider {
 
         let inner = self.completion.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let response = CompletionModel::complete(inner.as_ref(), request)
+            let response = Model::complete(inner.as_ref(), request)
                 .await
                 .map_err(|e| CandleLlmError::new_err(e.to_string()))?;
-            Ok(PyCompletionResponse { inner: response })
+            Ok(PyModelResponse { inner: response })
         })
     }
 
@@ -116,14 +116,14 @@ impl PyCandleLlmProvider {
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
         on_chunk: Py<PyAny>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
         let request = build_request(py, rust_messages, options.as_deref())?;
         let inner = self.completion.clone();
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let stream = CompletionModel::stream(inner.as_ref(), request)
+            let stream = Model::stream(inner.as_ref(), request)
                 .await
                 .map_err(|e| CandleLlmError::new_err(e.to_string()))?;
 
@@ -187,7 +187,7 @@ impl PyCandleLlmProvider {
     fn __repr__(&self) -> String {
         format!(
             "CandleLlmProvider(model_id='{}')",
-            CompletionModel::model_id(self.completion.as_ref())
+            Model::model_id(self.completion.as_ref())
         )
     }
 }

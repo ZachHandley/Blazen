@@ -25,7 +25,7 @@ import test from "ava";
 
 import {
   ChatMessage,
-  CompletionModel,
+  Model,
   CustomProvider,
   runAgent,
 } from "../../crates/blazen-node/index.js";
@@ -175,7 +175,7 @@ class ScriptedProvider extends CustomProvider {
     this.calls += 1;
     return {
       content: null,
-      // snake_case to match `CompletionResponse`'s serde naming
+      // snake_case to match `ModelResponse`'s serde naming
       tool_calls: [
         {
           id: "call-1",
@@ -192,7 +192,7 @@ class ScriptedProvider extends CustomProvider {
 
 test("Native error classes - toolHandler can throw a custom JS Error subclass without crashing the host", async (t) => {
   const provider = new ScriptedProvider();
-  const model = CompletionModel.custom(provider, "scripted-stub:test-model");
+  const model = Model.custom(provider, "scripted-stub:test-model");
   const messages = [ChatMessage.user("trigger the signal")];
 
   const toolHandler = (_name, args) => {

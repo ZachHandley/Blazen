@@ -27,8 +27,7 @@ use crate::http::{HttpClient, HttpRequest, HttpResponse};
 use crate::retry::RetryConfig;
 use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
 use crate::types::{
-    CompletionRequest, CompletionResponse, EmbeddingResponse, Role, StreamChunk, TokenUsage,
-    ToolCall,
+    EmbeddingResponse, ModelRequest, ModelResponse, Role, StreamChunk, TokenUsage, ToolCall,
 };
 
 // ---------------------------------------------------------------------------
@@ -148,7 +147,7 @@ impl OpenAiProvider {
 
     /// Build the JSON request body for the `OpenAI` chat completions endpoint.
     #[allow(clippy::too_many_lines)]
-    fn build_body(&self, request: &CompletionRequest, stream: bool) -> serde_json::Value {
+    fn build_body(&self, request: &ModelRequest, stream: bool) -> serde_json::Value {
         let model = request.model.as_deref().unwrap_or(&self.default_model);
 
         let mut messages: Vec<serde_json::Value> = Vec::with_capacity(request.messages.len());
@@ -322,11 +321,11 @@ impl OpenAiProvider {
 super::impl_simple_from_options!(OpenAiProvider, "openai");
 
 // ---------------------------------------------------------------------------
-// CompletionModel implementation
+// Model implementation
 // ---------------------------------------------------------------------------
 
 #[async_trait]
-impl crate::traits::CompletionModel for OpenAiProvider {
+impl crate::traits::Model for OpenAiProvider {
     fn model_id(&self) -> &str {
         &self.default_model
     }
@@ -339,10 +338,7 @@ impl crate::traits::CompletionModel for OpenAiProvider {
         Some(Self::http_client(self))
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         let model_id = request.model.as_deref().unwrap_or(&self.default_model);
         let span = tracing::info_span!(
             "llm.complete",
@@ -412,10 +408,10 @@ impl crate::traits::CompletionModel for OpenAiProvider {
         // TODO(phase-4.2): OpenAI o-series exposes `reasoning_summary` only via the
         // Responses API (`/v1/responses`), not chat completions. Once the fal.rs
         // Responses-API body builder lands in Phase 4.2, the parser there will
-        // populate `CompletionResponse.reasoning` for o-series models. This direct
+        // populate `ModelResponse.reasoning` for o-series models. This direct
         // chat-completions code path can stay as-is — o-series users should call the
         // Responses endpoint via fal.
-        Ok(CompletionResponse {
+        Ok(ModelResponse {
             content: choice.message.content,
             tool_calls,
             reasoning: None,
@@ -435,7 +431,7 @@ impl crate::traits::CompletionModel for OpenAiProvider {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         let model_id = request.model.as_deref().unwrap_or(&self.default_model);
@@ -918,7 +914,7 @@ mod tests {
     #[test]
     fn build_body_minimal() {
         let provider = OpenAiProvider::new("test-key");
-        let request = CompletionRequest {
+        let request = ModelRequest {
             messages: vec![ChatMessage::user("Hello")],
             tools: vec![],
             temperature: None,
@@ -941,7 +937,7 @@ mod tests {
     #[test]
     fn build_body_with_options() {
         let provider = OpenAiProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")])
+        let request = ModelRequest::new(vec![ChatMessage::user("Hello")])
             .with_temperature(0.5)
             .with_max_tokens(100)
             .with_model("gpt-4.1-mini");
@@ -956,8 +952,8 @@ mod tests {
     #[test]
     fn build_body_with_tools() {
         let provider = OpenAiProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]).with_tools(vec![
-            ToolDefinition {
+        let request =
+            ModelRequest::new(vec![ChatMessage::user("Hello")]).with_tools(vec![ToolDefinition {
                 name: "get_weather".to_owned(),
                 description: "Get current weather".to_owned(),
                 parameters: serde_json::json!({
@@ -966,8 +962,7 @@ mod tests {
                         "location": { "type": "string" }
                     }
                 }),
-            },
-        ]);
+            }]);
 
         let body = provider.build_body(&request, false);
         let tools = body["tools"].as_array().unwrap();
@@ -978,7 +973,7 @@ mod tests {
     #[test]
     fn test_text_backward_compat() {
         let provider = OpenAiProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]);
+        let request = ModelRequest::new(vec![ChatMessage::user("Hello")]);
 
         let body = provider.build_body(&request, false);
         // Text messages should produce a plain string, not an array.
@@ -988,7 +983,7 @@ mod tests {
     #[test]
     fn test_build_body_image_url() {
         let provider = OpenAiProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user_image_url(
+        let request = ModelRequest::new(vec![ChatMessage::user_image_url(
             "What is this?",
             "https://example.com/cat.jpg",
             Some("image/jpeg"),
@@ -1009,7 +1004,7 @@ mod tests {
     #[test]
     fn test_build_body_base64_image() {
         let provider = OpenAiProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user_image_base64(
+        let request = ModelRequest::new(vec![ChatMessage::user_image_base64(
             "Describe this",
             "abc123base64data",
             "image/png",
@@ -1032,7 +1027,7 @@ mod tests {
         use crate::types::{ContentPart, ImageContent, ImageSource};
 
         let provider = OpenAiProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user_parts(vec![
+        let request = ModelRequest::new(vec![ChatMessage::user_parts(vec![
             ContentPart::Text {
                 text: "First".into(),
             },
@@ -1081,8 +1076,7 @@ mod tests {
                 },
             ),
         );
-        let request =
-            CompletionRequest::new(vec![ChatMessage::user("draw a cat"), assistant, tool_msg]);
+        let request = ModelRequest::new(vec![ChatMessage::user("draw a cat"), assistant, tool_msg]);
 
         let body = provider.build_body(&request, false);
         let messages = body["messages"].as_array().unwrap();
@@ -1112,7 +1106,7 @@ mod tests {
                 },
             ),
         );
-        let request = CompletionRequest::new(vec![tool_msg]);
+        let request = ModelRequest::new(vec![tool_msg]);
 
         let body = provider.build_body(&request, false);
         let messages = body["messages"].as_array().unwrap();
@@ -1134,7 +1128,7 @@ mod tests {
                 ContentPart::image_url("https://example.com/x.png", None),
             ],
         );
-        let request = CompletionRequest::new(vec![tool_msg]);
+        let request = ModelRequest::new(vec![tool_msg]);
 
         let body = provider.build_body(&request, false);
         let messages = body["messages"].as_array().unwrap();

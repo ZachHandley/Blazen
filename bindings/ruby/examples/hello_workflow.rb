@@ -19,7 +19,7 @@ Blazen.init
 puts "Blazen native lib version: #{Blazen.version}"
 puts "Blazen gem version:        #{Blazen::VERSION}"
 
-req = Blazen::Llm.completion_request(
+req = Blazen::Llm.model_request(
   messages: [
     Blazen::Llm.system("You answer in one short sentence."),
     Blazen::Llm.user("What is the airspeed velocity of an unladen swallow?"),
@@ -27,7 +27,7 @@ req = Blazen::Llm.completion_request(
   temperature: 0.0,
   max_tokens: 64,
 )
-puts "Constructed CompletionRequest with #{req.messages.length} messages."
+puts "Constructed ModelRequest with #{req.messages.length} messages."
 
 # Actually calling out to a provider requires an API key:
 #

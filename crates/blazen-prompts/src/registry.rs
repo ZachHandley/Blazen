@@ -2,13 +2,13 @@
 //!
 //! The [`PromptRegistry`] organises templates by name and version, making it
 //! easy to look up the latest version of a prompt or pin to a specific one.
-//! It also supports batch rendering into a [`CompletionRequest`] and
+//! It also supports batch rendering into a [`ModelRequest`] and
 //! loading/saving from YAML and JSON files.
 
 use std::collections::HashMap;
 use std::path::Path;
 
-use blazen_llm::{ChatMessage, CompletionRequest};
+use blazen_llm::{ChatMessage, ModelRequest};
 
 use crate::error::PromptError;
 use crate::format::PromptFile;
@@ -124,11 +124,11 @@ impl PromptRegistry {
         template.render(vars)
     }
 
-    /// Build a [`CompletionRequest`] from a sequence of named prompts.
+    /// Build a [`ModelRequest`] from a sequence of named prompts.
     ///
     /// Each element in `prompts` is a `(prompt_name, variables)` tuple. The
     /// latest version of each prompt is rendered and the resulting messages
-    /// are collected into a single [`CompletionRequest`].
+    /// are collected into a single [`ModelRequest`].
     ///
     /// # Errors
     ///
@@ -136,7 +136,7 @@ impl PromptRegistry {
     pub fn build_request(
         &self,
         prompts: &[(&str, HashMap<String, String>)],
-    ) -> Result<CompletionRequest, PromptError> {
+    ) -> Result<ModelRequest, PromptError> {
         let mut messages = Vec::with_capacity(prompts.len());
 
         for (name, vars) in prompts {
@@ -144,7 +144,7 @@ impl PromptRegistry {
             messages.push(message);
         }
 
-        Ok(CompletionRequest::new(messages))
+        Ok(ModelRequest::new(messages))
     }
 
     /// List all registered prompt names.

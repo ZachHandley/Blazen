@@ -14,13 +14,13 @@ use blazen_llm::compute::{
     VideoGeneration,
 };
 use blazen_llm::providers::fal::FalProvider;
-use blazen_llm::traits::CompletionModel;
+use blazen_llm::traits::Model;
 
 use super::{
     apply_request_options, as_dyn_completion, complete_promise, fetch_client, resolve_key,
     stream_promise,
 };
-use crate::completion_model::WasmCompletionModel;
+use crate::model::WasmModel;
 
 /// A fal.ai provider with LLM, image, video, audio, transcription, 3-D and
 /// background-removal support.
@@ -72,10 +72,10 @@ impl WasmFalProvider {
         self.inner.model_id().to_owned()
     }
 
-    /// Convert into a generic [`CompletionModel`].
-    #[wasm_bindgen(js_name = "toCompletionModel")]
-    pub fn to_completion_model(&self) -> WasmCompletionModel {
-        WasmCompletionModel::from_arc(as_dyn_completion(Arc::clone(&self.inner)))
+    /// Convert into a generic [`Model`].
+    #[wasm_bindgen(js_name = "toModel")]
+    pub fn to_model(&self) -> WasmModel {
+        WasmModel::from_arc(as_dyn_completion(Arc::clone(&self.inner)))
     }
 
     // -----------------------------------------------------------------------
@@ -94,7 +94,7 @@ impl WasmFalProvider {
         let model = as_dyn_completion(Arc::clone(&self.inner));
         future_to_promise(async move {
             let msgs = crate::chat_message::js_messages_to_vec(&messages)?;
-            let request = blazen_llm::types::CompletionRequest::new(msgs);
+            let request = blazen_llm::types::ModelRequest::new(msgs);
             let request = apply_request_options(request, options)?;
             let response = model
                 .complete(request)

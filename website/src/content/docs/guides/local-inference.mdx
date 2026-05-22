@@ -20,14 +20,14 @@ Blazen can run every major model class entirely on your own hardware -- no API k
 | TTS | Piper | `blazen-audio-piper` | `piper` |
 | Image generation | Stable Diffusion | `blazen-image-diffusion` | `diffusion` |
 
-Every local provider implements the same trait as its remote counterpart -- `CompletionModel`, `EmbeddingModel`, `Transcription`, etc. -- so they slot into the exact same workflows and can be swapped with a one-line change.
+Every local provider implements the same trait as its remote counterpart -- `Model`, `EmbeddingModel`, `Transcription`, etc. -- so they slot into the exact same workflows and can be swapped with a one-line change.
 
 ## Local LLM (mistral.rs)
 
 ```python
-from blazen import CompletionModel, MistralRsOptions, Quantization, Device, ChatMessage
+from blazen import Model, MistralRsOptions, Quantization, Device, ChatMessage
 
-model = CompletionModel.mistralrs(options=MistralRsOptions(
+model = Model.mistralrs(options=MistralRsOptions(
     model_id="mistralai/Mistral-7B-Instruct-v0.3",
     quantization=Quantization.Q4KM,
     device=Device.Cuda,
@@ -47,7 +47,7 @@ await model.unload()
 
 ```rust
 use blazen_llm_mistralrs::{MistralRsOptions, MistralRsProvider};
-use blazen_llm::{ChatMessage, CompletionRequest, LocalModel, CompletionModel};
+use blazen_llm::{ChatMessage, ModelRequest, LocalModel, Model};
 
 let mut provider = MistralRsProvider::new(
     MistralRsOptions::new("mistralai/Mistral-7B-Instruct-v0.3")
@@ -57,12 +57,12 @@ let mut provider = MistralRsProvider::new(
 
 provider.load().await?;
 let response = provider
-    .complete(CompletionRequest::new(vec![ChatMessage::user("Hello!")]))
+    .complete(ModelRequest::new(vec![ChatMessage::user("Hello!")]))
     .await?;
 println!("{}", response.content.unwrap_or_default());
 ```
 
-`CompletionModel.mistralrs`, `CompletionModel.llamacpp`, and `CompletionModel.candle` all follow the same shape: required `model_id`, optional quantization and device hints, optional context length and cache directory.
+`Model.mistralrs`, `Model.llamacpp`, and `Model.candle` all follow the same shape: required `model_id`, optional quantization and device hints, optional context length and cache directory.
 
 ### Typed streaming chunks
 
@@ -81,7 +81,7 @@ for await (const chunk of stream) {
 }
 ```
 
-Swap `InferenceChunkStream` for `LlamaCppInferenceChunkStream` when you build the model via `CompletionModel.llamacpp` -- the surface is identical, only the prefix changes.
+Swap `InferenceChunkStream` for `LlamaCppInferenceChunkStream` when you build the model via `Model.llamacpp` -- the surface is identical, only the prefix changes.
 
 ```python
 stream = await model.complete_stream([ChatMessage.user("Hello!")])
@@ -156,12 +156,12 @@ See the dedicated [Transcription guide](/guides/transcription/) for audio format
 When running several local models side by side, the `ModelManager` tracks per-pool memory budgets (host RAM and GPU VRAM as separate buckets) and evicts the least-recently-used model **in the same pool** when a new load would exceed that pool's budget. Models in different pools never evict each other.
 
 ```python
-from blazen import ModelManager, CompletionModel, EmbeddingModel, MistralRsOptions
+from blazen import ModelManager, Model, EmbeddingModel, MistralRsOptions
 
 # 64 GB of CPU RAM, 24 GB of GPU VRAM (RTX 4090).
 manager = ModelManager(cpu_ram_gb=64, gpu_vram_gb=24)
 
-llm = CompletionModel.mistralrs(options=MistralRsOptions(
+llm = Model.mistralrs(options=MistralRsOptions(
     model_id="mistralai/Mistral-7B-Instruct-v0.3",
     device="cuda:0",
 ))

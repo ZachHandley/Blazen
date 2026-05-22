@@ -6,16 +6,16 @@ section: "guides"
 order: 7
 ---
 
-Blazen models are immutable. Each decorator method (`withRetry()`, `withCache()`, `withFallback()`) returns a **new** `CompletionModel` that wraps the original, so you can layer behaviours without mutating anything.
+Blazen models are immutable. Each decorator method (`withRetry()`, `withCache()`, `withFallback()`) returns a **new** `Model` that wraps the original, so you can layer behaviours without mutating anything.
 
 ## Retry
 
 Wrap a model with automatic retry on transient failures (rate limits, timeouts, server errors). Retries use exponential backoff with jitter.
 
 ```typescript
-import { CompletionModel } from "blazen";
+import { Model } from "blazen";
 
-const model = CompletionModel.openai({ apiKey: "sk-..." }).withRetry({
+const model = Model.openai({ apiKey: "sk-..." }).withRetry({
   maxRetries: 5,
   initialDelayMs: 500,
   maxDelayMs: 15000,
@@ -37,7 +37,7 @@ You can also call `withRetry()` with no argument to use the defaults.
 Cache identical non-streaming requests in memory so repeated prompts are served instantly without hitting the provider.
 
 ```typescript
-const model = CompletionModel.openai({ apiKey: "sk-..." }).withCache({
+const model = Model.openai({ apiKey: "sk-..." }).withCache({
   ttlSeconds: 600,
   maxEntries: 500,
 });
@@ -55,20 +55,20 @@ Streaming requests (`model.stream(...)`) bypass the cache and always go to the p
 Route requests through multiple providers in order. If the first provider fails with a transient error, the next one is tried automatically. Non-retryable errors (auth, validation) short-circuit immediately.
 
 ```typescript
-const primary = CompletionModel.openai({ apiKey: "sk-..." });
-const backup = CompletionModel.anthropic({ apiKey: "sk-ant-..." });
+const primary = Model.openai({ apiKey: "sk-..." });
+const backup = Model.anthropic({ apiKey: "sk-ant-..." });
 
-const model = CompletionModel.withFallback([primary, backup]);
+const model = Model.withFallback([primary, backup]);
 ```
 
-`withFallback()` is a **static factory method** that takes an array of `CompletionModel` instances and returns a new `CompletionModel`.
+`withFallback()` is a **static factory method** that takes an array of `Model` instances and returns a new `Model`.
 
 ## Composing Middleware
 
-Because each decorator returns a new `CompletionModel`, you can chain them:
+Because each decorator returns a new `Model`, you can chain them:
 
 ```typescript
-const model = CompletionModel.openai({ apiKey: "sk-..." })
+const model = Model.openai({ apiKey: "sk-..." })
   .withCache({ ttlSeconds: 300 })
   .withRetry({ maxRetries: 3 });
 ```
@@ -82,10 +82,10 @@ request -> retry -> cache -> provider -> cache -> retry -> response
 For maximum resilience, combine all three:
 
 ```typescript
-const primary = CompletionModel.openai({ apiKey: "sk-..." }).withCache().withRetry();
-const backup = CompletionModel.anthropic({ apiKey: "sk-ant-..." }).withRetry();
+const primary = Model.openai({ apiKey: "sk-..." }).withCache().withRetry();
+const backup = Model.anthropic({ apiKey: "sk-ant-..." }).withRetry();
 
-const model = CompletionModel.withFallback([primary, backup]);
+const model = Model.withFallback([primary, backup]);
 ```
 
 This gives you caching on the primary, automatic retries on both, and automatic failover from OpenAI to Anthropic.

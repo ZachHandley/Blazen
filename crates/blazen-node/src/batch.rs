@@ -10,11 +10,11 @@ use napi_derive::napi;
 use blazen_llm::batch::{
     BatchConfig, BatchResult as RustBatchResult, complete_batch as rust_complete_batch,
 };
-use blazen_llm::types::CompletionRequest;
+use blazen_llm::types::ModelRequest;
 
 use crate::generated::JsTokenUsage;
-use crate::providers::JsCompletionModel;
-use crate::types::{JsChatMessage, JsCompletionResponse, build_response};
+use crate::providers::JsModel;
+use crate::types::{JsChatMessage, JsModelResponse, build_response};
 
 // ---------------------------------------------------------------------------
 // JsBatchOptions
@@ -99,7 +99,7 @@ pub struct JsBatchResult {
 impl JsBatchResult {
     /// One response per input request. `null` for failed requests.
     #[napi(getter)]
-    pub fn responses(&self) -> Vec<Option<JsCompletionResponse>> {
+    pub fn responses(&self) -> Vec<Option<JsModelResponse>> {
         self.inner
             .responses
             .iter()
@@ -192,9 +192,9 @@ impl JsBatchResult {
 /// order as the input.
 ///
 /// ```typescript
-/// import { CompletionModel, ChatMessage, completeBatch } from 'blazen';
+/// import { Model, ChatMessage, completeBatch } from 'blazen';
 ///
-/// const model = CompletionModel.openai({ apiKey: "sk-..." });
+/// const model = Model.openai({ apiKey: "sk-..." });
 ///
 /// const result = await completeBatch(
 ///   model,
@@ -217,15 +217,15 @@ impl JsBatchResult {
 #[napi(js_name = "completeBatch")]
 #[allow(clippy::needless_pass_by_value, clippy::missing_errors_doc)]
 pub async fn complete_batch(
-    model: &JsCompletionModel,
+    model: &JsModel,
     message_sets: Vec<Vec<&JsChatMessage>>,
     options: Option<JsBatchOptions>,
 ) -> napi::Result<JsBatchResult> {
-    let requests: Vec<CompletionRequest> = message_sets
+    let requests: Vec<ModelRequest> = message_sets
         .into_iter()
         .map(|msgs| {
             let chat_messages = msgs.iter().map(|m| m.inner.clone()).collect();
-            CompletionRequest::new(chat_messages)
+            ModelRequest::new(chat_messages)
         })
         .collect();
 
@@ -238,9 +238,7 @@ pub async fn complete_batch(
     };
 
     let inner = model.inner.as_ref().ok_or_else(|| {
-        napi::Error::from_reason(
-            "completeBatch() is not supported on subclassed CompletionModel instances",
-        )
+        napi::Error::from_reason("completeBatch() is not supported on subclassed Model instances")
     })?;
     let result = rust_complete_batch(inner.as_ref(), requests, config).await;
 
@@ -255,7 +253,7 @@ pub async fn complete_batch(
 /// multiple calls.
 ///
 /// ```typescript
-/// import { CompletionModel, ChatMessage, BatchConfig, completeBatchConfig } from 'blazen';
+/// import { Model, ChatMessage, BatchConfig, completeBatchConfig } from 'blazen';
 ///
 /// const cfg = new BatchConfig(4);
 /// const result = await completeBatchConfig(model, messageSets, cfg);
@@ -263,15 +261,15 @@ pub async fn complete_batch(
 #[napi(js_name = "completeBatchConfig")]
 #[allow(clippy::needless_pass_by_value, clippy::missing_errors_doc)]
 pub async fn complete_batch_config(
-    model: &JsCompletionModel,
+    model: &JsModel,
     message_sets: Vec<Vec<&JsChatMessage>>,
     config: &JsBatchConfig,
 ) -> napi::Result<JsBatchResult> {
-    let requests: Vec<CompletionRequest> = message_sets
+    let requests: Vec<ModelRequest> = message_sets
         .into_iter()
         .map(|msgs| {
             let chat_messages = msgs.iter().map(|m| m.inner.clone()).collect();
-            CompletionRequest::new(chat_messages)
+            ModelRequest::new(chat_messages)
         })
         .collect();
 
@@ -279,7 +277,7 @@ pub async fn complete_batch_config(
 
     let inner = model.inner.as_ref().ok_or_else(|| {
         napi::Error::from_reason(
-            "completeBatchConfig() is not supported on subclassed CompletionModel instances",
+            "completeBatchConfig() is not supported on subclassed Model instances",
         )
     })?;
     let result = rust_complete_batch(inner.as_ref(), requests, cfg).await;

@@ -9,10 +9,10 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 
 use blazen_llm::batch::{BatchConfig as InnerBatchConfig, complete_batch};
-use blazen_llm::types::CompletionRequest;
+use blazen_llm::types::ModelRequest;
 
 use crate::chat_message::js_messages_to_vec;
-use crate::completion_model::WasmCompletionModel;
+use crate::model::WasmModel;
 
 // ---------------------------------------------------------------------------
 // BatchConfig (tsify-derived plain struct)
@@ -56,7 +56,7 @@ impl Default for BatchConfig {
 /// - `concurrency` (number) — max concurrent requests (default: 0 = unlimited)
 ///
 /// Returns a `Promise` that resolves to a JS object with:
-/// - `responses` (array) — one `CompletionResponse` or `null` per request
+/// - `responses` (array) — one `ModelResponse` or `null` per request
 /// - `errors` (array) — one error string or `null` per request
 /// - `totalUsage` (object | undefined) — aggregated token usage
 /// - `totalCost` (number | undefined) — aggregated cost in USD
@@ -78,7 +78,7 @@ impl Default for BatchConfig {
 /// ```
 #[wasm_bindgen(js_name = "completeBatch")]
 pub fn complete_batch_js(
-    model: &WasmCompletionModel,
+    model: &WasmModel,
     message_sets: JsValue,
     options: JsValue,
 ) -> js_sys::Promise {
@@ -95,7 +95,7 @@ pub fn complete_batch_js(
             let msgs = js_messages_to_vec(&inner_messages).map_err(|e| {
                 JsValue::from_str(&format!("Failed to parse message set at index {i}: {e:?}"))
             })?;
-            requests.push(CompletionRequest::new(msgs));
+            requests.push(ModelRequest::new(msgs));
         }
 
         // Parse optional configuration. Accepts either a tsify-typed

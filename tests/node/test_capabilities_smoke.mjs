@@ -8,7 +8,7 @@
 import test from "ava";
 
 import {
-  CompletionModel,
+  Model,
   ChatMessage,
   runAgent,
 } from "../../crates/blazen-node/index.js";
@@ -19,7 +19,7 @@ const T = OPENROUTER_API_KEY ? test : test.skip;
 // -- Streaming ---------------------------------------------------------------
 
 T("Streaming smoke tests · streams chunks for a basic prompt", async (t) => {
-  const model = CompletionModel.openrouter({ apiKey: OPENROUTER_API_KEY });
+  const model = Model.openrouter({ apiKey: OPENROUTER_API_KEY });
   const chunks = [];
 
   await model.stream(
@@ -41,7 +41,7 @@ T("Streaming smoke tests · streams chunks for a basic prompt", async (t) => {
 // -- Structured Output -------------------------------------------------------
 
 T("Structured output smoke tests · returns JSON conforming to a schema", async (t) => {
-  const model = CompletionModel.openrouter({ apiKey: OPENROUTER_API_KEY });
+  const model = Model.openrouter({ apiKey: OPENROUTER_API_KEY });
 
   const response = await model.completeWithOptions(
     [ChatMessage.user("What is 2 + 2? Respond in the required JSON format.")],
@@ -72,7 +72,7 @@ T("Structured output smoke tests · returns JSON conforming to a schema", async 
 // -- Agent Tool Calling ------------------------------------------------------
 
 T("Agent tool calling smoke tests · uses a multiply tool and returns the correct result", async (t) => {
-  const model = CompletionModel.openrouter({ apiKey: OPENROUTER_API_KEY });
+  const model = Model.openrouter({ apiKey: OPENROUTER_API_KEY });
 
   const tools = [
     {

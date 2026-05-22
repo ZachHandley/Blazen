@@ -5,7 +5,7 @@ section: "guides"
 order: 23
 ---
 
-Blazen ships a lightweight prompt templating layer for reusing system prompts and user-message scaffolds across steps, agents, and workflows. Templates use `{{variable}}` placeholders, carry a chat role, and render into `ChatMessage` objects that plug straight into `CompletionModel.complete()`.
+Blazen ships a lightweight prompt templating layer for reusing system prompts and user-message scaffolds across steps, agents, and workflows. Templates use `{{variable}}` placeholders, carry a chat role, and render into `ChatMessage` objects that plug straight into `Model.complete()`.
 
 ## Overview
 
@@ -43,9 +43,9 @@ console.log(msg.content);
 Pass the rendered `ChatMessage` straight into the model:
 
 ```python
-from blazen import CompletionModel, ChatMessage
+from blazen import Model, ChatMessage
 
-model = CompletionModel.openai()
+model = Model.openai()
 response = await model.complete([
     template.render({"doc_type": "article", "style": "concise"}),
     ChatMessage.user(document_text),

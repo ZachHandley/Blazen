@@ -13,7 +13,7 @@ Blazen workflows run natively inside the WASM module. Steps, events, and the con
 ## Creating a workflow
 
 ```typescript
-import init, { Workflow, ChatMessage, CompletionModel } from '@blazen/sdk';
+import init, { Workflow, ChatMessage, Model } from '@blazen/sdk';
 
 await init();
 
@@ -29,7 +29,7 @@ wf.addStep('summarize', ['SummarizeEvent'], async (event, ctx) => {
   // The WASM SDK reads OPENROUTER_API_KEY from the runtime environment.
   // Factory methods do not accept runtime keys -- configure the env var
   // at deploy time (see the Edge Deployment guide for strategies).
-  const model = CompletionModel.openrouter();
+  const model = Model.openrouter();
   const response = await model.complete([
     ChatMessage.system('Summarize the following text in 2-3 sentences.'),
     ChatMessage.user(event.text),

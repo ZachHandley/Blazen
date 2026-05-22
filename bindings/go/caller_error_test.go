@@ -97,11 +97,11 @@ func TestCallerErrorPreservation(t *testing.T) {
 	//
 	// Because the type doesn't exist yet, every reference is behind the
 	// t.Skip above; nothing executes until regen. The references that
-	// would fail to compile (CallerError, NewMockCompletionModel) are kept
+	// would fail to compile (CallerError, NewMockModel) are kept
 	// in commented form below for documentation. Reintroduce them when
 	// the regen lands.
 	//
-	// model := NewMockCompletionModel("mock") // (regen also adds a mock helper)
+	// model := NewMockModel("mock") // (regen also adds a mock helper)
 	// defer model.Close()
 	//
 	// tool := Tool{

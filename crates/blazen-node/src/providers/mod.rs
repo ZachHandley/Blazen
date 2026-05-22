@@ -7,7 +7,6 @@ pub mod base;
 pub mod bedrock;
 pub mod capability_providers;
 pub mod cohere;
-pub mod completion_model;
 pub mod custom;
 pub mod deepseek;
 pub mod defaults;
@@ -19,6 +18,7 @@ pub mod gemini;
 pub mod groq;
 pub mod middleware;
 pub mod mistral;
+pub mod model;
 pub mod openai;
 pub mod openai_compat;
 pub mod openrouter;
@@ -62,13 +62,12 @@ pub use capability_providers::{
     JsTTSProvider, JsThreeDProvider, JsVideoProvider, JsVoiceProvider,
 };
 pub use cohere::JsCohereProvider;
-pub use completion_model::JsCompletionModel;
 pub use custom::JsCustomProvider;
 pub use deepseek::JsDeepSeekProvider;
 pub use defaults::{
     JsAudioMusicProviderDefaults, JsAudioSpeechProviderDefaults,
-    JsBackgroundRemovalProviderDefaults, JsBaseProviderDefaults, JsCompletionProviderDefaults,
-    JsEmbeddingProviderDefaults, JsImageGenerationProviderDefaults, JsImageUpscaleProviderDefaults,
+    JsBackgroundRemovalProviderDefaults, JsBaseProviderDefaults, JsEmbeddingProviderDefaults,
+    JsImageGenerationProviderDefaults, JsImageUpscaleProviderDefaults, JsProviderDefaults,
     JsThreeDProviderDefaults, JsTranscriptionProviderDefaults, JsVideoProviderDefaults,
     JsVoiceCloningProviderDefaults,
 };
@@ -85,6 +84,7 @@ pub use middleware::{
     JsCacheMiddleware, JsMiddleware, JsMiddlewareConfig, JsMiddlewareStack, JsRetryMiddleware,
 };
 pub use mistral::JsMistralProvider;
+pub use model::JsModel;
 pub use openai::JsOpenAiProvider;
 pub use openai_compat::{JsAuthMethod, JsOpenAiCompatConfig, JsOpenAiCompatProvider};
 pub use openrouter::JsOpenRouterProvider;
@@ -92,7 +92,7 @@ pub use perplexity::JsPerplexityProvider;
 pub use together::JsTogetherProvider;
 pub use transcription::JsTranscription;
 pub use typed_tool::{JsTypedTool, typed_tool_simple};
-pub use wrappers::{JsCachedCompletionModel, JsFallbackModel, JsRetryCompletionModel};
+pub use wrappers::{JsCachedModel, JsFallbackModel, JsRetryModel};
 pub use xai::JsXaiProvider;
 
 #[cfg(feature = "candle-embed")]

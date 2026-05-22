@@ -1,7 +1,7 @@
 //! JavaScript callback bridge for local/custom completion models.
 //!
 //! Allows TypeScript code to supply a completion handler function that is
-//! called from the Rust `CompletionModel` trait implementation. This mirrors
+//! called from the Rust `Model` trait implementation. This mirrors
 //! the `JsTool` pattern in `agent.rs` and enables local or custom models
 //! (e.g. `transformers.js`, WebLLM, or any JS-side inference library) to
 //! participate in the Blazen completion pipeline.
@@ -9,12 +9,12 @@
 //! # Usage (TypeScript)
 //!
 //! ```typescript
-//! const model = CompletionModel.fromJsHandler(
+//! const model = Model.fromJsHandler(
 //!   'my-local-model',
 //!   async (request) => {
-//!     // `request` is a CompletionRequest serialized as a plain JS object.
+//!     // `request` is a ModelRequest serialized as a plain JS object.
 //!     const response = await myLocalModel.generate(request);
-//!     // Return a CompletionResponse-shaped object.
+//!     // Return a ModelResponse-shaped object.
 //!     return {
 //!       content: response.text,
 //!       toolCalls: [],
@@ -39,7 +39,7 @@ use futures_util::Stream;
 use wasm_bindgen::prelude::*;
 
 use blazen_llm::BlazenError;
-use blazen_llm::types::{CompletionRequest, CompletionResponse, StreamChunk};
+use blazen_llm::types::{ModelRequest, ModelResponse, StreamChunk};
 
 // ---------------------------------------------------------------------------
 // SendFuture wrapper (same pattern as agent.rs)
@@ -72,8 +72,8 @@ impl<F: std::future::Future> std::future::Future for SendFuture<F> {
 const TS_COMPLETE_HANDLER: &str = r#"
 /**
  * A JavaScript function that performs a completion given a request object.
- * The request is a plain JS object matching the CompletionRequest schema.
- * Must return (or resolve to) a CompletionResponse-shaped object.
+ * The request is a plain JS object matching the ModelRequest schema.
+ * Must return (or resolve to) a ModelResponse-shaped object.
  */
 export type CompleteHandler = (request: any) => Promise<any>;
 
@@ -91,34 +91,34 @@ export type StreamHandler = (request: any, onChunk: (chunk: any) => void) => Pro
 "#;
 
 // ---------------------------------------------------------------------------
-// JsCompletionHandler
+// JsModelHandler
 // ---------------------------------------------------------------------------
 
-/// A `CompletionModel` whose execution is delegated to JavaScript functions.
+/// A `Model` whose execution is delegated to JavaScript functions.
 ///
 /// The `complete_handler` is called for non-streaming completions.
 /// The `stream_handler` is optional: if absent, `stream()` falls back to
 /// calling `complete()` and yielding the result as a single `StreamChunk`.
-pub(crate) struct JsCompletionHandler {
+pub(crate) struct JsModelHandler {
     model_id: String,
     complete_handler: js_sys::Function,
     stream_handler: Option<js_sys::Function>,
 }
 
 // SAFETY: WASM is single-threaded.
-unsafe impl Send for JsCompletionHandler {}
-unsafe impl Sync for JsCompletionHandler {}
+unsafe impl Send for JsModelHandler {}
+unsafe impl Sync for JsModelHandler {}
 
-impl std::fmt::Debug for JsCompletionHandler {
+impl std::fmt::Debug for JsModelHandler {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("JsCompletionHandler")
+        f.debug_struct("JsModelHandler")
             .field("model_id", &self.model_id)
             .field("has_stream_handler", &self.stream_handler.is_some())
             .finish_non_exhaustive()
     }
 }
 
-impl JsCompletionHandler {
+impl JsModelHandler {
     /// Create a new handler from JS functions.
     pub(crate) fn new(
         model_id: String,
@@ -135,8 +135,8 @@ impl JsCompletionHandler {
     /// Internal non-Send async complete implementation.
     async fn complete_impl(
         &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
         // Serialize the request to a JS value.
         let js_request = serde_wasm_bindgen::to_value(&request)
             .map_err(|e| BlazenError::provider("js_handler", e.to_string()))?;
@@ -157,15 +157,15 @@ impl JsCompletionHandler {
             result
         };
 
-        // Deserialize the JS result back into a CompletionResponse.
-        serde_wasm_bindgen::from_value::<CompletionResponse>(result)
+        // Deserialize the JS result back into a ModelResponse.
+        serde_wasm_bindgen::from_value::<ModelResponse>(result)
             .map_err(|e| BlazenError::invalid_response(e.to_string()))
     }
 
     /// Internal non-Send async stream implementation using the JS stream handler.
     async fn stream_with_handler_impl(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
         stream_handler: &js_sys::Function,
     ) -> Result<Vec<StreamChunk>, BlazenError> {
         use std::cell::RefCell;
@@ -212,22 +212,22 @@ impl JsCompletionHandler {
 }
 
 #[async_trait]
-impl blazen_llm::traits::CompletionModel for JsCompletionHandler {
+impl blazen_llm::traits::Model for JsModelHandler {
     fn model_id(&self) -> &str {
         &self.model_id
     }
 
     async fn complete(
         &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
         // SAFETY: WASM is single-threaded, Send is vacuously satisfied.
         SendFuture(self.complete_impl(request)).await
     }
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         if let Some(ref handler) = self.stream_handler {

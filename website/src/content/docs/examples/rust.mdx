@@ -83,9 +83,9 @@ cargo run -p blazen --example llm_rag_workflow
 
 ---
 
-## Custom CompletionModel (trait impl)
+## Custom Model (trait impl)
 
-In Rust, custom providers are built by implementing the `CompletionModel` trait. The trait-impl is a first-class citizen -- it works with `run_agent`, `with_retry`, `with_cache`, and every other helper.
+In Rust, custom providers are built by implementing the `Model` trait. The trait-impl is a first-class citizen -- it works with `run_agent`, `with_retry`, `with_cache`, and every other helper.
 
 ```rust
 use async_trait::async_trait;
@@ -93,23 +93,23 @@ use futures::stream::{self, Stream};
 use std::pin::Pin;
 
 use blazen_llm::{
-    BlazenError, CompletionRequest, CompletionResponse, StreamChunk,
-    traits::CompletionModel,
+    BlazenError, ModelRequest, ModelResponse, StreamChunk,
+    traits::Model,
     types::Role,
 };
 
 struct EchoLLM;
 
 #[async_trait]
-impl CompletionModel for EchoLLM {
+impl Model for EchoLLM {
     fn model_id(&self) -> &str {
         "echo-llm"
     }
 
     async fn complete(
         &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
         let last = request
             .messages
             .iter()
@@ -118,7 +118,7 @@ impl CompletionModel for EchoLLM {
             .and_then(|m| m.content.text_content())
             .unwrap_or_default();
 
-        Ok(CompletionResponse {
+        Ok(ModelResponse {
             content: Some(format!("echo: {last}")),
             tool_calls: Vec::new(),
             reasoning: None,
@@ -138,7 +138,7 @@ impl CompletionModel for EchoLLM {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<
         Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>,
         BlazenError,
@@ -160,7 +160,7 @@ impl CompletionModel for EchoLLM {
 ```
 
 ```sh
-cargo run -p blazen --example custom_completion_model
+cargo run -p blazen --example custom_model
 ```
 
 ---
@@ -297,13 +297,13 @@ cargo run -p blazen --example model_manager_budget
 
 ## Pricing Registration and Cost Tracking
 
-Register pricing for any model ID (your own model, a local finetune, a custom deployment). Every `CompletionResponse` carries a `.cost` field computed from the registered rate.
+Register pricing for any model ID (your own model, a local finetune, a custom deployment). Every `ModelResponse` carries a `.cost` field computed from the registered rate.
 
 ```rust
 use blazen_llm::{
     ChatMessage, PricingEntry,
     providers::openai_compat::{AuthMethod, OpenAiCompatConfig, OpenAiCompatProvider},
-    register_pricing, traits::CompletionModel, types::CompletionRequest,
+    register_pricing, traits::Model, types::ModelRequest,
 };
 
 #[tokio::main]
@@ -329,7 +329,7 @@ async fn main() -> anyhow::Result<()> {
         supports_model_listing: true,
     });
 
-    let request = CompletionRequest::new(vec![
+    let request = ModelRequest::new(vec![
         ChatMessage::user("Summarize Rust in one line."),
     ]);
 

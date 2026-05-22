@@ -15,7 +15,7 @@ import os
 
 import pytest
 
-from blazen import ChatMessage, CompletionModel
+from blazen import ChatMessage, Model
 
 # MistralRsOptions lives behind the `mistralrs` Cargo feature gate.
 # If the installed wheel was not built with that feature, skip the
@@ -42,7 +42,7 @@ skip_without_flag = pytest.mark.skipif(
 async def test_mistralrs_complete():
     """mistral.rs model completes a prompt and returns non-empty content."""
     opts = MistralRsOptions(MODEL_ID)
-    model = CompletionModel.mistralrs(options=opts)
+    model = Model.mistralrs(options=opts)
 
     response = await model.complete([
         ChatMessage.user("What is 2+2? Answer with just the number."),
@@ -59,7 +59,7 @@ async def test_mistralrs_model_id():
     opts = MistralRsOptions(MODEL_ID)
     assert opts.model_id == MODEL_ID
 
-    model = CompletionModel.mistralrs(options=opts)
+    model = Model.mistralrs(options=opts)
     assert model.model_id is not None
     assert len(model.model_id) > 0
 
@@ -69,7 +69,7 @@ async def test_mistralrs_model_id():
 async def test_mistralrs_with_system_message():
     """mistral.rs model handles system + user message pairs."""
     opts = MistralRsOptions(MODEL_ID)
-    model = CompletionModel.mistralrs(options=opts)
+    model = Model.mistralrs(options=opts)
 
     response = await model.complete([
         ChatMessage.system("You are a helpful assistant. Be concise."),

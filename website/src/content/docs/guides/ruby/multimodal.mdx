@@ -26,7 +26,7 @@ media = Blazen::Llm.media(
 
 ## Sending an image
 
-Build a `ChatMessage` with the `media_parts:` kwarg, then pass it through `Blazen::Llm.completion_request`. The `ChatMessage` constructor consumes the `Media` wrappers (it transfers their native pointers to the cabi), so you cannot reuse a `Media` instance across two messages -- build a fresh one each time.
+Build a `ChatMessage` with the `media_parts:` kwarg, then pass it through `Blazen::Llm.model_request`. The `ChatMessage` constructor consumes the `Media` wrappers (it transfers their native pointers to the cabi), so you cannot reuse a `Media` instance across two messages -- build a fresh one each time.
 
 ```ruby
 require 'blazen'
@@ -43,7 +43,7 @@ msg = Blazen::Llm.message(
   media_parts: [media],
 )
 
-req = Blazen::Llm.completion_request(messages: [msg])
+req = Blazen::Llm.model_request(messages: [msg])
 
 model = Blazen::Providers.openai(
   api_key: ENV.fetch('OPENAI_API_KEY'),
@@ -72,7 +72,7 @@ audio = Blazen::Llm.media(
   data_base64: Base64.strict_encode64(File.binread('clip.mp3')),
 )
 
-req = Blazen::Llm.completion_request(
+req = Blazen::Llm.model_request(
   messages: [
     Blazen::Llm.message(
       role: 'user',

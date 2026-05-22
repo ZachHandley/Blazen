@@ -49,7 +49,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use blazen_uniffi::errors::{BlazenError as InnerError, BlazenResult};
-use blazen_uniffi::llm::{CompletionModel as InnerCompletionModel, TokenUsage as InnerTokenUsage};
+use blazen_uniffi::llm::{Model as InnerModel, TokenUsage as InnerTokenUsage};
 use blazen_uniffi::streaming::{
     CompletionStreamSink, StreamChunk as InnerStreamChunk, complete_streaming,
     complete_streaming_blocking,
@@ -57,8 +57,8 @@ use blazen_uniffi::streaming::{
 
 use crate::error::BlazenError;
 use crate::future::BlazenFuture;
-use crate::llm::BlazenCompletionModel;
-use crate::llm_records::{BlazenCompletionRequest, BlazenTokenUsage};
+use crate::llm::BlazenModel;
+use crate::llm_records::{BlazenModelRequest, BlazenTokenUsage};
 use crate::streaming_records::BlazenStreamChunk;
 
 // ---------------------------------------------------------------------------
@@ -390,10 +390,10 @@ impl CompletionStreamSink for CStreamSink {
 ///
 /// ## Ownership transfer
 ///
-/// - `model` is BORROWED — the underlying `Arc<CompletionModel>` is cloned
+/// - `model` is BORROWED — the underlying `Arc<Model>` is cloned
 ///   into the streaming call. Caller retains its handle.
 /// - `request` is CONSUMED — internally we `Box::from_raw` it and move the
-///   inner record out. Callers must NOT call `blazen_completion_request_free`
+///   inner record out. Callers must NOT call `blazen_model_request_free`
 ///   on the same pointer afterwards (double-free).
 /// - `sink` (the vtable) is CONSUMED — ownership of `user_data` transfers to
 ///   the wrapping `CStreamSink`, which releases it via `drop_user_data` on
@@ -403,16 +403,16 @@ impl CompletionStreamSink for CStreamSink {
 ///
 /// # Safety
 ///
-/// `model` must be null OR a live `BlazenCompletionModel` produced by the
-/// cabi surface. `request` must be null OR a live `BlazenCompletionRequest`
+/// `model` must be null OR a live `BlazenModel` produced by the
+/// cabi surface. `request` must be null OR a live `BlazenModelRequest`
 /// produced by the cabi surface; ownership transfers to this function.
 /// `sink.user_data` and the four `sink` function pointers must satisfy the
 /// contracts documented on [`BlazenCompletionStreamSinkVTable`]. `out_err`
 /// must be null OR a writable slot for a single `*mut BlazenError` write.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_complete_streaming_blocking(
-    model: *const BlazenCompletionModel,
-    request: *mut BlazenCompletionRequest,
+    model: *const BlazenModel,
+    request: *mut BlazenModelRequest,
     sink: BlazenCompletionStreamSinkVTable,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
@@ -435,9 +435,9 @@ pub unsafe extern "C" fn blazen_complete_streaming_blocking(
         return unsafe { write_internal_error(out_err, "blazen_complete_streaming: null request") };
     }
 
-    // SAFETY: caller has guaranteed `model` is a live `BlazenCompletionModel`.
+    // SAFETY: caller has guaranteed `model` is a live `BlazenModel`.
     let model_handle = unsafe { &*model };
-    let model_arc: Arc<InnerCompletionModel> = Arc::clone(&model_handle.0);
+    let model_arc: Arc<InnerModel> = Arc::clone(&model_handle.0);
 
     // SAFETY: caller has transferred ownership of `request`.
     let request_box = unsafe { Box::from_raw(request) };
@@ -479,15 +479,15 @@ pub unsafe extern "C" fn blazen_complete_streaming_blocking(
 ///
 /// # Safety
 ///
-/// `model` must be null OR a live `BlazenCompletionModel`. `request` must be
-/// null OR a live `BlazenCompletionRequest`; ownership transfers to this
+/// `model` must be null OR a live `BlazenModel`. `request` must be
+/// null OR a live `BlazenModelRequest`; ownership transfers to this
 /// function regardless of whether the call returns null. `sink` satisfies
 /// the [`BlazenCompletionStreamSinkVTable`] contract; its `user_data` is
 /// consumed.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_complete_streaming(
-    model: *const BlazenCompletionModel,
-    request: *mut BlazenCompletionRequest,
+    model: *const BlazenModel,
+    request: *mut BlazenModelRequest,
     sink: BlazenCompletionStreamSinkVTable,
 ) -> *mut BlazenFuture {
     if model.is_null() {
@@ -504,9 +504,9 @@ pub unsafe extern "C" fn blazen_complete_streaming(
         return std::ptr::null_mut();
     }
 
-    // SAFETY: caller has guaranteed `model` is a live `BlazenCompletionModel`.
+    // SAFETY: caller has guaranteed `model` is a live `BlazenModel`.
     let model_handle = unsafe { &*model };
-    let model_arc: Arc<InnerCompletionModel> = Arc::clone(&model_handle.0);
+    let model_arc: Arc<InnerModel> = Arc::clone(&model_handle.0);
 
     // SAFETY: caller has transferred ownership of `request`.
     let request_box = unsafe { Box::from_raw(request) };

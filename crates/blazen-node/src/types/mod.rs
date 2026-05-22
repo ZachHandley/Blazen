@@ -4,8 +4,6 @@ pub mod abc;
 pub mod artifact;
 pub mod chat_window;
 pub mod citation;
-pub mod completion;
-pub mod completion_request;
 #[cfg(feature = "embed")]
 pub mod embed_facade;
 pub mod embedding;
@@ -17,6 +15,8 @@ pub mod http_client_config;
 pub mod media;
 pub mod memory;
 pub mod message;
+pub mod model;
+pub mod model_request;
 pub mod pricing;
 pub mod prompts;
 pub mod provider_info;
@@ -40,11 +40,6 @@ pub use abc::{JsLocalModel, JsModelRegistry, JsStructuredOutput, JsTool};
 pub use artifact::JsArtifact;
 pub use chat_window::JsChatWindow;
 pub use citation::{CitationOptions, JsCitation, JsCitationClass};
-pub(crate) use completion::build_response;
-pub use completion::{JsCompletionOptions, JsCompletionResponse};
-pub use completion_request::{
-    JsCompletionRequest, JsFileContent, JsMessageContent, JsStructuredResponse,
-};
 #[cfg(feature = "embed")]
 pub use embed_facade::JsEmbedResponse;
 pub use embedding::{JsEmbeddingModel, JsEmbeddingResponse};
@@ -73,6 +68,9 @@ pub use memory::{JsJsonlBackend, JsValkeyBackend};
 pub use message::{
     ChatMessageOptions, JsChatMessage, JsContentPart, JsImageContent, JsImageSource, JsRole,
 };
+pub(crate) use model::build_response;
+pub use model::{JsModelOptions, JsModelResponse};
+pub use model_request::{JsFileContent, JsMessageContent, JsModelRequest, JsStructuredResponse};
 pub use pricing::{
     JsModelPricing, compute_audio_cost, compute_image_cost, compute_video_cost, lookup_pricing,
     register_pricing,
@@ -100,6 +98,5 @@ pub use usage::{
     TokenUsageOptions,
 };
 pub use usage_recording::{
-    JsNoopUsageEmitter, JsUsageEmitter, JsUsageRecordingCompletionModel,
-    JsUsageRecordingEmbeddingModel,
+    JsNoopUsageEmitter, JsUsageEmitter, JsUsageRecordingEmbeddingModel, JsUsageRecordingModel,
 };

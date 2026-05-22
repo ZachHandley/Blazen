@@ -628,7 +628,7 @@ impl PyUpstashBackend {
 /// A `MemoryBackend` decorator that retries transient errors with exponential
 /// backoff.
 ///
-/// Mirrors :class:`RetryCompletionModel` for `CompletionModel`. Wraps any
+/// Mirrors :class:`RetryModel` for `Model`. Wraps any
 /// `MemoryBackend` (subclass or built-in) and reissues each `put`/`get`/
 /// `delete`/`list`/`len`/`search_by_bands` call up to `config.max_retries`
 /// times when the underlying backend raises.

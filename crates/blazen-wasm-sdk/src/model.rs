@@ -1,4 +1,4 @@
-//! `wasm-bindgen` wrapper for [`blazen_llm::CompletionModel`].
+//! `wasm-bindgen` wrapper for [`blazen_llm::Model`].
 //!
 //! Exposes factory methods for each provider and `complete()` / `stream()`
 //! as async methods that return JavaScript `Promise`s.
@@ -8,7 +8,7 @@ use std::sync::Arc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::future_to_promise;
 
-use blazen_llm::cache::{CacheConfig, CachedCompletionModel};
+use blazen_llm::cache::{CacheConfig, CachedModel};
 use blazen_llm::fallback::FallbackModel;
 use blazen_llm::http::HttpClient;
 use blazen_llm::providers::anthropic::AnthropicProvider;
@@ -16,19 +16,19 @@ use blazen_llm::providers::azure::AzureOpenAiProvider;
 use blazen_llm::providers::fal::FalProvider;
 use blazen_llm::providers::gemini::GeminiProvider;
 use blazen_llm::providers::openai_compat::{AuthMethod, OpenAiCompatConfig, OpenAiCompatProvider};
-use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
-use blazen_llm::traits::CompletionModel;
-use blazen_llm::types::CompletionRequest;
+use blazen_llm::retry::{RetryModel, RetryConfig};
+use blazen_llm::traits::Model;
+use blazen_llm::types::ModelRequest;
 
 use crate::chat_message::js_messages_to_vec;
-use crate::js_completion::JsCompletionHandler;
+use crate::js_model::JsModelHandler;
 use blazen_llm::FetchHttpClient;
 
 // ---------------------------------------------------------------------------
 // WebLlmOptions
 // ---------------------------------------------------------------------------
 
-/// Options for the `CompletionModel.webLlm()` convenience factory.
+/// Options for the `Model.webLlm()` convenience factory.
 ///
 /// Controls default temperature and max-token limits for models loaded via
 /// `@mlc-ai/web-llm`.
@@ -62,7 +62,7 @@ impl Default for WebLlmOptions {
 }
 
 // ---------------------------------------------------------------------------
-// WasmCompletionModel
+// WasmModel
 // ---------------------------------------------------------------------------
 
 /// A provider-agnostic LLM completion model.
@@ -70,32 +70,32 @@ impl Default for WebLlmOptions {
 /// Use the static factory methods to create a model for a specific provider:
 ///
 /// ```js
-/// const model = CompletionModel.openai();
-/// const model = CompletionModel.openrouter();
+/// const model = Model.openai();
+/// const model = Model.openrouter();
 /// ```
 ///
 /// All async methods (`complete`, `stream`) return native JavaScript `Promise`s.
-#[wasm_bindgen(js_name = "CompletionModel")]
-pub struct WasmCompletionModel {
-    inner: Arc<dyn CompletionModel>,
+#[wasm_bindgen(js_name = "Model")]
+pub struct WasmModel {
+    inner: Arc<dyn Model>,
 }
 
 // SAFETY: WASM is single-threaded.
-unsafe impl Send for WasmCompletionModel {}
-unsafe impl Sync for WasmCompletionModel {}
+unsafe impl Send for WasmModel {}
+unsafe impl Sync for WasmModel {}
 
-impl WasmCompletionModel {
-    /// Access the inner `Arc<dyn CompletionModel>` for use by other crate modules.
-    pub(crate) fn inner_arc(&self) -> Arc<dyn CompletionModel> {
+impl WasmModel {
+    /// Access the inner `Arc<dyn Model>` for use by other crate modules.
+    pub(crate) fn inner_arc(&self) -> Arc<dyn Model> {
         Arc::clone(&self.inner)
     }
 
-    /// Construct a [`WasmCompletionModel`] from an existing
-    /// `Arc<dyn CompletionModel>`. Used by the standalone decorator and
-    /// middleware classes (`FallbackModel`, `RetryCompletionModel`,
-    /// `CachedCompletionModel`, `MiddlewareStack`) to expose their wrapped
-    /// model back to JavaScript as a regular `CompletionModel`.
-    pub(crate) fn from_arc(inner: Arc<dyn CompletionModel>) -> Self {
+    /// Construct a [`WasmModel`] from an existing
+    /// `Arc<dyn Model>`. Used by the standalone decorator and
+    /// middleware classes (`FallbackModel`, `RetryModel`,
+    /// `CachedModel`, `MiddlewareStack`) to expose their wrapped
+    /// model back to JavaScript as a regular `Model`.
+    pub(crate) fn from_arc(inner: Arc<dyn Model>) -> Self {
         Self { inner }
     }
 }
@@ -106,15 +106,15 @@ fn compat_with_fetch(config: OpenAiCompatConfig) -> OpenAiCompatProvider {
     OpenAiCompatProvider::new_with_client(config, client)
 }
 
-#[wasm_bindgen(js_class = "CompletionModel")]
-impl WasmCompletionModel {
+#[wasm_bindgen(js_class = "Model")]
+impl WasmModel {
     // -----------------------------------------------------------------------
     // Factory methods (each provider)
     // -----------------------------------------------------------------------
 
     /// OpenAI (`gpt-4.1`).
     #[wasm_bindgen]
-    pub fn openai() -> Result<WasmCompletionModel, JsValue> {
+    pub fn openai() -> Result<WasmModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("openai", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let provider = compat_with_fetch(OpenAiCompatConfig {
@@ -134,7 +134,7 @@ impl WasmCompletionModel {
 
     /// OpenRouter (400+ models, default `openai/gpt-4.1`).
     #[wasm_bindgen]
-    pub fn openrouter() -> Result<WasmCompletionModel, JsValue> {
+    pub fn openrouter() -> Result<WasmModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("openrouter", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let provider = compat_with_fetch(OpenAiCompatConfig {
@@ -154,7 +154,7 @@ impl WasmCompletionModel {
 
     /// Groq (fast inference, default `llama-3.3-70b-versatile`).
     #[wasm_bindgen]
-    pub fn groq() -> Result<WasmCompletionModel, JsValue> {
+    pub fn groq() -> Result<WasmModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("groq", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let provider = compat_with_fetch(OpenAiCompatConfig {
@@ -174,7 +174,7 @@ impl WasmCompletionModel {
 
     /// Together AI (default `meta-llama/Llama-3.3-70B-Instruct-Turbo`).
     #[wasm_bindgen]
-    pub fn together() -> Result<WasmCompletionModel, JsValue> {
+    pub fn together() -> Result<WasmModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("together", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let provider = compat_with_fetch(OpenAiCompatConfig {
@@ -194,7 +194,7 @@ impl WasmCompletionModel {
 
     /// Mistral AI (default `mistral-large-latest`).
     #[wasm_bindgen]
-    pub fn mistral() -> Result<WasmCompletionModel, JsValue> {
+    pub fn mistral() -> Result<WasmModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("mistral", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let provider = compat_with_fetch(OpenAiCompatConfig {
@@ -214,7 +214,7 @@ impl WasmCompletionModel {
 
     /// DeepSeek (default `deepseek-chat`).
     #[wasm_bindgen]
-    pub fn deepseek() -> Result<WasmCompletionModel, JsValue> {
+    pub fn deepseek() -> Result<WasmModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("deepseek", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let provider = compat_with_fetch(OpenAiCompatConfig {
@@ -234,7 +234,7 @@ impl WasmCompletionModel {
 
     /// Fireworks AI.
     #[wasm_bindgen]
-    pub fn fireworks() -> Result<WasmCompletionModel, JsValue> {
+    pub fn fireworks() -> Result<WasmModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("fireworks", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let provider = compat_with_fetch(OpenAiCompatConfig {
@@ -254,7 +254,7 @@ impl WasmCompletionModel {
 
     /// Perplexity (default `sonar-pro`).
     #[wasm_bindgen]
-    pub fn perplexity() -> Result<WasmCompletionModel, JsValue> {
+    pub fn perplexity() -> Result<WasmModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("perplexity", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let provider = compat_with_fetch(OpenAiCompatConfig {
@@ -274,7 +274,7 @@ impl WasmCompletionModel {
 
     /// xAI / Grok (default `grok-3`).
     #[wasm_bindgen]
-    pub fn xai() -> Result<WasmCompletionModel, JsValue> {
+    pub fn xai() -> Result<WasmModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("xai", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let provider = compat_with_fetch(OpenAiCompatConfig {
@@ -294,7 +294,7 @@ impl WasmCompletionModel {
 
     /// Cohere (default `command-a-08-2025`).
     #[wasm_bindgen]
-    pub fn cohere() -> Result<WasmCompletionModel, JsValue> {
+    pub fn cohere() -> Result<WasmModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("cohere", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let provider = compat_with_fetch(OpenAiCompatConfig {
@@ -314,7 +314,7 @@ impl WasmCompletionModel {
 
     /// AWS Bedrock via Mantle endpoint.
     #[wasm_bindgen]
-    pub fn bedrock(region: &str) -> Result<WasmCompletionModel, JsValue> {
+    pub fn bedrock(region: &str) -> Result<WasmModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("bedrock", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let provider = compat_with_fetch(OpenAiCompatConfig {
@@ -336,7 +336,7 @@ impl WasmCompletionModel {
     ///
     /// Reads the API key from the `ANTHROPIC_API_KEY` environment variable.
     #[wasm_bindgen]
-    pub fn anthropic() -> Result<WasmCompletionModel, JsValue> {
+    pub fn anthropic() -> Result<WasmModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("anthropic", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let client: Arc<dyn HttpClient> = FetchHttpClient::new().into_arc();
@@ -350,7 +350,7 @@ impl WasmCompletionModel {
     ///
     /// Reads the API key from the `GEMINI_API_KEY` environment variable.
     #[wasm_bindgen]
-    pub fn gemini() -> Result<WasmCompletionModel, JsValue> {
+    pub fn gemini() -> Result<WasmModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("gemini", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let client: Arc<dyn HttpClient> = FetchHttpClient::new().into_arc();
@@ -369,7 +369,7 @@ impl WasmCompletionModel {
     pub fn azure(
         resource_name: &str,
         deployment_name: &str,
-    ) -> Result<WasmCompletionModel, JsValue> {
+    ) -> Result<WasmModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("azure", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let client: Arc<dyn HttpClient> = FetchHttpClient::new().into_arc();
@@ -385,7 +385,7 @@ impl WasmCompletionModel {
     ///
     /// Reads the API key from the `FAL_KEY` environment variable.
     #[wasm_bindgen]
-    pub fn fal() -> Result<WasmCompletionModel, JsValue> {
+    pub fn fal() -> Result<WasmModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("fal", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let client: Arc<dyn HttpClient> = FetchHttpClient::new().into_arc();
@@ -399,7 +399,7 @@ impl WasmCompletionModel {
     // JS callback handler
     // -----------------------------------------------------------------------
 
-    /// Create a `CompletionModel` backed by JavaScript callback functions.
+    /// Create a `Model` backed by JavaScript callback functions.
     ///
     /// This enables local/custom models (e.g. `transformers.js`, WebLLM, or
     /// any JS-side inference library) to participate in the Blazen completion
@@ -407,8 +407,8 @@ impl WasmCompletionModel {
     ///
     /// - `model_id` identifies the model for logging and routing.
     /// - `complete_handler` is called for non-streaming completions with a
-    ///   `CompletionRequest`-shaped JS object; must return (or resolve to)
-    ///   a `CompletionResponse`-shaped object.
+    ///   `ModelRequest`-shaped JS object; must return (or resolve to)
+    ///   a `ModelResponse`-shaped object.
     /// - `stream_handler` (optional) is called for streaming completions with
     ///   `(request, onChunk)` where `onChunk` is a callback that accepts
     ///   `StreamChunk`-shaped objects. If omitted, `stream()` falls back to
@@ -423,7 +423,7 @@ impl WasmCompletionModel {
     ///   global pricing registry so that `lookupPricing(modelId)` works.
     ///
     /// ```js
-    /// const model = CompletionModel.fromJsHandler(
+    /// const model = Model.fromJsHandler(
     ///   'my-local-model',
     ///   async (request) => {
     ///     const text = await myLocalModel.generate(request.messages);
@@ -472,7 +472,7 @@ impl WasmCompletionModel {
             }
         }
 
-        let handler = JsCompletionHandler::new(model_id, complete_handler, stream_handler);
+        let handler = JsModelHandler::new(model_id, complete_handler, stream_handler);
         Self {
             inner: Arc::new(handler),
         }
@@ -493,7 +493,7 @@ impl WasmCompletionModel {
     /// import surface at `complete()` call time, not here.
     ///
     /// ```js
-    /// const model = CompletionModel.webLlm('Llama-3.1-8B-Instruct-q4f32_1-MLC');
+    /// const model = Model.webLlm('Llama-3.1-8B-Instruct-q4f32_1-MLC');
     /// const res = await model.complete([ChatMessage.user('Hello!')]);
     /// console.log(res.content);
     /// ```
@@ -502,7 +502,7 @@ impl WasmCompletionModel {
     pub fn web_llm(
         model_id: String,
         options: Option<WebLlmOptions>,
-    ) -> Result<WasmCompletionModel, JsValue> {
+    ) -> Result<WasmModel, JsValue> {
         let temperature = options.as_ref().map_or(0.7, |o| o.temperature);
         let max_tokens = options.as_ref().map_or(512, |o| o.max_tokens);
 
@@ -556,7 +556,7 @@ impl WasmCompletionModel {
         // `new Function("request", body)` creates `function anonymous(request) { body }`.
         let complete_handler = js_sys::Function::new_with_args("request", &handler_body);
 
-        let handler = JsCompletionHandler::new(
+        let handler = JsModelHandler::new(
             model_id,
             complete_handler,
             None, // streaming falls back to single-chunk via complete handler
@@ -572,7 +572,7 @@ impl WasmCompletionModel {
 
     /// Override the default model for this provider instance.
     ///
-    /// Returns a new `CompletionModel` -- does not mutate in place (WASM
+    /// Returns a new `Model` -- does not mutate in place (WASM
     /// limitation with wasm-bindgen ownership).
     #[wasm_bindgen(js_name = "withModel")]
     pub fn with_model(&self, model: &str) -> Self {
@@ -591,20 +591,20 @@ impl WasmCompletionModel {
     /// Retries rate-limit, timeout, and server errors with exponential
     /// backoff. `maxRetries` defaults to 3 if not specified.
     ///
-    /// Returns a new `CompletionModel`.
+    /// Returns a new `Model`.
     ///
     /// ```js
     /// const resilient = model.withRetry(5);
     /// const response = await resilient.complete([ChatMessage.user('Hi')]);
     /// ```
     #[wasm_bindgen(js_name = "withRetry")]
-    pub fn with_retry(&self, max_retries: Option<u32>) -> WasmCompletionModel {
+    pub fn with_retry(&self, max_retries: Option<u32>) -> WasmModel {
         let config = RetryConfig {
             max_retries: max_retries.unwrap_or(3),
             ..RetryConfig::default()
         };
-        WasmCompletionModel {
-            inner: Arc::new(RetryCompletionModel::from_arc(
+        WasmModel {
+            inner: Arc::new(RetryModel::from_arc(
                 Arc::clone(&self.inner),
                 config,
             )),
@@ -616,18 +616,18 @@ impl WasmCompletionModel {
     /// When one provider fails with a retryable error, the next is tried.
     /// Non-retryable errors (e.g. auth) short-circuit immediately.
     ///
-    /// `models` is an array of `CompletionModel` instances to try in order.
+    /// `models` is an array of `Model` instances to try in order.
     ///
     /// ```js
-    /// const primary = CompletionModel.openai();
-    /// const backup = CompletionModel.groq();
-    /// const resilient = CompletionModel.withFallback([primary, backup]);
+    /// const primary = Model.openai();
+    /// const backup = Model.groq();
+    /// const resilient = Model.withFallback([primary, backup]);
     /// ```
     #[wasm_bindgen(js_name = "withFallback")]
-    pub fn with_fallback(models: Vec<WasmCompletionModel>) -> WasmCompletionModel {
-        let providers: Vec<Arc<dyn CompletionModel>> =
+    pub fn with_fallback(models: Vec<WasmModel>) -> WasmModel {
+        let providers: Vec<Arc<dyn Model>> =
             models.into_iter().map(|m| m.inner).collect();
-        WasmCompletionModel {
+        WasmModel {
             inner: Arc::new(FallbackModel::new(providers)),
         }
     }
@@ -640,7 +640,7 @@ impl WasmCompletionModel {
     /// `maxEntries` caps the cache size (default 1000); the oldest entry
     /// is evicted when the limit is reached.
     ///
-    /// Returns a new `CompletionModel`.
+    /// Returns a new `Model`.
     ///
     /// ```js
     /// const cached = model.withCache(600, 500);
@@ -650,14 +650,14 @@ impl WasmCompletionModel {
         &self,
         ttl_seconds: Option<u32>,
         max_entries: Option<u32>,
-    ) -> WasmCompletionModel {
+    ) -> WasmModel {
         let config = CacheConfig {
             ttl_seconds: u64::from(ttl_seconds.unwrap_or(300)),
             max_entries: max_entries.unwrap_or(1000) as usize,
             ..CacheConfig::default()
         };
-        WasmCompletionModel {
-            inner: Arc::new(CachedCompletionModel::from_arc(
+        WasmModel {
+            inner: Arc::new(CachedModel::from_arc(
                 Arc::clone(&self.inner),
                 config,
             )),
@@ -683,13 +683,13 @@ impl WasmCompletionModel {
     /// `messages` should be an array of `ChatMessage` objects or plain JSON
     /// objects with `role` and `content` fields.
     ///
-    /// Returns a `Promise<CompletionResponse>`.
+    /// Returns a `Promise<ModelResponse>`.
     #[wasm_bindgen]
     pub fn complete(&self, messages: JsValue) -> js_sys::Promise {
         let model = Arc::clone(&self.inner);
         future_to_promise(async move {
             let msgs = js_messages_to_vec(&messages)?;
-            let request = CompletionRequest::new(msgs);
+            let request = ModelRequest::new(msgs);
             let response = model
                 .complete(request)
                 .await
@@ -710,13 +710,13 @@ impl WasmCompletionModel {
     /// - `tools` (array of tool definition objects)
     /// - `responseFormat` (JSON schema object)
     ///
-    /// Returns a `Promise<CompletionResponse>`.
+    /// Returns a `Promise<ModelResponse>`.
     #[wasm_bindgen(js_name = "completeWithOptions")]
     pub fn complete_with_options(&self, messages: JsValue, options: JsValue) -> js_sys::Promise {
         let model = Arc::clone(&self.inner);
         future_to_promise(async move {
             let msgs = js_messages_to_vec(&messages)?;
-            let mut request = CompletionRequest::new(msgs);
+            let mut request = ModelRequest::new(msgs);
 
             // Apply options from the JS object.
             if let Ok(opts) = serde_wasm_bindgen::from_value::<serde_json::Value>(options) {
@@ -787,7 +787,7 @@ impl WasmCompletionModel {
         let model = Arc::clone(&self.inner);
         future_to_promise(async move {
             let msgs = js_messages_to_vec(&messages)?;
-            let request = CompletionRequest::new(msgs);
+            let request = ModelRequest::new(msgs);
 
             let mut stream = model
                 .stream(request)
@@ -812,7 +812,7 @@ impl WasmCompletionModel {
 // CustomProvider factory functions (Ollama / LM Studio / OpenAI-compatible)
 // ---------------------------------------------------------------------------
 
-/// Construct a `CompletionModel` for an Ollama server.
+/// Construct a `Model` for an Ollama server.
 ///
 /// `host` and `port` identify the Ollama HTTP endpoint (e.g. `"localhost"`,
 /// `11434`). `model` is the default model id used when a request does not
@@ -827,12 +827,12 @@ pub fn create_ollama_provider(
     host: &str,
     port: u16,
     model: &str,
-) -> Result<WasmCompletionModel, JsValue> {
+) -> Result<WasmModel, JsValue> {
     let provider = blazen_llm::ollama(host, port, model);
-    Ok(WasmCompletionModel::from_arc(Arc::new(provider)))
+    Ok(WasmModel::from_arc(Arc::new(provider)))
 }
 
-/// Construct a `CompletionModel` for an LM Studio server.
+/// Construct a `Model` for an LM Studio server.
 ///
 /// `host` and `port` identify the LM Studio HTTP endpoint (LM Studio's
 /// default port is `1234`). `model` is the default model id used when a
@@ -846,12 +846,12 @@ pub fn create_lm_studio_provider(
     host: &str,
     port: u16,
     model: &str,
-) -> Result<WasmCompletionModel, JsValue> {
+) -> Result<WasmModel, JsValue> {
     let provider = blazen_llm::lm_studio(host, port, model);
-    Ok(WasmCompletionModel::from_arc(Arc::new(provider)))
+    Ok(WasmModel::from_arc(Arc::new(provider)))
 }
 
-/// Construct a `CompletionModel` for an arbitrary OpenAI-compatible server.
+/// Construct a `Model` for an arbitrary OpenAI-compatible server.
 ///
 /// - `provider_id` is the logical name used for logging and routing.
 /// - `base_url` is the full base URL of the chat-completions endpoint root
@@ -871,7 +871,7 @@ pub fn create_openai_compat_provider(
     base_url: &str,
     model: &str,
     api_key: Option<String>,
-) -> Result<WasmCompletionModel, JsValue> {
+) -> Result<WasmModel, JsValue> {
     let cfg = OpenAiCompatConfig {
         provider_name: provider_id.to_owned(),
         base_url: base_url.to_owned(),
@@ -883,7 +883,7 @@ pub fn create_openai_compat_provider(
         supports_model_listing: true,
     };
     let provider = blazen_llm::openai_compat(provider_id, cfg);
-    Ok(WasmCompletionModel::from_arc(Arc::new(provider)))
+    Ok(WasmModel::from_arc(Arc::new(provider)))
 }
 
 // ---------------------------------------------------------------------------
@@ -892,7 +892,7 @@ pub fn create_openai_compat_provider(
 
 /// Internal wrapper that overrides the model ID on every request.
 struct ModelOverride {
-    inner: Arc<dyn CompletionModel>,
+    inner: Arc<dyn Model>,
     model: String,
 }
 
@@ -901,22 +901,22 @@ unsafe impl Send for ModelOverride {}
 unsafe impl Sync for ModelOverride {}
 
 #[async_trait::async_trait]
-impl CompletionModel for ModelOverride {
+impl Model for ModelOverride {
     fn model_id(&self) -> &str {
         &self.model
     }
 
     async fn complete(
         &self,
-        request: CompletionRequest,
-    ) -> Result<blazen_llm::CompletionResponse, blazen_llm::BlazenError> {
+        request: ModelRequest,
+    ) -> Result<blazen_llm::ModelResponse, blazen_llm::BlazenError> {
         let request = request.with_model(&self.model);
         self.inner.complete(request).await
     }
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<
         std::pin::Pin<
             Box<

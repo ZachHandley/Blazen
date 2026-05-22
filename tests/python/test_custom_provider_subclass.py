@@ -120,7 +120,7 @@ async def test_subclass_complete_routes_to_override():
 
     assert provider.complete_calls == 1
     # Direct Python invocation returns the raw object yielded by the
-    # override; the typed ``CompletionResponse`` wrapper is only applied
+    # override; the typed ``ModelResponse`` wrapper is only applied
     # when Rust trait dispatch drives the call.
     assert isinstance(response, dict)
     assert response["content"] == "hi from stub"

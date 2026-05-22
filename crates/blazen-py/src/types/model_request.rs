@@ -1,36 +1,36 @@
-//! Python wrapper for [`blazen_llm::CompletionRequest`].
+//! Python wrapper for [`blazen_llm::ModelRequest`].
 
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
-use blazen_llm::CompletionRequest;
+use blazen_llm::ModelRequest;
 use blazen_llm::types::{ChatMessage, ToolDefinition};
 
 use super::{PyChatMessage, PyToolDefinition};
 
 /// A provider-agnostic chat-completion request.
 ///
-/// Mirrors [`blazen_llm::CompletionRequest`]. Most code paths build the
-/// request inline inside ``CompletionModel.complete(messages, options)``;
-/// `CompletionRequest` is the typed alternative for callers that want to
+/// Mirrors [`blazen_llm::ModelRequest`]. Most code paths build the
+/// request inline inside ``Model.complete(messages, options)``;
+/// `ModelRequest` is the typed alternative for callers that want to
 /// inspect, serialize, or hand off the full request body explicitly.
 ///
 /// Example:
-///     >>> req = CompletionRequest(
+///     >>> req = ModelRequest(
 ///     ...     messages=[ChatMessage.user("hi")],
 ///     ...     temperature=0.0,
 ///     ...     max_tokens=100,
 ///     ... )
 #[gen_stub_pyclass]
-#[pyclass(name = "CompletionRequest", from_py_object)]
+#[pyclass(name = "ModelRequest", from_py_object)]
 #[derive(Clone)]
-pub struct PyCompletionRequest {
-    pub(crate) inner: CompletionRequest,
+pub struct PyModelRequest {
+    pub(crate) inner: ModelRequest,
 }
 
 #[gen_stub_pymethods]
 #[pymethods]
-impl PyCompletionRequest {
+impl PyModelRequest {
     /// Construct a completion request.
     #[new]
     #[pyo3(signature = (
@@ -64,7 +64,7 @@ impl PyCompletionRequest {
             .map(|rf| crate::convert::py_to_json(py, rf))
             .transpose()?;
         Ok(Self {
-            inner: CompletionRequest {
+            inner: ModelRequest {
                 messages: rust_messages,
                 tools: rust_tools,
                 temperature,
@@ -141,7 +141,7 @@ impl PyCompletionRequest {
 
     fn __repr__(&self) -> String {
         format!(
-            "CompletionRequest(messages={}, tools={}, temperature={:?}, max_tokens={:?})",
+            "ModelRequest(messages={}, tools={}, temperature={:?}, max_tokens={:?})",
             self.inner.messages.len(),
             self.inner.tools.len(),
             self.inner.temperature,
@@ -150,8 +150,8 @@ impl PyCompletionRequest {
     }
 }
 
-impl From<CompletionRequest> for PyCompletionRequest {
-    fn from(inner: CompletionRequest) -> Self {
+impl From<ModelRequest> for PyModelRequest {
+    fn from(inner: ModelRequest) -> Self {
         Self { inner }
     }
 }

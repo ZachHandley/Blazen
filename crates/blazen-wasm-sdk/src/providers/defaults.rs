@@ -3,8 +3,8 @@
 //!
 //! Eleven classes total:
 //! - [`WasmBaseProviderDefaults`] — universal `before_request` hook holder.
-//! - [`WasmCompletionProviderDefaults`] — completion-role defaults (system
-//!   prompt, default tools, response format, `before_completion` hook).
+//! - [`WasmProviderDefaults`] — completion-role defaults (system
+//!   prompt, default tools, response format, `before_model` hook).
 //! - [`WasmEmbeddingProviderDefaults`] — embedding-role defaults (only
 //!   `base` for V1).
 //! - Nine role-specific defaults wrappers (audio speech, audio music, voice
@@ -76,36 +76,36 @@ impl WasmBaseProviderDefaults {
 }
 
 // ---------------------------------------------------------------------------
-// CompletionProviderDefaults
+// ProviderDefaults
 // ---------------------------------------------------------------------------
 
 /// Completion-role defaults. Carries the universal `base` plus completion-
 /// specific fields: `systemPrompt`, default `tools`, default `responseFormat`,
-/// and a typed `beforeCompletion` hook.
-#[wasm_bindgen(js_name = "CompletionProviderDefaults")]
+/// and a typed `beforeModel` hook.
+#[wasm_bindgen(js_name = "ProviderDefaults")]
 #[derive(Default)]
-pub struct WasmCompletionProviderDefaults {
+pub struct WasmProviderDefaults {
     base: Rc<RefCell<WasmBaseProviderDefaults>>,
     system_prompt: Rc<RefCell<Option<String>>>,
     tools: Rc<RefCell<Array>>,
     response_format: Rc<RefCell<JsValue>>,
-    before_completion: Rc<RefCell<Option<Function>>>,
+    before_model: Rc<RefCell<Option<Function>>>,
 }
 
-impl Clone for WasmCompletionProviderDefaults {
+impl Clone for WasmProviderDefaults {
     fn clone(&self) -> Self {
         Self {
             base: Rc::clone(&self.base),
             system_prompt: Rc::clone(&self.system_prompt),
             tools: Rc::clone(&self.tools),
             response_format: Rc::clone(&self.response_format),
-            before_completion: Rc::clone(&self.before_completion),
+            before_model: Rc::clone(&self.before_model),
         }
     }
 }
 
-#[wasm_bindgen(js_class = "CompletionProviderDefaults")]
-impl WasmCompletionProviderDefaults {
+#[wasm_bindgen(js_class = "ProviderDefaults")]
+impl WasmProviderDefaults {
     /// Create a new instance. All arguments are optional.
     ///
     /// - `base`: universal defaults (defaults to an empty
@@ -113,7 +113,7 @@ impl WasmCompletionProviderDefaults {
     /// - `systemPrompt`: prepended as a system message when the request has none.
     /// - `tools`: JS array of tool definitions appended to the request's tools.
     /// - `responseFormat`: applied when the request lacks a `responseFormat`.
-    /// - `beforeCompletion`: typed completion hook (JS function returning a Promise).
+    /// - `beforeModel`: typed completion hook (JS function returning a Promise).
     #[wasm_bindgen(constructor)]
     #[must_use]
     pub fn new(
@@ -121,14 +121,14 @@ impl WasmCompletionProviderDefaults {
         system_prompt: Option<String>,
         tools: Option<Array>,
         response_format: JsValue,
-        before_completion: Option<Function>,
-    ) -> WasmCompletionProviderDefaults {
+        before_model: Option<Function>,
+    ) -> WasmProviderDefaults {
         Self {
             base: Rc::new(RefCell::new(base.unwrap_or_default())),
             system_prompt: Rc::new(RefCell::new(system_prompt)),
             tools: Rc::new(RefCell::new(tools.unwrap_or_else(Array::new))),
             response_format: Rc::new(RefCell::new(response_format)),
-            before_completion: Rc::new(RefCell::new(before_completion)),
+            before_model: Rc::new(RefCell::new(before_model)),
         }
     }
 
@@ -184,17 +184,17 @@ impl WasmCompletionProviderDefaults {
         *self.response_format.borrow_mut() = value;
     }
 
-    /// The configured `beforeCompletion` hook, or `undefined`.
-    #[wasm_bindgen(getter, js_name = "beforeCompletion")]
+    /// The configured `beforeModel` hook, or `undefined`.
+    #[wasm_bindgen(getter, js_name = "beforeModel")]
     #[must_use]
-    pub fn before_completion(&self) -> Option<Function> {
-        self.before_completion.borrow().clone()
+    pub fn before_model(&self) -> Option<Function> {
+        self.before_model.borrow().clone()
     }
 
-    /// Replace the `beforeCompletion` hook.
-    #[wasm_bindgen(setter, js_name = "beforeCompletion")]
+    /// Replace the `beforeModel` hook.
+    #[wasm_bindgen(setter, js_name = "beforeModel")]
     pub fn set_before_completion(&self, hook: Option<Function>) {
-        *self.before_completion.borrow_mut() = hook;
+        *self.before_model.borrow_mut() = hook;
     }
 }
 

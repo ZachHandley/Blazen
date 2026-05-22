@@ -11,7 +11,7 @@
 //! - `GET  /metrics`               — Prometheus text format (optional)
 //!
 //! Bodies are `serde_json::Value` rather than typed structs because
-//! Blazen's provider-agnostic [`CompletionRequest`] / [`CompletionResponse`]
+//! Blazen's provider-agnostic [`ModelRequest`] / [`ModelResponse`]
 //! types live in `blazen-llm` (which this crate cannot depend on without
 //! creating a cycle). The `backends/tgi.rs` bridge does the typed
 //! conversion.

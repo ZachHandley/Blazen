@@ -28,8 +28,8 @@ module Blazen
   # ## Naming note
   #
   # The two response wrappers below are intentionally named
-  # +Blazen::CompletionResult+ / +Blazen::EmbeddingResult+ rather than
-  # +CompletionResponse+ / +EmbeddingResponse+ — the latter are accessor
+  # +Blazen::ModelResult+ / +Blazen::EmbeddingResult+ rather than
+  # +ModelResponse+ / +EmbeddingResponse+ — the latter are accessor
   # classes living in +blazen/llm.rb+ that wrap caller-owned handles
   # produced by +complete_blocking+ / +embed_blocking+. The +Result+
   # variants here are *constructors* a Ruby override hands back, and they
@@ -213,25 +213,25 @@ module Blazen
   end
 
   # Completion output for +CustomProvider#complete+ overrides. Wraps
-  # +BlazenCompletionResponse *+. Disambiguated from
-  # +Blazen::CompletionResponse+ (accessor for caller-owned handles
+  # +BlazenModelResponse *+. Disambiguated from
+  # +Blazen::ModelResponse+ (accessor for caller-owned handles
   # returned from +complete_blocking+) — see the +Blazen::Providers+
   # docstring for rationale.
-  class CompletionResult
+  class ModelResult
     include Providers::ResultHandle
 
     # @param data [Hash] schema-shaped completion-response record
     def initialize(data)
       @ptr = Providers.construct_from_json(
-        data, :blazen_completion_response_from_json,
-        "blazen_completion_response_from_json"
+        data, :blazen_model_response_from_json,
+        "blazen_model_response_from_json"
       )
       ObjectSpace.define_finalizer(self, self.class.finalizer(@ptr))
     end
 
     # @api private
     def self.finalizer(ptr)
-      proc { Blazen::FFI.blazen_completion_response_free(ptr) unless ptr.nil? || ptr.null? }
+      proc { Blazen::FFI.blazen_model_response_free(ptr) unless ptr.nil? || ptr.null? }
     end
   end
 

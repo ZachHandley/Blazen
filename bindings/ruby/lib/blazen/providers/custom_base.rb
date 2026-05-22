@@ -90,7 +90,7 @@ module Blazen
   # Provider-role-agnostic defaults — currently a marker that signals the
   # presence of a host-provided +before_request+ hook. Foreign callbacks
   # for that hook are not wired up in Phase A; the handle exists primarily
-  # so role-specific defaults ({CompletionProviderDefaults},
+  # so role-specific defaults ({ProviderDefaults},
   # {EmbeddingProviderDefaults}, etc.) can hang their +base+ off it.
   class BaseProviderDefaults
     # Allocates a fresh defaults handle, or wraps an existing one.
@@ -124,11 +124,11 @@ module Blazen
   # format, and an optional shared {BaseProviderDefaults}.
   #
   # @example
-  #   d = Blazen::CompletionProviderDefaults.new(
+  #   d = Blazen::ProviderDefaults.new(
   #     system_prompt: "Be terse.",
   #     tools_json: '[{"type":"function","function":{"name":"now"}}]',
   #   )
-  class CompletionProviderDefaults
+  class ProviderDefaults
     # @param system_prompt [String, nil]
     # @param tools_json [String, nil] JSON-encoded tools array
     # @param response_format_json [String, nil] JSON-encoded response_format
@@ -201,12 +201,12 @@ module Blazen
       BaseProviderDefaults.new(ptr)
     end
 
-    # @return [Boolean] whether a host +before_completion+ hook is attached
-    def has_before_completion?
-      Blazen::FFI.blazen_completion_provider_defaults_has_before_completion(@ptr)
+    # @return [Boolean] whether a host +before_model+ hook is attached
+    def has_before_model?
+      Blazen::FFI.blazen_provider_defaults_has_before_model(@ptr)
     end
 
-    # @return [::FFI::Pointer] the underlying +BlazenCompletionProviderDefaults *+
+    # @return [::FFI::Pointer] the underlying +BlazenProviderDefaults *+
     attr_reader :ptr
     alias_method :to_ptr, :ptr
   end
@@ -553,7 +553,7 @@ module Blazen
 
   # Wraps a +BlazenBaseProvider *+ — a completion model that has been
   # configured with instance-level defaults (system prompt, tools,
-  # response_format, plus an optional shared {CompletionProviderDefaults}
+  # response_format, plus an optional shared {ProviderDefaults}
   # handle). In V1, instances are not constructible from Ruby directly;
   # they are returned from {Blazen::CustomProvider} factories (Phase B).
   class BaseProvider
@@ -609,27 +609,27 @@ module Blazen
       self
     end
 
-    # Replaces the shared {CompletionProviderDefaults} attached to this
+    # Replaces the shared {ProviderDefaults} attached to this
     # provider. Returns +self+ for chaining.
     #
-    # @param defaults [Blazen::CompletionProviderDefaults]
+    # @param defaults [Blazen::ProviderDefaults]
     # @return [self]
     def with_defaults(defaults)
       Blazen::FFI.blazen_base_provider_with_defaults(@ptr, defaults.to_ptr)
       self
     end
 
-    # Returns the currently-attached {CompletionProviderDefaults} as a
+    # Returns the currently-attached {ProviderDefaults} as a
     # fresh wrapper, or +nil+ if none.
     #
-    # @return [Blazen::CompletionProviderDefaults, nil]
+    # @return [Blazen::ProviderDefaults, nil]
     def defaults
       ptr = Blazen::FFI.blazen_base_provider_defaults(@ptr)
       return nil if ptr.nil? || ptr.null?
 
-      cpd = CompletionProviderDefaults.allocate
+      cpd = ProviderDefaults.allocate
       cpd.instance_variable_set(:@ptr, ptr)
-      ObjectSpace.define_finalizer(cpd, CompletionProviderDefaults.finalizer(ptr))
+      ObjectSpace.define_finalizer(cpd, ProviderDefaults.finalizer(ptr))
       cpd
     end
 
@@ -802,7 +802,7 @@ module Blazen
   # An override can return one of three things:
   #
   # 1. A +Blazen::*Result+ instance (see +providers/results.rb+ — e.g.
-  #    +Blazen::AudioResult+, +Blazen::ImageResult+, +Blazen::CompletionResult+).
+  #    +Blazen::AudioResult+, +Blazen::ImageResult+, +Blazen::ModelResult+).
   #    The trampoline calls +#take_ptr!+ to steal the cabi handle and writes
   #    it through the vtable's +out_response+ slot.
   # 2. A Ruby +Hash+ matching the matching record's serde schema. The
@@ -903,7 +903,7 @@ module Blazen
     #
     # @api private
     REQUEST_FREE_FNS = {
-      complete:          :blazen_completion_request_free,
+      complete:          :blazen_model_request_free,
       text_to_speech:    :blazen_speech_request_free,
       generate_music:    :blazen_music_request_free,
       generate_sfx:      :blazen_music_request_free,
@@ -998,7 +998,7 @@ module Blazen
             end
           when Blazen::AudioResult, Blazen::ImageResult, Blazen::VideoResult,
                Blazen::ThreeDResult, Blazen::TranscriptionResult,
-               Blazen::VoiceHandle, Blazen::CompletionResult, Blazen::EmbeddingResult
+               Blazen::VoiceHandle, Blazen::ModelResult, Blazen::EmbeddingResult
             ptr = result.take_ptr!
             if ptr.nil? || ptr.null?
               raise Blazen::InternalError,
@@ -1055,15 +1055,15 @@ module Blazen
       proc { |user_data_ptr| unregister(user_data_ptr.address) },
     )
 
-    # +complete+ — Ruby override may return a +Blazen::CompletionResult+,
-    # a Hash matching the +CompletionResponse+ schema, or raise.
+    # +complete+ — Ruby override may return a +Blazen::ModelResult+,
+    # a Hash matching the +ModelResponse+ schema, or raise.
     COMPLETE_FN = ::FFI::Function.new(
       :int32,
       %i[pointer pointer pointer pointer],
       proc do |user_data_ptr, req_ptr, out_response, out_err|
         dispatch_typed(user_data_ptr, :complete, req_ptr,
-                       :blazen_completion_request_free, out_response, out_err,
-                       :blazen_completion_response_from_json)
+                       :blazen_model_request_free, out_response, out_err,
+                       :blazen_model_response_from_json)
       end,
       blocking: true,
     )
@@ -1077,11 +1077,11 @@ module Blazen
       :int32,
       %i[pointer pointer pointer pointer],
       proc do |user_data_ptr, req_ptr, _pusher, out_err|
-        # Note: +req_ptr+ here is a +BlazenCompletionRequest *+; +pusher+ is
+        # Note: +req_ptr+ here is a +BlazenModelRequest *+; +pusher+ is
         # caller-owned by the cabi (not freed here). No +out_response+
         # because the stream protocol writes through +pusher+.
         dispatch_typed(user_data_ptr, :stream, req_ptr,
-                       :blazen_completion_request_free, nil, out_err, nil)
+                       :blazen_model_request_free, nil, out_err, nil)
       end,
       blocking: true,
     )

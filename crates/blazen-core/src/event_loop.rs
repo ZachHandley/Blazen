@@ -1836,7 +1836,7 @@ async fn run_parallel_subworkflows(
     }
 }
 
-/// Mirror of the private `RetryCompletionModel::compute_delay` so
+/// Mirror of the private `RetryModel::compute_delay` so
 /// sub-workflow retries honor the same exponential backoff /
 /// max-delay / jitter semantics without depending on private
 /// internals of `blazen-llm`. The jitter source is a cheap LCG

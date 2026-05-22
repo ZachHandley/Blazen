@@ -70,7 +70,7 @@ pub enum BlazenError {
 
     // ---- LLM completion-specific ----
     #[error("completion error: {0}")]
-    Completion(CompletionErrorKind),
+    Model(ModelErrorKind),
 
     // ---- Compute job-specific ----
     #[error("compute error: {0}")]
@@ -193,7 +193,7 @@ pub struct ProviderHttpDetails {
 
 /// LLM completion-specific error variants.
 #[derive(Debug, thiserror::Error)]
-pub enum CompletionErrorKind {
+pub enum ModelErrorKind {
     #[error("model returned no content")]
     NoContent,
     #[error("model not found: {0}")]
@@ -370,19 +370,19 @@ impl BlazenError {
 
     #[must_use]
     pub fn no_content() -> Self {
-        Self::Completion(CompletionErrorKind::NoContent)
+        Self::Model(ModelErrorKind::NoContent)
     }
 
     pub fn model_not_found(model: impl Into<String>) -> Self {
-        Self::Completion(CompletionErrorKind::ModelNotFound(model.into()))
+        Self::Model(ModelErrorKind::ModelNotFound(model.into()))
     }
 
     pub fn invalid_response(message: impl Into<String>) -> Self {
-        Self::Completion(CompletionErrorKind::InvalidResponse(message.into()))
+        Self::Model(ModelErrorKind::InvalidResponse(message.into()))
     }
 
     pub fn stream_error(message: impl Into<String>) -> Self {
-        Self::Completion(CompletionErrorKind::Stream(message.into()))
+        Self::Model(ModelErrorKind::Stream(message.into()))
     }
 
     pub fn job_failed(message: impl Into<String>) -> Self {

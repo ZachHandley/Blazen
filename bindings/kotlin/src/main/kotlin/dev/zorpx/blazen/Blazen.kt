@@ -15,7 +15,7 @@ package dev.zorpx.blazen
  * `crates/blazen-uniffi/target/release/libblazen_uniffi.so` exposes only the
  * UDL-declared surface today (the [version] function). The rich
  * `#[uniffi::export]` proc-macro surface (`Workflow`, `Pipeline`,
- * `CompletionModel`, streaming, agent, batch, etc.) does **not** yet appear
+ * `Model`, streaming, agent, batch, etc.) does **not** yet appear
  * in the cdylib's exported metadata sections, so the bindgen cannot emit
  * Kotlin glue for it. Once the upstream crate is rebuilt with those
  * symbols retained, regenerate `blazen.kt` via

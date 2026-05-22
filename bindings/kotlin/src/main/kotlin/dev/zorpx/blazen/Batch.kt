@@ -11,7 +11,7 @@ import kotlinx.serialization.Serializable
 @Serializable
 public data class BatchItem(
     val id: String,
-    val request: CompletionRequest,
+    val request: ModelRequest,
 )
 
 /**
@@ -21,6 +21,6 @@ public data class BatchItem(
 @Serializable
 public data class BatchResult(
     val id: String,
-    val response: CompletionResponse? = null,
+    val response: ModelResponse? = null,
     val errorMessage: String? = null,
 )

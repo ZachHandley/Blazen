@@ -295,7 +295,7 @@ impl PyToolOutput {
 
 /// A tool invocation requested by the model.
 ///
-/// Returned in ``CompletionResponse.tool_calls`` and ``StreamChunk.tool_calls``.
+/// Returned in ``ModelResponse.tool_calls`` and ``StreamChunk.tool_calls``.
 ///
 /// Example:
 ///     >>> for tc in response.tool_calls:

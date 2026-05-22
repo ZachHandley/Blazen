@@ -1,20 +1,20 @@
-//! LLM opaque objects: `CompletionModel` and `EmbeddingModel`. Phase R3 Agent B.
+//! LLM opaque objects: `Model` and `EmbeddingModel`. Phase R3 Agent B.
 //!
-//! Both types wrap an `Arc<blazen_uniffi::llm::{CompletionModel,EmbeddingModel}>`
+//! Both types wrap an `Arc<blazen_uniffi::llm::{Model,EmbeddingModel}>`
 //! so multiple cabi handles can share the same underlying provider client
 //! (per-provider factories in Phase R4 construct one inner model and
 //! optionally hand back multiple wrappers).
 //!
 //! # Ownership conventions
 //!
-//! - **Model handles** (`*mut BlazenCompletionModel` / `*mut BlazenEmbeddingModel`):
+//! - **Model handles** (`*mut BlazenModel` / `*mut BlazenEmbeddingModel`):
 //!   produced by provider factories in Phase R4, owned by the C caller, freed
 //!   with the matching `*_free` function.
-//! - **Request consumption** (`BlazenCompletionRequest`): the
+//! - **Request consumption** (`BlazenModelRequest`): the
 //!   `complete_blocking` / `complete` entry points CONSUME the request
 //!   pointer. Internally we `Box::from_raw` it, move the inner record out, and
 //!   drop the (now-empty) wrapper. Callers must NOT call
-//!   `blazen_completion_request_free` on a pointer that was passed to one of
+//!   `blazen_model_request_free` on a pointer that was passed to one of
 //!   these two functions — that's a double-free.
 //! - **String-array inputs** (`embed_blocking` / `embed`): the
 //!   `*const *const c_char` argument is BORROWED. For `embed_blocking` we
@@ -24,14 +24,14 @@
 //!   duration of the cabi call itself (the spawned task owns its own
 //!   `Vec<String>` copy).
 //! - **Response handles**: the typed-take functions
-//!   `blazen_future_take_completion_response` and
+//!   `blazen_future_take_model_response` and
 //!   `blazen_future_take_embedding_response` produce
-//!   `*mut BlazenCompletionResponse` / `*mut BlazenEmbeddingResponse` that the
+//!   `*mut BlazenModelResponse` / `*mut BlazenEmbeddingResponse` that the
 //!   caller owns and must free with the matching `*_free`.
 //! - **`*mut c_char` getters** (`model_id`): allocated via `alloc_cstring`,
 //!   freed with `blazen_string_free`.
 
-// `BlazenCompletionModel::into_ptr` / `BlazenEmbeddingModel::into_ptr` are the
+// `BlazenModel::into_ptr` / `BlazenEmbeddingModel::into_ptr` are the
 // foundation helpers Phase R4 provider factories will reach for. The extern
 // FFI functions are linker-preserved regardless, but the helpers fire
 // dead-code until the factories wire in.
@@ -42,15 +42,13 @@ use std::sync::Arc;
 
 use blazen_uniffi::errors::BlazenError as InnerError;
 use blazen_uniffi::llm::{
-    CompletionModel as InnerCompletionModel, CompletionResponse as InnerCompletionResponse,
     EmbeddingModel as InnerEmbeddingModel, EmbeddingResponse as InnerEmbeddingResponse,
+    Model as InnerModel, ModelResponse as InnerModelResponse,
 };
 
 use crate::error::BlazenError;
 use crate::future::BlazenFuture;
-use crate::llm_records::{
-    BlazenCompletionRequest, BlazenCompletionResponse, BlazenEmbeddingResponse,
-};
+use crate::llm_records::{BlazenEmbeddingResponse, BlazenModelRequest, BlazenModelResponse};
 use crate::runtime::runtime;
 use crate::string::{alloc_cstring, cstr_to_str};
 
@@ -118,24 +116,24 @@ unsafe fn ptr_array_to_strings(ptrs: *const *const c_char, count: usize) -> Opti
 }
 
 // ---------------------------------------------------------------------------
-// BlazenCompletionModel
+// BlazenModel
 // ---------------------------------------------------------------------------
 
-/// Opaque wrapper around [`blazen_uniffi::llm::CompletionModel`]. Construct
+/// Opaque wrapper around [`blazen_uniffi::llm::Model`]. Construct
 /// via the per-provider factories in Phase R4 (e.g.
-/// `blazen_completion_model_openai`).
-pub struct BlazenCompletionModel(pub(crate) Arc<InnerCompletionModel>);
+/// `blazen_model_openai`).
+pub struct BlazenModel(pub(crate) Arc<InnerModel>);
 
-impl BlazenCompletionModel {
+impl BlazenModel {
     /// Leaks a fresh handle for the C caller. Used by Phase R4 provider
     /// factories.
-    pub(crate) fn into_ptr(self) -> *mut BlazenCompletionModel {
+    pub(crate) fn into_ptr(self) -> *mut BlazenModel {
         Box::into_raw(Box::new(self))
     }
 }
 
-impl From<Arc<InnerCompletionModel>> for BlazenCompletionModel {
-    fn from(inner: Arc<InnerCompletionModel>) -> Self {
+impl From<Arc<InnerModel>> for BlazenModel {
+    fn from(inner: Arc<InnerModel>) -> Self {
         Self(inner)
     }
 }
@@ -146,16 +144,14 @@ impl From<Arc<InnerCompletionModel>> for BlazenCompletionModel {
 ///
 /// # Safety
 ///
-/// `model` must be null OR a live `BlazenCompletionModel` produced by the
+/// `model` must be null OR a live `BlazenModel` produced by the
 /// cabi surface (and not yet freed).
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_model_id(
-    model: *const BlazenCompletionModel,
-) -> *mut c_char {
+pub unsafe extern "C" fn blazen_model_model_id(model: *const BlazenModel) -> *mut c_char {
     if model.is_null() {
         return std::ptr::null_mut();
     }
-    // SAFETY: caller has guaranteed `model` is a live `BlazenCompletionModel`.
+    // SAFETY: caller has guaranteed `model` is a live `BlazenModel`.
     let m = unsafe { &*model };
     let id = Arc::clone(&m.0).model_id();
     alloc_cstring(&id)
@@ -163,7 +159,7 @@ pub unsafe extern "C" fn blazen_completion_model_model_id(
 
 /// Synchronously runs a chat completion on the cabi tokio runtime.
 ///
-/// On success returns `0` and writes a fresh `BlazenCompletionResponse*` into
+/// On success returns `0` and writes a fresh `BlazenModelResponse*` into
 /// `*out_response`. On failure returns `-1` and writes a fresh `BlazenError*`
 /// into `*out_err`. Either out-parameter may be null to discard that side of
 /// the result (typically only meaningful on the error path during a smoke
@@ -171,44 +167,38 @@ pub unsafe extern "C" fn blazen_completion_model_model_id(
 ///
 /// **The `request` pointer is consumed.** Internally we `Box::from_raw` it
 /// and move its inner record out. Calling
-/// [`blazen_completion_request_free`](crate::llm_records::blazen_completion_request_free)
+/// [`blazen_model_request_free`](crate::llm_records::blazen_model_request_free)
 /// on the same pointer afterwards is a double-free.
 ///
 /// # Safety
 ///
-/// `model` must be null OR a live `BlazenCompletionModel`. `request` must be
-/// null OR a live `BlazenCompletionRequest` produced by the cabi surface;
+/// `model` must be null OR a live `BlazenModel`. `request` must be
+/// null OR a live `BlazenModelRequest` produced by the cabi surface;
 /// ownership transfers to this function. `out_response` and `out_err` must
 /// each be null OR point to a writable slot of the matching pointer type.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_complete_blocking(
-    model: *const BlazenCompletionModel,
-    request: *mut BlazenCompletionRequest,
-    out_response: *mut *mut BlazenCompletionResponse,
+pub unsafe extern "C" fn blazen_model_complete_blocking(
+    model: *const BlazenModel,
+    request: *mut BlazenModelRequest,
+    out_response: *mut *mut BlazenModelResponse,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     if model.is_null() {
-        write_internal_error(
-            out_err,
-            "blazen_completion_model_complete_blocking: null model",
-        );
+        write_internal_error(out_err, "blazen_model_complete_blocking: null model");
         return -1;
     }
     if request.is_null() {
-        write_internal_error(
-            out_err,
-            "blazen_completion_model_complete_blocking: null request",
-        );
+        write_internal_error(out_err, "blazen_model_complete_blocking: null request");
         return -1;
     }
-    // SAFETY: caller has guaranteed `model` is a live `BlazenCompletionModel`.
+    // SAFETY: caller has guaranteed `model` is a live `BlazenModel`.
     let m = unsafe { &*model };
     let inner_model = Arc::clone(&m.0);
     // SAFETY: caller has transferred ownership of `request`.
     let request_box = unsafe { Box::from_raw(request) };
     let inner_request = request_box.0;
 
-    let result: Result<InnerCompletionResponse, InnerError> =
+    let result: Result<InnerModelResponse, InnerError> =
         runtime().block_on(async move { inner_model.complete(inner_request).await });
 
     match result {
@@ -216,7 +206,7 @@ pub unsafe extern "C" fn blazen_completion_model_complete_blocking(
             if !out_response.is_null() {
                 // SAFETY: `out_response` is non-null per the branch above.
                 unsafe {
-                    *out_response = BlazenCompletionResponse::from(resp).into_ptr();
+                    *out_response = BlazenModelResponse::from(resp).into_ptr();
                 }
             }
             0
@@ -231,24 +221,24 @@ pub unsafe extern "C" fn blazen_completion_model_complete_blocking(
 /// Spawns a chat completion onto the cabi tokio runtime and returns an
 /// opaque future handle. The caller observes completion via the future's
 /// fd / `blazen_future_poll` / `blazen_future_wait`, then calls
-/// [`blazen_future_take_completion_response`] to pop the result. Free the
+/// [`blazen_future_take_model_response`] to pop the result. Free the
 /// future with `blazen_future_free`.
 ///
 /// Returns null if either `model` or `request` is null (in which case the
 /// `request`, if non-null, is still consumed and freed to avoid a leak).
 ///
 /// **The `request` pointer is consumed.** See
-/// [`blazen_completion_model_complete_blocking`] for details.
+/// [`blazen_model_complete_blocking`] for details.
 ///
 /// # Safety
 ///
-/// `model` must be null OR a live `BlazenCompletionModel`. `request` must be
-/// null OR a live `BlazenCompletionRequest`; ownership transfers to this
+/// `model` must be null OR a live `BlazenModel`. `request` must be
+/// null OR a live `BlazenModelRequest`; ownership transfers to this
 /// function regardless of whether the call returns null.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_complete(
-    model: *const BlazenCompletionModel,
-    request: *mut BlazenCompletionRequest,
+pub unsafe extern "C" fn blazen_model_complete(
+    model: *const BlazenModel,
+    request: *mut BlazenModelRequest,
 ) -> *mut BlazenFuture {
     if model.is_null() {
         if !request.is_null() {
@@ -260,7 +250,7 @@ pub unsafe extern "C" fn blazen_completion_model_complete(
     if request.is_null() {
         return std::ptr::null_mut();
     }
-    // SAFETY: caller has guaranteed `model` is a live `BlazenCompletionModel`.
+    // SAFETY: caller has guaranteed `model` is a live `BlazenModel`.
     let m = unsafe { &*model };
     let inner_model = Arc::clone(&m.0);
     // SAFETY: caller has transferred ownership of `request`.
@@ -270,14 +260,14 @@ pub unsafe extern "C" fn blazen_completion_model_complete(
     BlazenFuture::spawn(async move { inner_model.complete(inner_request).await })
 }
 
-/// Frees a `BlazenCompletionModel` handle. No-op on a null pointer.
+/// Frees a `BlazenModel` handle. No-op on a null pointer.
 ///
 /// # Safety
 ///
 /// `model` must be null OR a pointer previously produced by a provider
 /// factory in the cabi surface. Double-free is undefined behavior.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_completion_model_free(model: *mut BlazenCompletionModel) {
+pub unsafe extern "C" fn blazen_model_free(model: *mut BlazenModel) {
     if model.is_null() {
         return;
     }
@@ -466,8 +456,8 @@ pub unsafe extern "C" fn blazen_embedding_model_free(model: *mut BlazenEmbedding
 // C can't see Rust generics, so we monomorphise here.
 // ---------------------------------------------------------------------------
 
-/// Pops the [`BlazenCompletionResponse`] out of a future produced by
-/// [`blazen_completion_model_complete`].
+/// Pops the [`BlazenModelResponse`] out of a future produced by
+/// [`blazen_model_complete`].
 ///
 /// Returns `0` on success (writes the response into `*out` when non-null) or
 /// `-1` on failure (writes a fresh `BlazenError*` into `*err` when non-null).
@@ -480,23 +470,23 @@ pub unsafe extern "C" fn blazen_embedding_model_free(model: *mut BlazenEmbedding
 /// # Safety
 ///
 /// `fut` must be null OR a pointer previously produced by
-/// [`blazen_completion_model_complete`] (and not yet freed, not concurrently
+/// [`blazen_model_complete`] (and not yet freed, not concurrently
 /// freed from another thread). `out` and `err` must each be null OR point to
 /// a writable slot of the matching pointer type.
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_future_take_completion_response(
+pub unsafe extern "C" fn blazen_future_take_model_response(
     fut: *mut BlazenFuture,
-    out: *mut *mut BlazenCompletionResponse,
+    out: *mut *mut BlazenModelResponse,
     err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the contract on `fut` (live or null `BlazenFuture`
     // pointer produced by the cabi surface).
-    match unsafe { BlazenFuture::take_typed::<InnerCompletionResponse>(fut) } {
+    match unsafe { BlazenFuture::take_typed::<InnerModelResponse>(fut) } {
         Ok(v) => {
             if !out.is_null() {
                 // SAFETY: `out` is non-null per the branch above.
                 unsafe {
-                    *out = BlazenCompletionResponse::from(v).into_ptr();
+                    *out = BlazenModelResponse::from(v).into_ptr();
                 }
             }
             0

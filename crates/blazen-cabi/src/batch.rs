@@ -14,16 +14,16 @@
 //! ## Ownership conventions
 //!
 //! - `model` is BORROWED; the caller retains ownership of the
-//!   `BlazenCompletionModel*`. The inner `Arc<CompletionModel>` is cloned into
+//!   `BlazenModel*`. The inner `Arc<Model>` is cloned into
 //!   the task so the model handle can be freed independently of the spawned
 //!   batch.
 //! - The `requests` array itself is BORROWED at the array level — the caller
-//!   frees the outer `BlazenCompletionRequest*` array after the cabi call
-//!   returns — but each `BlazenCompletionRequest*` element is CONSUMED. The
+//!   frees the outer `BlazenModelRequest*` array after the cabi call
+//!   returns — but each `BlazenModelRequest*` element is CONSUMED. The
 //!   cabi reclaims each via `Box::from_raw`, moves the inner
-//!   `blazen_uniffi::llm::CompletionRequest` record out, and drops the empty
+//!   `blazen_uniffi::llm::ModelRequest` record out, and drops the empty
 //!   wrapper. Calling
-//!   [`crate::llm_records::blazen_completion_request_free`] on any element
+//!   [`crate::llm_records::blazen_model_request_free`] on any element
 //!   passed to a batch call afterwards is a double-free.
 //! - The result handle produced via either the blocking call or
 //!   [`blazen_future_take_batch_result`] is caller-owned and freed via
@@ -35,13 +35,13 @@ use std::sync::Arc;
 
 use blazen_uniffi::batch::BatchResult as InnerBatchResult;
 use blazen_uniffi::errors::BlazenError as InnerError;
-use blazen_uniffi::llm::CompletionRequest as InnerCompletionRequest;
+use blazen_uniffi::llm::ModelRequest as InnerModelRequest;
 
 use crate::batch_records::BlazenBatchResult;
 use crate::error::BlazenError;
 use crate::future::BlazenFuture;
-use crate::llm::BlazenCompletionModel;
-use crate::llm_records::BlazenCompletionRequest;
+use crate::llm::BlazenModel;
+use crate::llm_records::BlazenModelRequest;
 use crate::runtime::runtime;
 
 // ---------------------------------------------------------------------------
@@ -81,10 +81,10 @@ fn write_internal_error(out_err: *mut *mut BlazenError, message: &str) -> i32 {
 // ---------------------------------------------------------------------------
 
 /// Drain the C `requests` array, taking ownership of each
-/// `BlazenCompletionRequest*` element and moving the inner record out.
+/// `BlazenModelRequest*` element and moving the inner record out.
 ///
 /// Returns `None` if `requests` is null while `count > 0`, or if any indexed
-/// pointer is null. On the `None` path, every `BlazenCompletionRequest*`
+/// pointer is null. On the `None` path, every `BlazenModelRequest*`
 /// element that was successfully reclaimed before the first null is dropped
 /// (so callers don't leak prefix elements when a later element is invalid).
 ///
@@ -94,21 +94,21 @@ fn write_internal_error(out_err: *mut *mut BlazenError, message: &str) -> i32 {
 /// # Safety
 ///
 /// When `count > 0`, `requests` must point to an array of exactly `count`
-/// `BlazenCompletionRequest*` entries. Each entry must be null OR a pointer
-/// previously produced by [`crate::llm_records::blazen_completion_request_new`]
-/// (or equivalent `Box::into_raw` over a `BlazenCompletionRequest`), and
+/// `BlazenModelRequest*` entries. Each entry must be null OR a pointer
+/// previously produced by [`crate::llm_records::blazen_model_request_new`]
+/// (or equivalent `Box::into_raw` over a `BlazenModelRequest`), and
 /// ownership of every non-null entry transfers to this function.
 unsafe fn take_requests(
-    requests: *const *mut BlazenCompletionRequest,
+    requests: *const *mut BlazenModelRequest,
     count: usize,
-) -> Option<Vec<InnerCompletionRequest>> {
+) -> Option<Vec<InnerModelRequest>> {
     if count == 0 {
         return Some(Vec::new());
     }
     if requests.is_null() {
         return None;
     }
-    let mut out: Vec<InnerCompletionRequest> = Vec::with_capacity(count);
+    let mut out: Vec<InnerModelRequest> = Vec::with_capacity(count);
     for i in 0..count {
         // SAFETY: caller guarantees `requests` indexes exactly `count` valid
         // pointer slots; reading slot `i < count` is in-bounds.
@@ -122,7 +122,7 @@ unsafe fn take_requests(
         }
         // SAFETY: caller has transferred ownership of slot `i`; per the
         // module-level contract, `p` came from `Box::into_raw` over a
-        // `BlazenCompletionRequest`, so reconstructing the `Box` is sound.
+        // `BlazenModelRequest`, so reconstructing the `Box` is sound.
         let req_box = unsafe { Box::from_raw(p) };
         out.push(req_box.0);
     }
@@ -144,26 +144,26 @@ unsafe fn take_requests(
 /// `max_concurrency` is a hard cap on in-flight requests; `0` means unlimited
 /// (the upstream default — all dispatched in parallel).
 ///
-/// **Each `BlazenCompletionRequest*` element of `requests` is consumed.** See
+/// **Each `BlazenModelRequest*` element of `requests` is consumed.** See
 /// the module-level docs for the full ownership contract; calling
-/// [`crate::llm_records::blazen_completion_request_free`] on any element
+/// [`crate::llm_records::blazen_model_request_free`] on any element
 /// afterwards is a double-free.
 ///
 /// # Safety
 ///
-/// - `model` must be null OR a live `BlazenCompletionModel` produced by the
+/// - `model` must be null OR a live `BlazenModel` produced by the
 ///   cabi surface.
 /// - When `requests_count > 0`, `requests` must point to an array of exactly
-///   `requests_count` `BlazenCompletionRequest*` entries; each entry must be
-///   a live `BlazenCompletionRequest` produced by the cabi surface, and
+///   `requests_count` `BlazenModelRequest*` entries; each entry must be
+///   a live `BlazenModelRequest` produced by the cabi surface, and
 ///   ownership of every entry transfers to this function. When
 ///   `requests_count == 0`, `requests` may be null.
 /// - `out_result` and `out_err` must each be null OR point to a writable slot
 ///   of the matching pointer type.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_complete_batch_blocking(
-    model: *const BlazenCompletionModel,
-    requests: *const *mut BlazenCompletionRequest,
+    model: *const BlazenModel,
+    requests: *const *mut BlazenModelRequest,
     requests_count: usize,
     max_concurrency: u32,
     out_result: *mut *mut BlazenBatchResult,
@@ -173,14 +173,14 @@ pub unsafe extern "C" fn blazen_complete_batch_blocking(
         return write_internal_error(out_err, "blazen_complete_batch_blocking: null model");
     }
     // SAFETY: caller has guaranteed `requests` is a valid array of `requests_count`
-    // owned `BlazenCompletionRequest*` entries (or `requests_count == 0`).
+    // owned `BlazenModelRequest*` entries (or `requests_count == 0`).
     let Some(core_requests) = (unsafe { take_requests(requests, requests_count) }) else {
         return write_internal_error(
             out_err,
             "blazen_complete_batch_blocking: null requests array or null request element",
         );
     };
-    // SAFETY: caller has guaranteed `model` is a live `BlazenCompletionModel`.
+    // SAFETY: caller has guaranteed `model` is a live `BlazenModel`.
     let m = unsafe { &*model };
     let inner_model = Arc::clone(&m.0);
 
@@ -209,12 +209,12 @@ pub unsafe extern "C" fn blazen_complete_batch_blocking(
 /// `blazen_future_free`.
 ///
 /// Returns null if `model` is null, or if `requests` is null when
-/// `requests_count > 0`, or if any indexed `BlazenCompletionRequest*` element
+/// `requests_count > 0`, or if any indexed `BlazenModelRequest*` element
 /// is null. On every null-return path, ownership of any
-/// `BlazenCompletionRequest*` elements that were already reclaimed is
+/// `BlazenModelRequest*` elements that were already reclaimed is
 /// dropped (no leaks).
 ///
-/// **Each `BlazenCompletionRequest*` element of `requests` is consumed** on
+/// **Each `BlazenModelRequest*` element of `requests` is consumed** on
 /// the success path AND on the validation-failure path (so the caller is
 /// always relieved of ownership of every successfully-passed element). See
 /// the module-level docs for the full contract.
@@ -222,11 +222,11 @@ pub unsafe extern "C" fn blazen_complete_batch_blocking(
 /// # Safety
 ///
 /// Same as [`blazen_complete_batch_blocking`]: `model` must be null OR a live
-/// `BlazenCompletionModel`; the `requests` array elements transfer ownership.
+/// `BlazenModel`; the `requests` array elements transfer ownership.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_complete_batch(
-    model: *const BlazenCompletionModel,
-    requests: *const *mut BlazenCompletionRequest,
+    model: *const BlazenModel,
+    requests: *const *mut BlazenModelRequest,
     requests_count: usize,
     max_concurrency: u32,
 ) -> *mut BlazenFuture {
@@ -245,7 +245,7 @@ pub unsafe extern "C" fn blazen_complete_batch(
     let Some(core_requests) = (unsafe { take_requests(requests, requests_count) }) else {
         return std::ptr::null_mut();
     };
-    // SAFETY: caller has guaranteed `model` is a live `BlazenCompletionModel`.
+    // SAFETY: caller has guaranteed `model` is a live `BlazenModel`.
     let m = unsafe { &*model };
     let inner_model = Arc::clone(&m.0);
 
@@ -262,7 +262,7 @@ pub unsafe extern "C" fn blazen_complete_batch(
 /// Both out-parameters may be null to discard the corresponding side.
 ///
 /// Calling this against a future produced by any other cabi entry point
-/// (e.g. `blazen_completion_model_complete`) yields a `BlazenError::Internal`
+/// (e.g. `blazen_model_complete`) yields a `BlazenError::Internal`
 /// with a `type mismatch` message — see `BlazenFuture::take_typed`.
 ///
 /// # Safety

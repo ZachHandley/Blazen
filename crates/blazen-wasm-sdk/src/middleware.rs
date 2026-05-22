@@ -3,27 +3,27 @@
 //!
 //! Exposes:
 //! - [`WasmMiddlewareStack`] (`MiddlewareStack`) -- the builder used to
-//!   compose multiple middleware layers around a [`WasmCompletionModel`].
+//!   compose multiple middleware layers around a [`WasmModel`].
 //! - [`WasmRetryMiddleware`] (`RetryMiddleware`) -- a built-in middleware
-//!   that wraps a model with [`blazen_llm::retry::RetryCompletionModel`].
+//!   that wraps a model with [`blazen_llm::retry::RetryModel`].
 //! - [`WasmCacheMiddleware`] (`CacheMiddleware`) -- a built-in middleware
-//!   that wraps a model with [`blazen_llm::cache::CachedCompletionModel`].
+//!   that wraps a model with [`blazen_llm::cache::CachedModel`].
 //! - [`WasmCustomMiddleware`] (`Middleware`) -- a JS-callback-based
 //!   middleware that delegates the wrap step to a JavaScript function.
 //!
 //! # Custom middleware (the ABC pattern)
 //!
 //! `Middleware` is a JS-callback class: callers supply a function
-//! `(inner: CompletionModel) => CompletionModel` that returns a new
-//! `CompletionModel` decorating `inner`. The most common way to produce
-//! such a model is via `inner.withRetry({ ... })`, `new RetryCompletionModel(...)`,
-//! or `CompletionModel.fromJsHandler(...)`.
+//! `(inner: Model) => Model` that returns a new
+//! `Model` decorating `inner`. The most common way to produce
+//! such a model is via `inner.withRetry({ ... })`, `new RetryModel(...)`,
+//! or `Model.fromJsHandler(...)`.
 //!
 //! ```js
 //! const stack = new MiddlewareStack()
 //!   .layer(new RetryMiddleware({ maxRetries: 3 }))
 //!   .layer(new Middleware((inner) => inner.withCache({ ttlSeconds: 60 })));
-//! const model = stack.apply(CompletionModel.openai());
+//! const model = stack.apply(Model.openai());
 //! ```
 
 use std::sync::Arc;
@@ -31,12 +31,12 @@ use std::sync::Arc;
 use wasm_bindgen::convert::TryFromJsValue;
 use wasm_bindgen::prelude::*;
 
-use blazen_llm::cache::{CacheConfig, CachedCompletionModel};
+use blazen_llm::cache::{CacheConfig, CachedModel};
 use blazen_llm::middleware::{CacheMiddleware, Middleware, RetryMiddleware};
-use blazen_llm::retry::{RetryCompletionModel, RetryConfig};
-use blazen_llm::traits::CompletionModel;
+use blazen_llm::retry::{RetryModel, RetryConfig};
+use blazen_llm::traits::Model;
 
-use crate::completion_model::WasmCompletionModel;
+use crate::model::WasmModel;
 use crate::decorators::{build_cache_config, build_retry_config};
 
 // ---------------------------------------------------------------------------
@@ -45,8 +45,8 @@ use crate::decorators::{build_cache_config, build_retry_config};
 
 /// A [`Middleware`] whose `wrap` step is delegated to a JavaScript function.
 ///
-/// The JS function is called with a `CompletionModel` instance and must
-/// return another `CompletionModel` that decorates it.
+/// The JS function is called with a `Model` instance and must
+/// return another `Model` that decorates it.
 struct JsMiddleware {
     apply: js_sys::Function,
 }
@@ -56,21 +56,21 @@ unsafe impl Send for JsMiddleware {}
 unsafe impl Sync for JsMiddleware {}
 
 impl Middleware for JsMiddleware {
-    fn wrap(&self, inner: Arc<dyn CompletionModel>) -> Arc<dyn CompletionModel> {
-        // Wrap the inner Arc in a WasmCompletionModel and pass it to the JS
-        // function. The JS side returns a WasmCompletionModel (or an object
+    fn wrap(&self, inner: Arc<dyn Model>) -> Arc<dyn Model> {
+        // Wrap the inner Arc in a WasmModel and pass it to the JS
+        // function. The JS side returns a WasmModel (or an object
         // shaped like one) whose inner Arc we extract back.
-        let inner_js = WasmCompletionModel::from_arc(Arc::clone(&inner));
+        let inner_js = WasmModel::from_arc(Arc::clone(&inner));
         let inner_value: JsValue = inner_js.into();
 
         match self.apply.call1(&JsValue::NULL, &inner_value) {
             Ok(returned) => {
                 // Try to convert the returned value back into a
-                // WasmCompletionModel.
-                match WasmCompletionModel::try_from_js_value(returned) {
+                // WasmModel.
+                match WasmModel::try_from_js_value(returned) {
                     Ok(wm) => wm.inner_arc(),
                     Err(_) => {
-                        // The JS side did not return a CompletionModel: fall
+                        // The JS side did not return a Model: fall
                         // back to the inner model so the chain still works.
                         inner
                     }
@@ -105,7 +105,7 @@ impl WasmRetryMiddleware {
     /// Create a new retry middleware with the given options.
     ///
     /// `options` accepts the same fields as
-    /// [`crate::decorators::WasmRetryCompletionModel::new`].
+    /// [`crate::decorators::WasmRetryModel::new`].
     #[wasm_bindgen(constructor)]
     pub fn new(options: JsValue) -> WasmRetryMiddleware {
         Self {
@@ -113,17 +113,17 @@ impl WasmRetryMiddleware {
         }
     }
 
-    /// Apply this middleware directly to a `CompletionModel`, returning a
+    /// Apply this middleware directly to a `Model`, returning a
     /// new wrapped model. Equivalent to `model.withRetry(...)` or
-    /// `new RetryCompletionModel(model, ...)` but lets the same
+    /// `new RetryModel(model, ...)` but lets the same
     /// configuration object be reused across multiple stacks.
     #[wasm_bindgen]
-    pub fn wrap(&self, model: &WasmCompletionModel) -> WasmCompletionModel {
-        let wrapped: Arc<dyn CompletionModel> = Arc::new(RetryCompletionModel::from_arc(
+    pub fn wrap(&self, model: &WasmModel) -> WasmModel {
+        let wrapped: Arc<dyn Model> = Arc::new(RetryModel::from_arc(
             model.inner_arc(),
             self.config.clone(),
         ));
-        WasmCompletionModel::from_arc(wrapped)
+        WasmModel::from_arc(wrapped)
     }
 }
 
@@ -157,7 +157,7 @@ impl WasmCacheMiddleware {
     /// Create a new cache middleware with the given options.
     ///
     /// `options` accepts the same fields as
-    /// [`crate::decorators::WasmCachedCompletionModel::new`].
+    /// [`crate::decorators::WasmCachedModel::new`].
     #[wasm_bindgen(constructor)]
     pub fn new(options: JsValue) -> WasmCacheMiddleware {
         Self {
@@ -165,15 +165,15 @@ impl WasmCacheMiddleware {
         }
     }
 
-    /// Apply this middleware directly to a `CompletionModel`, returning a
+    /// Apply this middleware directly to a `Model`, returning a
     /// new wrapped model.
     #[wasm_bindgen]
-    pub fn wrap(&self, model: &WasmCompletionModel) -> WasmCompletionModel {
-        let wrapped: Arc<dyn CompletionModel> = Arc::new(CachedCompletionModel::from_arc(
+    pub fn wrap(&self, model: &WasmModel) -> WasmModel {
+        let wrapped: Arc<dyn Model> = Arc::new(CachedModel::from_arc(
             model.inner_arc(),
             self.config.clone(),
         ));
-        WasmCompletionModel::from_arc(wrapped)
+        WasmModel::from_arc(wrapped)
     }
 }
 
@@ -189,8 +189,8 @@ impl WasmCacheMiddleware {
 
 /// A user-defined middleware whose wrap step is a JavaScript function.
 ///
-/// The supplied function receives the inner `CompletionModel` and must
-/// synchronously return a new `CompletionModel` that decorates it (any
+/// The supplied function receives the inner `Model` and must
+/// synchronously return a new `Model` that decorates it (any
 /// async work must be performed inside the resulting model's
 /// `complete`/`stream` methods, not inside the wrap step itself).
 ///
@@ -214,21 +214,21 @@ unsafe impl Sync for WasmCustomMiddleware {}
 impl WasmCustomMiddleware {
     /// Create a new middleware from a JS apply callback.
     ///
-    /// The callback signature is `(inner: CompletionModel) => CompletionModel`.
+    /// The callback signature is `(inner: Model) => Model`.
     #[wasm_bindgen(constructor)]
     pub fn new(apply: js_sys::Function) -> WasmCustomMiddleware {
         Self { apply }
     }
 
-    /// Apply this middleware directly to a `CompletionModel`, returning a
+    /// Apply this middleware directly to a `Model`, returning a
     /// new wrapped model. Calls the JS apply callback exactly once.
     #[wasm_bindgen]
-    pub fn wrap(&self, model: &WasmCompletionModel) -> Result<WasmCompletionModel, JsValue> {
-        let inner_js = WasmCompletionModel::from_arc(model.inner_arc());
+    pub fn wrap(&self, model: &WasmModel) -> Result<WasmModel, JsValue> {
+        let inner_js = WasmModel::from_arc(model.inner_arc());
         let inner_value: JsValue = inner_js.into();
         let returned = self.apply.call1(&JsValue::NULL, &inner_value)?;
-        WasmCompletionModel::try_from_js_value(returned).map_err(|_| {
-            JsValue::from_str("Middleware apply callback must return a CompletionModel instance")
+        WasmModel::try_from_js_value(returned).map_err(|_| {
+            JsValue::from_str("Middleware apply callback must return a Model instance")
         })
     }
 }
@@ -238,7 +238,7 @@ impl WasmCustomMiddleware {
 // ---------------------------------------------------------------------------
 
 /// A builder for composing multiple middleware layers around a
-/// `CompletionModel`.
+/// `Model`.
 ///
 /// Layers are applied so that the **first layer added becomes the outermost
 /// wrapper** -- it executes first on the request path and last on the
@@ -248,7 +248,7 @@ impl WasmCustomMiddleware {
 /// const stack = new MiddlewareStack()
 ///   .layerRetry({ maxRetries: 3 })
 ///   .layerCache({ ttlSeconds: 60 });
-/// const model = stack.apply(CompletionModel.openai());
+/// const model = stack.apply(Model.openai());
 /// ```
 #[wasm_bindgen(js_name = "MiddlewareStack")]
 pub struct WasmMiddlewareStack {
@@ -320,7 +320,7 @@ impl WasmMiddlewareStack {
     /// Add a custom JS-callback middleware layer (consumes the value).
     ///
     /// The callback is invoked exactly once when [`Self::apply`] runs,
-    /// receiving the inner `CompletionModel` and returning the wrapped one.
+    /// receiving the inner `Model` and returning the wrapped one.
     #[wasm_bindgen(js_name = "layerCustom")]
     pub fn layer_custom(mut self, middleware: WasmCustomMiddleware) -> WasmMiddlewareStack {
         self.layers.push(Box::new(JsMiddleware {
@@ -330,17 +330,17 @@ impl WasmMiddlewareStack {
     }
 
     /// Apply all middleware layers to `model`, returning the fully wrapped
-    /// model as a generic `CompletionModel`.
+    /// model as a generic `Model`.
     ///
     /// Layers are applied in reverse insertion order so that the first
     /// layer added becomes the outermost wrapper.
     #[wasm_bindgen]
-    pub fn apply(self, model: &WasmCompletionModel) -> WasmCompletionModel {
+    pub fn apply(self, model: &WasmModel) -> WasmModel {
         let mut wrapped = model.inner_arc();
         for layer in self.layers.into_iter().rev() {
             wrapped = layer.wrap(wrapped);
         }
-        WasmCompletionModel::from_arc(wrapped)
+        WasmModel::from_arc(wrapped)
     }
 
     /// The number of layers currently in the stack.

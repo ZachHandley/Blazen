@@ -15,13 +15,13 @@
  *     StartEvent  ->  generate_poem  ->  PoemEvent
  *     PoemEvent   ->  summarize      ->  StopEvent
  *
- * Both steps call OpenRouter via `CompletionModel.openrouter()` to demonstrate
+ * Both steps call OpenRouter via `Model.openrouter()` to demonstrate
  * real LLM completions inside a Blazen pipeline.
  *
  * Run with: OPENROUTER_API_KEY=sk-or-... npx tsx llm_openrouter.ts
  */
 
-import { Workflow, CompletionModel } from "blazen";
+import { Workflow, Model } from "blazen";
 import type { Context, JsWorkflowResult } from "blazen";
 
 // Default model routed through OpenRouter.  You can swap this to any model
@@ -44,9 +44,9 @@ if (!apiKey) {
 }
 
 // ---------------------------------------------------------------------------
-// 2. Create the CompletionModel targeting OpenRouter
+// 2. Create the Model targeting OpenRouter
 // ---------------------------------------------------------------------------
-const llm: CompletionModel = CompletionModel.openrouter({ apiKey });
+const llm: Model = Model.openrouter({ apiKey });
 console.log(`Using model: ${DEFAULT_MODEL}`);
 console.log();
 

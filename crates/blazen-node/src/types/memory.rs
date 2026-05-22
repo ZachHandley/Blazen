@@ -492,7 +492,7 @@ type AnyBackend<'a> = Either<&'a JsInMemoryBackend, &'a JsUpstashBackend>;
 /// A `MemoryBackend` decorator that retries transient errors with
 /// exponential backoff.
 ///
-/// Mirrors `RetryCompletionModel` for `MemoryBackend`. Use one of the
+/// Mirrors `RetryModel` for `MemoryBackend`. Use one of the
 /// `wrapInMemory` / `wrapJsonl` / `wrapValkey` factories to wrap the
 /// matching backend.
 ///

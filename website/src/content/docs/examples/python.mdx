@@ -76,14 +76,14 @@ python examples/branching_workflow.py
 
 ## LLM RAG Workflow
 
-Multi-step RAG pipeline with context sharing between steps. Uses typed `ChatMessage` and `CompletionResponse`:
+Multi-step RAG pipeline with context sharing between steps. Uses typed `ChatMessage` and `ModelResponse`:
 
 ```python
-from blazen import CompletionModel, ChatMessage, CompletionResponse
+from blazen import Model, ChatMessage, ModelResponse
 
 # Reads OPENAI_API_KEY from the environment by default.
-model = CompletionModel.openai()
-response: CompletionResponse = await model.complete([
+model = Model.openai()
+response: ModelResponse = await model.complete([
     ChatMessage.system("Answer based on the provided documents."),
     ChatMessage.user(query),
 ])
@@ -145,17 +145,17 @@ python examples/stateful_workflow.py
 
 ---
 
-## Example 7: Subclassing CompletionModel (Custom Provider)
+## Example 7: Subclassing Model (Custom Provider)
 
-Build a custom provider by subclassing `CompletionModel`. Override `complete()` and/or `stream()` to plug in any backend (local inference, a proxy, a mock, etc.). Once subclassed the model is a first-class citizen -- it works with `run_agent`, `with_retry()`, `with_cache()`, and every other helper.
+Build a custom provider by subclassing `Model`. Override `complete()` and/or `stream()` to plug in any backend (local inference, a proxy, a mock, etc.). Once subclassed the model is a first-class citizen -- it works with `run_agent`, `with_retry()`, `with_cache()`, and every other helper.
 
 ```python
 import asyncio
 
-from blazen import ChatMessage, CompletionModel, run_agent
+from blazen import ChatMessage, Model, run_agent
 
 
-class EchoLLM(CompletionModel):
+class EchoLLM(Model):
     """A toy provider that echoes the last user message back."""
 
     def __init__(self):
@@ -165,7 +165,7 @@ class EchoLLM(CompletionModel):
         last = next(
             (m.content for m in reversed(messages) if m.role == "user"), ""
         )
-        # Return a dict -- the dispatcher depythonizes into CompletionResponse.
+        # Return a dict -- the dispatcher depythonizes into ModelResponse.
         # Only `content` and `model` are required; every other field defaults.
         return {"content": f"echo: {last}", "model": self.model_id}
 
@@ -186,7 +186,7 @@ asyncio.run(main())
 ```
 
 ```sh
-python examples/subclass_completion_model.py
+python examples/subclass_model.py
 ```
 
 ---
@@ -261,20 +261,20 @@ Track memory budgets across multiple local models, with separate pools for CPU R
 ```python
 import asyncio
 
-from blazen import CompletionModel, MistralRsOptions, ModelManager
+from blazen import Model, MistralRsOptions, ModelManager
 
 
 async def main():
     # 64 GB of CPU RAM, 24 GB of GPU VRAM (GPU-typical for a consumer card).
     manager = ModelManager(cpu_ram_gb=64, gpu_vram_gb=24)
 
-    llama_8b = CompletionModel.mistralrs(
+    llama_8b = Model.mistralrs(
         options=MistralRsOptions("meta-llama/Llama-3.1-8B-Instruct"),
     )
-    qwen_14b = CompletionModel.mistralrs(
+    qwen_14b = Model.mistralrs(
         options=MistralRsOptions("Qwen/Qwen2.5-14B-Instruct"),
     )
-    mistral_24b = CompletionModel.mistralrs(
+    mistral_24b = Model.mistralrs(
         options=MistralRsOptions("mistralai/Mistral-Small-24B"),
     )
 
@@ -308,21 +308,21 @@ python examples/model_manager_budget.py
 
 ## Example 10: Pricing Registration and Cost Tracking
 
-Register pricing for any model ID (your own model, a local finetune, a custom deployment). Every `CompletionResponse` then carries a `.cost` field computed from the registered rate.
+Register pricing for any model ID (your own model, a local finetune, a custom deployment). Every `ModelResponse` then carries a `.cost` field computed from the registered rate.
 
 ```python
 import asyncio
 
 from blazen import (
     ChatMessage,
-    CompletionModel,
+    Model,
     ModelPricing,
     lookup_pricing,
     register_pricing,
 )
 
 
-class MyFinetune(CompletionModel):
+class MyFinetune(Model):
     """A stand-in for a custom deployment that reports its usage."""
 
     def __init__(self):
@@ -434,14 +434,14 @@ import asyncio
 from blazen import (
     BlazenError,
     ChatMessage,
-    CompletionModel,
+    Model,
     ProviderError,
     RateLimitError,
 )
 
 
 async def main():
-    model = CompletionModel.openai()
+    model = Model.openai()
     try:
         response = await model.complete([ChatMessage.user("Hello")])
         print(response.content)

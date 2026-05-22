@@ -13,16 +13,14 @@ use uuid::Uuid;
 
 use blazen_events::UsageEvent;
 use blazen_llm::usage_recording::{
-    NoopUsageEmitter, UsageEmitter, UsageRecordingCompletionModel, UsageRecordingEmbeddingModel,
+    NoopUsageEmitter, UsageEmitter, UsageRecordingEmbeddingModel, UsageRecordingModel,
 };
-use blazen_llm::{BlazenError, ChatMessage, CompletionModel, EmbeddingModel, StreamChunk};
+use blazen_llm::{BlazenError, ChatMessage, EmbeddingModel, Model, StreamChunk};
 
 use crate::error::BlazenPyError;
 use crate::events::PyUsageEvent;
-use crate::providers::completion_model::{
-    PyCompletionModel, PyCompletionOptions, arc_from_bound, build_request,
-};
-use crate::types::{PyChatMessage, PyCompletionResponse, PyEmbeddingModel, PyEmbeddingResponse};
+use crate::providers::model::{PyModel, PyModelOptions, arc_from_bound, build_request};
+use crate::types::{PyChatMessage, PyEmbeddingModel, PyEmbeddingResponse, PyModelResponse};
 
 // ---------------------------------------------------------------------------
 // PyUsageEmitter -- subclassable ABC
@@ -149,31 +147,31 @@ fn extract_emitter(obj: &Bound<'_, PyAny>) -> PyResult<Arc<dyn UsageEmitter>> {
 }
 
 // ---------------------------------------------------------------------------
-// PyUsageRecordingCompletionModel
+// PyUsageRecordingModel
 // ---------------------------------------------------------------------------
 
-/// A `CompletionModel` decorator that emits a `UsageEvent` after each
+/// A `Model` decorator that emits a `UsageEvent` after each
 /// successful `complete` / `stream` call.
 ///
-/// Mirrors `blazen_llm::usage_recording::UsageRecordingCompletionModel`.
+/// Mirrors `blazen_llm::usage_recording::UsageRecordingModel`.
 ///
 /// Example:
-///     >>> base = CompletionModel.openai()
+///     >>> base = Model.openai()
 ///     >>> emitter = NoopUsageEmitter()
-///     >>> model = UsageRecordingCompletionModel(base, emitter, "openai")
+///     >>> model = UsageRecordingModel(base, emitter, "openai")
 #[gen_stub_pyclass]
-#[pyclass(name = "UsageRecordingCompletionModel")]
-pub struct PyUsageRecordingCompletionModel {
-    inner: Arc<dyn CompletionModel>,
+#[pyclass(name = "UsageRecordingModel")]
+pub struct PyUsageRecordingModel {
+    inner: Arc<dyn Model>,
 }
 
 #[gen_stub_pymethods]
 #[pymethods]
-impl PyUsageRecordingCompletionModel {
-    /// Wrap a `CompletionModel` with a usage-recording layer.
+impl PyUsageRecordingModel {
+    /// Wrap a `Model` with a usage-recording layer.
     ///
     /// Args:
-    ///     model: The `CompletionModel` to wrap.
+    ///     model: The `Model` to wrap.
     ///     emitter: A `UsageEmitter` that receives each emitted event.
     ///     provider_label: A string used as the `provider` field on each
     ///         emitted `UsageEvent` (e.g. `"openai"`).
@@ -182,7 +180,7 @@ impl PyUsageRecordingCompletionModel {
     #[new]
     #[pyo3(signature = (model, emitter, provider_label, run_id=None))]
     fn new(
-        model: Bound<'_, PyCompletionModel>,
+        model: Bound<'_, PyModel>,
         emitter: &Bound<'_, PyAny>,
         provider_label: String,
         run_id: Option<String>,
@@ -194,21 +192,17 @@ impl PyUsageRecordingCompletionModel {
                 .map_err(|e| PyValueError::new_err(format!("invalid run_id UUID: {e}")))?,
             None => Uuid::new_v4(),
         };
-        let wrapped = UsageRecordingCompletionModel::from_arc(
-            inner_model,
-            emitter_arc,
-            provider_label,
-            run_id_uuid,
-        );
+        let wrapped =
+            UsageRecordingModel::from_arc(inner_model, emitter_arc, provider_label, run_id_uuid);
         Ok(Self {
             inner: Arc::new(wrapped),
         })
     }
 
-    /// Convert this decorator into a `CompletionModel` so it can be passed to
-    /// APIs that expect a `CompletionModel`.
-    fn as_model(&self) -> PyCompletionModel {
-        PyCompletionModel {
+    /// Convert this decorator into a `Model` so it can be passed to
+    /// APIs that expect a `Model`.
+    fn as_model(&self) -> PyModel {
+        PyModel {
             inner: Some(self.inner.clone()),
             local_model: None,
             config: None,
@@ -223,31 +217,28 @@ impl PyUsageRecordingCompletionModel {
 
     /// Perform a chat completion, emitting a `UsageEvent` on success.
     #[pyo3(signature = (messages, options=None))]
-    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, CompletionResponse]", imports = ("typing",)))]
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ModelResponse]", imports = ("typing",)))]
     fn complete<'py>(
         &self,
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
         let request = build_request(py, chat_messages, options.as_deref())?;
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let response = inner.complete(request).await.map_err(BlazenPyError::from)?;
-            Ok(PyCompletionResponse { inner: response })
+            Ok(PyModelResponse { inner: response })
         })
     }
 
     fn __repr__(&self) -> String {
-        format!(
-            "UsageRecordingCompletionModel(model_id='{}')",
-            self.inner.model_id()
-        )
+        format!("UsageRecordingModel(model_id='{}')", self.inner.model_id())
     }
 }
 
-// Type alias for the streaming chunk type that `CompletionModel::stream` yields.
+// Type alias for the streaming chunk type that `Model::stream` yields.
 #[allow(dead_code)]
 type PinnedChunkStream = Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>;
 

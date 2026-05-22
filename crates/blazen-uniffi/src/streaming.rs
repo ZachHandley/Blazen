@@ -53,10 +53,10 @@ use std::sync::Arc;
 
 use futures_util::StreamExt;
 
-use blazen_llm::CompletionRequest as CoreCompletionRequest;
+use blazen_llm::ModelRequest as CoreModelRequest;
 
 use crate::errors::{BlazenError, BlazenResult};
-use crate::llm::{CompletionModel, CompletionRequest, TokenUsage, ToolCall};
+use crate::llm::{Model, ModelRequest, TokenUsage, ToolCall};
 use crate::runtime::runtime;
 
 // ---------------------------------------------------------------------------
@@ -154,11 +154,11 @@ pub trait CompletionStreamSink: Send + Sync {
 /// callback failures are surfaced via `on_error`.
 #[uniffi::export(async_runtime = "tokio")]
 pub async fn complete_streaming(
-    model: Arc<CompletionModel>,
-    request: CompletionRequest,
+    model: Arc<Model>,
+    request: ModelRequest,
     sink: Arc<dyn CompletionStreamSink>,
 ) -> BlazenResult<()> {
-    let core_request = CoreCompletionRequest::try_from(request)?;
+    let core_request = CoreModelRequest::try_from(request)?;
     let stream = match model.inner.stream(core_request).await {
         Ok(s) => s,
         Err(err) => {
@@ -237,8 +237,8 @@ pub async fn complete_streaming(
 /// (they're just driven synchronously from the caller's thread).
 #[uniffi::export]
 pub fn complete_streaming_blocking(
-    model: Arc<CompletionModel>,
-    request: CompletionRequest,
+    model: Arc<Model>,
+    request: ModelRequest,
     sink: Arc<dyn CompletionStreamSink>,
 ) -> BlazenResult<()> {
     runtime().block_on(complete_streaming(model, request, sink))

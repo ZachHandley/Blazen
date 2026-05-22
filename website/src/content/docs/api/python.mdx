@@ -308,23 +308,23 @@ store = CallbackFieldStore(
 
 ---
 
-## CompletionModel
+## Model
 
 Use static constructor methods to create a model for a specific provider, then call `complete()` or `stream()` to generate responses.
 
 API keys are resolved from `ProviderOptions(api_key=...)` when passed explicitly, or from the provider's standard environment variable (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) when `options` is omitted.
 
 ```python
-from blazen import CompletionModel, ProviderOptions
+from blazen import Model, ProviderOptions
 
 # Read key from OPENAI_API_KEY env var
-model = CompletionModel.openai()
+model = Model.openai()
 
 # Pass an explicit key
-model = CompletionModel.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
+model = Model.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
 
 # Override the default model
-model = CompletionModel.openrouter(
+model = Model.openrouter(
     options=ProviderOptions(api_key="sk-or-...", model="meta-llama/llama-3-70b")
 )
 ```
@@ -333,21 +333,21 @@ model = CompletionModel.openrouter(
 
 | Constructor | Signature |
 |---|---|
-| `openai` | `CompletionModel.openai(*, options: ProviderOptions = None)` |
-| `anthropic` | `CompletionModel.anthropic(*, options: ProviderOptions = None)` |
-| `gemini` | `CompletionModel.gemini(*, options: ProviderOptions = None)` |
-| `azure` | `CompletionModel.azure(*, options: AzureOptions)` |
-| `openrouter` | `CompletionModel.openrouter(*, options: ProviderOptions = None)` |
-| `groq` | `CompletionModel.groq(*, options: ProviderOptions = None)` |
-| `together` | `CompletionModel.together(*, options: ProviderOptions = None)` |
-| `mistral` | `CompletionModel.mistral(*, options: ProviderOptions = None)` |
-| `deepseek` | `CompletionModel.deepseek(*, options: ProviderOptions = None)` |
-| `fireworks` | `CompletionModel.fireworks(*, options: ProviderOptions = None)` |
-| `perplexity` | `CompletionModel.perplexity(*, options: ProviderOptions = None)` |
-| `xai` | `CompletionModel.xai(*, options: ProviderOptions = None)` |
-| `cohere` | `CompletionModel.cohere(*, options: ProviderOptions = None)` |
-| `bedrock` | `CompletionModel.bedrock(*, options: BedrockOptions)` |
-| `fal` | `CompletionModel.fal(*, options: FalOptions = None)` |
+| `openai` | `Model.openai(*, options: ProviderOptions = None)` |
+| `anthropic` | `Model.anthropic(*, options: ProviderOptions = None)` |
+| `gemini` | `Model.gemini(*, options: ProviderOptions = None)` |
+| `azure` | `Model.azure(*, options: AzureOptions)` |
+| `openrouter` | `Model.openrouter(*, options: ProviderOptions = None)` |
+| `groq` | `Model.groq(*, options: ProviderOptions = None)` |
+| `together` | `Model.together(*, options: ProviderOptions = None)` |
+| `mistral` | `Model.mistral(*, options: ProviderOptions = None)` |
+| `deepseek` | `Model.deepseek(*, options: ProviderOptions = None)` |
+| `fireworks` | `Model.fireworks(*, options: ProviderOptions = None)` |
+| `perplexity` | `Model.perplexity(*, options: ProviderOptions = None)` |
+| `xai` | `Model.xai(*, options: ProviderOptions = None)` |
+| `cohere` | `Model.cohere(*, options: ProviderOptions = None)` |
+| `bedrock` | `Model.bedrock(*, options: BedrockOptions)` |
+| `fal` | `Model.fal(*, options: FalOptions = None)` |
 
 **Properties**
 
@@ -358,16 +358,16 @@ model = CompletionModel.openrouter(
 **complete()**
 
 ```python
-response: CompletionResponse = await model.complete(
+response: ModelResponse = await model.complete(
     messages: list[ChatMessage],
-    options: CompletionOptions = None,
+    options: ModelOptions = None,
 )
 ```
 
-Returns a typed `CompletionResponse` (see below). Also supports dict-style access for backwards compatibility: `response["content"]`.
+Returns a typed `ModelResponse` (see below). Also supports dict-style access for backwards compatibility: `response["content"]`.
 
 ```python
-opts = CompletionOptions(temperature=0.7, max_tokens=1024)
+opts = ModelOptions(temperature=0.7, max_tokens=1024)
 response = await model.complete(messages, opts)
 ```
 
@@ -377,7 +377,7 @@ response = await model.complete(messages, opts)
 await model.stream(
     messages: list[ChatMessage],
     on_chunk: Callable[[dict], Any],
-    options: CompletionOptions = None,
+    options: ModelOptions = None,
 )
 ```
 
@@ -397,12 +397,12 @@ def handle(chunk):
 await model.stream([ChatMessage.user("Tell me a story")], handle)
 ```
 
-**CompletionOptions**
+**ModelOptions**
 
 Options object for `complete()` and `stream()`. All fields are optional keyword arguments.
 
 ```python
-opts = CompletionOptions(
+opts = ModelOptions(
     temperature=0.7,
     max_tokens=1024,
     top_p=0.9,
@@ -423,13 +423,13 @@ opts = CompletionOptions(
 
 **Middleware decorators**
 
-Each decorator returns a new `CompletionModel` wrapping the original with additional behaviour.
+Each decorator returns a new `Model` wrapping the original with additional behaviour.
 
 | Method | Signature | Description |
 |---|---|---|
 | `with_retry` | `.with_retry(config: RetryConfig \| None = None)` | Automatic retry with exponential backoff on transient failures. |
 | `with_cache` | `.with_cache(config: CacheConfig \| None = None)` | In-memory response cache for identical non-streaming requests. |
-| `with_fallback` | `CompletionModel.with_fallback(models: list[CompletionModel])` | Static method. Tries providers in order; falls back on transient errors. |
+| `with_fallback` | `Model.with_fallback(models: list[Model])` | Static method. Tries providers in order; falls back on transient errors. |
 
 `RetryConfig` and `CacheConfig` are typed configuration objects:
 
@@ -441,23 +441,23 @@ CacheConfig(*, strategy: CacheStrategy | None = None, ttl_seconds=300, max_entri
 ```python
 # Chain decorators with typed config objects
 model = (
-    CompletionModel.openai()
+    Model.openai()
     .with_cache(CacheConfig(ttl_seconds=600))
     .with_retry(RetryConfig(max_retries=5))
 )
 
 # Or use defaults (both config args are optional)
-model = CompletionModel.openai().with_cache().with_retry()
+model = Model.openai().with_cache().with_retry()
 
 # Fallback across providers
-primary = CompletionModel.openai()
-backup = CompletionModel.anthropic()
-model = CompletionModel.with_fallback([primary, backup])
+primary = Model.openai()
+backup = Model.anthropic()
+model = Model.with_fallback([primary, backup])
 ```
 
 ---
 
-## CompletionResponse
+## ModelResponse
 
 Returned by `model.complete()`. Supports both attribute access and dict-style access.
 
@@ -487,7 +487,7 @@ print(response.keys())         # list of available keys
 
 ## RequestTiming
 
-Timing metadata attached to a `CompletionResponse`. All fields are optional since not every provider reports timing data.
+Timing metadata attached to a `ModelResponse`. All fields are optional since not every provider reports timing data.
 
 | Property | Type | Description |
 |---|---|---|
@@ -690,7 +690,7 @@ Supports dict-style access: `usage["total_tokens"]`.
 
 ## Agent System
 
-The agent system provides an agentic tool-execution loop on top of `CompletionModel`. Define tools with `ToolDef`, then call `run_agent` to let the model iteratively call tools until it produces a final answer.
+The agent system provides an agentic tool-execution loop on top of `Model`. Define tools with `ToolDef`, then call `run_agent` to let the model iteratively call tools until it produces a final answer.
 
 ### ToolDef
 
@@ -792,7 +792,7 @@ Run an agentic tool-execution loop. The model is called repeatedly, executing an
 
 ```python
 result: AgentResult = await run_agent(
-    model: CompletionModel,
+    model: Model,
     messages: list[ChatMessage],
     *,
     tools: list[ToolDef],
@@ -806,7 +806,7 @@ result: AgentResult = await run_agent(
 
 | Parameter | Type | Default | Description |
 |---|---|---|---|
-| `model` | `CompletionModel` | required | The model to use for completions. |
+| `model` | `Model` | required | The model to use for completions. |
 | `messages` | `list[ChatMessage]` | required | Initial conversation messages. |
 | `tools` | `list[ToolDef]` | required | Tools available to the model. |
 | `max_iterations` | `int` | `10` | Maximum number of tool-call rounds before stopping. |
@@ -816,7 +816,7 @@ result: AgentResult = await run_agent(
 | `add_finish_tool` | `bool` | `False` | If `True`, adds a built-in "finish" tool the model can call to explicitly end the loop. |
 
 ```python
-model = CompletionModel.openai()
+model = Model.openai()
 messages = [ChatMessage.user("What's the weather in Paris and London?")]
 
 result = await run_agent(model, messages, tools=[weather_tool])
@@ -831,7 +831,7 @@ Returned by `run_agent`.
 
 | Property | Type | Description |
 |---|---|---|
-| `.response` | `CompletionResponse` | The final completion response from the model. |
+| `.response` | `ModelResponse` | The final completion response from the model. |
 | `.messages` | `list[ChatMessage]` | The full conversation history including all tool calls and results. |
 | `.iterations` | `int` | Number of tool-call iterations executed. |
 | `.total_cost` | `float \| None` | Total cost in USD accumulated across all iterations. |
@@ -1378,7 +1378,7 @@ async def on_chunk(chunk):
 
 ## EmbeddingModel
 
-Generate vector embeddings from text. Created via static constructor methods, similar to `CompletionModel`. Keys are read from environment variables (`OPENAI_API_KEY`, etc.) when `options` is omitted, or can be passed explicitly via `ProviderOptions(api_key=...)`.
+Generate vector embeddings from text. Created via static constructor methods, similar to `Model`. Keys are read from environment variables (`OPENAI_API_KEY`, etc.) when `options` is omitted, or can be passed explicitly via `ProviderOptions(api_key=...)`.
 
 ```python
 from blazen import EmbeddingModel, ProviderOptions
@@ -1479,14 +1479,14 @@ Includes per-message overhead (role markers, separators) in addition to content 
 
 ## Subclassable Providers
 
-`CompletionModel`, `EmbeddingModel`, and `Transcription` can be subclassed to implement custom providers. Override the relevant methods and the framework will dispatch to your implementation.
+`Model`, `EmbeddingModel`, and `Transcription` can be subclassed to implement custom providers. Override the relevant methods and the framework will dispatch to your implementation.
 
-### CompletionModel
+### Model
 
 ```python
-from blazen import CompletionModel, ChatMessage
+from blazen import Model, ChatMessage
 
-class MyLLM(CompletionModel):
+class MyLLM(Model):
     def __init__(self):
         super().__init__(model_id="my-llm")
 
@@ -1777,9 +1777,9 @@ if pricing:
 
 ---
 
-## LocalModel Methods on CompletionModel
+## LocalModel Methods on Model
 
-`CompletionModel` instances backed by local inference (not remote APIs) support explicit load/unload lifecycle management.
+`Model` instances backed by local inference (not remote APIs) support explicit load/unload lifecycle management.
 
 | Method | Signature | Description |
 |---|---|---|
@@ -1790,7 +1790,7 @@ if pricing:
 | `device` | `model.device() -> str` | Return device string (`'cpu'`, `'cuda:0'`, `'metal'`, etc.). Determines which pool the manager charges. Default implementation raises `NotImplementedError` -- subclasses should override. |
 
 ```python
-model = CompletionModel.openai()  # Remote -- these methods are no-ops
+model = Model.openai()  # Remote -- these methods are no-ops
 # For a local model:
 await model.load()
 print(await model.is_loaded())    # True

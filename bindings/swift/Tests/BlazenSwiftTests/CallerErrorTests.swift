@@ -81,7 +81,7 @@ final class CallerErrorTests: XCTestCase {
         // this skipped block as documentation; uncomment + activate once
         // the regen surfaces them.
         //
-        // let model = try MockCompletionModel.with(modelId: "mock") // regen helper
+        // let model = try MockModel.with(modelId: "mock") // regen helper
         // defer { model.close() }
         //
         // let tool = Tool(

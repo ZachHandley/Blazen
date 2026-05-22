@@ -73,7 +73,7 @@ class CallerErrorTest {
         // accessors), surfaced by the agent's `run` path on tool-handler
         // failure.
         //
-        // val model = Blazen.mockCompletionModel(modelId = "mock")  // regen helper
+        // val model = Blazen.mockModel(modelId = "mock")  // regen helper
         // val tool = Tool(
         //     name = "domain_op",
         //     description = "Always throws a typed caller error.",

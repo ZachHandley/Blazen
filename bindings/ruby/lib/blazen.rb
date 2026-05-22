@@ -24,7 +24,7 @@
 #   Blazen.init
 #   begin
 #     model = Blazen::Providers.openai(api_key: ENV.fetch("OPENAI_API_KEY"))
-#     req = Blazen::Llm.completion_request(
+#     req = Blazen::Llm.model_request(
 #       messages: [Blazen::Llm.user("Say hi.")],
 #       max_tokens: 64,
 #     )

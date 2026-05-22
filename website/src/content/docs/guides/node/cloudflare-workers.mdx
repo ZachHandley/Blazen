@@ -34,7 +34,7 @@ pnpm add @blazen-dev/wasi
 ```ts
 // src/index.ts — a minimal Cloudflare Worker
 import {
-  CompletionModel,
+  Model,
   ChatMessage,
   AnthropicProvider,
   setDefaultHttpClient,
@@ -62,7 +62,7 @@ setDefaultHttpClient(
 export default {
   async fetch(req: Request, env: Env): Promise<Response> {
     const provider = await AnthropicProvider.create({ apiKey: env.ANTHROPIC_API_KEY });
-    const model = CompletionModel.fromProvider(provider, 'claude-3-5-sonnet-latest');
+    const model = Model.fromProvider(provider, 'claude-3-5-sonnet-latest');
     const result = await model.complete([ChatMessage.user('say hi')], {});
     return Response.json({ content: result.content });
   },
@@ -90,7 +90,7 @@ pnpm add blazen @blazen-dev/blazen-wasm32-wasi
 ```
 
 ```ts
-import { CompletionModel, ChatMessage, AnthropicProvider } from 'blazen/workers';
+import { Model, ChatMessage, AnthropicProvider } from 'blazen/workers';
 // ... rest is identical to the alias path
 ```
 

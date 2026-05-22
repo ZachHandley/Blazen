@@ -17,12 +17,12 @@
 //! ## Quick start
 //!
 //! ```rust,no_run
-//! use blazen_llm::{CompletionModel, CompletionRequest, ChatMessage};
+//! use blazen_llm::{Model, ModelRequest, ChatMessage};
 //! use blazen_llm::providers::openai::OpenAiProvider;
 //!
 //! # async fn example() -> Result<(), blazen_llm::BlazenError> {
 //! let model = OpenAiProvider::new("sk-...");
-//! let request = CompletionRequest::new(vec![
+//! let request = ModelRequest::new(vec![
 //!     ChatMessage::user("What is 2 + 2?"),
 //! ]);
 //! let response = model.complete(request).await?;
@@ -124,11 +124,11 @@ pub use providers::custom::{ApiProtocol, CustomProvider, CustomProviderHandle};
 pub use providers::custom::{lm_studio, ollama, openai_compat};
 pub use providers::defaults::{
     AudioMusicProviderDefaults, AudioSpeechProviderDefaults, BackgroundRemovalProviderDefaults,
-    BaseProviderDefaults, BeforeBackgroundRemovalRequestHook, BeforeCompletionRequestHook,
-    BeforeImageRequestHook, BeforeMusicRequestHook, BeforeRequestHook, BeforeSpeechRequestHook,
+    BaseProviderDefaults, BeforeBackgroundRemovalRequestHook, BeforeImageRequestHook,
+    BeforeModelRequestHook, BeforeMusicRequestHook, BeforeRequestHook, BeforeSpeechRequestHook,
     BeforeThreeDRequestHook, BeforeTranscriptionRequestHook, BeforeUpscaleRequestHook,
-    BeforeVideoRequestHook, BeforeVoiceCloneRequestHook, CompletionProviderDefaults,
-    EmbeddingProviderDefaults, ImageGenerationProviderDefaults, ImageUpscaleProviderDefaults,
+    BeforeVideoRequestHook, BeforeVoiceCloneRequestHook, EmbeddingProviderDefaults,
+    ImageGenerationProviderDefaults, ImageUpscaleProviderDefaults, ProviderDefaults,
     ThreeDProviderDefaults, TranscriptionProviderDefaults, VideoProviderDefaults,
     VoiceCloningProviderDefaults,
 };
@@ -140,7 +140,7 @@ pub use agent::{
 };
 pub use artifacts::extract_inline_artifacts;
 pub use batch::{BatchConfig, BatchResult, complete_batch};
-pub use cache::{CacheConfig, CacheStrategy, CachedCompletionModel};
+pub use cache::{CacheConfig, CacheStrategy, CachedModel};
 pub use chat_window::ChatWindow;
 pub use compute::{
     // Audio
@@ -180,7 +180,7 @@ pub use compute::{
 pub use device::{Device, Pool};
 #[allow(deprecated)]
 pub use error::LlmError;
-pub use error::{BlazenError, CompletionErrorKind, ComputeErrorKind, MediaErrorKind};
+pub use error::{BlazenError, ComputeErrorKind, MediaErrorKind, ModelErrorKind};
 pub use events::{StreamChunkEvent, StreamCompleteEvent};
 pub use fallback::FallbackModel;
 pub use media::{
@@ -199,25 +199,24 @@ pub use pricing_fetcher::{
     fetch_one_default, fetch_one_default_with_url_base, refresh_default, refresh_default_with_url,
 };
 pub use quantization::Quantization;
-pub use retry::{RetryCompletionModel, RetryConfig};
+pub use retry::{RetryConfig, RetryModel};
 #[cfg(feature = "tiktoken")]
 pub use tokens::TiktokenCounter;
 pub use tokens::{EstimateCounter, TokenCounter};
 pub use traits::{
     AdapterHandle, AdapterMountStrategy, AdapterOptions, AdapterStatus, AdapterTransport,
-    CompletionModel, EmbeddingModel, LocalModel, ModelCapabilities, ModelInfo, ModelPricing,
-    ModelRegistry, ProviderCapabilities, ProviderConfig, ProviderInfo, StructuredOutput, Tool,
+    EmbeddingModel, LocalModel, Model, ModelCapabilities, ModelInfo, ModelPricing, ModelRegistry,
+    ProviderCapabilities, ProviderConfig, ProviderInfo, StructuredOutput, Tool,
 };
 pub use typed_tool::{TypedTool, typed_tool_simple};
 pub use types::{
-    Artifact, AudioContent, ChatMessage, Citation, CompletionRequest, CompletionResponse,
-    ContentPart, EmbeddingResponse, FileContent, FinishReason, ImageContent, ImageSource,
-    LlmPayload, MediaSource, MessageContent, ProviderId, ReasoningTrace, RequestTiming,
-    ResponseFormat, Role, StreamChunk, StructuredResponse, TokenUsage, ToolCall, ToolDefinition,
-    ToolOutput, VideoContent,
+    Artifact, AudioContent, ChatMessage, Citation, ContentPart, EmbeddingResponse, FileContent,
+    FinishReason, ImageContent, ImageSource, LlmPayload, MediaSource, MessageContent, ModelRequest,
+    ModelResponse, ProviderId, ReasoningTrace, RequestTiming, ResponseFormat, Role, StreamChunk,
+    StructuredResponse, TokenUsage, ToolCall, ToolDefinition, ToolOutput, VideoContent,
 };
 pub use usage_recording::{
-    NoopUsageEmitter, UsageEmitter, UsageRecordingCompletionModel, UsageRecordingEmbeddingModel,
+    NoopUsageEmitter, UsageEmitter, UsageRecordingEmbeddingModel, UsageRecordingModel,
 };
 
 // ---------------------------------------------------------------------------
@@ -267,7 +266,7 @@ pub use blazen_image_diffusion::{
 };
 
 #[cfg(feature = "candle-llm")]
-pub use backends::candle_llm::CandleLlmCompletionModel;
+pub use backends::candle_llm::CandleLlmModel;
 #[cfg(feature = "candle-llm")]
 pub use blazen_llm_candle::{
     CandleInferenceResult, CandleLlmError, CandleLlmOptions, CandleLlmProvider,

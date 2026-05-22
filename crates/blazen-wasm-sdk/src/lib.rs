@@ -12,11 +12,11 @@
 //! ## Quick start (TypeScript)
 //!
 //! ```typescript
-//! import init, { CompletionModel, ChatMessage } from '@blazen-dev/wasm';
+//! import init, { Model, ChatMessage } from '@blazen-dev/wasm';
 //!
 //! await init(); // load WASM module
 //!
-//! const model = CompletionModel.openrouter();
+//! const model = Model.openrouter();
 //! const response = await model.complete([ChatMessage.user('Hello!')]);
 //! console.log(response.content);
 //! ```
@@ -27,8 +27,8 @@ pub mod batch;
 pub mod byo_backend;
 pub mod capability_providers;
 pub mod chat_message;
-pub mod completion_model;
-pub mod completion_types;
+pub mod model;
+pub mod model_types;
 pub mod compute;
 pub mod compute_provider;
 pub mod content;
@@ -41,7 +41,7 @@ pub mod embedding;
 pub mod events;
 pub mod handler;
 pub mod http_client;
-pub mod js_completion;
+pub mod js_model;
 pub mod js_embedding;
 pub mod manager;
 pub mod memory;

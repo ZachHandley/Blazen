@@ -95,7 +95,7 @@ impl std::future::Future for SendTimeoutFuture {
 /// Wraps any `Arc<dyn MemoryBackend>`. Because [`MemoryError`] does not
 /// currently expose retryability information, every error is retried up to
 /// `config.max_retries` times. Delays follow the same exponential-backoff
-/// formula as [`blazen_llm::retry::RetryCompletionModel`] but without the
+/// formula as [`blazen_llm::retry::RetryModel`] but without the
 /// jitter / `Retry-After` plumbing — backend errors don't carry retry-after
 /// metadata.
 pub struct RetryMemoryBackend {

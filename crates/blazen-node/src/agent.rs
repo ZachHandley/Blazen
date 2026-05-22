@@ -17,13 +17,13 @@ use blazen_llm::agent::{
 };
 use blazen_llm::error::BlazenError;
 use blazen_llm::traits::Tool;
-use blazen_llm::types::{ChatMessage, CompletionResponse, ToolDefinition};
+use blazen_llm::types::{ChatMessage, ModelResponse, ToolDefinition};
 use napi::threadsafe_function::ThreadsafeFunctionCallMode;
 
 use crate::error::blazen_caller_error_to_napi;
-use crate::providers::JsCompletionModel;
+use crate::providers::JsModel;
 use crate::types::events::JsAgentEvent;
-use crate::types::{JsChatMessage, JsCompletionResponse, build_response};
+use crate::types::{JsChatMessage, JsModelResponse, build_response};
 
 // ---------------------------------------------------------------------------
 // Type alias for the tool handler ThreadsafeFunction
@@ -140,15 +140,15 @@ pub struct JsAgentRunOptions {
 
 /// The result of an agent run.
 //
-// The `response` field stores the source-of-truth Rust `CompletionResponse`
+// The `response` field stores the source-of-truth Rust `ModelResponse`
 // (which is `Clone`) and rebuilds the JS-shape on each getter call. This
 // mirrors `PyAgentResult` (which stores the inner Rust type and rebuilds the
 // Python wrapper per access) and avoids requiring `Clone` on
-// `JsCompletionResponse` (a `#[napi(object)]` shape whose transitively
+// `JsModelResponse` (a `#[napi(object)]` shape whose transitively
 // generated mirror types are not `Clone`).
 #[napi(js_name = "AgentResult")]
 pub struct JsAgentResult {
-    response: CompletionResponse,
+    response: ModelResponse,
     messages: Vec<serde_json::Value>,
     iterations: u32,
     total_cost: Option<f64>,
@@ -159,7 +159,7 @@ pub struct JsAgentResult {
 impl JsAgentResult {
     /// The final completion response from the model.
     #[napi(getter)]
-    pub fn response(&self) -> JsCompletionResponse {
+    pub fn response(&self) -> JsModelResponse {
         build_response(self.response.clone())
     }
 
@@ -193,7 +193,7 @@ impl JsAgentResult {
 
 impl JsAgentResult {
     pub(crate) fn new(
-        response: CompletionResponse,
+        response: ModelResponse,
         messages: Vec<serde_json::Value>,
         iterations: u32,
         total_cost: Option<f64>,
@@ -341,9 +341,9 @@ fn decode_structured_tool_output(
 /// that resolves to one).
 ///
 /// ```typescript
-/// import { CompletionModel, ChatMessage, runAgent } from 'blazen';
+/// import { Model, ChatMessage, runAgent } from 'blazen';
 ///
-/// const model = CompletionModel.openai({ apiKey: "sk-..." });
+/// const model = Model.openai({ apiKey: "sk-..." });
 ///
 /// const result = await runAgent(
 ///   model,
@@ -363,7 +363,7 @@ fn decode_structured_tool_output(
     clippy::missing_errors_doc
 )]
 pub async fn run_agent(
-    model: &JsCompletionModel,
+    model: &JsModel,
     messages: Vec<&JsChatMessage>,
     tools: Vec<JsToolDef>,
     tool_handler: ToolHandlerTsfn,
@@ -414,7 +414,7 @@ pub async fn run_agent(
         config = config.with_tool_concurrency(tc as usize);
     }
 
-    let inner = crate::providers::completion_model::arc_from_js_model(model)?;
+    let inner = crate::providers::model::arc_from_js_model(model)?;
     let result = rust_run_agent(inner.as_ref(), rust_messages, config)
         .await
         .map_err(blazen_caller_error_to_napi)?;
@@ -461,9 +461,9 @@ type AgentEventCallbackTsfn =
 /// abort the loop.
 ///
 /// ```typescript
-/// import { CompletionModel, ChatMessage, runAgentWithCallback } from 'blazen';
+/// import { Model, ChatMessage, runAgentWithCallback } from 'blazen';
 ///
-/// const model = CompletionModel.openai({ apiKey: "sk-..." });
+/// const model = Model.openai({ apiKey: "sk-..." });
 ///
 /// const result = await runAgentWithCallback(
 ///   model,
@@ -484,7 +484,7 @@ type AgentEventCallbackTsfn =
     clippy::too_many_arguments
 )]
 pub async fn run_agent_with_callback(
-    model: &JsCompletionModel,
+    model: &JsModel,
     messages: Vec<&JsChatMessage>,
     tools: Vec<JsToolDef>,
     tool_handler: ToolHandlerTsfn,
@@ -538,7 +538,7 @@ pub async fn run_agent_with_callback(
 
     let inner = model.inner.as_ref().ok_or_else(|| {
         napi::Error::from_reason(
-            "runAgentWithCallback() is not supported on subclassed CompletionModel instances",
+            "runAgentWithCallback() is not supported on subclassed Model instances",
         )
     })?;
 

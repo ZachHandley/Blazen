@@ -7,13 +7,13 @@
 //! using `Function::new_with_args` (the same pattern used by
 //! `tests/custom_provider.rs` and `tests/streaming.rs`) and assert that:
 //!
-//! - `complete()` round-trips a `CompletionResponse` through serde-wasm-bindgen.
+//! - `complete()` round-trips a `ModelResponse` through serde-wasm-bindgen.
 //! - `streamComplete()` chunks land in the Rust-side `Stream`.
 //! - `embed()` produces vectors when the optional method is present.
 //! - `registerByoBackend()` on `WasmModelManager` accepts the JS object and
 //!   exposes load/unload + status round-trips.
 
-use blazen_wasm_sdk::byo_backend::{JsBackendShim, byo_backend_as_completion_model};
+use blazen_wasm_sdk::byo_backend::{JsBackendShim, byo_backend_as_model};
 use blazen_wasm_sdk::manager::WasmModelManager;
 use futures_util::StreamExt;
 use js_sys::{Function, Object, Reflect};
@@ -47,7 +47,7 @@ fn make_minimal_backend(model_id: &str, complete_body: &str) -> JsValue {
 
 #[wasm_bindgen_test]
 async fn byo_complete_roundtrip() {
-    // JS backend returns a fixed CompletionResponse shape.
+    // JS backend returns a fixed ModelResponse shape.
     let body = r#"
         return Promise.resolve({
             content: 'hello from byo backend',
@@ -63,19 +63,19 @@ async fn byo_complete_roundtrip() {
     "#;
     let backend = make_minimal_backend("byo-test", body);
 
-    let model = byo_backend_as_completion_model(backend)
-        .expect("BYO backend should construct as a CompletionModel");
+    let model = byo_backend_as_model(backend)
+        .expect("BYO backend should construct as a Model");
 
-    // Sanity: model id round-trips (WasmCompletionModel.modelId getter returns String).
+    // Sanity: model id round-trips (WasmModel.modelId getter returns String).
     assert_eq!(model.model_id(), "byo-test".to_string());
 }
 
 #[wasm_bindgen_test]
 async fn byo_complete_deserializes_response_via_shim() {
-    // Drive the shim directly through the CompletionModel trait to confirm
+    // Drive the shim directly through the Model trait to confirm
     // the wire deserialization works end-to-end.
-    use blazen_llm::traits::CompletionModel;
-    use blazen_llm::types::CompletionRequest;
+    use blazen_llm::traits::Model;
+    use blazen_llm::types::ModelRequest;
 
     let body = r#"
         return Promise.resolve({
@@ -93,7 +93,7 @@ async fn byo_complete_deserializes_response_via_shim() {
     let backend = make_minimal_backend("shim-test", body);
     let shim = JsBackendShim::from_js(backend).expect("shim ctor");
 
-    let req = CompletionRequest {
+    let req = ModelRequest {
         messages: vec![],
         tools: vec![],
         temperature: None,
@@ -112,8 +112,8 @@ async fn byo_complete_deserializes_response_via_shim() {
 
 #[wasm_bindgen_test]
 async fn byo_stream_complete_chunks_delivered() {
-    use blazen_llm::traits::CompletionModel;
-    use blazen_llm::types::CompletionRequest;
+    use blazen_llm::traits::Model;
+    use blazen_llm::types::ModelRequest;
 
     // JS streamComplete pushes 3 chunks then resolves.
     let backend = Object::new();
@@ -135,7 +135,7 @@ async fn byo_stream_complete_chunks_delivered() {
 
     let shim = JsBackendShim::from_js(backend.into()).expect("shim ctor");
 
-    let req = CompletionRequest {
+    let req = ModelRequest {
         messages: vec![],
         tools: vec![],
         temperature: None,

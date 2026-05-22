@@ -1,9 +1,9 @@
-//! Per-provider factories for [`CompletionModel`] and [`EmbeddingModel`].
+//! Per-provider factories for [`Model`] and [`EmbeddingModel`].
 //!
 //! Each `#[uniffi::export]` function in this module constructs a concrete
-//! upstream provider, wraps it as `Arc<dyn blazen_llm::CompletionModel>` (or
+//! upstream provider, wraps it as `Arc<dyn blazen_llm::Model>` (or
 //! `Arc<dyn blazen_llm::EmbeddingModel>`), and hands it back to the foreign
-//! caller through the opaque [`CompletionModel`] / [`EmbeddingModel`] handles
+//! caller through the opaque [`Model`] / [`EmbeddingModel`] handles
 //! defined in [`crate::llm`].
 //!
 //! ## Argument shape
@@ -44,14 +44,14 @@
 
 use std::sync::Arc;
 
-use blazen_llm::CompletionModel as CoreCompletionModel;
 use blazen_llm::EmbeddingModel as CoreEmbeddingModel;
+use blazen_llm::Model as CoreModel;
 use blazen_llm::types::provider_options::{
     AzureOptions, BedrockOptions, FalLlmEndpointKind, FalOptions, ProviderOptions,
 };
 
 use crate::errors::{BlazenError, BlazenResult};
-use crate::llm::{CompletionModel, EmbeddingModel};
+use crate::llm::{EmbeddingModel, Model};
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -79,7 +79,7 @@ fn provider_options(
 }
 
 // ---------------------------------------------------------------------------
-// Cloud LLM providers — CompletionModel factories
+// Cloud LLM providers — Model factories
 // ---------------------------------------------------------------------------
 
 /// Build an `OpenAI` chat-completion model.
@@ -87,44 +87,44 @@ fn provider_options(
 /// `base_url` defaults to `https://api.openai.com/v1`; override it to target
 /// any OpenAI-compatible proxy that uses the official-OpenAI request shape.
 #[uniffi::export]
-pub fn new_openai_completion_model(
+pub fn new_openai_model(
     api_key: String,
     model: Option<String>,
     base_url: Option<String>,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let opts = provider_options(api_key, model, base_url);
     let provider = blazen_llm::providers::openai::OpenAiProvider::from_options(opts)
         .map_err(BlazenError::from)?;
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 /// Build an Anthropic Messages-API chat-completion model.
 #[uniffi::export]
-pub fn new_anthropic_completion_model(
+pub fn new_anthropic_model(
     api_key: String,
     model: Option<String>,
     base_url: Option<String>,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let opts = provider_options(api_key, model, base_url);
     let provider = blazen_llm::providers::anthropic::AnthropicProvider::from_options(opts)
         .map_err(BlazenError::from)?;
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 /// Build a Google Gemini chat-completion model.
 #[uniffi::export]
-pub fn new_gemini_completion_model(
+pub fn new_gemini_model(
     api_key: String,
     model: Option<String>,
     base_url: Option<String>,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let opts = provider_options(api_key, model, base_url);
     let provider = blazen_llm::providers::gemini::GeminiProvider::from_options(opts)
         .map_err(BlazenError::from)?;
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 /// Build an Azure `OpenAI` chat-completion model.
@@ -134,12 +134,12 @@ pub fn new_gemini_completion_model(
 /// exposed here. `api_version` defaults to the provider's pinned API
 /// version when `None`.
 #[uniffi::export]
-pub fn new_azure_completion_model(
+pub fn new_azure_model(
     api_key: String,
     resource_name: String,
     deployment_name: String,
     api_version: Option<String>,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let opts = AzureOptions {
         base: provider_options(api_key, None, None),
         resource_name,
@@ -148,8 +148,8 @@ pub fn new_azure_completion_model(
     };
     let provider = blazen_llm::providers::azure::AzureOpenAiProvider::from_options(opts)
         .map_err(BlazenError::from)?;
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 /// Build an AWS Bedrock chat-completion model.
@@ -158,146 +158,146 @@ pub fn new_azure_completion_model(
 /// Bedrock API key (which can be obtained via `aws bedrock` IAM keys or
 /// passed as an empty string to resolve from `AWS_BEARER_TOKEN_BEDROCK`).
 #[uniffi::export]
-pub fn new_bedrock_completion_model(
+pub fn new_bedrock_model(
     api_key: String,
     region: String,
     model: Option<String>,
     base_url: Option<String>,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let opts = BedrockOptions {
         base: provider_options(api_key, model, base_url),
         region,
     };
     let provider = blazen_llm::providers::bedrock::BedrockProvider::from_options(opts)
         .map_err(BlazenError::from)?;
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 /// Build an `OpenRouter` chat-completion model.
 #[uniffi::export]
-pub fn new_openrouter_completion_model(
+pub fn new_openrouter_model(
     api_key: String,
     model: Option<String>,
     base_url: Option<String>,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let opts = provider_options(api_key, model, base_url);
     let provider = blazen_llm::providers::openrouter::OpenRouterProvider::from_options(opts)
         .map_err(BlazenError::from)?;
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 /// Build a Groq chat-completion model.
 #[uniffi::export]
-pub fn new_groq_completion_model(
+pub fn new_groq_model(
     api_key: String,
     model: Option<String>,
     base_url: Option<String>,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let opts = provider_options(api_key, model, base_url);
     let provider =
         blazen_llm::providers::groq::GroqProvider::from_options(opts).map_err(BlazenError::from)?;
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 /// Build a Together AI chat-completion model.
 #[uniffi::export]
-pub fn new_together_completion_model(
+pub fn new_together_model(
     api_key: String,
     model: Option<String>,
     base_url: Option<String>,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let opts = provider_options(api_key, model, base_url);
     let provider = blazen_llm::providers::together::TogetherProvider::from_options(opts)
         .map_err(BlazenError::from)?;
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 /// Build a Mistral chat-completion model.
 #[uniffi::export]
-pub fn new_mistral_completion_model(
+pub fn new_mistral_model(
     api_key: String,
     model: Option<String>,
     base_url: Option<String>,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let opts = provider_options(api_key, model, base_url);
     let provider = blazen_llm::providers::mistral::MistralProvider::from_options(opts)
         .map_err(BlazenError::from)?;
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 /// Build a `DeepSeek` chat-completion model.
 #[uniffi::export]
-pub fn new_deepseek_completion_model(
+pub fn new_deepseek_model(
     api_key: String,
     model: Option<String>,
     base_url: Option<String>,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let opts = provider_options(api_key, model, base_url);
     let provider = blazen_llm::providers::deepseek::DeepSeekProvider::from_options(opts)
         .map_err(BlazenError::from)?;
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 /// Build a Fireworks AI chat-completion model.
 #[uniffi::export]
-pub fn new_fireworks_completion_model(
+pub fn new_fireworks_model(
     api_key: String,
     model: Option<String>,
     base_url: Option<String>,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let opts = provider_options(api_key, model, base_url);
     let provider = blazen_llm::providers::fireworks::FireworksProvider::from_options(opts)
         .map_err(BlazenError::from)?;
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 /// Build a Perplexity chat-completion model.
 #[uniffi::export]
-pub fn new_perplexity_completion_model(
+pub fn new_perplexity_model(
     api_key: String,
     model: Option<String>,
     base_url: Option<String>,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let opts = provider_options(api_key, model, base_url);
     let provider = blazen_llm::providers::perplexity::PerplexityProvider::from_options(opts)
         .map_err(BlazenError::from)?;
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 /// Build an xAI (Grok) chat-completion model.
 #[uniffi::export]
-pub fn new_xai_completion_model(
+pub fn new_xai_model(
     api_key: String,
     model: Option<String>,
     base_url: Option<String>,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let opts = provider_options(api_key, model, base_url);
     let provider =
         blazen_llm::providers::xai::XaiProvider::from_options(opts).map_err(BlazenError::from)?;
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 /// Build a Cohere chat-completion model.
 #[uniffi::export]
-pub fn new_cohere_completion_model(
+pub fn new_cohere_model(
     api_key: String,
     model: Option<String>,
     base_url: Option<String>,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let opts = provider_options(api_key, model, base_url);
     let provider = blazen_llm::providers::cohere::CohereProvider::from_options(opts)
         .map_err(BlazenError::from)?;
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 /// Build a fal.ai chat-completion model.
@@ -309,14 +309,14 @@ pub fn new_cohere_completion_model(
 /// SOC2-eligible variant; `auto_route_modality` toggles automatic routing
 /// to a vision/audio/video endpoint when the request carries media.
 #[uniffi::export]
-pub fn new_fal_completion_model(
+pub fn new_fal_model(
     api_key: String,
     model: Option<String>,
     base_url: Option<String>,
     endpoint: Option<String>,
     enterprise: bool,
     auto_route_modality: bool,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let endpoint_kind = endpoint.as_deref().map(|s| match s {
         "openai_responses" => FalLlmEndpointKind::OpenAiResponses,
         "openai_embeddings" => FalLlmEndpointKind::OpenAiEmbeddings,
@@ -332,8 +332,8 @@ pub fn new_fal_completion_model(
     };
     let provider =
         blazen_llm::providers::fal::FalProvider::from_options(opts).map_err(BlazenError::from)?;
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 /// Build a generic OpenAI-compatible chat-completion model.
@@ -342,12 +342,12 @@ pub fn new_fal_completion_model(
 /// wire format (vLLM, llama-server, LM Studio, local proxies, ...). Uses
 /// `Authorization: Bearer <api_key>` auth.
 #[uniffi::export]
-pub fn new_openai_compat_completion_model(
+pub fn new_openai_compat_model(
     provider_name: String,
     base_url: String,
     api_key: String,
     model: String,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let config = blazen_llm::providers::openai_compat::OpenAiCompatConfig {
         provider_name,
         base_url,
@@ -359,58 +359,50 @@ pub fn new_openai_compat_completion_model(
         supports_model_listing: false,
     };
     let provider = blazen_llm::providers::openai_compat::OpenAiCompatProvider::new(config);
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
-/// Construct a [`CompletionModel`] for an Ollama server.
+/// Construct a [`Model`] for an Ollama server.
 ///
-/// Convenience for [`new_custom_completion_model_with_openai_protocol`] with
+/// Convenience for [`new_custom_model_with_openai_protocol`] with
 /// `base_url = format!("http://{host}:{port}/v1")` and no API key. Delegates
 /// to [`blazen_llm::ollama`], which knows how to speak Ollama's flavour of
 /// the `OpenAI` chat-completions protocol.
 #[uniffi::export]
-pub fn new_ollama_completion_model(
-    host: String,
-    port: u16,
-    model: String,
-) -> BlazenResult<Arc<CompletionModel>> {
+pub fn new_ollama_model(host: String, port: u16, model: String) -> BlazenResult<Arc<Model>> {
     let provider = blazen_llm::ollama(host, port, model);
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
-/// Construct a [`CompletionModel`] for an LM Studio server.
+/// Construct a [`Model`] for an LM Studio server.
 ///
 /// Convenience wrapper around [`blazen_llm::lm_studio`] — targets LM Studio's
 /// local `OpenAI`-compatible endpoint on `http://{host}:{port}/v1`.
 #[uniffi::export]
-pub fn new_lm_studio_completion_model(
-    host: String,
-    port: u16,
-    model: String,
-) -> BlazenResult<Arc<CompletionModel>> {
+pub fn new_lm_studio_model(host: String, port: u16, model: String) -> BlazenResult<Arc<Model>> {
     let provider = blazen_llm::lm_studio(host, port, model);
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
-/// Construct a [`CompletionModel`] that speaks the `OpenAI` chat-completions
+/// Construct a [`Model`] that speaks the `OpenAI` chat-completions
 /// protocol against an arbitrary base URL.
 ///
 /// This is the same wire format as
-/// [`new_openai_compat_completion_model`], but wrapped in a
+/// [`new_openai_compat_model`], but wrapped in a
 /// [`blazen_llm::CustomProviderHandle`] for consistent ergonomics with the
-/// `new_ollama_completion_model` / `new_lm_studio_completion_model`
+/// `new_ollama_model` / `new_lm_studio_model`
 /// factories. `api_key` is optional: passing `None` (or an empty `Some`)
 /// omits the `Authorization` header entirely.
 #[uniffi::export]
-pub fn new_custom_completion_model_with_openai_protocol(
+pub fn new_custom_model_with_openai_protocol(
     provider_id: String,
     base_url: String,
     model: String,
     api_key: Option<String>,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let cfg = blazen_llm::providers::openai_compat::OpenAiCompatConfig {
         provider_name: provider_id.clone(),
         base_url,
@@ -422,8 +414,8 @@ pub fn new_custom_completion_model_with_openai_protocol(
         supports_model_listing: true,
     };
     let provider = blazen_llm::openai_compat(provider_id, cfg);
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 // ---------------------------------------------------------------------------
@@ -481,7 +473,7 @@ pub fn new_fal_embedding_model(
 }
 
 // ---------------------------------------------------------------------------
-// Local LLM providers — CompletionModel factories
+// Local LLM providers — Model factories
 // ---------------------------------------------------------------------------
 
 /// Build a local mistral.rs chat-completion model.
@@ -493,13 +485,13 @@ pub fn new_fal_embedding_model(
 /// for multimodal models like LLaVA / Qwen2-VL.
 #[cfg(feature = "mistralrs")]
 #[uniffi::export]
-pub fn new_mistralrs_completion_model(
+pub fn new_mistralrs_model(
     model_id: String,
     device: Option<String>,
     quantization: Option<String>,
     context_length: Option<u32>,
     vision: bool,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let opts = blazen_llm::MistralRsOptions {
         model_id,
         quantization,
@@ -522,8 +514,8 @@ pub fn new_mistralrs_completion_model(
             detail: None,
             retry_after_ms: None,
         })?;
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 /// Build a local llama.cpp chat-completion model.
@@ -533,13 +525,13 @@ pub fn new_mistralrs_completion_model(
 /// the device supports it.
 #[cfg(feature = "llamacpp")]
 #[uniffi::export]
-pub fn new_llamacpp_completion_model(
+pub fn new_llamacpp_model(
     model_path: String,
     device: Option<String>,
     quantization: Option<String>,
     context_length: Option<u32>,
     n_gpu_layers: Option<u32>,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let opts = blazen_llm::LlamaCppOptions {
         model_path: Some(model_path),
         device,
@@ -561,25 +553,25 @@ pub fn new_llamacpp_completion_model(
             detail: None,
             retry_after_ms: None,
         })?;
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(provider);
-    Ok(CompletionModel::from_arc(inner))
+    let inner: Arc<dyn CoreModel> = Arc::new(provider);
+    Ok(Model::from_arc(inner))
 }
 
 /// Build a local candle chat-completion model.
 ///
 /// Wraps [`CandleLlmProvider`](blazen_llm::CandleLlmProvider) through the
-/// [`CandleLlmCompletionModel`](blazen_llm::CandleLlmCompletionModel) trait
-/// bridge so it satisfies the same `CompletionModel` trait as remote
+/// [`CandleLlmModel`](blazen_llm::CandleLlmModel) trait
+/// bridge so it satisfies the same `Model` trait as remote
 /// providers.
 #[cfg(feature = "candle-llm")]
 #[uniffi::export]
-pub fn new_candle_completion_model(
+pub fn new_candle_model(
     model_id: String,
     device: Option<String>,
     quantization: Option<String>,
     revision: Option<String>,
     context_length: Option<u32>,
-) -> BlazenResult<Arc<CompletionModel>> {
+) -> BlazenResult<Arc<Model>> {
     let opts = blazen_llm::CandleLlmOptions {
         model_id: Some(model_id),
         device,
@@ -601,9 +593,9 @@ pub fn new_candle_completion_model(
             detail: None,
             retry_after_ms: None,
         })?;
-    let bridge = blazen_llm::CandleLlmCompletionModel::new(provider);
-    let inner: Arc<dyn CoreCompletionModel> = Arc::new(bridge);
-    Ok(CompletionModel::from_arc(inner))
+    let bridge = blazen_llm::CandleLlmModel::new(provider);
+    let inner: Arc<dyn CoreModel> = Arc::new(bridge);
+    Ok(Model::from_arc(inner))
 }
 
 // ---------------------------------------------------------------------------

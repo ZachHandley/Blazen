@@ -30,8 +30,8 @@ use crate::http::{ByteStream, HttpClient, HttpRequest, HttpResponse};
 use crate::retry::RetryConfig;
 use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
 use crate::types::{
-    Citation, CompletionRequest, CompletionResponse, ContentPart, ImageContent, ImageSource,
-    MessageContent, ReasoningTrace, Role, StreamChunk, TokenUsage, ToolCall,
+    Citation, ContentPart, ImageContent, ImageSource, MessageContent, ModelRequest, ModelResponse,
+    ReasoningTrace, Role, StreamChunk, TokenUsage, ToolCall,
 };
 
 // ---------------------------------------------------------------------------
@@ -385,7 +385,7 @@ impl GeminiProvider {
 
     /// Build the JSON request body for the Gemini `generateContent` endpoint.
     #[allow(clippy::unused_self, clippy::too_many_lines)]
-    fn build_body(&self, request: &CompletionRequest) -> serde_json::Value {
+    fn build_body(&self, request: &ModelRequest) -> serde_json::Value {
         // Separate system instructions from conversation messages.
         let mut system_parts: Vec<String> = Vec::new();
         let mut contents: Vec<serde_json::Value> = Vec::new();
@@ -525,7 +525,7 @@ impl GeminiProvider {
     }
 
     /// Resolve the model to use for this request, returning an owned String.
-    fn resolve_model(&self, request: &CompletionRequest) -> String {
+    fn resolve_model(&self, request: &ModelRequest) -> String {
         request
             .model
             .clone()
@@ -671,7 +671,7 @@ struct GeminiModelEntry {
 // Helper: parse a Gemini response into our types
 // ---------------------------------------------------------------------------
 
-fn parse_gemini_response(response: GeminiResponse) -> Result<CompletionResponse, BlazenError> {
+fn parse_gemini_response(response: GeminiResponse) -> Result<ModelResponse, BlazenError> {
     let candidates = response
         .candidates
         .ok_or_else(|| BlazenError::invalid_response("no candidates in response"))?;
@@ -761,7 +761,7 @@ fn parse_gemini_response(response: GeminiResponse) -> Result<CompletionResponse,
         .model_version
         .unwrap_or_else(|| "gemini".to_owned());
 
-    Ok(CompletionResponse {
+    Ok(ModelResponse {
         content,
         tool_calls,
         reasoning,
@@ -780,11 +780,11 @@ fn parse_gemini_response(response: GeminiResponse) -> Result<CompletionResponse,
 }
 
 // ---------------------------------------------------------------------------
-// CompletionModel implementation
+// Model implementation
 // ---------------------------------------------------------------------------
 
 #[async_trait]
-impl crate::traits::CompletionModel for GeminiProvider {
+impl crate::traits::Model for GeminiProvider {
     fn model_id(&self) -> &str {
         &self.default_model
     }
@@ -797,10 +797,7 @@ impl crate::traits::CompletionModel for GeminiProvider {
         Some(Self::http_client(self))
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         let model = self.resolve_model(&request);
         let span = tracing::info_span!(
             "llm.complete",
@@ -849,7 +846,7 @@ impl crate::traits::CompletionModel for GeminiProvider {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         let model = self.resolve_model(&request);
@@ -1265,7 +1262,7 @@ mod tests {
     #[test]
     fn build_body_basic() {
         let provider = GeminiProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]);
+        let request = ModelRequest::new(vec![ChatMessage::user("Hello")]);
 
         let body = provider.build_body(&request);
         let contents = body["contents"].as_array().unwrap();
@@ -1277,7 +1274,7 @@ mod tests {
     #[test]
     fn build_body_with_system() {
         let provider = GeminiProvider::new("test-key");
-        let request = CompletionRequest::new(vec![
+        let request = ModelRequest::new(vec![
             ChatMessage::system("You are helpful."),
             ChatMessage::user("Hello"),
         ]);
@@ -1296,7 +1293,7 @@ mod tests {
     #[test]
     fn build_body_with_generation_config() {
         let provider = GeminiProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")])
+        let request = ModelRequest::new(vec![ChatMessage::user("Hello")])
             .with_temperature(0.7)
             .with_max_tokens(200)
             .with_top_p(0.9);
@@ -1313,8 +1310,8 @@ mod tests {
     #[test]
     fn build_body_with_tools() {
         let provider = GeminiProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]).with_tools(vec![
-            ToolDefinition {
+        let request =
+            ModelRequest::new(vec![ChatMessage::user("Hello")]).with_tools(vec![ToolDefinition {
                 name: "search".to_owned(),
                 description: "Search the web".to_owned(),
                 parameters: serde_json::json!({
@@ -1323,8 +1320,7 @@ mod tests {
                         "query": { "type": "string" }
                     }
                 }),
-            },
-        ]);
+            }]);
 
         let body = provider.build_body(&request);
         let tools = body["tools"].as_array().unwrap();
@@ -1337,7 +1333,7 @@ mod tests {
     #[test]
     fn test_text_backward_compat() {
         let provider = GeminiProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]);
+        let request = ModelRequest::new(vec![ChatMessage::user("Hello")]);
 
         let body = provider.build_body(&request);
         let contents = body["contents"].as_array().unwrap();
@@ -1349,7 +1345,7 @@ mod tests {
     #[test]
     fn test_build_body_image_url() {
         let provider = GeminiProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user_image_url(
+        let request = ModelRequest::new(vec![ChatMessage::user_image_url(
             "What is this?",
             "https://example.com/cat.jpg",
             Some("image/jpeg"),
@@ -1369,7 +1365,7 @@ mod tests {
     #[test]
     fn test_build_body_base64_image() {
         let provider = GeminiProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user_image_base64(
+        let request = ModelRequest::new(vec![ChatMessage::user_image_base64(
             "Describe this",
             "abc123base64data",
             "image/png",
@@ -1387,7 +1383,7 @@ mod tests {
         use crate::types::{ContentPart, ImageContent, ImageSource};
 
         let provider = GeminiProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user_parts(vec![
+        let request = ModelRequest::new(vec![ChatMessage::user_parts(vec![
             ContentPart::Text {
                 text: "First".into(),
             },
@@ -1689,7 +1685,7 @@ mod tests {
                 },
             ),
         );
-        let request = CompletionRequest::new(vec![tool_msg]);
+        let request = ModelRequest::new(vec![tool_msg]);
         let body = provider.build_body(&request);
         let contents = body["contents"].as_array().unwrap();
         // functionResponse Content + follow-up user Content with inlineData.
@@ -1710,7 +1706,7 @@ mod tests {
     fn gemini_build_body_text_only_tool_result_no_follow_up() {
         let provider = GeminiProvider::new("test-key");
         let tool_msg = ChatMessage::tool_result("call_1", "search", serde_json::json!("ok"));
-        let request = CompletionRequest::new(vec![tool_msg]);
+        let request = ModelRequest::new(vec![tool_msg]);
         let body = provider.build_body(&request);
         let contents = body["contents"].as_array().unwrap();
         assert_eq!(contents.len(), 1);
@@ -1734,7 +1730,7 @@ mod tests {
                 },
             ),
         );
-        let request = CompletionRequest::new(vec![tool_msg]);
+        let request = ModelRequest::new(vec![tool_msg]);
         let body = provider.build_body(&request);
         let response = &body["contents"][0]["parts"][0]["functionResponse"]["response"];
         assert!(

@@ -2,7 +2,7 @@
 //!
 //! Surface intentionally minimal: only the runtime *refresh* path is
 //! exposed for now. Cost computation flows through the existing
-//! `CompletionResponse.usage.cost_usd` field, which is computed from the
+//! `ModelResponse.usage.cost_usd` field, which is computed from the
 //! global registry — calling [`refresh_pricing`] at app startup populates
 //! that registry with the latest catalog from blazen.dev so cost numbers
 //! reflect current pricing for the ~1600+ models the build-time baked

@@ -7,15 +7,15 @@ use napi::threadsafe_function::ThreadsafeFunctionCallMode;
 use napi_derive::napi;
 use tokio_stream::StreamExt;
 
-use blazen_llm::CompletionModel;
+use blazen_llm::Model;
 use blazen_llm::providers::azure::AzureOpenAiProvider;
-use blazen_llm::types::{ChatMessage, CompletionRequest, ToolDefinition};
+use blazen_llm::types::{ChatMessage, ModelRequest, ToolDefinition};
 
 use crate::error::{blazen_error_to_napi, llm_error_to_napi};
 use crate::generated::JsAzureOptions;
-use crate::providers::completion_model::StreamChunkCallbackTsfn;
+use crate::providers::model::StreamChunkCallbackTsfn;
 use crate::types::{
-    JsChatMessage, JsCompletionOptions, JsCompletionResponse, build_response, build_stream_chunk,
+    JsChatMessage, JsModelOptions, JsModelResponse, build_response, build_stream_chunk,
 };
 
 /// An Azure `OpenAI` chat completion provider.
@@ -60,9 +60,9 @@ impl JsAzureOpenAiProvider {
 
     /// Perform a chat completion.
     #[napi]
-    pub async fn complete(&self, messages: Vec<&JsChatMessage>) -> Result<JsCompletionResponse> {
+    pub async fn complete(&self, messages: Vec<&JsChatMessage>) -> Result<JsModelResponse> {
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let request = CompletionRequest::new(chat_messages);
+        let request = ModelRequest::new(chat_messages);
         let response = self
             .inner
             .complete(request)
@@ -76,10 +76,10 @@ impl JsAzureOpenAiProvider {
     pub async fn complete_with_options(
         &self,
         messages: Vec<&JsChatMessage>,
-        options: JsCompletionOptions,
-    ) -> Result<JsCompletionResponse> {
+        options: JsModelOptions,
+    ) -> Result<JsModelResponse> {
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let mut request = CompletionRequest::new(chat_messages);
+        let mut request = ModelRequest::new(chat_messages);
         if let Some(temp) = options.temperature {
             request.temperature = Some(temp as f32);
         }
@@ -121,7 +121,7 @@ impl JsAzureOpenAiProvider {
         on_chunk: StreamChunkCallbackTsfn,
     ) -> Result<()> {
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let request = CompletionRequest::new(chat_messages);
+        let request = ModelRequest::new(chat_messages);
         let stream = self
             .inner
             .stream(request)
@@ -148,10 +148,10 @@ impl JsAzureOpenAiProvider {
         &self,
         messages: Vec<&JsChatMessage>,
         on_chunk: StreamChunkCallbackTsfn,
-        options: JsCompletionOptions,
+        options: JsModelOptions,
     ) -> Result<()> {
         let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let mut request = CompletionRequest::new(chat_messages);
+        let mut request = ModelRequest::new(chat_messages);
         if let Some(temp) = options.temperature {
             request.temperature = Some(temp as f32);
         }

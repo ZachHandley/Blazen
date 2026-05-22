@@ -600,7 +600,7 @@ impl From<PyQuantization> for blazen_llm::Quantization {
 ///
 /// Example:
 ///     >>> opts = MistralRsOptions("mistralai/Mistral-7B-Instruct-v0.3")
-///     >>> model = CompletionModel.mistralrs(options=opts)
+///     >>> model = Model.mistralrs(options=opts)
 #[cfg(feature = "mistralrs")]
 #[gen_stub_pyclass]
 #[pyclass(name = "MistralRsOptions", from_py_object)]

@@ -318,16 +318,16 @@ If a workflow runs against the Node binding, the same code path runs under `@bla
 
 ## LLM Integration
 
-Every provider implements the same `CompletionModel` trait/interface. Switch providers by changing one line.
+Every provider implements the same `Model` trait/interface. Switch providers by changing one line.
 
 ### Rust
 
 ```rust
-use blazen_llm::{CompletionModel, CompletionRequest, ChatMessage};
+use blazen_llm::{Model, ModelRequest, ChatMessage};
 use blazen_llm::providers::openai::OpenAiProvider;
 
 let model = OpenAiProvider::new("sk-...");
-let request = CompletionRequest::new(vec![
+let request = ModelRequest::new(vec![
     ChatMessage::user("What is the meaning of life?"),
 ]);
 let response = model.complete(request).await?;
@@ -348,15 +348,15 @@ let deepseek = OpenAiCompatProvider::deepseek("...");
 ### Python
 
 ```python
-from blazen import CompletionModel, ChatMessage, Role, CompletionResponse, ProviderOptions
+from blazen import Model, ChatMessage, Role, ModelResponse, ProviderOptions
 
-model = CompletionModel.openai(options=ProviderOptions(api_key="sk-..."))
-# or: CompletionModel.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
-# or: CompletionModel.groq(options=ProviderOptions(api_key="gsk-..."))
-# or: CompletionModel.openrouter(options=ProviderOptions(api_key="sk-or-..."))
-# or with env vars: CompletionModel.openai()
+model = Model.openai(options=ProviderOptions(api_key="sk-..."))
+# or: Model.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
+# or: Model.groq(options=ProviderOptions(api_key="gsk-..."))
+# or: Model.openrouter(options=ProviderOptions(api_key="sk-or-..."))
+# or with env vars: Model.openai()
 
-response: CompletionResponse = await model.complete([
+response: ModelResponse = await model.complete([
     ChatMessage.system("You are helpful."),
     ChatMessage.user("What is the meaning of life?"),
 ])
@@ -369,16 +369,16 @@ print(response.finish_reason)
 ### TypeScript
 
 ```typescript
-import { CompletionModel, ChatMessage, Role } from "blazen";
-import type { CompletionResponse } from "blazen";
+import { Model, ChatMessage, Role } from "blazen";
+import type { ModelResponse } from "blazen";
 
-const model = CompletionModel.openai({ apiKey: "sk-..." });
-// or: CompletionModel.anthropic({ apiKey: "sk-ant-..." })
-// or: CompletionModel.groq({ apiKey: "gsk-..." })
-// or: CompletionModel.openrouter({ apiKey: "sk-or-..." })
-// or with env vars: CompletionModel.openai()
+const model = Model.openai({ apiKey: "sk-..." });
+// or: Model.anthropic({ apiKey: "sk-ant-..." })
+// or: Model.groq({ apiKey: "gsk-..." })
+// or: Model.openrouter({ apiKey: "sk-or-..." })
+// or with env vars: Model.openai()
 
-const response: CompletionResponse = await model.complete([
+const response: ModelResponse = await model.complete([
   ChatMessage.system("You are helpful."),
   ChatMessage.user("What is the meaning of life?"),
 ]);
@@ -399,7 +399,7 @@ Inputs flow through a pluggable `ContentStore`. You register a blob, URL, or rem
 ```rust
 use blazen_llm::content::{InMemoryContentStore, ContentStore, ContentBody, ContentHint, ContentKind};
 use blazen_llm::content::tool_input::image_input;
-use blazen_llm::types::{ToolDefinition, CompletionRequest, ChatMessage};
+use blazen_llm::types::{ToolDefinition, ModelRequest, ChatMessage};
 use std::sync::Arc;
 
 let store: Arc<dyn ContentStore> = Arc::new(InMemoryContentStore::new());
@@ -519,7 +519,7 @@ const result = await handler.result();
 | `blazen-events` | Core event traits, `StartEvent`, `StopEvent`, `DynamicEvent`, and derive macro support |
 | `blazen-macros` | `#[derive(Event)]` and `#[step]` proc macros |
 | `blazen-core` | Workflow engine, context, step registry, pause/resume, and snapshots |
-| `blazen-llm` | LLM provider abstraction -- `CompletionModel`, `StructuredOutput`, `EmbeddingModel`, `Tool` |
+| `blazen-llm` | LLM provider abstraction -- `Model`, `StructuredOutput`, `EmbeddingModel`, `Tool` |
 | `blazen-pipeline` | Multi-workflow pipeline orchestrator with sequential/parallel stages |
 | `blazen-prompts` | Prompt template management with versioning and YAML/JSON registries |
 | `blazen-memory` | Memory and vector store with LSH-based approximate nearest-neighbor retrieval |
@@ -552,14 +552,14 @@ const result = await handler.result();
 | AWS Bedrock | `.bedrock()` | `anthropic.claude-sonnet-4-5-20250929-v1:0` |
 | fal.ai | `FalProvider::new` / `.fal()` | (image generation) |
 
-All OpenAI-compatible providers are accessible through `OpenAiCompatProvider` in Rust, or through static factory methods on `CompletionModel` in Python and TypeScript.
+All OpenAI-compatible providers are accessible through `OpenAiCompatProvider` in Rust, or through static factory methods on `Model` in Python and TypeScript.
 
 ## Typed Errors
 
 Every error the engine, the LLM layer, or a backend can raise has a dedicated subclass in Python, Node/TypeScript, WASM, Go, Swift, Kotlin, and Ruby, so callers branch on type instead of parsing strings. The hierarchy is rooted at `BlazenError` (extending the host language's base `Error` / `Exception`) and fans out to ~87 leaves covering provider failures (`RateLimitError`, `AuthError`, `ContextLengthError`), local-inference backends (`LlamaCppError`, `MistralRsError`, `CandleLlmError`, `WhisperCppError`, `PiperError`, `DiffusionError`), persistence (`PersistError`, `SnapshotError`), and workflow control flow (`StepNotFoundError`, `EventTypeMismatchError`, `WorkflowAbortedError`).
 
 ```python
-from blazen import CompletionModel, RateLimitError, AuthError, BlazenError
+from blazen import Model, RateLimitError, AuthError, BlazenError
 
 try:
     response = await model.complete(messages)

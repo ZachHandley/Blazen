@@ -47,7 +47,7 @@ use std::pin::Pin;
 use std::sync::Arc;
 
 use async_trait::async_trait;
-use blazen_llm::CompletionModel as CoreCompletionModel;
+use blazen_llm::Model as CoreModel;
 use blazen_llm::compute::{
     AudioGeneration, BackgroundRemoval, ImageGeneration, ThreeDGeneration, Transcription,
     VideoGeneration, VoiceCloning,
@@ -60,7 +60,7 @@ use blazen_llm::providers::openai_compat::{
     AuthMethod as CoreAuthMethod, OpenAiCompatConfig as CoreOpenAiCompatConfig,
 };
 use blazen_llm::types::{
-    CompletionRequest as CoreCompletionRequest, EmbeddingResponse as CoreEmbeddingResponse,
+    EmbeddingResponse as CoreEmbeddingResponse, ModelRequest as CoreModelRequest,
     StreamChunk as CoreStreamChunk, ToolCall as CoreToolCall,
 };
 use futures_util::Stream;
@@ -73,7 +73,7 @@ use crate::compute_types::{
 };
 use crate::errors::{BlazenError, BlazenResult};
 use crate::llm::{
-    ChatMessage, CompletionRequest, CompletionResponse, EmbeddingResponse, TokenUsage, ToolCall,
+    ChatMessage, EmbeddingResponse, ModelRequest, ModelResponse, TokenUsage, ToolCall,
 };
 use crate::provider_api_protocol::OpenAiCompatConfig;
 use crate::provider_base::BaseProvider;
@@ -123,14 +123,14 @@ pub trait CustomProvider: Send + Sync {
     fn provider_id(&self) -> String;
 
     /// Perform a non-streaming chat completion.
-    async fn complete(&self, request: CompletionRequest) -> BlazenResult<CompletionResponse>;
+    async fn complete(&self, request: ModelRequest) -> BlazenResult<ModelResponse>;
 
     /// Perform a streaming chat completion, pushing chunks into the supplied
     /// sink. The implementation must call `sink.on_done` exactly once on
     /// success or `sink.on_error` exactly once on failure.
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
         sink: Arc<dyn CompletionStreamSink>,
     ) -> BlazenResult<()>;
 
@@ -278,30 +278,28 @@ impl UniffiToCoreCustomProviderAdapter {
         })
     }
 
-    /// Helper: dispatch a UniFFI `CompletionRequest` into the upstream
-    /// `CoreCompletionRequest` shape and forward to the inner foreign
+    /// Helper: dispatch a UniFFI `ModelRequest` into the upstream
+    /// `CoreModelRequest` shape and forward to the inner foreign
     /// `complete`.
     async fn complete_inner(
         &self,
-        request: CoreCompletionRequest,
-    ) -> Result<blazen_llm::types::CompletionResponse, CoreBlazenError> {
-        let ffi_request = core_completion_request_to_ffi(request)?;
+        request: CoreModelRequest,
+    ) -> Result<blazen_llm::types::ModelResponse, CoreBlazenError> {
+        let ffi_request = core_model_request_to_ffi(request)?;
         let resp = self
             .inner
             .complete(ffi_request)
             .await
             .map_err(core_error_from_ffi)?;
-        Ok(ffi_completion_response_to_core(resp))
+        Ok(ffi_model_response_to_core(resp))
     }
 }
 
-/// Convert an upstream [`CoreCompletionRequest`] into the UniFFI
-/// [`CompletionRequest`] record. Loses the multimodal `modalities` /
+/// Convert an upstream [`CoreModelRequest`] into the UniFFI
+/// [`ModelRequest`] record. Loses the multimodal `modalities` /
 /// `image_config` / `audio_config` slots since the UniFFI record doesn't
 /// surface them (matching the asymmetry already present in `crate::llm`).
-fn core_completion_request_to_ffi(
-    req: CoreCompletionRequest,
-) -> Result<CompletionRequest, CoreBlazenError> {
+fn core_model_request_to_ffi(req: CoreModelRequest) -> Result<ModelRequest, CoreBlazenError> {
     let messages = req.messages.into_iter().map(ChatMessage::from).collect();
     let tools: Vec<crate::llm::Tool> = req.tools.into_iter().map(Into::into).collect();
     let response_format_json = req
@@ -309,7 +307,7 @@ fn core_completion_request_to_ffi(
         .map(|v| serde_json::to_string(&v))
         .transpose()
         .map_err(|e| CoreBlazenError::Serialization(e.to_string()))?;
-    Ok(CompletionRequest {
+    Ok(ModelRequest {
         messages,
         tools,
         temperature: req.temperature.map(f64::from),
@@ -321,14 +319,12 @@ fn core_completion_request_to_ffi(
     })
 }
 
-/// Convert a UniFFI [`CompletionResponse`] into the upstream
-/// `blazen_llm::CompletionResponse`. The UniFFI shape collapses several
+/// Convert a UniFFI [`ModelResponse`] into the upstream
+/// `blazen_llm::ModelResponse`. The UniFFI shape collapses several
 /// upstream optional fields (`reasoning`, `citations`, `artifacts`, multimodal
 /// outputs) to empty / `None`; the foreign-side provider doesn't surface
 /// them.
-fn ffi_completion_response_to_core(
-    resp: CompletionResponse,
-) -> blazen_llm::types::CompletionResponse {
+fn ffi_model_response_to_core(resp: ModelResponse) -> blazen_llm::types::ModelResponse {
     let usage = if resp.usage.total_tokens == 0
         && resp.usage.prompt_tokens == 0
         && resp.usage.completion_tokens == 0
@@ -347,7 +343,7 @@ fn ffi_completion_response_to_core(
     } else {
         Some(resp.finish_reason)
     };
-    blazen_llm::types::CompletionResponse {
+    blazen_llm::types::ModelResponse {
         content: if resp.content.is_empty() {
             None
         } else {
@@ -477,19 +473,19 @@ impl CoreCustomProvider for UniffiToCoreCustomProviderAdapter {
 
     async fn complete(
         &self,
-        request: CoreCompletionRequest,
-    ) -> Result<blazen_llm::types::CompletionResponse, CoreBlazenError> {
+        request: CoreModelRequest,
+    ) -> Result<blazen_llm::types::ModelResponse, CoreBlazenError> {
         self.complete_inner(request).await
     }
 
     async fn stream(
         &self,
-        request: CoreCompletionRequest,
+        request: CoreModelRequest,
     ) -> Result<
         Pin<Box<dyn Stream<Item = Result<CoreStreamChunk, CoreBlazenError>> + Send>>,
         CoreBlazenError,
     > {
-        let ffi_request = core_completion_request_to_ffi(request)?;
+        let ffi_request = core_model_request_to_ffi(request)?;
         let (tx, rx) = mpsc::unbounded_channel();
         let sink: Arc<dyn CompletionStreamSink> = Arc::new(ChannelSink { tx });
         let inner = Arc::clone(&self.inner);
@@ -713,7 +709,7 @@ pub struct CustomProviderHandle {
     inner: parking_lot::RwLock<CoreCustomProviderHandle>,
     /// Paired [`BaseProvider`] handle so foreign callers can chain
     /// `.with_system_prompt(...)` etc. via [`as_base`](Self::as_base) and
-    /// hand the result to APIs taking a generic `CompletionModel`.
+    /// hand the result to APIs taking a generic `Model`.
     base: Arc<BaseProvider>,
 }
 
@@ -721,8 +717,8 @@ impl CustomProviderHandle {
     /// Internal: build a [`CustomProviderHandle`] from an upstream
     /// [`CoreCustomProviderHandle`].
     fn from_core(core: CoreCustomProviderHandle) -> Arc<Self> {
-        let completion_model: Arc<dyn CoreCompletionModel> = Arc::new(core.clone());
-        let base = BaseProvider::from_core(CoreBaseProvider::new(completion_model));
+        let model: Arc<dyn CoreModel> = Arc::new(core.clone());
+        let base = BaseProvider::from_core(CoreBaseProvider::new(model));
         Arc::new(Self {
             inner: parking_lot::RwLock::new(core),
             base,
@@ -741,7 +737,7 @@ impl CustomProviderHandle {
     ///
     /// Use for `.with_system_prompt(...)`, `.with_tools_json(...)`,
     /// `.with_response_format_json(...)`, or to hand the provider to an API
-    /// expecting an opaque `CompletionModel`-shaped handle.
+    /// expecting an opaque `Model`-shaped handle.
     #[must_use]
     pub fn as_base(self: Arc<Self>) -> Arc<BaseProvider> {
         Arc::clone(&self.base)
@@ -800,17 +796,13 @@ impl CustomProviderHandle {
     /// Perform a non-streaming chat completion. Applies any configured
     /// completion defaults (system prompt, tools, response format) before
     /// dispatching to the inner provider.
-    pub async fn complete(
-        self: Arc<Self>,
-        request: CompletionRequest,
-    ) -> BlazenResult<CompletionResponse> {
-        let core_request = CoreCompletionRequest::try_from(request)?;
+    pub async fn complete(self: Arc<Self>, request: ModelRequest) -> BlazenResult<ModelResponse> {
+        let core_request = CoreModelRequest::try_from(request)?;
         let handle = self.snapshot();
-        let response =
-            <CoreCustomProviderHandle as CoreCompletionModel>::complete(&handle, core_request)
-                .await
-                .map_err(BlazenError::from)?;
-        Ok(CompletionResponse::from(response))
+        let response = <CoreCustomProviderHandle as CoreModel>::complete(&handle, core_request)
+            .await
+            .map_err(BlazenError::from)?;
+        Ok(ModelResponse::from(response))
     }
 
     /// Drive a streaming chat completion, dispatching each chunk to the sink.
@@ -820,16 +812,14 @@ impl CustomProviderHandle {
     /// returns `Err` if the initial request conversion fails.
     pub async fn stream(
         self: Arc<Self>,
-        request: CompletionRequest,
+        request: ModelRequest,
         sink: Arc<dyn CompletionStreamSink>,
     ) -> BlazenResult<()> {
         use futures_util::StreamExt;
-        let core_request = CoreCompletionRequest::try_from(request)?;
+        let core_request = CoreModelRequest::try_from(request)?;
         let handle = self.snapshot();
         let mut stream =
-            match <CoreCustomProviderHandle as CoreCompletionModel>::stream(&handle, core_request)
-                .await
-            {
+            match <CoreCustomProviderHandle as CoreModel>::stream(&handle, core_request).await {
                 Ok(s) => s,
                 Err(e) => {
                     let _ = sink.on_error(BlazenError::from(e)).await;

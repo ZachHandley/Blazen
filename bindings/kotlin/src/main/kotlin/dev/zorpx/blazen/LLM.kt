@@ -85,7 +85,7 @@ public data class ChatMessage(
  * a request-level field, not a message.
  */
 @Serializable
-public data class CompletionRequest(
+public data class ModelRequest(
     val messages: List<ChatMessage>,
     val tools: List<Tool> = emptyList(),
     val temperature: Double? = null,
@@ -103,7 +103,7 @@ public data class CompletionRequest(
  * `finishReason` is the empty string when the provider didn't report one.
  */
 @Serializable
-public data class CompletionResponse(
+public data class ModelResponse(
     val content: String,
     val toolCalls: List<ToolCall> = emptyList(),
     val finishReason: String,

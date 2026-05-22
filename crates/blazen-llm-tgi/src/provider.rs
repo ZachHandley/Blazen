@@ -124,7 +124,7 @@ impl TgiProvider {
     /// POST `/generate` (native TGI shape, single response).
     ///
     /// The bridge in `blazen-llm/src/backends/tgi.rs` performs the typed
-    /// translation from `CompletionRequest`; this is a thin pass-through
+    /// translation from `ModelRequest`; this is a thin pass-through
     /// for `serde_json::Value` bodies that already match TGI's schema.
     /// If an adapter is active and the body does not already carry
     /// `adapter_id`, the active id is attached.

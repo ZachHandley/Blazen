@@ -438,7 +438,7 @@ impl<F: std::future::Future> std::future::Future for SendFuture<F> {
 /// and cached as [`js_sys::Function`]. The per-call hot path is then a
 /// direct `Function::call1` followed by `JsFuture::from(promise).await`,
 /// mirroring the dispatch pattern in
-/// [`crate::js_completion::JsCompletionHandler`].
+/// [`crate::js_model::JsModelHandler`].
 pub struct JsHostContentStore {
     /// `this`-binding for method dispatch — either the subclass instance or
     /// the JS options object.
@@ -453,7 +453,7 @@ pub struct JsHostContentStore {
 // SAFETY: WASM is single-threaded. `JsValue` / `js_sys::Function` are
 // `!Send + !Sync` on wasm32 because they reference JS-managed handles, but
 // there is no other thread to race with on this target. Mirrors the
-// equivalent assertions on `JsCompletionHandler` (see `js_completion.rs`).
+// equivalent assertions on `JsModelHandler` (see `js_completion.rs`).
 unsafe impl Send for JsHostContentStore {}
 unsafe impl Sync for JsHostContentStore {}
 

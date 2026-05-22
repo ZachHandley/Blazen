@@ -13,7 +13,7 @@ import (
 // an opaque handle obtained from a provider factory (Fal cloud APIs or
 // a local runtime like Whisper / Piper / Diffusion).
 //
-// The wrappers mirror the [CompletionModel] / [EmbeddingModel] shape:
+// The wrappers mirror the [Model] / [EmbeddingModel] shape:
 //
 //   - Public Go-native result records (no FFI types in the API).
 //   - Pointer-typed handles guarded by sync.Once for idempotent Close().

@@ -8,7 +8,7 @@ import os
 
 import pytest
 
-from blazen import ChatMessage, CompletionModel, CompletionOptions, ProviderOptions
+from blazen import ChatMessage, Model, ModelOptions, ProviderOptions
 
 # ---------------------------------------------------------------------------
 # API keys
@@ -49,9 +49,9 @@ skip_without_cohere = pytest.mark.skipif(not COHERE_API_KEY, reason="COHERE_API_
 PROMPT = [ChatMessage.user("What is 2+2? Reply with just the number.")]
 
 
-async def _assert_completion(model: CompletionModel) -> None:
+async def _assert_completion(model: Model) -> None:
     """Send a simple completion and verify the response."""
-    response = await model.complete(PROMPT, CompletionOptions(max_tokens=10))
+    response = await model.complete(PROMPT, ModelOptions(max_tokens=10))
     assert response.content is not None
     assert "4" in response.content
     assert response.model is not None
@@ -65,75 +65,75 @@ async def _assert_completion(model: CompletionModel) -> None:
 @skip_without_openai
 @pytest.mark.asyncio
 async def test_openai_completion():
-    model = CompletionModel.openai(options=ProviderOptions(api_key=OPENAI_API_KEY, model="gpt-4o"))
+    model = Model.openai(options=ProviderOptions(api_key=OPENAI_API_KEY, model="gpt-4o"))
     await _assert_completion(model)
 
 
 @skip_without_anthropic
 @pytest.mark.asyncio
 async def test_anthropic_completion():
-    model = CompletionModel.anthropic(options=ProviderOptions(api_key=ANTHROPIC_API_KEY, model="claude-sonnet-4-20250514"))
+    model = Model.anthropic(options=ProviderOptions(api_key=ANTHROPIC_API_KEY, model="claude-sonnet-4-20250514"))
     await _assert_completion(model)
 
 
 @skip_without_gemini
 @pytest.mark.asyncio
 async def test_gemini_completion():
-    model = CompletionModel.gemini(options=ProviderOptions(api_key=GEMINI_API_KEY, model="gemini-2.0-flash"))
+    model = Model.gemini(options=ProviderOptions(api_key=GEMINI_API_KEY, model="gemini-2.0-flash"))
     await _assert_completion(model)
 
 
 @skip_without_groq
 @pytest.mark.asyncio
 async def test_groq_completion():
-    model = CompletionModel.groq(options=ProviderOptions(api_key=GROQ_API_KEY, model="llama-3.3-70b-versatile"))
+    model = Model.groq(options=ProviderOptions(api_key=GROQ_API_KEY, model="llama-3.3-70b-versatile"))
     await _assert_completion(model)
 
 
 @skip_without_together
 @pytest.mark.asyncio
 async def test_together_completion():
-    model = CompletionModel.together(options=ProviderOptions(api_key=TOGETHER_API_KEY, model="meta-llama/Llama-3.3-70B-Instruct-Turbo"))
+    model = Model.together(options=ProviderOptions(api_key=TOGETHER_API_KEY, model="meta-llama/Llama-3.3-70B-Instruct-Turbo"))
     await _assert_completion(model)
 
 
 @skip_without_mistral
 @pytest.mark.asyncio
 async def test_mistral_completion():
-    model = CompletionModel.mistral(options=ProviderOptions(api_key=MISTRAL_API_KEY, model="mistral-small-latest"))
+    model = Model.mistral(options=ProviderOptions(api_key=MISTRAL_API_KEY, model="mistral-small-latest"))
     await _assert_completion(model)
 
 
 @skip_without_deepseek
 @pytest.mark.asyncio
 async def test_deepseek_completion():
-    model = CompletionModel.deepseek(options=ProviderOptions(api_key=DEEPSEEK_API_KEY, model="deepseek-chat"))
+    model = Model.deepseek(options=ProviderOptions(api_key=DEEPSEEK_API_KEY, model="deepseek-chat"))
     await _assert_completion(model)
 
 
 @skip_without_fireworks
 @pytest.mark.asyncio
 async def test_fireworks_completion():
-    model = CompletionModel.fireworks(options=ProviderOptions(api_key=FIREWORKS_API_KEY, model="accounts/fireworks/models/llama-v3p3-70b-instruct"))
+    model = Model.fireworks(options=ProviderOptions(api_key=FIREWORKS_API_KEY, model="accounts/fireworks/models/llama-v3p3-70b-instruct"))
     await _assert_completion(model)
 
 
 @skip_without_perplexity
 @pytest.mark.asyncio
 async def test_perplexity_completion():
-    model = CompletionModel.perplexity(options=ProviderOptions(api_key=PERPLEXITY_API_KEY, model="sonar"))
+    model = Model.perplexity(options=ProviderOptions(api_key=PERPLEXITY_API_KEY, model="sonar"))
     await _assert_completion(model)
 
 
 @skip_without_xai
 @pytest.mark.asyncio
 async def test_xai_completion():
-    model = CompletionModel.xai(options=ProviderOptions(api_key=XAI_API_KEY, model="grok-2-latest"))
+    model = Model.xai(options=ProviderOptions(api_key=XAI_API_KEY, model="grok-2-latest"))
     await _assert_completion(model)
 
 
 @skip_without_cohere
 @pytest.mark.asyncio
 async def test_cohere_completion():
-    model = CompletionModel.cohere(options=ProviderOptions(api_key=COHERE_API_KEY, model="command-r-plus"))
+    model = Model.cohere(options=ProviderOptions(api_key=COHERE_API_KEY, model="command-r-plus"))
     await _assert_completion(model)

@@ -5,7 +5,7 @@ section: "guides"
 order: 24
 ---
 
-`complete_batch` (Python) / `completeBatch` (Node) / `blazen_llm::batch::complete_batch` (Rust) drives a `CompletionModel` with a list of independent conversations in parallel, capped by a configurable concurrency limit. It preserves input order, reports per-request success/failure, and aggregates token usage and cost across the batch.
+`complete_batch` (Python) / `completeBatch` (Node) / `blazen_llm::batch::complete_batch` (Rust) drives a `Model` with a list of independent conversations in parallel, capped by a configurable concurrency limit. It preserves input order, reports per-request success/failure, and aggregates token usage and cost across the batch.
 
 ## Overview
 
@@ -21,9 +21,9 @@ Key properties:
 ## Basic usage
 
 ```python
-from blazen import CompletionModel, ChatMessage, complete_batch
+from blazen import Model, ChatMessage, complete_batch
 
-model = CompletionModel.openai()
+model = Model.openai()
 
 conversations = [
     [ChatMessage.user("What is 2 + 2?")],
@@ -44,9 +44,9 @@ print("Total cost:  $", result.total_cost)
 ```
 
 ```typescript
-import { CompletionModel, ChatMessage, completeBatch } from "blazen";
+import { Model, ChatMessage, completeBatch } from "blazen";
 
-const model = CompletionModel.openai({ apiKey: process.env.OPENAI_API_KEY });
+const model = Model.openai({ apiKey: process.env.OPENAI_API_KEY });
 
 const result = await completeBatch(
   model,
@@ -70,16 +70,16 @@ for (let i = 0; i < result.responses.length; i++) {
 
 ```rust
 use blazen_llm::batch::{complete_batch, BatchConfig};
-use blazen_llm::{ChatMessage, CompletionRequest};
+use blazen_llm::{ChatMessage, ModelRequest};
 use blazen_llm::providers::openai::OpenAiProvider;
-use blazen_llm::traits::CompletionModel;
+use blazen_llm::traits::Model;
 
 let model = OpenAiProvider::from_env()?;
 
 let requests = vec![
-    CompletionRequest::new(vec![ChatMessage::user("What is 2 + 2?")]),
-    CompletionRequest::new(vec![ChatMessage::user("What is the capital of France?")]),
-    CompletionRequest::new(vec![ChatMessage::user("Who wrote Hamlet?")]),
+    ModelRequest::new(vec![ChatMessage::user("What is 2 + 2?")]),
+    ModelRequest::new(vec![ChatMessage::user("What is the capital of France?")]),
+    ModelRequest::new(vec![ChatMessage::user("Who wrote Hamlet?")]),
 ];
 
 let result = complete_batch(&model, requests, BatchConfig::new(4)).await;
@@ -94,16 +94,16 @@ for (i, response) in result.responses.iter().enumerate() {
 
 ## Applying options to every request
 
-Pass a shared `CompletionOptions` / `JsCompletionOptions` to apply temperature, max tokens, or a tool set to every request in the flight:
+Pass a shared `ModelOptions` / `JsModelOptions` to apply temperature, max tokens, or a tool set to every request in the flight:
 
 ```python
-from blazen import CompletionOptions
+from blazen import ModelOptions
 
 result = await complete_batch(
     model,
     conversations,
     concurrency=8,
-    options=CompletionOptions(temperature=0.2, max_tokens=200),
+    options=ModelOptions(temperature=0.2, max_tokens=200),
 )
 ```
 
@@ -128,12 +128,12 @@ print(f"{len(failed_indices)} of {len(conversations)} requests failed")
 
 | Field | Type | Description |
 |---|---|---|
-| `responses` | `list[CompletionResponse \| None]` | Per-request results in input order. |
+| `responses` | `list[ModelResponse \| None]` | Per-request results in input order. |
 | `errors` | `list[str \| None]` | Per-request error messages. `None` when the request succeeded. |
 | `total_usage` | `dict \| None` | Summed `prompt_tokens`, `completion_tokens`, and `total_tokens` across successes. |
 | `total_cost` | `float \| None` | Summed USD cost across successes (only set when the provider reports pricing). |
 
-The Rust version returns `BatchResult` with `responses: Vec<Result<CompletionResponse, BlazenError>>` instead -- it does not split success and error into separate vectors.
+The Rust version returns `BatchResult` with `responses: Vec<Result<ModelResponse, BlazenError>>` instead -- it does not split success and error into separate vectors.
 
 ### Node `BatchResult` class
 
@@ -141,11 +141,11 @@ The Node binding returns a typed `BatchResult` class. Field access works through
 
 | Accessor | Type | Description |
 |---|---|---|
-| `.responses` | `(CompletionResponse \| null)[]` | Per-request results in input order. |
+| `.responses` | `(ModelResponse \| null)[]` | Per-request results in input order. |
 | `.errors` | `(BlazenError \| null)[]` | Per-request errors. `null` when the request succeeded. |
 | `.totalUsage` | `TokenUsage` | Summed `promptTokens`, `completionTokens`, and `totalTokens` across successes. |
 | `.totalCost` | `number` | Summed USD cost across successes (zero when no provider in the flight reports pricing). |
-| `.successCount` | `number` | Number of requests that produced a `CompletionResponse`. |
+| `.successCount` | `number` | Number of requests that produced a `ModelResponse`. |
 | `.failureCount` | `number` | Number of requests that produced a `BlazenError`. |
 | `.length` | `number` | Total request count -- always `successCount + failureCount`. |
 | `.toString()` | `string` | Human-readable summary, useful for logs. |
@@ -175,6 +175,6 @@ The Python `BatchResult` mirrors the same shape: `.responses`, `.errors`, `.tota
 
 ## See also
 
-- [Custom Providers](/guides/custom-providers/) -- batch also works with subclassed `CompletionModel`s
+- [Custom Providers](/guides/custom-providers/) -- batch also works with subclassed `Model`s
 - [Prompt Templates](/guides/prompts/) -- render a templated system prompt once and fan it across many user messages
 - [Chat Window](/guides/chat-window/) -- build each conversation within a token budget before batching

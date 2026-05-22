@@ -3,7 +3,7 @@
 //! Provides [`PyTranscription`] with factory methods for each supported
 //! transcription backend (fal.ai, whisper.cpp, etc.). Mirrors the pattern
 //! used for [`PyEmbeddingModel`](crate::types::embedding::PyEmbeddingModel)
-//! and [`PyCompletionModel`](crate::providers::PyCompletionModel).
+//! and [`PyModel`](crate::providers::PyModel).
 
 use std::sync::Arc;
 

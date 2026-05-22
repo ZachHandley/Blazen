@@ -263,10 +263,10 @@ module Blazen
     #   subclass.
     #
     # The +request+ is consumed by the call (the cabi takes ownership of
-    # the underlying +BlazenCompletionRequest *+).
+    # the underlying +BlazenModelRequest *+).
     #
-    # @param model [Blazen::Llm::CompletionModel] streaming-capable model
-    # @param request [Blazen::Llm::CompletionRequest] consumed by the call
+    # @param model [Blazen::Llm::Model] streaming-capable model
+    # @param request [Blazen::Llm::ModelRequest] consumed by the call
     # @param on_chunk [#call(chunk)] called for each {StreamChunk}
     # @param on_done [#call(finish_reason, usage)] called once when the
     #   stream completes normally
@@ -303,8 +303,8 @@ module Blazen
     #
     # The +request+ is consumed by the call.
     #
-    # @param model [Blazen::Llm::CompletionModel] streaming-capable model
-    # @param request [Blazen::Llm::CompletionRequest] consumed by the call
+    # @param model [Blazen::Llm::Model] streaming-capable model
+    # @param request [Blazen::Llm::ModelRequest] consumed by the call
     # @param on_chunk [#call(chunk)]
     # @param on_done [#call(finish_reason, usage)]
     # @param on_error [#call(err)]
@@ -375,12 +375,12 @@ module Blazen
     private_class_method :build_vtable
 
     # @api private
-    # Consumes a +Blazen::Llm::CompletionRequest+ wrapper into a bare
+    # Consumes a +Blazen::Llm::ModelRequest+ wrapper into a bare
     # +::FFI::Pointer+, raising +ArgumentError+ if the input isn't a
-    # CompletionRequest.
+    # ModelRequest.
     def self.consume_request!(request)
-      unless request.is_a?(Blazen::Llm::CompletionRequest)
-        raise ArgumentError, "request must be Blazen::Llm::CompletionRequest"
+      unless request.is_a?(Blazen::Llm::ModelRequest)
+        raise ArgumentError, "request must be Blazen::Llm::ModelRequest"
       end
 
       request.consume!

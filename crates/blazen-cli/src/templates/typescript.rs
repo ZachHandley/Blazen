@@ -83,15 +83,15 @@ const result = await workflow.runStreaming(
 ## LLM Integration
 
 ```typescript
-import { CompletionModel, ChatMessage, CompletionResponse } from "blazen";
+import { Model, ChatMessage, ModelResponse } from "blazen";
 
 // Pass an explicit key via the typed options object...
-const model = CompletionModel.openai({ apiKey: "your-api-key" });
+const model = Model.openai({ apiKey: "your-api-key" });
 
 // ...or omit options to pick up the standard env var (OPENAI_API_KEY):
-// const model = CompletionModel.openai();
+// const model = Model.openai();
 
-const response: CompletionResponse = await model.complete([
+const response: ModelResponse = await model.complete([
   { role: "user", content: "What is 2 + 2?" },
 ]);
 
@@ -117,21 +117,21 @@ environment variable (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`).
 
 | Provider | Factory |
 |----------|---------|
-| OpenAI | `CompletionModel.openai({ apiKey: "..." })` |
-| Anthropic | `CompletionModel.anthropic({ apiKey: "..." })` |
-| Google Gemini | `CompletionModel.gemini({ apiKey: "..." })` |
-| Azure OpenAI | `CompletionModel.azure({ apiKey: "...", resourceName: "...", deploymentName: "..." })` |
-| FAL.ai | `CompletionModel.fal({ apiKey: "..." })` |
-| OpenRouter | `CompletionModel.openrouter({ apiKey: "..." })` |
-| Groq | `CompletionModel.groq({ apiKey: "..." })` |
-| Together | `CompletionModel.together({ apiKey: "..." })` |
-| Mistral | `CompletionModel.mistral({ apiKey: "..." })` |
-| DeepSeek | `CompletionModel.deepseek({ apiKey: "..." })` |
-| Fireworks | `CompletionModel.fireworks({ apiKey: "..." })` |
-| Perplexity | `CompletionModel.perplexity({ apiKey: "..." })` |
-| xAI (Grok) | `CompletionModel.xai({ apiKey: "..." })` |
-| Cohere | `CompletionModel.cohere({ apiKey: "..." })` |
-| AWS Bedrock | `CompletionModel.bedrock({ apiKey: "...", region: "..." })` |
+| OpenAI | `Model.openai({ apiKey: "..." })` |
+| Anthropic | `Model.anthropic({ apiKey: "..." })` |
+| Google Gemini | `Model.gemini({ apiKey: "..." })` |
+| Azure OpenAI | `Model.azure({ apiKey: "...", resourceName: "...", deploymentName: "..." })` |
+| FAL.ai | `Model.fal({ apiKey: "..." })` |
+| OpenRouter | `Model.openrouter({ apiKey: "..." })` |
+| Groq | `Model.groq({ apiKey: "..." })` |
+| Together | `Model.together({ apiKey: "..." })` |
+| Mistral | `Model.mistral({ apiKey: "..." })` |
+| DeepSeek | `Model.deepseek({ apiKey: "..." })` |
+| Fireworks | `Model.fireworks({ apiKey: "..." })` |
+| Perplexity | `Model.perplexity({ apiKey: "..." })` |
+| xAI (Grok) | `Model.xai({ apiKey: "..." })` |
+| Cohere | `Model.cohere({ apiKey: "..." })` |
+| AWS Bedrock | `Model.bedrock({ apiKey: "...", region: "..." })` |
 
 ## TypeScript Types
 
@@ -141,8 +141,8 @@ Key interfaces exported from the package:
 interface Event { type: string; [key: string]: any; }
 interface WorkflowResult { type: string; data: Record<string, any>; }
 interface ChatMessage { role: "system" | "user" | "assistant" | "tool"; content: string; }
-interface CompletionResponse { content: string | null; toolCalls: ToolCall[]; usage: TokenUsage | null; model: string; }
-interface CompletionOptions { temperature?: number; maxTokens?: number; topP?: number; model?: string; }
+interface ModelResponse { content: string | null; toolCalls: ToolCall[]; usage: TokenUsage | null; model: string; }
+interface ModelOptions { temperature?: number; maxTokens?: number; topP?: number; model?: string; }
 ```
 
 ## Package Structure
@@ -151,6 +151,6 @@ interface CompletionOptions { temperature?: number; maxTokens?: number; topP?: n
 |--------|-------------|
 | `Workflow` | Workflow builder and runner |
 | `Context` | Shared state for steps |
-| `CompletionModel` | LLM provider interface with factory methods |
+| `Model` | LLM provider interface with factory methods |
 | `version()` | Returns the library version string |
 "#;

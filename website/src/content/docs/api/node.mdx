@@ -149,7 +149,7 @@ export type MediaSource = ImageSource;
 
 ---
 
-## CompletionModel
+## Model
 
 A chat completion model. Created via static factory methods for each provider.
 
@@ -159,29 +159,29 @@ All providers accept an optional options object containing an `apiKey` (and othe
 
 | Method | Signature |
 |---|---|
-| `CompletionModel.openai` | `(options?: ProviderOptions)` |
-| `CompletionModel.anthropic` | `(options?: ProviderOptions)` |
-| `CompletionModel.gemini` | `(options?: ProviderOptions)` |
-| `CompletionModel.azure` | `(options: AzureOptions)` |
-| `CompletionModel.fal` | `(options?: FalOptions)` |
-| `CompletionModel.openrouter` | `(options?: ProviderOptions)` |
-| `CompletionModel.groq` | `(options?: ProviderOptions)` |
-| `CompletionModel.together` | `(options?: ProviderOptions)` |
-| `CompletionModel.mistral` | `(options?: ProviderOptions)` |
-| `CompletionModel.deepseek` | `(options?: ProviderOptions)` |
-| `CompletionModel.fireworks` | `(options?: ProviderOptions)` |
-| `CompletionModel.perplexity` | `(options?: ProviderOptions)` |
-| `CompletionModel.xai` | `(options?: ProviderOptions)` |
-| `CompletionModel.cohere` | `(options?: ProviderOptions)` |
-| `CompletionModel.bedrock` | `(options: BedrockOptions)` |
+| `Model.openai` | `(options?: ProviderOptions)` |
+| `Model.anthropic` | `(options?: ProviderOptions)` |
+| `Model.gemini` | `(options?: ProviderOptions)` |
+| `Model.azure` | `(options: AzureOptions)` |
+| `Model.fal` | `(options?: FalOptions)` |
+| `Model.openrouter` | `(options?: ProviderOptions)` |
+| `Model.groq` | `(options?: ProviderOptions)` |
+| `Model.together` | `(options?: ProviderOptions)` |
+| `Model.mistral` | `(options?: ProviderOptions)` |
+| `Model.deepseek` | `(options?: ProviderOptions)` |
+| `Model.fireworks` | `(options?: ProviderOptions)` |
+| `Model.perplexity` | `(options?: ProviderOptions)` |
+| `Model.xai` | `(options?: ProviderOptions)` |
+| `Model.cohere` | `(options?: ProviderOptions)` |
+| `Model.bedrock` | `(options: BedrockOptions)` |
 
 ```typescript
 // Read key from OPENAI_API_KEY env var
-const model = CompletionModel.openai();
+const model = Model.openai();
 
 // Pass an explicit key and override the model
-const claude = CompletionModel.anthropic({ apiKey: "sk-ant-...", model: "claude-sonnet-4-20250514" });
-const gemini = CompletionModel.gemini({ model: "gemini-2.5-flash" });
+const claude = Model.anthropic({ apiKey: "sk-ant-...", model: "claude-sonnet-4-20250514" });
+const gemini = Model.gemini({ model: "gemini-2.5-flash" });
 ```
 
 ### Properties
@@ -190,7 +190,7 @@ const gemini = CompletionModel.gemini({ model: "gemini-2.5-flash" });
 |---|---|---|
 | `.modelId` | `string` | The model identifier string |
 
-### `await model.complete(messages: ChatMessage[]): CompletionResponse`
+### `await model.complete(messages: ChatMessage[]): ModelResponse`
 
 Perform a chat completion.
 
@@ -202,7 +202,7 @@ const response = await model.complete([
 console.log(response.content); // "4"
 ```
 
-### `await model.completeWithOptions(messages: ChatMessage[], options: CompletionOptions): CompletionResponse`
+### `await model.completeWithOptions(messages: ChatMessage[], options: ModelOptions): ModelResponse`
 
 Perform a chat completion with additional options.
 
@@ -236,7 +236,7 @@ Each chunk has the shape:
 }
 ```
 
-### `await model.streamWithOptions(messages: ChatMessage[], onChunk: (chunk) => void, options: CompletionOptions): void`
+### `await model.streamWithOptions(messages: ChatMessage[], onChunk: (chunk) => void, options: ModelOptions): void`
 
 Stream a chat completion with additional options.
 
@@ -250,9 +250,9 @@ await model.streamWithOptions(
 
 ### Middleware Decorators
 
-Each decorator returns a new `CompletionModel` wrapping the original with additional behaviour.
+Each decorator returns a new `Model` wrapping the original with additional behaviour.
 
-#### `model.withRetry(config?: RetryConfig): CompletionModel`
+#### `model.withRetry(config?: RetryConfig): Model`
 
 Automatic retry with exponential backoff on transient failures.
 
@@ -266,7 +266,7 @@ const resilient = model.withRetry({ maxRetries: 5, initialDelayMs: 500, maxDelay
 | `initialDelayMs` | `number` | `1000` | Delay before first retry (ms). |
 | `maxDelayMs` | `number` | `30000` | Upper bound on backoff delay (ms). |
 
-#### `model.withCache(config?: CacheConfig): CompletionModel`
+#### `model.withCache(config?: CacheConfig): Model`
 
 In-memory response cache for identical non-streaming requests.
 
@@ -279,25 +279,25 @@ const cached = model.withCache({ ttlSeconds: 600, maxEntries: 500 });
 | `ttlSeconds` | `number` | `300` | Cache entry TTL in seconds. |
 | `maxEntries` | `number` | `1000` | Maximum entries before eviction. |
 
-#### `CompletionModel.withFallback(models: CompletionModel[]): CompletionModel`
+#### `Model.withFallback(models: Model[]): Model`
 
 Static factory method. Tries providers in order; falls back on transient errors.
 
 ```typescript
-const model = CompletionModel.withFallback([
-  CompletionModel.openai(),
-  CompletionModel.anthropic(),
+const model = Model.withFallback([
+  Model.openai(),
+  Model.anthropic(),
 ]);
 ```
 
 ---
 
-## CompletionOptions
+## ModelOptions
 
 Options object for `completeWithOptions()` and `streamWithOptions()`.
 
 ```typescript
-interface CompletionOptions {
+interface ModelOptions {
   temperature?: number;        // Sampling temperature (0.0 - 2.0)
   maxTokens?: number;          // Maximum tokens to generate
   topP?: number;               // Nucleus sampling parameter
@@ -308,12 +308,12 @@ interface CompletionOptions {
 
 ---
 
-## CompletionResponse
+## ModelResponse
 
 Returned by `model.complete()` and `model.completeWithOptions()`.
 
 ```typescript
-interface CompletionResponse {
+interface ModelResponse {
   content?: string;                // The generated text
   toolCalls: ToolCall[];           // Tool calls requested by the model
   usage?: TokenUsage;              // Token usage statistics
@@ -731,7 +731,7 @@ const result = await runAgent(model, messages, tools, toolHandler, options?);
 
 | Parameter | Type | Description |
 |---|---|---|
-| `model` | `CompletionModel` | The completion model to use |
+| `model` | `Model` | The completion model to use |
 | `messages` | `ChatMessage[]` | Initial conversation messages |
 | `tools` | `ToolDef[]` | Tool definitions the agent can invoke |
 | `toolHandler` | `(toolName: string, args: object) => Promise<any \| ToolOutput>` | Callback that executes tool calls. May return a bare value (auto-wrapped) or an explicit [`ToolOutput`](#tooloutput). |
@@ -740,9 +740,9 @@ const result = await runAgent(model, messages, tools, toolHandler, options?);
 ### Example
 
 ```typescript
-import { CompletionModel, ChatMessage, runAgent } from "blazen";
+import { Model, ChatMessage, runAgent } from "blazen";
 
-const model = CompletionModel.openai();
+const model = Model.openai();
 
 const result = await runAgent(
   model,
@@ -880,7 +880,7 @@ Returned by `completeBatch()` / `completeBatchConfig()`. A typed class wrapping 
 
 | Property | Type | Description |
 |---|---|---|
-| `.responses` | `(CompletionResponse \| null)[]` | One entry per input request. `null` for failed requests. |
+| `.responses` | `(ModelResponse \| null)[]` | One entry per input request. `null` for failed requests. |
 | `.errors` | `(string \| null)[]` | Per-request error message, or `null` for successful requests. |
 | `.totalUsage` | `TokenUsage \| null` | Aggregated token usage across all successful responses. |
 | `.totalCost` | `number \| null` | Aggregated cost in USD across all successful responses. |
@@ -1666,14 +1666,14 @@ const count = countMessageTokens([
 
 ## Subclassable Providers
 
-`CompletionModel`, `EmbeddingModel`, and `Transcription` can be subclassed to implement custom providers. Override the relevant methods and the framework will dispatch to your implementation.
+`Model`, `EmbeddingModel`, and `Transcription` can be subclassed to implement custom providers. Override the relevant methods and the framework will dispatch to your implementation.
 
-### CompletionModel
+### Model
 
 ```typescript
-import { CompletionModel, ChatMessage } from "blazen";
+import { Model, ChatMessage } from "blazen";
 
-class MyLLM extends CompletionModel {
+class MyLLM extends Model {
   constructor() {
     super({ modelId: "my-llm" });
   }
@@ -2012,9 +2012,9 @@ if (pricing) {
 
 ---
 
-## LocalModel Methods on CompletionModel
+## LocalModel Methods on Model
 
-`CompletionModel` instances backed by local inference (not remote APIs) support explicit load/unload lifecycle management.
+`Model` instances backed by local inference (not remote APIs) support explicit load/unload lifecycle management.
 
 | Method | Signature | Description |
 |---|---|---|
@@ -2171,7 +2171,7 @@ async function safeCall<T>(fn: () => Promise<T>): Promise<T> {
 
 ## Local Inference Types
 
-Local backends (`MistralRsProvider`, `LlamaCppProvider`, `CandleLlmProvider`) expose typed input/output classes for direct use without going through the generic `CompletionModel` surface. Two parallel families exist — un-prefixed `*` for mistral.rs (the canonical surface) and `LlamaCpp*` for llama.cpp — plus a single `CandleInferenceResult` for the candle backend.
+Local backends (`MistralRsProvider`, `LlamaCppProvider`, `CandleLlmProvider`) expose typed input/output classes for direct use without going through the generic `Model` surface. Two parallel families exist — un-prefixed `*` for mistral.rs (the canonical surface) and `LlamaCpp*` for llama.cpp — plus a single `CandleInferenceResult` for the candle backend.
 
 ### mistral.rs (canonical, un-prefixed)
 

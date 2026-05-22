@@ -3,20 +3,20 @@
 //! These types are provider-agnostic. Each provider implementation is
 //! responsible for converting between these types and its wire format.
 
-mod completion;
 mod message;
+mod model;
 pub mod provider_options;
 mod tool;
 mod tool_output;
 mod usage;
 
-pub use completion::{
-    Artifact, Citation, CompletionRequest, CompletionResponse, EmbeddingResponse, FinishReason,
-    ReasoningTrace, ResponseFormat, StreamChunk, StructuredResponse,
-};
 pub use message::{
     AudioContent, ChatMessage, ContentPart, FileContent, ImageContent, ImageSource, MediaSource,
     MessageContent, Role, VideoContent,
+};
+pub use model::{
+    Artifact, Citation, EmbeddingResponse, FinishReason, ModelRequest, ModelResponse,
+    ReasoningTrace, ResponseFormat, StreamChunk, StructuredResponse,
 };
 pub use tool::{ToolCall, ToolDefinition};
 pub use tool_output::{LlmPayload, ProviderId, ToolOutput};

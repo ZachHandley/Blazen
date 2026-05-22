@@ -6,7 +6,7 @@
 //!
 //! Templates are organised in a [`PromptRegistry`] that supports named
 //! lookups, version pinning, and batch rendering into
-//! [`CompletionRequest`](blazen_llm::CompletionRequest) messages.
+//! [`ModelRequest`](blazen_llm::ModelRequest) messages.
 //!
 //! ## Quick start
 //!

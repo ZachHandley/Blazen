@@ -14,7 +14,7 @@ This example builds a two-step workflow:
     StartEvent  ->  generate_poem  ->  PoemEvent
     PoemEvent   ->  summarize      ->  StopEvent
 
-Both steps call OpenRouter via ``CompletionModel.openrouter()`` to demonstrate
+Both steps call OpenRouter via ``Model.openrouter()`` to demonstrate
 real LLM completions inside a Blazen pipeline.
 
 Run with: OPENROUTER_API_KEY=sk-or-... python llm_openrouter.py
@@ -26,7 +26,7 @@ import sys
 
 from blazen import (
     ChatMessage,
-    CompletionModel,
+    Model,
     Context,
     Event,
     ProviderOptions,
@@ -41,7 +41,7 @@ from blazen import (
 DEFAULT_MODEL = "anthropic/claude-sonnet-4-6"
 
 # Module-level model instance -- initialised in main() before the workflow runs.
-llm: CompletionModel
+llm: Model
 
 
 # ---------------------------------------------------------------------------
@@ -140,9 +140,9 @@ async def main() -> None:
         sys.exit(1)
 
     # ------------------------------------------------------------------
-    # 2. Create the CompletionModel targeting OpenRouter
+    # 2. Create the Model targeting OpenRouter
     # ------------------------------------------------------------------
-    llm = CompletionModel.openrouter(options=ProviderOptions(api_key=api_key, model=DEFAULT_MODEL))
+    llm = Model.openrouter(options=ProviderOptions(api_key=api_key, model=DEFAULT_MODEL))
     print(f"Using model: {llm.model_id}")
     print()
 

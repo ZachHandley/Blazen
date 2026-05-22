@@ -19,19 +19,19 @@ use crate::compute::result_types::{
     PyVideoResult,
 };
 use crate::error::{BlazenPyError, blazen_error_to_pyerr};
-use crate::providers::completion_model::PyCompletionOptions;
 use crate::providers::config::PyRetryConfig;
+use crate::providers::model::PyModelOptions;
 use crate::providers::options::PyFalOptions;
 use crate::types::embedding::PyEmbeddingResponse;
-use crate::types::{PyChatMessage, PyCompletionResponse, PyHttpClientHandle};
+use crate::types::{PyChatMessage, PyHttpClientHandle, PyModelResponse};
 use blazen_llm::ChatMessage;
 use blazen_llm::compute::{
     AudioGeneration, BackgroundRemoval, ComputeProvider, ImageGeneration, ThreeDGeneration,
     Transcription, VideoGeneration,
 };
 use blazen_llm::providers::fal::{FalEmbeddingModel, FalProvider};
-use blazen_llm::traits::{CompletionModel, EmbeddingModel};
-use blazen_llm::types::{CompletionRequest, ToolDefinition};
+use blazen_llm::traits::{EmbeddingModel, Model};
+use blazen_llm::types::{ModelRequest, ToolDefinition};
 
 // ---------------------------------------------------------------------------
 // PyFalProvider
@@ -521,41 +521,41 @@ impl PyFalProvider {
     }
 
     // -----------------------------------------------------------------
-    // LLM completion (delegates to CompletionModel trait)
+    // LLM completion (delegates to Model trait)
     // -----------------------------------------------------------------
 
     /// Perform a chat completion via fal-ai/any-llm.
     ///
     /// Args:
     ///     messages: A list of ChatMessage objects.
-    ///     options: Optional [`CompletionOptions`] for sampling parameters,
+    ///     options: Optional [`ModelOptions`] for sampling parameters,
     ///         tools, and response format.
     ///
     /// Returns:
-    ///     A CompletionResponse with content, model, tool_calls, usage, etc.
-    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, CompletionResponse]", imports = ("typing",)))]
+    ///     A ModelResponse with content, model, tool_calls, usage, etc.
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ModelResponse]", imports = ("typing",)))]
     #[pyo3(signature = (messages, options=None))]
     fn complete<'py>(
         &self,
         py: Python<'py>,
         messages: Vec<PyChatMessage>,
-        options: Option<Py<PyCompletionOptions>>,
+        options: Option<Py<PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
-        // Building the request requires GIL access because `PyCompletionOptions`
+        // Building the request requires GIL access because `PyModelOptions`
         // holds `tools` / `response_format` as `Py<PyAny>` and we need to
         // convert them with `crate::convert::py_to_json`. We use the `py` param
-        // directly, build the fully-owned `CompletionRequest`, and then release
+        // directly, build the fully-owned `ModelRequest`, and then release
         // the GIL inside future_into_py for the HTTP call.
         let rust_messages: Vec<ChatMessage> = messages.into_iter().map(|m| m.inner).collect();
         let opts_borrow = options.as_ref().map(|o| o.borrow(py));
-        let request = build_completion_request(py, rust_messages, opts_borrow.as_deref())?;
+        let request = build_model_request(py, rust_messages, opts_borrow.as_deref())?;
 
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let response = CompletionModel::complete(inner.as_ref(), request)
+            let response = Model::complete(inner.as_ref(), request)
                 .await
                 .map_err(blazen_error_to_pyerr)?;
-            Ok(PyCompletionResponse { inner: response })
+            Ok(PyModelResponse { inner: response })
         })
     }
 
@@ -564,7 +564,7 @@ impl PyFalProvider {
     /// Args:
     ///     messages: A list of ChatMessage objects.
     ///     on_chunk: Callback function receiving each chunk as a dict.
-    ///     options: Optional [`CompletionOptions`] for sampling parameters,
+    ///     options: Optional [`ModelOptions`] for sampling parameters,
     ///         tools, and response format.
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, None]", imports = ("typing",)))]
     #[pyo3(signature = (messages, on_chunk, options=None))]
@@ -573,15 +573,15 @@ impl PyFalProvider {
         py: Python<'py>,
         messages: Vec<PyRef<'py, PyChatMessage>>,
         on_chunk: Py<PyAny>,
-        options: Option<PyRef<'py, PyCompletionOptions>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
     ) -> PyResult<Bound<'py, PyAny>> {
         let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let request = build_completion_request(py, rust_messages, options.as_deref())?;
+        let request = build_model_request(py, rust_messages, options.as_deref())?;
 
         let inner = self.inner.clone();
 
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let stream = CompletionModel::stream(inner.as_ref(), request)
+            let stream = Model::stream(inner.as_ref(), request)
                 .await
                 .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
 
@@ -621,7 +621,7 @@ impl PyFalProvider {
     /// Get the model ID.
     #[getter]
     fn model_id(&self) -> &str {
-        CompletionModel::model_id(self.inner.as_ref())
+        Model::model_id(self.inner.as_ref())
     }
 
     /// Set the provider-level default retry config.
@@ -642,7 +642,7 @@ impl PyFalProvider {
     fn __repr__(&self) -> String {
         format!(
             "FalProvider(model_id='{}')",
-            CompletionModel::model_id(self.inner.as_ref())
+            Model::model_id(self.inner.as_ref())
         )
     }
 }
@@ -661,17 +661,17 @@ impl PyFalProvider {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Build a [`CompletionRequest`] from messages and optional [`PyCompletionOptions`].
+/// Build a [`ModelRequest`] from messages and optional [`PyModelOptions`].
 ///
-/// Mirrors the helper in [`crate::providers::completion_model`] so that
+/// Mirrors the helper in [`crate::providers::model`] so that
 /// [`PyFalProvider::complete`] and [`PyFalProvider::stream`] accept the same
-/// typed options object as [`PyCompletionModel`].
-fn build_completion_request(
+/// typed options object as [`PyModel`].
+fn build_model_request(
     py: Python<'_>,
     messages: Vec<ChatMessage>,
-    options: Option<&PyCompletionOptions>,
-) -> PyResult<CompletionRequest> {
-    let mut request = CompletionRequest::new(messages);
+    options: Option<&PyModelOptions>,
+) -> PyResult<ModelRequest> {
+    let mut request = ModelRequest::new(messages);
 
     if let Some(opts) = options {
         if let Some(t) = opts.temperature {

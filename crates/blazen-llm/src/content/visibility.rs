@@ -143,16 +143,16 @@ pub fn build_handle_directory_system_note(handles: &[ContentHandle]) -> Option<S
 /// resolved.
 ///
 /// Intended for the agent runner. If you only need one half, call
-/// [`crate::types::CompletionRequest::resolve_handles_with`] or
+/// [`crate::types::ModelRequest::resolve_handles_with`] or
 /// [`build_handle_directory_system_note`] directly.
 ///
 /// # Errors
 ///
 /// Returns whatever
-/// [`CompletionRequest::resolve_handles_with`](crate::types::CompletionRequest::resolve_handles_with)
+/// [`ModelRequest::resolve_handles_with`](crate::types::ModelRequest::resolve_handles_with)
 /// returns.
 pub async fn prepare_request_with_store(
-    request: &mut crate::types::CompletionRequest,
+    request: &mut crate::types::ModelRequest,
     store: &dyn super::store::ContentStore,
 ) -> Result<usize, crate::error::BlazenError> {
     // Snapshot handles first so the directory note describes them by id
@@ -251,7 +251,7 @@ mod tests {
     async fn prepare_request_resolves_and_injects_system_note() {
         use crate::content::store::{ContentBody, ContentHint, ContentStore};
         use crate::content::stores::InMemoryContentStore;
-        use crate::types::CompletionRequest;
+        use crate::types::ModelRequest;
 
         let store = InMemoryContentStore::new();
         let h = store
@@ -266,7 +266,7 @@ mod tests {
             )
             .await
             .unwrap();
-        let mut req = CompletionRequest::new(vec![user_with_handle(&h)]);
+        let mut req = ModelRequest::new(vec![user_with_handle(&h)]);
         let n = prepare_request_with_store(&mut req, &store).await.unwrap();
         assert_eq!(n, 1);
         // System note should have been prepended.

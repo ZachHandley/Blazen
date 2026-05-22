@@ -364,7 +364,7 @@ impl MistralRsProvider {
     /// for the vision-mode contract.
     ///
     /// The returned stream is decoupled from `&self` so that it satisfies
-    /// the `'static` bound required by the `CompletionModel` trait.
+    /// the `'static` bound required by the `Model` trait.
     ///
     /// # Errors
     ///

@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Astro 6 + @astrojs/cloudflare smoke test for the `blazen` npm package. Verifies that `import { CompletionModel } from 'blazen'` works in a workerd bundle WITHOUT any consumer-side Vite/Rollup workaround plugins.",
+  "description": "Astro 6 + @astrojs/cloudflare smoke test for the `blazen` npm package. Verifies that `import { Model } from 'blazen'` works in a workerd bundle WITHOUT any consumer-side Vite/Rollup workaround plugins.",
   "scripts": {
     "stage-local-blazen": "bash scripts/stage-local-blazen.sh",
     "predev": "pnpm run stage-local-blazen",

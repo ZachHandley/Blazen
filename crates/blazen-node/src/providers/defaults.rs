@@ -4,7 +4,7 @@
 //! [`blazen_llm::providers::defaults`]:
 //!
 //! - [`JsBaseProviderDefaults`] — universal fields (`beforeRequest`).
-//! - [`JsCompletionProviderDefaults`] — completion role.
+//! - [`JsProviderDefaults`] — completion role.
 //! - [`JsEmbeddingProviderDefaults`] — embedding role.
 //! - One class per role-specific defaults type (audio speech / music,
 //!   voice cloning, image generation / upscale, video, transcription,
@@ -16,7 +16,7 @@
 //! that JS callbacks captured at construction time survive being shipped
 //! across threads to the framework's async runtime. Today the hooks are
 //! **stored only** — Phase B wires them into actual dispatch through
-//! `BeforeRequestHook` / `BeforeCompletionRequestHook` / role-specific
+//! `BeforeRequestHook` / `BeforeModelRequestHook` / role-specific
 //! `Before*RequestHook` aliases. Until then the getters return whether a
 //! hook is present and the setters replace it.
 
@@ -29,8 +29,8 @@ use napi_derive::napi;
 
 use blazen_llm::providers::defaults::{
     AudioMusicProviderDefaults, AudioSpeechProviderDefaults, BackgroundRemovalProviderDefaults,
-    BaseProviderDefaults, CompletionProviderDefaults, EmbeddingProviderDefaults,
-    ImageGenerationProviderDefaults, ImageUpscaleProviderDefaults, ThreeDProviderDefaults,
+    BaseProviderDefaults, EmbeddingProviderDefaults, ImageGenerationProviderDefaults,
+    ImageUpscaleProviderDefaults, ProviderDefaults, ThreeDProviderDefaults,
     TranscriptionProviderDefaults, VideoProviderDefaults, VoiceCloningProviderDefaults,
 };
 use blazen_llm::types::ToolDefinition;
@@ -57,10 +57,10 @@ pub(crate) type BeforeRequestTsfn = ThreadsafeFunction<
     true,
 >;
 
-/// Typed `beforeCompletion` hook TSF.
+/// Typed `beforeModel` hook TSF.
 ///
 /// JS callback signature: `(request: any) => Promise<any | void>`.
-pub(crate) type BeforeCompletionTsfn = ThreadsafeFunction<
+pub(crate) type BeforeModelTsfn = ThreadsafeFunction<
     serde_json::Value,
     Promise<Option<serde_json::Value>>,
     serde_json::Value,
@@ -70,7 +70,7 @@ pub(crate) type BeforeCompletionTsfn = ThreadsafeFunction<
 >;
 
 /// Role-specific typed `before*` hook TSF (same shape as
-/// `BeforeCompletionTsfn`).
+/// `BeforeModelTsfn`).
 pub(crate) type BeforeRoleTsfn = ThreadsafeFunction<
     serde_json::Value,
     Promise<Option<serde_json::Value>>,
@@ -150,16 +150,16 @@ impl JsBaseProviderDefaults {
 }
 
 // ---------------------------------------------------------------------------
-// JsCompletionProviderDefaults
+// JsProviderDefaults
 // ---------------------------------------------------------------------------
 
 /// Completion-role provider defaults: system prompt, default tools,
-/// `responseFormat`, and a typed `beforeCompletion` hook.
+/// `responseFormat`, and a typed `beforeModel` hook.
 ///
 /// ```javascript
-/// import { BaseProviderDefaults, CompletionProviderDefaults } from "blazen";
+/// import { BaseProviderDefaults, ProviderDefaults } from "blazen";
 ///
-/// const d = new CompletionProviderDefaults(
+/// const d = new ProviderDefaults(
 ///   new BaseProviderDefaults(),
 ///   "Be terse.",
 ///   [], // default tools
@@ -167,18 +167,18 @@ impl JsBaseProviderDefaults {
 ///   async (request) => { /* mutate request */ },
 /// );
 /// ```
-#[napi(js_name = "CompletionProviderDefaults")]
-pub struct JsCompletionProviderDefaults {
+#[napi(js_name = "ProviderDefaults")]
+pub struct JsProviderDefaults {
     pub(crate) base: Arc<Mutex<JsBaseProviderDefaults>>,
     pub(crate) system_prompt: Arc<Mutex<Option<String>>>,
     pub(crate) tools: Arc<Mutex<Vec<JsToolDefinition>>>,
     pub(crate) response_format: Arc<Mutex<Option<serde_json::Value>>>,
-    pub(crate) before_completion: Arc<Mutex<Option<BeforeCompletionTsfn>>>,
+    pub(crate) before_model: Arc<Mutex<Option<BeforeModelTsfn>>>,
 }
 
 #[napi]
 #[allow(clippy::must_use_candidate, clippy::needless_pass_by_value)]
-impl JsCompletionProviderDefaults {
+impl JsProviderDefaults {
     /// Construct completion-role defaults.
     #[napi(constructor)]
     pub fn new(
@@ -186,7 +186,7 @@ impl JsCompletionProviderDefaults {
         system_prompt: Option<String>,
         tools: Option<Vec<JsToolDefinition>>,
         response_format: Option<serde_json::Value>,
-        before_completion: Option<BeforeCompletionTsfn>,
+        before_model: Option<BeforeModelTsfn>,
     ) -> Self {
         let base_owned = base.map_or_else(|| JsBaseProviderDefaults::new(None), clone_base);
         Self {
@@ -194,7 +194,7 @@ impl JsCompletionProviderDefaults {
             system_prompt: Arc::new(Mutex::new(system_prompt)),
             tools: Arc::new(Mutex::new(tools.unwrap_or_default())),
             response_format: Arc::new(Mutex::new(response_format)),
-            before_completion: Arc::new(Mutex::new(before_completion)),
+            before_model: Arc::new(Mutex::new(before_model)),
         }
     }
 
@@ -252,28 +252,28 @@ impl JsCompletionProviderDefaults {
         }
     }
 
-    /// Returns `true` when a `beforeCompletion` hook is configured.
+    /// Returns `true` when a `beforeModel` hook is configured.
     #[napi(getter, js_name = "hasBeforeCompletion")]
-    pub fn has_before_completion(&self) -> bool {
-        self.before_completion.lock().is_ok_and(|g| g.is_some())
+    pub fn has_before_model(&self) -> bool {
+        self.before_model.lock().is_ok_and(|g| g.is_some())
     }
 
-    /// Replace the typed `beforeCompletion` hook. Pass `null` to clear.
-    #[napi(setter, js_name = "beforeCompletion")]
-    pub fn set_before_completion(&self, hook: Option<BeforeCompletionTsfn>) {
-        if let Ok(mut g) = self.before_completion.lock() {
+    /// Replace the typed `beforeModel` hook. Pass `null` to clear.
+    #[napi(setter, js_name = "beforeModel")]
+    pub fn set_before_completion(&self, hook: Option<BeforeModelTsfn>) {
+        if let Ok(mut g) = self.before_model.lock() {
             *g = hook;
         }
     }
 }
 
-impl JsCompletionProviderDefaults {
+impl JsProviderDefaults {
     /// Internal: snapshot the JS-side defaults into a Rust
-    /// [`CompletionProviderDefaults`] for use by `BaseProvider`. V1
+    /// [`ProviderDefaults`] for use by `BaseProvider`. V1
     /// snapshots field values only — hooks are dropped because they
     /// require the Phase B dispatch wiring to convert TSFs into the
     /// Rust closure aliases.
-    pub(crate) fn to_rust(&self) -> CompletionProviderDefaults {
+    pub(crate) fn to_rust(&self) -> ProviderDefaults {
         let base = self
             .base
             .lock()
@@ -293,7 +293,7 @@ impl JsCompletionProviderDefaults {
         );
         let response_format = self.response_format.lock().ok().and_then(|g| g.clone());
 
-        let mut d = CompletionProviderDefaults::new().with_base(base);
+        let mut d = ProviderDefaults::new().with_base(base);
         if let Some(sp) = system_prompt {
             d = d.with_system_prompt(sp);
         }
@@ -314,7 +314,7 @@ impl JsCompletionProviderDefaults {
             system_prompt: Arc::clone(&self.system_prompt),
             tools: Arc::clone(&self.tools),
             response_format: Arc::clone(&self.response_format),
-            before_completion: Arc::clone(&self.before_completion),
+            before_model: Arc::clone(&self.before_model),
         }
     }
 }

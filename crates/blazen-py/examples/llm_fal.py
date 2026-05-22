@@ -35,7 +35,7 @@ import time
 
 from blazen import (
     ChatMessage,
-    CompletionModel,
+    Model,
     Context,
     Event,
     FalLlmEndpoint,
@@ -47,10 +47,10 @@ from blazen import (
     step,
 )
 
-# Module-level model instance. CompletionModel is a native Rust object and
+# Module-level model instance. Model is a native Rust object and
 # is NOT JSON-serializable, so it cannot be stored via ctx.set(). We create
 # it once in main() and reference it from steps via this module variable.
-MODEL: CompletionModel | None = None
+MODEL: Model | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -160,9 +160,9 @@ async def analyze(ctx: Context, ev: Event) -> StopEvent:
 # fal.ai auto-routes multimodal chat requests to the matching vision, audio,
 # or video-capable variant of the underlying router (controlled by
 # ``FalOptions(auto_route_modality=True)``, the default). The helpers below
-# demonstrate each modality using the same ``CompletionModel.fal`` instance.
+# demonstrate each modality using the same ``Model.fal`` instance.
 # ---------------------------------------------------------------------------
-async def demo_vision(model: CompletionModel) -> None:
+async def demo_vision(model: Model) -> None:
     """Send a text + image-URL message through fal.ai (vision input)."""
     print("\n[vision] Describing an image via fal.ai...")
     response = await model.complete([
@@ -174,7 +174,7 @@ async def demo_vision(model: CompletionModel) -> None:
     print(f"[vision] {response['content']}")
 
 
-async def demo_audio(model: CompletionModel) -> None:
+async def demo_audio(model: Model) -> None:
     """Send a text + audio-URL message through fal.ai (audio input)."""
     print("\n[audio] Transcribing/analysing a clip via fal.ai...")
     response = await model.complete([
@@ -186,7 +186,7 @@ async def demo_audio(model: CompletionModel) -> None:
     print(f"[audio] {response['content']}")
 
 
-async def demo_video(model: CompletionModel) -> None:
+async def demo_video(model: Model) -> None:
     """Send a text + video-URL message through fal.ai (video input)."""
     print("\n[video] Describing a video clip via fal.ai...")
     response = await model.complete([
@@ -203,7 +203,7 @@ async def demo_video(model: CompletionModel) -> None:
 #
 # These live on ``FalProvider`` directly. ``FalProvider`` exposes the full
 # fal.ai compute surface (image / video / audio / 3D / transcription /
-# embeddings / background removal) in addition to the ``CompletionModel``
+# embeddings / background removal) in addition to the ``Model``
 # interface.
 # ---------------------------------------------------------------------------
 async def demo_embeddings(provider: FalProvider) -> None:
@@ -252,10 +252,10 @@ async def main() -> None:
     # (openrouter/router/openai/v1/chat/completions), which provides full
     # OpenAI chat-completions semantics: messages array, tool calls, structured
     # outputs, native streaming.
-    # CompletionModel is a native Rust object (not JSON-serializable), so we
+    # Model is a native Rust object (not JSON-serializable), so we
     # store it as a module-level variable rather than in ctx.set().
     global MODEL
-    MODEL = CompletionModel.fal(options=FalOptions(api_key=fal_key))
+    MODEL = Model.fal(options=FalOptions(api_key=fal_key))
 
     # You can also pin a specific model, endpoint, or the enterprise tier
     # by constructing a ``FalOptions`` and passing it as ``options=``. The
@@ -267,7 +267,7 @@ async def main() -> None:
         enterprise=True,
     )
     _ = enterprise_opts  # silence "unused" lint
-    # MODEL = CompletionModel.fal(options=enterprise_opts)
+    # MODEL = Model.fal(options=enterprise_opts)
 
     print(f"Using model: {MODEL.model_id}")
     print("NOTE: fal.ai uses a queue-based architecture. Each call involves")

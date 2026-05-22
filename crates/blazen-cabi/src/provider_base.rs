@@ -1,9 +1,9 @@
 //! C ABI wrapper for [`blazen_llm::providers::BaseProvider`].
 //!
-//! `BaseProvider` wraps an `Arc<dyn CompletionModel>` and applies a
-//! [`CompletionProviderDefaults`](blazen_llm::providers::CompletionProviderDefaults)
+//! `BaseProvider` wraps an `Arc<dyn Model>` and applies a
+//! [`ProviderDefaults`](blazen_llm::providers::ProviderDefaults)
 //! to every completion call. For V1 we cannot construct a `BaseProvider` from
-//! C alone — the `Arc<dyn CompletionModel>` it needs has no FFI representation
+//! C alone — the `Arc<dyn Model>` it needs has no FFI representation
 //! today. The wrapper therefore exposes only:
 //!
 //! - Builder-style setters (system prompt / tools / response format / defaults).
@@ -28,12 +28,12 @@
 use std::ffi::c_char;
 
 use blazen_llm::providers::base::BaseProvider;
-use blazen_llm::traits::CompletionModel;
-use blazen_llm::types::{ChatMessage, CompletionRequest, ToolDefinition};
+use blazen_llm::traits::Model;
+use blazen_llm::types::{ChatMessage, ModelRequest, ToolDefinition};
 
 use crate::error::BlazenError;
 use crate::future::BlazenFuture;
-use crate::provider_defaults::BlazenCompletionProviderDefaults;
+use crate::provider_defaults::BlazenProviderDefaults;
 use crate::string::{alloc_cstring, cstr_to_str};
 
 // ---------------------------------------------------------------------------
@@ -160,17 +160,17 @@ pub unsafe extern "C" fn blazen_base_provider_with_response_format_json(
     unsafe { with_inner(handle, |bp| bp.with_response_format(value)) }
 }
 
-/// Replaces the entire `CompletionProviderDefaults` on the provider with a
+/// Replaces the entire `ProviderDefaults` on the provider with a
 /// clone of the supplied handle. Null `d` is a no-op.
 ///
 /// # Safety
 ///
 /// `handle` must be null OR a live `BlazenBaseProvider`. `d` must be null OR
-/// a live `BlazenCompletionProviderDefaults`.
+/// a live `BlazenProviderDefaults`.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_base_provider_with_defaults(
     handle: *mut BlazenBaseProvider,
-    d: *const BlazenCompletionProviderDefaults,
+    d: *const BlazenProviderDefaults,
 ) {
     if handle.is_null() || d.is_null() {
         return;
@@ -185,7 +185,7 @@ pub unsafe extern "C" fn blazen_base_provider_with_defaults(
 // Getters
 // ---------------------------------------------------------------------------
 
-/// Returns a clone of the configured `CompletionProviderDefaults`. Caller owns
+/// Returns a clone of the configured `ProviderDefaults`. Caller owns
 /// the returned handle and must free with
 /// [`crate::provider_defaults::blazen_completion_provider_defaults_free`].
 ///
@@ -195,13 +195,13 @@ pub unsafe extern "C" fn blazen_base_provider_with_defaults(
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_base_provider_defaults(
     handle: *const BlazenBaseProvider,
-) -> *mut BlazenCompletionProviderDefaults {
+) -> *mut BlazenProviderDefaults {
     if handle.is_null() {
         return std::ptr::null_mut();
     }
     // SAFETY: caller guarantees live handle.
     let r = unsafe { &*handle };
-    BlazenCompletionProviderDefaults::from(r.0.defaults().clone()).into_ptr()
+    BlazenProviderDefaults::from(r.0.defaults().clone()).into_ptr()
 }
 
 /// Returns the inner model's `model_id` as a caller-owned C string. Free with
@@ -223,7 +223,7 @@ pub unsafe extern "C" fn blazen_base_provider_model_id(
 }
 
 /// Returns the inner model's `provider_id` as a caller-owned C string. The
-/// `CompletionModel` trait surfaces this through `model_id()` plus the
+/// `Model` trait surfaces this through `model_id()` plus the
 /// provider's own identification; for V1 we return the same string as
 /// [`blazen_base_provider_model_id`]. Free with
 /// [`crate::string::blazen_string_free`].
@@ -276,7 +276,7 @@ pub unsafe extern "C" fn blazen_base_provider_free(handle: *mut BlazenBaseProvid
 /// The implementation:
 ///
 /// 1. Parses both JSON inputs.
-/// 2. Builds a [`CompletionRequest`] with `response_format = schema`.
+/// 2. Builds a [`ModelRequest`] with `response_format = schema`.
 /// 3. Awaits the provider's `complete(...)`.
 /// 4. Returns the response's `content` string (the model's JSON output) as
 ///    the future's typed result.
@@ -322,7 +322,7 @@ pub unsafe extern "C" fn blazen_base_provider_extract(
     // SAFETY: caller guarantees live handle.
     let provider = unsafe { &*handle }.0.clone();
 
-    let request = CompletionRequest::new(messages).with_response_format(schema);
+    let request = ModelRequest::new(messages).with_response_format(schema);
 
     BlazenFuture::spawn::<String, _>(async move {
         let resp = provider.complete(request).await?;

@@ -1,7 +1,7 @@
 /**
  * Local LLM inference with Blazen's mistral.rs backend.
  *
- * Demonstrates using Blazen's CompletionModel with the mistral.rs engine to
+ * Demonstrates using Blazen's Model with the mistral.rs engine to
  * run LLM inference entirely on-device -- no API key or network access
  * required (after the initial model download from HuggingFace Hub).
  *
@@ -11,13 +11,13 @@
  * Run with: npx tsx llm_mistralrs.ts
  */
 
-import { CompletionModel, ChatMessage } from "blazen";
+import { Model, ChatMessage } from "blazen";
 
 // ---------------------------------------------------------------------------
 // 1. Create a local mistral.rs model.
 // ---------------------------------------------------------------------------
 
-const model: CompletionModel = CompletionModel.mistralrs({
+const model: Model = Model.mistralrs({
   modelId: "TheBloke/Mistral-7B-Instruct-v0.2-GGUF",
 });
 

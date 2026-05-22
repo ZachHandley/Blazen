@@ -8,7 +8,7 @@
 //! - `GET  /v1/models`                     — list base + mounted adapters
 //!
 //! All bodies are `serde_json::Value` rather than typed structs because
-//! Blazen's provider-agnostic [`CompletionRequest`] / [`CompletionResponse`]
+//! Blazen's provider-agnostic [`ModelRequest`] / [`ModelResponse`]
 //! types live in `blazen-llm` (which this crate cannot depend on without
 //! creating a cycle). The `backends/vllm.rs` bridge module does the
 //! typed-shape conversion.

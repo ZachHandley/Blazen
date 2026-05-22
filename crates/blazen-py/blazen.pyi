@@ -41,13 +41,13 @@ __all__ = [
     "BlazenPeerClient",
     "BlazenPeerServer",
     "BlazenState",
-    "BlockingCompletionModel",
     "BlockingEmbeddingModel",
+    "BlockingModel",
     "BytesWrapper",
     "CacheConfig",
     "CacheMiddleware",
     "CacheStrategy",
-    "CachedCompletionModel",
+    "CachedModel",
     "CallbackFieldStore",
     "CandleEmbedError",
     "CandleEmbedModel",
@@ -63,11 +63,6 @@ __all__ = [
     "CheckpointStore",
     "Citation",
     "CohereProvider",
-    "CompletionModel",
-    "CompletionOptions",
-    "CompletionProviderDefaults",
-    "CompletionRequest",
-    "CompletionResponse",
     "CompletionStream",
     "Compute",
     "ComputeError",
@@ -181,12 +176,16 @@ __all__ = [
     "MistralRsProvider",
     "MixedPrecision",
     "Modality",
+    "Model",
     "ModelCache",
     "ModelCapabilities",
     "ModelInfo",
     "ModelManager",
+    "ModelOptions",
     "ModelPricing",
     "ModelRegistry",
+    "ModelRequest",
+    "ModelResponse",
     "ModelStatus",
     "MusicProvider",
     "MusicRequest",
@@ -225,6 +224,7 @@ __all__ = [
     "PromptTemplate",
     "ProviderCapabilities",
     "ProviderConfig",
+    "ProviderDefaults",
     "ProviderError",
     "ProviderId",
     "ProviderInfo",
@@ -244,12 +244,12 @@ __all__ = [
     "RequestTiming",
     "ResourceHint",
     "ResponseFormat",
-    "RetryCompletionModel",
     "RetryConfig",
     "RetryEmbeddingModel",
     "RetryHttpClient",
     "RetryMemoryBackend",
     "RetryMiddleware",
+    "RetryModel",
     "RetryStack",
     "Role",
     "RunEventStream",
@@ -318,8 +318,8 @@ __all__ = [
     "UpstashBackend",
     "UsageEmitter",
     "UsageEvent",
-    "UsageRecordingCompletionModel",
     "UsageRecordingEmbeddingModel",
+    "UsageRecordingModel",
     "ValidationError",
     "ValkeyBackend",
     "ValkeyCheckpointStore",
@@ -607,7 +607,7 @@ class AgentResult:
         >>> print(result.total_cost)
     """
     @property
-    def response(self) -> CompletionResponse:
+    def response(self) -> ModelResponse:
         r"""
         The final completion response from the model.
         """
@@ -633,7 +633,7 @@ class AnthropicProvider:
     r"""
     An Anthropic Messages API provider.
     
-    This is the standalone class form of `CompletionModel.anthropic(...)`.
+    This is the standalone class form of `Model.anthropic(...)`.
     Both surfaces wrap the same Rust provider; use whichever you prefer.
     
     Example:
@@ -653,25 +653,25 @@ class AnthropicProvider:
         Args:
             options: Optional [`ProviderOptions`] with api_key, base_url, model.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse:
         r"""
         Perform a chat completion.
         
         Args:
             messages: A list of ChatMessage objects.
-            options: Optional [`CompletionOptions`] for sampling parameters,
+            options: Optional [`ModelOptions`] for sampling parameters,
                 tools, and response format.
         
         Returns:
-            A CompletionResponse with content, model, tool_calls, usage, etc.
+            A ModelResponse with content, model, tool_calls, usage, etc.
         """
-    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream:
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> CompletionStream:
         r"""
         Stream a chat completion as an async iterator.
         
         Args:
             messages: A list of ChatMessage objects.
-            options: Optional [`CompletionOptions`] for sampling parameters,
+            options: Optional [`ModelOptions`] for sampling parameters,
                 tools, and response format.
         
         Returns:
@@ -1047,7 +1047,7 @@ class AzureOpenAiProvider:
     r"""
     An Azure OpenAI Service provider.
     
-    Standalone class form of `CompletionModel.azure(...)`. Requires
+    Standalone class form of `Model.azure(...)`. Requires
     `resource_name` and `deployment_name` on [`AzureOptions`].
     
     Example:
@@ -1067,8 +1067,8 @@ class AzureOpenAiProvider:
             options: [`AzureOptions`] with required ``resource_name`` and
                 ``deployment_name`` plus optional ``api_version``.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
-    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse: ...
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> AzureOpenAiProvider:
         r"""
         Set the provider-level default retry config.
@@ -1197,7 +1197,7 @@ class BackgroundRemovalRequest:
 
 class BaseProvider:
     r"""
-    Wraps any [`CompletionModel`] with instance-level defaults that are
+    Wraps any [`Model`] with instance-level defaults that are
     applied to every ``complete()`` / ``stream()`` call before delegation.
     
     Phase A exposes the structural builder surface so foreign-language
@@ -1206,8 +1206,8 @@ class BaseProvider:
     arrives in Phase B.
     
     Example:
-        >>> from blazen import BaseProvider, CompletionModel
-        >>> inner = CompletionModel.openai()
+        >>> from blazen import BaseProvider, Model
+        >>> inner = Model.openai()
         >>> provider = (
         ...     BaseProvider(inner)
         ...     .with_system_prompt("be terse")
@@ -1215,7 +1215,7 @@ class BaseProvider:
         ... )
     """
     @property
-    def defaults(self) -> CompletionProviderDefaults:
+    def defaults(self) -> ProviderDefaults:
         r"""
         The currently configured defaults.
         """
@@ -1230,22 +1230,22 @@ class BaseProvider:
         The wrapped completion model's ``provider_id``, if it exposes one.
         
         Returns ``None`` for built-in providers that don't expose a
-        ``provider_id`` attribute (the inner ``CompletionModel`` trait has no
+        ``provider_id`` attribute (the inner ``Model`` trait has no
         ``provider_id`` method --- it lives on the compute-side
         ``ComputeProvider`` trait).
         """
     @property
-    def inner(self) -> CompletionModel:
+    def inner(self) -> Model:
         r"""
         Return a fresh handle to the wrapped completion model.
         """
-    def __new__(cls, inner: CompletionModel, defaults: typing.Optional[CompletionProviderDefaults] = None) -> BaseProvider:
+    def __new__(cls, inner: Model, defaults: typing.Optional[ProviderDefaults] = None) -> BaseProvider:
         r"""
-        Wrap a [`CompletionModel`] with instance-level defaults.
+        Wrap a [`Model`] with instance-level defaults.
         
         Args:
-            inner: Any [`CompletionModel`] (built-in factory or subclass).
-            defaults: Optional [`CompletionProviderDefaults`]; defaults to
+            inner: Any [`Model`] (built-in factory or subclass).
+            defaults: Optional [`ProviderDefaults`]; defaults to
                 an empty bag.
         """
     def with_system_prompt(self, system_prompt: builtins.str) -> BaseProvider:
@@ -1265,11 +1265,11 @@ class BaseProvider:
         Return a clone with the universal JSON-level ``before_request`` hook
         set on the embedded base defaults.
         """
-    def with_before_completion(self, hook: typing.Any) -> BaseProvider:
+    def with_before_model(self, hook: typing.Any) -> BaseProvider:
         r"""
-        Return a clone with the typed ``before_completion`` hook set.
+        Return a clone with the typed ``before_model`` hook set.
         """
-    def with_defaults(self, defaults: CompletionProviderDefaults) -> BaseProvider:
+    def with_defaults(self, defaults: ProviderDefaults) -> BaseProvider:
         r"""
         Return a clone with the entire defaults bag replaced.
         """
@@ -1356,7 +1356,7 @@ class BatchResult:
     Result of a batch completion run.
     
     Each input request maps to a positional entry in ``responses`` and
-    ``errors``. A successful request has a ``CompletionResponse`` in
+    ``errors``. A successful request has a ``ModelResponse`` in
     ``responses`` and ``None`` in ``errors``; a failed request has ``None``
     in ``responses`` and an error string in ``errors``.
     
@@ -1369,7 +1369,7 @@ class BatchResult:
         ...         print(f"Request {i} failed: {result.errors[i]}")
     """
     @property
-    def responses(self) -> builtins.list[typing.Optional[CompletionResponse]]:
+    def responses(self) -> builtins.list[typing.Optional[ModelResponse]]:
         r"""
         Per-request responses. ``None`` for requests that failed.
         """
@@ -1439,7 +1439,7 @@ class BedrockProvider:
     r"""
     An AWS Bedrock provider.
     
-    Standalone class form of `CompletionModel.bedrock(...)`. Requires
+    Standalone class form of `Model.bedrock(...)`. Requires
     ``region`` on [`BedrockOptions`].
     """
     @property
@@ -1451,8 +1451,8 @@ class BedrockProvider:
         Args:
             options: [`BedrockOptions`] with required ``region``.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
-    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse: ...
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> BedrockProvider:
         r"""
         Set the provider-level default retry config.
@@ -1592,32 +1592,6 @@ class BlazenState:
     def __new__(cls, **_kwargs: typing.Any) -> BlazenState: ...
 
 @typing.final
-class BlockingCompletionModel:
-    r"""
-    Blocking sibling of [`CompletionModel`].
-    
-    Wrap any `CompletionModel` with `BlockingCompletionModel(model)` to drive
-    `complete()` synchronously from non-async Python contexts (CLIs, REPLs,
-    scripts, sync libraries). Streaming is not exposed here — use the async
-    API or pass an `on_chunk` callback to the regular model when you need
-    partial chunks.
-    """
-    @property
-    def model_id(self) -> builtins.str:
-        r"""
-        The model id reported by the wrapped provider.
-        """
-    def __new__(cls, model: CompletionModel) -> BlockingCompletionModel:
-        r"""
-        Wrap a `CompletionModel` for synchronous dispatch.
-        """
-    def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
-        r"""
-        Synchronously perform a chat completion. Blocks the calling thread.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
 class BlockingEmbeddingModel:
     r"""
     Blocking sibling of [`EmbeddingModel`].
@@ -1639,6 +1613,32 @@ class BlockingEmbeddingModel:
     def embed(self, texts: typing.Sequence[builtins.str]) -> EmbeddingResponse:
         r"""
         Synchronously embed a list of texts.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class BlockingModel:
+    r"""
+    Blocking sibling of [`Model`].
+    
+    Wrap any `Model` with `BlockingModel(model)` to drive
+    `complete()` synchronously from non-async Python contexts (CLIs, REPLs,
+    scripts, sync libraries). Streaming is not exposed here — use the async
+    API or pass an `on_chunk` callback to the regular model when you need
+    partial chunks.
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        The model id reported by the wrapped provider.
+        """
+    def __new__(cls, model: Model) -> BlockingModel:
+        r"""
+        Wrap a `Model` for synchronous dispatch.
+        """
+    def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse:
+        r"""
+        Synchronously perform a chat completion. Blocks the calling thread.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -1694,7 +1694,7 @@ class CacheConfig:
 @typing.final
 class CacheMiddleware:
     r"""
-    Middleware that wraps a model with `CachedCompletionModel`.
+    Middleware that wraps a model with `CachedModel`.
     
     This is the standalone Python-facing equivalent of
     `blazen_llm::middleware::CacheMiddleware`.
@@ -1708,24 +1708,24 @@ class CacheMiddleware:
                 `CacheConfig()` (content-hash strategy, 300s TTL,
                 1000 entries).
         """
-    def wrap(self, model: CompletionModel) -> CompletionModel:
+    def wrap(self, model: Model) -> Model:
         r"""
-        Apply this middleware directly to a `CompletionModel`, returning
-        a new `CompletionModel` with caching behaviour.
+        Apply this middleware directly to a `Model`, returning
+        a new `Model` with caching behaviour.
         """
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
-class CachedCompletionModel:
+class CachedModel:
     r"""
-    A `CompletionModel` decorator that caches non-streaming responses.
+    A `Model` decorator that caches non-streaming responses.
     
-    Standalone equivalent of `CompletionModel.with_cache(config)`.
+    Standalone equivalent of `Model.with_cache(config)`.
     Streaming requests are never cached and always pass through.
     
     Example:
-        >>> base = CompletionModel.openai()
-        >>> model = CachedCompletionModel(base, CacheConfig(ttl_seconds=600))
+        >>> base = Model.openai()
+        >>> model = CachedModel(base, CacheConfig(ttl_seconds=600))
         >>> response = await model.complete([ChatMessage.user("Hi")])
     """
     @property
@@ -1733,25 +1733,25 @@ class CachedCompletionModel:
         r"""
         The model id reported by the underlying provider.
         """
-    def __new__(cls, model: CompletionModel, config: typing.Optional[CacheConfig] = None) -> CachedCompletionModel:
+    def __new__(cls, model: Model, config: typing.Optional[CacheConfig] = None) -> CachedModel:
         r"""
-        Wrap a `CompletionModel` with response caching.
+        Wrap a `Model` with response caching.
         
         Args:
-            model: The `CompletionModel` to wrap.
+            model: The `Model` to wrap.
             config: Optional typed `CacheConfig`. Defaults to
                 `CacheConfig()` (content-hash strategy, 300s TTL,
                 1000 entries).
         """
-    def as_model(self) -> CompletionModel:
+    def as_model(self) -> Model:
         r"""
-        Convert this decorator into a `CompletionModel`.
+        Convert this decorator into a `Model`.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse:
         r"""
         Perform a chat completion, served from cache when possible.
         """
-    def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Optional[typing.Any] = None, options: typing.Optional[CompletionOptions] = None) -> typing.Any:
+    def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Optional[typing.Any] = None, options: typing.Optional[ModelOptions] = None) -> typing.Any:
         r"""
         Stream a chat completion (always passes through; never cached).
         """
@@ -1987,18 +1987,18 @@ class CandleLlmProvider:
             options: Optional :class:`CandleLlmOptions` for model id, device,
                 quantization, revision, context length, and cache directory.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse:
         r"""
         Perform a chat completion.
         
         Args:
             messages: A list of :class:`ChatMessage` objects.
-            options: Optional :class:`CompletionOptions` for sampling params.
+            options: Optional :class:`ModelOptions` for sampling params.
         
         Returns:
-            A :class:`CompletionResponse`.
+            A :class:`ModelResponse`.
         """
-    async def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Any, options: typing.Optional[CompletionOptions] = None) -> None:
+    async def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Any, options: typing.Optional[ModelOptions] = None) -> None:
         r"""
         Stream a chat completion, calling a callback for each chunk.
         """
@@ -2331,7 +2331,7 @@ class Citation:
     def __new__(cls, *, url: builtins.str, title: typing.Optional[builtins.str] = None, snippet: typing.Optional[builtins.str] = None, start: typing.Optional[builtins.int] = None, end: typing.Optional[builtins.int] = None, document_id: typing.Optional[builtins.str] = None, metadata: typing.Optional[typing.Any] = None) -> Citation:
         r"""
         Construct a citation explicitly. Most users get these from
-        `CompletionResponse.citations` rather than building them.
+        `ModelResponse.citations` rather than building them.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -2340,7 +2340,7 @@ class CohereProvider:
     r"""
     A Cohere provider for chat completions and embeddings.
     
-    Standalone class form of `CompletionModel.cohere(...)`.
+    Standalone class form of `Model.cohere(...)`.
     """
     @property
     def model_id(self) -> builtins.str: ...
@@ -2348,8 +2348,8 @@ class CohereProvider:
         r"""
         Create a new Cohere provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
-    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse: ...
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> CompletionStream: ...
     def embedding_model(self) -> EmbeddingModel:
         r"""
         Build a Cohere [`EmbeddingModel`] sharing this provider's API key.
@@ -2364,652 +2364,6 @@ class CohereProvider:
         r"""
         Return an opaque handle to the underlying HTTP client.
         """
-    def __repr__(self) -> builtins.str: ...
-
-class CompletionModel:
-    r"""
-    A chat completion model.
-    
-    Use the static constructor methods to create a model for a specific
-    provider, then call `complete()` to generate responses.
-    
-    Example:
-        >>> model = CompletionModel.openai()
-        >>> model = CompletionModel.anthropic()
-        >>> model = CompletionModel.openrouter()
-        >>>
-        >>> response = await model.complete([
-        ...     ChatMessage.user("What is 2+2?")
-        ... ])
-    """
-    @property
-    def model_id(self) -> builtins.str:
-        r"""
-        Get the model ID.
-        
-        Returns:
-            The string identifier of the model.
-        """
-    def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> CompletionModel:
-        r"""
-        Create a custom completion model by subclassing.
-        
-        Override ``complete()`` and optionally ``stream()`` in your
-        subclass to implement a custom provider.
-        
-        Args:
-            model_id: The model identifier.
-            context_length: Maximum context window in tokens.
-            base_url: Base URL for HTTP-based providers.
-            pricing: Optional pricing information.
-            memory_estimate_bytes: Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise).
-            max_output_tokens: Maximum output tokens the model supports.
-        `__new__` for `CompletionModel`. PyO3's `#[new]` is the `__new__`
-        slot; when a Python subclass like
-        `class MockLLM(CompletionModel): def __init__(self): super().__init__(model_id=...)`
-        is instantiated, Python calls `MockLLM.__new__(MockLLM, *outer_args)`.
-        To let arbitrary subclass `__init__` signatures (positional or keyword)
-        flow through without erroring at `__new__` time, we accept `*args,
-        **kwargs` here and ignore them -- the real configuration work happens
-        in `__init__` below.
-        """
-    def __init__(self, *, model_id: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None, max_output_tokens: typing.Optional[builtins.int] = None) -> None:
-        r"""
-        Subclass-friendly `__init__`. PyO3's `#[new]` only implements
-        `__new__`; without an `__init__` here, a Python subclass that calls
-        `super().__init__(model_id=..., context_length=...)` falls through to
-        `object.__init__` and raises ``TypeError``. We accept the same typed
-        keyword arguments the constructor documents and re-populate
-        ``self.config`` so subclasses see the values they passed.
-        """
-    @staticmethod
-    def openai(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
-        r"""
-        Create an OpenAI provider.
-        
-        Args:
-            options: Optional typed ``ProviderOptions`` object.
-        """
-    @staticmethod
-    def anthropic(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
-        r"""
-        Create an Anthropic provider.
-        
-        Args:
-            options: Optional typed ``ProviderOptions`` object.
-        """
-    @staticmethod
-    def gemini(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
-        r"""
-        Create a Google Gemini provider.
-        
-        Args:
-            options: Optional typed ``ProviderOptions`` object.
-        """
-    @staticmethod
-    def azure(*, options: AzureOptions) -> CompletionModel:
-        r"""
-        Create an Azure OpenAI provider.
-        
-        Args:
-            options: Typed ``AzureOptions`` object with required
-                ``resource_name`` and ``deployment_name``, plus optional
-                ``api_version``.
-        """
-    @staticmethod
-    def openrouter(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
-        r"""
-        Create an OpenRouter provider.
-        
-        Args:
-            options: Optional typed ``ProviderOptions`` object.
-        """
-    @staticmethod
-    def groq(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
-        r"""
-        Create a Groq provider.
-        
-        Args:
-            options: Optional typed ``ProviderOptions`` object.
-        """
-    @staticmethod
-    def together(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
-        r"""
-        Create a Together AI provider.
-        
-        Args:
-            options: Optional typed ``ProviderOptions`` object.
-        """
-    @staticmethod
-    def mistral(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
-        r"""
-        Create a Mistral provider.
-        
-        Args:
-            options: Optional typed ``ProviderOptions`` object.
-        """
-    @staticmethod
-    def deepseek(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
-        r"""
-        Create a DeepSeek provider.
-        
-        Args:
-            options: Optional typed ``ProviderOptions`` object.
-        """
-    @staticmethod
-    def fireworks(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
-        r"""
-        Create a Fireworks AI provider.
-        
-        Args:
-            options: Optional typed ``ProviderOptions`` object.
-        """
-    @staticmethod
-    def perplexity(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
-        r"""
-        Create a Perplexity provider.
-        
-        Args:
-            options: Optional typed ``ProviderOptions`` object.
-        """
-    @staticmethod
-    def xai(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
-        r"""
-        Create an xAI (Grok) provider.
-        
-        Args:
-            options: Optional typed ``ProviderOptions`` object.
-        """
-    @staticmethod
-    def cohere(*, options: typing.Optional[ProviderOptions] = None) -> CompletionModel:
-        r"""
-        Create a Cohere provider.
-        
-        Args:
-            options: Optional typed ``ProviderOptions`` object.
-        """
-    @staticmethod
-    def bedrock(*, options: BedrockOptions) -> CompletionModel:
-        r"""
-        Create an AWS Bedrock provider.
-        
-        Args:
-            options: Typed ``BedrockOptions`` object with required ``region``
-                and optional ``model``.
-        """
-    @staticmethod
-    def ollama(host: builtins.str, port: builtins.int, model: builtins.str) -> CompletionModel:
-        r"""
-        Build a `CompletionModel` for an Ollama server.
-        
-        Equivalent to constructing an OpenAI-compatible provider with
-        `base_url = format!("http://{host}:{port}/v1")` and no API key.
-        
-        Args:
-            host: Hostname or IP (e.g. `"localhost"`, `"192.168.1.50"`).
-            port: TCP port (Ollama default is 11434).
-            model: Model identifier loaded on the server (e.g. `"llama3.1"`).
-        """
-    @staticmethod
-    def lm_studio(host: builtins.str, port: builtins.int, model: builtins.str) -> CompletionModel:
-        r"""
-        Build a `CompletionModel` for an LM Studio server.
-        
-        Args:
-            host: Hostname or IP.
-            port: TCP port (LM Studio default is 1234).
-            model: Model identifier loaded on the server.
-        """
-    @staticmethod
-    def openai_compat(provider_id: builtins.str, config: OpenAiCompatConfig) -> CompletionModel:
-        r"""
-        Build a `CompletionModel` from an arbitrary OpenAI-compatible config.
-        
-        Use this for OpenAI-compatible servers that aren't pre-configured by
-        the `ollama` / `lm_studio` helpers (vLLM, llama.cpp's server, TGI, or
-        hosted OpenAI-compat services).
-        """
-    @staticmethod
-    def custom(host_object: typing.Any, provider_id: typing.Optional[builtins.str] = None) -> CompletionModel:
-        r"""
-        Build a `CompletionModel` backed by a Python host object that implements
-        `complete` (and optionally `stream`).
-        
-        Use this for fully-custom protocols where the framework can't help with
-        the wire format. The host object's `complete(request)` async method will
-        be invoked with a serialized `CompletionRequest`.
-        
-        Args:
-            host_object: A Python class instance with async `complete` method.
-            provider_id: Optional short identifier for logging.
-        """
-    @staticmethod
-    def fal(*, options: typing.Optional[FalOptions] = None) -> CompletionModel:
-        r"""
-        Create a fal.ai provider.
-        
-        Args:
-            options: Optional typed ``FalOptions`` object for selecting the
-                model, endpoint, enterprise tier, and auto-routing. Defaults to
-                the OpenAI-chat endpoint
-                (``openrouter/router/openai/v1/chat/completions``).
-        """
-    def with_retry(self, config: typing.Optional[RetryConfig] = None) -> CompletionModel:
-        r"""
-        Wrap this model with automatic retry on transient failures.
-        
-        Returns a new CompletionModel that retries on rate limits,
-        timeouts, and server errors with exponential backoff.
-        
-        Args:
-            config: Optional typed ``RetryConfig`` object. Defaults to
-                ``RetryConfig()`` (3 retries, 1s initial, 30s max).
-        
-        Returns:
-            A new CompletionModel with retry behaviour.
-        
-        Example:
-            >>> model = CompletionModel.openai(options=ProviderOptions(api_key="sk-...")).with_retry(RetryConfig(max_retries=5))
-        """
-    @staticmethod
-    def with_fallback(models: typing.Sequence[CompletionModel]) -> CompletionModel:
-        r"""
-        Create a fallback model that tries multiple providers in order.
-        
-        When the first provider fails with a retryable error, the request
-        is forwarded to the next provider. Non-retryable errors (auth,
-        validation) short-circuit immediately.
-        
-        Args:
-            models: A list of CompletionModel instances to try in order.
-        
-        Returns:
-            A new CompletionModel that falls back through the providers.
-        
-        Example:
-            >>> primary = CompletionModel.openai(options=ProviderOptions(api_key="sk-..."))
-            >>> backup = CompletionModel.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
-            >>> model = CompletionModel.with_fallback([primary, backup])
-        """
-    def with_cache(self, config: typing.Optional[CacheConfig] = None) -> CompletionModel:
-        r"""
-        Wrap this model with response caching.
-        
-        Repeated identical requests are served from an in-memory cache
-        without hitting the underlying provider. Streaming requests are
-        never cached.
-        
-        Args:
-            config: Optional typed ``CacheConfig`` object. Defaults to
-                ``CacheConfig()`` (content-hash strategy, 300s TTL, 1000 entries).
-        
-        Returns:
-            A new CompletionModel with caching enabled.
-        
-        Example:
-            >>> model = CompletionModel.openai(options=ProviderOptions(api_key="sk-...")).with_cache(CacheConfig(ttl_seconds=600))
-        """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
-        r"""
-        Perform a chat completion.
-        
-        Args:
-            messages: A list of ChatMessage objects.
-            options: Optional CompletionOptions for sampling parameters,
-                tools, and response format.
-        
-        Returns:
-            A CompletionResponse with content, model, tool_calls, usage,
-            and finish_reason attributes.
-        
-        Example:
-            >>> response = await model.complete([
-            ...     ChatMessage.system("You are helpful."),
-            ...     ChatMessage.user("What is 2+2?"),
-            ... ])
-            >>> print(response.content)
-        """
-    def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Optional[typing.Any] = None, options: typing.Optional[CompletionOptions] = None) -> typing.Any:
-        r"""
-        Stream a chat completion.
-        
-        Two usage modes are supported:
-        
-        1. **Async iterator** (``on_chunk`` omitted) -- returns a
-           [`CompletionStream`] which can be consumed with ``async for``.
-        2. **Callback** (``on_chunk`` provided) -- returns a coroutine that
-           resolves once the stream is exhausted, invoking ``on_chunk`` once
-           per [`StreamChunk`].
-        
-        Args:
-            messages: A list of ChatMessage objects.
-            on_chunk: Optional callback function receiving each chunk. If
-                omitted, the method returns an async iterator.
-            options: Optional [`CompletionOptions`] for sampling parameters,
-                tools, and response format.
-        
-        Example (async iterator):
-            >>> async for chunk in model.stream([ChatMessage.user("Hi!")]):
-            ...     if chunk.delta:
-            ...         print(chunk.delta, end="")
-        
-        Example (callback):
-            >>> def handle_chunk(chunk):
-            ...     if chunk.delta:
-            ...         print(chunk.delta, end="")
-            >>> await model.stream([ChatMessage.user("Hi!")], handle_chunk)
-        """
-    def __repr__(self) -> builtins.str: ...
-    async def load(self) -> None:
-        r"""
-        Explicitly load the model weights into memory / VRAM.
-        
-        For remote providers (OpenAI, Anthropic, fal, etc.) this raises
-        ``NotImplementedError`` -- there is no local model to load.
-        For local providers (mistral.rs, llama.cpp, candle) this triggers
-        the download + load synchronously, so the next inference call
-        does not pay the startup cost.
-        
-        Idempotent: calling ``load`` on an already-loaded model is a no-op
-        that returns immediately.
-        """
-    async def unload(self) -> None:
-        r"""
-        Drop the loaded model and free its memory / VRAM.
-        
-        For remote providers this raises ``NotImplementedError``.
-        For local providers this frees GPU memory so the process can
-        load a different model. Idempotent.
-        """
-    async def is_loaded(self) -> builtins.bool:
-        r"""
-        Whether the model is currently loaded in memory / VRAM.
-        
-        Always returns ``False`` for remote providers (they have no local
-        model to load). Returns the real state for local providers.
-        """
-    async def memory_bytes(self) -> typing.Optional[builtins.int]:
-        r"""
-        Approximate memory footprint in bytes (host RAM if running on CPU,
-        GPU VRAM otherwise). Returns ``None`` for remote providers or for
-        local providers that do not expose memory usage.
-        """
-    @staticmethod
-    def mistralrs(*, options: MistralRsOptions) -> CompletionModel:
-        r"""
-        Create a local mistral.rs provider.
-        
-        Runs LLM inference entirely on-device using the mistral.rs engine.
-        No API key is required.
-        
-        Args:
-            options: Typed ``MistralRsOptions`` with required ``model_id``
-                (HuggingFace model ID or local GGUF path).
-        """
-
-@typing.final
-class CompletionOptions:
-    r"""
-    Options for a chat completion request.
-    
-    Example:
-        >>> opts = CompletionOptions(temperature=0.7, max_tokens=1000)
-        >>> response = await model.complete(messages, opts)
-    """
-    @property
-    def temperature(self) -> typing.Optional[builtins.float]:
-        r"""
-        Sampling temperature (0.0-2.0).
-        """
-    @temperature.setter
-    def temperature(self, value: typing.Optional[builtins.float]) -> None:
-        r"""
-        Sampling temperature (0.0-2.0).
-        """
-    @property
-    def max_tokens(self) -> typing.Optional[builtins.int]:
-        r"""
-        Maximum tokens to generate.
-        """
-    @max_tokens.setter
-    def max_tokens(self, value: typing.Optional[builtins.int]) -> None:
-        r"""
-        Maximum tokens to generate.
-        """
-    @property
-    def top_p(self) -> typing.Optional[builtins.float]:
-        r"""
-        Nucleus sampling parameter (0.0-1.0).
-        """
-    @top_p.setter
-    def top_p(self, value: typing.Optional[builtins.float]) -> None:
-        r"""
-        Nucleus sampling parameter (0.0-1.0).
-        """
-    @property
-    def model(self) -> typing.Optional[builtins.str]:
-        r"""
-        Model override for this request.
-        """
-    @model.setter
-    def model(self, value: typing.Optional[builtins.str]) -> None:
-        r"""
-        Model override for this request.
-        """
-    @property
-    def tools(self) -> typing.Optional[builtins.list[ToolDef]]:
-        r"""
-        Tool definitions for function calling.
-        """
-    @tools.setter
-    def tools(self, value: typing.Optional[typing.Sequence[ToolDef]]) -> None:
-        r"""
-        Tool definitions for function calling.
-        """
-    @property
-    def response_format(self) -> typing.Optional[typing.Any]:
-        r"""
-        JSON schema dict for structured output.
-        """
-    @response_format.setter
-    def response_format(self, value: typing.Optional[typing.Any]) -> None:
-        r"""
-        JSON schema dict for structured output.
-        """
-    def __new__(cls, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, top_p: typing.Optional[builtins.float] = None, model: typing.Optional[builtins.str] = None, tools: typing.Optional[typing.Sequence[ToolDef]] = None, response_format: typing.Optional[typing.Any] = None) -> CompletionOptions: ...
-
-class CompletionProviderDefaults:
-    r"""
-    Completion-role defaults. Carries the universal ``base`` bag plus
-    completion-specific fields: ``system_prompt``, default ``tools``,
-    default ``response_format``, and the typed ``before_completion``
-    hook.
-    
-    All fields are read/write so Python users can tweak them after
-    construction.
-    
-    Example:
-        >>> async def add_user(req):
-        ...     req["metadata"]["origin"] = "blazen-py"
-        >>> defaults = CompletionProviderDefaults(
-        ...     system_prompt="be terse",
-        ...     tools=[my_tool],
-        ...     response_format={"type": "json_object"},
-        ...     before_completion=add_user,
-        ... )
-    """
-    @property
-    def base(self) -> BaseProviderDefaults:
-        r"""
-        The universal base defaults bag.
-        """
-    @base.setter
-    def base(self, value: BaseProviderDefaults) -> None: ...
-    @property
-    def system_prompt(self) -> typing.Optional[builtins.str]:
-        r"""
-        Default system prompt, if set.
-        """
-    @system_prompt.setter
-    def system_prompt(self, value: typing.Optional[builtins.str]) -> None: ...
-    @property
-    def tools(self) -> builtins.list[ToolDefinition]:
-        r"""
-        Default tool definitions.
-        """
-    @tools.setter
-    def tools(self, value: typing.Sequence[ToolDefinition]) -> None: ...
-    @property
-    def response_format(self) -> typing.Optional[typing.Any]:
-        r"""
-        Default response-format dict, if set.
-        """
-    @response_format.setter
-    def response_format(self, value: typing.Optional[typing.Any]) -> None: ...
-    @property
-    def before_completion(self) -> typing.Optional[typing.Any]:
-        r"""
-        Typed completion-level ``before_completion`` hook, if set.
-        """
-    @before_completion.setter
-    def before_completion(self, value: typing.Optional[typing.Any]) -> None: ...
-    def __new__(cls, base: typing.Optional[BaseProviderDefaults] = None, system_prompt: typing.Optional[builtins.str] = None, tools: typing.Optional[typing.Sequence[ToolDefinition]] = None, response_format: typing.Optional[typing.Any] = None, before_completion: typing.Optional[typing.Any] = None) -> CompletionProviderDefaults:
-        r"""
-        Construct completion defaults.
-        
-        Args:
-            base: Universal [`BaseProviderDefaults`]; defaults to an empty bag.
-            system_prompt: Default system message prepended when the request
-                has none.
-            tools: Default tool definitions appended to the request's tools
-                list (request entries win on name collision).
-            response_format: Default JSON-schema dict applied when the request
-                has no ``response_format``.
-            before_completion: Optional ``async def(request: dict) -> None``
-                typed hook applied after the universal ``before_request``.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class CompletionRequest:
-    r"""
-    A provider-agnostic chat-completion request.
-    
-    Mirrors [`blazen_llm::CompletionRequest`]. Most code paths build the
-    request inline inside ``CompletionModel.complete(messages, options)``;
-    `CompletionRequest` is the typed alternative for callers that want to
-    inspect, serialize, or hand off the full request body explicitly.
-    
-    Example:
-        >>> req = CompletionRequest(
-        ...     messages=[ChatMessage.user("hi")],
-        ...     temperature=0.0,
-        ...     max_tokens=100,
-        ... )
-    """
-    @property
-    def messages(self) -> builtins.list[ChatMessage]:
-        r"""
-        The conversation messages.
-        """
-    @property
-    def tools(self) -> builtins.list[ToolDefinition]:
-        r"""
-        Tool definitions available to the model.
-        """
-    @property
-    def temperature(self) -> typing.Optional[builtins.float]:
-        r"""
-        Sampling temperature, if set.
-        """
-    @property
-    def max_tokens(self) -> typing.Optional[builtins.int]:
-        r"""
-        Maximum output tokens, if set.
-        """
-    @property
-    def top_p(self) -> typing.Optional[builtins.float]:
-        r"""
-        Nucleus sampling parameter, if set.
-        """
-    @property
-    def model(self) -> typing.Optional[builtins.str]:
-        r"""
-        Model override for this request, if set.
-        """
-    @property
-    def modalities(self) -> typing.Optional[builtins.list[builtins.str]]:
-        r"""
-        Output modalities (`["text"]`, `["image", "text"]`, ...), if set.
-        """
-    @property
-    def response_format(self) -> typing.Optional[typing.Any]:
-        r"""
-        JSON schema / response-format hint, returned as a Python dict.
-        """
-    def __new__(cls, *, messages: typing.Sequence[ChatMessage], tools: typing.Optional[typing.Sequence[ToolDefinition]] = None, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, top_p: typing.Optional[builtins.float] = None, response_format: typing.Optional[typing.Any] = None, model: typing.Optional[builtins.str] = None, modalities: typing.Optional[typing.Sequence[builtins.str]] = None) -> CompletionRequest:
-        r"""
-        Construct a completion request.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class CompletionResponse:
-    r"""
-    The result of a chat completion.
-    
-    Supports both attribute access and dict-style access for backwards
-    compatibility:
-        >>> response.content        # attribute
-        >>> response["content"]     # dict-style
-    """
-    @property
-    def content(self) -> typing.Optional[builtins.str]: ...
-    @property
-    def model(self) -> builtins.str: ...
-    @property
-    def finish_reason(self) -> typing.Optional[builtins.str]: ...
-    @property
-    def tool_calls(self) -> builtins.list[ToolCall]: ...
-    @property
-    def usage(self) -> typing.Optional[TokenUsage]: ...
-    @property
-    def cost(self) -> typing.Optional[builtins.float]: ...
-    @property
-    def timing(self) -> typing.Optional[RequestTiming]: ...
-    @property
-    def images(self) -> builtins.list[GeneratedImage]: ...
-    @property
-    def audio(self) -> builtins.list[GeneratedAudio]: ...
-    @property
-    def videos(self) -> builtins.list[GeneratedVideo]: ...
-    @property
-    def metadata_extra(self) -> dict[str, typing.Any]: ...
-    @property
-    def reasoning(self) -> typing.Optional[ReasoningTrace]:
-        r"""
-        Reasoning trace from models that expose one (Anthropic extended thinking,
-        DeepSeek R1, OpenAI o-series, xAI Grok, Gemini thoughts).
-        """
-    @property
-    def citations(self) -> builtins.list[Citation]:
-        r"""
-        Web/document citations backing the model's statement (Perplexity,
-        Gemini grounding, Anthropic web search).
-        """
-    @property
-    def artifacts(self) -> builtins.list[Artifact]:
-        r"""
-        Typed inline artifacts extracted from the response (SVG, code blocks,
-        markdown, mermaid, html, latex, json, custom).
-        """
-    def finish_reason_normalized(self) -> typing.Optional[FinishReason]:
-        r"""
-        Lazily map the raw provider finish-reason string into a normalized
-        [`FinishReason`].
-        """
-    def __getitem__(self, key: builtins.str) -> typing.Any: ...
-    def keys(self) -> builtins.list[builtins.str]: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -3029,7 +2383,7 @@ class CompletionStream:
     ```
     """
     def __aiter__(self) -> CompletionStream: ...
-    async def __anext__(self) -> CompletionResponse: ...
+    async def __anext__(self) -> ModelResponse: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -3872,7 +3226,7 @@ class DeepSeekProvider:
     r"""
     A DeepSeek provider.
     
-    Standalone class form of `CompletionModel.deepseek(...)`.
+    Standalone class form of `Model.deepseek(...)`.
     """
     @property
     def model_id(self) -> builtins.str: ...
@@ -3880,8 +3234,8 @@ class DeepSeekProvider:
         r"""
         Create a new DeepSeek provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
-    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse: ...
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> DeepSeekProvider:
         r"""
         Set the provider-level default retry config.
@@ -4727,26 +4081,26 @@ class FalProvider:
         Args:
             job: The [`JobHandle`] returned by [`submit`].
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse:
         r"""
         Perform a chat completion via fal-ai/any-llm.
         
         Args:
             messages: A list of ChatMessage objects.
-            options: Optional [`CompletionOptions`] for sampling parameters,
+            options: Optional [`ModelOptions`] for sampling parameters,
                 tools, and response format.
         
         Returns:
-            A CompletionResponse with content, model, tool_calls, usage, etc.
+            A ModelResponse with content, model, tool_calls, usage, etc.
         """
-    async def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Any, options: typing.Optional[CompletionOptions] = None) -> None:
+    async def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Any, options: typing.Optional[ModelOptions] = None) -> None:
         r"""
         Stream a chat completion, calling a callback for each chunk.
         
         Args:
             messages: A list of ChatMessage objects.
             on_chunk: Callback function receiving each chunk as a dict.
-            options: Optional [`CompletionOptions`] for sampling parameters,
+            options: Optional [`ModelOptions`] for sampling parameters,
                 tools, and response format.
         """
     def with_retry_config(self, config: RetryConfig) -> FalProvider:
@@ -4762,17 +4116,17 @@ class FalProvider:
 @typing.final
 class FallbackModel:
     r"""
-    A `CompletionModel` that tries a primary provider and falls back to a
+    A `Model` that tries a primary provider and falls back to a
     secondary on retryable failures.
     
     Standalone equivalent of
-    `CompletionModel.with_fallback([primary, fallback])` for the common
+    `Model.with_fallback([primary, fallback])` for the common
     two-provider case. For chains of three or more providers use
-    `CompletionModel.with_fallback(...)`.
+    `Model.with_fallback(...)`.
     
     Example:
-        >>> primary = CompletionModel.openai()
-        >>> backup = CompletionModel.anthropic()
+        >>> primary = Model.openai()
+        >>> backup = Model.anthropic()
         >>> model = FallbackModel(primary, backup)
         >>> response = await model.complete([ChatMessage.user("Hi")])
     """
@@ -4781,7 +4135,7 @@ class FallbackModel:
         r"""
         The model id reported by the primary provider.
         """
-    def __new__(cls, primary: CompletionModel, fallback: CompletionModel) -> FallbackModel:
+    def __new__(cls, primary: Model, fallback: Model) -> FallbackModel:
         r"""
         Build a fallback chain from a primary and a fallback provider.
         
@@ -4790,16 +4144,16 @@ class FallbackModel:
             fallback: The provider to invoke when `primary` fails with
                 a retryable error.
         """
-    def as_model(self) -> CompletionModel:
+    def as_model(self) -> Model:
         r"""
-        Convert this decorator into a `CompletionModel`.
+        Convert this decorator into a `Model`.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse:
         r"""
         Perform a chat completion against the primary provider, falling
         back to the secondary on retryable failures.
         """
-    def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Optional[typing.Any] = None, options: typing.Optional[CompletionOptions] = None) -> typing.Any:
+    def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Optional[typing.Any] = None, options: typing.Optional[ModelOptions] = None) -> typing.Any:
         r"""
         Stream a chat completion against the primary provider, falling
         back to the secondary on retryable failures during the initial
@@ -4956,7 +4310,7 @@ class FireworksProvider:
     r"""
     A Fireworks AI provider for chat completions and embeddings.
     
-    Standalone class form of `CompletionModel.fireworks(...)`.
+    Standalone class form of `Model.fireworks(...)`.
     """
     @property
     def model_id(self) -> builtins.str: ...
@@ -4964,8 +4318,8 @@ class FireworksProvider:
         r"""
         Create a new Fireworks AI provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
-    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse: ...
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> CompletionStream: ...
     def embedding_model(self) -> EmbeddingModel:
         r"""
         Build a Fireworks AI [`EmbeddingModel`] sharing this provider's API key.
@@ -5023,7 +4377,7 @@ class GeminiProvider:
     r"""
     A Google Gemini provider.
     
-    This is the standalone class form of `CompletionModel.gemini(...)`.
+    This is the standalone class form of `Model.gemini(...)`.
     
     Example:
         >>> from blazen import GeminiProvider, ProviderOptions, ChatMessage
@@ -5039,8 +4393,8 @@ class GeminiProvider:
         Args:
             options: Optional [`ProviderOptions`] with api_key, base_url, model.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
-    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse: ...
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> GeminiProvider:
         r"""
         Set the provider-level default retry config.
@@ -5169,7 +4523,7 @@ class GroqProvider:
     r"""
     A Groq provider — ultra-fast LPU inference for popular open models.
     
-    Standalone class form of `CompletionModel.groq(...)`.
+    Standalone class form of `Model.groq(...)`.
     """
     @property
     def model_id(self) -> builtins.str: ...
@@ -5177,8 +4531,8 @@ class GroqProvider:
         r"""
         Create a new Groq provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
-    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse: ...
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> GroqProvider:
         r"""
         Set the provider-level default retry config.
@@ -6436,26 +5790,26 @@ class LlamaCppProvider:
                 device, quantization, context length, GPU layer count, and
                 cache directory.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse:
         r"""
         Perform a chat completion.
         
         Args:
             messages: A list of :class:`ChatMessage` objects.
-            options: Optional :class:`CompletionOptions` for sampling params.
+            options: Optional :class:`ModelOptions` for sampling params.
         
         Returns:
-            A :class:`CompletionResponse` with content, model, usage,
+            A :class:`ModelResponse` with content, model, usage,
             finish_reason, and timing.
         """
-    async def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Any, options: typing.Optional[CompletionOptions] = None) -> None:
+    async def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Any, options: typing.Optional[ModelOptions] = None) -> None:
         r"""
         Stream a chat completion, calling a callback for each chunk.
         
         Args:
             messages: A list of :class:`ChatMessage` objects.
             on_chunk: Callback function receiving each chunk as a dict.
-            options: Optional :class:`CompletionOptions` for sampling params.
+            options: Optional :class:`ModelOptions` for sampling params.
         """
     async def load(self) -> None:
         r"""
@@ -7065,8 +6419,8 @@ class Middleware:
     Abstract base class for Python-implemented LLM middleware.
     
     Subclass and override `apply(model, messages, options)` (async) to
-    add custom behaviour around a `CompletionModel`. The `model`
-    argument is the inner `CompletionModel` produced by the rest of the
+    add custom behaviour around a `Model`. The `model`
+    argument is the inner `Model` produced by the rest of the
     middleware chain; call `await model.complete(messages, options)` to
     forward the request, optionally inspecting or modifying the result
     before returning it.
@@ -7080,7 +6434,7 @@ class Middleware:
         ...         return response
         >>>
         >>> stack = MiddlewareStack().layer(LoggingMiddleware())
-        >>> wrapped = stack.apply(CompletionModel.openai())
+        >>> wrapped = stack.apply(Model.openai())
     """
     def __new__(cls) -> Middleware: ...
     def apply(self, model: typing.Any, messages: typing.Any, options: typing.Optional[typing.Any] = None) -> typing.Any:
@@ -7091,13 +6445,13 @@ class Middleware:
         raises `NotImplementedError`.
         
         Args:
-            model: The inner `CompletionModel` to forward to.
+            model: The inner `Model` to forward to.
             messages: The list of `ChatMessage` objects from the request.
-            options: Optional `CompletionOptions` (sampling parameters,
+            options: Optional `ModelOptions` (sampling parameters,
                 tools, response format).
         
         Returns:
-            A `CompletionResponse`.
+            A `ModelResponse`.
         """
 
 @typing.final
@@ -7108,14 +6462,14 @@ class MiddlewareStack:
     Layers are added with `layer()` (or the convenience helpers
     `with_retry()` / `with_cache()`); the first layer added becomes the
     outermost wrapper at `apply_to()` time. Calling `apply_to(model)`
-    returns a new `CompletionModel` that runs every layer around the
+    returns a new `Model` that runs every layer around the
     supplied model.
     
     Example:
         >>> stack = (MiddlewareStack()
         ...     .with_retry(RetryConfig(max_retries=5))
         ...     .with_cache(CacheConfig(ttl_seconds=600)))
-        >>> wrapped = stack.apply(CompletionModel.openai())
+        >>> wrapped = stack.apply(Model.openai())
     """
     def __new__(cls) -> MiddlewareStack:
         r"""
@@ -7144,10 +6498,10 @@ class MiddlewareStack:
         r"""
         Convenience: add a `CacheMiddleware` layer.
         """
-    def apply(self, model: CompletionModel) -> CompletionModel:
+    def apply(self, model: Model) -> Model:
         r"""
         Apply every registered layer to `model` and return the fully
-        wrapped `CompletionModel`.
+        wrapped `Model`.
         
         The first layer added becomes the outermost wrapper. Layers are
         applied in reverse insertion order so that the first layer added
@@ -7164,7 +6518,7 @@ class MistralProvider:
     r"""
     A Mistral AI provider.
     
-    Standalone class form of `CompletionModel.mistral(...)`.
+    Standalone class form of `Model.mistral(...)`.
     """
     @property
     def model_id(self) -> builtins.str: ...
@@ -7172,8 +6526,8 @@ class MistralProvider:
         r"""
         Create a new Mistral provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
-    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse: ...
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> MistralProvider:
         r"""
         Set the provider-level default retry config.
@@ -7194,7 +6548,7 @@ class MistralRsOptions:
     
     Example:
         >>> opts = MistralRsOptions("mistralai/Mistral-7B-Instruct-v0.3")
-        >>> model = CompletionModel.mistralrs(options=opts)
+        >>> model = Model.mistralrs(options=opts)
     """
     @property
     def model_id(self) -> builtins.str: ...
@@ -7265,11 +6619,11 @@ class MistralRsProvider:
         Args:
             options: Required :class:`MistralRsOptions` with the model id.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse:
         r"""
         Perform a chat completion.
         """
-    async def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Any, options: typing.Optional[CompletionOptions] = None) -> None:
+    async def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Any, options: typing.Optional[ModelOptions] = None) -> None:
         r"""
         Stream a chat completion, calling a callback for each chunk.
         """
@@ -7363,6 +6717,387 @@ class Modality:
         """
     def __repr__(self) -> builtins.str: ...
     def __eq__(self, other: Modality) -> builtins.bool: ...
+
+class Model:
+    r"""
+    A chat completion model.
+    
+    Use the static constructor methods to create a model for a specific
+    provider, then call `complete()` to generate responses.
+    
+    Example:
+        >>> model = Model.openai()
+        >>> model = Model.anthropic()
+        >>> model = Model.openrouter()
+        >>>
+        >>> response = await model.complete([
+        ...     ChatMessage.user("What is 2+2?")
+        ... ])
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        Get the model ID.
+        
+        Returns:
+            The string identifier of the model.
+        """
+    def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> Model:
+        r"""
+        Create a custom completion model by subclassing.
+        
+        Override ``complete()`` and optionally ``stream()`` in your
+        subclass to implement a custom provider.
+        
+        Args:
+            model_id: The model identifier.
+            context_length: Maximum context window in tokens.
+            base_url: Base URL for HTTP-based providers.
+            pricing: Optional pricing information.
+            memory_estimate_bytes: Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise).
+            max_output_tokens: Maximum output tokens the model supports.
+        `__new__` for `Model`. PyO3's `#[new]` is the `__new__`
+        slot; when a Python subclass like
+        `class MockLLM(Model): def __init__(self): super().__init__(model_id=...)`
+        is instantiated, Python calls `MockLLM.__new__(MockLLM, *outer_args)`.
+        To let arbitrary subclass `__init__` signatures (positional or keyword)
+        flow through without erroring at `__new__` time, we accept `*args,
+        **kwargs` here and ignore them -- the real configuration work happens
+        in `__init__` below.
+        """
+    def __init__(self, *, model_id: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None, max_output_tokens: typing.Optional[builtins.int] = None) -> None:
+        r"""
+        Subclass-friendly `__init__`. PyO3's `#[new]` only implements
+        `__new__`; without an `__init__` here, a Python subclass that calls
+        `super().__init__(model_id=..., context_length=...)` falls through to
+        `object.__init__` and raises ``TypeError``. We accept the same typed
+        keyword arguments the constructor documents and re-populate
+        ``self.config`` so subclasses see the values they passed.
+        """
+    @staticmethod
+    def openai(*, options: typing.Optional[ProviderOptions] = None) -> Model:
+        r"""
+        Create an OpenAI provider.
+        
+        Args:
+            options: Optional typed ``ProviderOptions`` object.
+        """
+    @staticmethod
+    def anthropic(*, options: typing.Optional[ProviderOptions] = None) -> Model:
+        r"""
+        Create an Anthropic provider.
+        
+        Args:
+            options: Optional typed ``ProviderOptions`` object.
+        """
+    @staticmethod
+    def gemini(*, options: typing.Optional[ProviderOptions] = None) -> Model:
+        r"""
+        Create a Google Gemini provider.
+        
+        Args:
+            options: Optional typed ``ProviderOptions`` object.
+        """
+    @staticmethod
+    def azure(*, options: AzureOptions) -> Model:
+        r"""
+        Create an Azure OpenAI provider.
+        
+        Args:
+            options: Typed ``AzureOptions`` object with required
+                ``resource_name`` and ``deployment_name``, plus optional
+                ``api_version``.
+        """
+    @staticmethod
+    def openrouter(*, options: typing.Optional[ProviderOptions] = None) -> Model:
+        r"""
+        Create an OpenRouter provider.
+        
+        Args:
+            options: Optional typed ``ProviderOptions`` object.
+        """
+    @staticmethod
+    def groq(*, options: typing.Optional[ProviderOptions] = None) -> Model:
+        r"""
+        Create a Groq provider.
+        
+        Args:
+            options: Optional typed ``ProviderOptions`` object.
+        """
+    @staticmethod
+    def together(*, options: typing.Optional[ProviderOptions] = None) -> Model:
+        r"""
+        Create a Together AI provider.
+        
+        Args:
+            options: Optional typed ``ProviderOptions`` object.
+        """
+    @staticmethod
+    def mistral(*, options: typing.Optional[ProviderOptions] = None) -> Model:
+        r"""
+        Create a Mistral provider.
+        
+        Args:
+            options: Optional typed ``ProviderOptions`` object.
+        """
+    @staticmethod
+    def deepseek(*, options: typing.Optional[ProviderOptions] = None) -> Model:
+        r"""
+        Create a DeepSeek provider.
+        
+        Args:
+            options: Optional typed ``ProviderOptions`` object.
+        """
+    @staticmethod
+    def fireworks(*, options: typing.Optional[ProviderOptions] = None) -> Model:
+        r"""
+        Create a Fireworks AI provider.
+        
+        Args:
+            options: Optional typed ``ProviderOptions`` object.
+        """
+    @staticmethod
+    def perplexity(*, options: typing.Optional[ProviderOptions] = None) -> Model:
+        r"""
+        Create a Perplexity provider.
+        
+        Args:
+            options: Optional typed ``ProviderOptions`` object.
+        """
+    @staticmethod
+    def xai(*, options: typing.Optional[ProviderOptions] = None) -> Model:
+        r"""
+        Create an xAI (Grok) provider.
+        
+        Args:
+            options: Optional typed ``ProviderOptions`` object.
+        """
+    @staticmethod
+    def cohere(*, options: typing.Optional[ProviderOptions] = None) -> Model:
+        r"""
+        Create a Cohere provider.
+        
+        Args:
+            options: Optional typed ``ProviderOptions`` object.
+        """
+    @staticmethod
+    def bedrock(*, options: BedrockOptions) -> Model:
+        r"""
+        Create an AWS Bedrock provider.
+        
+        Args:
+            options: Typed ``BedrockOptions`` object with required ``region``
+                and optional ``model``.
+        """
+    @staticmethod
+    def ollama(host: builtins.str, port: builtins.int, model: builtins.str) -> Model:
+        r"""
+        Build a `Model` for an Ollama server.
+        
+        Equivalent to constructing an OpenAI-compatible provider with
+        `base_url = format!("http://{host}:{port}/v1")` and no API key.
+        
+        Args:
+            host: Hostname or IP (e.g. `"localhost"`, `"192.168.1.50"`).
+            port: TCP port (Ollama default is 11434).
+            model: Model identifier loaded on the server (e.g. `"llama3.1"`).
+        """
+    @staticmethod
+    def lm_studio(host: builtins.str, port: builtins.int, model: builtins.str) -> Model:
+        r"""
+        Build a `Model` for an LM Studio server.
+        
+        Args:
+            host: Hostname or IP.
+            port: TCP port (LM Studio default is 1234).
+            model: Model identifier loaded on the server.
+        """
+    @staticmethod
+    def openai_compat(provider_id: builtins.str, config: OpenAiCompatConfig) -> Model:
+        r"""
+        Build a `Model` from an arbitrary OpenAI-compatible config.
+        
+        Use this for OpenAI-compatible servers that aren't pre-configured by
+        the `ollama` / `lm_studio` helpers (vLLM, llama.cpp's server, TGI, or
+        hosted OpenAI-compat services).
+        """
+    @staticmethod
+    def custom(host_object: typing.Any, provider_id: typing.Optional[builtins.str] = None) -> Model:
+        r"""
+        Build a `Model` backed by a Python host object that implements
+        `complete` (and optionally `stream`).
+        
+        Use this for fully-custom protocols where the framework can't help with
+        the wire format. The host object's `complete(request)` async method will
+        be invoked with a serialized `ModelRequest`.
+        
+        Args:
+            host_object: A Python class instance with async `complete` method.
+            provider_id: Optional short identifier for logging.
+        """
+    @staticmethod
+    def fal(*, options: typing.Optional[FalOptions] = None) -> Model:
+        r"""
+        Create a fal.ai provider.
+        
+        Args:
+            options: Optional typed ``FalOptions`` object for selecting the
+                model, endpoint, enterprise tier, and auto-routing. Defaults to
+                the OpenAI-chat endpoint
+                (``openrouter/router/openai/v1/chat/completions``).
+        """
+    def with_retry(self, config: typing.Optional[RetryConfig] = None) -> Model:
+        r"""
+        Wrap this model with automatic retry on transient failures.
+        
+        Returns a new Model that retries on rate limits,
+        timeouts, and server errors with exponential backoff.
+        
+        Args:
+            config: Optional typed ``RetryConfig`` object. Defaults to
+                ``RetryConfig()`` (3 retries, 1s initial, 30s max).
+        
+        Returns:
+            A new Model with retry behaviour.
+        
+        Example:
+            >>> model = Model.openai(options=ProviderOptions(api_key="sk-...")).with_retry(RetryConfig(max_retries=5))
+        """
+    @staticmethod
+    def with_fallback(models: typing.Sequence[Model]) -> Model:
+        r"""
+        Create a fallback model that tries multiple providers in order.
+        
+        When the first provider fails with a retryable error, the request
+        is forwarded to the next provider. Non-retryable errors (auth,
+        validation) short-circuit immediately.
+        
+        Args:
+            models: A list of Model instances to try in order.
+        
+        Returns:
+            A new Model that falls back through the providers.
+        
+        Example:
+            >>> primary = Model.openai(options=ProviderOptions(api_key="sk-..."))
+            >>> backup = Model.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
+            >>> model = Model.with_fallback([primary, backup])
+        """
+    def with_cache(self, config: typing.Optional[CacheConfig] = None) -> Model:
+        r"""
+        Wrap this model with response caching.
+        
+        Repeated identical requests are served from an in-memory cache
+        without hitting the underlying provider. Streaming requests are
+        never cached.
+        
+        Args:
+            config: Optional typed ``CacheConfig`` object. Defaults to
+                ``CacheConfig()`` (content-hash strategy, 300s TTL, 1000 entries).
+        
+        Returns:
+            A new Model with caching enabled.
+        
+        Example:
+            >>> model = Model.openai(options=ProviderOptions(api_key="sk-...")).with_cache(CacheConfig(ttl_seconds=600))
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse:
+        r"""
+        Perform a chat completion.
+        
+        Args:
+            messages: A list of ChatMessage objects.
+            options: Optional ModelOptions for sampling parameters,
+                tools, and response format.
+        
+        Returns:
+            A ModelResponse with content, model, tool_calls, usage,
+            and finish_reason attributes.
+        
+        Example:
+            >>> response = await model.complete([
+            ...     ChatMessage.system("You are helpful."),
+            ...     ChatMessage.user("What is 2+2?"),
+            ... ])
+            >>> print(response.content)
+        """
+    def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Optional[typing.Any] = None, options: typing.Optional[ModelOptions] = None) -> typing.Any:
+        r"""
+        Stream a chat completion.
+        
+        Two usage modes are supported:
+        
+        1. **Async iterator** (``on_chunk`` omitted) -- returns a
+           [`CompletionStream`] which can be consumed with ``async for``.
+        2. **Callback** (``on_chunk`` provided) -- returns a coroutine that
+           resolves once the stream is exhausted, invoking ``on_chunk`` once
+           per [`StreamChunk`].
+        
+        Args:
+            messages: A list of ChatMessage objects.
+            on_chunk: Optional callback function receiving each chunk. If
+                omitted, the method returns an async iterator.
+            options: Optional [`ModelOptions`] for sampling parameters,
+                tools, and response format.
+        
+        Example (async iterator):
+            >>> async for chunk in model.stream([ChatMessage.user("Hi!")]):
+            ...     if chunk.delta:
+            ...         print(chunk.delta, end="")
+        
+        Example (callback):
+            >>> def handle_chunk(chunk):
+            ...     if chunk.delta:
+            ...         print(chunk.delta, end="")
+            >>> await model.stream([ChatMessage.user("Hi!")], handle_chunk)
+        """
+    def __repr__(self) -> builtins.str: ...
+    async def load(self) -> None:
+        r"""
+        Explicitly load the model weights into memory / VRAM.
+        
+        For remote providers (OpenAI, Anthropic, fal, etc.) this raises
+        ``NotImplementedError`` -- there is no local model to load.
+        For local providers (mistral.rs, llama.cpp, candle) this triggers
+        the download + load synchronously, so the next inference call
+        does not pay the startup cost.
+        
+        Idempotent: calling ``load`` on an already-loaded model is a no-op
+        that returns immediately.
+        """
+    async def unload(self) -> None:
+        r"""
+        Drop the loaded model and free its memory / VRAM.
+        
+        For remote providers this raises ``NotImplementedError``.
+        For local providers this frees GPU memory so the process can
+        load a different model. Idempotent.
+        """
+    async def is_loaded(self) -> builtins.bool:
+        r"""
+        Whether the model is currently loaded in memory / VRAM.
+        
+        Always returns ``False`` for remote providers (they have no local
+        model to load). Returns the real state for local providers.
+        """
+    async def memory_bytes(self) -> typing.Optional[builtins.int]:
+        r"""
+        Approximate memory footprint in bytes (host RAM if running on CPU,
+        GPU VRAM otherwise). Returns ``None`` for remote providers or for
+        local providers that do not expose memory usage.
+        """
+    @staticmethod
+    def mistralrs(*, options: MistralRsOptions) -> Model:
+        r"""
+        Create a local mistral.rs provider.
+        
+        Runs LLM inference entirely on-device using the mistral.rs engine.
+        No API key is required.
+        
+        Args:
+            options: Typed ``MistralRsOptions`` with required ``model_id``
+                (HuggingFace model ID or local GGUF path).
+        """
 
 @typing.final
 class ModelCache:
@@ -7532,8 +7267,8 @@ class ModelManager:
         
         The `model` argument can be either:
         
-        * A :class:`CompletionModel` produced by a local factory (e.g.
-          ``CompletionModel.mistralrs(...)``), in which case its built-in
+        * A :class:`Model` produced by a local factory (e.g.
+          ``Model.mistralrs(...)``), in which case its built-in
           ``LocalModel`` implementation is used.
         * Any Python object exposing callable ``load`` and ``unload``
           attributes (sync or async). It does *not* need to subclass
@@ -7544,7 +7279,7 @@ class ModelManager:
         
         Args:
             id: A unique identifier for this model.
-            model: A CompletionModel with local model support, or a duck-typed
+            model: A Model with local model support, or a duck-typed
                 object with ``load`` and ``unload`` methods.
             memory_estimate_bytes: Estimated memory footprint in bytes (host
                 RAM if the model targets CPU, GPU VRAM otherwise).
@@ -7719,6 +7454,77 @@ class ModelManager:
         """
 
 @typing.final
+class ModelOptions:
+    r"""
+    Options for a chat completion request.
+    
+    Example:
+        >>> opts = ModelOptions(temperature=0.7, max_tokens=1000)
+        >>> response = await model.complete(messages, opts)
+    """
+    @property
+    def temperature(self) -> typing.Optional[builtins.float]:
+        r"""
+        Sampling temperature (0.0-2.0).
+        """
+    @temperature.setter
+    def temperature(self, value: typing.Optional[builtins.float]) -> None:
+        r"""
+        Sampling temperature (0.0-2.0).
+        """
+    @property
+    def max_tokens(self) -> typing.Optional[builtins.int]:
+        r"""
+        Maximum tokens to generate.
+        """
+    @max_tokens.setter
+    def max_tokens(self, value: typing.Optional[builtins.int]) -> None:
+        r"""
+        Maximum tokens to generate.
+        """
+    @property
+    def top_p(self) -> typing.Optional[builtins.float]:
+        r"""
+        Nucleus sampling parameter (0.0-1.0).
+        """
+    @top_p.setter
+    def top_p(self, value: typing.Optional[builtins.float]) -> None:
+        r"""
+        Nucleus sampling parameter (0.0-1.0).
+        """
+    @property
+    def model(self) -> typing.Optional[builtins.str]:
+        r"""
+        Model override for this request.
+        """
+    @model.setter
+    def model(self, value: typing.Optional[builtins.str]) -> None:
+        r"""
+        Model override for this request.
+        """
+    @property
+    def tools(self) -> typing.Optional[builtins.list[ToolDef]]:
+        r"""
+        Tool definitions for function calling.
+        """
+    @tools.setter
+    def tools(self, value: typing.Optional[typing.Sequence[ToolDef]]) -> None:
+        r"""
+        Tool definitions for function calling.
+        """
+    @property
+    def response_format(self) -> typing.Optional[typing.Any]:
+        r"""
+        JSON schema dict for structured output.
+        """
+    @response_format.setter
+    def response_format(self, value: typing.Optional[typing.Any]) -> None:
+        r"""
+        JSON schema dict for structured output.
+        """
+    def __new__(cls, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, top_p: typing.Optional[builtins.float] = None, model: typing.Optional[builtins.str] = None, tools: typing.Optional[typing.Sequence[ToolDef]] = None, response_format: typing.Optional[typing.Any] = None) -> ModelOptions: ...
+
+@typing.final
 class ModelPricing:
     r"""
     Pricing information for a model.
@@ -7770,6 +7576,128 @@ class ModelRegistry:
         Look up a model by id. Should return a coroutine resolving to an
         optional ``ModelInfo``.
         """
+
+@typing.final
+class ModelRequest:
+    r"""
+    A provider-agnostic chat-completion request.
+    
+    Mirrors [`blazen_llm::ModelRequest`]. Most code paths build the
+    request inline inside ``Model.complete(messages, options)``;
+    `ModelRequest` is the typed alternative for callers that want to
+    inspect, serialize, or hand off the full request body explicitly.
+    
+    Example:
+        >>> req = ModelRequest(
+        ...     messages=[ChatMessage.user("hi")],
+        ...     temperature=0.0,
+        ...     max_tokens=100,
+        ... )
+    """
+    @property
+    def messages(self) -> builtins.list[ChatMessage]:
+        r"""
+        The conversation messages.
+        """
+    @property
+    def tools(self) -> builtins.list[ToolDefinition]:
+        r"""
+        Tool definitions available to the model.
+        """
+    @property
+    def temperature(self) -> typing.Optional[builtins.float]:
+        r"""
+        Sampling temperature, if set.
+        """
+    @property
+    def max_tokens(self) -> typing.Optional[builtins.int]:
+        r"""
+        Maximum output tokens, if set.
+        """
+    @property
+    def top_p(self) -> typing.Optional[builtins.float]:
+        r"""
+        Nucleus sampling parameter, if set.
+        """
+    @property
+    def model(self) -> typing.Optional[builtins.str]:
+        r"""
+        Model override for this request, if set.
+        """
+    @property
+    def modalities(self) -> typing.Optional[builtins.list[builtins.str]]:
+        r"""
+        Output modalities (`["text"]`, `["image", "text"]`, ...), if set.
+        """
+    @property
+    def response_format(self) -> typing.Optional[typing.Any]:
+        r"""
+        JSON schema / response-format hint, returned as a Python dict.
+        """
+    def __new__(cls, *, messages: typing.Sequence[ChatMessage], tools: typing.Optional[typing.Sequence[ToolDefinition]] = None, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, top_p: typing.Optional[builtins.float] = None, response_format: typing.Optional[typing.Any] = None, model: typing.Optional[builtins.str] = None, modalities: typing.Optional[typing.Sequence[builtins.str]] = None) -> ModelRequest:
+        r"""
+        Construct a completion request.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class ModelResponse:
+    r"""
+    The result of a chat completion.
+    
+    Supports both attribute access and dict-style access for backwards
+    compatibility:
+        >>> response.content        # attribute
+        >>> response["content"]     # dict-style
+    """
+    @property
+    def content(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def model(self) -> builtins.str: ...
+    @property
+    def finish_reason(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def tool_calls(self) -> builtins.list[ToolCall]: ...
+    @property
+    def usage(self) -> typing.Optional[TokenUsage]: ...
+    @property
+    def cost(self) -> typing.Optional[builtins.float]: ...
+    @property
+    def timing(self) -> typing.Optional[RequestTiming]: ...
+    @property
+    def images(self) -> builtins.list[GeneratedImage]: ...
+    @property
+    def audio(self) -> builtins.list[GeneratedAudio]: ...
+    @property
+    def videos(self) -> builtins.list[GeneratedVideo]: ...
+    @property
+    def metadata_extra(self) -> dict[str, typing.Any]: ...
+    @property
+    def reasoning(self) -> typing.Optional[ReasoningTrace]:
+        r"""
+        Reasoning trace from models that expose one (Anthropic extended thinking,
+        DeepSeek R1, OpenAI o-series, xAI Grok, Gemini thoughts).
+        """
+    @property
+    def citations(self) -> builtins.list[Citation]:
+        r"""
+        Web/document citations backing the model's statement (Perplexity,
+        Gemini grounding, Anthropic web search).
+        """
+    @property
+    def artifacts(self) -> builtins.list[Artifact]:
+        r"""
+        Typed inline artifacts extracted from the response (SVG, code blocks,
+        markdown, mermaid, html, latex, json, custom).
+        """
+    def finish_reason_normalized(self) -> typing.Optional[FinishReason]:
+        r"""
+        Lazily map the raw provider finish-reason string into a normalized
+        [`FinishReason`].
+        """
+    def __getitem__(self, key: builtins.str) -> typing.Any: ...
+    def keys(self) -> builtins.list[builtins.str]: ...
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class ModelStatus:
@@ -7966,8 +7894,8 @@ class OpenAiCompatProvider:
         Args:
             config: A fully-specified [`OpenAiCompatConfig`].
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
-    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse: ...
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> CompletionStream: ...
     def embedding_model(self, *, model: builtins.str, dimensions: builtins.int) -> EmbeddingModel:
         r"""
         Build an embedding model sharing this provider's configuration.
@@ -8028,7 +7956,7 @@ class OpenAiProvider:
     r"""
     An OpenAI provider for text-to-speech and other compute capabilities.
     
-    For LLM chat completions, use [`CompletionModel.openai`] instead.
+    For LLM chat completions, use [`Model.openai`] instead.
     This class wraps [`blazen_llm::providers::openai::OpenAiProvider`]
     directly and exposes its non-completion capabilities.
     
@@ -8077,7 +8005,7 @@ class OpenRouterProvider:
     r"""
     An OpenRouter provider — gives unified access to 400+ models.
     
-    Standalone class form of `CompletionModel.openrouter(...)`.
+    Standalone class form of `Model.openrouter(...)`.
     """
     @property
     def model_id(self) -> builtins.str: ...
@@ -8085,8 +8013,8 @@ class OpenRouterProvider:
         r"""
         Create a new OpenRouter provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
-    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse: ...
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> OpenRouterProvider:
         r"""
         Set the provider-level default retry config.
@@ -8327,7 +8255,7 @@ class PerplexityProvider:
     r"""
     A Perplexity provider — web-grounded chat with citations.
     
-    Standalone class form of `CompletionModel.perplexity(...)`.
+    Standalone class form of `Model.perplexity(...)`.
     """
     @property
     def model_id(self) -> builtins.str: ...
@@ -8335,8 +8263,8 @@ class PerplexityProvider:
         r"""
         Create a new Perplexity provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
-    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse: ...
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> PerplexityProvider:
         r"""
         Set the provider-level default retry config.
@@ -9147,6 +9075,78 @@ class ProviderConfig:
     def __new__(cls, *, name: typing.Optional[builtins.str] = None, model_id: typing.Optional[builtins.str] = None, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, max_output_tokens: typing.Optional[builtins.int] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None, pricing: typing.Optional[ModelPricing] = None, capabilities: typing.Optional[ModelCapabilities] = None) -> ProviderConfig: ...
     def __repr__(self) -> builtins.str: ...
 
+class ProviderDefaults:
+    r"""
+    Completion-role defaults. Carries the universal ``base`` bag plus
+    completion-specific fields: ``system_prompt``, default ``tools``,
+    default ``response_format``, and the typed ``before_model``
+    hook.
+    
+    All fields are read/write so Python users can tweak them after
+    construction.
+    
+    Example:
+        >>> async def add_user(req):
+        ...     req["metadata"]["origin"] = "blazen-py"
+        >>> defaults = ProviderDefaults(
+        ...     system_prompt="be terse",
+        ...     tools=[my_tool],
+        ...     response_format={"type": "json_object"},
+        ...     before_model=add_user,
+        ... )
+    """
+    @property
+    def base(self) -> BaseProviderDefaults:
+        r"""
+        The universal base defaults bag.
+        """
+    @base.setter
+    def base(self, value: BaseProviderDefaults) -> None: ...
+    @property
+    def system_prompt(self) -> typing.Optional[builtins.str]:
+        r"""
+        Default system prompt, if set.
+        """
+    @system_prompt.setter
+    def system_prompt(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def tools(self) -> builtins.list[ToolDefinition]:
+        r"""
+        Default tool definitions.
+        """
+    @tools.setter
+    def tools(self, value: typing.Sequence[ToolDefinition]) -> None: ...
+    @property
+    def response_format(self) -> typing.Optional[typing.Any]:
+        r"""
+        Default response-format dict, if set.
+        """
+    @response_format.setter
+    def response_format(self, value: typing.Optional[typing.Any]) -> None: ...
+    @property
+    def before_model(self) -> typing.Optional[typing.Any]:
+        r"""
+        Typed completion-level ``before_model`` hook, if set.
+        """
+    @before_completion.setter
+    def before_completion(self, value: typing.Optional[typing.Any]) -> None: ...
+    def __new__(cls, base: typing.Optional[BaseProviderDefaults] = None, system_prompt: typing.Optional[builtins.str] = None, tools: typing.Optional[typing.Sequence[ToolDefinition]] = None, response_format: typing.Optional[typing.Any] = None, before_model: typing.Optional[typing.Any] = None) -> ProviderDefaults:
+        r"""
+        Construct completion defaults.
+        
+        Args:
+            base: Universal [`BaseProviderDefaults`]; defaults to an empty bag.
+            system_prompt: Default system message prepended when the request
+                has none.
+            tools: Default tool definitions appended to the request's tools
+                list (request entries win on name collision).
+            response_format: Default JSON-schema dict applied when the request
+                has no ``response_format``.
+            before_model: Optional ``async def(request: dict) -> None``
+                typed hook applied after the universal ``before_request``.
+        """
+    def __repr__(self) -> builtins.str: ...
+
 class ProviderInfo:
     r"""
     Subclassable ABC that mirrors [`blazen_llm::traits::ProviderInfo`].
@@ -9510,7 +9510,7 @@ class ResponseFormat:
     
     Example:
         >>> rf = ResponseFormat.json_schema("Person", {"type": "object", ...})
-        >>> options = CompletionOptions(response_format=rf.to_dict())
+        >>> options = ModelOptions(response_format=rf.to_dict())
     """
     @property
     def kind(self) -> builtins.str:
@@ -9537,7 +9537,7 @@ class ResponseFormat:
     def to_dict(self) -> dict[str, typing.Any]:
         r"""
         Serialize this response format to a JSON-compatible dict suitable for
-        passing to ``CompletionOptions.response_format``.
+        passing to ``ModelOptions.response_format``.
         """
     @staticmethod
     def text() -> ResponseFormat:
@@ -9553,52 +9553,6 @@ class ResponseFormat:
     def json_schema(name: builtins.str, schema: typing.Any, strict: builtins.bool = True) -> ResponseFormat:
         r"""
         Build a JSON-Schema response format.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class RetryCompletionModel:
-    r"""
-    A `CompletionModel` decorator that retries transient failures with
-    exponential backoff.
-    
-    This is the standalone equivalent of
-    `CompletionModel.with_retry(config)` and exposes the same
-    `complete()` / `stream()` surface.
-    
-    Example:
-        >>> base = CompletionModel.openai()
-        >>> model = RetryCompletionModel(base, RetryConfig(max_retries=5))
-        >>> response = await model.complete([ChatMessage.user("Hi")])
-    """
-    @property
-    def model_id(self) -> builtins.str:
-        r"""
-        The model id reported by the underlying provider.
-        """
-    def __new__(cls, model: CompletionModel, config: typing.Optional[RetryConfig] = None) -> RetryCompletionModel:
-        r"""
-        Wrap a `CompletionModel` with automatic retry on transient failures.
-        
-        Args:
-            model: The `CompletionModel` to wrap.
-            config: Optional typed `RetryConfig`. Defaults to
-                `RetryConfig()` (3 retries, 1s initial, 30s max).
-        """
-    def as_model(self) -> CompletionModel:
-        r"""
-        Convert this decorator into a `CompletionModel` so it can be passed
-        to APIs that expect a `CompletionModel` (`run_agent`,
-        `complete_batch`, further decorators, etc.).
-        """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
-        r"""
-        Perform a chat completion, retrying transient failures.
-        """
-    def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Optional[typing.Any] = None, options: typing.Optional[CompletionOptions] = None) -> typing.Any:
-        r"""
-        Stream a chat completion, retrying the initial connection on
-        transient failures.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -9703,7 +9657,7 @@ class RetryMemoryBackend:
     A `MemoryBackend` decorator that retries transient errors with exponential
     backoff.
     
-    Mirrors :class:`RetryCompletionModel` for `CompletionModel`. Wraps any
+    Mirrors :class:`RetryModel` for `Model`. Wraps any
     `MemoryBackend` (subclass or built-in) and reissues each `put`/`get`/
     `delete`/`list`/`len`/`search_by_bands` call up to `config.max_retries`
     times when the underlying backend raises.
@@ -9727,7 +9681,7 @@ class RetryMemoryBackend:
 @typing.final
 class RetryMiddleware:
     r"""
-    Middleware that wraps a model with `RetryCompletionModel`.
+    Middleware that wraps a model with `RetryModel`.
     
     This is the standalone Python-facing equivalent of
     `blazen_llm::middleware::RetryMiddleware`.
@@ -9740,10 +9694,56 @@ class RetryMiddleware:
             config: Optional typed `RetryConfig`. Defaults to
                 `RetryConfig()` (3 retries, 1s initial, 30s max).
         """
-    def wrap(self, model: CompletionModel) -> CompletionModel:
+    def wrap(self, model: Model) -> Model:
         r"""
-        Apply this middleware directly to a `CompletionModel`, returning
-        a new `CompletionModel` with retry behaviour.
+        Apply this middleware directly to a `Model`, returning
+        a new `Model` with retry behaviour.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class RetryModel:
+    r"""
+    A `Model` decorator that retries transient failures with
+    exponential backoff.
+    
+    This is the standalone equivalent of
+    `Model.with_retry(config)` and exposes the same
+    `complete()` / `stream()` surface.
+    
+    Example:
+        >>> base = Model.openai()
+        >>> model = RetryModel(base, RetryConfig(max_retries=5))
+        >>> response = await model.complete([ChatMessage.user("Hi")])
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        The model id reported by the underlying provider.
+        """
+    def __new__(cls, model: Model, config: typing.Optional[RetryConfig] = None) -> RetryModel:
+        r"""
+        Wrap a `Model` with automatic retry on transient failures.
+        
+        Args:
+            model: The `Model` to wrap.
+            config: Optional typed `RetryConfig`. Defaults to
+                `RetryConfig()` (3 retries, 1s initial, 30s max).
+        """
+    def as_model(self) -> Model:
+        r"""
+        Convert this decorator into a `Model` so it can be passed
+        to APIs that expect a `Model` (`run_agent`,
+        `complete_batch`, further decorators, etc.).
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse:
+        r"""
+        Perform a chat completion, retrying transient failures.
+        """
+    def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Optional[typing.Any] = None, options: typing.Optional[ModelOptions] = None) -> typing.Any:
+        r"""
+        Stream a chat completion, retrying the initial connection on
+        transient failures.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -10396,7 +10396,7 @@ class StreamChunk:
     r"""
     A single chunk from a streaming completion response.
     
-    Yielded by ``CompletionModel.stream(...)`` either via async iteration or
+    Yielded by ``Model.stream(...)`` either via async iteration or
     the ``on_chunk`` callback. Carries an incremental text ``delta`` plus any
     tool calls, reasoning deltas, citations, or artifacts that landed in this
     chunk. The ``finish_reason`` is set on the terminal chunk.
@@ -10501,7 +10501,7 @@ class StructuredOutput:
     r"""
     Subclassable ABC mirroring [`blazen_llm::traits::StructuredOutput`].
     
-    The Rust trait has a blanket implementation for every `CompletionModel`,
+    The Rust trait has a blanket implementation for every `Model`,
     so most callers just call ``model.complete(messages, options)`` with a
     [`ResponseFormat.json_schema(...)`](crate::types::PyResponseFormat) hint.
     This ABC lets a Python provider explicitly opt in to a typed
@@ -10859,7 +10859,7 @@ class TogetherProvider:
     r"""
     A Together AI provider for chat completions and embeddings.
     
-    Standalone class form of `CompletionModel.together(...)`.
+    Standalone class form of `Model.together(...)`.
     """
     @property
     def model_id(self) -> builtins.str: ...
@@ -10867,8 +10867,8 @@ class TogetherProvider:
         r"""
         Create a new Together AI provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
-    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse: ...
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> CompletionStream: ...
     def embedding_model(self) -> EmbeddingModel:
         r"""
         Build a Together AI [`EmbeddingModel`] sharing this provider's API key.
@@ -11014,7 +11014,7 @@ class ToolCall:
     r"""
     A tool invocation requested by the model.
     
-    Returned in ``CompletionResponse.tool_calls`` and ``StreamChunk.tool_calls``.
+    Returned in ``ModelResponse.tool_calls`` and ``StreamChunk.tool_calls``.
     
     Example:
         >>> for tc in response.tool_calls:
@@ -11983,47 +11983,6 @@ class UsageEvent:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
-class UsageRecordingCompletionModel:
-    r"""
-    A `CompletionModel` decorator that emits a `UsageEvent` after each
-    successful `complete` / `stream` call.
-    
-    Mirrors `blazen_llm::usage_recording::UsageRecordingCompletionModel`.
-    
-    Example:
-        >>> base = CompletionModel.openai()
-        >>> emitter = NoopUsageEmitter()
-        >>> model = UsageRecordingCompletionModel(base, emitter, "openai")
-    """
-    @property
-    def model_id(self) -> builtins.str:
-        r"""
-        The model id reported by the underlying provider.
-        """
-    def __new__(cls, model: CompletionModel, emitter: typing.Any, provider_label: builtins.str, run_id: typing.Optional[builtins.str] = None) -> UsageRecordingCompletionModel:
-        r"""
-        Wrap a `CompletionModel` with a usage-recording layer.
-        
-        Args:
-            model: The `CompletionModel` to wrap.
-            emitter: A `UsageEmitter` that receives each emitted event.
-            provider_label: A string used as the `provider` field on each
-                emitted `UsageEvent` (e.g. `"openai"`).
-            run_id: Optional UUID string identifying the workflow run. If
-                omitted, a random UUID is generated.
-        """
-    def as_model(self) -> CompletionModel:
-        r"""
-        Convert this decorator into a `CompletionModel` so it can be passed to
-        APIs that expect a `CompletionModel`.
-        """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse:
-        r"""
-        Perform a chat completion, emitting a `UsageEvent` on success.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
 class UsageRecordingEmbeddingModel:
     r"""
     An `EmbeddingModel` decorator that emits a `UsageEvent` after each
@@ -12060,6 +12019,47 @@ class UsageRecordingEmbeddingModel:
     async def embed(self, texts: typing.Sequence[builtins.str]) -> EmbeddingResponse:
         r"""
         Embed a list of texts, emitting a `UsageEvent` on success.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class UsageRecordingModel:
+    r"""
+    A `Model` decorator that emits a `UsageEvent` after each
+    successful `complete` / `stream` call.
+    
+    Mirrors `blazen_llm::usage_recording::UsageRecordingModel`.
+    
+    Example:
+        >>> base = Model.openai()
+        >>> emitter = NoopUsageEmitter()
+        >>> model = UsageRecordingModel(base, emitter, "openai")
+    """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        The model id reported by the underlying provider.
+        """
+    def __new__(cls, model: Model, emitter: typing.Any, provider_label: builtins.str, run_id: typing.Optional[builtins.str] = None) -> UsageRecordingModel:
+        r"""
+        Wrap a `Model` with a usage-recording layer.
+        
+        Args:
+            model: The `Model` to wrap.
+            emitter: A `UsageEmitter` that receives each emitted event.
+            provider_label: A string used as the `provider` field on each
+                emitted `UsageEvent` (e.g. `"openai"`).
+            run_id: Optional UUID string identifying the workflow run. If
+                omitted, a random UUID is generated.
+        """
+    def as_model(self) -> Model:
+        r"""
+        Convert this decorator into a `Model` so it can be passed to
+        APIs that expect a `Model`.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse:
+        r"""
+        Perform a chat completion, emitting a `UsageEvent` on success.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -12433,7 +12433,7 @@ class WhisperCppProvider:
     @property
     def model_id(self) -> builtins.str:
         r"""
-        Alias for :attr:`provider_id` to mirror :class:`CompletionModel`.
+        Alias for :attr:`provider_id` to mirror :class:`Model`.
         """
     def __new__(cls, *, options: typing.Optional[WhisperOptions] = None) -> WhisperCppProvider:
         r"""
@@ -13180,7 +13180,7 @@ class XaiProvider:
     r"""
     An xAI (Grok) provider.
     
-    Standalone class form of `CompletionModel.xai(...)`.
+    Standalone class form of `Model.xai(...)`.
     """
     @property
     def model_id(self) -> builtins.str: ...
@@ -13188,8 +13188,8 @@ class XaiProvider:
         r"""
         Create a new xAI provider.
         """
-    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionResponse: ...
-    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[CompletionOptions] = None) -> CompletionStream: ...
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse: ...
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> CompletionStream: ...
     def with_retry_config(self, config: RetryConfig) -> XaiProvider:
         r"""
         Set the provider-level default retry config.
@@ -13658,7 +13658,7 @@ def cad_input(name: builtins.str, description: builtins.str) -> typing.Any:
     Schema declaring a single required CAD-file input.
     """
 
-async def complete_batch(model: CompletionModel, requests: typing.Sequence[typing.Sequence[ChatMessage]], *, config: typing.Optional[BatchConfig] = None, concurrency: builtins.int = 0, options: typing.Optional[CompletionOptions] = None) -> BatchResult:
+async def complete_batch(model: Model, requests: typing.Sequence[typing.Sequence[ChatMessage]], *, config: typing.Optional[BatchConfig] = None, concurrency: builtins.int = 0, options: typing.Optional[ModelOptions] = None) -> BatchResult:
     r"""
     Execute multiple completion requests in parallel with bounded concurrency.
     
@@ -13672,14 +13672,14 @@ async def complete_batch(model: CompletionModel, requests: typing.Sequence[typin
         requests: A list of message lists. Each inner list is one conversation.
         concurrency: Maximum number of concurrent requests. ``0`` (the default)
             means unlimited.
-        options: Optional ``CompletionOptions`` applied to every request
+        options: Optional ``ModelOptions`` applied to every request
             (temperature, max_tokens, tools, etc.).
     
     Returns:
         A ``BatchResult`` with per-request responses and aggregated usage/cost.
     
     Example:
-        >>> model = CompletionModel.openai()
+        >>> model = Model.openai()
         >>> conversations = [
         ...     [ChatMessage.user("What is 2+2?")],
         ...     [ChatMessage.user("What is 3+3?")],
@@ -14134,7 +14134,7 @@ def resolve_peer_token() -> typing.Optional[builtins.str]:
     non-empty string, ``None`` otherwise.
     """
 
-async def run_agent(model: CompletionModel, messages: typing.Sequence[ChatMessage], *, tools: typing.Sequence[ToolDef], max_iterations: builtins.int = 10, system_prompt: typing.Optional[builtins.str] = None, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, add_finish_tool: builtins.bool = False, tool_concurrency: builtins.int = 0) -> AgentResult:
+async def run_agent(model: Model, messages: typing.Sequence[ChatMessage], *, tools: typing.Sequence[ToolDef], max_iterations: builtins.int = 10, system_prompt: typing.Optional[builtins.str] = None, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, add_finish_tool: builtins.bool = False, tool_concurrency: builtins.int = 0) -> AgentResult:
     r"""
     Run an agentic tool execution loop.
     
@@ -14157,7 +14157,7 @@ async def run_agent(model: CompletionModel, messages: typing.Sequence[ChatMessag
         AgentResult with the final response and full conversation history.
     """
 
-async def run_agent_with_callback(model: CompletionModel, messages: typing.Sequence[ChatMessage], *, tools: typing.Sequence[ToolDef], config: AgentConfig, callback: typing.Any) -> AgentResult:
+async def run_agent_with_callback(model: Model, messages: typing.Sequence[ChatMessage], *, tools: typing.Sequence[ToolDef], config: AgentConfig, callback: typing.Any) -> AgentResult:
     r"""
     Run the agent loop while invoking a Python callback for every
     [`AgentEvent`].
@@ -14233,23 +14233,23 @@ def video_input(name: builtins.str, description: builtins.str) -> typing.Any:
     Schema declaring a single required video input.
     """
 
-def wrap_with_tracing(model: CompletionModel, provider_name: builtins.str) -> CompletionModel:
+def wrap_with_tracing(model: Model, provider_name: builtins.str) -> Model:
     r"""
-    Wrap a `CompletionModel` with a tracing decorator.
+    Wrap a `Model` with a tracing decorator.
     
     Each call to `complete()` or `stream()` is instrumented with an
     `info_span!` carrying provider name, model id, token usage, duration,
     and finish reason.
     
     Args:
-        model: The CompletionModel to wrap.
+        model: The Model to wrap.
         provider_name: Static label included in every emitted span.
             Note: the underlying Rust type requires a `'static` lifetime,
             so the provided string is leaked for the lifetime of the
             process. Use a small, stable set of labels.
     
     Returns:
-        A new CompletionModel that emits tracing spans on every call.
+        A new Model that emits tracing spans on every call.
     """
 
 # --- Exception hierarchy ---------------------------------------------------

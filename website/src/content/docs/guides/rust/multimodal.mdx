@@ -280,14 +280,14 @@ Tools can return `LlmPayload::Parts { parts: Vec<ContentPart> }` -- a list mixin
 
 ## Resolving handles before the wire call
 
-If your `CompletionRequest` contains messages with `ImageSource::Handle { .. }` content, call `resolve_handles_with` before sending it to a provider that does not understand handles natively:
+If your `ModelRequest` contains messages with `ImageSource::Handle { .. }` content, call `resolve_handles_with` before sending it to a provider that does not understand handles natively:
 
 ```rust
 use blazen_llm::content::InMemoryContentStore;
-use blazen_llm::types::CompletionRequest;
+use blazen_llm::types::ModelRequest;
 
 let store = InMemoryContentStore::new();
-let mut request = CompletionRequest::new("gpt-4o");
+let mut request = ModelRequest::new("gpt-4o");
 // ... attach messages with ImageSource::Handle entries ...
 let replaced = request.resolve_handles_with(&store).await?;
 println!("replaced {replaced} handle(s) with concrete sources");
@@ -298,10 +298,10 @@ For full conversations -- where you also want the model to know which handles ex
 ```rust
 use blazen_llm::content::visibility::prepare_request_with_store;
 use blazen_llm::content::InMemoryContentStore;
-use blazen_llm::types::CompletionRequest;
+use blazen_llm::types::ModelRequest;
 
 let store = InMemoryContentStore::new();
-let mut request = CompletionRequest::new("claude-sonnet-4-5");
+let mut request = ModelRequest::new("claude-sonnet-4-5");
 // ... append user messages that reference handles ...
 let resolved = prepare_request_with_store(&mut request, &store).await?;
 println!("{resolved} handles resolved and announced to the model");

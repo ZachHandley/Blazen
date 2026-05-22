@@ -6,7 +6,7 @@ import UniFFIBlazen
 /// `Blazen` is a namespace of static helpers covering one-time process
 /// lifecycle (`initialize`, `shutdown`) and version introspection.
 /// Everything else lives on dedicated types: `Workflow`, `Pipeline`,
-/// `CompletionModel`, `EmbeddingModel`, `Agent`, the `Providers` factories,
+/// `Model`, `EmbeddingModel`, `Agent`, the `Providers` factories,
 /// etc.
 public enum Blazen {
     /// Run Blazen's one-time process initialisation.

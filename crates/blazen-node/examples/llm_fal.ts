@@ -32,17 +32,17 @@
 
 import {
   Workflow,
-  CompletionModel,
+  Model,
   ChatMessage,
   FalProvider,
   FalLlmEndpoint,
 } from "blazen";
 import type { Context, JsWorkflowResult, JsFalOptions } from "blazen";
 
-// Module-level model instance. CompletionModel is a native Rust object and
+// Module-level model instance. Model is a native Rust object and
 // is NOT JSON-serializable, so it cannot be stored via ctx.set(). We create
 // it once in main() and reference it from steps via this module variable.
-let MODEL: CompletionModel | null = null;
+let MODEL: Model | null = null;
 
 // ---------------------------------------------------------------------------
 // Step 1: Generate a response using fal.ai
@@ -58,7 +58,7 @@ const wf = new Workflow("fal-demo");
 
 wf.addStep("generate", ["blazen::StartEvent"], async (event: Record<string, any>, ctx: Context) => {
   const prompt: string = event.prompt;
-  const model: CompletionModel = MODEL!;
+  const model: Model = MODEL!;
   if (!model) throw new Error("MODEL must be set before running the workflow");
 
   console.log("[generate] Submitting to fal.ai queue...");
@@ -103,7 +103,7 @@ wf.addStep("generate", ["blazen::StartEvent"], async (event: Record<string, any>
 
 wf.addStep("analyze", ["GenerateComplete"], async (event: Record<string, any>, ctx: Context) => {
   const content: string = event.content;
-  const model: CompletionModel = MODEL!;
+  const model: Model = MODEL!;
   if (!model) throw new Error("MODEL must be set before running the workflow");
 
   console.log("\n[analyze] Submitting analysis to fal.ai queue...");
@@ -156,11 +156,11 @@ wf.addStep("analyze", ["GenerateComplete"], async (event: Record<string, any>, c
 // fal.ai auto-routes multimodal chat requests to the matching vision, audio,
 // or video-capable variant of the underlying router (controlled by
 // `FalOptions.autoRouteModality`, which defaults to `true`). The helpers
-// below demonstrate each modality using the same `CompletionModel.fal`
+// below demonstrate each modality using the same `Model.fal`
 // instance.
 // ---------------------------------------------------------------------------
 
-async function demoVision(model: CompletionModel): Promise<void> {
+async function demoVision(model: Model): Promise<void> {
   console.log("\n[vision] Describing an image via fal.ai...");
   const response: Record<string, any> = await model.complete([
     ChatMessage.userImageUrl(
@@ -171,7 +171,7 @@ async function demoVision(model: CompletionModel): Promise<void> {
   console.log(`[vision] ${response.content}`);
 }
 
-async function demoAudio(model: CompletionModel): Promise<void> {
+async function demoAudio(model: Model): Promise<void> {
   console.log("\n[audio] Transcribing/analysing a clip via fal.ai...");
   const response: Record<string, any> = await model.complete([
     ChatMessage.userAudio(
@@ -182,7 +182,7 @@ async function demoAudio(model: CompletionModel): Promise<void> {
   console.log(`[audio] ${response.content}`);
 }
 
-async function demoVideo(model: CompletionModel): Promise<void> {
+async function demoVideo(model: Model): Promise<void> {
   console.log("\n[video] Describing a video clip via fal.ai...");
   const response: Record<string, any> = await model.complete([
     ChatMessage.userVideo(
@@ -198,7 +198,7 @@ async function demoVideo(model: CompletionModel): Promise<void> {
 //
 // These live on `FalProvider` directly. `FalProvider` exposes the full
 // fal.ai compute surface (image / video / audio / 3D / transcription /
-// embeddings / background removal) in addition to the `CompletionModel`
+// embeddings / background removal) in addition to the `Model`
 // interface.
 // ---------------------------------------------------------------------------
 
@@ -247,9 +247,9 @@ if (!falKey) {
 // (openrouter/router/openai/v1/chat/completions), which provides full
 // OpenAI chat-completions semantics: messages array, tool calls, structured
 // outputs, native streaming.
-// CompletionModel is a native Rust object (not JSON-serializable), so we
+// Model is a native Rust object (not JSON-serializable), so we
 // store it as a module-level variable rather than in ctx.set().
-MODEL = CompletionModel.fal({ apiKey: falKey });
+MODEL = Model.fal({ apiKey: falKey });
 
 // You can also pin a specific model, endpoint, or the enterprise tier
 // by passing a `JsFalOptions` as the second argument. The object below is
@@ -261,7 +261,7 @@ const enterpriseOpts: JsFalOptions = {
   enterprise: true,
 };
 void enterpriseOpts; // silence "unused" lint
-// MODEL = CompletionModel.fal({ apiKey: falKey, ...enterpriseOpts });
+// MODEL = Model.fal({ apiKey: falKey, ...enterpriseOpts });
 
 console.log(`Using model: ${MODEL.modelId}`);
 console.log("NOTE: fal.ai uses a queue-based architecture. Each call involves");
@@ -320,7 +320,7 @@ console.log("\n" + "=".repeat(60));
 console.log("MULTIMODAL + COMPUTE DEMOS");
 console.log("=".repeat(60));
 
-const chatModel: CompletionModel = MODEL!;
+const chatModel: Model = MODEL!;
 for (const [name, demo] of [
   ["demoVision", demoVision],
   ["demoAudio", demoAudio],

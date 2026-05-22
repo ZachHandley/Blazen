@@ -20,8 +20,8 @@ from blazen import (
     CacheStrategy,
     ChatMessage,
     ChatWindow,
-    CompletionModel,
-    CompletionOptions,
+    Model,
+    ModelOptions,
     Context,
     Event,
     FalLlmEndpointKind,
@@ -484,7 +484,7 @@ def test_provider_options_typed():
     assert opts.base_url == "https://api.openai.com/v1"
     # Pass to a factory
     opts.api_key = "fake-key"
-    model = CompletionModel.openai(options=opts)
+    model = Model.openai(options=opts)
     assert model is not None
 
 
@@ -513,7 +513,7 @@ def test_azure_options_required_fields():
     assert opts.api_version == "2024-02-15-preview"
     # AzureOptions is required (not optional) for the factory
     opts.api_key = "fake-key"
-    model = CompletionModel.azure(options=opts)
+    model = Model.azure(options=opts)
     assert model is not None
 
 
@@ -539,8 +539,8 @@ def test_image_request_typed():
 
 
 def test_with_retry_constructs():
-    """CompletionModel.with_retry accepts a typed RetryConfig."""
-    model = CompletionModel.openai(options=ProviderOptions(api_key="fake-key"))
+    """Model.with_retry accepts a typed RetryConfig."""
+    model = Model.openai(options=ProviderOptions(api_key="fake-key"))
     config = RetryConfig(
         max_retries=5,
         initial_delay_ms=500,
@@ -556,14 +556,14 @@ def test_with_retry_constructs():
 
 def test_with_retry_no_config_uses_defaults():
     """with_retry with no config falls back to RetryConfig defaults."""
-    model = CompletionModel.openai(options=ProviderOptions(api_key="fake-key"))
+    model = Model.openai(options=ProviderOptions(api_key="fake-key"))
     retried = model.with_retry()
     assert retried is not None
 
 
 def test_with_cache_constructs():
-    """CompletionModel.with_cache accepts a typed CacheConfig."""
-    model = CompletionModel.openai(options=ProviderOptions(api_key="fake-key"))
+    """Model.with_cache accepts a typed CacheConfig."""
+    model = Model.openai(options=ProviderOptions(api_key="fake-key"))
     config = CacheConfig(
         ttl_seconds=60,
         max_entries=100,
@@ -577,21 +577,21 @@ def test_with_cache_constructs():
 
 def test_with_cache_no_config_uses_defaults():
     """with_cache with no config falls back to CacheConfig defaults."""
-    model = CompletionModel.openai(options=ProviderOptions(api_key="fake-key"))
+    model = Model.openai(options=ProviderOptions(api_key="fake-key"))
     cached = model.with_cache()
     assert cached is not None
 
 
 def test_with_fallback_constructs():
-    """CompletionModel.with_fallback chains multiple models."""
-    m1 = CompletionModel.openai(options=ProviderOptions(api_key="fake-key-1"))
-    m2 = CompletionModel.openai(options=ProviderOptions(api_key="fake-key-2"))
-    fallback = CompletionModel.with_fallback([m1, m2])
+    """Model.with_fallback chains multiple models."""
+    m1 = Model.openai(options=ProviderOptions(api_key="fake-key-1"))
+    m2 = Model.openai(options=ProviderOptions(api_key="fake-key-2"))
+    fallback = Model.with_fallback([m1, m2])
     assert fallback is not None
 
 
 # =========================================================================
-# Tools via CompletionOptions (subclassed CompletionModel)
+# Tools via ModelOptions (subclassed Model)
 # =========================================================================
 
 
@@ -659,9 +659,9 @@ def test_tooldef_description_required():
 
 
 def test_completion_options_accepts_single_tooldef():
-    """CompletionOptions accepts a list containing one ToolDef."""
+    """ModelOptions accepts a list containing one ToolDef."""
     tool = _make_search_tool()
-    opts = CompletionOptions(tools=[tool])
+    opts = ModelOptions(tools=[tool])
 
     assert opts.tools is not None
     assert len(opts.tools) == 1
@@ -672,10 +672,10 @@ def test_completion_options_accepts_single_tooldef():
 
 
 def test_completion_options_accepts_multiple_tooldefs():
-    """CompletionOptions accepts multiple ToolDef objects and preserves them."""
+    """ModelOptions accepts multiple ToolDef objects and preserves them."""
     search = _make_search_tool()
     calc = _make_calculator_tool()
-    opts = CompletionOptions(tools=[search, calc])
+    opts = ModelOptions(tools=[search, calc])
 
     assert opts.tools is not None
     assert len(opts.tools) == 2
@@ -689,13 +689,13 @@ def test_completion_options_accepts_multiple_tooldefs():
 
 
 def test_completion_options_typed_tool_list_type():
-    """CompletionOptions.tools contains typed ToolDef objects (not dicts).
+    """ModelOptions.tools contains typed ToolDef objects (not dicts).
 
     This verifies the core change: tools are now typed `ToolDef` objects,
     not untyped dicts. Users should always pass `ToolDef` instances.
     """
     tool = _make_search_tool()
-    opts = CompletionOptions(tools=[tool])
+    opts = ModelOptions(tools=[tool])
 
     assert opts.tools is not None
     assert len(opts.tools) == 1
@@ -706,20 +706,20 @@ def test_completion_options_typed_tool_list_type():
 
 
 def test_completion_options_no_tools_returns_none():
-    """CompletionOptions without tools has tools == None (not empty list)."""
-    opts = CompletionOptions()
+    """ModelOptions without tools has tools == None (not empty list)."""
+    opts = ModelOptions()
     assert opts.tools is None
 
 
 def test_completion_options_empty_tools_list():
-    """CompletionOptions accepts an explicit empty list."""
-    opts = CompletionOptions(tools=[])
+    """ModelOptions accepts an explicit empty list."""
+    opts = ModelOptions(tools=[])
     assert opts.tools == []
 
 
 def test_completion_options_tools_setter_typed():
-    """CompletionOptions.tools setter accepts a new list of ToolDef."""
-    opts = CompletionOptions()
+    """ModelOptions.tools setter accepts a new list of ToolDef."""
+    opts = ModelOptions()
     assert opts.tools is None
 
     tool = _make_search_tool()
@@ -731,16 +731,16 @@ def test_completion_options_tools_setter_typed():
 
 
 def test_completion_options_tools_setter_rejects_dicts():
-    """Assigning dicts to CompletionOptions.tools raises (typed contract)."""
-    opts = CompletionOptions()
+    """Assigning dicts to ModelOptions.tools raises (typed contract)."""
+    opts = ModelOptions()
     with pytest.raises((TypeError, ValueError)):
         opts.tools = [{"name": "x", "description": "d", "parameters": {}}]
 
 
 def test_completion_options_tools_with_other_params():
-    """CompletionOptions preserves tools alongside other parameters."""
+    """ModelOptions preserves tools alongside other parameters."""
     tool = _make_search_tool()
-    opts = CompletionOptions(
+    opts = ModelOptions(
         temperature=0.7,
         max_tokens=1000,
         tools=[tool],
@@ -776,7 +776,7 @@ def test_tooldef_handler_receives_args():
 def test_completion_options_tools_roundtrip_through_options():
     """Tools assigned via constructor survive a get/set cycle on the options."""
     tool = _make_search_tool()
-    opts = CompletionOptions(tools=[tool])
+    opts = ModelOptions(tools=[tool])
 
     # Read back through the property
     retrieved = opts.tools
@@ -790,15 +790,15 @@ def test_completion_options_tools_roundtrip_through_options():
 
 
 # =========================================================================
-# Tools passthrough via CompletionOptions (subclassed CompletionModel)
+# Tools passthrough via ModelOptions (subclassed Model)
 # =========================================================================
 #
-# These tests verify end-to-end that tools supplied via CompletionOptions
-# reach a subclassed CompletionModel's `complete()` override with their
+# These tests verify end-to-end that tools supplied via ModelOptions
+# reach a subclassed Model's `complete()` override with their
 # name/description/parameters/handler fields intact.
 #
 # The subclass uses ``__new__`` to forward keyword arguments to the base
-# ``CompletionModel`` constructor (PyO3's ``#[new]`` maps to Python's
+# ``Model`` constructor (PyO3's ``#[new]`` maps to Python's
 # ``__new__`` slot). Calling ``super().__init__(model_id=...)`` from an
 # overridden ``__init__`` is rejected by ``object.__init__`` because the
 # base class has no ``__init__`` slot -- only ``__new__``.
@@ -806,11 +806,11 @@ def test_completion_options_tools_roundtrip_through_options():
 
 @pytest.mark.asyncio
 async def test_tools_via_completion_options_passthrough():
-    """Tools passed via CompletionOptions reach the subclass override with correct name/description/parameters."""
+    """Tools passed via ModelOptions reach the subclass override with correct name/description/parameters."""
 
     captured = []
 
-    class ToolInspectorLLM(CompletionModel):
+    class ToolInspectorLLM(Model):
         def __new__(cls):
             return super().__new__(cls, model_id="tool-inspector")
 
@@ -851,7 +851,7 @@ async def test_tools_via_completion_options_passthrough():
         handler=lambda args: {"result": args["a"] + args["b"]},
     )
 
-    opts = CompletionOptions(tools=[search_tool, calc_tool])
+    opts = ModelOptions(tools=[search_tool, calc_tool])
 
     with pytest.raises(RuntimeError, match="inspection-complete"):
         await model.complete([ChatMessage.user("Hi")], options=opts)
@@ -865,11 +865,11 @@ async def test_tools_via_completion_options_passthrough():
 
 @pytest.mark.asyncio
 async def test_tools_none_when_options_has_no_tools():
-    """When CompletionOptions has no tools, options.tools is None in the override."""
+    """When ModelOptions has no tools, options.tools is None in the override."""
 
     captured = {"tools_value": "sentinel"}
 
-    class NoToolsLLM(CompletionModel):
+    class NoToolsLLM(Model):
         def __new__(cls):
             return super().__new__(cls, model_id="no-tools")
 
@@ -881,7 +881,7 @@ async def test_tools_none_when_options_has_no_tools():
             raise RuntimeError("stream-not-used")
 
     model = NoToolsLLM()
-    opts = CompletionOptions(temperature=0.7)
+    opts = ModelOptions(temperature=0.7)
 
     with pytest.raises(RuntimeError, match="done"):
         await model.complete([ChatMessage.user("Hi")], options=opts)
@@ -895,7 +895,7 @@ async def test_tool_parameters_schema_preserved():
 
     captured_params = []
 
-    class ParamsCaptureLLM(CompletionModel):
+    class ParamsCaptureLLM(Model):
         def __new__(cls):
             return super().__new__(cls, model_id="params-capture")
 
@@ -929,7 +929,7 @@ async def test_tool_parameters_schema_preserved():
     )
 
     with pytest.raises(RuntimeError, match="captured"):
-        await model.complete([ChatMessage.user("Hi")], options=CompletionOptions(tools=[tool]))
+        await model.complete([ChatMessage.user("Hi")], options=ModelOptions(tools=[tool]))
 
     assert len(captured_params) == 1
     params = captured_params[0]
@@ -948,7 +948,7 @@ async def test_tool_handler_is_callable_in_override():
     def my_handler(args):
         return {"doubled": args["x"] * 2}
 
-    class HandlerCheckLLM(CompletionModel):
+    class HandlerCheckLLM(Model):
         def __new__(cls):
             return super().__new__(cls, model_id="handler-check")
 
@@ -972,6 +972,6 @@ async def test_tool_handler_is_callable_in_override():
     )
 
     with pytest.raises(RuntimeError, match="done"):
-        await model.complete([ChatMessage.user("Hi")], options=CompletionOptions(tools=[tool]))
+        await model.complete([ChatMessage.user("Hi")], options=ModelOptions(tools=[tool]))
 
     assert handler_results == [{"doubled": 42}]

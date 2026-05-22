@@ -29,9 +29,7 @@ use crate::error::BlazenError;
 use crate::http::{HttpClient, HttpRequest, HttpResponse};
 use crate::retry::RetryConfig;
 use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
-use crate::types::{
-    CompletionRequest, CompletionResponse, Role, StreamChunk, TokenUsage, ToolCall,
-};
+use crate::types::{ModelRequest, ModelResponse, Role, StreamChunk, TokenUsage, ToolCall};
 
 // ---------------------------------------------------------------------------
 // Constants
@@ -202,7 +200,7 @@ impl AzureOpenAiProvider {
     /// Build the JSON request body (same format as `OpenAI`, but without the
     /// `model` field since the deployment determines the model).
     #[allow(clippy::unused_self)]
-    fn build_body(&self, request: &CompletionRequest, stream: bool) -> serde_json::Value {
+    fn build_body(&self, request: &ModelRequest, stream: bool) -> serde_json::Value {
         let mut messages: Vec<serde_json::Value> = Vec::with_capacity(request.messages.len());
         for m in &request.messages {
             let role = match m.role {
@@ -350,11 +348,11 @@ impl AzureOpenAiProvider {
 }
 
 // ---------------------------------------------------------------------------
-// CompletionModel implementation
+// Model implementation
 // ---------------------------------------------------------------------------
 
 #[async_trait]
-impl crate::traits::CompletionModel for AzureOpenAiProvider {
+impl crate::traits::Model for AzureOpenAiProvider {
     fn model_id(&self) -> &str {
         &self.deployment_name
     }
@@ -367,10 +365,7 @@ impl crate::traits::CompletionModel for AzureOpenAiProvider {
         Some(Self::http_client(self))
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         let model_id = request.model.as_deref().unwrap_or(&self.deployment_name);
         let span = tracing::info_span!(
             "llm.complete",
@@ -437,7 +432,7 @@ impl crate::traits::CompletionModel for AzureOpenAiProvider {
             .as_ref()
             .and_then(|u| crate::pricing::compute_cost(&oai.model, u));
 
-        Ok(CompletionResponse {
+        Ok(ModelResponse {
             content: choice.message.content,
             tool_calls,
             reasoning: None,
@@ -457,7 +452,7 @@ impl crate::traits::CompletionModel for AzureOpenAiProvider {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         let model_id = request.model.as_deref().unwrap_or(&self.deployment_name);
@@ -623,16 +618,13 @@ mod tests {
     #[test]
     fn model_id_is_deployment() {
         let provider = AzureOpenAiProvider::new("key", "res", "my-deployment");
-        assert_eq!(
-            crate::traits::CompletionModel::model_id(&provider),
-            "my-deployment"
-        );
+        assert_eq!(crate::traits::Model::model_id(&provider), "my-deployment");
     }
 
     #[test]
     fn build_body_no_model_field() {
         let provider = AzureOpenAiProvider::new("key", "res", "deploy");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]);
+        let request = ModelRequest::new(vec![ChatMessage::user("Hello")]);
 
         let body = provider.build_body(&request, false);
         // Azure doesn't need a "model" field since the deployment determines it.
@@ -643,7 +635,7 @@ mod tests {
     #[test]
     fn build_body_with_options() {
         let provider = AzureOpenAiProvider::new("key", "res", "deploy");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")])
+        let request = ModelRequest::new(vec![ChatMessage::user("Hello")])
             .with_temperature(0.5)
             .with_max_tokens(100);
 
@@ -656,13 +648,12 @@ mod tests {
     #[test]
     fn build_body_with_tools() {
         let provider = AzureOpenAiProvider::new("key", "res", "deploy");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]).with_tools(vec![
-            ToolDefinition {
+        let request =
+            ModelRequest::new(vec![ChatMessage::user("Hello")]).with_tools(vec![ToolDefinition {
                 name: "search".to_owned(),
                 description: "Search".to_owned(),
                 parameters: serde_json::json!({"type": "object"}),
-            },
-        ]);
+            }]);
 
         let body = provider.build_body(&request, false);
         let tools = body["tools"].as_array().unwrap();
@@ -688,7 +679,7 @@ mod tests {
                 },
             ),
         );
-        let request = CompletionRequest::new(vec![tool_msg]);
+        let request = ModelRequest::new(vec![tool_msg]);
         let body = provider.build_body(&request, false);
         let messages = body["messages"].as_array().unwrap();
         assert_eq!(messages.len(), 2);
@@ -701,7 +692,7 @@ mod tests {
     #[test]
     fn test_text_backward_compat() {
         let provider = AzureOpenAiProvider::new("key", "res", "deploy");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]);
+        let request = ModelRequest::new(vec![ChatMessage::user("Hello")]);
 
         let body = provider.build_body(&request, false);
         assert_eq!(body["messages"][0]["content"], "Hello");
@@ -710,7 +701,7 @@ mod tests {
     #[test]
     fn test_build_body_image_url() {
         let provider = AzureOpenAiProvider::new("key", "res", "deploy");
-        let request = CompletionRequest::new(vec![ChatMessage::user_image_url(
+        let request = ModelRequest::new(vec![ChatMessage::user_image_url(
             "What is this?",
             "https://example.com/cat.jpg",
             Some("image/jpeg"),
@@ -731,7 +722,7 @@ mod tests {
     #[test]
     fn test_build_body_base64_image() {
         let provider = AzureOpenAiProvider::new("key", "res", "deploy");
-        let request = CompletionRequest::new(vec![ChatMessage::user_image_base64(
+        let request = ModelRequest::new(vec![ChatMessage::user_image_base64(
             "Describe this",
             "abc123base64data",
             "image/png",
@@ -754,7 +745,7 @@ mod tests {
         use crate::types::{ContentPart, ImageContent, ImageSource};
 
         let provider = AzureOpenAiProvider::new("key", "res", "deploy");
-        let request = CompletionRequest::new(vec![ChatMessage::user_parts(vec![
+        let request = ModelRequest::new(vec![ChatMessage::user_parts(vec![
             ContentPart::Text {
                 text: "First".into(),
             },

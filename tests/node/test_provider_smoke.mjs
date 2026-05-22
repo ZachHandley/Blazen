@@ -8,7 +8,7 @@
 import test from "ava";
 
 import {
-  CompletionModel,
+  Model,
   ChatMessage,
 } from "../../crates/blazen-node/index.js";
 
@@ -18,7 +18,7 @@ const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
 const TOpenAI = OPENAI_API_KEY ? test : test.skip;
 
 TOpenAI("OpenAI smoke tests · completes a basic prompt", async (t) => {
-  const model = CompletionModel.openai({ apiKey: OPENAI_API_KEY });
+  const model = Model.openai({ apiKey: OPENAI_API_KEY });
   const response = await model.complete([
     ChatMessage.user("What is 2+2? Reply with just the number."),
   ]);
@@ -34,7 +34,7 @@ const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY;
 const TAnthropic = ANTHROPIC_API_KEY ? test : test.skip;
 
 TAnthropic("Anthropic smoke tests · completes a basic prompt", async (t) => {
-  const model = CompletionModel.anthropic({ apiKey: ANTHROPIC_API_KEY });
+  const model = Model.anthropic({ apiKey: ANTHROPIC_API_KEY });
   const response = await model.complete([
     ChatMessage.user("What is 2+2? Reply with just the number."),
   ]);
@@ -50,7 +50,7 @@ const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const TGemini = GEMINI_API_KEY ? test : test.skip;
 
 TGemini("Gemini smoke tests · completes a basic prompt", async (t) => {
-  const model = CompletionModel.gemini({ apiKey: GEMINI_API_KEY });
+  const model = Model.gemini({ apiKey: GEMINI_API_KEY });
   const response = await model.complete([
     ChatMessage.user("What is 2+2? Reply with just the number."),
   ]);
@@ -66,7 +66,7 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY;
 const TGroq = GROQ_API_KEY ? test : test.skip;
 
 TGroq("Groq smoke tests · completes a basic prompt", async (t) => {
-  const model = CompletionModel.groq({ apiKey: GROQ_API_KEY });
+  const model = Model.groq({ apiKey: GROQ_API_KEY });
   const response = await model.complete([
     ChatMessage.user("What is 2+2? Reply with just the number."),
   ]);
@@ -82,7 +82,7 @@ const TOGETHER_API_KEY = process.env.TOGETHER_API_KEY;
 const TTogether = TOGETHER_API_KEY ? test : test.skip;
 
 TTogether("Together smoke tests · completes a basic prompt", async (t) => {
-  const model = CompletionModel.together({ apiKey: TOGETHER_API_KEY });
+  const model = Model.together({ apiKey: TOGETHER_API_KEY });
   const response = await model.complete([
     ChatMessage.user("What is 2+2? Reply with just the number."),
   ]);
@@ -98,7 +98,7 @@ const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY;
 const TMistral = MISTRAL_API_KEY ? test : test.skip;
 
 TMistral("Mistral smoke tests · completes a basic prompt", async (t) => {
-  const model = CompletionModel.mistral({ apiKey: MISTRAL_API_KEY });
+  const model = Model.mistral({ apiKey: MISTRAL_API_KEY });
   const response = await model.complete([
     ChatMessage.user("What is 2+2? Reply with just the number."),
   ]);
@@ -114,7 +114,7 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 const TDeepSeek = DEEPSEEK_API_KEY ? test : test.skip;
 
 TDeepSeek("DeepSeek smoke tests · completes a basic prompt", async (t) => {
-  const model = CompletionModel.deepseek({ apiKey: DEEPSEEK_API_KEY });
+  const model = Model.deepseek({ apiKey: DEEPSEEK_API_KEY });
   const response = await model.complete([
     ChatMessage.user("What is 2+2? Reply with just the number."),
   ]);
@@ -130,7 +130,7 @@ const FIREWORKS_API_KEY = process.env.FIREWORKS_API_KEY;
 const TFireworks = FIREWORKS_API_KEY ? test : test.skip;
 
 TFireworks("Fireworks smoke tests · completes a basic prompt", async (t) => {
-  const model = CompletionModel.fireworks({ apiKey: FIREWORKS_API_KEY });
+  const model = Model.fireworks({ apiKey: FIREWORKS_API_KEY });
   const response = await model.complete([
     ChatMessage.user("What is 2+2? Reply with just the number."),
   ]);
@@ -146,7 +146,7 @@ const PERPLEXITY_API_KEY = process.env.PERPLEXITY_API_KEY;
 const TPerplexity = PERPLEXITY_API_KEY ? test : test.skip;
 
 TPerplexity("Perplexity smoke tests · completes a basic prompt", async (t) => {
-  const model = CompletionModel.perplexity({ apiKey: PERPLEXITY_API_KEY });
+  const model = Model.perplexity({ apiKey: PERPLEXITY_API_KEY });
   const response = await model.complete([
     ChatMessage.user("What is 2+2? Reply with just the number."),
   ]);
@@ -162,7 +162,7 @@ const XAI_API_KEY = process.env.XAI_API_KEY;
 const TXai = XAI_API_KEY ? test : test.skip;
 
 TXai("xAI smoke tests · completes a basic prompt", async (t) => {
-  const model = CompletionModel.xai({ apiKey: XAI_API_KEY });
+  const model = Model.xai({ apiKey: XAI_API_KEY });
   const response = await model.complete([
     ChatMessage.user("What is 2+2? Reply with just the number."),
   ]);
@@ -178,7 +178,7 @@ const COHERE_API_KEY = process.env.COHERE_API_KEY;
 const TCohere = COHERE_API_KEY ? test : test.skip;
 
 TCohere("Cohere smoke tests · completes a basic prompt", async (t) => {
-  const model = CompletionModel.cohere({ apiKey: COHERE_API_KEY });
+  const model = Model.cohere({ apiKey: COHERE_API_KEY });
   const response = await model.complete([
     ChatMessage.user("What is 2+2? Reply with just the number."),
   ]);

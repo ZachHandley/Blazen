@@ -23,10 +23,10 @@ type BatchItem interface {
 }
 
 // BatchItemSuccess is the [BatchItem] variant carrying a completed
-// [CompletionResponse]. Slot ordering in [BatchResult.Responses] matches
+// [ModelResponse]. Slot ordering in [BatchResult.Responses] matches
 // the input request slice passed to [CompleteBatch].
 type BatchItemSuccess struct {
-	Response CompletionResponse
+	Response ModelResponse
 }
 
 func (BatchItemSuccess) batchItem() {}
@@ -36,7 +36,7 @@ func (BatchItemSuccess) batchItem() {}
 // BlazenError on the Rust side; the structured variant is flattened to a
 // string at the FFI boundary because nested-enum errors do not survive
 // every UniFFI target language. Callers wanting typed errors should
-// dispatch requests individually via [CompletionModel.Complete].
+// dispatch requests individually via [Model.Complete].
 type BatchItemFailure struct {
 	ErrorMessage string
 }
@@ -112,12 +112,12 @@ func batchResultFromFFI(r uniffiblazen.BatchResult) *BatchResult {
 // before dispatch). Per-request failures surface as [BatchItemFailure]
 // entries inside the returned [BatchResult] and do not produce an
 // error here.
-func CompleteBatch(ctx context.Context, model *CompletionModel, requests []CompletionRequest, maxConcurrency uint32) (*BatchResult, error) {
+func CompleteBatch(ctx context.Context, model *Model, requests []ModelRequest, maxConcurrency uint32) (*BatchResult, error) {
 	ensureInit()
 	if model == nil || model.inner == nil {
 		return nil, &ValidationError{Message: "model is nil or closed"}
 	}
-	ffiReqs := make([]uniffiblazen.CompletionRequest, len(requests))
+	ffiReqs := make([]uniffiblazen.ModelRequest, len(requests))
 	for i, r := range requests {
 		ffiReqs[i] = r.toFFI()
 	}
@@ -151,12 +151,12 @@ func CompleteBatch(ctx context.Context, model *CompletionModel, requests []Compl
 // the distinction between batch-level errors (returned here) versus
 // per-request failures (carried inside [BatchResult.Responses]) are
 // identical to [CompleteBatch].
-func CompleteBatchBlocking(model *CompletionModel, requests []CompletionRequest, maxConcurrency uint32) (*BatchResult, error) {
+func CompleteBatchBlocking(model *Model, requests []ModelRequest, maxConcurrency uint32) (*BatchResult, error) {
 	ensureInit()
 	if model == nil || model.inner == nil {
 		return nil, &ValidationError{Message: "model is nil or closed"}
 	}
-	ffiReqs := make([]uniffiblazen.CompletionRequest, len(requests))
+	ffiReqs := make([]uniffiblazen.ModelRequest, len(requests))
 	for i, r := range requests {
 		ffiReqs[i] = r.toFFI()
 	}

@@ -129,16 +129,16 @@ asyncio.run(main())
 
 ## LLM Integration
 
-Blazen includes a built-in multi-provider LLM client. All providers share the same `CompletionModel` / `ChatMessage` interface. Responses are returned as typed `CompletionResponse` objects.
+Blazen includes a built-in multi-provider LLM client. All providers share the same `Model` / `ChatMessage` interface. Responses are returned as typed `ModelResponse` objects.
 
-### ChatMessage, Role, and CompletionResponse
+### ChatMessage, Role, and ModelResponse
 
 ```python
 import os
-from blazen import CompletionModel, ChatMessage, Role, CompletionResponse, ProviderOptions
+from blazen import Model, ChatMessage, Role, ModelResponse, ProviderOptions
 
-model = CompletionModel.openrouter(options=ProviderOptions(api_key=os.environ["OPENROUTER_API_KEY"], model="openai/gpt-4o"))
-response: CompletionResponse = await model.complete([
+model = Model.openrouter(options=ProviderOptions(api_key=os.environ["OPENROUTER_API_KEY"], model="openai/gpt-4o"))
+response: ModelResponse = await model.complete([
     ChatMessage.system("You are helpful."),
     ChatMessage.user("What is 2+2?"),
 ], temperature=0.7, max_tokens=256)
@@ -205,34 +205,34 @@ src3 = MediaSource.base64(b64_bytes, "image/png")
 
 | Provider | Constructor | Default Model |
 |---|---|---|
-| OpenAI | `CompletionModel.openai(options=ProviderOptions(api_key=key, model="gpt-4o"))` | `gpt-4o` |
-| Anthropic | `CompletionModel.anthropic(options=ProviderOptions(api_key=key, model="claude-sonnet-4-20250514"))` | `claude-sonnet-4-20250514` |
-| Google Gemini | `CompletionModel.gemini(options=ProviderOptions(api_key=key, model="gemini-2.0-flash"))` | `gemini-2.0-flash` |
-| Azure OpenAI | `CompletionModel.azure(options=AzureOptions(api_key=key, resource_name="...", deployment_name="..."))` | (deployment) |
-| OpenRouter | `CompletionModel.openrouter(options=ProviderOptions(api_key=key, model="..."))` | -- |
-| Groq | `CompletionModel.groq(options=ProviderOptions(api_key=key, model="..."))` | -- |
-| Together AI | `CompletionModel.together(options=ProviderOptions(api_key=key, model="..."))` | -- |
-| Mistral | `CompletionModel.mistral(options=ProviderOptions(api_key=key, model="..."))` | -- |
-| DeepSeek | `CompletionModel.deepseek(options=ProviderOptions(api_key=key, model="..."))` | -- |
-| Fireworks | `CompletionModel.fireworks(options=ProviderOptions(api_key=key, model="..."))` | -- |
-| Perplexity | `CompletionModel.perplexity(options=ProviderOptions(api_key=key, model="..."))` | -- |
-| xAI (Grok) | `CompletionModel.xai(options=ProviderOptions(api_key=key, model="..."))` | -- |
-| Cohere | `CompletionModel.cohere(options=ProviderOptions(api_key=key, model="..."))` | -- |
-| AWS Bedrock | `CompletionModel.bedrock(options=BedrockOptions(api_key=key, region="...", model="..."))` | -- |
-| fal.ai | `CompletionModel.fal(options=FalOptions(api_key=key, model="..."))` | -- |
+| OpenAI | `Model.openai(options=ProviderOptions(api_key=key, model="gpt-4o"))` | `gpt-4o` |
+| Anthropic | `Model.anthropic(options=ProviderOptions(api_key=key, model="claude-sonnet-4-20250514"))` | `claude-sonnet-4-20250514` |
+| Google Gemini | `Model.gemini(options=ProviderOptions(api_key=key, model="gemini-2.0-flash"))` | `gemini-2.0-flash` |
+| Azure OpenAI | `Model.azure(options=AzureOptions(api_key=key, resource_name="...", deployment_name="..."))` | (deployment) |
+| OpenRouter | `Model.openrouter(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| Groq | `Model.groq(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| Together AI | `Model.together(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| Mistral | `Model.mistral(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| DeepSeek | `Model.deepseek(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| Fireworks | `Model.fireworks(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| Perplexity | `Model.perplexity(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| xAI (Grok) | `Model.xai(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| Cohere | `Model.cohere(options=ProviderOptions(api_key=key, model="..."))` | -- |
+| AWS Bedrock | `Model.bedrock(options=BedrockOptions(api_key=key, region="...", model="..."))` | -- |
+| fal.ai | `Model.fal(options=FalOptions(api_key=key, model="..."))` | -- |
 
 ### Using LLMs in Workflows
 
 ```python
 import os
-from blazen import Workflow, step, Event, StopEvent, Context, CompletionModel, ChatMessage, ProviderOptions
+from blazen import Workflow, step, Event, StopEvent, Context, Model, ChatMessage, ProviderOptions
 
 class AnswerEvent(Event):
     answer: str
 
 @step
 async def ask_llm(ctx: Context, ev: Event):
-    model = CompletionModel.anthropic(options=ProviderOptions(api_key=os.environ["ANTHROPIC_API_KEY"], model="claude-sonnet-4-20250514"))
+    model = Model.anthropic(options=ProviderOptions(api_key=os.environ["ANTHROPIC_API_KEY"], model="claude-sonnet-4-20250514"))
     response = await model.complete([
         ChatMessage.system("Answer concisely."),
         ChatMessage.user(ev.prompt),
@@ -605,11 +605,11 @@ async def load_model(ctx: Context, ev: NextEvent):
 | `await wf.run(**kwargs)` | Execute the workflow. Returns a `WorkflowHandler`. Kwargs become the `StartEvent` payload. |
 | `WorkflowHandler` | Handle to a running workflow: `await handler.result()`, `async for ev in handler.stream_events()`, `handler.pause()`, `await handler.snapshot()`, `await handler.resume_in_place()`, `await handler.respond_to_input(request_id, response)`, `await handler.abort()`. |
 | `await Workflow.resume(snapshot_json, steps, timeout=None)` | Resume a paused workflow from a JSON snapshot. Returns a `WorkflowHandler`. |
-| `CompletionModel.<provider>(options=ProviderOptions(...))` | LLM provider. Pass a typed options struct (`ProviderOptions`, `AzureOptions`, `BedrockOptions`, or `FalOptions`) via `options=`. Providers: `openai`, `anthropic`, `gemini`, `azure`, `openrouter`, `groq`, `together`, `mistral`, `deepseek`, `fireworks`, `perplexity`, `xai`, `cohere`, `bedrock`, `fal`. |
-| `await model.complete(messages, ...)` | Chat completion. Returns a typed `CompletionResponse`. |
+| `Model.<provider>(options=ProviderOptions(...))` | LLM provider. Pass a typed options struct (`ProviderOptions`, `AzureOptions`, `BedrockOptions`, or `FalOptions`) via `options=`. Providers: `openai`, `anthropic`, `gemini`, `azure`, `openrouter`, `groq`, `together`, `mistral`, `deepseek`, `fireworks`, `perplexity`, `xai`, `cohere`, `bedrock`, `fal`. |
+| `await model.complete(messages, ...)` | Chat completion. Returns a typed `ModelResponse`. |
 | `ChatMessage(role=, content=, parts=)` | Chat message. Constructor with keyword args (role defaults to `"user"`). Static factories: `.system()`, `.user()`, `.assistant()`, `.tool()`, `.user_image_url()`, `.user_image_base64()`, `.user_parts()`. |
 | `Role` | Role enum: `Role.SYSTEM`, `Role.USER`, `Role.ASSISTANT`, `Role.TOOL`. |
-| `CompletionResponse` | Typed response: `.content`, `.model`, `.finish_reason`, `.tool_calls`, `.usage`. Also supports dict-style `response["content"]`. |
+| `ModelResponse` | Typed response: `.content`, `.model`, `.finish_reason`, `.tool_calls`, `.usage`. Also supports dict-style `response["content"]`. |
 | `ToolCall` | Tool call object: `.id`, `.name`, `.arguments`. |
 | `TokenUsage` | Token usage: `.prompt_tokens`, `.completion_tokens`, `.total_tokens`. |
 | `ContentPart` | Multimodal content part: `.text(text=...)`, `.image_url(url=..., media_type=...)`, `.image_base64(data=..., media_type=...)`. |

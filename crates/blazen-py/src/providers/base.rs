@@ -1,16 +1,16 @@
 //! Python wrapper for [`blazen_llm::BaseProvider`].
 //!
-//! Wraps any [`CompletionModel`] together with a
-//! [`PyCompletionProviderDefaults`] that is applied to every completion
+//! Wraps any [`Model`] together with a
+//! [`PyProviderDefaults`] that is applied to every completion
 //! request before delegating. Phase A exposes the *structural* surface:
 //! constructor, chainable builders, and read-only introspection
 //! getters. The actual hook dispatch wiring (running user-supplied
-//! coroutines for `before_request` / `before_completion`) is deferred
+//! coroutines for `before_request` / `before_model`) is deferred
 //! to Phase B; for now the defaults bag stores the Python callables
 //! and propagates them through builders unchanged.
 //!
 //! Once Phase D wires up Python subclassing of `BaseProvider`, the
-//! `inner` slot stays as the user-supplied [`PyCompletionModel`] and a
+//! `inner` slot stays as the user-supplied [`PyModel`] and a
 //! true `BlzBaseProvider` is built on demand.
 
 use std::sync::Arc;
@@ -19,18 +19,18 @@ use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use blazen_llm::ChatMessage;
-use blazen_llm::traits::CompletionModel;
-use blazen_llm::types::CompletionRequest;
+use blazen_llm::traits::Model;
+use blazen_llm::types::ModelRequest;
 
-use crate::providers::completion_model::{PyCompletionModel, arc_from_bound};
-use crate::providers::defaults::PyCompletionProviderDefaults;
+use crate::providers::defaults::PyProviderDefaults;
+use crate::providers::model::{PyModel, arc_from_bound};
 use crate::types::{PyChatMessage, PyToolDefinition};
 
 // ---------------------------------------------------------------------------
 // PyBaseProvider
 // ---------------------------------------------------------------------------
 
-/// Wraps any [`CompletionModel`] with instance-level defaults that are
+/// Wraps any [`Model`] with instance-level defaults that are
 /// applied to every ``complete()`` / ``stream()`` call before delegation.
 ///
 /// Phase A exposes the structural builder surface so foreign-language
@@ -39,8 +39,8 @@ use crate::types::{PyChatMessage, PyToolDefinition};
 /// arrives in Phase B.
 ///
 /// Example:
-///     >>> from blazen import BaseProvider, CompletionModel
-///     >>> inner = CompletionModel.openai()
+///     >>> from blazen import BaseProvider, Model
+///     >>> inner = Model.openai()
 ///     >>> provider = (
 ///     ...     BaseProvider(inner)
 ///     ...     .with_system_prompt("be terse")
@@ -50,13 +50,13 @@ use crate::types::{PyChatMessage, PyToolDefinition};
 #[pyclass(name = "BaseProvider", subclass, from_py_object)]
 pub struct PyBaseProvider {
     /// User-supplied completion model. Held as the original Py wrapper so
-    /// the underlying `Arc<dyn CompletionModel>` (or subclass payload) can
+    /// the underlying `Arc<dyn Model>` (or subclass payload) can
     /// be re-extracted when Phase B/D actually constructs a Rust
     /// [`blazen_llm::BaseProvider`].
-    pub(crate) inner: Py<PyCompletionModel>,
+    pub(crate) inner: Py<PyModel>,
     /// The configured completion-role defaults. Cloned on every builder
     /// step so callers see Rust-style chainable, value-returning methods.
-    pub(crate) defaults: PyCompletionProviderDefaults,
+    pub(crate) defaults: PyProviderDefaults,
 }
 
 impl Clone for PyBaseProvider {
@@ -71,15 +71,15 @@ impl Clone for PyBaseProvider {
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyBaseProvider {
-    /// Wrap a [`CompletionModel`] with instance-level defaults.
+    /// Wrap a [`Model`] with instance-level defaults.
     ///
     /// Args:
-    ///     inner: Any [`CompletionModel`] (built-in factory or subclass).
-    ///     defaults: Optional [`CompletionProviderDefaults`]; defaults to
+    ///     inner: Any [`Model`] (built-in factory or subclass).
+    ///     defaults: Optional [`ProviderDefaults`]; defaults to
     ///         an empty bag.
     #[new]
     #[pyo3(signature = (inner, defaults=None))]
-    fn new(inner: Py<PyCompletionModel>, defaults: Option<PyCompletionProviderDefaults>) -> Self {
+    fn new(inner: Py<PyModel>, defaults: Option<PyProviderDefaults>) -> Self {
         Self {
             inner,
             defaults: defaults.unwrap_or_default(),
@@ -119,15 +119,15 @@ impl PyBaseProvider {
         cloned
     }
 
-    /// Return a clone with the typed ``before_completion`` hook set.
-    fn with_before_completion(&self, hook: Py<PyAny>) -> Self {
+    /// Return a clone with the typed ``before_model`` hook set.
+    fn with_before_model(&self, hook: Py<PyAny>) -> Self {
         let mut cloned = self.clone();
-        cloned.defaults.before_completion = Some(hook);
+        cloned.defaults.before_model = Some(hook);
         cloned
     }
 
     /// Return a clone with the entire defaults bag replaced.
-    fn with_defaults(&self, defaults: PyCompletionProviderDefaults) -> Self {
+    fn with_defaults(&self, defaults: PyProviderDefaults) -> Self {
         let mut cloned = self.clone();
         cloned.defaults = defaults;
         cloned
@@ -139,7 +139,7 @@ impl PyBaseProvider {
 
     /// The currently configured defaults.
     #[getter]
-    fn defaults(&self) -> PyCompletionProviderDefaults {
+    fn defaults(&self) -> PyProviderDefaults {
         self.defaults.clone()
     }
 
@@ -160,7 +160,7 @@ impl PyBaseProvider {
     /// The wrapped completion model's ``provider_id``, if it exposes one.
     ///
     /// Returns ``None`` for built-in providers that don't expose a
-    /// ``provider_id`` attribute (the inner ``CompletionModel`` trait has no
+    /// ``provider_id`` attribute (the inner ``Model`` trait has no
     /// ``provider_id`` method --- it lives on the compute-side
     /// ``ComputeProvider`` trait).
     #[getter]
@@ -182,7 +182,7 @@ impl PyBaseProvider {
 
     /// Return a fresh handle to the wrapped completion model.
     #[getter]
-    fn inner(&self) -> Py<PyCompletionModel> {
+    fn inner(&self) -> Py<PyModel> {
         Python::attach(|py| self.inner.clone_ref(py))
     }
 
@@ -242,10 +242,9 @@ impl PyBaseProvider {
             }
         });
 
-        // Step 2: build the CompletionRequest with the response_format.
+        // Step 2: build the ModelRequest with the response_format.
         let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
-        let mut request =
-            CompletionRequest::new(rust_messages).with_response_format(response_format);
+        let mut request = ModelRequest::new(rust_messages).with_response_format(response_format);
         if let Some(prompt) = self.defaults.system_prompt.clone() {
             // Prepend a system message if none exists already. Matches the
             // behavior of `BaseProvider`'s defaults application path.
@@ -257,16 +256,16 @@ impl PyBaseProvider {
                 let mut new_messages = Vec::with_capacity(request.messages.len() + 1);
                 new_messages.push(ChatMessage::system(prompt));
                 new_messages.append(&mut request.messages);
-                request = CompletionRequest::new(new_messages)
+                request = ModelRequest::new(new_messages)
                     .with_response_format(request.response_format.clone().unwrap_or_default());
             }
         }
 
-        // Step 3: pull a concrete `Arc<dyn CompletionModel>` from the inner
-        // `PyCompletionModel`. Handles built-in providers (direct trait
-        // object) and subclasses (via `PySubclassCompletionModel`).
+        // Step 3: pull a concrete `Arc<dyn Model>` from the inner
+        // `PyModel`. Handles built-in providers (direct trait
+        // object) and subclasses (via `PySubclassModel`).
         let inner_bound = self.inner.bind(py);
-        let model: Arc<dyn CompletionModel> = arc_from_bound(inner_bound);
+        let model: Arc<dyn Model> = arc_from_bound(inner_bound);
         // Keep a handle to the schema class so we can invoke
         // `model_validate` once the response lands.
         let schema_owned: Py<PyAny> = schema.unbind();
@@ -304,7 +303,7 @@ impl PyBaseProvider {
 // trait object directly into a Rust `BaseProvider`. The import path is
 // kept so it surfaces in editor jump-to-definition.
 #[allow(dead_code)]
-fn _phase_b_anchor(_p: &PyBaseProvider) -> Option<Arc<dyn blazen_llm::CompletionModel>> {
+fn _phase_b_anchor(_p: &PyBaseProvider) -> Option<Arc<dyn blazen_llm::Model>> {
     // Phase B/D will populate this from `_p.inner.bind(py).borrow().inner.clone()`
     // and construct a `blazen_llm::BaseProvider` for actual dispatch.
     None

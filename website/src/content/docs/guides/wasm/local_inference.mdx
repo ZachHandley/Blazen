@@ -10,11 +10,11 @@ The Blazen WASM SDK can run AI models entirely in the browser -- no API key requ
 
 1. **Built-in `TractEmbedModel`** -- ONNX embeddings shipped directly inside the SDK, no extra JS dependency.
 2. **transformers.js** -- bring-your-own embedding pipeline via `EmbeddingModel.fromJsHandler()`.
-3. **WebLLM** -- WebGPU-accelerated chat models via `CompletionModel.fromJsHandler()`.
+3. **WebLLM** -- WebGPU-accelerated chat models via `Model.fromJsHandler()`.
 
 ## What is possible
 
-`TractEmbedModel.create()` runs ONNX models inside the WASM module via the [tract](https://github.com/sonos/tract) inference engine. The `EmbeddingModel.fromJsHandler()` and `CompletionModel.fromJsHandler()` factories let you plug any JavaScript inference library into the Blazen pipeline. The model runs on the user's device while Blazen's `Memory`, `CompletionModel.withFallback()`, `withRetry()`, and `withCache()` work exactly the same as they do with hosted APIs.
+`TractEmbedModel.create()` runs ONNX models inside the WASM module via the [tract](https://github.com/sonos/tract) inference engine. The `EmbeddingModel.fromJsHandler()` and `Model.fromJsHandler()` factories let you plug any JavaScript inference library into the Blazen pipeline. The model runs on the user's device while Blazen's `Memory`, `Model.withFallback()`, `withRetry()`, and `withCache()` work exactly the same as they do with hosted APIs.
 
 Use cases:
 
@@ -168,7 +168,7 @@ npm install @blazen/sdk @mlc-ai/web-llm
 ### Usage
 
 ```typescript
-import init, { CompletionModel, ChatMessage } from '@blazen/sdk';
+import init, { Model, ChatMessage } from '@blazen/sdk';
 import * as webllm from '@mlc-ai/web-llm';
 
 await init();
@@ -181,8 +181,8 @@ const engine = await webllm.CreateMLCEngine(
   },
 );
 
-// Wrap it as a Blazen CompletionModel
-const model = CompletionModel.fromJsHandler(
+// Wrap it as a Blazen Model
+const model = Model.fromJsHandler(
   'Llama-3.2-1B-Instruct',
   async (request) => {
     const messages = (request.messages || []).map((m) => ({
@@ -222,14 +222,14 @@ console.log(response.content);
 ### The `fromJsHandler` API
 
 ```typescript
-CompletionModel.fromJsHandler(
+Model.fromJsHandler(
   modelId: string,
-  completeHandler: (request: CompletionRequest) => Promise<CompletionResponse>,
-  streamHandler?: (request: CompletionRequest, onChunk: (chunk: StreamChunk) => void) => Promise<void>
-): CompletionModel
+  completeHandler: (request: ModelRequest) => Promise<ModelResponse>,
+  streamHandler?: (request: ModelRequest, onChunk: (chunk: StreamChunk) => void) => Promise<void>
+): Model
 ```
 
-The `completeHandler` receives a `CompletionRequest`-shaped object and must return a `CompletionResponse`-shaped object. The optional `streamHandler` enables token streaming; if omitted, `model.stream()` falls back to calling `completeHandler` and yielding the result as a single chunk.
+The `completeHandler` receives a `ModelRequest`-shaped object and must return a `ModelResponse`-shaped object. The optional `streamHandler` enables token streaming; if omitted, `model.stream()` falls back to calling `completeHandler` and yielding the result as a single chunk.
 
 ### Practical model sizes
 
@@ -248,30 +248,30 @@ Models at 7B+ parameters require 4+ GB of GPU memory and have cold starts measur
 Not every user has WebGPU. Even those who do may be on low-end hardware or a phone with insufficient memory. The recommended production pattern is to try local inference first and fall back to a cloud API:
 
 ```typescript
-import init, { CompletionModel, ChatMessage } from '@blazen/sdk';
+import init, { Model, ChatMessage } from '@blazen/sdk';
 
 await init();
 
 let localModel;
 try {
   // Try to create local model (WebLLM, etc.)
-  localModel = CompletionModel.fromJsHandler('local', localHandler);
+  localModel = Model.fromJsHandler('local', localHandler);
 } catch {
   // WebGPU not available or model too large
 }
 
-const apiModel = CompletionModel.openrouter(); // reads OPENROUTER_API_KEY
+const apiModel = Model.openrouter(); // reads OPENROUTER_API_KEY
 
 // If local model loaded, try it first; if it fails, use the API.
 // If local model did not load, use the API directly.
 const model = localModel
-  ? CompletionModel.withFallback([localModel, apiModel])
+  ? Model.withFallback([localModel, apiModel])
   : apiModel;
 
 const response = await model.complete([ChatMessage.user('Hello!')]);
 ```
 
-`CompletionModel.withFallback()` is a static method that takes an array of models and tries them in order. If the first model throws a retryable error, the next is tried. Non-retryable errors (auth failures, invalid input) short-circuit.
+`Model.withFallback()` is a static method that takes an array of models and tries them in order. If the first model throws a retryable error, the next is tried. Non-retryable errors (auth failures, invalid input) short-circuit.
 
 ## In-browser RAG
 
@@ -292,7 +292,7 @@ const results = await memory.query("question", 5);
 ### Full RAG pipeline with the built-in embedder
 
 ```typescript
-import init, { Memory, InMemoryBackend, TractEmbedModel, CompletionModel, ChatMessage } from '@blazen/sdk';
+import init, { Memory, InMemoryBackend, TractEmbedModel, Model, ChatMessage } from '@blazen/sdk';
 
 await init();
 
@@ -311,7 +311,7 @@ await memory.upsert([
 async function answerQuestion(question: string) {
   const context = await memory.query(question, 3);
   const contextText = context.map((r) => r.content).join('\n');
-  const llm = CompletionModel.openrouter();
+  const llm = Model.openrouter();
   const response = await llm.complete([
     ChatMessage.system(`Answer using only this context:\n${contextText}`),
     ChatMessage.user(question),
@@ -325,7 +325,7 @@ The embedding + similarity search runs locally. Only the final generation call h
 ### Same pipeline with a transformers.js embedder
 
 ```typescript
-import init, { EmbeddingModel, Memory, InMemoryBackend, CompletionModel, ChatMessage } from '@blazen/sdk';
+import init, { EmbeddingModel, Memory, InMemoryBackend, Model, ChatMessage } from '@blazen/sdk';
 import { pipeline } from '@huggingface/transformers';
 
 await init();

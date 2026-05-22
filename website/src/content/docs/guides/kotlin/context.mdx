@@ -161,7 +161,7 @@ When a step exceeds its budget the engine raises `BlazenException.Timeout`; when
 
 ## Closing native handles
 
-Every UniFFI handle — `Workflow`, `WorkflowBuilder`, `CompletionModel`, `EmbeddingModel`, `Agent`, `Pipeline`, `CheckpointStore` — implements `AutoCloseable`. Use Kotlin's `use { }` block to close them deterministically:
+Every UniFFI handle — `Workflow`, `WorkflowBuilder`, `Model`, `EmbeddingModel`, `Agent`, `Pipeline`, `CheckpointStore` — implements `AutoCloseable`. Use Kotlin's `use { }` block to close them deterministically:
 
 ```kotlin
 WorkflowBuilder("greeter").use { builder ->

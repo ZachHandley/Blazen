@@ -8,7 +8,7 @@ import os
 
 import pytest
 
-from blazen import AgentResult, ChatMessage, CompletionModel, CompletionOptions, ProviderOptions, ToolDef, run_agent
+from blazen import AgentResult, ChatMessage, Model, ModelOptions, ProviderOptions, ToolDef, run_agent
 
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 
@@ -27,7 +27,7 @@ skip_without_key = pytest.mark.skipif(
 @pytest.mark.asyncio
 async def test_streaming_completion():
     """Stream a completion and verify at least one chunk is received."""
-    model = CompletionModel.openrouter(options=ProviderOptions(api_key=OPENROUTER_API_KEY))
+    model = Model.openrouter(options=ProviderOptions(api_key=OPENROUTER_API_KEY))
 
     chunks: list[dict] = []
 
@@ -37,7 +37,7 @@ async def test_streaming_completion():
     await model.stream(
         [ChatMessage.user("Count from 1 to 5.")],
         on_chunk,
-        CompletionOptions(max_tokens=64),
+        ModelOptions(max_tokens=64),
     )
 
     assert len(chunks) > 0, "Expected at least one streamed chunk"
@@ -52,11 +52,11 @@ async def test_streaming_completion():
 @pytest.mark.asyncio
 async def test_structured_output():
     """Request structured JSON output and verify the schema is respected."""
-    model = CompletionModel.openrouter(options=ProviderOptions(api_key=OPENROUTER_API_KEY))
+    model = Model.openrouter(options=ProviderOptions(api_key=OPENROUTER_API_KEY))
 
     response = await model.complete(
         [ChatMessage.user("What is 2+2? Return JSON.")],
-        CompletionOptions(
+        ModelOptions(
             response_format={
                 "type": "json_schema",
                 "json_schema": {
@@ -89,7 +89,7 @@ async def test_structured_output():
 @pytest.mark.asyncio
 async def test_agent_tool_calling():
     """Run the agent loop with a sync tool handler."""
-    model = CompletionModel.openrouter(options=ProviderOptions(api_key=OPENROUTER_API_KEY))
+    model = Model.openrouter(options=ProviderOptions(api_key=OPENROUTER_API_KEY))
 
     def multiply(arguments: dict) -> dict:
         return {"result": arguments["a"] * arguments["b"]}
@@ -130,7 +130,7 @@ async def test_agent_tool_calling():
 @pytest.mark.asyncio
 async def test_agent_async_tool():
     """Run the agent loop with an async tool handler."""
-    model = CompletionModel.openrouter(options=ProviderOptions(api_key=OPENROUTER_API_KEY))
+    model = Model.openrouter(options=ProviderOptions(api_key=OPENROUTER_API_KEY))
 
     async def multiply(arguments: dict) -> dict:
         return {"result": arguments["a"] * arguments["b"]}

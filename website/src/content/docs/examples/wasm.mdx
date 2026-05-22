@@ -25,7 +25,7 @@ A minimal chat interface that runs Blazen entirely in the browser. Tokens stream
   <button id="send">Send</button>
 
   <script type="module">
-    import init, { CompletionModel, ChatMessage } from '@blazen/sdk';
+    import init, { Model, ChatMessage } from '@blazen/sdk';
 
     await init();
 
@@ -36,7 +36,7 @@ A minimal chat interface that runs Blazen entirely in the browser. Tokens stream
 
     // WASM reads OPENROUTER_API_KEY from the runtime env (or `process.env` in Node).
     // In production, proxy through your backend -- never expose keys client-side.
-    const model = CompletionModel.openrouter();
+    const model = Model.openrouter();
 
     send.addEventListener('click', async () => {
       const text = input.value.trim();
@@ -72,7 +72,7 @@ A minimal chat interface that runs Blazen entirely in the browser. Tokens stream
 A serverless API endpoint that uses the WASM SDK with tool calling. Deploy to any platform that supports Node.js (Vercel, AWS Lambda, etc.).
 
 ```typescript
-import init, { CompletionModel, ChatMessage, runAgent } from '@blazen/sdk';
+import init, { Model, ChatMessage, runAgent } from '@blazen/sdk';
 
 let initialized = false;
 
@@ -120,7 +120,7 @@ export default async function handler(req: Request): Promise<Response> {
 
   const { message } = await req.json();
   // Reads OPENAI_API_KEY from process.env.
-  const model = CompletionModel.openai();
+  const model = Model.openai();
 
   const result = await runAgent(
     model,
@@ -150,7 +150,7 @@ Use the WASM SDK inside a Tauri v2 app to run AI features locally without a serv
 
 ```typescript
 // src/lib/ai.ts
-import init, { CompletionModel, ChatMessage, Workflow } from '@blazen/sdk';
+import init, { Model, ChatMessage, Workflow } from '@blazen/sdk';
 
 let ready = false;
 
@@ -168,7 +168,7 @@ export async function summarize(text: string): Promise<string> {
 
   wf.addStep('summarize', ['blazen::StartEvent'], async (event, ctx) => {
     // The WASM SDK reads ANTHROPIC_API_KEY from the runtime environment.
-    const model = CompletionModel.anthropic();
+    const model = Model.anthropic();
     const response = await model.complete([
       ChatMessage.system('Summarize the following text concisely.'),
       ChatMessage.user(event.text),
@@ -190,7 +190,7 @@ export async function chat(
   await ensureInit();
 
   // Reads OPENAI_API_KEY from the environment.
-  const model = CompletionModel.openai();
+  const model = Model.openai();
   const chatMessages = messages.map((m) =>
     m.role === 'user' ? ChatMessage.user(m.content) : ChatMessage.assistant(m.content)
   );
@@ -220,24 +220,24 @@ The WASM binary runs inside the webview's JavaScript context. No Tauri command b
 
 ---
 
-## Custom CompletionModel via `fromJsHandler`
+## Custom Model via `fromJsHandler`
 
-WASM classes cannot be subclassed the way Python or Node classes can -- `wasm-bindgen` forbids it. Instead, the SDK exposes factory methods that accept JS handler functions. `CompletionModel.fromJsHandler` is the WASM equivalent of subclassing.
+WASM classes cannot be subclassed the way Python or Node classes can -- `wasm-bindgen` forbids it. Instead, the SDK exposes factory methods that accept JS handler functions. `Model.fromJsHandler` is the WASM equivalent of subclassing.
 
 ```typescript
 import init, {
   ChatMessage,
-  CompletionModel,
+  Model,
   runAgent,
 } from "@blazen/sdk";
 
 await init();
 
 // Build a custom model by passing a complete handler (and optionally a stream handler).
-const model = CompletionModel.fromJsHandler(
+const model = Model.fromJsHandler(
   "echo-llm",
   async (request) => {
-    // request has the same shape as CompletionRequest.
+    // request has the same shape as ModelRequest.
     const last = [...request.messages].reverse().find((m: any) => m.role === "user");
     return {
       content: `echo: ${last?.content ?? ""}`,
@@ -330,7 +330,7 @@ const music = new MusicProvider("local-musicgen", {
 The WASM `ModelManager` tracks per-pool memory budgets and evicts the least-recently-used model within the same pool when its budget would be exceeded. Because WASM classes cannot be subclassed, the manager takes an explicit `lifecycle` object with `load()` and `unload()` async methods (plus optional `memoryBytes()` and `device()` callbacks for pool routing).
 
 ```typescript
-import init, { CompletionModel, ModelManager } from "@blazen/sdk";
+import init, { Model, ModelManager } from "@blazen/sdk";
 
 await init();
 
@@ -339,8 +339,8 @@ await init();
 const manager = new ModelManager(8);
 
 // Construct models backed by @mlc-ai/web-llm (lazy-loaded at complete-time).
-const llama = CompletionModel.webLlm("Llama-3.1-8B-Instruct-q4f32_1-MLC");
-const qwen = CompletionModel.webLlm("Qwen2.5-7B-Instruct-q4f32_1-MLC");
+const llama = Model.webLlm("Llama-3.1-8B-Instruct-q4f32_1-MLC");
+const qwen = Model.webLlm("Qwen2.5-7B-Instruct-q4f32_1-MLC");
 
 // Each model registers with a lifecycle object. In a real app, this
 // calls into the WebLLM engine to load/unload GPU resources.
@@ -416,7 +416,7 @@ Both methods may return synchronous values too -- the SDK awaits whatever the ca
 ```typescript
 import init, {
   ChatMessage,
-  CompletionModel,
+  Model,
   computeCost,
   lookupPricing,
   registerPricing,
@@ -439,7 +439,7 @@ console.log(`estimated cost: $${cost?.toFixed(6)}`);
 
 // Or route through any model that emits the same modelId -- for example, a
 // custom handler that tags its responses with "my-finetuned-model".
-const model = CompletionModel.fromJsHandler(
+const model = Model.fromJsHandler(
   "my-finetuned-model",
   async (_request) => ({
     content: "…",

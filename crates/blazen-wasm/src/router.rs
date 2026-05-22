@@ -8,7 +8,7 @@ use std::sync::{LazyLock, RwLock};
 
 use serde::{Deserialize, Serialize};
 
-use blazen_llm::CompletionModel;
+use blazen_llm::Model;
 use blazen_llm::error::BlazenError;
 use blazen_llm::http::HttpClient;
 use blazen_llm::providers::anthropic::AnthropicProvider;
@@ -27,7 +27,7 @@ use blazen_llm::providers::openrouter::OpenRouterProvider;
 use blazen_llm::providers::perplexity::PerplexityProvider;
 use blazen_llm::providers::together::TogetherProvider;
 use blazen_llm::providers::xai::XaiProvider;
-use blazen_llm::types::{ChatMessage, CompletionRequest, CompletionResponse};
+use blazen_llm::types::{ChatMessage, ModelRequest, ModelResponse};
 
 use crate::keys::KeyProvider;
 
@@ -229,7 +229,7 @@ impl RouteResponse {
             BlazenError::Validation { .. } => (400, "invalid_request_error"),
             BlazenError::ContentPolicy { .. } => (400, "content_policy_violation"),
             BlazenError::Unsupported { .. } => (400, "unsupported"),
-            BlazenError::Completion(_) => (500, "completion_error"),
+            BlazenError::Model(_) => (500, "model_error"),
             _ => (500, "server_error"),
         };
         Self::error(status, err.to_string(), error_type)
@@ -479,8 +479,8 @@ fn handle_chat_completions(
         return RouteResponse::error(400, "No valid messages provided", "invalid_request_error");
     }
 
-    // Build the blazen-llm CompletionRequest
-    let mut request = CompletionRequest::new(messages).with_model(&model_id);
+    // Build the blazen-llm ModelRequest
+    let mut request = ModelRequest::new(messages).with_model(&model_id);
 
     if let Some(temp) = oai_request.temperature {
         request = request.with_temperature(temp);
@@ -493,7 +493,7 @@ fn handle_chat_completions(
     }
 
     // Resolve and construct the provider
-    let provider: Box<dyn CompletionModel> = match resolve_provider(
+    let provider: Box<dyn Model> = match resolve_provider(
         provider_name,
         &model_id,
         &api_key,
@@ -526,13 +526,13 @@ fn handle_stub(feature: &str) -> RouteResponse {
 // Provider resolution
 // ---------------------------------------------------------------------------
 
-/// Map a provider name to a concrete `CompletionModel` implementation.
+/// Map a provider name to a concrete `Model` implementation.
 fn resolve_provider(
     provider_name: &str,
     model_id: &str,
     api_key: &str,
     http_client: std::sync::Arc<dyn HttpClient>,
-) -> Result<Box<dyn CompletionModel>, RouteResponse> {
+) -> Result<Box<dyn Model>, RouteResponse> {
     match provider_name {
         // Native providers with dedicated API formats
         "openai" => Ok(Box::new(
@@ -649,8 +649,8 @@ fn next_response_id() -> String {
     format!("chatcmpl-wasm-{n}")
 }
 
-/// Map a `CompletionResponse` to the OpenAI-compatible response format.
-fn to_oai_response(model_id: &str, response: &CompletionResponse) -> OaiChatResponse {
+/// Map a `ModelResponse` to the OpenAI-compatible response format.
+fn to_oai_response(model_id: &str, response: &ModelResponse) -> OaiChatResponse {
     OaiChatResponse {
         id: next_response_id(),
         object: "chat.completion".to_owned(),

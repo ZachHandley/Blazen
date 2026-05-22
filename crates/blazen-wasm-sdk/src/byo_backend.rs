@@ -38,7 +38,7 @@
 //!   isLoaded?: () => boolean | Promise<boolean>;
 //!
 //!   /** Required: non-streaming completion. */
-//!   complete(request: CompletionRequest): Promise<CompletionResponse>;
+//!   complete(request: ModelRequest): Promise<ModelResponse>;
 //!
 //!   /**
 //!    * Optional: streaming completion. If absent, `stream()` falls back to
@@ -46,7 +46,7 @@
 //!    * `StreamChunk`-shaped objects.
 //!    */
 //!   streamComplete?(
-//!     request: CompletionRequest,
+//!     request: ModelRequest,
 //!     onChunk: (chunk: StreamChunk) => void,
 //!   ): Promise<void>;
 //!
@@ -74,14 +74,14 @@
 //! # Dispatch flow
 //!
 //! [`JsBackendShim`] holds a clone of the JS object plus extracted method
-//! handles. Inference methods on [`CompletionModel`] / [`EmbeddingModel`]
+//! handles. Inference methods on [`Model`] / [`EmbeddingModel`]
 //! serialize the Rust request via [`serde_wasm_bindgen`], invoke the JS
 //! method through [`js_sys::Function::call*`], await the returned promise
 //! through [`wasm_bindgen_futures::JsFuture`], and deserialize the result.
 //!
 //! Streaming forwards chunks through a Rust-side `Closure` that pushes into
 //! a shared `Vec<StreamChunk>` (same pattern as
-//! [`crate::js_completion::JsCompletionHandler`]).
+//! [`crate::js_model::JsModelHandler`]).
 //!
 //! # Safety
 //!
@@ -99,10 +99,10 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
 use blazen_llm::traits::{
-    AdapterHandle, AdapterMountStrategy, AdapterOptions, AdapterStatus, CompletionModel,
+    AdapterHandle, AdapterMountStrategy, AdapterOptions, AdapterStatus, Model,
     EmbeddingModel, LocalModel,
 };
-use blazen_llm::types::{CompletionRequest, CompletionResponse, EmbeddingResponse, StreamChunk};
+use blazen_llm::types::{ModelRequest, ModelResponse, EmbeddingResponse, StreamChunk};
 use blazen_llm::{BlazenError, Device};
 
 // ---------------------------------------------------------------------------
@@ -222,7 +222,7 @@ async fn await_if_promise(val: JsValue) -> Result<JsValue, JsValue> {
 // ---------------------------------------------------------------------------
 
 /// Adapter that bridges a JS-side [`BlazenJsBackend`]-shaped object to the
-/// Rust trait surface ([`LocalModel`], [`CompletionModel`], and optionally
+/// Rust trait surface ([`LocalModel`], [`Model`], and optionally
 /// [`EmbeddingModel`]).
 ///
 /// Built by [`JsBackendShim::from_js`] which validates the contract once at
@@ -388,8 +388,8 @@ impl JsBackendShim {
 
     async fn complete_impl(
         &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
         let js_req = serde_wasm_bindgen::to_value(&request)
             .map_err(|e| BlazenError::provider("byo_backend", e.to_string()))?;
 
@@ -405,17 +405,17 @@ impl JsBackendShim {
             BlazenError::provider("byo_backend", format!("complete() rejected: {e:?}"))
         })?;
 
-        serde_wasm_bindgen::from_value::<CompletionResponse>(resolved).map_err(|e| {
+        serde_wasm_bindgen::from_value::<ModelResponse>(resolved).map_err(|e| {
             BlazenError::invalid_response(format!(
                 "BYO backend.complete() returned a value that did not deserialize \
-                 to CompletionResponse: {e}"
+                 to ModelResponse: {e}"
             ))
         })
     }
 
     async fn stream_with_handler_impl(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
         handler: &Function,
     ) -> Result<Vec<StreamChunk>, BlazenError> {
         use std::cell::RefCell;
@@ -705,21 +705,21 @@ impl LocalModel for JsBackendShim {
 }
 
 #[async_trait]
-impl CompletionModel for JsBackendShim {
+impl Model for JsBackendShim {
     fn model_id(&self) -> &str {
         &self.model_id
     }
 
     async fn complete(
         &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
         SendFuture(self.complete_impl(request)).await
     }
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         if let Some(handler) = self.stream_complete_fn.as_ref() {
@@ -783,9 +783,9 @@ export interface BlazenJsBackend {
   unload?: () => Promise<void> | void;
   isLoaded?: () => boolean | Promise<boolean>;
 
-  complete(request: CompletionRequest): Promise<CompletionResponse>;
+  complete(request: ModelRequest): Promise<ModelResponse>;
   streamComplete?(
-    request: CompletionRequest,
+    request: ModelRequest,
     onChunk: (chunk: StreamChunk) => void,
   ): Promise<void>;
   embed?(texts: string[]): Promise<Float32Array[] | number[][]>;
@@ -799,11 +799,11 @@ export interface BlazenJsBackend {
 ";
 
 // ---------------------------------------------------------------------------
-// Public WASM constructor — wrap a JS object into a CompletionModel handle.
+// Public WASM constructor — wrap a JS object into a Model handle.
 // ---------------------------------------------------------------------------
 
 /// A `wasm-bindgen`-visible factory that wraps a `BlazenJsBackend` object
-/// and returns a [`crate::completion_model::WasmCompletionModel`] backed by
+/// and returns a [`crate::model::WasmModel`] backed by
 /// the BYO shim. Useful when the caller wants to use BYO outside the
 /// `ModelManager` (e.g. for ad-hoc one-shot completions).
 ///
@@ -812,12 +812,12 @@ export interface BlazenJsBackend {
 /// Returns the underlying [`JsBackendShim::from_js`] error if `backend` is
 /// not a JS object, the required `complete` method is missing or not a
 /// function, or any optional method key is present but not a function.
-#[wasm_bindgen(js_name = "byoBackendAsCompletionModel")]
-pub fn byo_backend_as_completion_model(
+#[wasm_bindgen(js_name = "byoBackendAsModel")]
+pub fn byo_backend_as_model(
     backend: JsValue,
-) -> Result<crate::completion_model::WasmCompletionModel, JsValue> {
-    let shim: Arc<dyn CompletionModel> = Arc::new(JsBackendShim::from_js(backend)?);
-    Ok(crate::completion_model::WasmCompletionModel::from_arc(shim))
+) -> Result<crate::model::WasmModel, JsValue> {
+    let shim: Arc<dyn Model> = Arc::new(JsBackendShim::from_js(backend)?);
+    Ok(crate::model::WasmModel::from_arc(shim))
 }
 
 /// Construct a [`JsBackendShim`] from a JS object. Intended for use by

@@ -1,6 +1,6 @@
 //! Anthropic Messages API provider.
 //!
-//! This module implements [`CompletionModel`] for the Anthropic Messages API.
+//! This module implements [`Model`] for the Anthropic Messages API.
 //! The Anthropic API differs from `OpenAI` in several important ways:
 //!
 //! - Authentication uses the `x-api-key` header (not Bearer auth).
@@ -30,7 +30,7 @@ use crate::http::{ByteStream, HttpClient, HttpRequest, HttpResponse};
 use crate::retry::RetryConfig;
 use crate::traits::{ModelCapabilities, ModelInfo, ModelRegistry};
 use crate::types::{
-    CompletionRequest, CompletionResponse, ContentPart, ImageContent, ImageSource, MessageContent,
+    ContentPart, ImageContent, ImageSource, MessageContent, ModelRequest, ModelResponse,
     ReasoningTrace, Role, StreamChunk, TokenUsage, ToolCall,
 };
 
@@ -368,7 +368,7 @@ impl AnthropicProvider {
     /// Key differences from `OpenAI`:
     /// - System messages are extracted into the top-level `system` field.
     /// - `max_tokens` is always present (required by the API).
-    fn build_body(&self, request: &CompletionRequest, stream: bool) -> serde_json::Value {
+    fn build_body(&self, request: &ModelRequest, stream: bool) -> serde_json::Value {
         let model = request.model.as_deref().unwrap_or(&self.default_model);
 
         // Separate system messages from the conversation messages.
@@ -685,7 +685,7 @@ struct ParsedContent {
 }
 
 /// Walk a list of Anthropic content blocks and split them into the
-/// provider-agnostic pieces consumed by [`CompletionResponse`].
+/// provider-agnostic pieces consumed by [`ModelResponse`].
 ///
 /// Anthropic returns the assistant turn as an array of typed blocks. This
 /// helper concatenates `text` blocks, lifts `tool_use` blocks into
@@ -751,11 +751,11 @@ fn parse_content_blocks(blocks: Vec<ContentBlock>) -> ParsedContent {
 }
 
 // ---------------------------------------------------------------------------
-// CompletionModel implementation
+// Model implementation
 // ---------------------------------------------------------------------------
 
 #[async_trait]
-impl crate::traits::CompletionModel for AnthropicProvider {
+impl crate::traits::Model for AnthropicProvider {
     fn model_id(&self) -> &str {
         &self.default_model
     }
@@ -768,10 +768,7 @@ impl crate::traits::CompletionModel for AnthropicProvider {
         Some(Self::http_client(self))
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         let model_id = request.model.as_deref().unwrap_or(&self.default_model);
         let span = tracing::info_span!(
             "llm.complete",
@@ -824,7 +821,7 @@ impl crate::traits::CompletionModel for AnthropicProvider {
             .as_ref()
             .and_then(|u| crate::pricing::compute_cost(&anthropic.model, u));
 
-        Ok(CompletionResponse {
+        Ok(ModelResponse {
             content,
             tool_calls,
             reasoning,
@@ -844,7 +841,7 @@ impl crate::traits::CompletionModel for AnthropicProvider {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         let model_id = request.model.as_deref().unwrap_or(&self.default_model);
@@ -1305,7 +1302,7 @@ mod tests {
     #[test]
     fn build_body_extracts_system() {
         let provider = AnthropicProvider::new("test-key");
-        let request = CompletionRequest {
+        let request = ModelRequest {
             messages: vec![
                 ChatMessage::system("You are helpful."),
                 ChatMessage::user("Hello"),
@@ -1332,7 +1329,7 @@ mod tests {
     #[test]
     fn build_body_requires_max_tokens() {
         let provider = AnthropicProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]);
+        let request = ModelRequest::new(vec![ChatMessage::user("Hello")]);
 
         let body = provider.build_body(&request, false);
         assert_eq!(body["max_tokens"], DEFAULT_MAX_TOKENS);
@@ -1341,7 +1338,7 @@ mod tests {
     #[test]
     fn test_response_format_injects_schema_into_system_prompt() {
         let provider = AnthropicProvider::new("test-key");
-        let request = CompletionRequest {
+        let request = ModelRequest {
             model: None,
             messages: vec![ChatMessage::user("hi")],
             tools: vec![],
@@ -1366,8 +1363,8 @@ mod tests {
     #[test]
     fn build_body_with_tools() {
         let provider = AnthropicProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]).with_tools(vec![
-            ToolDefinition {
+        let request =
+            ModelRequest::new(vec![ChatMessage::user("Hello")]).with_tools(vec![ToolDefinition {
                 name: "search".to_owned(),
                 description: "Search the web".to_owned(),
                 parameters: serde_json::json!({
@@ -1376,8 +1373,7 @@ mod tests {
                         "query": { "type": "string" }
                     }
                 }),
-            },
-        ]);
+            }]);
 
         let body = provider.build_body(&request, false);
         let tools = body["tools"].as_array().unwrap();
@@ -1390,7 +1386,7 @@ mod tests {
     #[test]
     fn test_text_backward_compat() {
         let provider = AnthropicProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]);
+        let request = ModelRequest::new(vec![ChatMessage::user("Hello")]);
 
         let body = provider.build_body(&request, false);
         // Text messages should produce a plain string, not an array.
@@ -1400,7 +1396,7 @@ mod tests {
     #[test]
     fn test_build_body_image_url() {
         let provider = AnthropicProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user_image_url(
+        let request = ModelRequest::new(vec![ChatMessage::user_image_url(
             "What is this?",
             "https://example.com/cat.jpg",
             Some("image/jpeg"),
@@ -1419,7 +1415,7 @@ mod tests {
     #[test]
     fn test_build_body_base64_image() {
         let provider = AnthropicProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user_image_base64(
+        let request = ModelRequest::new(vec![ChatMessage::user_image_base64(
             "Describe this",
             "abc123base64data",
             "image/png",
@@ -1439,7 +1435,7 @@ mod tests {
         use crate::types::{ContentPart, ImageContent, ImageSource};
 
         let provider = AnthropicProvider::new("test-key");
-        let request = CompletionRequest::new(vec![ChatMessage::user_parts(vec![
+        let request = ModelRequest::new(vec![ChatMessage::user_parts(vec![
             ContentPart::Text {
                 text: "First".into(),
             },
@@ -1606,7 +1602,7 @@ mod tests {
 
         let anthropic: AnthropicResponse = serde_json::from_value(body).unwrap();
 
-        // Build a CompletionResponse the same way `complete()` does, minus
+        // Build a ModelResponse the same way `complete()` does, minus
         // the HTTP / span / pricing plumbing.
         let ParsedContent {
             content,
@@ -1614,7 +1610,7 @@ mod tests {
             reasoning,
         } = parse_content_blocks(anthropic.content);
 
-        let response = CompletionResponse {
+        let response = ModelResponse {
             content,
             tool_calls,
             reasoning,

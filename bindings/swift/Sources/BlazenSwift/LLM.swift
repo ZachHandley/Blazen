@@ -6,7 +6,7 @@ import UniFFIBlazen
 /// Build one via the `Providers` factory functions (e.g.
 /// `Providers.openAI(apiKey:model:baseURL:)`), then call
 /// `complete(_:)` or `completeStream(_:)` to generate responses.
-public typealias CompletionModel = UniFFIBlazen.CompletionModel
+public typealias Model = UniFFIBlazen.Model
 
 /// An embedding model handle.
 public typealias EmbeddingModel = UniFFIBlazen.EmbeddingModel
@@ -17,10 +17,10 @@ public typealias EmbeddingModel = UniFFIBlazen.EmbeddingModel
 public typealias ChatMessage = UniFFIBlazen.ChatMessage
 
 /// A provider-agnostic chat completion request.
-public typealias CompletionRequest = UniFFIBlazen.CompletionRequest
+public typealias ModelRequest = UniFFIBlazen.ModelRequest
 
 /// The result of a non-streaming chat completion.
-public typealias CompletionResponse = UniFFIBlazen.CompletionResponse
+public typealias ModelResponse = UniFFIBlazen.ModelResponse
 
 /// Response from an embedding model — one vector per input string.
 public typealias EmbeddingResponse = UniFFIBlazen.EmbeddingResponse
@@ -39,11 +39,11 @@ public typealias TokenUsage = UniFFIBlazen.TokenUsage
 
 // MARK: - Idiomatic helpers
 
-public extension CompletionModel {
+public extension Model {
     /// Perform a chat completion. Convenience alias matching the
     /// idiomatic `model.complete(request)` shape preferred over the
     /// underlying argument-labelled `complete(request:)` API.
-    func complete(_ request: CompletionRequest) async throws -> CompletionResponse {
+    func complete(_ request: ModelRequest) async throws -> ModelResponse {
         try await complete(request: request)
     }
 
@@ -121,10 +121,10 @@ public extension ChatMessage {
     }
 }
 
-public extension CompletionRequest {
+public extension ModelRequest {
     /// Convenience constructor with `Encodable`-typed messages list and
     /// the rarely-used fields defaulted. Matches the most common call
-    /// shape: `CompletionRequest(messages: [...])`.
+    /// shape: `ModelRequest(messages: [...])`.
     init(
         messages: [ChatMessage],
         tools: [Tool] = [],

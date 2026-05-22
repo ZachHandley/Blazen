@@ -121,7 +121,7 @@ type Agent struct {
 // model and handler must be non-nil; both are programmer errors that
 // panic immediately rather than returning an error, mirroring the
 // upstream FFI contract that [uniffiblazen.NewAgent] is infallible.
-func NewAgent(model *CompletionModel, systemPrompt string, tools []Tool, handler ToolHandler, maxIterations uint32) *Agent {
+func NewAgent(model *Model, systemPrompt string, tools []Tool, handler ToolHandler, maxIterations uint32) *Agent {
 	ensureInit()
 	if model == nil || model.inner == nil {
 		panic("blazen.NewAgent: model must not be nil or closed")

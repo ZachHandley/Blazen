@@ -1,7 +1,7 @@
 //! Observability and telemetry for Blazen workflows.
 //!
 //! Feature flags:
-//! - `spans` (default): `TracingCompletionModel` wrapper
+//! - `spans` (default): `TracingModel` wrapper
 //! - `history`: Append-only workflow event history
 //! - `otlp`: OpenTelemetry OTLP export over gRPC (tonic)
 //! - `otlp-http`: OpenTelemetry OTLP export over HTTP (binary protobuf)
@@ -30,7 +30,7 @@ pub mod error;
 
 // Re-exports
 #[cfg(feature = "spans")]
-pub use spans::TracingCompletionModel;
+pub use spans::TracingModel;
 
 #[cfg(feature = "langfuse")]
 pub use error::TelemetryError;

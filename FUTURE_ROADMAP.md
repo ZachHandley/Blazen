@@ -79,7 +79,7 @@ These extend the session ref system beyond the single-process, single-machine ca
 
 ## Guiding Principles
 
-1. **Traits are the contract.** All of our public traits (`CompletionModel`, `EmbeddingModel`, `ImageGeneration`, `AudioGeneration`, `Transcription`, etc.) are already provider-agnostic. Adding local backends means adding new *implementations*, not changing traits.
+1. **Traits are the contract.** All of our public traits (`Model`, `EmbeddingModel`, `ImageGeneration`, `AudioGeneration`, `Transcription`, etc.) are already provider-agnostic. Adding local backends means adding new *implementations*, not changing traits.
 2. **Feature-gated.** Local backends pull in heavy native dependencies (ONNX Runtime, CUDA, GGML, etc.). Every local backend must be behind a Cargo feature so the default build stays lean.
 3. **Separate crates for heavy backends.** Anything that needs its own native build config (e.g. llama.cpp bindings, candle CUDA kernels) belongs in its own crate that depends on `blazen-llm` and implements our traits. The `blazen-llm` crate itself should NOT grow a native-model dependency tree.
 4. **Binding coverage is optional per backend.** Not every local backend needs Python + Node + WASM bindings. Some are native-only. Document this per-feature.
@@ -175,7 +175,7 @@ Running LLMs locally is the single biggest unlock for privacy-sensitive workload
 
 - Wraps [`mistral.rs`](https://github.com/EricLBuehler/mistral.rs) — a pure-Rust inference engine with GGUF support, CUDA, Metal, paged attention, and a clean async API
 - Supports Mistral, LLaMA, Phi, Gemma, Qwen, and more
-- Implements `CompletionModel` trait from `blazen-llm::traits`
+- Implements `Model` trait from `blazen-llm::traits`
 - Supports streaming via `stream()` method returning `Pin<Box<dyn Stream<Item = ChatStreamChunk>>>`
 - Tool calling via the model's native format (where supported)
 
@@ -194,8 +194,8 @@ let model = MistralRsProvider::from_options(MistralRsOptions {
 
 **Python:**
 ```python
-from blazen import CompletionModel, MistralRsOptions
-model = CompletionModel.mistralrs(options=MistralRsOptions(
+from blazen import Model, MistralRsOptions
+model = Model.mistralrs(options=MistralRsOptions(
     model_id="TheBloke/Llama-3.1-8B-Instruct-GGUF",
     quantization="Q5_K_M",
     device="cuda:0",
@@ -214,7 +214,7 @@ model = CompletionModel.mistralrs(options=MistralRsOptions(
 - Wraps [`llama-cpp-rs`](https://github.com/utilityai/llama-cpp-rs) — Rust bindings over `llama.cpp`
 - Industry-standard GGUF runtime with the widest model support
 - More mature than `mistral.rs` but requires a C++ build step (bundled llama.cpp)
-- Implements `CompletionModel` trait
+- Implements `Model` trait
 
 **Why both?** `mistral.rs` is pure Rust (easier build, fewer surprises). `llama.cpp` has broader model coverage and battle-tested performance. Users pick based on their priorities.
 
@@ -230,7 +230,7 @@ model = CompletionModel.mistralrs(options=MistralRsOptions(
 - Uses `candle-transformers` to run HF models directly in Rust
 - Supports quantization (GGUF, AWQ, GPTQ)
 - Slower than `mistral.rs` for typical chat workloads but more flexible for research use cases
-- Implements `CompletionModel` trait
+- Implements `Model` trait
 
 **Placement:** `crates/blazen-llm-candle/` (shares crate with `blazen-embed-candle` if practical — or keep separate, each behind a feature).
 
@@ -354,7 +354,7 @@ Vision-language models (LLaVA, MiniCPM-V, Qwen2-VL) run locally now. Useful for 
 
 ### Approach
 
-These are just `CompletionModel` implementations with image support in `ChatMessage::user_image_url`. The existing trait already handles this. We add them as another backend in:
+These are just `Model` implementations with image support in `ChatMessage::user_image_url`. The existing trait already handles this. We add them as another backend in:
 
 - `blazen-llm-mistralrs` (mistral.rs supports LLaVA, Phi-3.5-vision)
 - `blazen-llm-candle` (candle has LLaVA and Qwen2-VL implementations)
@@ -554,7 +554,7 @@ Once the first local backends land:
 - **No breaking changes.** Existing API providers (OpenAI, Anthropic, etc.) keep working unchanged.
 - **Memory subsystem** (`blazen-memory`): Already accepts any `Arc<dyn EmbeddingModel>` — local embeddings drop in with zero code changes.
 - **Workflows:** Steps that call `model.complete()` are provider-agnostic — swap a local model in, nothing else changes.
-- **Fallback chains:** `CompletionModel.with_fallback([local_model, cloud_model])` becomes a powerful pattern — try local first, fall back to cloud on overload.
+- **Fallback chains:** `Model.with_fallback([local_model, cloud_model])` becomes a powerful pattern — try local first, fall back to cloud on overload.
 
 ---
 

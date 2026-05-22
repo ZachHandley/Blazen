@@ -25,7 +25,7 @@ On a successful run the stream emits zero or more `.chunk` events followed by ex
 
 ## Consuming a stream
 
-`CompletionModel.completeStream(_:)` returns the async sequence directly:
+`Model.completeStream(_:)` returns the async sequence directly:
 
 ```swift
 import BlazenSwift
@@ -34,7 +34,7 @@ Blazen.initialize()
 defer { Blazen.shutdown() }
 
 let model = try Providers.openAI(apiKey: "", model: "gpt-4o-mini")
-let request = CompletionRequest(messages: [
+let request = ModelRequest(messages: [
     .system("You are a helpful assistant."),
     .user("Tell me a short joke."),
 ])
@@ -102,11 +102,11 @@ A streaming step that turns model output into a `StopEvent` typically buffers th
 
 ```swift
 final class StreamingGreetHandler: StepHandler, @unchecked Sendable {
-    let model: CompletionModel
-    init(model: CompletionModel) { self.model = model }
+    let model: Model
+    init(model: Model) { self.model = model }
 
     func invoke(event: Event) async throws -> StepOutput {
-        let request = CompletionRequest(messages: [
+        let request = ModelRequest(messages: [
             .user("Greet the user."),
         ])
 

@@ -5,9 +5,9 @@ On-device LLM chat using the Blazen WASM SDK with [WebLLM](https://webllm.mlc.ai
 ## What it demonstrates
 
 - Creating a WebLLM engine for a small on-device model
-- Wrapping it as a Blazen `CompletionModel` with `CompletionModel.fromJsHandler()`
+- Wrapping it as a Blazen `Model` with `Model.fromJsHandler()`
 - Multi-turn chat using `model.complete(messages)`
-- A fallback-to-API pattern using `CompletionModel.withFallback()` (commented out, ready to enable)
+- A fallback-to-API pattern using `Model.withFallback()` (commented out, ready to enable)
 
 ## Prerequisites
 
@@ -45,7 +45,7 @@ WebLLM compiles the model for your specific GPU on first use. This takes 30-60 s
 
 1. **`init()`** loads the Blazen WASM binary.
 2. **`webllm.CreateMLCEngine()`** downloads, caches, and compiles the model for WebGPU.
-3. **`CompletionModel.fromJsHandler()`** wraps the WebLLM engine as a Blazen `CompletionModel`.
+3. **`Model.fromJsHandler()`** wraps the WebLLM engine as a Blazen `Model`.
 4. **`model.complete(messages)`** sends the conversation to the local model and returns the response.
 
 ## Choosing a model
@@ -64,7 +64,7 @@ Models at 7B+ parameters require 4+ GB of GPU memory and cause 1-3 minute cold s
 The commented-out section at the bottom of the error handler demonstrates how to set up a hosted API fallback. This is the recommended production pattern -- try local inference first, fall back to a cloud API if WebGPU is unavailable:
 
 ```js
-const localModel = CompletionModel.fromJsHandler('local', handler);
-const apiModel = CompletionModel.openrouter();
-const model = CompletionModel.withFallback([localModel, apiModel]);
+const localModel = Model.fromJsHandler('local', handler);
+const apiModel = Model.openrouter();
+const model = Model.withFallback([localModel, apiModel]);
 ```

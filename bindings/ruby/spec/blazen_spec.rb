@@ -159,13 +159,13 @@ RSpec.describe Blazen do
       expect(tool.tool_call_id).to eq("call_1")
     end
 
-    it "builds a CompletionRequest from ChatMessages" do
-      req = Blazen::Llm.completion_request(
+    it "builds a ModelRequest from ChatMessages" do
+      req = Blazen::Llm.model_request(
         messages: [Blazen::Llm.system("be brief"), Blazen::Llm.user("hi")],
         temperature: 0.1,
         max_tokens: 32,
       )
-      expect(req).to be_a(Blazen::CompletionRequest)
+      expect(req).to be_a(Blazen::ModelRequest)
     end
 
     it "serializes Hash tool parameters to JSON" do
@@ -426,24 +426,24 @@ RSpec.describe Blazen do
 
     let(:model) { Blazen::Providers.openai(api_key: ENV.fetch("OPENAI_API_KEY")) }
 
-    it "constructs a CompletionModel" do
-      expect(model).to be_a(Blazen::Llm::CompletionModel)
+    it "constructs a Model" do
+      expect(model).to be_a(Blazen::Llm::Model)
     end
 
     it "returns a non-empty content via complete_blocking" do
-      req = Blazen::Llm.completion_request(
+      req = Blazen::Llm.model_request(
         messages: [Blazen::Llm.user("Reply with exactly the word: pong")],
         max_tokens: 8,
         temperature: 0.0,
       )
       resp = model.complete_blocking(req)
-      expect(resp).to be_a(Blazen::Llm::CompletionResponse)
+      expect(resp).to be_a(Blazen::Llm::ModelResponse)
       expect(resp.content).to be_a(String)
       expect(resp.content).not_to be_empty
     end
 
     it "returns a non-empty content via the awaitable complete path" do
-      req = Blazen::Llm.completion_request(
+      req = Blazen::Llm.model_request(
         messages: [Blazen::Llm.user("Reply with exactly the word: pong")],
         max_tokens: 8,
         temperature: 0.0,
@@ -458,7 +458,7 @@ RSpec.describe Blazen do
 
     it "invokes on_chunk at least once and on_done exactly once" do
       model = Blazen::Providers.openai(api_key: ENV.fetch("OPENAI_API_KEY"))
-      req = Blazen::Llm.completion_request(
+      req = Blazen::Llm.model_request(
         messages: [Blazen::Llm.user("Count from 1 to 5, space-separated.")],
         max_tokens: 32,
         temperature: 0.0,

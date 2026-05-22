@@ -2,7 +2,7 @@
 //!
 //! Exposes [`JsOpenAiProvider`] as a NAPI class with a factory constructor and
 //! a `textToSpeech` async method backed by `OpenAI`'s `/v1/audio/speech`
-//! endpoint. For LLM chat completions use the [`crate::providers::completion_model::JsCompletionModel`]
+//! endpoint. For LLM chat completions use the [`crate::providers::model::JsModel`]
 //! entry point instead — this wrapper intentionally surfaces only the
 //! standalone compute capabilities that are specific to the `OpenAI` provider
 //! (i.e. text-to-speech). The trait defaults for `generateMusic` /
@@ -28,7 +28,7 @@ use crate::generated::{JsAudioResult, JsProviderOptions, JsSpeechRequest};
 /// An `OpenAI` compute provider exposing text-to-speech.
 ///
 /// For chat completions and embeddings, use
-/// [`CompletionModel.openai`](crate::providers::completion_model::JsCompletionModel::openai)
+/// [`Model.openai`](crate::providers::model::JsModel::openai)
 /// instead — this class is the standalone entry point for the compute
 /// capabilities (currently text-to-speech) that the `OpenAI` provider
 /// implements directly.

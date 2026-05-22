@@ -20,7 +20,7 @@ import pytest
 
 from blazen import (
     ChatMessage,
-    CompletionModel,
+    Model,
     ToolDef,
     run_agent,
 )
@@ -49,8 +49,8 @@ class SubmitEvaluationSignal(Exception):
 # ---------------------------------------------------------------------------
 
 
-class StubToolCallingModel(CompletionModel):
-    """Subclassed ``CompletionModel`` whose ``complete`` always returns a single
+class StubToolCallingModel(Model):
+    """Subclassed ``Model`` whose ``complete`` always returns a single
     ``submit_eval`` tool call. The first invocation will trigger the tool
     handler — which raises ``SubmitEvaluationSignal`` — so the agent loop
     never reaches a second iteration.
@@ -60,7 +60,7 @@ class StubToolCallingModel(CompletionModel):
         super().__init__(model_id="stub-error", context_length=4096)
 
     async def complete(self, messages, options=None):  # type: ignore[override]
-        # The Rust ``CompletionResponse`` schema (see
+        # The Rust ``ModelResponse`` schema (see
         # ``crates/blazen-llm/src/types/completion.rs``) requires ``model``;
         # every other field is ``#[serde(default)]``. ``tool_calls`` accepts a
         # list of ``{id, name, arguments}`` dicts.

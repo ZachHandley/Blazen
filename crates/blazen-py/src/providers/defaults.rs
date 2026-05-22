@@ -3,7 +3,7 @@
 //! Mirrors the Rust types in
 //! [`blazen_llm::providers::defaults`]: `BaseProviderDefaults` is the
 //! universal cross-role bag (currently just the JSON-level `before_request`
-//! hook); each role-specific defaults type (`CompletionProviderDefaults`,
+//! hook); each role-specific defaults type (`ProviderDefaults`,
 //! `AudioSpeechProviderDefaults`, ...) embeds a `base` field plus its
 //! typed `before_*` hook.
 //!
@@ -93,12 +93,12 @@ impl PyBaseProviderDefaults {
 }
 
 // ---------------------------------------------------------------------------
-// PyCompletionProviderDefaults
+// PyProviderDefaults
 // ---------------------------------------------------------------------------
 
 /// Completion-role defaults. Carries the universal ``base`` bag plus
 /// completion-specific fields: ``system_prompt``, default ``tools``,
-/// default ``response_format``, and the typed ``before_completion``
+/// default ``response_format``, and the typed ``before_model``
 /// hook.
 ///
 /// All fields are read/write so Python users can tweak them after
@@ -107,24 +107,24 @@ impl PyBaseProviderDefaults {
 /// Example:
 ///     >>> async def add_user(req):
 ///     ...     req["metadata"]["origin"] = "blazen-py"
-///     >>> defaults = CompletionProviderDefaults(
+///     >>> defaults = ProviderDefaults(
 ///     ...     system_prompt="be terse",
 ///     ...     tools=[my_tool],
 ///     ...     response_format={"type": "json_object"},
-///     ...     before_completion=add_user,
+///     ...     before_model=add_user,
 ///     ... )
 #[gen_stub_pyclass]
-#[pyclass(name = "CompletionProviderDefaults", subclass, from_py_object)]
+#[pyclass(name = "ProviderDefaults", subclass, from_py_object)]
 #[derive(Default)]
-pub struct PyCompletionProviderDefaults {
+pub struct PyProviderDefaults {
     pub(crate) base: PyBaseProviderDefaults,
     pub(crate) system_prompt: Option<String>,
     pub(crate) tools: Vec<PyToolDefinition>,
     pub(crate) response_format: Option<Py<PyAny>>,
-    pub(crate) before_completion: Option<Py<PyAny>>,
+    pub(crate) before_model: Option<Py<PyAny>>,
 }
 
-impl Clone for PyCompletionProviderDefaults {
+impl Clone for PyProviderDefaults {
     fn clone(&self) -> Self {
         Self {
             base: self.base.clone(),
@@ -134,8 +134,8 @@ impl Clone for PyCompletionProviderDefaults {
                 .response_format
                 .as_ref()
                 .map(|v| Python::attach(|py| v.clone_ref(py))),
-            before_completion: self
-                .before_completion
+            before_model: self
+                .before_model
                 .as_ref()
                 .map(|h| Python::attach(|py| h.clone_ref(py))),
         }
@@ -144,7 +144,7 @@ impl Clone for PyCompletionProviderDefaults {
 
 #[gen_stub_pymethods]
 #[pymethods]
-impl PyCompletionProviderDefaults {
+impl PyProviderDefaults {
     /// Construct completion defaults.
     ///
     /// Args:
@@ -155,23 +155,23 @@ impl PyCompletionProviderDefaults {
     ///         list (request entries win on name collision).
     ///     response_format: Default JSON-schema dict applied when the request
     ///         has no ``response_format``.
-    ///     before_completion: Optional ``async def(request: dict) -> None``
+    ///     before_model: Optional ``async def(request: dict) -> None``
     ///         typed hook applied after the universal ``before_request``.
     #[new]
-    #[pyo3(signature = (base=None, system_prompt=None, tools=None, response_format=None, before_completion=None))]
+    #[pyo3(signature = (base=None, system_prompt=None, tools=None, response_format=None, before_model=None))]
     fn new(
         base: Option<PyBaseProviderDefaults>,
         system_prompt: Option<String>,
         tools: Option<Vec<PyToolDefinition>>,
         response_format: Option<Py<PyAny>>,
-        before_completion: Option<Py<PyAny>>,
+        before_model: Option<Py<PyAny>>,
     ) -> Self {
         Self {
             base: base.unwrap_or_default(),
             system_prompt,
             tools: tools.unwrap_or_default(),
             response_format,
-            before_completion,
+            before_model,
         }
     }
 
@@ -221,26 +221,26 @@ impl PyCompletionProviderDefaults {
         self.response_format = value;
     }
 
-    /// Typed completion-level ``before_completion`` hook, if set.
+    /// Typed completion-level ``before_model`` hook, if set.
     #[getter]
-    fn before_completion(&self) -> Option<Py<PyAny>> {
-        self.before_completion
+    fn before_model(&self) -> Option<Py<PyAny>> {
+        self.before_model
             .as_ref()
             .map(|h| Python::attach(|py| h.clone_ref(py)))
     }
 
     #[setter]
     fn set_before_completion(&mut self, value: Option<Py<PyAny>>) {
-        self.before_completion = value;
+        self.before_model = value;
     }
 
     fn __repr__(&self) -> String {
         format!(
-            "CompletionProviderDefaults(has_system_prompt={}, tools_len={}, has_response_format={}, has_before_completion={})",
+            "ProviderDefaults(has_system_prompt={}, tools_len={}, has_response_format={}, has_before_model={})",
             self.system_prompt.is_some(),
             self.tools.len(),
             self.response_format.is_some(),
-            self.before_completion.is_some(),
+            self.before_model.is_some(),
         )
     }
 }

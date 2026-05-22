@@ -107,7 +107,7 @@ Until the bindings land, you can call the Rust API directly from a Rust workflow
 Node.js bindings follow the same pattern:
 
 ```typescript
-import { Workflow, CompletionModel } from "blazen";
+import { Workflow, Model } from "blazen";
 import { PeerClient } from "blazen/peer";
 
 const client = await PeerClient.connect("http://peer-b:50051", "node-a");

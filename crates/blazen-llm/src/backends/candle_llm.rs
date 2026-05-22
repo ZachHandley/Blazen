@@ -1,7 +1,7 @@
 //! Bridge between [`blazen_llm_candle::CandleLlmProvider`] and
-//! [`crate::CompletionModel`].
+//! [`crate::Model`].
 //!
-//! This module implements the `CompletionModel` trait for `CandleLlmProvider`,
+//! This module implements the `Model` trait for `CandleLlmProvider`,
 //! mapping Blazen's provider-agnostic request/response types to and from the
 //! candle engine's own types.
 //!
@@ -24,7 +24,7 @@ use blazen_llm_candle::CandleLlmProvider;
 use futures_util::Stream;
 
 use crate::error::BlazenError;
-use crate::types::{ChatMessage, CompletionRequest, CompletionResponse, StreamChunk};
+use crate::types::{ChatMessage, ModelRequest, ModelResponse, StreamChunk};
 
 // ---------------------------------------------------------------------------
 // Message conversion
@@ -69,11 +69,11 @@ fn convert_messages(messages: &[ChatMessage]) -> Vec<(String, String)> {
 }
 
 // ---------------------------------------------------------------------------
-// CompletionModel implementation
+// Model implementation
 // ---------------------------------------------------------------------------
 
 /// Wrapper around `CandleLlmProvider` that caches a `model_id: String`
-/// suitable for the `CompletionModel::model_id(&self) -> &str` signature.
+/// suitable for the `Model::model_id(&self) -> &str` signature.
 ///
 /// `CandleLlmProvider::model_id` returns `Option<&str>`, which cannot
 /// satisfy the trait's non-optional return type, so we snapshot it
@@ -81,12 +81,12 @@ fn convert_messages(messages: &[ChatMessage]) -> Vec<(String, String)> {
 /// `CandleLlmProvider::infer` and `infer_stream` already take `&self`,
 /// so no outer mutex is needed; the provider manages its own internal
 /// `tokio::sync::Mutex<Option<CandleEngine>>` for interior mutability.
-pub struct CandleLlmCompletionModel {
+pub struct CandleLlmModel {
     provider: CandleLlmProvider,
     model_id: String,
 }
 
-impl CandleLlmCompletionModel {
+impl CandleLlmModel {
     /// Create a new completion model wrapper from a `CandleLlmProvider`.
     #[must_use]
     pub fn new(provider: CandleLlmProvider) -> Self {
@@ -96,15 +96,12 @@ impl CandleLlmCompletionModel {
 }
 
 #[async_trait]
-impl crate::traits::CompletionModel for CandleLlmCompletionModel {
+impl crate::traits::Model for CandleLlmModel {
     fn model_id(&self) -> &str {
         &self.model_id
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         let messages = convert_messages(&request.messages);
         let max_tokens = request.max_tokens.map(|t| t as usize);
         let temperature = request.temperature.map(f64::from);
@@ -132,7 +129,7 @@ impl crate::traits::CompletionModel for CandleLlmCompletionModel {
             total_ms: Some(total_ms),
         });
 
-        Ok(CompletionResponse {
+        Ok(ModelResponse {
             content: Some(result.content),
             tool_calls: Vec::new(),
             reasoning: None,
@@ -152,7 +149,7 @@ impl crate::traits::CompletionModel for CandleLlmCompletionModel {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         let messages = convert_messages(&request.messages);

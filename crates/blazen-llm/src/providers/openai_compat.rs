@@ -2,7 +2,7 @@
 //!
 //! Most hosted LLM APIs follow the `OpenAI` chat completions wire format. This
 //! module provides [`OpenAiCompatProvider`] -- a single implementation of
-//! [`CompletionModel`] that works with any OpenAI-compatible endpoint by
+//! [`Model`] that works with any OpenAI-compatible endpoint by
 //! configuring the base URL, auth method, and extra headers.
 //!
 //! For specific providers, use the dedicated provider modules (e.g.
@@ -31,8 +31,8 @@ use crate::http::{HttpClient, HttpRequest, HttpResponse};
 use crate::retry::RetryConfig;
 use crate::traits::{ModelCapabilities, ModelInfo, ModelPricing, ModelRegistry};
 use crate::types::{
-    Citation, CompletionRequest, CompletionResponse, EmbeddingResponse, ReasoningTrace, Role,
-    StreamChunk, TokenUsage, ToolCall,
+    Citation, EmbeddingResponse, ModelRequest, ModelResponse, ReasoningTrace, Role, StreamChunk,
+    TokenUsage, ToolCall,
 };
 
 // ---------------------------------------------------------------------------
@@ -225,7 +225,7 @@ impl OpenAiCompatProvider {
 
     /// Build the JSON request body for the chat completions endpoint.
     #[allow(clippy::too_many_lines)]
-    fn build_body(&self, request: &CompletionRequest, stream: bool) -> serde_json::Value {
+    fn build_body(&self, request: &ModelRequest, stream: bool) -> serde_json::Value {
         let model = request
             .model
             .as_deref()
@@ -501,11 +501,11 @@ fn parse_citations(entries: Vec<serde_json::Value>) -> Vec<Citation> {
 }
 
 // ---------------------------------------------------------------------------
-// CompletionModel implementation
+// Model implementation
 // ---------------------------------------------------------------------------
 
 #[async_trait]
-impl crate::traits::CompletionModel for OpenAiCompatProvider {
+impl crate::traits::Model for OpenAiCompatProvider {
     fn model_id(&self) -> &str {
         &self.config.default_model
     }
@@ -518,10 +518,7 @@ impl crate::traits::CompletionModel for OpenAiCompatProvider {
         Some(Self::http_client(self))
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         let model_id = request
             .model
             .as_deref()
@@ -605,7 +602,7 @@ impl crate::traits::CompletionModel for OpenAiCompatProvider {
             .as_ref()
             .and_then(|u| crate::pricing::compute_cost(&oai.model, u));
 
-        Ok(CompletionResponse {
+        Ok(ModelResponse {
             content: message.content,
             tool_calls,
             reasoning,
@@ -625,7 +622,7 @@ impl crate::traits::CompletionModel for OpenAiCompatProvider {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         let model_id = request
@@ -1360,7 +1357,7 @@ mod tests {
     #[test]
     fn build_body_minimal() {
         let provider = test_provider("gpt-4.1");
-        let request = CompletionRequest {
+        let request = ModelRequest {
             messages: vec![ChatMessage::user("Hello")],
             tools: vec![],
             temperature: None,
@@ -1383,7 +1380,7 @@ mod tests {
     #[test]
     fn build_body_with_options() {
         let provider = test_provider("gpt-4.1");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")])
+        let request = ModelRequest::new(vec![ChatMessage::user("Hello")])
             .with_temperature(0.5)
             .with_max_tokens(100)
             .with_model("gpt-4.1-mini");
@@ -1398,8 +1395,8 @@ mod tests {
     #[test]
     fn build_body_with_tools() {
         let provider = test_provider("gpt-4.1");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]).with_tools(vec![
-            ToolDefinition {
+        let request =
+            ModelRequest::new(vec![ChatMessage::user("Hello")]).with_tools(vec![ToolDefinition {
                 name: "get_weather".to_owned(),
                 description: "Get current weather".to_owned(),
                 parameters: serde_json::json!({
@@ -1408,8 +1405,7 @@ mod tests {
                         "location": { "type": "string" }
                     }
                 }),
-            },
-        ]);
+            }]);
 
         let body = provider.build_body(&request, false);
         let tools = body["tools"].as_array().unwrap();
@@ -1420,7 +1416,7 @@ mod tests {
     #[test]
     fn test_text_backward_compat() {
         let provider = test_provider("gpt-4.1");
-        let request = CompletionRequest::new(vec![ChatMessage::user("Hello")]);
+        let request = ModelRequest::new(vec![ChatMessage::user("Hello")]);
 
         let body = provider.build_body(&request, false);
         assert_eq!(body["messages"][0]["content"], "Hello");
@@ -1429,7 +1425,7 @@ mod tests {
     #[test]
     fn test_build_body_image_url() {
         let provider = test_provider("gpt-4.1");
-        let request = CompletionRequest::new(vec![ChatMessage::user_image_url(
+        let request = ModelRequest::new(vec![ChatMessage::user_image_url(
             "What is this?",
             "https://example.com/cat.jpg",
             Some("image/jpeg"),
@@ -1450,7 +1446,7 @@ mod tests {
     #[test]
     fn test_build_body_base64_image() {
         let provider = test_provider("gpt-4.1");
-        let request = CompletionRequest::new(vec![ChatMessage::user_image_base64(
+        let request = ModelRequest::new(vec![ChatMessage::user_image_base64(
             "Describe this",
             "abc123base64data",
             "image/png",
@@ -1473,7 +1469,7 @@ mod tests {
         use crate::types::{ContentPart, ImageContent, ImageSource};
 
         let provider = test_provider("gpt-4.1");
-        let request = CompletionRequest::new(vec![ChatMessage::user_parts(vec![
+        let request = ModelRequest::new(vec![ChatMessage::user_parts(vec![
             ContentPart::Text {
                 text: "First".into(),
             },
@@ -1514,7 +1510,7 @@ mod tests {
                 },
             ),
         );
-        let request = CompletionRequest::new(vec![tool_msg]);
+        let request = ModelRequest::new(vec![tool_msg]);
 
         let body = provider.build_body(&request, false);
         let messages = body["messages"].as_array().unwrap();
@@ -1529,7 +1525,7 @@ mod tests {
     fn tool_result_text_only_no_follow_up() {
         let provider = test_provider("gpt-4.1");
         let tool_msg = ChatMessage::tool_result("call_1", "search", serde_json::json!("ok"));
-        let request = CompletionRequest::new(vec![tool_msg]);
+        let request = ModelRequest::new(vec![tool_msg]);
         let body = provider.build_body(&request, false);
         let messages = body["messages"].as_array().unwrap();
         assert_eq!(messages.len(), 1);

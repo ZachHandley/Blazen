@@ -3,7 +3,7 @@
 //! Provides [`JsTranscription`] with factory methods for each supported
 //! transcription backend (fal.ai, whisper.cpp, etc.). Mirrors the pattern
 //! used for [`JsEmbeddingModel`](crate::types::embedding::JsEmbeddingModel)
-//! and [`JsCompletionModel`](crate::providers::JsCompletionModel).
+//! and [`JsModel`](crate::providers::JsModel).
 
 use std::sync::Arc;
 

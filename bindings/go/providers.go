@@ -7,7 +7,7 @@ import (
 // This file collects the provider factory wrappers exposed by blazen-go.
 //
 // The generated UniFFI surface exposes each provider as a free constructor
-// returning the opaque CompletionModel / EmbeddingModel handle. The
+// returning the opaque Model / EmbeddingModel handle. The
 // wrappers here add three Go-flavoured affordances on top:
 //
 //   - Idiomatic naming (OpenAI/XAI/LlamaCpp/MistralRs/DeepSeek/FastEmbed)
@@ -20,7 +20,7 @@ import (
 //
 // Providers whose models are not chat completers (diffusion image models,
 // Whisper STT, Piper / Fal TTS) live in compute.go because their public
-// surface is the speech/image API rather than CompletionModel /
+// surface is the speech/image API rather than Model /
 // EmbeddingModel.
 
 // optUint32 returns a pointer to v, or nil when v is zero. Matches the
@@ -38,156 +38,156 @@ func optUint32(v uint32) *uint32 {
 // HTTP completion providers
 // ---------------------------------------------------------------------
 
-// NewAnthropicCompletion creates a [CompletionModel] backed by the
+// NewAnthropicModel creates a [Model] backed by the
 // Anthropic Messages API.
 //
 // model selects the model id (e.g. "claude-3-5-sonnet-latest"); pass ""
 // for the provider default. baseURL overrides the API root; pass "" for
 // https://api.anthropic.com.
-func NewAnthropicCompletion(apiKey, model, baseURL string) (*CompletionModel, error) {
+func NewAnthropicModel(apiKey, model, baseURL string) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewAnthropicCompletionModel(apiKey, optString(model), optString(baseURL))
+	inner, err := uniffiblazen.NewAnthropicModel(apiKey, optString(model), optString(baseURL))
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
-// NewAzureCompletion creates a [CompletionModel] backed by an Azure
+// NewAzureModel creates a [Model] backed by an Azure
 // OpenAI deployment.
 //
 // resourceName and deploymentName identify the Azure resource and the
 // deployed model respectively. apiVersion pins the REST API version;
 // pass "" to use the binding's built-in default.
-func NewAzureCompletion(apiKey, resourceName, deploymentName, apiVersion string) (*CompletionModel, error) {
+func NewAzureModel(apiKey, resourceName, deploymentName, apiVersion string) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewAzureCompletionModel(apiKey, resourceName, deploymentName, optString(apiVersion))
+	inner, err := uniffiblazen.NewAzureModel(apiKey, resourceName, deploymentName, optString(apiVersion))
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
-// NewBedrockCompletion creates a [CompletionModel] backed by AWS Bedrock.
+// NewBedrockModel creates a [Model] backed by AWS Bedrock.
 //
 // region is the AWS region (e.g. "us-east-1"). model selects the
 // foundation model id; pass "" for the provider default. baseURL
 // overrides the Bedrock endpoint and is primarily useful for VPC
 // endpoints; pass "" for the standard regional endpoint.
-func NewBedrockCompletion(apiKey, region, model, baseURL string) (*CompletionModel, error) {
+func NewBedrockModel(apiKey, region, model, baseURL string) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewBedrockCompletionModel(apiKey, region, optString(model), optString(baseURL))
+	inner, err := uniffiblazen.NewBedrockModel(apiKey, region, optString(model), optString(baseURL))
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
-// NewCohereCompletion creates a [CompletionModel] backed by the Cohere
+// NewCohereModel creates a [Model] backed by the Cohere
 // Chat API.
 //
 // model selects the model id (e.g. "command-r-plus"); pass "" for the
 // provider default. baseURL overrides the API root; pass "" for the
 // standard Cohere endpoint.
-func NewCohereCompletion(apiKey, model, baseURL string) (*CompletionModel, error) {
+func NewCohereModel(apiKey, model, baseURL string) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewCohereCompletionModel(apiKey, optString(model), optString(baseURL))
+	inner, err := uniffiblazen.NewCohereModel(apiKey, optString(model), optString(baseURL))
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
-// NewDeepSeekCompletion creates a [CompletionModel] backed by the
+// NewDeepSeekModel creates a [Model] backed by the
 // DeepSeek chat API.
 //
 // model selects the model id (e.g. "deepseek-chat"); pass "" for the
 // provider default. baseURL overrides the API root; pass "" for the
 // standard DeepSeek endpoint.
-func NewDeepSeekCompletion(apiKey, model, baseURL string) (*CompletionModel, error) {
+func NewDeepSeekModel(apiKey, model, baseURL string) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewDeepseekCompletionModel(apiKey, optString(model), optString(baseURL))
+	inner, err := uniffiblazen.NewDeepseekModel(apiKey, optString(model), optString(baseURL))
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
-// NewFireworksCompletion creates a [CompletionModel] backed by
+// NewFireworksModel creates a [Model] backed by
 // Fireworks AI.
 //
 // model selects the model id; pass "" for the provider default. baseURL
 // overrides the API root; pass "" for the standard Fireworks endpoint.
-func NewFireworksCompletion(apiKey, model, baseURL string) (*CompletionModel, error) {
+func NewFireworksModel(apiKey, model, baseURL string) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewFireworksCompletionModel(apiKey, optString(model), optString(baseURL))
+	inner, err := uniffiblazen.NewFireworksModel(apiKey, optString(model), optString(baseURL))
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
-// NewGeminiCompletion creates a [CompletionModel] backed by Google's
+// NewGeminiModel creates a [Model] backed by Google's
 // Gemini API.
 //
 // model selects the model id (e.g. "gemini-1.5-pro"); pass "" for the
 // provider default. baseURL overrides the API root; pass "" for the
 // standard Google endpoint.
-func NewGeminiCompletion(apiKey, model, baseURL string) (*CompletionModel, error) {
+func NewGeminiModel(apiKey, model, baseURL string) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewGeminiCompletionModel(apiKey, optString(model), optString(baseURL))
+	inner, err := uniffiblazen.NewGeminiModel(apiKey, optString(model), optString(baseURL))
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
-// NewGroqCompletion creates a [CompletionModel] backed by Groq's
+// NewGroqModel creates a [Model] backed by Groq's
 // OpenAI-compatible API.
 //
 // model selects the model id (e.g. "llama-3.1-70b-versatile"); pass ""
 // for the provider default. baseURL overrides the API root; pass "" for
 // the standard Groq endpoint.
-func NewGroqCompletion(apiKey, model, baseURL string) (*CompletionModel, error) {
+func NewGroqModel(apiKey, model, baseURL string) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewGroqCompletionModel(apiKey, optString(model), optString(baseURL))
+	inner, err := uniffiblazen.NewGroqModel(apiKey, optString(model), optString(baseURL))
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
-// NewMistralCompletion creates a [CompletionModel] backed by the
+// NewMistralModel creates a [Model] backed by the
 // Mistral AI API.
 //
 // model selects the model id (e.g. "mistral-large-latest"); pass "" for
 // the provider default. baseURL overrides the API root; pass "" for the
 // standard Mistral endpoint.
-func NewMistralCompletion(apiKey, model, baseURL string) (*CompletionModel, error) {
+func NewMistralModel(apiKey, model, baseURL string) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewMistralCompletionModel(apiKey, optString(model), optString(baseURL))
+	inner, err := uniffiblazen.NewMistralModel(apiKey, optString(model), optString(baseURL))
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
-// NewOpenAICompletion creates a [CompletionModel] backed by the OpenAI
+// NewOpenAIModel creates a [Model] backed by the OpenAI
 // chat completions API.
 //
 // model selects the model id (e.g. "gpt-4o"); pass "" for the provider
 // default. baseURL overrides the API root; pass "" for
 // https://api.openai.com.
-func NewOpenAICompletion(apiKey, model, baseURL string) (*CompletionModel, error) {
+func NewOpenAIModel(apiKey, model, baseURL string) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewOpenaiCompletionModel(apiKey, optString(model), optString(baseURL))
+	inner, err := uniffiblazen.NewOpenaiModel(apiKey, optString(model), optString(baseURL))
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
-// NewOpenAICompatCompletion creates a [CompletionModel] for an arbitrary
+// NewOpenAICompatModel creates a [Model] for an arbitrary
 // OpenAI-compatible chat completions endpoint (Ollama, vLLM, LM Studio,
 // LocalAI, ...).
 //
@@ -195,16 +195,16 @@ func NewOpenAICompletion(apiKey, model, baseURL string) (*CompletionModel, error
 // telemetry, baseURL is the API root, apiKey is the bearer credential
 // (use a placeholder string when the upstream does not require one),
 // and model selects the model id.
-func NewOpenAICompatCompletion(providerName, baseURL, apiKey, model string) (*CompletionModel, error) {
+func NewOpenAICompatModel(providerName, baseURL, apiKey, model string) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewOpenaiCompatCompletionModel(providerName, baseURL, apiKey, model)
+	inner, err := uniffiblazen.NewOpenaiCompatModel(providerName, baseURL, apiKey, model)
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
-// NewOpenRouterCompletion creates a [CompletionModel] backed by
+// NewOpenRouterModel creates a [Model] backed by
 // OpenRouter, an aggregator that proxies dozens of upstream providers
 // behind a single OpenAI-compatible API.
 //
@@ -212,67 +212,67 @@ func NewOpenAICompatCompletion(providerName, baseURL, apiKey, model string) (*Co
 // "anthropic/claude-3.5-sonnet"); pass "" for the provider default.
 // baseURL overrides the API root; pass "" for
 // https://openrouter.ai/api/v1.
-func NewOpenRouterCompletion(apiKey, model, baseURL string) (*CompletionModel, error) {
+func NewOpenRouterModel(apiKey, model, baseURL string) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewOpenrouterCompletionModel(apiKey, optString(model), optString(baseURL))
+	inner, err := uniffiblazen.NewOpenrouterModel(apiKey, optString(model), optString(baseURL))
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
-// NewPerplexityCompletion creates a [CompletionModel] backed by the
+// NewPerplexityModel creates a [Model] backed by the
 // Perplexity AI sonar API.
 //
 // model selects the model id (e.g. "sonar-pro"); pass "" for the
 // provider default. baseURL overrides the API root; pass "" for the
 // standard Perplexity endpoint.
-func NewPerplexityCompletion(apiKey, model, baseURL string) (*CompletionModel, error) {
+func NewPerplexityModel(apiKey, model, baseURL string) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewPerplexityCompletionModel(apiKey, optString(model), optString(baseURL))
+	inner, err := uniffiblazen.NewPerplexityModel(apiKey, optString(model), optString(baseURL))
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
-// NewTogetherCompletion creates a [CompletionModel] backed by Together
+// NewTogetherModel creates a [Model] backed by Together
 // AI's OpenAI-compatible API.
 //
 // model selects the model id; pass "" for the provider default. baseURL
 // overrides the API root; pass "" for the standard Together endpoint.
-func NewTogetherCompletion(apiKey, model, baseURL string) (*CompletionModel, error) {
+func NewTogetherModel(apiKey, model, baseURL string) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewTogetherCompletionModel(apiKey, optString(model), optString(baseURL))
+	inner, err := uniffiblazen.NewTogetherModel(apiKey, optString(model), optString(baseURL))
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
-// NewXAICompletion creates a [CompletionModel] backed by xAI's Grok
+// NewXAIModel creates a [Model] backed by xAI's Grok
 // API (OpenAI-compatible).
 //
 // model selects the model id (e.g. "grok-2-latest"); pass "" for the
 // provider default. baseURL overrides the API root; pass "" for the
 // standard xAI endpoint.
-func NewXAICompletion(apiKey, model, baseURL string) (*CompletionModel, error) {
+func NewXAIModel(apiKey, model, baseURL string) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewXaiCompletionModel(apiKey, optString(model), optString(baseURL))
+	inner, err := uniffiblazen.NewXaiModel(apiKey, optString(model), optString(baseURL))
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
-// FalCompletionOpts configures [NewFalCompletion].
+// FalModelOpts configures [NewFalModel].
 //
 // APIKey is required. Model, BaseURL, and Endpoint use the
 // empty-string-means-unset convention. Enterprise toggles the
 // fal.ai enterprise routing path. AutoRouteModality enables
 // automatic modality detection (text/image/video) for the chosen
 // endpoint.
-type FalCompletionOpts struct {
+type FalModelOpts struct {
 	APIKey            string // required: fal.ai key
 	Model             string // "" for the provider default
 	BaseURL           string // "" for https://fal.run
@@ -281,15 +281,15 @@ type FalCompletionOpts struct {
 	AutoRouteModality bool   // true to auto-detect text/image/video
 }
 
-// NewFalCompletion creates a [CompletionModel] backed by fal.ai.
+// NewFalModel creates a [Model] backed by fal.ai.
 //
 // fal.ai exposes both LLM endpoints and image / video generation
 // endpoints behind the same API; this factory targets the text-chat
 // surface. See compute.go for the image / video / TTS factories that
 // share the same backend.
-func NewFalCompletion(opts FalCompletionOpts) (*CompletionModel, error) {
+func NewFalModel(opts FalModelOpts) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewFalCompletionModel(
+	inner, err := uniffiblazen.NewFalModel(
 		opts.APIKey,
 		optString(opts.Model),
 		optString(opts.BaseURL),
@@ -300,14 +300,14 @@ func NewFalCompletion(opts FalCompletionOpts) (*CompletionModel, error) {
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
 // ---------------------------------------------------------------------
 // Local-runtime completion providers
 // ---------------------------------------------------------------------
 
-// CandleCompletionOpts configures [NewCandleCompletion].
+// CandleModelOpts configures [NewCandleModel].
 //
 // ModelID is required and identifies the Hugging Face repo (e.g.
 // "meta-llama/Llama-3-8B"). Device is "" for auto-select, otherwise
@@ -315,7 +315,7 @@ func NewFalCompletion(opts FalCompletionOpts) (*CompletionModel, error) {
 // a backend-specific tag (e.g. "q4_0"). Revision pins a git revision.
 // ContextLength is zero for the model default, otherwise the desired
 // context window in tokens.
-type CandleCompletionOpts struct {
+type CandleModelOpts struct {
 	ModelID       string // required: Hugging Face repo id
 	Device        string // "" = auto
 	Quantization  string // "" = none
@@ -323,11 +323,11 @@ type CandleCompletionOpts struct {
 	ContextLength uint32 // 0 = model default
 }
 
-// NewCandleCompletion creates a [CompletionModel] running locally via
+// NewCandleModel creates a [Model] running locally via
 // the Candle inference runtime (CPU/CUDA/Metal).
-func NewCandleCompletion(opts CandleCompletionOpts) (*CompletionModel, error) {
+func NewCandleModel(opts CandleModelOpts) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewCandleCompletionModel(
+	inner, err := uniffiblazen.NewCandleModel(
 		opts.ModelID,
 		optString(opts.Device),
 		optString(opts.Quantization),
@@ -337,17 +337,17 @@ func NewCandleCompletion(opts CandleCompletionOpts) (*CompletionModel, error) {
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
-// LlamaCppCompletionOpts configures [NewLlamaCppCompletion].
+// LlamaCppModelOpts configures [NewLlamaCppModel].
 //
 // ModelPath is required and points at a GGUF file on the local
 // filesystem. Device is "" for auto-select. Quantization is informational
 // (the GGUF file itself encodes the quantization). ContextLength is
 // zero for the GGUF default. NGpuLayers is the number of transformer
 // layers to offload to the GPU (zero for CPU-only).
-type LlamaCppCompletionOpts struct {
+type LlamaCppModelOpts struct {
 	ModelPath     string // required: path to a .gguf file
 	Device        string // "" = auto
 	Quantization  string // "" = inferred from the GGUF header
@@ -355,11 +355,11 @@ type LlamaCppCompletionOpts struct {
 	NGpuLayers    uint32 // 0 = CPU-only
 }
 
-// NewLlamaCppCompletion creates a [CompletionModel] running locally via
+// NewLlamaCppModel creates a [Model] running locally via
 // the llama.cpp runtime against a GGUF model file.
-func NewLlamaCppCompletion(opts LlamaCppCompletionOpts) (*CompletionModel, error) {
+func NewLlamaCppModel(opts LlamaCppModelOpts) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewLlamacppCompletionModel(
+	inner, err := uniffiblazen.NewLlamacppModel(
 		opts.ModelPath,
 		optString(opts.Device),
 		optString(opts.Quantization),
@@ -369,16 +369,16 @@ func NewLlamaCppCompletion(opts LlamaCppCompletionOpts) (*CompletionModel, error
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
-// MistralRsCompletionOpts configures [NewMistralRsCompletion].
+// MistralRsModelOpts configures [NewMistralRsModel].
 //
 // ModelID is required and identifies the Hugging Face repo. Device is
 // "" for auto-select. Quantization is a backend-specific tag.
 // ContextLength is zero for the model default. Vision enables the
 // multimodal (vision) execution path for models that support it.
-type MistralRsCompletionOpts struct {
+type MistralRsModelOpts struct {
 	ModelID       string // required: Hugging Face repo id
 	Device        string // "" = auto
 	Quantization  string // "" = none
@@ -386,11 +386,11 @@ type MistralRsCompletionOpts struct {
 	Vision        bool   // true to enable vision path
 }
 
-// NewMistralRsCompletion creates a [CompletionModel] running locally via
+// NewMistralRsModel creates a [Model] running locally via
 // the mistral.rs inference runtime.
-func NewMistralRsCompletion(opts MistralRsCompletionOpts) (*CompletionModel, error) {
+func NewMistralRsModel(opts MistralRsModelOpts) (*Model, error) {
 	ensureInit()
-	inner, err := uniffiblazen.NewMistralrsCompletionModel(
+	inner, err := uniffiblazen.NewMistralrsModel(
 		opts.ModelID,
 		optString(opts.Device),
 		optString(opts.Quantization),
@@ -400,7 +400,7 @@ func NewMistralRsCompletion(opts MistralRsCompletionOpts) (*CompletionModel, err
 	if err != nil {
 		return nil, wrapErr(err)
 	}
-	return newCompletionModel(inner), nil
+	return newModel(inner), nil
 }
 
 // ---------------------------------------------------------------------

@@ -2,7 +2,7 @@
 //!
 //! Lets a Python user write a normal class with async capability methods
 //! and have it surface as a first-class Blazen provider that implements
-//! [`CompletionModel`], [`AudioGeneration`], [`VoiceCloning`],
+//! [`Model`], [`AudioGeneration`], [`VoiceCloning`],
 //! [`ImageGeneration`], [`VideoGeneration`], [`Transcription`],
 //! [`ThreeDGeneration`], and [`BackgroundRemoval`]. Every method missing
 //! on the Python side falls through to ``BlazenError::Unsupported`` —
@@ -60,8 +60,8 @@ use blazen_llm::compute::results::{
 };
 use blazen_llm::compute::traits::ComputeProvider;
 use blazen_llm::error::BlazenError;
-use blazen_llm::traits::CompletionModel;
-use blazen_llm::types::{CompletionRequest, CompletionResponse, EmbeddingResponse, StreamChunk};
+use blazen_llm::traits::Model;
+use blazen_llm::types::{EmbeddingResponse, ModelRequest, ModelResponse, StreamChunk};
 use blazen_llm::{ApiProtocol, CustomProvider, CustomProviderHandle};
 
 use crate::compute::request_types::{
@@ -75,9 +75,9 @@ use crate::compute::result_types::{
 use crate::error::blazen_error_to_pyerr;
 use crate::providers::api_protocol::{ApiProtocolKind, PyApiProtocol};
 use crate::providers::base::PyBaseProvider;
-use crate::providers::completion_model::PyCompletionModel;
 use crate::providers::config::PyRetryConfig;
-use crate::providers::defaults::PyCompletionProviderDefaults;
+use crate::providers::defaults::PyProviderDefaults;
+use crate::providers::model::PyModel;
 use crate::providers::openai_compat::PyOpenAiCompatConfig;
 use crate::types::PyHttpClientHandle;
 
@@ -265,25 +265,22 @@ impl CustomProvider for PyCustomProviderAdapter {
         &self.model_id
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         dispatch_call(
             &self.instance,
             "complete",
             move |py| Ok(vec![pythonize_value(py, &request)?]),
-            |_py, bound| depythonize_value::<CompletionResponse>(bound),
+            |_py, bound| depythonize_value::<ModelResponse>(bound),
         )
         .await
     }
 
     async fn stream(
         &self,
-        _request: CompletionRequest,
+        _request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
-        // Mirrors `PySubclassCompletionModel::stream`: streaming through
+        // Mirrors `PySubclassModel::stream`: streaming through
         // the Python adapter is not yet wired. Subclasses that need
         // streaming should call `stream()` directly on the Python side.
         Err(BlazenError::unsupported(
@@ -444,26 +441,26 @@ impl CustomProvider for PyCustomProviderAdapter {
 // ---------------------------------------------------------------------------
 
 /// Build a `(PyCustomProvider, PyBaseProvider)` tuple ready to hand back
-/// to Python from `__new__`. Centralizes the `PyCompletionModel`-wrapping
+/// to Python from `__new__`. Centralizes the `PyModel`-wrapping
 /// and parent-defaults wiring.
 fn build_parent_pair(
     handle: CustomProviderHandle,
     protocol: PyApiProtocol,
-    defaults: Option<PyCompletionProviderDefaults>,
+    defaults: Option<PyProviderDefaults>,
     provider_id: String,
 ) -> PyResult<(PyCustomProvider, PyBaseProvider)> {
     let arc = Arc::new(handle);
-    // `CustomProviderHandle` itself implements `CompletionModel`, so we
-    // can hand it straight to `PyCompletionModel` as the inner trait
-    // object — that lets `PyBaseProvider`/`PyCompletionModel.complete`
+    // `CustomProviderHandle` itself implements `Model`, so we
+    // can hand it straight to `PyModel` as the inner trait
+    // object — that lets `PyBaseProvider`/`PyModel.complete`
     // reach the same defaults-applying path as the Rust handle.
-    let completion: Arc<dyn CompletionModel> = arc.clone();
-    let py_completion = PyCompletionModel {
+    let completion: Arc<dyn Model> = arc.clone();
+    let py_completion = PyModel {
         inner: Some(completion),
         local_model: None,
         config: None,
     };
-    let py_inner: Py<PyCompletionModel> = Python::attach(|py| Py::new(py, py_completion))?;
+    let py_inner: Py<PyModel> = Python::attach(|py| Py::new(py, py_completion))?;
     let base = PyBaseProvider {
         inner: py_inner,
         defaults: defaults.unwrap_or_default(),
@@ -601,7 +598,7 @@ impl PyCustomProvider {
         // The real wiring happens in `__init__` (below) once we have
         // access to `slf` / `cls`. `__new__` only needs to seed enough
         // state to keep PyO3 happy — the parent slot must hold a valid
-        // `PyCompletionModel`, so we build one wrapping an
+        // `PyModel`, so we build one wrapping an
         // "uninitialized" `CustomProviderHandle` whose every method
         // falls back to `Unsupported`.
         let stub: Arc<dyn CustomProvider> = Arc::new(UninitializedAdapter {
@@ -665,13 +662,13 @@ impl PyCustomProvider {
 
         // Replace the placeholder state installed by `__new__`.
         let arc = Arc::new(handle);
-        let completion: Arc<dyn CompletionModel> = arc.clone();
-        let py_completion = PyCompletionModel {
+        let completion: Arc<dyn Model> = arc.clone();
+        let py_completion = PyModel {
             inner: Some(completion),
             local_model: None,
             config: None,
         };
-        let py_inner: Py<PyCompletionModel> = Py::new(py, py_completion)?;
+        let py_inner: Py<PyModel> = Py::new(py, py_completion)?;
         {
             let mut me = slf.borrow_mut();
             me.handle = arc;

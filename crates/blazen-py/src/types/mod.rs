@@ -4,8 +4,6 @@ pub mod abc;
 pub mod artifact;
 pub mod chat_window;
 pub mod citation;
-pub mod completion;
-pub mod completion_request;
 pub mod embedding;
 pub mod finish_reason;
 pub mod http;
@@ -15,6 +13,8 @@ pub mod memory;
 pub mod memory_entry;
 pub mod message;
 pub mod message_content;
+pub mod model;
+pub mod model_request;
 pub mod pricing;
 pub mod pricing_entry;
 pub mod prompts;
@@ -37,8 +37,6 @@ pub use abc::{
 pub use artifact::PyArtifact;
 pub use chat_window::PyChatWindow;
 pub use citation::PyCitation;
-pub use completion::PyCompletionResponse;
-pub use completion_request::PyCompletionRequest;
 pub use embedding::{PyEmbeddingModel, PyEmbeddingResponse};
 pub use finish_reason::PyFinishReason;
 pub use http::{PyHttpClient, PyHttpClientConfig};
@@ -58,6 +56,8 @@ pub use message::{PyChatMessage, PyContentPart, PyRole};
 pub use message_content::{
     PyAudioContent, PyFileContent, PyImageContent, PyImageSource, PyMessageContent, PyVideoContent,
 };
+pub use model::PyModelResponse;
+pub use model_request::PyModelRequest;
 pub use pricing::PyModelPricing;
 pub use pricing_entry::PyPricingEntry;
 pub use prompts::{PyPromptFile, PyPromptRegistry, PyPromptTemplate, PyTemplateRole};
@@ -76,6 +76,5 @@ pub use tool::{PyLlmPayload, PyToolCall, PyToolDefinition, PyToolOutput};
 pub use transcription::PyTranscription;
 pub use usage::{PyTokenUsage, RequestTiming};
 pub use usage_recording::{
-    PyNoopUsageEmitter, PyUsageEmitter, PyUsageRecordingCompletionModel,
-    PyUsageRecordingEmbeddingModel,
+    PyNoopUsageEmitter, PyUsageEmitter, PyUsageRecordingEmbeddingModel, PyUsageRecordingModel,
 };

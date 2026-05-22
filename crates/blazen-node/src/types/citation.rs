@@ -107,7 +107,7 @@ pub struct JsCitationClass {
 )]
 impl JsCitationClass {
     /// Construct a citation. Most callers receive these via
-    /// `CompletionResponse.citations` rather than building them by hand.
+    /// `ModelResponse.citations` rather than building them by hand.
     #[napi(constructor)]
     pub fn new(options: CitationOptions) -> Self {
         Self {

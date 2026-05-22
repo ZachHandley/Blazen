@@ -130,21 +130,21 @@ console.log(result.data); // { status: "done" }
 
 ## LLM Integration
 
-`CompletionModel` provides a unified interface to 15 LLM providers. Create a model instance with a static factory method and call `complete()` or `completeWithOptions()`. All messages and responses are fully typed.
+`Model` provides a unified interface to 15 LLM providers. Create a model instance with a static factory method and call `complete()` or `completeWithOptions()`. All messages and responses are fully typed.
 
 ### ChatMessage and Role
 
 Build messages with the `ChatMessage` class and `Role` enum:
 
 ```typescript
-import { CompletionModel, ChatMessage, Role } from "blazen";
-import type { CompletionResponse, ToolCall, TokenUsage } from "blazen";
+import { Model, ChatMessage, Role } from "blazen";
+import type { ModelResponse, ToolCall, TokenUsage } from "blazen";
 
-const model = CompletionModel.openrouter({ apiKey: process.env.OPENROUTER_API_KEY! });
-// or rely on the OPENROUTER_API_KEY env var: CompletionModel.openrouter();
+const model = Model.openrouter({ apiKey: process.env.OPENROUTER_API_KEY! });
+// or rely on the OPENROUTER_API_KEY env var: Model.openrouter();
 
 // Using static factory methods (recommended)
-const response: CompletionResponse = await model.complete([
+const response: ModelResponse = await model.complete([
   ChatMessage.system("You are helpful."),
   ChatMessage.user("What is 2+2?"),
 ]);
@@ -187,9 +187,9 @@ const msg = ChatMessage.userParts([
 Use `completeWithOptions` to control temperature, token limits, model selection, and tool definitions:
 
 ```typescript
-import type { CompletionOptions } from "blazen";
+import type { ModelOptions } from "blazen";
 
-const options: CompletionOptions = {
+const options: ModelOptions = {
   temperature: 0.9,
   maxTokens: 256,
   topP: 0.95,
@@ -212,35 +212,35 @@ Every factory method takes a single options object (or no argument, to read the 
 
 | Factory Method | Provider |
 |---|---|
-| `CompletionModel.openai({ apiKey })` | OpenAI |
-| `CompletionModel.anthropic({ apiKey })` | Anthropic |
-| `CompletionModel.gemini({ apiKey })` | Google Gemini |
-| `CompletionModel.azure({ apiKey, resourceName, deploymentName })` | Azure OpenAI |
-| `CompletionModel.openrouter({ apiKey })` | OpenRouter |
-| `CompletionModel.groq({ apiKey })` | Groq |
-| `CompletionModel.together({ apiKey })` | Together AI |
-| `CompletionModel.mistral({ apiKey })` | Mistral AI |
-| `CompletionModel.deepseek({ apiKey })` | DeepSeek |
-| `CompletionModel.fireworks({ apiKey })` | Fireworks AI |
-| `CompletionModel.perplexity({ apiKey })` | Perplexity |
-| `CompletionModel.xai({ apiKey })` | xAI / Grok |
-| `CompletionModel.cohere({ apiKey })` | Cohere |
-| `CompletionModel.bedrock({ apiKey, region })` | AWS Bedrock |
-| `CompletionModel.fal({ apiKey })` | fal.ai |
+| `Model.openai({ apiKey })` | OpenAI |
+| `Model.anthropic({ apiKey })` | Anthropic |
+| `Model.gemini({ apiKey })` | Google Gemini |
+| `Model.azure({ apiKey, resourceName, deploymentName })` | Azure OpenAI |
+| `Model.openrouter({ apiKey })` | OpenRouter |
+| `Model.groq({ apiKey })` | Groq |
+| `Model.together({ apiKey })` | Together AI |
+| `Model.mistral({ apiKey })` | Mistral AI |
+| `Model.deepseek({ apiKey })` | DeepSeek |
+| `Model.fireworks({ apiKey })` | Fireworks AI |
+| `Model.perplexity({ apiKey })` | Perplexity |
+| `Model.xai({ apiKey })` | xAI / Grok |
+| `Model.cohere({ apiKey })` | Cohere |
+| `Model.bedrock({ apiKey, region })` | AWS Bedrock |
+| `Model.fal({ apiKey })` | fal.ai |
 
 Omit the argument entirely to fall back to provider-specific environment variables (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `OPENROUTER_API_KEY`):
 
 ```typescript
-const model = CompletionModel.openai(); // reads OPENAI_API_KEY
+const model = Model.openai(); // reads OPENAI_API_KEY
 ```
 
 ### Using LLMs Inside Workflows
 
 ```typescript
-import { Workflow, CompletionModel, ChatMessage } from "blazen";
+import { Workflow, Model, ChatMessage } from "blazen";
 
-const model = CompletionModel.openai({ apiKey: process.env.OPENAI_API_KEY! });
-// or rely on the OPENAI_API_KEY env var: CompletionModel.openai();
+const model = Model.openai({ apiKey: process.env.OPENAI_API_KEY! });
+// or rely on the OPENAI_API_KEY env var: Model.openai();
 
 const wf = new Workflow("llm-workflow");
 
@@ -264,12 +264,12 @@ Every error thrown across the FFI boundary is an instance of `BlazenError extend
 
 ```typescript
 import {
-  CompletionModel, ChatMessage,
+  Model, ChatMessage,
   BlazenError, RateLimitError, AuthError, TimeoutError, ValidationError,
   ContentPolicyError, ProviderError,
 } from "blazen";
 
-const model = CompletionModel.openai();
+const model = Model.openai();
 
 try {
   const response = await model.complete([ChatMessage.user("Hello")]);
@@ -369,7 +369,7 @@ Returned by agent runs that may invoke tools across multiple iterations.
 import type { AgentResult } from "blazen";
 
 const result: AgentResult = await agent.run("Summarize this document");
-console.log(result.response);    // CompletionResponse from the final model call
+console.log(result.response);    // ModelResponse from the final model call
 console.log(result.messages);    // full message history (incl. tool calls + results)
 console.log(result.iterations);  // number of tool-calling iterations
 console.log(result.totalCost);   // aggregated USD cost across iterations, or null
@@ -378,7 +378,7 @@ console.log(result.toString());  // matches the Python AgentResult.__repr__
 
 | Getter | Type | Description |
 |---|---|---|
-| `.response` | `CompletionResponse` | Final completion response from the model |
+| `.response` | `ModelResponse` | Final completion response from the model |
 | `.messages` | `Array<any>` | Full message history including tool calls and results |
 | `.iterations` | `number` | Number of tool-calling iterations performed |
 | `.totalCost` | `number \| null` | Aggregated USD cost across iterations, if available |
@@ -405,7 +405,7 @@ console.log("total cost:", batch.totalCost);
 
 | Getter | Type | Description |
 |---|---|---|
-| `.responses` | `Array<CompletionResponse \| null>` | One response per request; `null` for failures |
+| `.responses` | `Array<ModelResponse \| null>` | One response per request; `null` for failures |
 | `.errors` | `Array<string \| null>` | One error message per request; `null` for successes |
 | `.totalUsage` | `TokenUsage \| null` | Aggregated token usage across successful responses |
 | `.totalCost` | `number \| null` | Aggregated USD cost across successful responses |
@@ -417,7 +417,7 @@ console.log("total cost:", batch.totalCost);
 
 ## Local Inference Types
 
-Local inference (mistral.rs, llama.cpp, candle) exposes its own typed result and streaming classes alongside the higher-level `CompletionModel` API. Streams are pulled by repeatedly awaiting `stream.next()` until it returns `null` -- they are **not** `for await`-iterable.
+Local inference (mistral.rs, llama.cpp, candle) exposes its own typed result and streaming classes alongside the higher-level `Model` API. Streams are pulled by repeatedly awaiting `stream.next()` until it returns `null` -- they are **not** `for await`-iterable.
 
 ### mistral.rs
 
@@ -775,7 +775,7 @@ Full TypeScript type definitions ship with the package -- no `@types` needed. Al
 
 ```typescript
 import {
-  Workflow, WorkflowHandler, Context, CompletionModel,
+  Workflow, WorkflowHandler, Context, Model,
   ChatMessage, Role, version,
   // Typed errors
   BlazenError, RateLimitError, AuthError, ProviderError,
@@ -792,7 +792,7 @@ import {
   LangfuseConfig, initLangfuse,
 } from "blazen";
 import type {
-  JsWorkflowResult, CompletionResponse, CompletionOptions,
+  JsWorkflowResult, ModelResponse, ModelOptions,
   ToolCall, TokenUsage, ContentPart, ImageContent, ImageSource, MediaSource,
 } from "blazen";
 ```
@@ -830,16 +830,16 @@ import type {
 | `Context.session` | `SessionNamespace` getter -- in-process-only values (excluded from snapshots) |
 | `StateNamespace.set / get / setBytes / getBytes` | Async persistable storage routed through the same dispatch as `ctx.set` |
 | `SessionNamespace.set / get / has / remove` | Async in-process-only storage; values are routed through `serde_json::Value` (no JS identity preservation) |
-| `CompletionModel` | Unified LLM client with 15 provider factory methods |
-| `CompletionModel.complete(messages)` | Chat completion with typed `ChatMessage[]` input, returns `CompletionResponse` (async) |
-| `CompletionModel.completeWithOptions(messages, opts)` | Chat completion with `CompletionOptions` (async) |
-| `CompletionModel.modelId` | Getter for the current model ID |
+| `Model` | Unified LLM client with 15 provider factory methods |
+| `Model.complete(messages)` | Chat completion with typed `ChatMessage[]` input, returns `ModelResponse` (async) |
+| `Model.completeWithOptions(messages, opts)` | Chat completion with `ModelOptions` (async) |
+| `Model.modelId` | Getter for the current model ID |
 | `ChatMessage` | Chat message class with static factories: `.system()`, `.user()`, `.assistant()`, `.tool()`, `.userImageUrl()`, `.userImageBase64()`, `.userParts()` |
 | `Role` | String enum: `Role.System`, `Role.User`, `Role.Assistant`, `Role.Tool` |
-| `CompletionResponse` | Interface: `{ content, toolCalls, usage, model, finishReason }` |
+| `ModelResponse` | Interface: `{ content, toolCalls, usage, model, finishReason }` |
 | `ToolCall` | Interface: `{ id, name, arguments }` |
 | `TokenUsage` | Interface: `{ promptTokens, completionTokens, totalTokens }` |
-| `CompletionOptions` | Interface: `{ temperature?, maxTokens?, topP?, model?, tools? }` |
+| `ModelOptions` | Interface: `{ temperature?, maxTokens?, topP?, model?, tools? }` |
 | `ContentPart` / `ImageContent` / `ImageSource` | Types for multimodal message content |
 | `MediaSource` | Type alias for `ImageSource` |
 | `AgentResult` | Class: `.response`, `.messages`, `.iterations`, `.totalCost`, `.toString()` |

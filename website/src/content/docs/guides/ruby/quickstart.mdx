@@ -93,7 +93,7 @@ end
 
 ## A quick LLM completion
 
-The `Blazen::Providers` module exposes keyword-arg factories for every supported backend. Each factory returns a `Blazen::Llm::CompletionModel` (or `EmbeddingModel`, etc.).
+The `Blazen::Providers` module exposes keyword-arg factories for every supported backend. Each factory returns a `Blazen::Llm::Model` (or `EmbeddingModel`, etc.).
 
 ```ruby
 require 'blazen'
@@ -105,7 +105,7 @@ model = Blazen::Providers.openai(
   model: 'gpt-4o-mini',
 )
 
-request = Blazen::Llm.completion_request(
+request = Blazen::Llm.model_request(
   messages: [
     Blazen::Llm.system('You are a helpful assistant.'),
     Blazen::Llm.user('Write a haiku about Ruby blocks.'),
@@ -118,7 +118,7 @@ puts response.content
 puts "tokens in=#{response.usage.prompt_tokens} out=#{response.usage.completion_tokens}"
 ```
 
-`Blazen::Llm.completion_request` consumes the messages array -- once you pass a `ChatMessage` in, do not reuse the same wrapper for a second request. Build a fresh one each time.
+`Blazen::Llm.model_request` consumes the messages array -- once you pass a `ChatMessage` in, do not reuse the same wrapper for a second request. Build a fresh one each time.
 
 ## Lifecycle
 
@@ -128,7 +128,7 @@ The binding has a small lifecycle surface:
 |---|---|
 | `Blazen.init` | Boots the embedded Tokio runtime and tracing subscriber. Idempotent; called lazily by every entry point. |
 | `Blazen.shutdown` | Flushes telemetry exporters. Safe to call once before process exit. |
-| Native handles (`Workflow::Instance`, `CompletionModel`, ...) | Auto-freed via `FFI::AutoPointer` finalizers when the Ruby wrapper is garbage-collected. |
+| Native handles (`Workflow::Instance`, `Model`, ...) | Auto-freed via `FFI::AutoPointer` finalizers when the Ruby wrapper is garbage-collected. |
 
 Every wrapper class installs an `FFI::AutoPointer` finalizer, so a forgotten handle does not leak native memory across a GC -- but pinning long-lived models in a constant or instance variable is preferred over relying on GC timing.
 

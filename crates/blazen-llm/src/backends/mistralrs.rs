@@ -1,7 +1,7 @@
 //! Bridge between [`blazen_llm_mistralrs::MistralRsProvider`] and
-//! [`crate::CompletionModel`].
+//! [`crate::Model`].
 //!
-//! This module implements the `CompletionModel` trait for `MistralRsProvider`,
+//! This module implements the `Model` trait for `MistralRsProvider`,
 //! mapping Blazen's provider-agnostic request/response types to and from the
 //! mistral.rs engine's own types.
 //!
@@ -14,7 +14,7 @@
 //!
 //! Vision messages are supported when the provider is constructed with
 //! [`MistralRsOptions::vision`](blazen_llm_mistralrs::MistralRsOptions::vision)
-//! set to `true`. Image content parts in a [`CompletionRequest`] are
+//! set to `true`. Image content parts in a [`ModelRequest`] are
 //! translated into [`InferenceImage`] values:
 //!
 //! - [`ImageSource::File`](crate::types::ImageSource::File) is passed
@@ -37,8 +37,8 @@ use futures_util::Stream;
 
 use crate::error::BlazenError;
 use crate::types::{
-    ChatMessage, CompletionRequest, CompletionResponse, ContentPart, ImageContent, ImageSource,
-    Role, StreamChunk,
+    ChatMessage, ContentPart, ImageContent, ImageSource, ModelRequest, ModelResponse, Role,
+    StreamChunk,
 };
 
 // ---------------------------------------------------------------------------
@@ -156,19 +156,16 @@ fn convert_messages(messages: &[ChatMessage]) -> Result<Vec<ChatMessageInput>, B
 }
 
 // ---------------------------------------------------------------------------
-// CompletionModel implementation
+// Model implementation
 // ---------------------------------------------------------------------------
 
 #[async_trait]
-impl crate::traits::CompletionModel for MistralRsProvider {
+impl crate::traits::Model for MistralRsProvider {
     fn model_id(&self) -> &str {
         MistralRsProvider::model_id(self)
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         let messages = convert_messages(&request.messages)?;
 
         let result = self
@@ -214,7 +211,7 @@ impl crate::traits::CompletionModel for MistralRsProvider {
                 effort: None,
             });
 
-        Ok(CompletionResponse {
+        Ok(ModelResponse {
             content: result.content,
             tool_calls,
             reasoning,
@@ -234,7 +231,7 @@ impl crate::traits::CompletionModel for MistralRsProvider {
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         use futures_util::StreamExt;

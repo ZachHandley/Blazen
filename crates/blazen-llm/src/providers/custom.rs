@@ -10,7 +10,7 @@
 //! callers. It owns an `Arc<dyn CustomProvider>` plus per-instance defaults
 //! (system prompt, tools, response format, role-specific compute defaults,
 //! retry config), applies those defaults before dispatching to the inner
-//! provider, and implements every relevant Blazen trait (`CompletionModel`,
+//! provider, and implements every relevant Blazen trait (`Model`,
 //! `ComputeProvider`, `AudioGeneration`, `ImageGeneration`, `VideoGeneration`,
 //! `Transcription`, `ThreeDGeneration`, `VoiceCloning`, `BackgroundRemoval`,
 //! and `CustomProvider` itself for clean composition).
@@ -63,16 +63,14 @@ use crate::http::HttpClient;
 use crate::providers::base::BaseProvider;
 use crate::providers::defaults::{
     AudioMusicProviderDefaults, AudioSpeechProviderDefaults, BackgroundRemovalProviderDefaults,
-    BaseProviderDefaults, BeforeCompletionRequestHook, BeforeRequestHook,
-    CompletionProviderDefaults, ImageGenerationProviderDefaults, ImageUpscaleProviderDefaults,
+    BaseProviderDefaults, BeforeModelRequestHook, BeforeRequestHook,
+    ImageGenerationProviderDefaults, ImageUpscaleProviderDefaults, ProviderDefaults,
     ThreeDProviderDefaults, TranscriptionProviderDefaults, VideoProviderDefaults,
     VoiceCloningProviderDefaults,
 };
 use crate::retry::RetryConfig;
-use crate::traits::CompletionModel;
-use crate::types::{
-    CompletionRequest, CompletionResponse, EmbeddingResponse, StreamChunk, ToolDefinition,
-};
+use crate::traits::Model;
+use crate::types::{EmbeddingResponse, ModelRequest, ModelResponse, StreamChunk, ToolDefinition};
 
 // ---------------------------------------------------------------------------
 // ApiProtocol
@@ -131,10 +129,7 @@ pub trait CustomProvider: Send + Sync + 'static {
     // ---- Completion ----
 
     /// Perform a non-streaming chat completion.
-    async fn complete(
-        &self,
-        _request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, _request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         Err(BlazenError::unsupported(
             "CustomProvider::complete not implemented",
         ))
@@ -143,7 +138,7 @@ pub trait CustomProvider: Send + Sync + 'static {
     /// Perform a streaming chat completion.
     async fn stream(
         &self,
-        _request: CompletionRequest,
+        _request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         Err(BlazenError::unsupported(
@@ -261,24 +256,24 @@ pub trait CustomProvider: Send + Sync + 'static {
 }
 
 // ---------------------------------------------------------------------------
-// CustomProviderAsCompletionModel — adapter (private)
+// CustomProviderAsModel — adapter (private)
 // ---------------------------------------------------------------------------
 
 /// Internal adapter that turns an `Arc<dyn CustomProvider>` into an
-/// `Arc<dyn CompletionModel>`, so [`BaseProvider::new`] can wrap it for
+/// `Arc<dyn Model>`, so [`BaseProvider::new`] can wrap it for
 /// completion-defaults application.
-pub(crate) struct CustomProviderAsCompletionModel(pub Arc<dyn CustomProvider>);
+pub(crate) struct CustomProviderAsModel(pub Arc<dyn CustomProvider>);
 
-impl std::fmt::Debug for CustomProviderAsCompletionModel {
+impl std::fmt::Debug for CustomProviderAsModel {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CustomProviderAsCompletionModel")
+        f.debug_struct("CustomProviderAsModel")
             .field("provider_id", &self.0.provider_id())
             .finish_non_exhaustive()
     }
 }
 
 #[async_trait]
-impl CompletionModel for CustomProviderAsCompletionModel {
+impl Model for CustomProviderAsModel {
     fn model_id(&self) -> &str {
         self.0.model_id()
     }
@@ -291,16 +286,13 @@ impl CompletionModel for CustomProviderAsCompletionModel {
         self.0.http_client()
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         self.0.complete(request).await
     }
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         self.0.stream(request).await
@@ -316,7 +308,7 @@ impl CompletionModel for CustomProviderAsCompletionModel {
 /// before delegating each method to the inner provider.
 ///
 /// Bindings hold this. It implements every relevant Blazen trait
-/// (`CompletionModel`, `ComputeProvider`, all media-capability traits, and
+/// (`Model`, `ComputeProvider`, all media-capability traits, and
 /// `CustomProvider` itself for clean nesting).
 pub struct CustomProviderHandle {
     inner: Arc<dyn CustomProvider>,
@@ -370,11 +362,10 @@ impl CustomProviderHandle {
     /// compute defaults.
     #[must_use]
     pub fn new(inner: Arc<dyn CustomProvider>) -> Self {
-        let completion_model: Arc<dyn CompletionModel> =
-            Arc::new(CustomProviderAsCompletionModel(Arc::clone(&inner)));
+        let model: Arc<dyn Model> = Arc::new(CustomProviderAsModel(Arc::clone(&inner)));
         Self {
             inner,
-            base: BaseProvider::new(completion_model),
+            base: BaseProvider::new(model),
             retry_config: None,
             audio_speech_defaults: None,
             audio_music_defaults: None,
@@ -429,17 +420,17 @@ impl CustomProviderHandle {
     }
 
     /// Set the typed before-completion hook. Fires AFTER the universal
-    /// `before_request` hook, with a typed view of the `CompletionRequest`.
+    /// `before_request` hook, with a typed view of the `ModelRequest`.
     #[must_use]
-    pub fn with_before_completion(mut self, hook: BeforeCompletionRequestHook) -> Self {
-        self.base = self.base.with_before_completion(hook);
+    pub fn with_before_model(mut self, hook: BeforeModelRequestHook) -> Self {
+        self.base = self.base.with_before_model(hook);
         self
     }
 
-    /// Replace the entire `CompletionProviderDefaults` for the underlying
+    /// Replace the entire `ProviderDefaults` for the underlying
     /// completion path.
     #[must_use]
-    pub fn with_completion_defaults(mut self, defaults: CompletionProviderDefaults) -> Self {
+    pub fn with_defaults(mut self, defaults: ProviderDefaults) -> Self {
         self.base = self.base.set_defaults(defaults);
         self
     }
@@ -455,7 +446,7 @@ impl CustomProviderHandle {
 
     /// Read-only access to the configured completion defaults.
     #[must_use]
-    pub fn completion_defaults(&self) -> &CompletionProviderDefaults {
+    pub fn provider_defaults(&self) -> &ProviderDefaults {
         self.base.defaults()
     }
 
@@ -586,18 +577,15 @@ impl CustomProvider for CustomProviderHandle {
         self.inner.http_client()
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         // `BaseProvider` applies completion defaults then calls the inner
-        // CompletionModel adapter, which forwards to `self.inner.complete`.
+        // Model adapter, which forwards to `self.inner.complete`.
         self.base.complete(request).await
     }
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         self.base.stream(request).await
@@ -700,11 +688,11 @@ impl CustomProvider for CustomProviderHandle {
 }
 
 // ---------------------------------------------------------------------------
-// CompletionModel impl
+// Model impl
 // ---------------------------------------------------------------------------
 
 #[async_trait]
-impl CompletionModel for CustomProviderHandle {
+impl Model for CustomProviderHandle {
     fn model_id(&self) -> &str {
         self.inner.model_id()
     }
@@ -719,16 +707,13 @@ impl CompletionModel for CustomProviderHandle {
         self.inner.http_client()
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         self.base.complete(request).await
     }
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         self.base.stream(request).await
@@ -878,27 +863,24 @@ impl CustomProvider for OpenAiBackedCustomProvider {
     }
 
     fn model_id(&self) -> &str {
-        <OpenAiCompatProvider as CompletionModel>::model_id(&self.inner)
+        <OpenAiCompatProvider as Model>::model_id(&self.inner)
     }
 
     fn retry_config(&self) -> Option<&Arc<RetryConfig>> {
-        <OpenAiCompatProvider as CompletionModel>::retry_config(&self.inner)
+        <OpenAiCompatProvider as Model>::retry_config(&self.inner)
     }
 
     fn http_client(&self) -> Option<Arc<dyn HttpClient>> {
         Some(OpenAiCompatProvider::http_client(&self.inner))
     }
 
-    async fn complete(
-        &self,
-        request: CompletionRequest,
-    ) -> Result<CompletionResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         self.inner.complete(request).await
     }
 
     async fn stream(
         &self,
-        request: CompletionRequest,
+        request: ModelRequest,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
     {
         self.inner.stream(request).await
@@ -1031,11 +1013,8 @@ mod tests {
             "stub-complete"
         }
 
-        async fn complete(
-            &self,
-            _request: CompletionRequest,
-        ) -> Result<CompletionResponse, BlazenError> {
-            Ok(CompletionResponse {
+        async fn complete(&self, _request: ModelRequest) -> Result<ModelResponse, BlazenError> {
+            Ok(ModelResponse {
                 content: Some("hello from stub".to_string()),
                 tool_calls: Vec::new(),
                 reasoning: None,
@@ -1081,8 +1060,8 @@ mod tests {
     #[tokio::test]
     async fn complete_dispatches_to_inner() {
         let handle = CustomProviderHandle::new(Arc::new(StubCompleteProvider));
-        let req = CompletionRequest::new(vec![ChatMessage::user("hi")]);
-        let resp = <CustomProviderHandle as CompletionModel>::complete(&handle, req)
+        let req = ModelRequest::new(vec![ChatMessage::user("hi")]);
+        let resp = <CustomProviderHandle as Model>::complete(&handle, req)
             .await
             .unwrap();
         assert_eq!(resp.content.as_deref(), Some("hello from stub"));
@@ -1099,19 +1078,19 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn completion_defaults_propagate_through_handle() {
+    async fn provider_defaults_propagate_through_handle() {
         let handle = CustomProviderHandle::new(Arc::new(StubCompleteProvider))
             .with_system_prompt("be terse");
 
-        let req = CompletionRequest::new(vec![ChatMessage::user("hi")]);
-        let resp = <CustomProviderHandle as CompletionModel>::complete(&handle, req)
+        let req = ModelRequest::new(vec![ChatMessage::user("hi")]);
+        let resp = <CustomProviderHandle as Model>::complete(&handle, req)
             .await
             .unwrap();
         assert_eq!(resp.content.as_deref(), Some("hello from stub"));
 
         // Sanity: read back the defaults we just set.
         assert_eq!(
-            handle.completion_defaults().system_prompt.as_deref(),
+            handle.provider_defaults().system_prompt.as_deref(),
             Some("be terse")
         );
     }
@@ -1156,10 +1135,7 @@ mod tests {
     fn ollama_factory_builds_openai_protocol() {
         let h = ollama("192.168.1.50", 11434, "llama3.1");
         assert_eq!(h.provider_id_str(), "ollama");
-        assert_eq!(
-            <CustomProviderHandle as CompletionModel>::model_id(&h),
-            "llama3.1"
-        );
+        assert_eq!(<CustomProviderHandle as Model>::model_id(&h), "llama3.1");
         match h.protocol() {
             ApiProtocol::OpenAi(cfg) => {
                 assert_eq!(cfg.base_url, "http://192.168.1.50:11434/v1");

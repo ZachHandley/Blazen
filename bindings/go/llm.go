@@ -67,7 +67,7 @@ type TokenUsage struct {
 	ReasoningTokens   uint64
 }
 
-// CompletionRequest is a provider-agnostic chat completion request.
+// ModelRequest is a provider-agnostic chat completion request.
 //
 // Temperature, MaxTokens, and TopP retain pointer types so callers can
 // distinguish an explicit zero from "use the provider default" — pass
@@ -78,7 +78,7 @@ type TokenUsage struct {
 // ResponseFormatJSON, when set, is a JSON Schema string constraining
 // the model's output. System, when set, is prepended as a system-role
 // message before Messages.
-type CompletionRequest struct {
+type ModelRequest struct {
 	Messages           []ChatMessage
 	Tools              []Tool
 	Temperature        *float64
@@ -89,12 +89,12 @@ type CompletionRequest struct {
 	System             string
 }
 
-// CompletionResponse is the outcome of a non-streaming chat completion.
+// ModelResponse is the outcome of a non-streaming chat completion.
 //
 // Content is the empty string when the provider returned no text (e.g.
 // the model emitted only tool calls). FinishReason is the empty string
 // when the provider did not report one.
-type CompletionResponse struct {
+type ModelResponse struct {
 	Content      string
 	ToolCalls    []ToolCall
 	FinishReason string
@@ -323,13 +323,13 @@ func tokenUsageFromFFI(u uniffiblazen.TokenUsage) TokenUsage {
 	}
 }
 
-// toFFI converts the wrapper CompletionRequest into its FFI
+// toFFI converts the wrapper ModelRequest into its FFI
 // counterpart. Pointer-typed numeric fields are passed through as-is so
 // callers retain the ability to distinguish "explicitly zero" from
 // "unset"; string-typed Model/ResponseFormatJSON/System are translated
 // from the wrapper's empty-string convention into FFI optionals.
-func (r CompletionRequest) toFFI() uniffiblazen.CompletionRequest {
-	return uniffiblazen.CompletionRequest{
+func (r ModelRequest) toFFI() uniffiblazen.ModelRequest {
+	return uniffiblazen.ModelRequest{
 		Messages:           chatMessageSliceToFFI(r.Messages),
 		Tools:              toolSliceToFFI(r.Tools),
 		Temperature:        r.Temperature,
@@ -341,10 +341,10 @@ func (r CompletionRequest) toFFI() uniffiblazen.CompletionRequest {
 	}
 }
 
-// completionResponseFromFFI converts an FFI CompletionResponse into the
+// completionResponseFromFFI converts an FFI ModelResponse into the
 // wrapper form.
-func completionResponseFromFFI(r uniffiblazen.CompletionResponse) CompletionResponse {
-	return CompletionResponse{
+func completionResponseFromFFI(r uniffiblazen.ModelResponse) ModelResponse {
+	return ModelResponse{
 		Content:      r.Content,
 		ToolCalls:    toolCallSliceFromFFI(r.ToolCalls),
 		FinishReason: r.FinishReason,
@@ -365,26 +365,26 @@ func embeddingResponseFromFFI(r uniffiblazen.EmbeddingResponse) EmbeddingRespons
 	}
 }
 
-// CompletionModel is a handle to a chat completion model. Obtain one
-// via a provider factory (see providers.go) and call [CompletionModel.Complete]
-// or [CompletionModel.CompleteBlocking] to generate responses.
+// Model is a handle to a chat completion model. Obtain one
+// via a provider factory (see providers.go) and call [Model.Complete]
+// or [Model.CompleteBlocking] to generate responses.
 //
-// CompletionModel owns a native handle; call [CompletionModel.Close]
+// Model owns a native handle; call [Model.Close]
 // when finished to release it. A finalizer is attached as a safety net,
 // but explicit Close is preferred for predictable resource release.
-type CompletionModel struct {
-	inner *uniffiblazen.CompletionModel
+type Model struct {
+	inner *uniffiblazen.Model
 	once  sync.Once
 }
 
-// newCompletionModel wraps a raw FFI handle into the public type and
+// newModel wraps a raw FFI handle into the public type and
 // installs a finalizer so a forgotten Close() still releases the native
 // resource. Intended for use by sibling files in this package (e.g.
-// providers.go) — callers in user code obtain a [*CompletionModel]
+// providers.go) — callers in user code obtain a [*Model]
 // from a provider factory rather than constructing one directly.
-func newCompletionModel(inner *uniffiblazen.CompletionModel) *CompletionModel {
-	m := &CompletionModel{inner: inner}
-	runtime.SetFinalizer(m, func(c *CompletionModel) { c.Close() })
+func newModel(inner *uniffiblazen.Model) *Model {
+	m := &Model{inner: inner}
+	runtime.SetFinalizer(m, func(c *Model) { c.Close() })
 	return m
 }
 
@@ -394,12 +394,12 @@ func newCompletionModel(inner *uniffiblazen.CompletionModel) *CompletionModel {
 // model responds. The Rust-side request continues until it finishes
 // naturally — cancellation propagation into the runtime is a known gap
 // pending an upstream UniFFI feature.
-func (m *CompletionModel) Complete(ctx context.Context, req CompletionRequest) (*CompletionResponse, error) {
+func (m *Model) Complete(ctx context.Context, req ModelRequest) (*ModelResponse, error) {
 	if m.inner == nil {
 		return nil, &ValidationError{Message: "completion model has been closed"}
 	}
 	type completeResult struct {
-		res uniffiblazen.CompletionResponse
+		res uniffiblazen.ModelResponse
 		err error
 	}
 	done := make(chan completeResult, 1)
@@ -421,12 +421,12 @@ func (m *CompletionModel) Complete(ctx context.Context, req CompletionRequest) (
 }
 
 // CompleteBlocking is the synchronous variant of
-// [CompletionModel.Complete]. It does not accept a [context.Context]
+// [Model.Complete]. It does not accept a [context.Context]
 // and blocks the calling goroutine until the model responds. Prefer
-// [CompletionModel.Complete] in long-running services where
+// [Model.Complete] in long-running services where
 // cancellation matters; use this in short scripts or main() functions
 // where the async wiring is overkill.
-func (m *CompletionModel) CompleteBlocking(req CompletionRequest) (*CompletionResponse, error) {
+func (m *Model) CompleteBlocking(req ModelRequest) (*ModelResponse, error) {
 	if m.inner == nil {
 		return nil, &ValidationError{Message: "completion model has been closed"}
 	}
@@ -439,8 +439,8 @@ func (m *CompletionModel) CompleteBlocking(req CompletionRequest) (*CompletionRe
 }
 
 // ModelID returns the model's identifier (e.g. "gpt-4o",
-// "claude-3-5-sonnet"). Returns the empty string after [CompletionModel.Close].
-func (m *CompletionModel) ModelID() string {
+// "claude-3-5-sonnet"). Returns the empty string after [Model.Close].
+func (m *Model) ModelID() string {
 	if m.inner == nil {
 		return ""
 	}
@@ -450,7 +450,7 @@ func (m *CompletionModel) ModelID() string {
 // Close releases the underlying native handle. It is safe to call
 // Close multiple times and from multiple goroutines; subsequent calls
 // are no-ops.
-func (m *CompletionModel) Close() {
+func (m *Model) Close() {
 	m.once.Do(func() {
 		if m.inner != nil {
 			m.inner.Destroy()
@@ -484,7 +484,7 @@ func newEmbeddingModel(inner *uniffiblazen.EmbeddingModel) *EmbeddingModel {
 
 // Embed produces an embedding vector for each input string. The FFI
 // call is blocking on the Rust side; ctx cancellation semantics match
-// [CompletionModel.Complete] — the caller is unblocked on cancel, but
+// [Model.Complete] — the caller is unblocked on cancel, but
 // the Rust-side request continues until it finishes naturally.
 func (m *EmbeddingModel) Embed(ctx context.Context, inputs []string) (*EmbeddingResponse, error) {
 	if m.inner == nil {

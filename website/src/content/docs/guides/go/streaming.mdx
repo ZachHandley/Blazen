@@ -11,7 +11,7 @@ order: 4
 The Go binding exposes streaming completions through a single function:
 
 ```go
-func Stream(ctx context.Context, model *CompletionModel, req CompletionRequest) <-chan StreamEvent
+func Stream(ctx context.Context, model *Model, req ModelRequest) <-chan StreamEvent
 ```
 
 `Stream` returns immediately with a receive-only channel of `blazen.StreamEvent`. The channel delivers zero or more `*StreamChunkEvent` values as the model emits tokens, then exactly one terminal event -- either `*StreamDoneEvent` (success) or `*StreamErrorEvent` (failure) -- after which the channel is closed.
@@ -29,13 +29,13 @@ func main() {
     blazen.Init()
     defer blazen.Shutdown()
 
-    model, err := blazen.NewOpenAICompletion(os.Getenv("OPENAI_API_KEY"), "gpt-4o", "")
+    model, err := blazen.NewOpenAIModel(os.Getenv("OPENAI_API_KEY"), "gpt-4o", "")
     if err != nil {
         panic(err)
     }
     defer model.Close()
 
-    req := blazen.CompletionRequest{
+    req := blazen.ModelRequest{
         Messages: []blazen.ChatMessage{
             {Role: "user", Content: "Write a haiku about Go's channels."},
         },
@@ -148,5 +148,5 @@ Closing the model mid-stream is undefined behavior on the FFI side -- the finali
 ## See also
 
 - [LLM](/guides/go/llm/) -- non-streaming `Complete` and `CompleteBlocking`.
-- [Agent](/guides/go/agent/) -- tool-call loop on top of `CompletionModel`.
+- [Agent](/guides/go/agent/) -- tool-call loop on top of `Model`.
 - [Context](/guides/go/context/) -- cancellation semantics across every blocking entry point.
