@@ -46,6 +46,7 @@ members = [
     "crates/blazen-llm-tgi",
     "crates/blazen-llm-lmstudio",
     "crates/blazen-3d",
+    "crates/blazen-3d-core",
 ]
 exclude = [
     "crates/blazen-wasm",

@@ -1,0 +1,23 @@
+[package]
+name = "blazen-3d-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Shared candle primitives (triplane sampling, marching cubes, gaussian splat types, DINOv2 wrapper) reused across Blazen 3D backends (TripoSR, TRELLIS, Hunyuan3D)"
+
+[lib]
+crate-type = ["rlib"]
+
+[lints]
+workspace = true
+
+[dependencies]
+candle-core.workspace = true
+candle-nn.workspace = true
+candle-transformers.workspace = true
+isosurface = "0.0.4"
+serde = { workspace = true, features = ["derive"] }
+thiserror.workspace = true

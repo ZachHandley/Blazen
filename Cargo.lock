@@ -705,10 +705,26 @@ name = "blazen-3d"
 version = "0.0.0-dev"
 dependencies = [
  "async-trait",
+ "base64 0.22.1",
  "blazen-core",
  "futures-core",
+ "mockito",
+ "reqwest 0.13.3",
  "serde",
  "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
+name = "blazen-3d-core"
+version = "0.0.0-dev"
+dependencies = [
+ "candle-core",
+ "candle-nn",
+ "candle-transformers",
+ "isosurface",
+ "serde",
  "thiserror 2.0.18",
 ]
 
@@ -4648,6 +4664,12 @@ name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
+
+[[package]]
+name = "isosurface"
+version = "0.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a4caf4535490ed52ef057093edbd2e30440c997ae5e65b95691c694e0321dc54"
 
 [[package]]
 name = "itertools"
