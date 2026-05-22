@@ -86,6 +86,10 @@ local-all = [
 
 # Stable Audio (latent diffusion text-to-music).
 audio-music-stable-audio = ["blazen-uniffi/audio-music-stable-audio"]
+audio-stt-whisper-streaming = ["blazen-uniffi/audio-stt-whisper-streaming"]
+audio-tts-bark = ["blazen-uniffi/audio-tts-bark"]
+audio-tts-f5 = ["blazen-uniffi/audio-tts-f5"]
+audio-vc-rvc = ["blazen-uniffi/audio-vc-rvc"]
 
 otlp = ["blazen-uniffi/otlp"]
 prometheus = ["blazen-uniffi/prometheus"]

@@ -77,11 +77,14 @@ audio-tts          = ["dep:blazen-audio", "dep:blazen-audio-tts"]
 audio-tts-anytts   = ["audio-tts", "blazen-audio-tts/anytts"]
 audio-tts-openai   = ["audio-tts", "blazen-audio-tts/openai"]
 audio-tts-piper    = ["audio-tts"]
+audio-tts-bark     = ["audio-tts", "blazen-audio-tts/bark"]
+audio-tts-f5       = ["audio-tts", "blazen-audio-tts/f5-tts"]
 
 # Speech-to-text bridge surface (DynSttProvider impl of Transcription).
 audio-stt          = ["dep:blazen-audio", "dep:blazen-audio-stt"]
 audio-stt-whispercpp = ["audio-stt", "blazen-audio-stt/whispercpp"]
 audio-stt-candle   = ["audio-stt", "blazen-audio-stt/candle"]
+audio-stt-whisper-streaming = ["audio-stt", "blazen-audio-stt/whisper-streaming"]
 
 # Music / SFX bridge surface (DynMusicProvider impl of AudioGeneration).
 audio-music        = ["dep:blazen-audio", "dep:blazen-audio-music"]
@@ -93,6 +96,10 @@ audio-music-stable-audio = ["audio-music", "blazen-audio-music/stable-audio"]
 audio-codec        = ["dep:blazen-audio", "dep:blazen-audio-codec"]
 audio-codec-encodec = ["audio-codec", "blazen-audio-codec/encodec"]
 audio-codec-dac    = ["audio-codec", "blazen-audio-codec/dac"]
+
+# Voice-conversion bridge surface (speaker-transform engines: RVC, ...).
+audio-vc          = ["dep:blazen-audio", "dep:blazen-audio-vc"]
+audio-vc-rvc      = ["audio-vc", "blazen-audio-vc/rvc"]
 
 # ---------------------------------------------------------------------------
 # Backwards-compat aliases (deprecated — slated for removal in 2 releases).
@@ -147,6 +154,7 @@ blazen-llm-ollama = { workspace = true, optional = true }
 blazen-llm-llamacpp-server = { workspace = true, optional = true }
 blazen-llm-tgi = { workspace = true, optional = true }
 blazen-llm-lmstudio = { workspace = true, optional = true }
+blazen-audio-vc = { workspace = true, optional = true }
 
 # Timer/runtime features only on native targets (mio doesn't support any wasm32 target)
 [target.'cfg(not(any(target_os = "wasi", target_arch = "wasm32")))'.dependencies]

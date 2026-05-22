@@ -113,6 +113,10 @@ local-all = [
 
 # Stable Audio (latent diffusion text-to-music).
 audio-music-stable-audio = ["blazen-llm/audio-music-stable-audio"]
+audio-stt-whisper-streaming = ["blazen-llm/audio-stt-whisper-streaming"]
+audio-tts-bark = ["blazen-llm/audio-tts-bark"]
+audio-tts-f5 = ["blazen-llm/audio-tts-f5"]
+audio-vc-rvc = ["blazen-llm/audio-vc-rvc"]
 
 # Telemetry exporters
 otlp = ["blazen-telemetry/otlp"]

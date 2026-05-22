@@ -30,12 +30,16 @@ local-audio = [
     "blazen-llm/audio-tts-anytts",
     "blazen-llm/audio-tts-openai",
     "blazen-llm/audio-tts-piper",
+    "blazen-llm/audio-tts-bark",
+    "blazen-llm/audio-tts-f5",
     "blazen-llm/audio-stt-whispercpp",
     "blazen-llm/audio-stt-candle",
+    "blazen-llm/audio-stt-whisper-streaming",
     "blazen-llm/audio-music-musicgen",
     "blazen-llm/audio-music-audiogen",
     "blazen-llm/audio-codec-encodec",
     "blazen-llm/audio-codec-dac",
+    "blazen-llm/audio-vc-rvc",
 ]
 local-all = ["local-embeddings", "local-llm", "local-image", "local-audio"]
 
