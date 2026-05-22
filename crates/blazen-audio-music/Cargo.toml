@@ -52,6 +52,12 @@ musicgen = [
 # the AudioGen backend module is gated separately on `audiogen` so a
 # pure `musicgen` build doesn't compile in the AudioGen wrapper.
 audiogen = ["musicgen"]
+# AudioLDM2 text-to-audio latent-diffusion backend (Wave H.1 scaffolding
+# only -- the real UNet 2D denoiser + DDIM sampler + T5 / FLAN-T5
+# encoder + mel-spectrogram VAE + HiFi-GAN vocoder land in Wave H.2).
+# Currently empty because the placeholder modules don't reference any
+# external crates yet; real dependency wiring lands with Wave H.2.
+audioldm = []
 # Stability AI Stable Audio Open native candle port (Oobleck VAE + DiT +
 # T5 conditioner + DPM-Solver++ / distilled samplers). Pulls in the same
 # candle inference stack as `musicgen` (candle-core, candle-nn,

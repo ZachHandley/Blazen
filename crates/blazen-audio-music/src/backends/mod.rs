@@ -10,6 +10,8 @@
 
 #[cfg(feature = "audiogen")]
 pub mod audiogen;
+#[cfg(feature = "audioldm")]
+pub mod audioldm;
 pub mod musicgen;
 pub mod stable_audio;
 #[cfg(any(feature = "musicgen", feature = "stable-audio"))]
