@@ -16,10 +16,12 @@ blazen-audio-core = { version = "0.0.0-dev", path = "../blazen-audio-core", opti
 candle-core = { workspace = true, optional = true }
 candle-nn = { workspace = true, optional = true }
 futures-core.workspace = true
+hf-hub = { workspace = true, features = ["ureq"], optional = true }
 reqwest = { workspace = true, features = ["multipart"], optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde_json = { workspace = true, optional = true }
 thiserror.workspace = true
+tokio = { workspace = true, features = ["rt"], optional = true }
 
 [features]
 default = []
@@ -46,6 +48,9 @@ triposr = [
     "dep:blazen-audio-core",
     "dep:candle-core",
     "dep:candle-nn",
+    "dep:hf-hub",
+    "dep:serde_json",
+    "dep:tokio",
 ]
 
 [lints]
@@ -54,4 +59,5 @@ workspace = true
 [dev-dependencies]
 mockito = "1.7.2"
 serde_json.workspace = true
+tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -147,6 +147,24 @@ impl TripoSrImageEncoder {
         })
     }
 
+    /// Load the `DINOv2`-base encoder from an existing `VarBuilder`.
+    ///
+    /// Used by [`crate::backends::triposr::pipeline::TripoSrPipeline`]
+    /// when the same `TripoSR` checkpoint carves into three sibling
+    /// `VarBuilder`s — image encoder, triplane transformer, `NeRF`
+    /// field — rather than three separate files on disk.
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn load_from_var_builder(
+        vb: VarBuilder,
+        device: &Device,
+    ) -> Result<Self, TripoSrEncoderError> {
+        let encoder = DinoV2Encoder::load(&vb, DinoV2Config::base_default())?;
+        Ok(Self {
+            encoder,
+            device: device.clone(),
+        })
+    }
+
     /// Encode a pre-decoded RGB image.
     ///
     /// `image_rgb` is expected to be in standard interleaved byte order
