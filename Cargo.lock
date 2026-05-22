@@ -706,6 +706,8 @@ version = "0.0.0-dev"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "blazen-3d-core",
+ "candle-core",
  "futures-core",
  "mockito",
  "reqwest 0.13.3",
@@ -845,6 +847,7 @@ dependencies = [
  "candle-nn",
  "candle-transformers",
  "futures-core",
+ "futures-util",
  "hf-hub 0.5.0",
  "mockito",
  "reqwest 0.13.3",

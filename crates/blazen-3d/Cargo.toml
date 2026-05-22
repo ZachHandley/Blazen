@@ -11,6 +11,8 @@ description = "Multi-backend 3D-pipeline crate for Blazen (texturizer, rigger, r
 [dependencies]
 async-trait.workspace = true
 base64 = { workspace = true, optional = true }
+blazen-3d-core = { version = "0.0.0-dev", path = "../blazen-3d-core", optional = true }
+candle-core = { workspace = true, optional = true }
 futures-core.workspace = true
 reqwest = { workspace = true, features = ["multipart"], optional = true }
 serde = { workspace = true, features = ["derive"] }
@@ -25,6 +27,19 @@ default = []
 # enabling it pulls in `reqwest` (with the `multipart` feature) and
 # `base64`.
 compat-proxy = ["dep:reqwest", "dep:base64", "dep:serde_json"]
+# `triposr` enables the native TripoSR single-image-to-3D backend at
+# `src/backends/triposr/`. Wave T.1 ships the scaffolding (placeholder
+# modules + `TripoSrBackend` struct); Wave T.2 lands the real DINOv2
+# image encoder + triplane transformer + NeRF/SDF field + marching
+# cubes mesh extraction. Pulls in `blazen-3d-core` (shared 3D
+# primitives) and `candle-core` (tensor runtime).
+#
+# Note: the `ThreeDGeneration` trait impl lives in `blazen-llm`, not
+# here, to avoid a `blazen-llm` -> `blazen-3d` -> `blazen-llm` dep
+# cycle (`blazen-llm` already depends on `blazen-3d` via the `threed`
+# feature). See `src/backends/triposr/mod.rs` for the cycle-resolution
+# notes.
+triposr = ["dep:blazen-3d-core", "dep:candle-core"]
 
 [lints]
 workspace = true

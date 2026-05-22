@@ -9,3 +9,6 @@
 
 #[cfg(feature = "compat-proxy")]
 pub mod compat;
+
+#[cfg(feature = "triposr")]
+pub mod triposr;
