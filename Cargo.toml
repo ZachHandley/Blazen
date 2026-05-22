@@ -27,6 +27,7 @@ members = [
     "crates/blazen-llm-candle",
     "crates/blazen-llm-llamacpp",
     "crates/blazen-audio-tts",
+    "crates/blazen-audio-vc",
     "crates/blazen-peer",
     "crates/blazen-controlplane",
     "crates/blazen-manager",

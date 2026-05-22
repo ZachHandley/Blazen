@@ -1,0 +1,53 @@
+[package]
+name = "blazen-audio-vc"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Multi-backend voice-conversion crate for Blazen (RVC and related speaker-transform engines)"
+
+[dependencies]
+async-trait.workspace = true
+bincode = { version = "1", optional = true }
+blazen-audio = { version = "0.0.0-dev", path = "../blazen-audio" }
+blazen-core = { version = "0.0.0-dev", path = "../blazen-core" }
+candle-core = { workspace = true, optional = true }
+candle-nn = { workspace = true, optional = true }
+futures-core.workspace = true
+futures-util = { workspace = true, optional = true }
+hf-hub = { workspace = true, features = ["ureq"], optional = true }
+instant-distance = { version = "0.6.1", features = ["with-serde"], optional = true }
+ndarray = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"] }
+thiserror.workspace = true
+tokio = { workspace = true, features = ["sync", "rt"], optional = true }
+tracing = { workspace = true, optional = true }
+tract-onnx = { workspace = true, optional = true }
+
+[features]
+default = []
+# `rvc` enables the Retrieval-based Voice Conversion backend at
+# `src/backends/rvc/`. Wave D.2 will wire in the F0 extractor, content
+# encoder, kNN feature retrieval, generator, and decoding pipeline.
+rvc = [
+    "dep:candle-core",
+    "dep:candle-nn",
+    "dep:hf-hub",
+    "dep:instant-distance",
+    "dep:bincode",
+    "dep:tract-onnx",
+    "dep:ndarray",
+    "dep:tokio",
+    "dep:futures-util",
+    "dep:tracing",
+]
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+serde_json.workspace = true
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt"] }
