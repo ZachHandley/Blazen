@@ -30,6 +30,7 @@ blazen-audio-codec = { workspace = true, optional = true }
 blazen-audio-core = { workspace = true, optional = true }
 rustfft = { version = "6.4.1", optional = true }
 futures-core.workspace = true
+futures-util.workspace = true
 
 [features]
 default = ["openai"]

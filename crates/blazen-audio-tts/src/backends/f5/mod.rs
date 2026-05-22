@@ -54,17 +54,70 @@ pub use tokenizer::F5Tokenizer;
 pub use weights::F5Weights;
 
 use std::path::PathBuf;
+use std::pin::Pin;
 
 use async_trait::async_trait;
 use blazen_audio::{AudioBackend, AudioFormat, CloneVoiceRequest, GeneratedAudio, VoiceHandle};
+use futures_core::Stream;
 
-use crate::traits::TtsBackend;
+use crate::traits::{StreamingAudioChunk, TtsBackend};
 use crate::{TtsError, TtsOptions};
 
 use pipeline::{
     PipelineCell, get_or_init_pipeline, new_pipeline_cell, pcm_duration_seconds,
     save_voice_reference,
 };
+
+/// Streaming chunk window in milliseconds. Picked to match the cadence
+/// used by the streaming-capable Bark backend so downstream consumers
+/// (WebSocket bridges, the OpenAI-compatible `/v1/audio/speech` SSE
+/// surface, the napi-rs / `PyO3` stream adapters) see a uniform pacing
+/// across diffusion-based TTS backends.
+const F5_STREAM_WINDOW_MS: u32 = 250;
+
+/// Chunk a fully-rendered PCM buffer into uniform fixed-width windows
+/// for the [`TtsBackend::stream_synthesize`] override.
+///
+/// The last chunk has `is_final = true`; all earlier chunks have
+/// `is_final = false`. Pulled out as a free function so the chunking
+/// invariants (window size, final-flag placement) can be unit-tested
+/// without spinning up an F5 pipeline.
+///
+/// `window_ms` must be > 0; `sample_rate` is the PCM sample rate in Hz.
+/// An empty `samples` input returns an empty `Vec`. A single-chunk
+/// input (fewer than one window) returns one chunk with `is_final =
+/// true`.
+#[must_use]
+fn chunk_into_streaming(
+    samples: &[f32],
+    sample_rate: u32,
+    window_ms: u32,
+) -> Vec<StreamingAudioChunk> {
+    if samples.is_empty() {
+        return Vec::new();
+    }
+    let window_samples = usize::try_from((u64::from(sample_rate) * u64::from(window_ms)) / 1_000)
+        .expect("window samples fit usize on 32-bit and wider targets");
+    debug_assert!(
+        window_samples > 0,
+        "f5-tts: chunk_into_streaming requires window_ms * sample_rate >= 1000",
+    );
+    let total = samples.len();
+    let chunk_count = total.div_ceil(window_samples);
+    let mut chunks: Vec<StreamingAudioChunk> = Vec::with_capacity(chunk_count);
+    let mut offset = 0_usize;
+    while offset < total {
+        let end = (offset + window_samples).min(total);
+        let is_final = end == total;
+        chunks.push(StreamingAudioChunk {
+            samples: samples[offset..end].to_vec(),
+            is_final,
+            latency_seconds: None,
+        });
+        offset = end;
+    }
+    chunks
+}
 
 /// Stable backend-id prefix surfaced via [`AudioBackend::id`].
 pub const F5_BACKEND_ID_PREFIX: &str = "f5-tts";
@@ -275,6 +328,84 @@ impl TtsBackend for F5Backend {
             provider: F5_BACKEND_ID_PREFIX.to_owned(),
         })
     }
+
+    /// Chunked-after-synthesis streaming.
+    ///
+    /// F5-TTS is a non-causal flow-matching `DiT` over the *entire*
+    /// utterance mel spectrogram — every Euler ODE step refines the
+    /// whole tensor, so per-frame (true causal) streaming is not
+    /// architecturally possible. The Vocos vocoder is similarly
+    /// non-causal (`ConvNeXt` + `iSTFT` overlap-add).
+    ///
+    /// This override therefore implements the only honest streaming
+    /// shape available for diffusion-based TTS: synthesize the full
+    /// utterance, then chop the rendered 24 kHz PCM into 250 ms
+    /// windows and yield each as a [`StreamingAudioChunk`]. The last
+    /// chunk has `is_final = true`. The total latency to first chunk
+    /// is identical to a non-streaming [`synthesize`](Self::synthesize)
+    /// call — the streaming layer is purely a delivery cadence
+    /// adapter for callers (WebSocket bridges, SSE clients, the
+    /// language-binding stream adapters) that expect a chunked feed.
+    async fn stream_synthesize(
+        &self,
+        text: &str,
+        voice: Option<&str>,
+        options: TtsOptions,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamingAudioChunk, TtsError>> + Send>>, TtsError>
+    {
+        // Honor the per-call `voice` override by merging it into the
+        // options before delegating to `synthesize` — F5's voice
+        // selection currently flows through TtsOptions.voice, so this
+        // keeps the streaming and non-streaming voice resolution paths
+        // identical.
+        let mut merged = options;
+        if let Some(v) = voice {
+            merged.voice = Some(v.to_owned());
+        }
+
+        let audio = self.synthesize(text, &merged).await?;
+        let samples = decode_wav_to_f32(&audio.bytes)?;
+        let chunks = chunk_into_streaming(&samples, audio.sample_rate, F5_STREAM_WINDOW_MS);
+        let stream = futures_util::stream::iter(chunks.into_iter().map(Ok));
+        Ok(Box::pin(stream))
+    }
+}
+
+/// Decode a 16-bit PCM mono WAV (the format the F5 pipeline emits via
+/// [`pipeline::F5Pipeline::synthesize_wav`]) back to a `Vec<f32>` of
+/// samples in `[-1.0, 1.0]`. Strictly speaking this is the inverse of
+/// the local `encode_wav_16bit` writer in [`pipeline`], not a general
+/// WAV decoder — it asserts the 44-byte RIFF/WAVE/fmt/data layout we
+/// emit and surfaces [`TtsError::Synthesis`] on any mismatch (which
+/// would indicate the pipeline writer changed shape from under us).
+fn decode_wav_to_f32(wav: &[u8]) -> Result<Vec<f32>, TtsError> {
+    const HEADER_LEN: usize = 44;
+    if wav.len() < HEADER_LEN {
+        return Err(TtsError::Synthesis(format!(
+            "f5-tts stream: wav too small ({} < {HEADER_LEN}-byte header)",
+            wav.len(),
+        )));
+    }
+    if &wav[0..4] != b"RIFF" || &wav[8..12] != b"WAVE" {
+        return Err(TtsError::Synthesis(
+            "f5-tts stream: wav header missing RIFF/WAVE".to_owned(),
+        ));
+    }
+    let pcm = &wav[HEADER_LEN..];
+    if !pcm.len().is_multiple_of(2) {
+        return Err(TtsError::Synthesis(format!(
+            "f5-tts stream: wav data length {} not aligned to i16",
+            pcm.len(),
+        )));
+    }
+    let samples = pcm
+        .chunks_exact(2)
+        .map(|pair| {
+            let i = i16::from_le_bytes([pair[0], pair[1]]);
+            f32::from(i) / f32::from(i16::MAX)
+        })
+        .collect();
+    Ok(samples)
 }
 
 #[cfg(test)]
@@ -362,5 +493,85 @@ mod tests {
         unsafe {
             std::env::remove_var("BLAZEN_F5_VOICE_DIR");
         }
+    }
+
+    #[test]
+    fn stream_synthesize_chunks_have_final_at_end() {
+        // 1.25 s at 24 kHz = 30 000 samples; 250 ms window = 6 000
+        // samples → exactly 5 chunks of 6 000, the last is_final.
+        let samples = vec![0.25_f32; 30_000];
+        let chunks = chunk_into_streaming(&samples, F5_SAMPLE_RATE_HZ, F5_STREAM_WINDOW_MS);
+        assert_eq!(chunks.len(), 5, "expected 5 chunks for 1.25 s at 24 kHz");
+        for (i, chunk) in chunks.iter().enumerate() {
+            assert_eq!(
+                chunk.samples.len(),
+                6_000,
+                "chunk {i} must hold one full 250 ms window",
+            );
+            let want_final = i == chunks.len() - 1;
+            assert_eq!(
+                chunk.is_final, want_final,
+                "chunk {i}: is_final = {} but expected {want_final}",
+                chunk.is_final,
+            );
+        }
+    }
+
+    #[test]
+    fn chunk_into_streaming_marks_short_tail_as_final() {
+        // 30 050 samples → 5 full windows + a 50-sample tail; the
+        // tail chunk must be the only one with `is_final = true`.
+        let samples = vec![0.0_f32; 30_050];
+        let chunks = chunk_into_streaming(&samples, F5_SAMPLE_RATE_HZ, F5_STREAM_WINDOW_MS);
+        assert_eq!(chunks.len(), 6, "30 050 samples → 5 full + 1 short tail");
+        for (i, chunk) in chunks.iter().take(5).enumerate() {
+            assert_eq!(chunk.samples.len(), 6_000, "leading chunk {i} must be full");
+            assert!(!chunk.is_final, "leading chunk {i} must not be final");
+        }
+        let tail = chunks.last().expect("tail chunk");
+        assert_eq!(tail.samples.len(), 50, "tail must carry the remainder");
+        assert!(tail.is_final, "tail chunk must be flagged final");
+    }
+
+    #[test]
+    fn chunk_into_streaming_empty_input_yields_no_chunks() {
+        let chunks = chunk_into_streaming(&[], F5_SAMPLE_RATE_HZ, F5_STREAM_WINDOW_MS);
+        assert!(chunks.is_empty(), "empty input must not emit a final chunk");
+    }
+
+    #[test]
+    fn decode_wav_to_f32_roundtrips_through_pipeline_writer() {
+        // Build a tiny WAV using the same 44-byte header the F5
+        // pipeline emits, then decode and compare. Sample values are
+        // chosen to exercise sign + clamping behaviour.
+        let sr: u32 = F5_SAMPLE_RATE_HZ;
+        let channels: u16 = 1;
+        let bits_per_sample: u16 = 16;
+        let data_size: u32 = 4 * 2;
+        let byte_rate = sr * u32::from(channels) * u32::from(bits_per_sample) / 8;
+        let block_align = channels * bits_per_sample / 8;
+        let mut wav = Vec::with_capacity(44 + 8);
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&(36 + data_size).to_le_bytes());
+        wav.extend_from_slice(b"WAVE");
+        wav.extend_from_slice(b"fmt ");
+        wav.extend_from_slice(&16_u32.to_le_bytes());
+        wav.extend_from_slice(&1_u16.to_le_bytes());
+        wav.extend_from_slice(&channels.to_le_bytes());
+        wav.extend_from_slice(&sr.to_le_bytes());
+        wav.extend_from_slice(&byte_rate.to_le_bytes());
+        wav.extend_from_slice(&block_align.to_le_bytes());
+        wav.extend_from_slice(&bits_per_sample.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&data_size.to_le_bytes());
+        for s in [0_i16, i16::MAX, -i16::MAX, 0] {
+            wav.extend_from_slice(&s.to_le_bytes());
+        }
+        let samples = decode_wav_to_f32(&wav).expect("decode minimal wav");
+        assert_eq!(samples.len(), 4);
+        assert!(samples[0].abs() < 1e-6);
+        assert!((samples[1] - 1.0).abs() < 1e-4);
+        assert!((samples[2] + 1.0).abs() < 1e-4);
+        assert!(samples[3].abs() < 1e-6);
     }
 }

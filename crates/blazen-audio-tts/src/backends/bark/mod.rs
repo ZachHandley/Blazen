@@ -52,11 +52,13 @@ pub use tokenizer::BarkTokenizer;
 pub use weights::BarkWeights;
 
 use std::path::PathBuf;
+use std::pin::Pin;
 
 use async_trait::async_trait;
 use blazen_audio::{AudioBackend, AudioFormat, CloneVoiceRequest, GeneratedAudio, VoiceHandle};
+use futures_core::Stream;
 
-use crate::traits::TtsBackend;
+use crate::traits::{StreamingAudioChunk, TtsBackend};
 use crate::{TtsError, TtsOptions};
 
 use pipeline::{
@@ -275,8 +277,118 @@ impl TtsBackend for BarkBackend {
         })
     }
 
+    /// Streaming synthesis for the Bark backend.
+    ///
+    /// This is a **chunked-after-synthesis** implementation: the full
+    /// utterance is synthesised via [`Self::synthesize`] (which runs the
+    /// semantic → coarse → fine → `EnCodec`-decode pipeline end-to-end),
+    /// the returned 16-bit PCM WAV is decoded back to mono f32 samples
+    /// at 24 kHz, then the buffer is sliced into ~250 ms windows
+    /// (`STREAM_CHUNK_MS` × `BARK_SAMPLE_RATE_HZ` / 1000 samples per
+    /// chunk) and yielded through a [`futures_util::stream::iter`]. The
+    /// last chunk carries `is_final = true`. `latency_seconds` is
+    /// reported as `None` because all chunks are emitted post-synthesis
+    /// and therefore reflect post-hoc slicing rather than measured
+    /// per-frame model latency. True per-frame streaming — yielding
+    /// audio while the fine acoustic stage is still generating
+    /// codebook frames through `EnCodec` — is a follow-up enhancement
+    /// (it requires restructuring the pipeline to expose an incremental
+    /// fine-decode → codec loop rather than the current one-shot path).
+    async fn stream_synthesize(
+        &self,
+        text: &str,
+        voice: Option<&str>,
+        mut options: TtsOptions,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamingAudioChunk, TtsError>> + Send>>, TtsError>
+    {
+        if let Some(v) = voice {
+            options.voice = Some(v.to_owned());
+        }
+        let generated = self.synthesize(text, &options).await?;
+        let pcm = decode_wav_16bit_to_f32(&generated.bytes)?;
+        let chunks = chunk_pcm_into_windows(&pcm, pipeline::BARK_SAMPLE_RATE_HZ, STREAM_CHUNK_MS);
+        Ok(Box::pin(futures_util::stream::iter(
+            chunks.into_iter().map(Ok),
+        )))
+    }
+
     // `list_voices`, `design_voice`, `delete_voice` inherit the
     // `TtsBackend` default impls (all returning `Unsupported`).
+}
+
+/// Streaming chunk window size in milliseconds. 250 ms strikes a
+/// reasonable balance between perceived responsiveness and per-chunk
+/// overhead for the chunked-after-synthesis stream emitter.
+const STREAM_CHUNK_MS: u32 = 250;
+
+/// Decode the 16-bit signed-PCM `data` chunk of a Blazen-emitted Bark
+/// WAV (produced by [`pipeline::synthesize_wav`]) back to a mono f32
+/// PCM buffer in [-1.0, 1.0].
+///
+/// Bark always emits WAV with a 44-byte canonical RIFF header followed
+/// by little-endian `i16` samples (see `encode_wav_16bit` in
+/// [`pipeline`]). Any malformed buffer surfaces as
+/// [`TtsError::Synthesis`].
+fn decode_wav_16bit_to_f32(wav: &[u8]) -> Result<Vec<f32>, TtsError> {
+    const HEADER_LEN: usize = 44;
+    if wav.len() < HEADER_LEN || &wav[..4] != b"RIFF" || &wav[8..12] != b"WAVE" {
+        return Err(TtsError::Synthesis(
+            "bark stream_synthesize: synthesised WAV missing RIFF/WAVE header".to_owned(),
+        ));
+    }
+    let body = &wav[HEADER_LEN..];
+    if !body.len().is_multiple_of(2) {
+        return Err(TtsError::Synthesis(
+            "bark stream_synthesize: WAV data chunk length is not a multiple of 2 bytes".to_owned(),
+        ));
+    }
+    let mut out = Vec::with_capacity(body.len() / 2);
+    for pair in body.chunks_exact(2) {
+        let raw: [u8; 2] = pair.try_into().expect("chunks_exact(2) guarantees len 2");
+        let i = i16::from_le_bytes(raw);
+        out.push(f32::from(i) / f32::from(i16::MAX));
+    }
+    Ok(out)
+}
+
+/// Slice a contiguous mono f32 PCM buffer into successive windows of
+/// `window_ms` milliseconds at `sample_rate` Hz. The final window may
+/// be short; only it carries `is_final = true`. An empty input yields
+/// a single empty final chunk so consumers always observe a stream
+/// terminator.
+#[allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    reason = "window_ms * sample_rate / 1000 fits in usize for any realistic TTS clip"
+)]
+fn chunk_pcm_into_windows(
+    pcm: &[f32],
+    sample_rate: u32,
+    window_ms: u32,
+) -> Vec<StreamingAudioChunk> {
+    let window_samples = ((u64::from(sample_rate) * u64::from(window_ms)) / 1000) as usize;
+    let window_samples = window_samples.max(1);
+    if pcm.is_empty() {
+        return vec![StreamingAudioChunk {
+            samples: Vec::new(),
+            is_final: true,
+            latency_seconds: None,
+        }];
+    }
+    let total = pcm.len();
+    let mut out: Vec<StreamingAudioChunk> = Vec::with_capacity(total.div_ceil(window_samples));
+    let mut offset = 0;
+    while offset < total {
+        let end = (offset + window_samples).min(total);
+        let is_final = end == total;
+        out.push(StreamingAudioChunk {
+            samples: pcm[offset..end].to_vec(),
+            is_final,
+            latency_seconds: None,
+        });
+        offset = end;
+    }
+    out
 }
 
 #[cfg(test)]
@@ -407,5 +519,156 @@ mod tests {
     fn config_defaults_include_encodec_model_id() {
         let cfg = BarkConfig::default();
         assert_eq!(cfg.encodec_model_id, "facebook/encodec_24khz");
+    }
+
+    /// Chunking helper round-trip: a synthetic 1-second mono f32 buffer
+    /// at 24 kHz must split into 4 × 250 ms windows whose concatenation
+    /// reproduces the input bit-for-bit, with `is_final` set only on
+    /// the last chunk.
+    #[test]
+    fn chunk_pcm_into_windows_splits_one_second_into_four_quarter_second_chunks() {
+        let sr = pipeline::BARK_SAMPLE_RATE_HZ;
+        let total = sr as usize;
+        let pcm: Vec<f32> = (0..total)
+            .map(|i| {
+                #[allow(
+                    clippy::cast_precision_loss,
+                    reason = "test fixture indexes well below f32 precision limit"
+                )]
+                let x = i as f32 / total as f32;
+                x
+            })
+            .collect();
+        let chunks = chunk_pcm_into_windows(&pcm, sr, STREAM_CHUNK_MS);
+
+        assert_eq!(chunks.len(), 4, "1s ÷ 250ms = 4 chunks");
+        assert_eq!(chunks[0].samples.len(), (sr as usize) / 4);
+        for (i, c) in chunks.iter().enumerate() {
+            assert_eq!(c.is_final, i == chunks.len() - 1, "chunk {i} is_final");
+            assert!(c.latency_seconds.is_none());
+        }
+        let concat: Vec<f32> = chunks.into_iter().flat_map(|c| c.samples).collect();
+        assert_eq!(concat, pcm);
+    }
+
+    /// Trailing-window correctness: 1.1 s of audio produces 5 chunks
+    /// (four full 250 ms windows + one short 100 ms tail), and only
+    /// the tail carries `is_final = true`.
+    #[test]
+    fn chunk_pcm_into_windows_handles_trailing_partial_window() {
+        let sr = pipeline::BARK_SAMPLE_RATE_HZ;
+        let total = (sr as usize) + (sr as usize) / 10;
+        let pcm = vec![0.25_f32; total];
+        let chunks = chunk_pcm_into_windows(&pcm, sr, STREAM_CHUNK_MS);
+
+        assert_eq!(chunks.len(), 5);
+        for c in chunks.iter().take(4) {
+            assert!(!c.is_final);
+            assert_eq!(c.samples.len(), (sr as usize) / 4);
+        }
+        let tail = chunks.last().expect("non-empty");
+        assert!(tail.is_final);
+        assert_eq!(tail.samples.len(), (sr as usize) / 10);
+    }
+
+    /// Empty PCM input still produces one terminating empty chunk so
+    /// downstream consumers always see an end-of-stream marker.
+    #[test]
+    fn chunk_pcm_into_windows_yields_single_empty_final_chunk_for_empty_input() {
+        let chunks = chunk_pcm_into_windows(&[], pipeline::BARK_SAMPLE_RATE_HZ, STREAM_CHUNK_MS);
+        assert_eq!(chunks.len(), 1);
+        assert!(chunks[0].samples.is_empty());
+        assert!(chunks[0].is_final);
+    }
+
+    /// `decode_wav_16bit_to_f32` reverses the WAV encoder used by the
+    /// Bark pipeline. Encoding a synthetic ramp and decoding it back
+    /// must recover the input within `i16` quantisation error
+    /// (1/32767 ≈ 3e-5).
+    #[test]
+    fn decode_wav_16bit_to_f32_round_trips_against_pipeline_encoder() {
+        // Synthesize a tiny 3-sample buffer and round-trip via the
+        // pipeline's WAV encoder (re-exposed through `synthesize_wav`
+        // is not necessary here — we mirror its 16-bit-PCM frame
+        // layout manually).
+        let samples = [0.0_f32, 0.5, -0.5];
+        let nbytes = u32::try_from(samples.len() * 2).expect("3-sample fixture fits u32 trivially");
+        let mut wav = Vec::with_capacity(44 + samples.len() * 2);
+        wav.extend_from_slice(b"RIFF");
+        wav.extend_from_slice(&(36_u32 + nbytes).to_le_bytes());
+        wav.extend_from_slice(b"WAVE");
+        wav.extend_from_slice(b"fmt ");
+        wav.extend_from_slice(&16_u32.to_le_bytes());
+        wav.extend_from_slice(&1_u16.to_le_bytes());
+        wav.extend_from_slice(&1_u16.to_le_bytes());
+        wav.extend_from_slice(&pipeline::BARK_SAMPLE_RATE_HZ.to_le_bytes());
+        wav.extend_from_slice(&(pipeline::BARK_SAMPLE_RATE_HZ * 2).to_le_bytes());
+        wav.extend_from_slice(&2_u16.to_le_bytes());
+        wav.extend_from_slice(&16_u16.to_le_bytes());
+        wav.extend_from_slice(b"data");
+        wav.extend_from_slice(&nbytes.to_le_bytes());
+        for &s in &samples {
+            #[allow(
+                clippy::cast_possible_truncation,
+                reason = "clamped sample fits i16 by construction"
+            )]
+            let i = (s.clamp(-1.0, 1.0) * f32::from(i16::MAX)) as i16;
+            wav.extend_from_slice(&i.to_le_bytes());
+        }
+
+        let decoded = decode_wav_16bit_to_f32(&wav).expect("decode succeeds");
+        assert_eq!(decoded.len(), samples.len());
+        for (got, want) in decoded.iter().zip(samples.iter()) {
+            assert!((got - want).abs() < 1.0e-4, "got {got}, want {want}");
+        }
+    }
+
+    #[test]
+    fn decode_wav_16bit_to_f32_rejects_buffer_without_riff_header() {
+        let err = decode_wav_16bit_to_f32(&[0_u8; 50]).expect_err("must reject non-RIFF buffer");
+        assert!(matches!(err, TtsError::Synthesis(_)));
+    }
+
+    /// End-to-end streaming test against the real Bark model.
+    ///
+    /// Gated by `BLAZEN_TEST_BARK=1` because it downloads ~400 MB of
+    /// weights and runs a full 3-stage synthesis (semantic + coarse +
+    /// fine + `EnCodec` decode). Marked `#[ignore]` so the default
+    /// `cargo nextest run --features bark` invocation skips it.
+    #[tokio::test]
+    #[ignore = "requires BLAZEN_TEST_BARK=1 and pulls ~400 MB of Bark weights from HF Hub"]
+    async fn stream_synthesize_returns_stream_with_final_chunk_at_end() {
+        use futures_util::StreamExt;
+
+        if std::env::var("BLAZEN_TEST_BARK").ok().as_deref() != Some("1") {
+            eprintln!("skipping: BLAZEN_TEST_BARK != 1");
+            return;
+        }
+
+        let backend = BarkBackend::default();
+        let stream = backend
+            .stream_synthesize("hi", None, TtsOptions::default())
+            .await
+            .expect("stream_synthesize returns Ok");
+
+        let chunks: Vec<StreamingAudioChunk> = stream
+            .collect::<Vec<Result<StreamingAudioChunk, TtsError>>>()
+            .await
+            .into_iter()
+            .map(|r| r.expect("each chunk Ok"))
+            .collect();
+
+        assert!(!chunks.is_empty(), "expected at least one chunk");
+        let last = chunks.last().expect("non-empty");
+        assert!(last.is_final, "final chunk must have is_final = true");
+        for (i, c) in chunks
+            .iter()
+            .enumerate()
+            .take(chunks.len().saturating_sub(1))
+        {
+            assert!(!c.is_final, "non-terminal chunk {i} must not be final");
+        }
+        let concat: Vec<f32> = chunks.into_iter().flat_map(|c| c.samples).collect();
+        assert!(!concat.is_empty(), "concatenated samples must be non-empty");
     }
 }
