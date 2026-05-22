@@ -2,9 +2,11 @@
 //! [`blazen_audio::AudioBackend`] for speech-to-text engines.
 
 use std::path::Path;
+use std::pin::Pin;
 
 use async_trait::async_trait;
 use blazen_audio::AudioBackend;
+use futures_core::Stream;
 use serde::{Deserialize, Serialize};
 
 use crate::error::SttError;
@@ -32,6 +34,26 @@ pub struct TranscriptionResult {
     /// (ISO 639-1 code), if known.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub language: Option<String>,
+}
+
+/// One emission from a streaming STT backend.
+///
+/// Partial transcripts are interim guesses that may be revised in
+/// subsequent emissions; final transcripts are committed and will
+/// not be revised.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct StreamingTranscript {
+    /// Text emitted for this chunk (partial or final).
+    pub text: String,
+    /// `true` when this emission is committed and will not be revised
+    /// in a later emission; `false` for interim guesses.
+    pub is_final: bool,
+    /// Optional confidence in `[0, 1]` if the backend produces one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub confidence: Option<f32>,
+    /// Optional latency-from-utterance-start in seconds.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latency_seconds: Option<f32>,
 }
 
 /// Capability extension of [`AudioBackend`] for speech-to-text engines.
@@ -66,6 +88,40 @@ pub trait SttBackend: AudioBackend {
         audio_path: &Path,
         language: Option<&str>,
     ) -> Result<TranscriptionResult, SttError>;
+
+    /// Stream-based transcription for low-latency real-time STT.
+    ///
+    /// Consumes a stream of audio sample chunks (32-bit float PCM at the
+    /// backend's expected sample rate — typically 16 kHz mono for
+    /// Whisper-family backends) and yields a stream of
+    /// [`StreamingTranscript`] emissions. Each emission carries either a
+    /// partial (interim) or final (committed) transcript for the audio
+    /// consumed so far.
+    ///
+    /// Default impl returns [`SttError::Unsupported`]. Backends that
+    /// support streaming (e.g. `whisper-streaming`) override this.
+    ///
+    /// # Arguments
+    ///
+    /// * `audio` — boxed stream of PCM sample chunks.
+    /// * `language` — optional ISO 639-1 language hint for this single
+    ///   call. When `None`, the backend uses its configured default.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SttError::Unsupported`] from the default impl. Backend
+    /// implementations may also return [`SttError::ModelLoad`] on weight
+    /// init failures and [`SttError::Transcription`] on inference-time
+    /// failures (either on this call or on items yielded from the
+    /// returned stream).
+    async fn stream(
+        &self,
+        _audio: Pin<Box<dyn Stream<Item = Vec<f32>> + Send>>,
+        _language: Option<&str>,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamingTranscript, SttError>> + Send>>, SttError>
+    {
+        Err(SttError::Unsupported("streaming transcription".into()))
+    }
 }
 
 #[cfg(test)]

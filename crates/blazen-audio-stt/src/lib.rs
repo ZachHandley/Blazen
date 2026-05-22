@@ -20,6 +20,8 @@
 //!   failures into one of a small set of variants and implements
 //!   `From<SttError> for blazen_audio::AudioError`.
 //! - [`TranscriptionResult`] / [`TranscriptionSegment`]: result types.
+//! - [`StreamingTranscript`]: per-chunk emission from the streaming
+//!   `SttBackend::stream` surface.
 //!
 //! ## Backends
 //!
@@ -47,9 +49,12 @@ pub mod traits;
 pub use error::SttError;
 pub use options::SttOptions;
 pub use provider::{DynSttProvider, SttProvider};
-pub use traits::{SttBackend, TranscriptionResult, TranscriptionSegment};
+pub use traits::{StreamingTranscript, SttBackend, TranscriptionResult, TranscriptionSegment};
 
 #[cfg(feature = "candle")]
 pub use backends::candle::{
     CandleWhisperBackend, CandleWhisperConfig, WhisperModel as CandleWhisperModel, WhisperTask,
 };
+
+#[cfg(feature = "whisper-streaming")]
+pub use backends::whisper_streaming::{WhisperStreamingBackend, WhisperStreamingConfig};

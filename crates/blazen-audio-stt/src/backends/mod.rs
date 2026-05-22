@@ -4,13 +4,17 @@
 //! `cargo check` stays fast and downstream binaries only pay for the
 //! engines they actually use.
 //!
-//! | Module                      | Feature       | Status   |
-//! |-----------------------------|---------------|----------|
-//! | [`whispercpp`]              | `whispercpp`  | active   |
-//! | [`candle`]                  | `candle`      | active   |
+//! | Module                      | Feature              | Status      |
+//! |-----------------------------|----------------------|-------------|
+//! | [`whispercpp`]              | `whispercpp`         | active      |
+//! | [`candle`]                  | `candle`             | active      |
+//! | [`whisper_streaming`]       | `whisper-streaming`  | scaffolding |
 
 #[cfg(feature = "candle")]
 pub mod candle;
 
 #[cfg(feature = "whispercpp")]
 pub mod whispercpp;
+
+#[cfg(feature = "whisper-streaming")]
+pub mod whisper_streaming;

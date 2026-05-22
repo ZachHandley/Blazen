@@ -780,6 +780,8 @@ dependencies = [
  "candle-core",
  "candle-nn",
  "candle-transformers",
+ "futures-core",
+ "futures-util",
  "hf-hub 0.5.0",
  "serde",
  "serde_json",
@@ -787,6 +789,7 @@ dependencies = [
  "tokenizers 0.23.1",
  "tokio",
  "tracing",
+ "tract-onnx",
  "whisper-rs",
 ]
 
