@@ -34,6 +34,7 @@ members = [
     "crates/blazen-llm-vllm",
     "crates/blazen-audio",
     "crates/blazen-audio-codec",
+    "crates/blazen-audio-core",
     "crates/blazen-audio-music",
     "crates/blazen-audio-stt",
     "crates/blazen-audio-piper-vendored",
@@ -162,6 +163,7 @@ blazen-audio-dac-vendored = { version = "0.0.0-dev", path = "crates/blazen-audio
 blazen-audio-stt = { version = "0.0.0-dev", path = "crates/blazen-audio-stt", registry = "forgejo" }
 blazen-audio-music = { version = "0.0.0-dev", path = "crates/blazen-audio-music", registry = "forgejo" }
 blazen-audio-codec = { version = "0.0.0-dev", path = "crates/blazen-audio-codec", registry = "forgejo" }
+blazen-audio-core = { version = "0.0.0-dev", path = "crates/blazen-audio-core", registry = "forgejo" }
 blazen-peer = { version = "0.0.0-dev", path = "crates/blazen-peer", registry = "forgejo" }
 blazen-controlplane = { version = "0.0.0-dev", path = "crates/blazen-controlplane", registry = "forgejo", default-features = false }
 blazen-manager = { version = "0.0.0-dev", path = "crates/blazen-manager", registry = "forgejo" }

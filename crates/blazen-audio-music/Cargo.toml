@@ -12,6 +12,7 @@ description = "Music + sound-effect generation backends for Blazen (MusicGen, Au
 async-trait.workspace = true
 blazen-audio = { workspace = true }
 blazen-audio-codec = { version = "0.0.0-dev", path = "../blazen-audio-codec", optional = true }
+blazen-audio-core = { workspace = true, optional = true }
 candle-core = { workspace = true, optional = true }
 candle-nn = { workspace = true, optional = true }
 candle-transformers = { workspace = true, optional = true }
@@ -62,6 +63,7 @@ stable-audio = [
     "dep:candle-transformers",
     "dep:hf-hub",
     "dep:tokenizers",
+    "dep:blazen-audio-core",
 ]
 # Live, network-dependent tests that pull real weights from Hugging Face.
 # Gated separately so `cargo test --features musicgen` stays hermetic.

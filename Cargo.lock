@@ -720,6 +720,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "blazen-audio-core"
+version = "0.0.0-dev"
+dependencies = [
+ "candle-core",
+ "candle-nn",
+]
+
+[[package]]
 name = "blazen-audio-dac-vendored"
 version = "0.0.0-dev"
 dependencies = [
@@ -736,6 +744,7 @@ dependencies = [
  "async-trait",
  "blazen-audio",
  "blazen-audio-codec",
+ "blazen-audio-core",
  "candle-core",
  "candle-nn",
  "candle-transformers",

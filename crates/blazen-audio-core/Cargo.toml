@@ -1,0 +1,19 @@
+[package]
+name = "blazen-audio-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Shared candle primitives (DiT attention, SwiGLU, AdaLN-Zero, RoPE, Fourier features) reused across Blazen audio + 3D diffusion backends"
+
+[lib]
+crate-type = ["rlib"]
+
+[dependencies]
+candle-core = { workspace = true }
+candle-nn = { workspace = true }
+
+[lints]
+workspace = true
