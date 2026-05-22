@@ -45,6 +45,7 @@ members = [
     "crates/blazen-llm-llamacpp-server",
     "crates/blazen-llm-tgi",
     "crates/blazen-llm-lmstudio",
+    "crates/blazen-3d",
 ]
 exclude = [
     "crates/blazen-wasm",
@@ -165,6 +166,7 @@ blazen-audio-stt = { version = "0.0.0-dev", path = "crates/blazen-audio-stt", re
 blazen-audio-music = { version = "0.0.0-dev", path = "crates/blazen-audio-music", registry = "forgejo" }
 blazen-audio-codec = { version = "0.0.0-dev", path = "crates/blazen-audio-codec", registry = "forgejo" }
 blazen-audio-core = { version = "0.0.0-dev", path = "crates/blazen-audio-core", registry = "forgejo" }
+blazen-audio-vc = { version = "0.0.0-dev", path = "crates/blazen-audio-vc", registry = "forgejo" }
 blazen-peer = { version = "0.0.0-dev", path = "crates/blazen-peer", registry = "forgejo" }
 blazen-controlplane = { version = "0.0.0-dev", path = "crates/blazen-controlplane", registry = "forgejo", default-features = false }
 blazen-manager = { version = "0.0.0-dev", path = "crates/blazen-manager", registry = "forgejo" }
