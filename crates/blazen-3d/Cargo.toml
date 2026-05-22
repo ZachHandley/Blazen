@@ -12,7 +12,9 @@ description = "Multi-backend 3D-pipeline crate for Blazen (texturizer, rigger, r
 async-trait.workspace = true
 base64 = { workspace = true, optional = true }
 blazen-3d-core = { version = "0.0.0-dev", path = "../blazen-3d-core", optional = true }
+blazen-audio-core = { version = "0.0.0-dev", path = "../blazen-audio-core", optional = true }
 candle-core = { workspace = true, optional = true }
+candle-nn = { workspace = true, optional = true }
 futures-core.workspace = true
 reqwest = { workspace = true, features = ["multipart"], optional = true }
 serde = { workspace = true, features = ["derive"] }
@@ -39,7 +41,12 @@ compat-proxy = ["dep:reqwest", "dep:base64", "dep:serde_json"]
 # cycle (`blazen-llm` already depends on `blazen-3d` via the `threed`
 # feature). See `src/backends/triposr/mod.rs` for the cycle-resolution
 # notes.
-triposr = ["dep:blazen-3d-core", "dep:candle-core"]
+triposr = [
+    "dep:blazen-3d-core",
+    "dep:blazen-audio-core",
+    "dep:candle-core",
+    "dep:candle-nn",
+]
 
 [lints]
 workspace = true
