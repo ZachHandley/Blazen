@@ -12,3 +12,5 @@
 pub mod audiogen;
 pub mod musicgen;
 pub mod stable_audio;
+#[cfg(any(feature = "musicgen", feature = "stable-audio"))]
+pub mod wav;

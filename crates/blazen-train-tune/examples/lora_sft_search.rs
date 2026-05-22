@@ -1,4 +1,4 @@
-//! Example: TPE hyperparameter search over LoRA SFT.
+//! Example: TPE hyperparameter search over `LoRA` SFT.
 //!
 //! Wires `blazen-train`'s `LoraConfig` + `OptimConfig` axes into a
 //! `SearchSpace`, then runs a TPE search whose evaluator is a *mock*
@@ -7,7 +7,7 @@
 //! `blazen_train::Trainer::run()` call when you want live tuning.
 //!
 //! Usage:
-//!   cargo run -p blazen-train-tune --example lora_sft_search -- [max_trials]
+//!   `cargo run -p blazen-train-tune --example lora_sft_search -- [max_trials]`
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -18,10 +18,15 @@ use serde_json::Value as JsonValue;
 
 /// Mock objective: a smooth bowl over (log-lr, rank, alpha) with the
 /// minimum near lr=3e-4, rank=16, alpha=32 — biologically plausible
-/// LoRA-SFT sweet spot. Useful as a CI-friendly stand-in for actual
+/// `LoRA`-SFT sweet spot. Useful as a CI-friendly stand-in for actual
 /// training.
 fn mock_eval_loss(cfg: &HashMap<String, JsonValue>) -> f64 {
     let lr = cfg["learning_rate"].as_f64().unwrap();
+    #[allow(
+        clippy::cast_precision_loss,
+        reason = "rank choices live in {4, 8, 16, 32, 64} — well within \
+                  f64's 53-bit mantissa, so the cast is exact."
+    )]
     let rank = cfg["rank"].as_i64().unwrap() as f64;
     let alpha = cfg["alpha"].as_f64().unwrap();
     let log_lr_target = (3e-4f64).ln();

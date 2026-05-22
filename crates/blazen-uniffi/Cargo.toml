@@ -101,6 +101,7 @@ local-all = [
     "diffusion",
     "whispercpp",
     "tts",
+    "audio-music-stable-audio",
     "tiktoken",
     "distributed",
     "otlp",
@@ -109,6 +110,9 @@ local-all = [
     "hf-loader",
     "training",
 ]
+
+# Stable Audio (latent diffusion text-to-music).
+audio-music-stable-audio = ["blazen-llm/audio-music-stable-audio"]
 
 # Telemetry exporters
 otlp = ["blazen-telemetry/otlp"]

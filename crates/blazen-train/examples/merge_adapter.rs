@@ -1,7 +1,7 @@
 //! Single-adapter merge CLI smoke example.
 //!
-//! Folds a PEFT LoRA adapter into a base safetensors file and writes a
-//! plain (non-LoRA) merged shard.
+//! Folds a PEFT `LoRA` adapter into a base safetensors file and writes a
+//! plain (non-`LoRA`) merged shard.
 //!
 //! Usage:
 //!

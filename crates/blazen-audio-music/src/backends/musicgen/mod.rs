@@ -431,38 +431,10 @@ pub fn encodec_backend_for(variant: MusicgenVariant) -> EncodecBackend {
 
 /// Pack `f32` PCM into a 16-bit-PCM WAV byte vector.
 ///
-/// Exposed `pub` so sibling backends (AudioGen) can reuse the same WAV
-/// container without duplicating the writer.
-#[must_use]
-pub fn pcm_to_wav(samples: &[f32], sample_rate: u32, channels: u16) -> Vec<u8> {
-    let bits_per_sample: u16 = 16;
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let data_size = (samples.len() * usize::from(bits_per_sample / 8)) as u32;
-    let byte_rate = sample_rate * u32::from(channels) * u32::from(bits_per_sample) / 8;
-    let block_align = channels * bits_per_sample / 8;
-
-    let mut out = Vec::with_capacity(44 + samples.len() * 2);
-    out.extend_from_slice(b"RIFF");
-    out.extend_from_slice(&(36 + data_size).to_le_bytes());
-    out.extend_from_slice(b"WAVE");
-    out.extend_from_slice(b"fmt ");
-    out.extend_from_slice(&16_u32.to_le_bytes()); // PCM chunk size
-    out.extend_from_slice(&1_u16.to_le_bytes()); // PCM format
-    out.extend_from_slice(&channels.to_le_bytes());
-    out.extend_from_slice(&sample_rate.to_le_bytes());
-    out.extend_from_slice(&byte_rate.to_le_bytes());
-    out.extend_from_slice(&block_align.to_le_bytes());
-    out.extend_from_slice(&bits_per_sample.to_le_bytes());
-    out.extend_from_slice(b"data");
-    out.extend_from_slice(&data_size.to_le_bytes());
-    for &s in samples {
-        let clamped = s.clamp(-1.0, 1.0);
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let i = (clamped * f32::from(i16::MAX)) as i16;
-        out.extend_from_slice(&i.to_le_bytes());
-    }
-    out
-}
+/// Re-export of [`super::wav::pcm_to_wav`] kept here for backward
+/// compatibility with sibling backends (AudioGen) that already import
+/// it from `backends::musicgen::pcm_to_wav`.
+pub use super::wav::pcm_to_wav;
 
 // ---------------------------------------------------------------------------
 // Trait impls

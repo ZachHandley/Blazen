@@ -77,7 +77,7 @@ impl MusicError {
     }
 }
 
-#[cfg(feature = "musicgen")]
+#[cfg(any(feature = "musicgen", feature = "stable-audio"))]
 impl From<candle_core::Error> for MusicError {
     fn from(err: candle_core::Error) -> Self {
         Self::Candle(err.to_string())

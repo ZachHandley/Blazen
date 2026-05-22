@@ -74,6 +74,7 @@ local-all = [
     "diffusion",
     "whispercpp",
     "tts",
+    "audio-music-stable-audio",
     "tiktoken",
     "distributed",
     "otlp",
@@ -82,6 +83,9 @@ local-all = [
     "hf-loader",
     "training",
 ]
+
+# Stable Audio (latent diffusion text-to-music).
+audio-music-stable-audio = ["blazen-uniffi/audio-music-stable-audio"]
 
 otlp = ["blazen-uniffi/otlp"]
 prometheus = ["blazen-uniffi/prometheus"]

@@ -21,6 +21,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 tokenizers = { workspace = true, optional = true }
 tokio.workspace = true
+tracing.workspace = true
 
 [lints]
 workspace = true
@@ -47,6 +48,21 @@ musicgen = [
 # the AudioGen backend module is gated separately on `audiogen` so a
 # pure `musicgen` build doesn't compile in the AudioGen wrapper.
 audiogen = ["musicgen"]
+# Stability AI Stable Audio Open native candle port (Oobleck VAE + DiT +
+# T5 conditioner + DPM-Solver++ / distilled samplers). Pulls in the same
+# candle inference stack as `musicgen` (candle-core, candle-nn,
+# candle-transformers, tokenizers, hf-hub) but does NOT depend on
+# blazen-audio-codec — Stable Audio uses its own Oobleck autoencoder
+# rather than EnCodec. With this feature OFF, `StableAudioBackend` still
+# exists but every entry point surfaces `MusicError::NotYetImplemented`
+# with a message pointing at this flag.
+stable-audio = [
+    "dep:candle-core",
+    "dep:candle-nn",
+    "dep:candle-transformers",
+    "dep:hf-hub",
+    "dep:tokenizers",
+]
 # Live, network-dependent tests that pull real weights from Hugging Face.
 # Gated separately so `cargo test --features musicgen` stays hermetic.
 live-models = []
@@ -60,3 +76,7 @@ cuda = [
 ]
 # Apple Metal acceleration. Implies `musicgen`.
 metal = ["musicgen", "blazen-audio-codec/metal"]
+
+[dev-dependencies]
+candle-core.workspace = true
+serde_json.workspace = true

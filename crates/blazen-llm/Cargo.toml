@@ -87,6 +87,7 @@ audio-stt-candle   = ["audio-stt", "blazen-audio-stt/candle"]
 audio-music        = ["dep:blazen-audio", "dep:blazen-audio-music"]
 audio-music-musicgen = ["audio-music", "blazen-audio-music/musicgen"]
 audio-music-audiogen = ["audio-music"]
+audio-music-stable-audio = ["audio-music", "blazen-audio-music/stable-audio"]
 
 # Neural audio codec bridge surface (DynCodecProvider impl of Codec).
 audio-codec        = ["dep:blazen-audio", "dep:blazen-audio-codec"]
