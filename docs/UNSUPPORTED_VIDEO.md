@@ -1,13 +1,9 @@
 # Unsupported video backends
 
 This file tracks the state of text-to-video and image-to-video backends in
-Blazen as of **2026-05-22**.
-
-In-depth design notes, port plans, license verdicts, and "resume-from-here"
-breadcrumbs live in the **BlackLeafDocs** sibling repository
-(`../../BlackLeafDocs/blazen/video/`). That is the canonical home of all
-research-grade material; this file is a short index that ships in the public
-Blazen tree.
+Blazen as of **2026-05-22**. Each pending native port links to its upstream
+public repository so a reader can find the architecture, weights, and
+license directly at the source.
 
 ---
 
@@ -31,30 +27,29 @@ is purely about removing the cloud dependency.
 
 ### CogVideoX 5B / 2B / I2V
 
-THUDM's open-weight text-to-video and image-to-video line. DiT-based
-diffusion over a 3D VAE latent. The 2B variant is the most realistic
-first-native target (smaller VRAM, similar architecture to the 5B). I2V
-shares weights with T2V plus an image-conditioning encoder.
-
-[Research notes](../../BlackLeafDocs/blazen/video/cogvideox.md)
+**CogVideoX** — THUDM's open-weight text-to-video and image-to-video line:
+DiT-based diffusion over a 3D VAE latent. License: Apache-2.0. The 2B
+variant is the most realistic first-native target (smaller VRAM, similar
+architecture to the 5B). I2V shares weights with T2V plus an
+image-conditioning encoder. **Status:** pending native Rust port; blocked
+on a candle 3D VAE codec and DiT block variants. Upstream:
+<https://github.com/THUDM/CogVideo>.
 
 ### HunyuanVideo
 
-Tencent's open-weight video DiT — substantially larger than CogVideoX 5B,
-higher fidelity. Same family of architectural blockers (DiT in candle,
-3D VAE codec, flow-matching sampler). License is permissive for
-non-commercial; commercial use needs Tencent's separate license — flag
-this clearly when wiring the backend.
-
-[Research notes](../../BlackLeafDocs/blazen/video/hunyuanvideo.md)
+**HunyuanVideo** — Tencent's open-weight video DiT, substantially larger
+than CogVideoX 5B at higher fidelity. Same family of architectural
+blockers (DiT in candle, 3D VAE codec, flow-matching sampler). **License:
+Tencent's commercial-use license requires a separate agreement — flag this
+clearly when wiring the backend.** **Status:** pending native Rust port.
+Upstream: <https://github.com/Tencent/HunyuanVideo>.
 
 ### Mochi
 
-Genmo's open-weight video model, Apache-2.0. Smaller-than-Hunyuan
+**Mochi** — Genmo's open-weight video model: smaller-than-Hunyuan
 parameter count but a non-standard sampler and conditioning scheme.
-Notable for the permissive license.
-
-[Research notes](../../BlackLeafDocs/blazen/video/mochi.md)
+License: Apache-2.0 — notable for the permissive license. **Status:**
+pending native Rust port. Upstream: <https://github.com/genmoai/models>.
 
 ---
 
@@ -62,12 +57,8 @@ Notable for the permissive license.
 
 Cross-cutting infrastructure that all three video models share — 3D VAE
 codec, DiT block variants, flow-matching sampler, frame-interpolation
-helpers — lives in:
-
-[Shared primitives](../../BlackLeafDocs/blazen/video/shared_primitives.md)
-
-The cross-cutting Rust ecosystem gap notes for video (video-specific DiT
-attention kernels, T2V evaluation harness, etc.) are co-located in
-`../../BlackLeafDocs/blazen/video/` alongside the per-model notes — there
-is no single `rust_ecosystem_gaps.md` for video today; the per-model
-notes each call out their own blockers.
+helpers — and video-specific Rust ecosystem gaps (DiT attention kernels
+tuned for video, T2V evaluation harness, etc.) remain open work. Rust
+ecosystem fills like spconv, FlexGEMM and kaolin remain open work; see
+issues / future commits in this repo. The per-model sections above call
+out each model's individual blockers.
