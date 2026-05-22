@@ -447,6 +447,210 @@ impl PpoTrainer {
         (self.lr_scheduler)(self.global_step)
     }
 
+    /// Resolve the scheduler's learning rate at `step`.
+    ///
+    /// Used by [`crate::distributed::AllReducePpoTrainer`] to mirror the
+    /// LR-then-step ordering inside its custom step loop.
+    #[must_use]
+    pub fn lr_for_step(&self, step: usize) -> f64 {
+        (self.lr_scheduler)(step)
+    }
+
+    /// Apply `lr` to the inner AdamW optimizer.
+    ///
+    /// Used by [`crate::distributed::AllReducePpoTrainer`] before the
+    /// per-step optimizer kick.
+    pub fn set_optimizer_lr(&mut self, lr: f64) {
+        self.optimizer.set_learning_rate(lr);
+    }
+
+    /// Increment the global-step counter.
+    ///
+    /// Mirrors [`PpoTrainer::step`]: the counter advances on every call,
+    /// regardless of whether the optimizer fired this step (PPO's
+    /// convention; differs from SFT [`crate::Trainer::bump_global_step`]).
+    pub fn bump_global_step(&mut self) {
+        self.global_step += 1;
+    }
+
+    /// Trainable param list: LoRA A/B rows (policy + critic encoder) plus
+    /// the value-head row, captured from the shared varmap.
+    ///
+    /// Exposed for [`crate::distributed::AllReducePpoTrainer`] which needs
+    /// the var list to (a) match gradient tensors to params during
+    /// AllReduce and (b) forward to grad-clip via
+    /// [`PpoTrainer::maybe_step_optimizer`].
+    #[must_use]
+    pub fn collect_trainable_params(&self) -> Vec<candle_core::Var> {
+        collect_ppo_trainable_params(&self.varmap, &self.config.lora)
+    }
+
+    /// Forward + loss for one PPO batch, **without** backward / optimizer.
+    ///
+    /// Returns the un-scaled loss tensor (autograd-live). The distributed
+    /// wrapper scales by `1 / gradient_accumulation_steps`, runs
+    /// `.backward()` itself, splices ring-AllReduce between backward and
+    /// the optimizer step, then calls [`PpoTrainer::maybe_step_optimizer`].
+    ///
+    /// Loss formula and masking conventions are documented at the module
+    /// level. The shape and dtype checks are identical to [`PpoTrainer::step`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BlazenTrainError::Forward`] for shape mismatches; forwards
+    /// any candle error.
+    // Why: this is exactly the math of `step()` up to (but excluding) the
+    // scale-and-backward. Splitting it lets the AllReduce wrapper reuse
+    // the autograd graph without forking the loss formula.
+    #[allow(clippy::too_many_lines)]
+    pub fn forward_loss(&self, batch: &PpoBatch) -> Result<Tensor, BlazenTrainError> {
+        let (b, t) = batch.input_ids.dims2()?;
+        check_shape("completion_mask", &batch.completion_mask, b, t)?;
+        check_shape("actions", &batch.actions, b, t)?;
+        check_shape("old_log_probs", &batch.old_log_probs, b, t)?;
+        check_shape("old_values", &batch.old_values, b, t)?;
+        check_shape("ref_log_probs", &batch.ref_log_probs, b, t)?;
+        let (br,) = batch.rewards.dims1().map(|n| (n,))?;
+        if br != b {
+            return Err(BlazenTrainError::Forward(format!(
+                "ppo step: rewards has length {br}, expected batch {b}"
+            )));
+        }
+
+        // ----- Host-side GAE (no autograd) ---------------------------
+        let mask_f32: Vec<f32> = batch
+            .completion_mask
+            .to_dtype(DType::F32)?
+            .to_vec2::<f32>()?
+            .into_iter()
+            .flatten()
+            .collect();
+        let old_values_host: Vec<f32> = batch
+            .old_values
+            .to_dtype(DType::F32)?
+            .to_vec2::<f32>()?
+            .into_iter()
+            .flatten()
+            .collect();
+        let rewards_host: Vec<f32> = batch.rewards.to_dtype(DType::F32)?.to_vec1::<f32>()?;
+
+        let mut rewards_per_token = vec![0.0_f32; b * t];
+        for (row, &reward) in rewards_host.iter().enumerate().take(b) {
+            let row_base = row * t;
+            let last = (0..t).rev().find(|&col| mask_f32[row_base + col] > 0.5);
+            if let Some(col) = last {
+                rewards_per_token[row_base + col] = reward;
+            }
+        }
+
+        let (advantages_host, returns_host) = Self::compute_gae(
+            &rewards_per_token,
+            &old_values_host,
+            &mask_f32,
+            b,
+            t,
+            self.ppo_cfg.gamma,
+            self.ppo_cfg.gae_lambda,
+        )?;
+        let advantages_host = normalize_advantages(&advantages_host, &mask_f32);
+
+        let advantages_t = Tensor::from_vec(advantages_host, (b, t), &self.device)?.detach();
+        let returns_t = Tensor::from_vec(returns_host, (b, t), &self.device)?.detach();
+        let mask_t = Tensor::from_vec(mask_f32.clone(), (b, t), &self.device)?.detach();
+        let mask_sum = mask_t.sum_all()?.to_dtype(DType::F32)?.to_scalar::<f32>()?;
+        if mask_sum < 0.5 {
+            return Err(BlazenTrainError::Forward(
+                "ppo step: completion_mask is all zeros — no positions to reduce over".to_string(),
+            ));
+        }
+        let mask_sum_t = Tensor::new(mask_sum, &self.device)?.detach();
+
+        // ----- Policy forward (autograd-live) -----------------------
+        let policy_logits = self.policy.forward(&batch.input_ids)?;
+        let log_probs_all =
+            candle_nn::ops::log_softmax(&policy_logits.to_dtype(DType::F32)?, D::Minus1)?;
+        let actions_u32 = batch.actions.to_dtype(DType::U32)?;
+        let new_log_probs = log_probs_all
+            .gather(&actions_u32.unsqueeze(2)?, 2)?
+            .squeeze(2)?;
+
+        // ----- Critic forward (autograd-live) -----------------------
+        let new_values = self.critic.forward_values(&batch.input_ids)?;
+
+        // ----- PPO surrogate ----------------------------------------
+        let ratio = (&new_log_probs - &batch.old_log_probs)?.exp()?;
+        let surr1 = (&ratio * &advantages_t)?;
+        let lo = f64::from(1.0_f32 - self.ppo_cfg.clip_epsilon);
+        let hi = f64::from(1.0_f32 + self.ppo_cfg.clip_epsilon);
+        let ratio_clamped = ratio.clamp(lo, hi)?;
+        let surr2 = (&ratio_clamped * &advantages_t)?;
+        let surr_min = surr1.minimum(&surr2)?;
+        let surr_masked = (&surr_min * &mask_t)?;
+        let pg_loss = surr_masked.sum_all()?.neg()?.broadcast_div(&mask_sum_t)?;
+
+        // ----- Value-function regression ----------------------------
+        let value_diff = (&new_values - &returns_t)?;
+        let vf_per = value_diff.sqr()?;
+        let vf_masked = (&vf_per * &mask_t)?;
+        let vf_loss = vf_masked.sum_all()?.broadcast_div(&mask_sum_t)?;
+
+        // ----- Entropy bonus ----------------------------------------
+        let probs = log_probs_all.exp()?;
+        let neg_p_logp = (&probs * &log_probs_all)?.neg()?;
+        let entropy_per_pos = neg_p_logp.sum(D::Minus1)?;
+        let entropy_masked = (&entropy_per_pos * &mask_t)?;
+        let ent_mean = entropy_masked.sum_all()?.broadcast_div(&mask_sum_t)?;
+        let ent_term = (ent_mean * f64::from(-self.ppo_cfg.entropy_coef))?;
+
+        // ----- Optional KL-to-reference -----------------------------
+        let kl_term = if self.ppo_cfg.kl_coef.abs() > f32::EPSILON {
+            let kl_per = (&new_log_probs - &batch.ref_log_probs)?;
+            let kl_masked = (&kl_per * &mask_t)?;
+            let kl_mean = kl_masked.sum_all()?.broadcast_div(&mask_sum_t)?;
+            (kl_mean * f64::from(self.ppo_cfg.kl_coef))?
+        } else {
+            Tensor::zeros((), DType::F32, &self.device)?
+        };
+
+        // ----- Total loss -------------------------------------------
+        let vf_scaled = (vf_loss * f64::from(self.ppo_cfg.value_coef))?;
+        let loss = ((pg_loss + vf_scaled)? + ent_term)?;
+        let loss = (loss + kl_term)?;
+        Ok(loss)
+    }
+
+    /// Run the gradient-clip + AdamW step on `grads` once the
+    /// accumulation counter has reached `gradient_accumulation_steps`.
+    /// Returns `true` when the optimizer actually fired.
+    ///
+    /// Used by [`crate::distributed::AllReducePpoTrainer`] after the
+    /// AllReduce splice so the wrapper can decide whether the optimizer
+    /// actually advanced (e.g. for logging hooks).
+    ///
+    /// # Errors
+    /// - [`BlazenTrainError::Optimizer`] when AdamW rejects the step.
+    /// - [`BlazenTrainError::Candle`] for grad-clip tensor errors.
+    pub fn maybe_step_optimizer(
+        &mut self,
+        grads: &mut candle_core::backprop::GradStore,
+        vars: &[candle_core::Var],
+    ) -> Result<bool, BlazenTrainError> {
+        let accum = self.config.gradient_accumulation_steps.max(1);
+        self.accum_counter += 1;
+        if self.accum_counter < accum {
+            return Ok(false);
+        }
+        if let Some(max) = self.config.optim.gradient_clip {
+            let var_refs: Vec<&candle_core::Var> = vars.iter().collect();
+            grad_clip::clip_grad_norm(grads, &var_refs, max)?;
+        }
+        self.optimizer
+            .step(grads)
+            .map_err(|e| BlazenTrainError::Optimizer(e.to_string()))?;
+        self.accum_counter = 0;
+        Ok(true)
+    }
+
     /// Compute GAE advantages + returns from a host-side rollout.
     ///
     /// All four inputs are flat row-major slices of length `B * T`:
@@ -546,135 +750,11 @@ impl PpoTrainer {
     // setup. Splitting it across helpers would scatter the autograd
     // graph and make the masking convention harder to audit; keep the
     // single-pass implementation and silence the line-count lint.
-    #[allow(clippy::too_many_lines)]
     pub fn step(&mut self, batch: &PpoBatch) -> Result<f32, BlazenTrainError> {
-        let lr = (self.lr_scheduler)(self.global_step);
-        self.optimizer.set_learning_rate(lr);
+        let lr = self.lr_for_step(self.global_step);
+        self.set_optimizer_lr(lr);
 
-        let (b, t) = batch.input_ids.dims2()?;
-        check_shape("completion_mask", &batch.completion_mask, b, t)?;
-        check_shape("actions", &batch.actions, b, t)?;
-        check_shape("old_log_probs", &batch.old_log_probs, b, t)?;
-        check_shape("old_values", &batch.old_values, b, t)?;
-        check_shape("ref_log_probs", &batch.ref_log_probs, b, t)?;
-        let (br,) = batch.rewards.dims1().map(|n| (n,))?;
-        if br != b {
-            return Err(BlazenTrainError::Forward(format!(
-                "ppo step: rewards has length {br}, expected batch {b}"
-            )));
-        }
-
-        // ----- Host-side GAE (no autograd) ---------------------------
-        // Distribute the per-row terminal reward to the last completion
-        // position; everything else is r_t = 0.
-        let mask_f32: Vec<f32> = batch
-            .completion_mask
-            .to_dtype(DType::F32)?
-            .to_vec2::<f32>()?
-            .into_iter()
-            .flatten()
-            .collect();
-        let old_values_host: Vec<f32> = batch
-            .old_values
-            .to_dtype(DType::F32)?
-            .to_vec2::<f32>()?
-            .into_iter()
-            .flatten()
-            .collect();
-        let rewards_host: Vec<f32> = batch.rewards.to_dtype(DType::F32)?.to_vec1::<f32>()?;
-
-        let mut rewards_per_token = vec![0.0_f32; b * t];
-        for (row, &reward) in rewards_host.iter().enumerate().take(b) {
-            // Find the last position with mask == 1 (terminal reward placement).
-            let row_base = row * t;
-            let last = (0..t).rev().find(|&col| mask_f32[row_base + col] > 0.5);
-            if let Some(col) = last {
-                rewards_per_token[row_base + col] = reward;
-            }
-        }
-
-        let (advantages_host, returns_host) = Self::compute_gae(
-            &rewards_per_token,
-            &old_values_host,
-            &mask_f32,
-            b,
-            t,
-            self.ppo_cfg.gamma,
-            self.ppo_cfg.gae_lambda,
-        )?;
-
-        // Normalize advantages over the unmasked entries (standard PPO
-        // trick; stabilizes training when rewards have arbitrary scale).
-        let advantages_host = normalize_advantages(&advantages_host, &mask_f32);
-
-        let advantages_t = Tensor::from_vec(advantages_host, (b, t), &self.device)?.detach();
-        let returns_t = Tensor::from_vec(returns_host, (b, t), &self.device)?.detach();
-        let mask_t = Tensor::from_vec(mask_f32.clone(), (b, t), &self.device)?.detach();
-        let mask_sum = mask_t.sum_all()?.to_dtype(DType::F32)?.to_scalar::<f32>()?;
-        if mask_sum < 0.5 {
-            return Err(BlazenTrainError::Forward(
-                "ppo step: completion_mask is all zeros — no positions to reduce over".to_string(),
-            ));
-        }
-        let mask_sum_t = Tensor::new(mask_sum, &self.device)?.detach();
-
-        // ----- Policy forward (autograd-live) -----------------------
-        let policy_logits = self.policy.forward(&batch.input_ids)?;
-        let log_probs_all =
-            candle_nn::ops::log_softmax(&policy_logits.to_dtype(DType::F32)?, D::Minus1)?;
-        // Gather log π(a_t | s_t) at the sampled action ids.
-        let actions_u32 = batch.actions.to_dtype(DType::U32)?;
-        let new_log_probs = log_probs_all
-            .gather(&actions_u32.unsqueeze(2)?, 2)?
-            .squeeze(2)?; // [B, T] f32
-
-        // ----- Critic forward (autograd-live) -----------------------
-        let new_values = self.critic.forward_values(&batch.input_ids)?; // [B, T]
-
-        // ----- PPO surrogate ----------------------------------------
-        let ratio = (&new_log_probs - &batch.old_log_probs)?.exp()?; // [B, T]
-        let surr1 = (&ratio * &advantages_t)?;
-        let lo = f64::from(1.0_f32 - self.ppo_cfg.clip_epsilon);
-        let hi = f64::from(1.0_f32 + self.ppo_cfg.clip_epsilon);
-        let ratio_clamped = ratio.clamp(lo, hi)?;
-        let surr2 = (&ratio_clamped * &advantages_t)?;
-        // min(surr1, surr2) per element. Use .minimum() — candle supports it.
-        let surr_min = surr1.minimum(&surr2)?;
-        let surr_masked = (&surr_min * &mask_t)?;
-        let pg_loss = surr_masked.sum_all()?.neg()?.broadcast_div(&mask_sum_t)?;
-
-        // ----- Value-function regression ----------------------------
-        let value_diff = (&new_values - &returns_t)?;
-        let vf_per = value_diff.sqr()?;
-        let vf_masked = (&vf_per * &mask_t)?;
-        let vf_loss = vf_masked.sum_all()?.broadcast_div(&mask_sum_t)?;
-
-        // ----- Entropy bonus ----------------------------------------
-        // H = -Σ_a p_a * log p_a, computed per position.
-        let probs = log_probs_all.exp()?;
-        let neg_p_logp = (&probs * &log_probs_all)?.neg()?;
-        let entropy_per_pos = neg_p_logp.sum(D::Minus1)?; // [B, T]
-        let entropy_masked = (&entropy_per_pos * &mask_t)?;
-        let ent_mean = entropy_masked.sum_all()?.broadcast_div(&mask_sum_t)?;
-        // We want to *maximize* entropy → subtract entropy_coef * H.
-        let ent_term = (ent_mean * f64::from(-self.ppo_cfg.entropy_coef))?;
-
-        // ----- Optional KL-to-reference -----------------------------
-        let kl_term = if self.ppo_cfg.kl_coef.abs() > f32::EPSILON {
-            // k1 estimator: KL ≈ log π_pol(a) - log π_ref(a) per sampled token.
-            let kl_per = (&new_log_probs - &batch.ref_log_probs)?;
-            let kl_masked = (&kl_per * &mask_t)?;
-            let kl_mean = kl_masked.sum_all()?.broadcast_div(&mask_sum_t)?;
-            (kl_mean * f64::from(self.ppo_cfg.kl_coef))?
-        } else {
-            Tensor::zeros((), DType::F32, &self.device)?
-        };
-
-        // ----- Total loss -------------------------------------------
-        let vf_scaled = (vf_loss * f64::from(self.ppo_cfg.value_coef))?;
-        let loss = ((pg_loss + vf_scaled)? + ent_term)?;
-        let loss = (loss + kl_term)?;
-
+        let loss = self.forward_loss(batch)?;
         let accum = self.config.gradient_accumulation_steps.max(1);
         #[allow(clippy::cast_precision_loss)]
         let scale = 1.0_f64 / accum as f64;
@@ -682,21 +762,9 @@ impl PpoTrainer {
         let loss_value = loss.to_dtype(DType::F32)?.to_scalar::<f32>()?;
 
         let mut grads = scaled_loss.backward()?;
-
-        self.accum_counter += 1;
-        if self.accum_counter >= accum {
-            if let Some(max) = self.config.optim.gradient_clip {
-                let vars = collect_ppo_trainable_params(&self.varmap, &self.config.lora);
-                let var_refs: Vec<&candle_core::Var> = vars.iter().collect();
-                grad_clip::clip_grad_norm(&mut grads, &var_refs, max)?;
-            }
-            self.optimizer
-                .step(&grads)
-                .map_err(|e| BlazenTrainError::Optimizer(e.to_string()))?;
-            self.accum_counter = 0;
-        }
-
-        self.global_step += 1;
+        let vars = self.collect_trainable_params();
+        let _stepped = self.maybe_step_optimizer(&mut grads, &vars)?;
+        self.bump_global_step();
         Ok(loss_value)
     }
 }

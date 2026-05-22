@@ -856,10 +856,10 @@ impl LocalModel for JsLocalModelAdapter {
 
 #[cfg(feature = "training")]
 pub use training::{
-    JsDpoConfig, JsFullFineTuneConfig, JsFullFineTuneResult, JsJsonlDataset, JsKtoConfig,
-    JsLoraConfig, JsMixedPrecision, JsOptimConfig, JsOrpoConfig, JsPreferenceJsonlDataset,
-    JsRatedJsonlDataset, JsSchedulerConfig, JsSchedulerKind, JsSimpoConfig, JsTrainConfig,
-    JsTrainCoreConfig, JsTrainedAdapter, JsTrainingEvent,
+    JsDistributedConfig, JsDpoConfig, JsFullFineTuneConfig, JsFullFineTuneResult, JsJsonlDataset,
+    JsKtoConfig, JsLoraConfig, JsMixedPrecision, JsOptimConfig, JsOrpoConfig,
+    JsPreferenceJsonlDataset, JsRatedJsonlDataset, JsSchedulerConfig, JsSchedulerKind,
+    JsSimpoConfig, JsTrainConfig, JsTrainCoreConfig, JsTrainedAdapter, JsTrainingEvent,
 };
 
 #[cfg(feature = "training")]
@@ -2230,6 +2230,47 @@ mod training {
                 .await
                 .map_err(|e| napi::Error::from_reason(e.to_string()))?;
             Ok(JsFullFineTuneResult::from(result))
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // JsDistributedConfig — ring-AllReduce config for multi-GPU / multi-node
+    // training. Lifted to/from blazen_train::config::DistributedConfig.
+    // -----------------------------------------------------------------------
+
+    /// Configuration for distributed (ring-AllReduce) training. Pass to
+    /// the training verbs to enable gradient averaging across
+    /// `worldSize` workers connected via gRPC. Each worker holds an
+    /// identical-shape gradient tensor; the ring algorithm sums and
+    /// averages per-parameter gradients before the optimizer step.
+    ///
+    /// `rank` is the 0-indexed rank of this worker; `worldSize` is the
+    /// total number of workers. `peers` is the ordered list of
+    /// `"host:port"` gRPC endpoints — one entry per rank. `masterAddr`
+    /// + `masterPort` identify the bootstrap node (typically the host
+    /// part of `peers[0]`).
+    #[napi(object)]
+    pub struct JsDistributedConfig {
+        pub rank: u32,
+        #[napi(js_name = "worldSize")]
+        pub world_size: u32,
+        pub peers: Vec<String>,
+        #[napi(js_name = "masterAddr")]
+        pub master_addr: String,
+        #[napi(js_name = "masterPort")]
+        pub master_port: u16,
+    }
+
+    #[cfg(feature = "distributed")]
+    impl From<JsDistributedConfig> for blazen_train::config::DistributedConfig {
+        fn from(v: JsDistributedConfig) -> Self {
+            Self {
+                rank: v.rank as usize,
+                world_size: v.world_size as usize,
+                peers: v.peers,
+                master_addr: v.master_addr,
+                master_port: v.master_port,
+            }
         }
     }
 }

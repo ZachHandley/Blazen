@@ -2769,6 +2769,49 @@ pub trait RatedDataset: Send + Sync {
     async fn batch(&self, batch_size: usize, idx: usize) -> Result<KtoBatch, BlazenTrainError>;
 }
 
+/// Async source of pre-sampled, pre-scored GRPO batches.
+///
+/// GRPO batches arrive pre-rolled by the caller — token ids, group ids,
+/// and per-row rewards are all the result of sampling K completions per
+/// prompt and scoring them with a frozen reward model. Constructing a
+/// [`GrpoBatch`] is therefore application-specific (different reward
+/// models, different sampling policies, different prompt sources), and
+/// this trait deliberately leaves that work to the caller. The
+/// [`crate::ModelManager::train_grpo`]-equivalent verb in upstream
+/// callers iterates over `next_batch` until it returns `None`.
+#[async_trait]
+pub trait GrpoDataset: Send + Sync {
+    /// Produce the next pre-sampled GRPO batch, or `None` once the dataset
+    /// is exhausted.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BlazenTrainError::Dataset`] for sampling / scoring /
+    /// tensor-construction failures.
+    async fn next_batch(&mut self) -> Result<Option<crate::grpo::GrpoBatch>, BlazenTrainError>;
+}
+
+/// Async source of pre-rolled PPO batches.
+///
+/// PPO batches carry the full RLHF rollout snapshot — sampled actions,
+/// behavior-policy log-probs, value estimates, terminal rewards, and
+/// reference-policy log-probs. Constructing them is highly
+/// application-specific (different rollout strategies, different reward
+/// models, different KL configurations) so this trait leaves batch
+/// construction entirely to the caller. The upstream `train_ppo` verb
+/// iterates over `next_batch` until it returns `None`.
+#[async_trait]
+pub trait PpoDataset: Send + Sync {
+    /// Produce the next pre-rolled PPO batch, or `None` once the dataset
+    /// is exhausted.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BlazenTrainError::Dataset`] for rollout / scoring /
+    /// tensor-construction failures.
+    async fn next_batch(&mut self) -> Result<Option<crate::ppo::PpoBatch>, BlazenTrainError>;
+}
+
 /// Final artifact produced by [`Trainer::run`].
 #[derive(Debug, Clone)]
 pub struct TrainedAdapter {

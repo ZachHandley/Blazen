@@ -1406,6 +1406,30 @@ typedef struct {
 } BlazenFullFineTuneConfig;
 
 /**
+ * Configuration for distributed (ring-AllReduce) training.
+ *
+ * `rank` is the 0-indexed rank of this worker; `world_size` is the total
+ * number of workers. `peers` is the ordered list of `"host:port"` gRPC
+ * endpoints — one entry per rank, joined by newlines on the wire.
+ * `master_addr` + `master_port` identify the bootstrap node.
+ */
+typedef struct {
+    uint64_t rank;
+    uint64_t world_size;
+    /**
+     * Newline-separated `"host:port"` peer endpoints. Caller-owned (heap
+     * `CString`); freed when the enclosing `BlazenDistributedConfig` is
+     * freed.
+     */
+    char *peers;
+    /**
+     * Bootstrap address (typically the host part of `peers[0]`).
+     */
+    char *master_addr;
+    uint16_t master_port;
+} BlazenDistributedConfig;
+
+/**
  * Function-pointer vtable a foreign caller fills out to implement
  * [`CompletionStreamSink`] across the C ABI.
  *
@@ -7222,6 +7246,36 @@ const BlazenPoolStatus *blazen_pool_status_list_get(const BlazenPoolStatusList *
  * `h` must be null OR a pointer produced by the cabi surface.
  */
  void blazen_adapter_handle_info_free(BlazenAdapterHandleInfo *h);
+
+/**
+ * Construct a `BlazenDistributedConfig` from caller-supplied fields.
+ *
+ * All `*const c_char` inputs are NUL-terminated UTF-8 owned by the caller;
+ * they are copied into the returned struct (so the caller may free them
+ * immediately after this call).
+ *
+ * # Safety
+ *
+ * - `peers` and `master_addr` must be NUL-terminated UTF-8 strings or null.
+ * - The returned pointer must be freed via [`blazen_distributed_config_free`].
+ */
+
+BlazenDistributedConfig *blazen_distributed_config_new(uint64_t rank,
+                                                       uint64_t world_size,
+                                                       const char *peers,
+                                                       const char *master_addr,
+                                                       uint16_t master_port);
+
+/**
+ * Free a [`BlazenDistributedConfig`] allocated by
+ * [`blazen_distributed_config_new`].
+ *
+ * # Safety
+ *
+ * `cfg` must be null OR a pointer returned by
+ * [`blazen_distributed_config_new`] that has not yet been freed.
+ */
+ void blazen_distributed_config_free(BlazenDistributedConfig *cfg);
 
 /**
  * Synchronously open a plaintext gRPC connection to a model server at

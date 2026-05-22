@@ -1645,6 +1645,16 @@ module Blazen
                     [:pointer, :pointer, :pointer], :int32
     attach_function :blazen_full_finetune_result_free, [:pointer], :void
 
+    # DistributedConfig — ring-AllReduce config for multi-GPU /
+    # multi-node training. Constructed via
+    # {blazen_distributed_config_new}, freed via
+    # {blazen_distributed_config_free}. Passed to training verbs that
+    # accept distributed configuration.
+    attach_function :blazen_distributed_config_new,
+                    %i[uint64 uint64 pointer pointer uint16],
+                    :pointer
+    attach_function :blazen_distributed_config_free, [:pointer], :void
+
     # -------------------------------------------------------------------
     # Ruby-side helpers
     # -------------------------------------------------------------------

@@ -45,6 +45,8 @@
 //! `QloraTrainer`, `GrpoTrainer`, and `PpoTrainer` wrappers, and exposes
 //! the wrapper through the Python / Node / WASM bindings.
 
+pub mod all_reduce_grpo;
+pub mod all_reduce_ppo;
 pub mod allreduce;
 pub mod ring;
 pub mod trainer;
@@ -57,6 +59,8 @@ pub mod pb {
     tonic::include_proto!("blazen.allreduce.v1");
 }
 
+pub use all_reduce_grpo::AllReduceGrpoTrainer;
+pub use all_reduce_ppo::AllReducePpoTrainer;
 pub use allreduce::ring_all_reduce;
 pub use ring::{RingConfig, RingTopology, parse_peer_list};
 pub use trainer::AllReduceTrainer;

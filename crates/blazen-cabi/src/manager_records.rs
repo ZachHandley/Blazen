@@ -827,3 +827,145 @@ pub unsafe extern "C" fn blazen_adapter_handle_info_free(h: *mut BlazenAdapterHa
     // SAFETY: per the `Box::into_raw` provenance contract.
     drop(unsafe { Box::from_raw(h) });
 }
+
+// =============================================================================
+// BlazenDistributedConfig — ring-AllReduce config for multi-GPU / multi-node
+// training. Constructed on the foreign side via
+// `blazen_distributed_config_new`, freed via `blazen_distributed_config_free`,
+// and passed to training verbs that accept distributed configuration.
+// =============================================================================
+
+/// Configuration for distributed (ring-AllReduce) training.
+///
+/// `rank` is the 0-indexed rank of this worker; `world_size` is the total
+/// number of workers. `peers` is the ordered list of `"host:port"` gRPC
+/// endpoints — one entry per rank, joined by newlines on the wire.
+/// `master_addr` + `master_port` identify the bootstrap node.
+#[repr(C)]
+pub struct BlazenDistributedConfig {
+    pub rank: u64,
+    pub world_size: u64,
+    /// Newline-separated `"host:port"` peer endpoints. Caller-owned (heap
+    /// `CString`); freed when the enclosing `BlazenDistributedConfig` is
+    /// freed.
+    pub peers: *mut c_char,
+    /// Bootstrap address (typically the host part of `peers[0]`).
+    pub master_addr: *mut c_char,
+    pub master_port: u16,
+}
+
+/// Construct a `BlazenDistributedConfig` from caller-supplied fields.
+///
+/// All `*const c_char` inputs are NUL-terminated UTF-8 owned by the caller;
+/// they are copied into the returned struct (so the caller may free them
+/// immediately after this call).
+///
+/// # Safety
+///
+/// - `peers` and `master_addr` must be NUL-terminated UTF-8 strings or null.
+/// - The returned pointer must be freed via [`blazen_distributed_config_free`].
+#[cfg(feature = "distributed")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_distributed_config_new(
+    rank: u64,
+    world_size: u64,
+    peers: *const c_char,
+    master_addr: *const c_char,
+    master_port: u16,
+) -> *mut BlazenDistributedConfig {
+    use std::ffi::CStr;
+    let peers_str = if peers.is_null() {
+        String::new()
+    } else {
+        // SAFETY: per the per-fn docs.
+        unsafe { CStr::from_ptr(peers) }
+            .to_str()
+            .unwrap_or("")
+            .to_owned()
+    };
+    let master_str = if master_addr.is_null() {
+        String::new()
+    } else {
+        // SAFETY: per the per-fn docs.
+        unsafe { CStr::from_ptr(master_addr) }
+            .to_str()
+            .unwrap_or("")
+            .to_owned()
+    };
+    Box::into_raw(Box::new(BlazenDistributedConfig {
+        rank,
+        world_size,
+        peers: alloc_cstring(&peers_str),
+        master_addr: alloc_cstring(&master_str),
+        master_port,
+    }))
+}
+
+/// Free a [`BlazenDistributedConfig`] allocated by
+/// [`blazen_distributed_config_new`].
+///
+/// # Safety
+///
+/// `cfg` must be null OR a pointer returned by
+/// [`blazen_distributed_config_new`] that has not yet been freed.
+#[cfg(feature = "distributed")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_distributed_config_free(cfg: *mut BlazenDistributedConfig) {
+    if cfg.is_null() {
+        return;
+    }
+    // SAFETY: per the per-fn docs.
+    let boxed = unsafe { Box::from_raw(cfg) };
+    if !boxed.peers.is_null() {
+        // SAFETY: produced by `alloc_cstring`.
+        unsafe { crate::string::blazen_string_free(boxed.peers) };
+    }
+    if !boxed.master_addr.is_null() {
+        // SAFETY: produced by `alloc_cstring`.
+        unsafe { crate::string::blazen_string_free(boxed.master_addr) };
+    }
+}
+
+#[cfg(feature = "distributed")]
+impl BlazenDistributedConfig {
+    /// Lift to the Rust-side `blazen_train::config::DistributedConfig`.
+    ///
+    /// # Safety
+    ///
+    /// `self.peers` and `self.master_addr` must be live NUL-terminated UTF-8
+    /// pointers (or null).
+    #[must_use]
+    #[allow(
+        clippy::cast_possible_truncation,
+        reason = "distributed rank/world_size fit in u32 in practice"
+    )]
+    pub unsafe fn to_rust(&self) -> blazen_train::config::DistributedConfig {
+        use std::ffi::CStr;
+        let peers = if self.peers.is_null() {
+            Vec::new()
+        } else {
+            // SAFETY: per the per-fn docs.
+            let s = unsafe { CStr::from_ptr(self.peers) }.to_str().unwrap_or("");
+            s.lines()
+                .map(|l| l.trim().to_owned())
+                .filter(|l| !l.is_empty())
+                .collect()
+        };
+        let master_addr = if self.master_addr.is_null() {
+            String::new()
+        } else {
+            // SAFETY: per the per-fn docs.
+            unsafe { CStr::from_ptr(self.master_addr) }
+                .to_str()
+                .unwrap_or("")
+                .to_owned()
+        };
+        blazen_train::config::DistributedConfig {
+            rank: self.rank as usize,
+            world_size: self.world_size as usize,
+            peers,
+            master_addr,
+            master_port: self.master_port,
+        }
+    }
+}

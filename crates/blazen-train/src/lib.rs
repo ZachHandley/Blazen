@@ -75,6 +75,6 @@ pub use reward::{
 };
 #[cfg(feature = "engine")]
 pub use trainer::{
-    FullFineTuneResult, KtoBatch, PreferenceBatch, PreferenceDataset, RatedDataset, ReferenceModel,
-    TrainedAdapter, Trainer, TrainingBatch, TrainingDataset,
+    FullFineTuneResult, GrpoDataset, KtoBatch, PpoDataset, PreferenceBatch, PreferenceDataset,
+    RatedDataset, ReferenceModel, TrainedAdapter, Trainer, TrainingBatch, TrainingDataset,
 };

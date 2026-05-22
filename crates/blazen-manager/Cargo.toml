@@ -91,6 +91,15 @@ training = [
     "dep:candle-core",
     "dep:candle-nn",
 ]
+# Multi-GPU / multi-node distributed training. Lights up the optional
+# `distributed: Option<DistributedConfig>` parameter on `train_grpo` /
+# `train_ppo` and wraps the inner trainer in the matching
+# `AllReduce{Grpo,Ppo}Trainer` from `blazen-train::distributed`. Pulls in
+# the gRPC ring transport stack via `blazen-train/distributed`.
+distributed = [
+    "training",
+    "blazen-train/distributed",
+]
 
 [lints]
 workspace = true

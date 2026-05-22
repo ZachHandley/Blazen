@@ -329,6 +329,60 @@ pub mod grpc {
                 prev_rank,
             }
         }
+
+        /// One-shot bootstrap: bind this worker's AllReduce gRPC server
+        /// on `bind_addr`, connect a client to the `next` peer's endpoint,
+        /// and return a fully wired [`GrpcRingTransport`] alongside the
+        /// server's [`tokio::task::JoinHandle`] (kept by the caller so
+        /// dropping the handle tears the server down at end-of-training).
+        ///
+        /// Combines [`spawn_allreduce_server`] + tonic client connect +
+        /// [`Self::new`] so upstream verbs (e.g. the
+        /// `ModelManager::train_grpo` / `train_ppo` distributed paths)
+        /// don't have to thread inbox + notify + tonic types through
+        /// their own surface.
+        ///
+        /// # Errors
+        /// - [`BlazenTrainError::Distributed`] if the gRPC server bind on
+        ///   `bind_addr` fails or the tonic client cannot connect to the
+        ///   `next` peer's endpoint.
+        pub async fn bootstrap(
+            topology: &super::super::ring::RingTopology,
+            bind_addr: SocketAddr,
+        ) -> Result<(Self, tokio::task::JoinHandle<()>), BlazenTrainError> {
+            let rank = topology.rank;
+            let prev_rank = topology.prev_rank();
+            let next_endpoint = topology.next_endpoint();
+            let next_url =
+                if next_endpoint.starts_with("http://") || next_endpoint.starts_with("https://") {
+                    next_endpoint.to_string()
+                } else {
+                    format!("http://{next_endpoint}")
+                };
+
+            let (handle, inbox, notify) = spawn_allreduce_server(bind_addr).await?;
+
+            let next_client = BlazenAllReduceClient::connect(next_url.clone())
+                .await
+                .map_err(|e| {
+                    BlazenTrainError::Distributed(format!(
+                        "gRPC connect to next peer {next_url} failed: {e}"
+                    ))
+                })?;
+
+            // Why: rank / prev_rank are usize on the topology but the
+            // wire protocol uses u32; the cast is safe because peer
+            // counts in practice are well below 2^32.
+            #[allow(clippy::cast_possible_truncation)]
+            let rank_u32 = rank as u32;
+            #[allow(clippy::cast_possible_truncation)]
+            let prev_rank_u32 = prev_rank as u32;
+
+            Ok((
+                Self::new(rank_u32, prev_rank_u32, next_client, inbox, notify),
+                handle,
+            ))
+        }
     }
 
     #[async_trait]

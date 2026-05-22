@@ -28,10 +28,11 @@ use crate::hf_loader::{BackendHint, HfLoadOptions};
 
 #[cfg(feature = "training")]
 pub use blazen_train::{
-    BlazenTrainError, DpoConfig, FullFineTuneConfig, FullFineTuneResult, KtoConfig, LoraConfig,
-    MixedPrecision, OptimConfig, OrpoConfig, PreferenceDataset, RatedDataset, SchedulerConfig,
-    SchedulerKind, SimpoConfig, TrainConfig, TrainCoreConfig, TrainedAdapter, TrainingDataset,
-    TrainingEvent, TrainingProgress,
+    BlazenTrainError, DistributedConfig, DpoConfig, FullFineTuneConfig, FullFineTuneResult,
+    GrpoConfig, GrpoDataset, GrpoTrainer, KtoConfig, LoraConfig, MixedPrecision, OptimConfig,
+    OrpoConfig, PpoConfig, PpoDataset, PpoTrainer, PreferenceDataset, RatedDataset,
+    SchedulerConfig, SchedulerKind, SimpoConfig, TrainConfig, TrainCoreConfig, TrainedAdapter,
+    TrainingDataset, TrainingEvent, TrainingProgress,
 };
 
 // Why: the concrete JSONL loaders (`PreferenceJsonlDataset`,
@@ -666,6 +667,138 @@ impl ModelManager {
         Ok(result)
     }
 
+    /// Run Group Relative Policy Optimization (GRPO) against a pre-built
+    /// [`GrpoTrainer`] and a stream of pre-sampled, pre-scored batches.
+    ///
+    /// Unlike [`Self::train_lora`] / [`Self::train_dpo`] / etc., this verb
+    /// does *not* construct the policy / reference models — GRPO batches
+    /// require K sampled completions per prompt and per-row rewards from
+    /// a frozen reward model, and the policy + reference + reward-model
+    /// loading path for GRPO is application-specific (different reward
+    /// models, different samplers). Callers build the [`GrpoTrainer`] via
+    /// `GrpoTrainer::new(cfg, varmap, device, policy, reference, ..)` and
+    /// hand it in. The verb then owns the driving loop, the optional
+    /// `AllReduce` wrapping, progress emission, and PEFT adapter export
+    /// at the end.
+    ///
+    /// When `distributed` is `Some`, the inner trainer is wrapped in
+    /// [`blazen_train::distributed::AllReduceGrpoTrainer`] and every
+    /// `step` participates in a ring-AllReduce gradient average across
+    /// `distributed.peers` before the optimizer kick. The local gRPC
+    /// `AllReduce` server is bound on `0.0.0.0:<distributed.master_port>`
+    /// (this rank's slot in the peer list); the `next` peer's endpoint
+    /// is dialed via tonic. When `None`, the inner sync `step` is driven
+    /// directly with no networking.
+    ///
+    /// # Errors
+    ///
+    /// - [`BlazenError::Validation`] if `distributed` is `Some` and
+    ///   `RingTopology::new` rejects the rank / peers combination.
+    /// - [`BlazenError::Request`] (via [`BlazenError::internal`]) for any
+    ///   transport bootstrap failure (server bind, peer connect),
+    ///   training-time failure (forward / backward / optimizer /
+    ///   `AllReduce`), dataset I/O error, or adapter-export failure.
+    /// - [`BlazenError::cancelled`] when the progress callback aborts.
+    #[cfg(feature = "training")]
+    pub async fn train_grpo(
+        &self,
+        trainer: blazen_train::GrpoTrainer,
+        mut dataset: Box<dyn blazen_train::GrpoDataset>,
+        progress: Option<Arc<dyn TrainingProgress>>,
+        #[cfg(feature = "distributed")] distributed: Option<
+            blazen_train::config::DistributedConfig,
+        >,
+        #[cfg(not(feature = "distributed"))] distributed: Option<()>,
+    ) -> Result<TrainedAdapter, BlazenError> {
+        let _ = progress; // GrpoTrainer captures its progress sink at construction time.
+        let output_dir = trainer.output_dir();
+        let base_repo = trainer.config().base_model_repo.clone();
+        let lora_cfg = trainer.config().lora.clone();
+
+        #[cfg(feature = "distributed")]
+        let (final_loss, total_steps, finished) = if let Some(dist_cfg) = distributed {
+            run_grpo_distributed(trainer, &mut *dataset, dist_cfg).await?
+        } else {
+            run_grpo_local(trainer, &mut *dataset).await?
+        };
+        #[cfg(not(feature = "distributed"))]
+        let (final_loss, total_steps, finished) = {
+            let _ = distributed; // unused when the `distributed` feature is off
+            run_grpo_local(trainer, &mut *dataset).await?
+        };
+
+        blazen_train::export::save_peft_adapter(
+            finished.varmap(),
+            &output_dir,
+            &lora_cfg,
+            &base_repo,
+        )
+        .map_err(BlazenError::from)?;
+
+        Ok(TrainedAdapter {
+            adapter_dir: output_dir,
+            final_loss,
+            total_steps,
+        })
+    }
+
+    /// Run Proximal Policy Optimization (PPO) against a pre-built
+    /// [`PpoTrainer`] and a stream of pre-rolled batches.
+    ///
+    /// Mirrors [`Self::train_grpo`]: the caller builds the trainer
+    /// (policy + critic + reference) because PPO rollouts are
+    /// application-specific (different sampler, different reward model,
+    /// different KL configuration). The verb owns the loop, the optional
+    /// distributed wrapping via
+    /// [`blazen_train::distributed::AllReducePpoTrainer`], progress
+    /// emission, and PEFT adapter export.
+    ///
+    /// # Errors
+    ///
+    /// Same surface as [`Self::train_grpo`].
+    #[cfg(feature = "training")]
+    pub async fn train_ppo(
+        &self,
+        trainer: blazen_train::PpoTrainer,
+        mut dataset: Box<dyn blazen_train::PpoDataset>,
+        progress: Option<Arc<dyn TrainingProgress>>,
+        #[cfg(feature = "distributed")] distributed: Option<
+            blazen_train::config::DistributedConfig,
+        >,
+        #[cfg(not(feature = "distributed"))] distributed: Option<()>,
+    ) -> Result<TrainedAdapter, BlazenError> {
+        let _ = progress; // PpoTrainer captures its progress sink at construction time.
+        let output_dir = trainer.config().output_dir.clone();
+        let base_repo = trainer.config().base_model_repo.clone();
+        let lora_cfg = trainer.config().lora.clone();
+
+        #[cfg(feature = "distributed")]
+        let (final_loss, total_steps, finished) = if let Some(dist_cfg) = distributed {
+            run_ppo_distributed(trainer, &mut *dataset, dist_cfg).await?
+        } else {
+            run_ppo_local(trainer, &mut *dataset).await?
+        };
+        #[cfg(not(feature = "distributed"))]
+        let (final_loss, total_steps, finished) = {
+            let _ = distributed;
+            run_ppo_local(trainer, &mut *dataset).await?
+        };
+
+        blazen_train::export::save_peft_adapter(
+            finished.varmap(),
+            &output_dir,
+            &lora_cfg,
+            &base_repo,
+        )
+        .map_err(BlazenError::from)?;
+
+        Ok(TrainedAdapter {
+            adapter_dir: output_dir,
+            final_loss,
+            total_steps,
+        })
+    }
+
     /// List adapters mounted on a registered model.
     ///
     /// # Errors
@@ -853,6 +986,114 @@ fn sum_adapter_bytes(adapter_dir: &Path) -> Result<u64, BlazenError> {
         }
     }
     Ok(total)
+}
+
+/// Drive a [`blazen_train::GrpoTrainer`] to dataset exhaustion on a single
+/// device, returning `(final_loss, total_steps, trainer)`.
+#[cfg(feature = "training")]
+async fn run_grpo_local(
+    mut trainer: blazen_train::GrpoTrainer,
+    dataset: &mut dyn blazen_train::GrpoDataset,
+) -> Result<(f32, usize, blazen_train::GrpoTrainer), BlazenError> {
+    let mut final_loss: f32 = 0.0;
+    while let Some(batch) = dataset.next_batch().await? {
+        final_loss = trainer.step(&batch)?;
+    }
+    let total_steps = trainer.global_step();
+    Ok((final_loss, total_steps, trainer))
+}
+
+/// Drive a [`blazen_train::GrpoTrainer`] under ring-AllReduce gradient
+/// averaging across `distributed.peers`. Bootstraps the gRPC `AllReduce`
+/// server on `0.0.0.0:<dist_cfg.master_port>` (this rank's slot in the
+/// peer list) and dials the `next` peer's endpoint before the first
+/// step. Returns `(final_loss, total_steps, unwrapped_trainer)`.
+#[cfg(all(feature = "training", feature = "distributed"))]
+async fn run_grpo_distributed(
+    trainer: blazen_train::GrpoTrainer,
+    dataset: &mut dyn blazen_train::GrpoDataset,
+    dist_cfg: blazen_train::config::DistributedConfig,
+) -> Result<(f32, usize, blazen_train::GrpoTrainer), BlazenError> {
+    use blazen_train::distributed::{
+        AllReduceGrpoTrainer, RingTopology, transport::grpc::GrpcRingTransport,
+    };
+
+    let topology = RingTopology::new(dist_cfg.rank, dist_cfg.peers.clone())
+        .map_err(|e| BlazenError::validation(format!("invalid distributed config: {e}")))?;
+    let bind_addr: std::net::SocketAddr = format!("0.0.0.0:{}", dist_cfg.master_port)
+        .parse()
+        .map_err(|e| {
+            BlazenError::validation(format!(
+                "invalid master_port {} for AllReduce bind: {e}",
+                dist_cfg.master_port
+            ))
+        })?;
+    let (transport, _server_handle) = GrpcRingTransport::bootstrap(&topology, bind_addr)
+        .await
+        .map_err(BlazenError::from)?;
+    let transport: Arc<dyn blazen_train::distributed::RingTransport> = Arc::new(transport);
+
+    let mut wrapped = AllReduceGrpoTrainer::new(trainer, topology, transport);
+    let mut final_loss: f32 = 0.0;
+    while let Some(batch) = dataset.next_batch().await? {
+        final_loss = wrapped.step(&batch).await?;
+    }
+    let total_steps = wrapped.inner().global_step();
+    let inner = wrapped.into_inner();
+    Ok((final_loss, total_steps, inner))
+}
+
+/// Drive a [`blazen_train::PpoTrainer`] to dataset exhaustion on a single
+/// device, returning `(final_loss, total_steps, trainer)`.
+#[cfg(feature = "training")]
+async fn run_ppo_local(
+    mut trainer: blazen_train::PpoTrainer,
+    dataset: &mut dyn blazen_train::PpoDataset,
+) -> Result<(f32, usize, blazen_train::PpoTrainer), BlazenError> {
+    let mut final_loss: f32 = 0.0;
+    while let Some(batch) = dataset.next_batch().await? {
+        final_loss = trainer.step(&batch)?;
+    }
+    let total_steps = trainer.global_step();
+    Ok((final_loss, total_steps, trainer))
+}
+
+/// Drive a [`blazen_train::PpoTrainer`] under ring-AllReduce gradient
+/// averaging across `distributed.peers`. See [`run_grpo_distributed`]
+/// for bootstrap details.
+#[cfg(all(feature = "training", feature = "distributed"))]
+async fn run_ppo_distributed(
+    trainer: blazen_train::PpoTrainer,
+    dataset: &mut dyn blazen_train::PpoDataset,
+    dist_cfg: blazen_train::config::DistributedConfig,
+) -> Result<(f32, usize, blazen_train::PpoTrainer), BlazenError> {
+    use blazen_train::distributed::{
+        AllReducePpoTrainer, RingTopology, transport::grpc::GrpcRingTransport,
+    };
+
+    let topology = RingTopology::new(dist_cfg.rank, dist_cfg.peers.clone())
+        .map_err(|e| BlazenError::validation(format!("invalid distributed config: {e}")))?;
+    let bind_addr: std::net::SocketAddr = format!("0.0.0.0:{}", dist_cfg.master_port)
+        .parse()
+        .map_err(|e| {
+            BlazenError::validation(format!(
+                "invalid master_port {} for AllReduce bind: {e}",
+                dist_cfg.master_port
+            ))
+        })?;
+    let (transport, _server_handle) = GrpcRingTransport::bootstrap(&topology, bind_addr)
+        .await
+        .map_err(BlazenError::from)?;
+    let transport: Arc<dyn blazen_train::distributed::RingTransport> = Arc::new(transport);
+
+    let mut wrapped = AllReducePpoTrainer::new(trainer, topology, transport);
+    let mut final_loss: f32 = 0.0;
+    while let Some(batch) = dataset.next_batch().await? {
+        final_loss = wrapped.step(&batch).await?;
+    }
+    let total_steps = wrapped.inner().global_step();
+    let inner = wrapped.into_inner();
+    Ok((final_loss, total_steps, inner))
 }
 
 #[cfg(test)]

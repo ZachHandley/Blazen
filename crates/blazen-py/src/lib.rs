@@ -605,6 +605,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<manager::PyKtoConfig>()?;
         m.add_class::<manager::PyFullFineTuneConfig>()?;
         m.add_class::<manager::PyFullFineTuneResult>()?;
+        m.add_class::<manager::PyDistributedConfig>()?;
     }
 
     // Model cache (HuggingFace Hub downloader / on-disk cache)

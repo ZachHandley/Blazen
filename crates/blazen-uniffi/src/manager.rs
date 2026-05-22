@@ -412,11 +412,11 @@ impl UniffiModelManager {
 
 #[cfg(feature = "training")]
 pub use training::{
-    DpoConfigRecord, ForeignTrainingProgress, FullFineTuneConfigRecord, FullFineTuneResultRecord,
-    KtoConfigRecord, LoraConfigRecord, MixedPrecisionEnum, OptimConfigRecord, OrpoConfigRecord,
-    SchedulerConfigRecord, SchedulerKindEnum, SimpoConfigRecord, TrainConfigRecord,
-    TrainCoreConfigRecord, TrainedAdapterRecord, TrainingEventEnum, UniffiJsonlDataset,
-    UniffiPreferenceJsonlDataset, UniffiRatedJsonlDataset,
+    DistributedConfigRecord, DpoConfigRecord, ForeignTrainingProgress, FullFineTuneConfigRecord,
+    FullFineTuneResultRecord, KtoConfigRecord, LoraConfigRecord, MixedPrecisionEnum,
+    OptimConfigRecord, OrpoConfigRecord, SchedulerConfigRecord, SchedulerKindEnum,
+    SimpoConfigRecord, TrainConfigRecord, TrainCoreConfigRecord, TrainedAdapterRecord,
+    TrainingEventEnum, UniffiJsonlDataset, UniffiPreferenceJsonlDataset, UniffiRatedJsonlDataset,
 };
 
 #[cfg(feature = "training")]
@@ -1520,6 +1520,41 @@ mod training {
                     assert_eq!(adapter_dir, "/tmp/adapter");
                 }
                 other => panic!("expected Finished, got {other:?}"),
+            }
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // DistributedConfigRecord — ring-AllReduce config for multi-GPU /
+    // multi-node training. Lifted to/from
+    // blazen_train::config::DistributedConfig.
+    // -----------------------------------------------------------------------
+
+    /// Configuration for distributed (ring-AllReduce) training.
+    ///
+    /// `rank` is the 0-indexed rank of this worker; `world_size` is the
+    /// total number of workers. `peers` is the ordered list of
+    /// `"host:port"` gRPC endpoints — one entry per rank. `master_addr`
+    /// + `master_port` identify the bootstrap node (typically the host
+    /// part of `peers[0]`).
+    #[derive(Debug, Clone, uniffi::Record)]
+    pub struct DistributedConfigRecord {
+        pub rank: u32,
+        pub world_size: u32,
+        pub peers: Vec<String>,
+        pub master_addr: String,
+        pub master_port: u16,
+    }
+
+    #[cfg(feature = "distributed")]
+    impl From<DistributedConfigRecord> for blazen_train::config::DistributedConfig {
+        fn from(v: DistributedConfigRecord) -> Self {
+            Self {
+                rank: v.rank as usize,
+                world_size: v.world_size as usize,
+                peers: v.peers,
+                master_addr: v.master_addr,
+                master_port: v.master_port,
             }
         }
     }

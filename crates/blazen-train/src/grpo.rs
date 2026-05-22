@@ -278,6 +278,83 @@ impl GrpoTrainer {
         self.global_step
     }
 
+    // --- Distributed-training accessors (used by AllReduceGrpoTrainer) ---
+
+    /// Evaluate the LR schedule at `step` without mutating optimizer state.
+    /// Used by [`crate::distributed::AllReduceGrpoTrainer`].
+    #[must_use]
+    pub fn lr_for_step(&self, step: usize) -> f64 {
+        (self.lr_scheduler)(step)
+    }
+
+    /// Apply `lr` to the inner optimizer. Used by
+    /// [`crate::distributed::AllReduceGrpoTrainer`] right before the
+    /// per-step optimizer kick.
+    pub fn set_optimizer_lr(&mut self, lr: f64) {
+        self.optimizer.set_learning_rate(lr);
+    }
+
+    /// GRPO KL-regularization coefficient (β).
+    #[must_use]
+    pub(crate) fn beta_coeff(&self) -> f32 {
+        self.grpo_cfg.beta
+    }
+
+    /// GRPO advantage-normalization epsilon (per-group std floor).
+    #[must_use]
+    pub(crate) fn advantage_epsilon(&self) -> f32 {
+        self.grpo_cfg.advantage_epsilon
+    }
+
+    /// Borrow the policy [`TrainableLlama`] (autograd-live forward pass).
+    pub(crate) fn policy(&self) -> &TrainableLlama {
+        &self.policy
+    }
+
+    /// Borrow the frozen reference [`TrainableLlama`] (used for the KL term).
+    pub(crate) fn reference(&self) -> &TrainableLlama {
+        &self.reference
+    }
+
+    /// Run the gradient-clip + optimizer step on `grads` if the accumulation
+    /// counter has reached `gradient_accumulation_steps`. Returns `true` when
+    /// the optimizer actually stepped.
+    ///
+    /// Used by [`crate::distributed::AllReduceGrpoTrainer`] after the
+    /// AllReduce splice so the wrapper can decide whether to bump
+    /// `global_step`.
+    ///
+    /// # Errors
+    /// - [`BlazenTrainError::Optimizer`] when the AdamW step fails.
+    /// - [`BlazenTrainError::Candle`] for grad-clip tensor errors.
+    pub fn maybe_step_optimizer(
+        &mut self,
+        grads: &mut candle_core::backprop::GradStore,
+        vars: &[candle_core::Var],
+    ) -> Result<bool, BlazenTrainError> {
+        let accum = self.config.gradient_accumulation_steps.max(1);
+        self.accum_counter += 1;
+        if self.accum_counter < accum {
+            return Ok(false);
+        }
+        if let Some(max) = self.config.optim.gradient_clip {
+            let var_refs: Vec<&candle_core::Var> = vars.iter().collect();
+            grad_clip::clip_grad_norm(grads, &var_refs, max)?;
+        }
+        self.optimizer
+            .step(grads)
+            .map_err(|e| BlazenTrainError::Optimizer(e.to_string()))?;
+        self.accum_counter = 0;
+        Ok(true)
+    }
+
+    /// Increment the global step counter. Used by
+    /// [`crate::distributed::AllReduceGrpoTrainer`] after a successful
+    /// optimizer step.
+    pub fn bump_global_step(&mut self) {
+        self.global_step += 1;
+    }
+
     /// Compute group-relative advantages from raw per-row rewards.
     ///
     /// `rewards` is `[B*K]` f32 and `group_ids` is `[B*K]` u32 with values
@@ -563,7 +640,10 @@ fn emit_event(
 /// Implementation mirrors `trainer.rs::sequence_logprobs` but with a per-row
 /// average instead of a sum — GRPO normalizes by completion length so longer
 /// completions don't dominate the advantage signal.
-fn mean_label_log_probs(logits: &Tensor, labels: &Tensor) -> Result<Tensor, BlazenTrainError> {
+pub(crate) fn mean_label_log_probs(
+    logits: &Tensor,
+    labels: &Tensor,
+) -> Result<Tensor, BlazenTrainError> {
     let log_probs = candle_nn::ops::log_softmax(&logits.to_dtype(DType::F32)?, D::Minus1)?;
 
     let labels_i64 = labels.to_dtype(DType::I64)?;

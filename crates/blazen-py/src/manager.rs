@@ -1145,10 +1145,10 @@ impl From<PyHfLoadOptions> for HfLoadOptions {
 
 #[cfg(feature = "training")]
 pub use training::{
-    PyDpoConfig, PyFullFineTuneConfig, PyFullFineTuneResult, PyJsonlDataset, PyKtoConfig,
-    PyLoraConfig, PyMixedPrecision, PyOptimConfig, PyOrpoConfig, PyPreferenceJsonlDataset,
-    PyRatedJsonlDataset, PySchedulerConfig, PySchedulerKind, PySimpoConfig, PyTrainConfig,
-    PyTrainCoreConfig, PyTrainedAdapter, PyTrainingEvent,
+    PyDistributedConfig, PyDpoConfig, PyFullFineTuneConfig, PyFullFineTuneResult, PyJsonlDataset,
+    PyKtoConfig, PyLoraConfig, PyMixedPrecision, PyOptimConfig, PyOrpoConfig,
+    PyPreferenceJsonlDataset, PyRatedJsonlDataset, PySchedulerConfig, PySchedulerKind,
+    PySimpoConfig, PyTrainConfig, PyTrainCoreConfig, PyTrainedAdapter, PyTrainingEvent,
 };
 
 #[cfg(feature = "training")]
@@ -1948,6 +1948,73 @@ mod training {
                     .map_err(BlazenPyError::from)?;
                 Ok(PyTrainedAdapter::from(adapter))
             })
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // PyDistributedConfig — ring-AllReduce config for multi-GPU / multi-node
+    // training. Lifted to/from blazen_train::config::DistributedConfig.
+    // -----------------------------------------------------------------------
+
+    /// Configuration for distributed (ring-AllReduce) training. Pass to
+    /// :meth:`ModelManager.train_grpo` / :meth:`train_ppo` to enable
+    /// gradient averaging across ``world_size`` workers connected via
+    /// gRPC.
+    ///
+    /// ``rank`` is the 0-indexed rank of this worker; ``world_size`` is
+    /// the total number of workers. ``peers`` is the ordered list of
+    /// ``"host:port"`` gRPC endpoints — one entry per rank. ``master_addr``
+    /// and ``master_port`` identify the bootstrap node (typically the
+    /// host part of ``peers[0]``).
+    #[gen_stub_pyclass]
+    #[pyclass(name = "DistributedConfig", from_py_object)]
+    #[derive(Clone)]
+    pub struct PyDistributedConfig {
+        #[pyo3(get, set)]
+        pub rank: usize,
+        #[pyo3(get, set)]
+        pub world_size: usize,
+        #[pyo3(get, set)]
+        pub peers: Vec<String>,
+        #[pyo3(get, set)]
+        pub master_addr: String,
+        #[pyo3(get, set)]
+        pub master_port: u16,
+    }
+
+    #[gen_stub_pymethods]
+    #[pymethods]
+    impl PyDistributedConfig {
+        #[new]
+        #[pyo3(signature = (*, rank, world_size, peers, master_addr, master_port))]
+        #[must_use]
+        pub fn new(
+            rank: usize,
+            world_size: usize,
+            peers: Vec<String>,
+            master_addr: String,
+            master_port: u16,
+        ) -> Self {
+            Self {
+                rank,
+                world_size,
+                peers,
+                master_addr,
+                master_port,
+            }
+        }
+    }
+
+    #[cfg(feature = "distributed")]
+    impl From<PyDistributedConfig> for blazen_train::config::DistributedConfig {
+        fn from(v: PyDistributedConfig) -> Self {
+            Self {
+                rank: v.rank,
+                world_size: v.world_size,
+                peers: v.peers,
+                master_addr: v.master_addr,
+                master_port: v.master_port,
+            }
         }
     }
 
