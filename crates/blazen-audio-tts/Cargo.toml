@@ -27,6 +27,8 @@ candle-transformers = { workspace = true, optional = true }
 tokenizers = { workspace = true, optional = true }
 hf-hub = { workspace = true, features = ["ureq"], optional = true }
 blazen-audio-codec = { workspace = true, optional = true }
+blazen-audio-core = { workspace = true, optional = true }
+rustfft = { version = "6.4.1", optional = true }
 
 [features]
 default = ["openai"]
@@ -57,6 +59,20 @@ bark = [
     "dep:hf-hub",
     "dep:blazen-audio-codec",
     "blazen-audio-codec/encodec",
+]
+# `f5-tts` enables the SWivid F5-TTS flow-matching DiT zero-shot
+# voice-cloning text-to-speech backend. Reuses
+# blazen-audio-core::{dit, adaln, rope} primitives + adds a Vocos
+# vocoder + Euler flow-matching sampler. 24 kHz mel-spectrogram output
+# via iSTFT. Upstream `SWivid/F5-TTS` is MIT-licensed.
+f5-tts = [
+    "dep:candle-core",
+    "dep:candle-nn",
+    "dep:candle-transformers",
+    "dep:tokenizers",
+    "dep:hf-hub",
+    "dep:blazen-audio-core",
+    "dep:rustfft",
 ]
 
 [lints]

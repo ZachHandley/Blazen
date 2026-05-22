@@ -32,6 +32,8 @@
 //! | `anytts`  | no      | Builds [`backends::anytts::AnyTtsBackend`].       |
 //! | `bark`    | no      | Builds [`backends::bark::BarkBackend`] (Suno-AI   |
 //! |           |         | Bark: 3-stage AR transformer + EnCodec).          |
+//! | `f5-tts`  | no      | Builds [`backends::f5::F5Backend`] (SWivid F5-TTS:|
+//! |           |         | flow-matching DiT + Vocos vocoder).               |
 //! | `engine`  | no      | **Deprecated** alias for `anytts`; will be       |
 //! |           |         | removed one release after the multi-backend      |
 //! |           |         | restructure ships.                               |
@@ -57,6 +59,9 @@ pub use backends::AnyTtsBackend;
 
 #[cfg(feature = "bark")]
 pub use backends::{BARK_BACKEND_ID_PREFIX, BarkBackend, BarkConfig};
+
+#[cfg(feature = "f5-tts")]
+pub use backends::{F5_BACKEND_ID_PREFIX, F5Backend, F5Config};
 
 #[cfg(feature = "openai")]
 pub use backends::{
