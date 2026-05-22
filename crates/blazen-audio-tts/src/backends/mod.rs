@@ -23,6 +23,9 @@ pub mod f5;
 #[cfg(feature = "spark-tts")]
 pub mod spark;
 
+#[cfg(feature = "maskgct")]
+pub mod maskgct;
+
 #[cfg(feature = "openai")]
 pub mod openai;
 
