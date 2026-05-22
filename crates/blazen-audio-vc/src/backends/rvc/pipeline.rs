@@ -30,9 +30,11 @@
 //!   are trained offline. [`RvcBackend::register_target_voice`] returns
 //!   [`VcError::Unsupported`] explaining how to place a precomputed
 //!   profile under `$BLAZEN_RVC_VOICE_DIR/<voice_id>/`.
-//! - Streaming conversion ([`RvcBackend::stream_convert`]) is not yet
-//!   implemented; the file-based [`RvcBackend::convert_voice`] is the
-//!   supported entry point.
+//! - Streaming conversion ([`RvcBackend::stream_convert`]) buffers
+//!   2-second windows (32 000 samples at the 16 kHz source rate) and
+//!   runs the full convert pipeline per window. Lower-latency
+//!   real-time conversion with overlap-add crossfading is a follow-up
+//!   enhancement.
 
 #![cfg(feature = "rvc")]
 #![allow(
@@ -85,6 +87,18 @@ pub const HUBERT_FILENAME: &str = "hubert_base.pt";
 
 /// Stable backend identifier surfaced by [`AudioBackend::id`].
 pub const BACKEND_ID: &str = "rvc";
+
+/// Streaming buffer size in 16 kHz source samples. 32 000 samples =
+/// 2 seconds of audio; this is the chunking granularity for
+/// [`RvcBackend::stream_convert`]. Lower-latency real-time conversion
+/// with overlap-add crossfading is a follow-up enhancement.
+pub const STREAM_BUFFER_SAMPLES: usize = 32_000;
+
+/// Bounded capacity for the mpsc channel that carries converted
+/// chunks from the background streaming task back to the caller. A
+/// small capacity provides natural backpressure so the producer can't
+/// outrun the consumer when conversion is faster than consumption.
+const STREAM_CHANNEL_CAPACITY: usize = 8;
 
 // ---------------------------------------------------------------------------
 // Error conversions
@@ -392,6 +406,86 @@ impl RvcBackend {
         Ok(linear_resample(&mono, sample_rate, target_sr))
     }
 
+    /// Run the F0 + content + retrieval + generator flow on a mono
+    /// 16 kHz `f32` PCM buffer, returning the converted PCM at the
+    /// voice's native sample rate.
+    ///
+    /// Shared by [`Self::convert_voice`] (which decodes a WAV first)
+    /// and [`Self::stream_convert`] (which buffers raw samples from the
+    /// input stream). The split keeps the inference logic
+    /// deduplicated.
+    async fn convert_buffer(
+        &self,
+        samples_16k: &[f32],
+        target_voice_id: &str,
+    ) -> Result<Vec<f32>, VcError> {
+        // 1. Voice profile (cheap if cached; otherwise hits disk).
+        let voice = self.ensure_voice(target_voice_id).await?;
+        if samples_16k.is_empty() {
+            return Err(VcError::Conversion("source audio is empty".into()));
+        }
+
+        // 2. Pitch extraction.
+        let rmvpe = self.ensure_rmvpe().await?;
+        let pitch_hz_vec = {
+            let rmvpe_clone = rmvpe.clone();
+            let samples = samples_16k.to_vec();
+            tokio::task::spawn_blocking(move || rmvpe_clone.extract(&samples))
+                .await
+                .map_err(|e| VcError::Conversion(format!("rmvpe spawn_blocking: {e}")))??
+        };
+        let pitch_coarse_vec = pitch_to_coarse(&pitch_hz_vec, F0_MIN, F0_MAX, PITCH_COARSE_BINS);
+
+        // 3. Content extraction (currently propagates the upstream
+        //    "pending" error verbatim through the `ContentError -> VcError`
+        //    conversion; callers see a clear `VcError::ModelLoad`).
+        let hubert = self.ensure_hubert().await?;
+        let content = hubert.encode(samples_16k)?;
+
+        // 4. Retrieval blend.
+        //    content is (1, n_frames, hidden_dim); FeatureIndex::retrieve
+        //    takes and returns the same layout.
+        let blended = voice
+            .index
+            .retrieve(&content, self.top_k, self.retrieval_blend)?;
+
+        // 5. Transpose to channels-first for the generator.
+        //    (1, n_frames, hidden) -> (1, hidden, n_frames).
+        let blended_cf = blended.transpose(1, 2)?.contiguous()?;
+
+        // Align frame counts: the content encoder operates at 50 Hz
+        // (16 kHz / 320 hop) while RMVPE emits at 100 Hz (16 kHz /
+        // 160 hop). Take the shorter of the two so every per-frame
+        // tensor lines up.
+        let (_, _, n_frames_content) = blended_cf.dims3()?;
+        let n_frames_pitch = pitch_hz_vec.len();
+        let n_frames = n_frames_content.min(n_frames_pitch);
+        if n_frames == 0 {
+            return Err(VcError::Conversion("no frames to synthesise".into()));
+        }
+        let content_aligned = blended_cf.narrow(2, 0, n_frames)?;
+        let pitch_hz_aligned: Vec<f32> = pitch_hz_vec.into_iter().take(n_frames).collect();
+        let pitch_coarse_aligned: Vec<i64> = pitch_coarse_vec
+            .into_iter()
+            .take(n_frames)
+            .map(i64::from)
+            .collect();
+
+        // 6. Build pitch + speaker tensors on the configured device.
+        let pitch_coarse_t = Tensor::from_vec(pitch_coarse_aligned, (1, n_frames), &self.device)?
+            .to_dtype(DType::I64)?;
+        let pitch_hz_t = Tensor::from_vec(pitch_hz_aligned, (1, n_frames), &self.device)?;
+        let speaker_id_t = Tensor::from_vec(vec![i64::from(voice.speaker_id)], (1,), &self.device)?;
+
+        // 7. Synthesise → PCM at the voice's native rate.
+        Ok(voice.generator.synthesize(
+            &content_aligned,
+            &pitch_coarse_t,
+            &pitch_hz_t,
+            &speaker_id_t,
+        )?)
+    }
+
     /// Encode mono f32 PCM as a 16-bit little-endian WAV byte buffer.
     fn encode_wav_16bit_mono(samples: &[f32], sample_rate_hz: u32) -> Vec<u8> {
         let channels: u16 = 1;
@@ -486,65 +580,8 @@ impl VoiceConversionBackend for RvcBackend {
             return Err(VcError::Conversion("source audio is empty".into()));
         }
 
-        // 3. Pitch extraction.
-        let rmvpe = self.ensure_rmvpe().await?;
-        let pitch_hz_vec = {
-            let rmvpe_clone = rmvpe.clone();
-            let samples = samples_16k.clone();
-            tokio::task::spawn_blocking(move || rmvpe_clone.extract(&samples))
-                .await
-                .map_err(|e| VcError::Conversion(format!("rmvpe spawn_blocking: {e}")))??
-        };
-        let pitch_coarse_vec = pitch_to_coarse(&pitch_hz_vec, F0_MIN, F0_MAX, PITCH_COARSE_BINS);
-
-        // 4. Content extraction (currently propagates the upstream
-        //    "pending" error verbatim through the `ContentError -> VcError`
-        //    conversion; callers see a clear `VcError::ModelLoad`).
-        let hubert = self.ensure_hubert().await?;
-        let content = hubert.encode(&samples_16k)?;
-
-        // 5. Retrieval blend.
-        //    content is (1, n_frames, hidden_dim); FeatureIndex::retrieve
-        //    takes and returns the same layout.
-        let blended = voice
-            .index
-            .retrieve(&content, self.top_k, self.retrieval_blend)?;
-
-        // 6. Transpose to channels-first for the generator.
-        //    (1, n_frames, hidden) -> (1, hidden, n_frames).
-        let blended_cf = blended.transpose(1, 2)?.contiguous()?;
-
-        // Align frame counts: the content encoder operates at 50 Hz
-        // (16 kHz / 320 hop) while RMVPE emits at 100 Hz (16 kHz /
-        // 160 hop). Take the shorter of the two so every per-frame
-        // tensor lines up.
-        let (_, _, n_frames_content) = blended_cf.dims3()?;
-        let n_frames_pitch = pitch_hz_vec.len();
-        let n_frames = n_frames_content.min(n_frames_pitch);
-        if n_frames == 0 {
-            return Err(VcError::Conversion("no frames to synthesise".into()));
-        }
-        let content_aligned = blended_cf.narrow(2, 0, n_frames)?;
-        let pitch_hz_aligned: Vec<f32> = pitch_hz_vec.into_iter().take(n_frames).collect();
-        let pitch_coarse_aligned: Vec<i64> = pitch_coarse_vec
-            .into_iter()
-            .take(n_frames)
-            .map(i64::from)
-            .collect();
-
-        // 7. Build pitch + speaker tensors on the configured device.
-        let pitch_coarse_t = Tensor::from_vec(pitch_coarse_aligned, (1, n_frames), &self.device)?
-            .to_dtype(DType::I64)?;
-        let pitch_hz_t = Tensor::from_vec(pitch_hz_aligned, (1, n_frames), &self.device)?;
-        let speaker_id_t = Tensor::from_vec(vec![i64::from(voice.speaker_id)], (1,), &self.device)?;
-
-        // 8. Synthesise.
-        let pcm = voice.generator.synthesize(
-            &content_aligned,
-            &pitch_coarse_t,
-            &pitch_hz_t,
-            &speaker_id_t,
-        )?;
+        // 3-8. Run the shared F0+content+retrieval+generator flow.
+        let pcm = self.convert_buffer(&samples_16k, target_voice_id).await?;
 
         // 9. Encode as 16-bit mono WAV at the voice's native rate.
         Ok(Self::encode_wav_16bit_mono(&pcm, voice.sample_rate_hz))
@@ -605,28 +642,79 @@ impl VoiceConversionBackend for RvcBackend {
         ))
     }
 
-    /// Streaming voice conversion is not yet implemented.
+    /// Chunked streaming voice conversion.
     ///
-    /// The minimal viable streaming path would buffer the input stream
-    /// until at least one second of audio is available, run the same
-    /// F0 + content + retrieval + generator pipeline as
-    /// [`Self::convert_voice`], emit the resulting PCM, and slide
-    /// forward with a small overlap to mask boundary artefacts. The
-    /// overlap policy interacts with the generator's edge behaviour
-    /// (the `ConvTranspose1d` stack drops samples at chunk boundaries)
-    /// so a clean implementation requires explicit chunk-overlap
-    /// configuration and a small crossfade window; that is scoped to
-    /// a follow-up. Use [`Self::convert_voice`] for now.
+    /// Buffers incoming `f32` source samples until at least
+    /// [`STREAM_BUFFER_SAMPLES`] (2 seconds at the 16 kHz source rate)
+    /// are available, then runs the full F0 + content + retrieval +
+    /// generator pipeline (shared with [`Self::convert_voice`] through
+    /// [`Self::convert_buffer`]) on the buffered window and yields the
+    /// converted PCM at the voice's native sample rate. The cycle
+    /// repeats until the input stream ends; any non-empty remainder is
+    /// flushed as a final partial chunk.
+    ///
+    /// # Latency tradeoff
+    ///
+    /// The current implementation buffers 2-second windows, so end-to-
+    /// end latency is bounded below by ~2 s plus per-window inference
+    /// time. Lower-latency real-time conversion with overlap-add
+    /// crossfading (so the generator's `ConvTranspose1d` boundary
+    /// artefacts don't surface as audible clicks at chunk seams) is a
+    /// follow-up enhancement.
+    ///
+    /// # Backpressure
+    ///
+    /// The background task forwards converted chunks through a bounded
+    /// `tokio::sync::mpsc::channel` of capacity
+    /// [`STREAM_CHANNEL_CAPACITY`]. If the consumer falls behind the
+    /// task suspends on `send().await` until capacity frees up, giving
+    /// natural backpressure all the way to the input stream.
     async fn stream_convert(
         &self,
-        _audio: Pin<Box<dyn Stream<Item = Vec<f32>> + Send>>,
-        _target_voice_id: &str,
+        mut audio: Pin<Box<dyn Stream<Item = Vec<f32>> + Send>>,
+        target_voice_id: &str,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<Vec<f32>, VcError>> + Send>>, VcError> {
-        Err(VcError::Unsupported(
-            "streaming voice conversion requires explicit chunk-overlap configuration; \
-             use convert_voice for now"
-                .into(),
-        ))
+        use futures_util::StreamExt;
+
+        let (tx, rx) =
+            tokio::sync::mpsc::channel::<Result<Vec<f32>, VcError>>(STREAM_CHANNEL_CAPACITY);
+
+        let backend = self.clone();
+        let voice_id = target_voice_id.to_owned();
+        tokio::spawn(async move {
+            let mut buffer: Vec<f32> = Vec::with_capacity(STREAM_BUFFER_SAMPLES);
+
+            while let Some(chunk) = audio.next().await {
+                buffer.extend_from_slice(&chunk);
+                while buffer.len() >= STREAM_BUFFER_SAMPLES {
+                    let window: Vec<f32> = buffer.drain(..STREAM_BUFFER_SAMPLES).collect();
+                    let result = backend.convert_buffer(&window, &voice_id).await;
+                    if tx.send(result).await.is_err() {
+                        // Consumer went away; stop pulling input.
+                        return;
+                    }
+                }
+            }
+
+            // Input stream ended; flush any partial remainder as a
+            // final chunk so callers see the tail of the conversion.
+            if !buffer.is_empty() {
+                let result = backend.convert_buffer(&buffer, &voice_id).await;
+                let _ = tx.send(result).await;
+            }
+        });
+
+        // Adapt the mpsc receiver into a `Stream`. We can't use
+        // `tokio_stream::wrappers::ReceiverStream` here because
+        // `tokio-stream` isn't a direct dep of this crate (gating it on
+        // the `rvc` feature would require a Cargo.toml edit that's
+        // out of scope for this change). `stream::unfold` does the job
+        // with no extra deps.
+        let stream = futures_util::stream::unfold(rx, |mut rx| async move {
+            rx.recv().await.map(|item| (item, rx))
+        });
+
+        Ok(Box::pin(stream))
     }
 }
 
@@ -731,18 +819,51 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn stream_convert_returns_unsupported() {
+    async fn stream_convert_yields_chunks_for_buffered_input() {
+        use futures_util::StreamExt;
         use futures_util::stream;
+
+        // Tempdir keeps `ensure_voice` from finding any voice on disk
+        // so we get a clean `VoiceNotFound` error per buffered window.
+        // That's enough to confirm the streaming wiring is live --
+        // we're asserting the task runs and the channel forwards
+        // results, not that inference succeeds (it can't: HuBERT load
+        // is pending upstream, and no voice profile exists either).
+        let tmp = tempfile::tempdir().expect("tempdir");
+        let _g = set_voice_dir(tmp.path()).await;
+
         let backend = RvcBackend::new();
-        let s: Pin<Box<dyn Stream<Item = Vec<f32>> + Send>> = Box::pin(stream::empty::<Vec<f32>>());
-        // The Ok branch of stream_convert holds a boxed trait object
-        // that isn't Debug, so we can't use `expect_err` here -- match
-        // explicitly.
-        match backend.stream_convert(s, "anything").await {
-            Err(VcError::Unsupported(_)) => {}
-            Err(other) => panic!("expected Unsupported, got {other:?}"),
-            Ok(_) => panic!("expected Err, got Ok"),
-        }
+        // Three 16 000-sample chunks → 48 000 samples total. With a
+        // 32 000-sample buffer threshold the task should produce at
+        // least one full-window chunk plus a flushed remainder.
+        let input: Pin<Box<dyn Stream<Item = Vec<f32>> + Send>> = Box::pin(stream::iter(vec![
+            vec![0.0_f32; 16_000],
+            vec![0.0_f32; 16_000],
+            vec![0.0_f32; 16_000],
+        ]));
+
+        let out_stream = backend
+            .stream_convert(input, "missing-voice")
+            .await
+            .expect("stream_convert returns Ok");
+        let chunks: Vec<Result<Vec<f32>, VcError>> = out_stream.collect().await;
+
+        assert!(
+            !chunks.is_empty(),
+            "stream_convert must produce at least one chunk attempt; got 0"
+        );
+        // Since the voice is missing every window converts into an
+        // error -- assert at least one of them is the expected
+        // VoiceNotFound (proves convert_buffer ran end-to-end).
+        let saw_voice_not_found = chunks
+            .iter()
+            .any(|r| matches!(r, Err(VcError::VoiceNotFound(_))));
+        assert!(
+            saw_voice_not_found,
+            "expected at least one VoiceNotFound chunk, got: {chunks:?}"
+        );
+
+        clear_voice_dir();
     }
 
     #[tokio::test]
