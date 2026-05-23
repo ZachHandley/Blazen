@@ -53,6 +53,8 @@ pub mod providers;
 pub mod retry;
 pub mod sync;
 pub mod telemetry;
+#[cfg(feature = "threed-compat-proxy")]
+pub mod threed;
 pub mod types;
 pub mod workflow;
 
@@ -692,6 +694,10 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<telemetry::langfuse::PyLangfuseConfig>()?;
     #[cfg(feature = "langfuse")]
     m.add_function(wrap_pyfunction!(telemetry::langfuse::init_langfuse, m)?)?;
+
+    // 3D-pipeline HTTP-proxy bindings (Compat3dProvider + request/result classes).
+    #[cfg(feature = "threed-compat-proxy")]
+    threed::register(m)?;
 
     // Error exception types
     error::register_exceptions(m)?;
