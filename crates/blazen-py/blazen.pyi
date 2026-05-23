@@ -13,6 +13,8 @@ __all__ = [
     "AgentConfig",
     "AgentEvent",
     "AgentResult",
+    "AnimateRequest",
+    "AnimateResult",
     "AnthropicProvider",
     "ApiProtocol",
     "Artifact",
@@ -63,6 +65,7 @@ __all__ = [
     "CheckpointStore",
     "Citation",
     "CohereProvider",
+    "Compat3dProvider",
     "CompletionStream",
     "Compute",
     "ComputeError",
@@ -86,6 +89,7 @@ __all__ = [
     "DiffusionOptions",
     "DiffusionProvider",
     "DiffusionScheduler",
+    "DistributedConfig",
     "DpoConfig",
     "DynamicEvent",
     "EmbedOptions",
@@ -204,6 +208,7 @@ __all__ = [
     "ParallelStage",
     "ParallelSubWorkflowsStep",
     "PauseReason",
+    "PbrMaps",
     "PeerClient",
     "PeerRemoteRefDescriptor",
     "PerplexityProvider",
@@ -237,6 +242,9 @@ __all__ = [
     "ReasoningTrace",
     "RedbCheckpointStore",
     "RefLifetime",
+    "RefineRequest",
+    "RefineResult",
+    "RefineStats",
     "RegistryKey",
     "ReleaseRequest",
     "ReleaseResponse",
@@ -253,6 +261,8 @@ __all__ = [
     "RetryMiddleware",
     "RetryModel",
     "RetryStack",
+    "RigRequest",
+    "RigResult",
     "Role",
     "RunEventStream",
     "RunStatus",
@@ -285,6 +295,8 @@ __all__ = [
     "SubWorkflowStep",
     "TTSProvider",
     "TemplateRole",
+    "TexturizeRequest",
+    "TexturizeResult",
     "ThreeDProvider",
     "ThreeDProviderDefaults",
     "ThreeDRequest",
@@ -628,6 +640,64 @@ class AgentResult:
     def total_cost(self) -> typing.Optional[builtins.float]:
         r"""
         Aggregated cost across all rounds, if available.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class AnimateRequest:
+    r"""
+    Request parameters for :meth:`Compat3dProvider.animate`.
+    """
+    @property
+    def prompt(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def driving_video(self) -> typing.Optional[bytes]: ...
+    @property
+    def bvh_motion(self) -> typing.Optional[bytes]: ...
+    @property
+    def duration_seconds(self) -> typing.Optional[builtins.float]: ...
+    @property
+    def fps(self) -> typing.Optional[builtins.int]: ...
+    @property
+    def loop_animation(self) -> builtins.bool: ...
+    def __new__(cls, *, prompt: typing.Optional[builtins.str] = None, driving_video: typing.Optional[typing.Sequence[builtins.int]] = None, bvh_motion: typing.Optional[typing.Sequence[builtins.int]] = None, duration_seconds: typing.Optional[builtins.float] = None, fps: typing.Optional[builtins.int] = None, loop_animation: builtins.bool = False) -> AnimateRequest:
+        r"""
+        Construct a new animate request.
+        
+        Args:
+            prompt: Text-guided motion prompt (e.g. ``"walks forward and waves"``).
+            driving_video: Optional MP4 bytes for video-driven motion transfer.
+            bvh_motion: Optional BVH motion-capture clip bytes.
+            duration_seconds: Requested animation duration in seconds.
+            fps: Requested animation framerate.
+            loop_animation: ``True`` to mark the produced animation as a seamless loop.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class AnimateResult:
+    r"""
+    Result of a successful :meth:`Compat3dProvider.animate` call.
+    """
+    @property
+    def animated_glb(self) -> bytes:
+        r"""
+        GLB bytes with the animation track(s) embedded.
+        """
+    @property
+    def mime_type(self) -> builtins.str:
+        r"""
+        MIME type of :attr:`animated_glb`; always ``"model/gltf-binary"``.
+        """
+    @property
+    def duration_seconds(self) -> builtins.float:
+        r"""
+        Actual produced duration in seconds (may differ from the request).
+        """
+    @property
+    def fps(self) -> builtins.int:
+        r"""
+        Actual produced framerate in frames per second (may differ from the request).
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -2370,6 +2440,78 @@ class CohereProvider:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class Compat3dProvider:
+    r"""
+    HTTP-proxy backend that implements all four 3D-pipeline capability
+    traits against a configurable upstream service.
+    
+    For every stage, this provider POSTs a ``multipart/form-data`` request
+    with the mesh GLB and a JSON request body to
+    ``{base_url}/v1/3d/{texturize,rig,refine,animate}``, and decodes a
+    base64-wrapped JSON response into the corresponding result class.
+    
+    Example:
+        >>> provider = Compat3dProvider("https://my-3d-server.example.com", api_key="...")
+        >>> result = await provider.texturize(mesh_glb, TexturizeRequest(prompt="bronze", pbr=True))
+    """
+    def __new__(cls, base_url: builtins.str, api_key: typing.Optional[builtins.str] = None, timeout_secs: typing.Optional[builtins.int] = None) -> Compat3dProvider:
+        r"""
+        Construct a new HTTP-proxy provider.
+        
+        Args:
+            base_url: Upstream base URL (e.g. ``"https://3d.example.com"``).
+            api_key: Optional bearer token for ``Authorization: Bearer ...``.
+            timeout_secs: Optional per-request timeout in seconds (default 600).
+        """
+    async def texturize(self, mesh_glb: typing.Sequence[builtins.int], request: TexturizeRequest) -> TexturizeResult:
+        r"""
+        Apply or generate a texture/material for an existing 3D mesh.
+        
+        Args:
+            mesh_glb: Input mesh as GLB or OBJ bytes.
+            request: A :class:`TexturizeRequest` describing the desired texture.
+        
+        Returns:
+            A :class:`TexturizeResult` with the textured GLB and optional PBR maps.
+        """
+    async def rig(self, mesh_glb: typing.Sequence[builtins.int], request: RigRequest) -> RigResult:
+        r"""
+        Auto-rig a 3D mesh, producing a GLB with skeletal armature and
+        (optionally) skin weights embedded.
+        
+        Args:
+            mesh_glb: Input mesh as GLB bytes.
+            request: A :class:`RigRequest` describing the desired rig.
+        
+        Returns:
+            A :class:`RigResult` with the rigged GLB and bone names.
+        """
+    async def refine(self, mesh_glb: typing.Sequence[builtins.int], request: RefineRequest) -> RefineResult:
+        r"""
+        Refine a 3D mesh: decimate, fill holes, unwrap UVs, retopologize, smooth.
+        
+        Args:
+            mesh_glb: Input mesh as GLB bytes.
+            request: A :class:`RefineRequest` describing the passes to apply.
+        
+        Returns:
+            A :class:`RefineResult` with the refined GLB and statistics.
+        """
+    async def animate(self, rigged_glb: typing.Sequence[builtins.int], request: AnimateRequest) -> AnimateResult:
+        r"""
+        Animate a rigged 3D mesh from a text prompt, motion-capture clip,
+        or driving video.
+        
+        Args:
+            rigged_glb: Rigged mesh as GLB bytes (output of :meth:`rig`).
+            request: An :class:`AnimateRequest` describing the desired motion.
+        
+        Returns:
+            An :class:`AnimateResult` with the animated GLB.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class CompletionStream:
     r"""
     Async iterator over streamed completion chunks.
@@ -3413,6 +3555,42 @@ class DiffusionProvider:
                 progress, this call always raises.
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class DistributedConfig:
+    r"""
+    Configuration for distributed (ring-AllReduce) training. Pass to
+    :meth:`ModelManager.train_grpo` / :meth:`train_ppo` to enable
+    gradient averaging across ``world_size`` workers connected via
+    gRPC.
+    
+    ``rank`` is the 0-indexed rank of this worker; ``world_size`` is
+    the total number of workers. ``peers`` is the ordered list of
+    ``"host:port"`` gRPC endpoints — one entry per rank. ``master_addr``
+    and ``master_port`` identify the bootstrap node (typically the
+    host part of ``peers[0]``).
+    """
+    @property
+    def rank(self) -> builtins.int: ...
+    @rank.setter
+    def rank(self, value: builtins.int) -> None: ...
+    @property
+    def world_size(self) -> builtins.int: ...
+    @world_size.setter
+    def world_size(self, value: builtins.int) -> None: ...
+    @property
+    def peers(self) -> builtins.list[builtins.str]: ...
+    @peers.setter
+    def peers(self, value: typing.Sequence[builtins.str]) -> None: ...
+    @property
+    def master_addr(self) -> builtins.str: ...
+    @master_addr.setter
+    def master_addr(self, value: builtins.str) -> None: ...
+    @property
+    def master_port(self) -> builtins.int: ...
+    @master_port.setter
+    def master_port(self, value: builtins.int) -> None: ...
+    def __new__(cls, *, rank: builtins.int, world_size: builtins.int, peers: typing.Sequence[builtins.str], master_addr: builtins.str, master_port: builtins.int) -> DistributedConfig: ...
 
 @typing.final
 class DpoConfig:
@@ -8513,6 +8691,34 @@ class ParallelSubWorkflowsStep:
         """
     def __repr__(self) -> builtins.str: ...
 
+@typing.final
+class PbrMaps:
+    r"""
+    Bundle of PBR (physically-based rendering) material maps produced by
+    a texturizer backend.
+    """
+    @property
+    def albedo_png(self) -> bytes:
+        r"""
+        Base-color / diffuse texture as PNG bytes. Always present.
+        """
+    @property
+    def normal_png(self) -> typing.Optional[bytes]:
+        r"""
+        Tangent-space normal map as PNG bytes, if produced.
+        """
+    @property
+    def roughness_png(self) -> typing.Optional[bytes]:
+        r"""
+        Linear roughness map as PNG bytes, if produced.
+        """
+    @property
+    def metallic_png(self) -> typing.Optional[bytes]:
+        r"""
+        Linear metallic map as PNG bytes, if produced.
+        """
+    def __repr__(self) -> builtins.str: ...
+
 class PeerClient:
     r"""
     Abstract base class mirroring the [`PeerClient`] trait.
@@ -9615,6 +9821,79 @@ class RedbCheckpointStore:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class RefineRequest:
+    r"""
+    Request parameters for :meth:`Compat3dProvider.refine`.
+    """
+    @property
+    def decimate_target_tris(self) -> typing.Optional[builtins.int]: ...
+    @property
+    def fill_holes(self) -> builtins.bool: ...
+    @property
+    def unwrap_uvs(self) -> builtins.bool: ...
+    @property
+    def retopologize(self) -> builtins.bool: ...
+    @property
+    def smooth_iterations(self) -> typing.Optional[builtins.int]: ...
+    def __new__(cls, *, decimate_target_tris: typing.Optional[builtins.int] = None, fill_holes: builtins.bool = False, unwrap_uvs: builtins.bool = False, retopologize: builtins.bool = False, smooth_iterations: typing.Optional[builtins.int] = None) -> RefineRequest:
+        r"""
+        Construct a new refine request.
+        
+        Args:
+            decimate_target_tris: Decimate the mesh towards this triangle count.
+            fill_holes: ``True`` to fill holes via screened poisson reconstruction.
+            unwrap_uvs: ``True`` to compute a new UV unwrap.
+            retopologize: ``True`` to retopologize the mesh.
+            smooth_iterations: Laplacian / Taubin smoothing iteration count.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class RefineResult:
+    r"""
+    Result of a successful :meth:`Compat3dProvider.refine` call.
+    """
+    @property
+    def refined_glb(self) -> bytes:
+        r"""
+        GLB bytes with the requested refinement passes applied.
+        """
+    @property
+    def mime_type(self) -> builtins.str:
+        r"""
+        MIME type of :attr:`refined_glb`; always ``"model/gltf-binary"``.
+        """
+    @property
+    def stats(self) -> RefineStats:
+        r"""
+        Before/after statistics for the refinement run.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class RefineStats:
+    r"""
+    Summary statistics emitted by a :meth:`Compat3dProvider.refine` call.
+    """
+    @property
+    def input_tri_count(self) -> builtins.int:
+        r"""
+        Triangle count of the input mesh.
+        """
+    @property
+    def output_tri_count(self) -> builtins.int:
+        r"""
+        Triangle count of the output (refined) mesh.
+        """
+    @property
+    def uv_chart_count(self) -> typing.Optional[builtins.int]:
+        r"""
+        When UV unwrapping ran, the number of UV charts the unwrap produced.
+        ``None`` when UV unwrapping did not run for this call.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class RegistryKey:
     r"""
     Strongly-typed UUID key identifying an entry in a
@@ -10114,6 +10393,50 @@ class RetryStack:
         Resolve the stack against an optional per-call override and return
         the effective `RetryConfig`. Precedence: call > step > workflow >
         pipeline > provider; falls back to `RetryConfig()` defaults.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class RigRequest:
+    r"""
+    Request parameters for :meth:`Compat3dProvider.rig`.
+    """
+    @property
+    def template(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def skin(self) -> builtins.bool: ...
+    @property
+    def pose_hint(self) -> typing.Optional[builtins.str]: ...
+    def __new__(cls, *, template: typing.Optional[builtins.str] = None, skin: builtins.bool = True, pose_hint: typing.Optional[builtins.str] = None) -> RigRequest:
+        r"""
+        Construct a new rig request.
+        
+        Args:
+            template: Target rig template (``"humanoid"``, ``"quadruped"``, ``"auto"``).
+            skin: ``True`` to apply skin-weight painting after armature placement.
+            pose_hint: Optional pose hint (``"t-pose"``, ``"a-pose"``, or backend JSON).
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class RigResult:
+    r"""
+    Result of a successful :meth:`Compat3dProvider.rig` call.
+    """
+    @property
+    def rigged_glb(self) -> bytes:
+        r"""
+        GLB bytes with the new armature (and skin weights, if requested) embedded.
+        """
+    @property
+    def mime_type(self) -> builtins.str:
+        r"""
+        MIME type of :attr:`rigged_glb`; always ``"model/gltf-binary"``.
+        """
+    @property
+    def bone_names(self) -> builtins.list[builtins.str]:
+        r"""
+        Names of bones in the produced armature, in depth-first traversal order.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -11062,6 +11385,57 @@ class TTSProvider:
         r"""
         Synthesize speech from text.
         """
+
+@typing.final
+class TexturizeRequest:
+    r"""
+    Request parameters for :meth:`Compat3dProvider.texturize`.
+    """
+    @property
+    def prompt(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def reference_image(self) -> typing.Optional[bytes]: ...
+    @property
+    def style(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def resolution(self) -> typing.Optional[builtins.int]: ...
+    @property
+    def pbr(self) -> builtins.bool: ...
+    def __new__(cls, *, prompt: typing.Optional[builtins.str] = None, reference_image: typing.Optional[typing.Sequence[builtins.int]] = None, style: typing.Optional[builtins.str] = None, resolution: typing.Optional[builtins.int] = None, pbr: builtins.bool = False) -> TexturizeRequest:
+        r"""
+        Construct a new texturize request.
+        
+        Args:
+            prompt: Text-guided texture prompt (e.g. ``"weathered bronze"``).
+            reference_image: Optional PNG/JPEG bytes used as a style anchor.
+            style: Backend-specific style preset (``"stylized"``, ``"realistic"``, ...).
+            resolution: Target square texture resolution in pixels.
+            pbr: ``True`` to request a full PBR material bundle.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class TexturizeResult:
+    r"""
+    Result of a successful :meth:`Compat3dProvider.texturize` call.
+    """
+    @property
+    def textured_glb(self) -> bytes:
+        r"""
+        GLB bytes with the new texture (and PBR maps if any) embedded.
+        """
+    @property
+    def mime_type(self) -> builtins.str:
+        r"""
+        MIME type of :attr:`textured_glb`; always ``"model/gltf-binary"``.
+        """
+    @property
+    def pbr_maps(self) -> typing.Optional[PbrMaps]:
+        r"""
+        Optional out-of-band PBR map bundle. Duplicates of the maps
+        embedded in :attr:`textured_glb` when present.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 class ThreeDProvider:
     r"""

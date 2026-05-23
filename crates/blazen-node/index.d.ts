@@ -7532,6 +7532,27 @@ export declare const enum JsDiffusionScheduler {
   Ddim = 'ddim'
 }
 
+/**
+ * Configuration for distributed (ring-AllReduce) training. Pass to
+ * the training verbs to enable gradient averaging across
+ * `worldSize` workers connected via gRPC. Each worker holds an
+ * identical-shape gradient tensor; the ring algorithm sums and
+ * averages per-parameter gradients before the optimizer step.
+ *
+ * `rank` is the 0-indexed rank of this worker; `worldSize` is the
+ * total number of workers. `peers` is the ordered list of
+ * `"host:port"` gRPC endpoints — one entry per rank. `masterAddr`
+ * + `masterPort` identify the bootstrap node (typically the host
+ * part of `peers[0]`).
+ */
+export interface JsDistributedConfig {
+  rank: number
+  worldSize: number
+  peers: Array<string>
+  masterAddr: string
+  masterPort: number
+}
+
 /** Direct Preference Optimization (DPO) configuration. */
 export interface JsDpoConfig {
   /** Shared training hyperparameters. */
