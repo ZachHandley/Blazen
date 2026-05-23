@@ -15,6 +15,7 @@ blazen-model-cache = { workspace = true, optional = true }
 candle-core = { workspace = true, optional = true }
 candle-nn = { workspace = true, optional = true }
 candle-transformers = { workspace = true, optional = true }
+ct2rs = { version = "0.9.18", features = ["whisper"], optional = true }
 futures-core.workspace = true
 futures-util.workspace = true
 hf-hub = { workspace = true, features = ["ureq"], optional = true }
@@ -93,6 +94,15 @@ coreml = ["whispercpp"]
 # [`SttBackend::stream`]; the file-based `transcribe` returns `Unsupported`
 # (callers should route to the `candle` backend for blocking transcription).
 whisper-streaming = ["candle", "dep:tract-onnx"]
+
+# `faster-whisper` enables the CTranslate2-backed Whisper SttBackend in
+# `src/backends/faster_whisper/`. Pulls in `ct2rs` (Rust bindings to
+# CTranslate2) with its `whisper` sub-feature, which in turn vendors and
+# compiles CTranslate2's C++ source on the first build (~5–10 min cold,
+# fast on incremental rebuilds). See `crates/blazen-audio-stt/README.md`
+# for system requirements (cmake ≥ 3.18, C++ toolchain, optional
+# CUDA/MKL/OpenBLAS/Accelerate for acceleration).
+faster-whisper = ["dep:ct2rs"]
 
 [lints]
 workspace = true

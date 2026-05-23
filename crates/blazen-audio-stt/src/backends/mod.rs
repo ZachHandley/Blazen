@@ -9,6 +9,7 @@
 //! | [`whispercpp`]              | `whispercpp`         | active      |
 //! | [`candle`]                  | `candle`             | active      |
 //! | [`whisper_streaming`]       | `whisper-streaming`  | scaffolding |
+//! | [`faster_whisper`]          | `faster-whisper`     | scaffolding |
 
 #[cfg(feature = "candle")]
 pub mod candle;
@@ -18,3 +19,6 @@ pub mod whispercpp;
 
 #[cfg(feature = "whisper-streaming")]
 pub mod whisper_streaming;
+
+#[cfg(feature = "faster-whisper")]
+pub mod faster_whisper;

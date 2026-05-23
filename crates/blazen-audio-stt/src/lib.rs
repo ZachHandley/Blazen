@@ -58,3 +58,6 @@ pub use backends::candle::{
 
 #[cfg(feature = "whisper-streaming")]
 pub use backends::whisper_streaming::{WhisperStreamingBackend, WhisperStreamingConfig};
+
+#[cfg(feature = "faster-whisper")]
+pub use backends::faster_whisper::{FasterWhisperBackend, FasterWhisperConfig};
