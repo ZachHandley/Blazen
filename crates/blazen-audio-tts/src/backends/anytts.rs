@@ -308,13 +308,31 @@ mod tests {
 
     /// Live, network-dependent smoke test: loads the real Kokoro-82M
     /// weights via `any-tts` (downloading on first run) and synthesizes a
-    /// short sample. Skipped automatically if model load fails for
-    /// environmental reasons (no network, HF rate limit, missing onnx
-    /// runtime, etc.) — failures of the synthesis itself still fail the
-    /// test.
+    /// short sample using the default `af_bella` voice. Skipped
+    /// automatically if model load fails for environmental reasons (no
+    /// network, HF rate limit, missing onnx runtime, etc.) — failures of
+    /// the synthesis itself still fail the test.
+    ///
+    /// Gated by `BLAZEN_TEST_KOKORO=1` because `any-tts` treats Kokoro
+    /// preset voice packs (`voices/*.pt`) as *optional* assets — its
+    /// loader fetches the base weights but does not download `af_bella.pt`
+    /// or any other voice file on its own, so this test additionally
+    /// requires the user (or a previous run with the env opt-in) to have
+    /// populated the voice cache. Marked `#[ignore]` so the default
+    /// `cargo nextest run --all-features` invocation skips it.
+    ///
+    ///     BLAZEN_TEST_KOKORO=1 cargo nextest run \
+    ///         --features anytts,live-models \
+    ///         -E 'test(live_synthesize_kokoro_default_voice)' \
+    ///         --run-ignored only
     #[cfg(all(feature = "anytts", feature = "live-models"))]
     #[tokio::test]
+    #[ignore = "requires BLAZEN_TEST_KOKORO=1 and a cached Kokoro voice pack (e.g. af_bella.pt)"]
     async fn live_synthesize_kokoro_default_voice() {
+        if std::env::var("BLAZEN_TEST_KOKORO").ok().as_deref() != Some("1") {
+            eprintln!("skipping: BLAZEN_TEST_KOKORO != 1");
+            return;
+        }
         let backend = AnyTtsBackend::new().expect("construct default backend");
         if let Err(e) = backend.load().await {
             eprintln!("skipping live_synthesize_kokoro_default_voice: {e}");
