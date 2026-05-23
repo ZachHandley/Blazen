@@ -58,13 +58,19 @@ mod weights;
 // from sibling modules and integration tests ahead of Waves F.2.4 / F.2.7
 // wiring it into the live transcribe path.
 pub use audio::{AudioError, AudioInput, TARGET_SAMPLE_RATE, prepare_for_whisper};
+pub use decoder::{
+    DecodedSegment, DecodedTranscript, DecodedWord, DecoderError, DetectedLanguage,
+    FasterWhisperDecoder, FasterWhisperDecoderConfig, TranscribeOptions,
+};
 
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::pin::Pin;
+use std::sync::Arc;
 
 use async_trait::async_trait;
 use blazen_audio::AudioBackend;
 use futures_core::Stream;
+use tokio::sync::OnceCell;
 
 use crate::SttError;
 use crate::traits::{StreamingTranscript, SttBackend, TranscriptionResult};
@@ -84,12 +90,26 @@ pub struct FasterWhisperConfig {
     /// Hugging Face repo id for the `CTranslate2` Whisper bundle.
     /// Default `"Systran/faster-whisper-tiny"`.
     pub model_id: String,
+    /// Local filesystem path to a pre-downloaded `CTranslate2` Whisper
+    /// bundle directory (the layout documented on
+    /// [`FasterWhisperDecoder::load`]).
+    ///
+    /// `None` (the default) means "wait for Wave F.2.5's HF download
+    /// helper" — until that wave lands, every
+    /// [`SttBackend::transcribe`] call returns [`SttError::Unsupported`]
+    /// unless the caller fills this field explicitly.
+    pub model_dir: Option<PathBuf>,
+    /// Decoder knobs (beam size, compute type, etc.). See
+    /// [`FasterWhisperDecoderConfig`].
+    pub decoder: FasterWhisperDecoderConfig,
 }
 
 impl Default for FasterWhisperConfig {
     fn default() -> Self {
         Self {
             model_id: "Systran/faster-whisper-tiny".to_owned(),
+            model_dir: None,
+            decoder: FasterWhisperDecoderConfig::default(),
         }
     }
 }
@@ -100,23 +120,78 @@ impl Default for FasterWhisperConfig {
 /// on the first [`SttBackend::transcribe`] call once Wave F.2 lands.
 /// Until then every [`SttBackend`] method returns
 /// [`SttError::Unsupported`].
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct FasterWhisperBackend {
     id: String,
     config: FasterWhisperConfig,
+    /// Lazily-initialised ct2rs decoder. `OnceCell` keeps `load()` and
+    /// the first `transcribe()` race-safely converging on a single weight
+    /// load — same pattern used by [`crate::backends::candle`].
+    inner: Arc<OnceCell<Arc<FasterWhisperDecoder>>>,
+}
+
+impl std::fmt::Debug for FasterWhisperBackend {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("FasterWhisperBackend")
+            .field("id", &self.id)
+            .field("model_id", &self.config.model_id)
+            .field("model_dir", &self.config.model_dir)
+            .field("loaded", &self.inner.initialized())
+            .finish_non_exhaustive()
+    }
 }
 
 impl FasterWhisperBackend {
     /// Build a new faster-whisper backend with the given configuration.
     ///
-    /// No weights are downloaded at construction time — the underlying
-    /// pipeline is materialised on the first transcription call once
-    /// Wave F.2 lands. Until then every [`SttBackend`] method returns
-    /// [`SttError::Unsupported`].
+    /// No weights are downloaded or loaded at construction time — the
+    /// ct2rs decoder is materialised lazily on the first transcription
+    /// call when [`FasterWhisperConfig::model_dir`] is set. With
+    /// `model_dir: None` (the default), [`SttBackend::transcribe`]
+    /// returns [`SttError::Unsupported`] until Wave F.2.5 wires the HF
+    /// download helper.
     #[must_use]
     pub fn new(config: FasterWhisperConfig) -> Self {
         let id = format!("{FASTER_WHISPER_BACKEND_ID_PREFIX}:{}", config.model_id);
-        Self { id, config }
+        Self {
+            id,
+            config,
+            inner: Arc::new(OnceCell::new()),
+        }
+    }
+
+    /// Ensure the ct2rs decoder is loaded; returns a cheap `Arc` clone
+    /// of the cached handle.
+    ///
+    /// # Errors
+    ///
+    /// - [`SttError::Unsupported`] when [`FasterWhisperConfig::model_dir`]
+    ///   is `None`. The message mentions Wave F.2.5 so callers know how
+    ///   to unblock themselves manually in the meantime.
+    /// - [`SttError::ModelLoad`] when the bundle is malformed or ct2rs
+    ///   refuses to initialise.
+    async fn ensure_loaded(&self) -> Result<Arc<FasterWhisperDecoder>, SttError> {
+        let model_dir = self.config.model_dir.clone().ok_or_else(|| {
+            SttError::Unsupported(
+                "faster-whisper backend requires FasterWhisperConfig::model_dir until Wave F.2.5 \
+                 wires automatic Hugging Face download — set model_dir manually to a \
+                 CTranslate2 Whisper bundle for now"
+                    .to_owned(),
+            )
+        })?;
+        let decoder_cfg = self.config.decoder.clone();
+        self.inner
+            .get_or_try_init(|| async move {
+                tokio::task::spawn_blocking(move || {
+                    FasterWhisperDecoder::load(&model_dir, decoder_cfg)
+                        .map(Arc::new)
+                        .map_err(SttError::from)
+                })
+                .await
+                .map_err(|e| SttError::ModelLoad(format!("join error: {e}")))?
+            })
+            .await
+            .map(Arc::clone)
     }
 
     /// The resolved model id this backend was configured with.
@@ -149,7 +224,7 @@ impl AudioBackend for FasterWhisperBackend {
     }
 
     async fn is_loaded(&self) -> bool {
-        false
+        self.inner.initialized()
     }
 }
 
@@ -157,12 +232,29 @@ impl AudioBackend for FasterWhisperBackend {
 impl SttBackend for FasterWhisperBackend {
     async fn transcribe(
         &self,
-        _audio_path: &Path,
-        _language: Option<&str>,
+        audio_path: &Path,
+        language: Option<&str>,
     ) -> Result<TranscriptionResult, SttError> {
-        Err(SttError::Unsupported(
-            "faster-whisper Wave F.0 scaffolding — ct2rs integration lands in Wave F.1+".into(),
-        ))
+        let handle = self.ensure_loaded().await?;
+
+        let samples = prepare_for_whisper(AudioInput::Path(audio_path)).map_err(SttError::from)?;
+
+        let lang_owned = language.map(str::to_owned);
+        let decoded = tokio::task::spawn_blocking(move || {
+            handle.transcribe(
+                &samples,
+                lang_owned.as_deref(),
+                &TranscribeOptions {
+                    want_segment_timestamps: true,
+                    ..TranscribeOptions::default()
+                },
+            )
+        })
+        .await
+        .map_err(|e| SttError::Transcription(format!("join error: {e}")))?
+        .map_err(SttError::from)?;
+
+        Ok(decoder::into_transcription_result(decoded))
     }
 
     async fn stream(
@@ -172,7 +264,7 @@ impl SttBackend for FasterWhisperBackend {
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamingTranscript, SttError>> + Send>>, SttError>
     {
         Err(SttError::Unsupported(
-            "faster-whisper Wave F.0 scaffolding — streaming override lands in Wave F.2.7".into(),
+            "faster-whisper streaming override lands in Wave F.2.7".into(),
         ))
     }
 }
@@ -185,6 +277,12 @@ mod tests {
     fn faster_whisper_config_defaults_match_first_light_target() {
         let cfg = FasterWhisperConfig::default();
         assert_eq!(cfg.model_id, "Systran/faster-whisper-tiny");
+        assert!(
+            cfg.model_dir.is_none(),
+            "model_dir defaults to None pending Wave F.2.5"
+        );
+        assert_eq!(cfg.decoder.beam_size, 5);
+        assert_eq!(cfg.decoder.compute_type, "int8");
     }
 
     #[test]
@@ -202,19 +300,44 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn transcribe_returns_wave_f0_unsupported() {
+    async fn transcribe_without_model_dir_returns_unsupported() {
+        // With model_dir: None (the default), transcribe must short-circuit
+        // before touching audio I/O with an Unsupported error that points
+        // at Wave F.2.5 (the wave that will land the HF download helper).
         let backend = FasterWhisperBackend::default();
         let err = backend
             .transcribe(Path::new("/nonexistent.wav"), None)
             .await
-            .expect_err("scaffold must surface Unsupported");
+            .expect_err("missing model_dir must surface Unsupported");
         match err {
             SttError::Unsupported(msg) => {
-                assert!(msg.contains("Wave F."), "msg = {msg}");
-                assert!(msg.contains("ct2rs"), "msg = {msg}");
+                assert!(msg.contains("model_dir"), "msg = {msg}");
+                assert!(msg.contains("F.2.5"), "msg = {msg}");
             }
             other => panic!("expected Unsupported, got {other:?}"),
         }
+    }
+
+    #[tokio::test]
+    async fn transcribe_with_invalid_model_dir_returns_model_load_error() {
+        // With a model_dir that points nowhere, we should bubble up
+        // through the decoder's InvalidModelDir -> SttError::ModelLoad
+        // mapping — not panic, not silently succeed.
+        let cfg = FasterWhisperConfig {
+            model_dir: Some(PathBuf::from(
+                "/nonexistent/blazen-faster-whisper-mod-test-dir",
+            )),
+            ..FasterWhisperConfig::default()
+        };
+        let backend = FasterWhisperBackend::new(cfg);
+        let err = backend
+            .transcribe(Path::new("/nonexistent.wav"), None)
+            .await
+            .expect_err("invalid model_dir must surface an error");
+        assert!(
+            matches!(err, SttError::ModelLoad(_)),
+            "expected ModelLoad, got {err:?}"
+        );
     }
 
     #[tokio::test]
