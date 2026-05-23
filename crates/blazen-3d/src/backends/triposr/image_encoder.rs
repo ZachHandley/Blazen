@@ -18,10 +18,11 @@
 //!
 //! # Wave T.2 caveats
 //!
-//! - Resize uses **nearest-neighbour** interpolation. `DINOv2`'s
-//!   robust `ViT` features tolerate the visual artefact at the
-//!   scaffolding level, and a `candle`-native bilinear resize is a
-//!   non-trivial follow-up. Bilinear is the obvious enhancement.
+//! - Resize uses **bilinear** interpolation with half-pixel center
+//!   alignment (matching `PIL.Image.resize` / `torchvision`'s default),
+//!   implemented inline against the raw `RGB` byte buffer. This avoids
+//!   pulling in an external image-resize crate and keeps the math close
+//!   to the per-channel normalisation that immediately follows.
 //! - [`blazen_3d_core::image_encoders::DinoV2Encoder::encode`] returns
 //!   the upstream candle `DINOv2` classifier logits (`(1, 1000)`) today;
 //!   the per-patch-token output that `TripoSR`'s triplane transformer
@@ -40,7 +41,11 @@
     clippy::cast_precision_loss,
     clippy::cast_possible_truncation,
     clippy::cast_sign_loss,
-    clippy::cast_possible_wrap
+    clippy::cast_possible_wrap,
+    // The bilinear-resize loop uses the standard `sx/sy/wx/wy/x0/x1/y0/y1`
+    // image-processing names where `x`/`y` paired forms genuinely improve
+    // readability; clippy's similar-names lint flags them as too-alike.
+    clippy::similar_names
 )]
 
 use std::path::Path;
@@ -242,30 +247,62 @@ fn preprocess_to_dinov2_tensor(
         )));
     }
 
-    // Nearest-neighbour resize from (h, w, 3) -> (DINOV2_INPUT_SIZE,
+    // Bilinear resize from (h, w, 3) -> (DINOV2_INPUT_SIZE,
     // DINOV2_INPUT_SIZE, 3), converting to f32 / 255.0 and applying
     // per-channel ImageNet normalisation in the same pass. The output
     // is laid out as a flat channels-first buffer of length
     // `3 * DINOV2_INPUT_SIZE * DINOV2_INPUT_SIZE` so we can hand it
     // straight to `Tensor::from_vec` with shape `(1, 3, S, S)`.
+    //
+    // Source coordinates use half-pixel center alignment:
+    //     sx = (dx + 0.5) * src_w / dst_w - 0.5
+    // matching `PIL.Image.resize` / `torchvision`'s default. The four
+    // neighbouring source pixels `(x0, y0)..(x1, y1)` are clamped to
+    // the image bounds and blended with fractional weights
+    // `wx = sx - x0`, `wy = sy - y0`.
     let s = DINOV2_INPUT_SIZE;
     let plane = s * s;
     let mut chw = vec![0.0_f32; 3 * plane];
 
     let scale_x = w as f32 / s as f32;
     let scale_y = h as f32 / s as f32;
+    let w_max = (w - 1) as isize;
+    let h_max = (h - 1) as isize;
 
     for dy in 0..s {
-        let src_row_f = (dy as f32 + 0.5) * scale_y - 0.5;
-        let src_row = clamp_index(src_row_f, h);
+        let sy = (dy as f32 + 0.5) * scale_y - 0.5;
+        let sy_floor = sy.floor();
+        let y0 = (sy_floor as isize).clamp(0, h_max) as usize;
+        let y1 = (sy_floor as isize + 1).clamp(0, h_max) as usize;
+        let wy = (sy - sy_floor).clamp(0.0, 1.0);
+        let wy_inv = 1.0 - wy;
         for dx in 0..s {
-            let src_col_f = (dx as f32 + 0.5) * scale_x - 0.5;
-            let src_col = clamp_index(src_col_f, w);
-            let src_off = (src_row * w + src_col) * 3;
-            // Channels-first: chw[c * plane + dy * s + dx]
+            let sx = (dx as f32 + 0.5) * scale_x - 0.5;
+            let sx_floor = sx.floor();
+            let x0 = (sx_floor as isize).clamp(0, w_max) as usize;
+            let x1 = (sx_floor as isize + 1).clamp(0, w_max) as usize;
+            let wx = (sx - sx_floor).clamp(0.0, 1.0);
+            let wx_inv = 1.0 - wx;
+
+            // Pre-multiplied row-bilinear weights for the 4 taps.
+            let w00 = wy_inv * wx_inv;
+            let w01 = wy_inv * wx;
+            let w10 = wy * wx_inv;
+            let w11 = wy * wx;
+
+            let off00 = (y0 * w + x0) * 3;
+            let off01 = (y0 * w + x1) * 3;
+            let off10 = (y1 * w + x0) * 3;
+            let off11 = (y1 * w + x1) * 3;
+
             let dst_pixel = dy * s + dx;
             for c in 0..3 {
-                let v = f32::from(image_rgb[src_off + c]) / 255.0;
+                let p00 = f32::from(image_rgb[off00 + c]);
+                let p01 = f32::from(image_rgb[off01 + c]);
+                let p10 = f32::from(image_rgb[off10 + c]);
+                let p11 = f32::from(image_rgb[off11 + c]);
+                let blended = w00 * p00 + w01 * p01 + w10 * p10 + w11 * p11;
+                let v = blended / 255.0;
                 let normed = (v - IMAGENET_MEAN[c]) / IMAGENET_STD[c];
                 chw[c * plane + dst_pixel] = normed;
             }
@@ -275,22 +312,6 @@ fn preprocess_to_dinov2_tensor(
     let tensor =
         Tensor::from_vec(chw, (1, 3, s, s), device).map_err(TripoSrEncoderError::Candle)?;
     Ok(tensor)
-}
-
-/// Round a (potentially negative) source coordinate to the nearest
-/// in-bounds integer index for nearest-neighbour sampling.
-fn clamp_index(coord: f32, len: usize) -> usize {
-    if coord <= 0.0 {
-        return 0;
-    }
-    let idx = coord.round() as isize;
-    if idx < 0 {
-        0
-    } else if (idx as usize) >= len {
-        len - 1
-    } else {
-        idx as usize
-    }
 }
 
 #[cfg(test)]
@@ -365,6 +386,54 @@ mod tests {
                 assert!(msg.contains("length mismatch"), "unexpected message: {msg}");
             }
             other => panic!("expected Inference variant, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn preprocess_bilinear_blends_neighbours() {
+        // 2x1 grayscale-ish image: left pixel black, right pixel white.
+        // With half-pixel-center bilinear upsampling to S x S, the
+        // resulting row should be a monotonically non-decreasing ramp
+        // from ~min to ~max (after ImageNet normalisation), with
+        // strictly intermediate values somewhere in the middle —
+        // something nearest-neighbour cannot produce (it would emit
+        // exactly two unique values per channel).
+        let device = Device::Cpu;
+        let (w, h) = (2_u32, 1_u32);
+        let img: Vec<u8> = vec![0, 0, 0, 255, 255, 255];
+        let t = preprocess_to_dinov2_tensor(&img, w, h, &device).expect("preprocess ok");
+
+        // Pull channel 0, row 0. With half-pixel alignment and S=518,
+        // the row spans the full ramp.
+        let row = t
+            .i((0, 0, 0, ..))
+            .expect("slice row")
+            .to_vec1::<f32>()
+            .expect("to_vec1");
+        let min = (0.0 - IMAGENET_MEAN[0]) / IMAGENET_STD[0];
+        let max = (1.0 - IMAGENET_MEAN[0]) / IMAGENET_STD[0];
+
+        // Endpoints clamp to the source extremes (within float slack).
+        assert!((row[0] - min).abs() < 1e-4, "left end: {} vs {min}", row[0]);
+        let last = row[row.len() - 1];
+        assert!((last - max).abs() < 1e-4, "right end: {last} vs {max}");
+
+        // At least one strictly-interior value exists (bilinear, not
+        // nearest). Nearest-neighbour would emit only `{min, max}`.
+        let interior = row
+            .iter()
+            .any(|v| (*v - min).abs() > 1e-3 && (*v - max).abs() > 1e-3);
+        assert!(
+            interior,
+            "expected at least one interpolated value strictly between {min} and {max}; got {row:?}"
+        );
+
+        // And the ramp must be monotonic non-decreasing.
+        for pair in row.windows(2) {
+            assert!(
+                pair[1] + 1e-5 >= pair[0],
+                "non-monotonic ramp at value pair {pair:?}"
+            );
         }
     }
 
