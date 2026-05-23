@@ -20769,6 +20769,59 @@ public object FfiConverterTypeControlPlaneWorkerInfo : FfiConverterRustBuffer<Co
 }
 
 /**
+ * Configuration for distributed (ring-AllReduce) training.
+ *
+ * `rank` is the 0-indexed rank of this worker; `world_size` is the
+ * total number of workers. `peers` is the ordered list of
+ * `"host:port"` gRPC endpoints — one entry per rank. `master_addr`
+ * + `master_port` identify the bootstrap node (typically the host
+ * part of `peers[0]`).
+ */
+data class DistributedConfigRecord(
+    var `rank`: kotlin.UInt,
+    var `worldSize`: kotlin.UInt,
+    var `peers`: List<kotlin.String>,
+    var `masterAddr`: kotlin.String,
+    var `masterPort`: kotlin.UShort,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeDistributedConfigRecord : FfiConverterRustBuffer<DistributedConfigRecord> {
+    override fun read(buf: ByteBuffer): DistributedConfigRecord =
+        DistributedConfigRecord(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterSequenceString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterUShort.read(buf),
+        )
+
+    override fun allocationSize(value: DistributedConfigRecord) =
+        (
+            FfiConverterUInt.allocationSize(value.`rank`) +
+                FfiConverterUInt.allocationSize(value.`worldSize`) +
+                FfiConverterSequenceString.allocationSize(value.`peers`) +
+                FfiConverterString.allocationSize(value.`masterAddr`) +
+                FfiConverterUShort.allocationSize(value.`masterPort`)
+        )
+
+    override fun write(
+        value: DistributedConfigRecord,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterUInt.write(value.`rank`, buf)
+        FfiConverterUInt.write(value.`worldSize`, buf)
+        FfiConverterSequenceString.write(value.`peers`, buf)
+        FfiConverterString.write(value.`masterAddr`, buf)
+        FfiConverterUShort.write(value.`masterPort`, buf)
+    }
+}
+
+/**
  * Direct Preference Optimization (DPO) configuration.
  *
  * Requires a frozen reference model. If `reference_model_repo` is

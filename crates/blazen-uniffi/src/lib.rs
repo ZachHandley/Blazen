@@ -51,6 +51,8 @@ pub mod providers;
 pub mod runtime;
 pub mod streaming;
 pub mod telemetry;
+#[cfg(feature = "threed-compat-proxy")]
+pub mod threed;
 pub mod workflow;
 
 pub use agent::{Agent, AgentResult, ToolHandler};
@@ -112,6 +114,11 @@ pub use telemetry::init_otlp;
 #[cfg(feature = "prometheus")]
 pub use telemetry::init_prometheus;
 pub use telemetry::{WorkflowHistoryEntry, parse_workflow_history, shutdown_telemetry};
+#[cfg(feature = "threed-compat-proxy")]
+pub use threed::{
+    AnimateRequest, AnimateResult, Compat3dProvider, PbrMaps, RefineRequest, RefineResult,
+    RefineStats, RigRequest, RigResult, TexturizeRequest, TexturizeResult, ThreeDError,
+};
 pub use workflow::{Event, StepHandler, StepOutput, Workflow, WorkflowBuilder, WorkflowResult};
 
 /// Returns the `blazen-uniffi` crate version baked in at compile time.

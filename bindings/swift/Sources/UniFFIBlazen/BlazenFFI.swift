@@ -12454,6 +12454,81 @@ public func FfiConverterTypeControlPlaneWorkerInfo_lower(_ value: ControlPlaneWo
 
 
 /**
+ * Configuration for distributed (ring-AllReduce) training.
+ *
+ * `rank` is the 0-indexed rank of this worker; `world_size` is the
+ * total number of workers. `peers` is the ordered list of
+ * `"host:port"` gRPC endpoints — one entry per rank. `master_addr`
+ * + `master_port` identify the bootstrap node (typically the host
+ * part of `peers[0]`).
+ */
+public struct DistributedConfigRecord: Equatable, Hashable {
+    public var rank: UInt32
+    public var worldSize: UInt32
+    public var peers: [String]
+    public var masterAddr: String
+    public var masterPort: UInt16
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(rank: UInt32, worldSize: UInt32, peers: [String], masterAddr: String, masterPort: UInt16) {
+        self.rank = rank
+        self.worldSize = worldSize
+        self.peers = peers
+        self.masterAddr = masterAddr
+        self.masterPort = masterPort
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension DistributedConfigRecord: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeDistributedConfigRecord: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> DistributedConfigRecord {
+        return
+            try DistributedConfigRecord(
+                rank: FfiConverterUInt32.read(from: &buf), 
+                worldSize: FfiConverterUInt32.read(from: &buf), 
+                peers: FfiConverterSequenceString.read(from: &buf), 
+                masterAddr: FfiConverterString.read(from: &buf), 
+                masterPort: FfiConverterUInt16.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: DistributedConfigRecord, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.rank, into: &buf)
+        FfiConverterUInt32.write(value.worldSize, into: &buf)
+        FfiConverterSequenceString.write(value.peers, into: &buf)
+        FfiConverterString.write(value.masterAddr, into: &buf)
+        FfiConverterUInt16.write(value.masterPort, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDistributedConfigRecord_lift(_ buf: RustBuffer) throws -> DistributedConfigRecord {
+    return try FfiConverterTypeDistributedConfigRecord.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeDistributedConfigRecord_lower(_ value: DistributedConfigRecord) -> RustBuffer {
+    return FfiConverterTypeDistributedConfigRecord.lower(value)
+}
+
+
+/**
  * Direct Preference Optimization (DPO) configuration.
  *
  * Requires a frozen reference model. If `reference_model_repo` is

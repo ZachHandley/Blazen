@@ -50,6 +50,7 @@ candle-core = { workspace = true, optional = true }
 tokenizers = { workspace = true, optional = true }
 base64.workspace = true
 tonic = { workspace = true, optional = true, features = ["tls-aws-lc"] }
+blazen-3d = { version = "0.0.0-dev", path = "../blazen-3d", default-features = false, optional = true }
 
 [build-dependencies]
 uniffi_build.workspace = true
@@ -119,8 +120,16 @@ audio-tts-f5 = ["blazen-llm/audio-tts-f5"]
 audio-vc-rvc = ["blazen-llm/audio-vc-rvc"]
 
 # 3D-pipeline bridge surface (HTTP-proxy backend forwards to upstream 3D services).
-threed = ["blazen-llm/threed"]
-threed-compat-proxy = ["blazen-llm/threed-compat-proxy"]
+# `threed` pulls in the bridge surface through `blazen-llm` plus the
+# `blazen-3d` crate that owns the four capability traits.
+# `threed-compat-proxy` additionally enables the `Compat3dProvider`
+# HTTP-proxy backend in `blazen-3d` so the UniFFI bindings can expose it.
+threed = ["blazen-llm/threed", "dep:blazen-3d"]
+threed-compat-proxy = [
+    "threed",
+    "blazen-llm/threed-compat-proxy",
+    "blazen-3d/compat-proxy",
+]
 
 # Telemetry exporters
 otlp = ["blazen-telemetry/otlp"]

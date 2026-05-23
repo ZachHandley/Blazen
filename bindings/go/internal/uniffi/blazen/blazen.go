@@ -14609,6 +14609,69 @@ func (_ FfiDestroyerControlPlaneWorkerInfo) Destroy(value ControlPlaneWorkerInfo
 	value.Destroy()
 }
 
+// Configuration for distributed (ring-AllReduce) training.
+//
+// `rank` is the 0-indexed rank of this worker; `world_size` is the
+// total number of workers. `peers` is the ordered list of
+// `"host:port"` gRPC endpoints — one entry per rank. `master_addr`
+// + `master_port` identify the bootstrap node (typically the host
+// part of `peers[0]`).
+type DistributedConfigRecord struct {
+	Rank       uint32
+	WorldSize  uint32
+	Peers      []string
+	MasterAddr string
+	MasterPort uint16
+}
+
+func (r *DistributedConfigRecord) Destroy() {
+	FfiDestroyerUint32{}.Destroy(r.Rank)
+	FfiDestroyerUint32{}.Destroy(r.WorldSize)
+	FfiDestroyerSequenceString{}.Destroy(r.Peers)
+	FfiDestroyerString{}.Destroy(r.MasterAddr)
+	FfiDestroyerUint16{}.Destroy(r.MasterPort)
+}
+
+type FfiConverterDistributedConfigRecord struct{}
+
+var FfiConverterDistributedConfigRecordINSTANCE = FfiConverterDistributedConfigRecord{}
+
+func (c FfiConverterDistributedConfigRecord) Lift(rb RustBufferI) DistributedConfigRecord {
+	return LiftFromRustBuffer[DistributedConfigRecord](c, rb)
+}
+
+func (c FfiConverterDistributedConfigRecord) Read(reader io.Reader) DistributedConfigRecord {
+	return DistributedConfigRecord{
+		FfiConverterUint32INSTANCE.Read(reader),
+		FfiConverterUint32INSTANCE.Read(reader),
+		FfiConverterSequenceStringINSTANCE.Read(reader),
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterUint16INSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterDistributedConfigRecord) Lower(value DistributedConfigRecord) C.RustBuffer {
+	return LowerIntoRustBuffer[DistributedConfigRecord](c, value)
+}
+
+func (c FfiConverterDistributedConfigRecord) LowerExternal(value DistributedConfigRecord) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[DistributedConfigRecord](c, value))
+}
+
+func (c FfiConverterDistributedConfigRecord) Write(writer io.Writer, value DistributedConfigRecord) {
+	FfiConverterUint32INSTANCE.Write(writer, value.Rank)
+	FfiConverterUint32INSTANCE.Write(writer, value.WorldSize)
+	FfiConverterSequenceStringINSTANCE.Write(writer, value.Peers)
+	FfiConverterStringINSTANCE.Write(writer, value.MasterAddr)
+	FfiConverterUint16INSTANCE.Write(writer, value.MasterPort)
+}
+
+type FfiDestroyerDistributedConfigRecord struct{}
+
+func (_ FfiDestroyerDistributedConfigRecord) Destroy(value DistributedConfigRecord) {
+	value.Destroy()
+}
+
 // Direct Preference Optimization (DPO) configuration.
 //
 // Requires a frozen reference model. If `reference_model_repo` is
