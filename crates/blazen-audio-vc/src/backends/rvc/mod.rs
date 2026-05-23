@@ -7,7 +7,10 @@
 
 pub mod content;
 pub mod f0;
+mod feature_extractor;
 pub mod generator;
+mod hubert;
+mod hubert_encoder;
 pub mod pipeline;
 pub mod retrieval;
 pub mod weights;

@@ -20,12 +20,13 @@
 //!
 //! # Current limitations
 //!
-//! - The `HuBERT` content encoder loader is deferred upstream
-//!   (`candle-transformers` lacks a stock `HuBERT` model). Until that
-//!   lands, [`RvcBackend::convert_voice`] surfaces a clear
-//!   [`VcError::ModelLoad`] error sourced from
-//!   [`super::content::ContentEncoder::load`] and the pipeline does
-//!   *not* panic.
+//! - The `HuBERT` content encoder loader currently supports
+//!   [`super::content::RvcVersion::V2`] only (the fairseq
+//!   `hubert_base.pt` checkpoint that the overwhelming majority of
+//!   contemporary RVC models target). [`super::content::RvcVersion::V1`]
+//!   is rejected at load time with a clear
+//!   [`VcError::ModelLoad`] error because the legacy 256-dim
+//!   `ContentVec` ships a different model topology.
 //! - On-the-fly voice registration is not supported: RVC voice profiles
 //!   are trained offline. [`RvcBackend::register_target_voice`] returns
 //!   [`VcError::Unsupported`] explaining how to place a precomputed
@@ -254,9 +255,10 @@ impl RvcBackend {
 
     /// Lazily download + load the shared `HuBERT` content encoder.
     ///
-    /// At the time of writing this returns
-    /// [`VcError::ModelLoad`] with the upstream "pending" message --
-    /// see [`super::content`].
+    /// Fetches `hubert_base.pt` from `lj1995/VoiceConversionWebUI` on
+    /// first call (cached by `hf-hub`), then assembles the full
+    /// HuBERT-base composite via [`ContentEncoder::load`]. Subsequent
+    /// callers receive the same shared [`Arc`].
     async fn ensure_hubert(&self) -> Result<Arc<ContentEncoder>, VcError> {
         let device = self.device.clone();
         let version = self.rvc_version;
@@ -823,12 +825,14 @@ mod tests {
         use futures_util::StreamExt;
         use futures_util::stream;
 
-        // Tempdir keeps `ensure_voice` from finding any voice on disk
-        // so we get a clean `VoiceNotFound` error per buffered window.
-        // That's enough to confirm the streaming wiring is live --
-        // we're asserting the task runs and the channel forwards
-        // results, not that inference succeeds (it can't: HuBERT load
-        // is pending upstream, and no voice profile exists either).
+        // Tempdir keeps `ensure_voice` from finding any voice on disk,
+        // so every buffered window converts into a `VoiceNotFound`
+        // error and the test short-circuits before the model is needed.
+        // That's enough to confirm the streaming wiring is live -- we
+        // assert the task runs and the channel forwards results, not
+        // that inference succeeds. HuBERT load itself now works for v2
+        // against `hubert_base.pt`, but isn't exercised here because the
+        // missing-voice path returns before the encoder is invoked.
         let tmp = tempfile::tempdir().expect("tempdir");
         let _g = set_voice_dir(tmp.path()).await;
 

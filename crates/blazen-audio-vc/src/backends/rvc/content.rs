@@ -3,8 +3,8 @@
 //! ContentVec is a fairseq HuBERT-base checkpoint fine-tuned for
 //! speaker-disentangled content extraction. RVC uses it as the linguistic
 //! front-end: 16 kHz mono PCM in, dense per-frame content features out,
-//! which the generator (Wave D.3) consumes alongside F0 and (optionally)
-//! retrieved index features.
+//! which the [`super::generator`] consumes alongside F0 and
+//! (optionally) retrieved index features.
 //!
 //! # Architecture
 //!
@@ -55,25 +55,25 @@
 //! combined into a single dense `[768, 48, 128]` kernel via
 //! `weight = weight_g * weight_v / ||weight_v||` along the input dims.
 //!
-//! # Deferred: load() implementation
+//! # Loader status
 //!
-//! `candle-transformers` 0.10 does not yet ship a HuBERT or Wav2Vec2
-//! model. Implementing the full feature extractor + transformer encoder
-//! from scratch -- together with the fairseq -> candle key remapping
-//! and the weight-norm composition -- is a multi-hundred-LOC effort
-//! that belongs in its own change. Wave D.2 therefore lands the public
-//! contract and architecture documentation; [`ContentEncoder::load`]
-//! returns
-//! `Err(ContentError::ModelLoad("ContentVec loader pending upstream ..."))`.
-//! The pipeline (Wave D.3) is expected to surface this as a backend
-//! capability error and refuse to construct an RVC session until the
-//! loader lands.
+//! [`ContentEncoder::load`] consumes the [`super::hubert::HubertBase`]
+//! composite (feature extractor + feature projection + pos-conv +
+//! 12x transformer encoder layer):
 //!
-//! When the loader is implemented, only [`ContentEncoder::load`] needs
-//! to change -- the [`ContentEncoder::encode`] signature, the input
-//! contract (mono 16 kHz f32 PCM), and the output contract
-//! (`(1, n_frames, hidden_dim)` f32 tensor on the configured device)
-//! are stable.
+//! - [`RvcVersion::V2`] -- supported. The fairseq `hubert_base.pt`
+//!   pickle is parsed via `candle_nn::VarBuilder::from_pth`, the
+//!   feature-extractor / feature-projection / pos-conv / 12x encoder
+//!   stack is assembled, and [`ContentEncoder::encode`] returns the
+//!   post-layer-12 hidden state.
+//! - [`RvcVersion::V1`] -- rejected at load time with
+//!   [`ContentError::ModelLoad`]. The public v1 ContentVec
+//!   (`checkpoint_best_legacy_500.pt`) ships a 256-dim variant whose
+//!   model topology differs from the standard fairseq HuBERT-base, so it
+//!   cannot be loaded into the [`super::hubert::HubertBase`] composite.
+//!   A parallel loader for the v1 topology is deliberately deferred
+//!   to a future wave; v2 covers the overwhelming majority of
+//!   contemporary RVC models.
 
 #![cfg(feature = "rvc")]
 // The architecture docs above and on each item are dense with proper
@@ -82,10 +82,14 @@
 // Disable the doc-markdown lint at the file level.
 #![allow(clippy::doc_markdown)]
 
+use std::fmt;
 use std::path::{Path, PathBuf};
+use std::sync::Arc;
 
 use candle_core::{Device, Tensor};
 use thiserror::Error;
+
+use super::hubert::HubertBase;
 
 /// Sample rate, in Hz, that ContentVec / HuBERT-base operates on.
 /// Any other input rate must be resampled by the caller before
@@ -169,36 +173,60 @@ pub enum ContentError {
 /// behavior selected by [`RvcVersion`]. See the module-level docs for
 /// the full architecture description and the fairseq -> candle key
 /// remapping table.
-#[derive(Debug)]
 pub struct ContentEncoder {
     /// Device the model lives on; all returned tensors will be on this
     /// device.
     device: Device,
     /// Which checkpoint family this encoder was loaded against.
     version: RvcVersion,
-    /// Path the weights were loaded from. Retained for diagnostics and
-    /// for the deferred loader to consume once it lands.
+    /// Path the weights were loaded from. Retained for diagnostics.
     weights_path: PathBuf,
+    /// Loaded HuBERT-base model. Only populated for [`RvcVersion::V2`];
+    /// v1 (the legacy 256-dim ContentVec) requires a different model
+    /// topology and is rejected at [`ContentEncoder::load`] time.
+    ///
+    /// Wrapped in [`Arc`] so cloning an encoder (e.g. for sharing across
+    /// pipeline sessions) doesn't deep-copy the model weights -- mirrors
+    /// the `Arc<OnceCell<Arc<ContentEncoder>>>` pattern in `pipeline.rs`.
+    hubert: Arc<HubertBase>,
+}
+
+// Manual `Debug` impl: `HubertBase` doesn't itself derive `Debug` (its
+// inner `candle_nn` modules don't either), so we elide the model
+// internals and surface only the diagnostically useful fields.
+impl fmt::Debug for ContentEncoder {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("ContentEncoder")
+            .field("device", &self.device)
+            .field("version", &self.version)
+            .field("weights_path", &self.weights_path)
+            .field("hubert", &"<HubertBase>")
+            .finish()
+    }
 }
 
 impl ContentEncoder {
     /// Load a ContentVec encoder from a fairseq HuBERT `.pt` checkpoint
     /// onto the given device.
     ///
+    /// Only [`RvcVersion::V2`] is supported by this loader: it consumes
+    /// `hubert_base.pt`-compatible checkpoints and reads out the
+    /// post-layer-12 hidden state. [`RvcVersion::V1`] requires a
+    /// different (256-dim) topology and is rejected up front.
+    ///
     /// # Errors
     ///
-    /// Currently returns [`ContentError::ModelLoad`] unconditionally:
-    /// the candle HuBERT model + fairseq state-dict remapping is
-    /// deferred (see the module-level docs). Once the loader lands,
-    /// this will return errors from missing/mismatched tensors, file
-    /// I/O, and candle failures.
+    /// - [`ContentError::ModelLoad`] if `weights_path` does not exist,
+    ///   if `rvc_version` is [`RvcVersion::V1`] (unsupported topology),
+    ///   or if the underlying pickle parse fails.
+    /// - [`ContentError::Candle`] if any sub-module's load surfaces a
+    ///   shape / dtype mismatch against the canonical HuBERT-base
+    ///   topology.
     pub fn load(
         weights_path: &Path,
         device: &Device,
         rvc_version: RvcVersion,
     ) -> Result<Self, ContentError> {
-        // Validate up-front so that, when the loader lands, callers
-        // that pass a bogus path still see a fast, clear error.
         if !weights_path.exists() {
             return Err(ContentError::ModelLoad(format!(
                 "weights path does not exist: {}",
@@ -206,14 +234,30 @@ impl ContentEncoder {
             )));
         }
 
-        let _ = (device, rvc_version);
+        // v1 uses a different 256-dim ContentVec checkpoint
+        // (`checkpoint_best_legacy_500.pt`) with a different model
+        // topology than the standard fairseq HuBERT-base. The current
+        // loader targets the v2 case (`hubert_base.pt` -> layer-12
+        // readout) which covers the overwhelming majority of
+        // contemporary RVC models. v1 support requires a parallel
+        // loader that we deliberately defer.
+        if matches!(rvc_version, RvcVersion::V1) {
+            return Err(ContentError::ModelLoad(
+                "RVC v1 (256-dim legacy ContentVec) requires a different model \
+                 topology than fairseq HuBERT-base; the current loader supports \
+                 v2 only. Pass RvcVersion::V2 and a hubert_base.pt-compatible \
+                 checkpoint, or open an issue if v1 support is required."
+                    .to_string(),
+            ));
+        }
 
-        Err(ContentError::ModelLoad(
-            "ContentVec loader pending upstream candle-transformers HuBERT support \
-             (Wave D.2 lands the architecture + contract; the fairseq state-dict \
-             remapping is a follow-up). See backends/rvc/content.rs module docs."
-                .to_string(),
-        ))
+        let hubert = HubertBase::load(weights_path, device)?;
+        Ok(Self {
+            device: device.clone(),
+            version: rvc_version,
+            weights_path: weights_path.to_path_buf(),
+            hubert: Arc::new(hubert),
+        })
     }
 
     /// Device the encoder's tensors live on.
@@ -259,17 +303,27 @@ impl ContentEncoder {
     ///   rate; the exact count follows the standard convolution-output
     ///   formula `floor((L - k) / s) + 1` accumulated across all seven
     ///   conv layers).
-    /// - `hidden_dim = 256` for [`RvcVersion::V1`] (HuBERT layer-9
-    ///   readout, no projection).
     /// - `hidden_dim = 768` for [`RvcVersion::V2`] (HuBERT layer-12
-    ///   readout fed through the learned 768->768 projection).
+    ///   readout). The loader does not apply a learned 768->768
+    ///   projection: the `hubert_base.pt` state-dict does not carry
+    ///   one (the architecture doc above predated checkpoint
+    ///   inspection -- `post_extract_proj` is the 512->768 projection
+    ///   INSIDE the feature-projection module, not a post-readout one).
+    ///
+    /// The forward path runs the full HuBERT-base composite
+    /// ([`super::hubert::HubertBase::forward_layers`]) and returns the
+    /// hidden state at `Vec` index 11 -- the post-layer-12 activation.
     ///
     /// # Errors
     ///
-    /// Returns [`ContentError::Inference`] if the input is empty (the
-    /// HuBERT conv stack needs at least one frame's worth of samples),
-    /// or [`ContentError::Candle`] / [`ContentError::Inference`] from
-    /// the forward pass once the loader lands.
+    /// - [`ContentError::Inference`] if the input is shorter than one
+    ///   HuBERT frame (320 samples), if the configured version is
+    ///   somehow [`RvcVersion::V1`] (defensive -- [`Self::load`] rejects
+    ///   v1 up front), or if the underlying HuBERT forward returns
+    ///   fewer hidden states than expected.
+    /// - [`ContentError::Candle`] from any tensor operation inside the
+    ///   forward pass (re-wrapped through
+    ///   [`super::hubert::HubertBase::forward_layers`]).
     pub fn encode(&self, samples_16khz: &[f32]) -> Result<Tensor, ContentError> {
         if samples_16khz.len() < FEATURE_DOWNSAMPLE {
             return Err(ContentError::Inference(format!(
@@ -279,22 +333,28 @@ impl ContentEncoder {
             )));
         }
 
-        // Once the loader lands, the forward pass goes here:
-        //   1. `Tensor::from_slice(samples_16khz, (1, samples_16khz.len()), &self.device)`
-        //   2. 7-layer conv feature extractor -> `(1, 512, n_frames)`
-        //   3. Transpose to `(1, n_frames, 512)` + feature-projection LN/Linear -> 768
-        //   4. Add `pos_conv` relative-pos embedding -> encoder LN
-        //   5. Run 12 transformer blocks, capturing the readout layer's
-        //      activations (`self.version.readout_layer()`).
-        //   6. For v2, apply the learned 768->768 projection. For v1,
-        //      take the 256-dim readout as-is.
-        //   7. Return as `(1, n_frames, hidden_dim)` f32.
+        // V2 reads post-layer-12 (Vec index 11). V1 was rejected at
+        // load time, so this match is exhaustive but defensive in case
+        // of future version variants.
+        let layer_idx = match self.version {
+            RvcVersion::V2 => 11,
+            RvcVersion::V1 => {
+                return Err(ContentError::Inference(
+                    "RVC v1 unsupported at this loader; load() should have rejected it."
+                        .to_string(),
+                ));
+            }
+        };
 
-        Err(ContentError::Inference(
-            "ContentVec encode unavailable: model not loaded (loader pending -- see \
-             ContentEncoder::load and module docs)."
-                .to_string(),
-        ))
+        let hidden_states = self.hubert.forward_layers(samples_16khz)?;
+
+        hidden_states.get(layer_idx).cloned().ok_or_else(|| {
+            ContentError::Inference(format!(
+                "hubert produced {} hidden states; expected at least {}",
+                hidden_states.len(),
+                layer_idx + 1
+            ))
+        })
     }
 }
 
@@ -334,21 +394,107 @@ mod tests {
     }
 
     #[test]
-    fn load_returns_pending_upstream_error_for_existing_path() {
-        // Use a path that *does* exist so we exercise the deferred-loader
-        // branch, not the path-missing guard. Once the real loader lands,
-        // this test should be replaced with a fixture-based round-trip.
+    fn load_v1_returns_unsupported_topology_error() {
+        // V1 uses a different 256-dim ContentVec checkpoint with a
+        // different model topology than the standard fairseq
+        // HuBERT-base; the current loader rejects it at load time with
+        // a clear message.
         let tmp = tempfile::NamedTempFile::new().expect("tempfile");
         let device = Device::Cpu;
-        let result = ContentEncoder::load(tmp.path(), &device, RvcVersion::V2);
+        let result = ContentEncoder::load(tmp.path(), &device, RvcVersion::V1);
         match result {
             Err(ContentError::ModelLoad(msg)) => {
                 assert!(
-                    msg.contains("pending upstream"),
-                    "expected pending-upstream error, got: {msg}"
+                    msg.contains("v1"),
+                    "expected v1-unsupported error, got: {msg}"
                 );
             }
-            other => panic!("expected ModelLoad pending-upstream error, got: {other:?}"),
+            other => panic!("expected ModelLoad v1-unsupported error, got: {other:?}"),
         }
+    }
+
+    #[test]
+    fn load_v2_against_garbage_file_returns_clean_load_error() {
+        // An empty (zero-byte) tempfile is not a valid PyTorch pickle,
+        // so `VarBuilder::from_pth` must fail with a structured error
+        // rather than panic. Either `ModelLoad` (wrapped by
+        // `HubertBase::load`) or `Candle` (raw candle error if it
+        // surfaces unwrapped) is acceptable.
+        let tmp = tempfile::NamedTempFile::new().expect("tempfile");
+        let device = Device::Cpu;
+        let result = ContentEncoder::load(tmp.path(), &device, RvcVersion::V2);
+        assert!(
+            matches!(
+                result,
+                Err(ContentError::ModelLoad(_) | ContentError::Candle(_))
+            ),
+            "expected clean load error, got: {result:?}"
+        );
+    }
+
+    /// End-to-end smoke against the real `hubert_base.pt` checkpoint.
+    ///
+    /// Downloads the v2 ContentVec weights from
+    /// `lj1995/VoiceConversionWebUI` via `hf-hub`, assembles the full
+    /// [`ContentEncoder`], pushes a 1 s @ 16 kHz silence buffer through
+    /// [`ContentEncoder::encode`], and asserts the documented
+    /// `(1, ~50, 768)` output shape. This is the only test in the file
+    /// that exercises real `.pt` parsing and the full forward path.
+    ///
+    /// `#[ignore]`'d because it requires network access (the first run
+    /// pulls ~360 MB into `~/.cache/huggingface/`) and several seconds
+    /// of CPU. Run explicitly with:
+    ///
+    /// ```bash
+    /// cargo nextest run -p blazen-audio-vc --features rvc \
+    ///     --run-ignored only encode_against_real_hubert_base
+    /// ```
+    ///
+    /// Uses `#[tokio::test]` rather than a hand-rolled
+    /// `Runtime::new().block_on(...)` because `tokio = { features =
+    /// ["macros", "rt"] }` is already in `[dev-dependencies]` and the
+    /// macro keeps the test signature symmetric with the other async
+    /// integration tests in the crate (see `pipeline.rs`).
+    #[tokio::test]
+    #[ignore = "downloads ~360 MB; run explicitly with --run-ignored only"]
+    async fn encode_against_real_hubert_base() {
+        let path = super::super::weights::hf_download(
+            "lj1995/VoiceConversionWebUI",
+            "hubert_base.pt",
+            None,
+        )
+        .await
+        .expect("hf-hub download of hubert_base.pt should succeed");
+
+        let device = Device::Cpu;
+        let encoder = ContentEncoder::load(&path, &device, RvcVersion::V2)
+            .expect("ContentEncoder::load against real hubert_base.pt should succeed");
+
+        // 16 000 samples = 1 s at 16 kHz; silence is enough -- this
+        // test validates the loader + forward shape contract, not
+        // audio quality.
+        let samples = vec![0.0_f32; 16_000];
+        let out = encoder
+            .encode(&samples)
+            .expect("encode of 1 s silence should succeed");
+
+        let dims = out.dims();
+        assert_eq!(dims.len(), 3, "expected (B, T, C), got {dims:?}");
+        assert_eq!(dims[0], 1, "expected batch 1, got {}", dims[0]);
+        assert_eq!(
+            dims[2],
+            RvcVersion::V2.hidden_dim(),
+            "expected hidden dim {}, got {}",
+            RvcVersion::V2.hidden_dim(),
+            dims[2]
+        );
+        // 16 000 / 320 = 50; the conv-output floor formula shaves a
+        // handful of frames off the edges. Same closed interval the
+        // synthetic-weights tests use.
+        assert!(
+            (40..=50).contains(&dims[1]),
+            "expected ~50 frames for 1 s @ 16 kHz, got {}",
+            dims[1]
+        );
     }
 }
