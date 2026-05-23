@@ -6,8 +6,11 @@
 //!
 //! 1. **Audio frontend** ([`audio`]) — resamples input to 16 kHz mono
 //!    and computes the 80-band log-mel spectrogram Whisper expects.
-//! 2. **Tokenizer** ([`tokenizer`]) — Whisper BPE tokenizer (loaded
-//!    from `tokenizer.json` alongside the CT2 weights).
+//! 2. **Tokenizer** ([`tokenizer`]) — Whisper BPE tokenization is
+//!    owned internally by `ct2rs::Whisper` (loads `tokenizer.json`
+//!    from the model directory, encodes the prompt, decodes the output
+//!    sequence). No Rust-side tokenizer is required; see the module
+//!    doc for rationale.
 //! 3. **Decoder** ([`decoder`]) — thin wrapper over `ct2rs::Whisper`
 //!    that owns the `CTranslate2` model handle and performs the
 //!    encoder/decoder inference.
@@ -28,9 +31,11 @@
 //!   behind `faster-whisper`) plus a link-probe smoke test
 //!   ([`tests::link_probe_ct2rs_loads_successfully`]) that confirms
 //!   the Rust binding loads the `CTranslate2` shared library.
-//! - **Waves F.2.1 – F.2.5**: real [`audio`], [`tokenizer`],
-//!   [`decoder`], [`pipeline`], and [`weights`] implementations land,
-//!   wiring the live `transcribe` path.
+//! - **Waves F.2.1, F.2.3 – F.2.5**: real [`audio`], [`decoder`],
+//!   [`pipeline`], and [`weights`] implementations land, wiring the
+//!   live `transcribe` path. Wave **F.2.2** (Whisper BPE tokenization)
+//!   is absorbed by `ct2rs::Whisper`'s internal tokenizer and
+//!   contributes no Rust surface — see [`tokenizer`] for details.
 //! - **Wave F.2.7**: streaming override for [`SttBackend::stream`]
 //!   built on top of the file-based pipeline.
 //!
@@ -48,6 +53,11 @@ mod decoder;
 mod pipeline;
 mod tokenizer;
 mod weights;
+
+// Re-export the Wave F.2.1 audio preprocessing surface so it is reachable
+// from sibling modules and integration tests ahead of Waves F.2.4 / F.2.7
+// wiring it into the live transcribe path.
+pub use audio::{AudioError, AudioInput, TARGET_SAMPLE_RATE, prepare_for_whisper};
 
 use std::path::Path;
 use std::pin::Pin;
