@@ -6,10 +6,12 @@
 //! candle tensors.
 //!
 //! The crate's default checkpoint is `facebook/encodec_24khz` (24 kHz
-//! mono, 4 codebooks of 1024 entries each at 6 kbps target bandwidth).
-//! Both the encoder and decoder run on the device picked by
-//! [`pick_device`]; CUDA / Metal are used automatically when the matching
-//! cargo feature is enabled.
+//! mono). The upstream `candle_transformers` [`Config::default()`] picks
+//! the highest entry in `target_bandwidths` (24 kbps), which yields
+//! **32 codebooks** of 1024 entries each at a 75 Hz frame rate (computed
+//! as `1000 * 24.0 / (75 * 10) = 32`). Both the encoder and decoder run
+//! on the device picked by [`pick_device`]; CUDA / Metal are used
+//! automatically when the matching cargo feature is enabled.
 //!
 //! Adapted from the official `candle-examples/examples/encodec/main.rs`
 //! reference and the previous home of this code in
@@ -91,6 +93,36 @@ struct LoadedModel {
     device: Device,
     /// Sampling rate baked into the config (Hz).
     sample_rate: u32,
+    /// Number of residual-vector-quantizer codebooks the upstream `Config`
+    /// resolves to at its selected target bandwidth. Cached at load time
+    /// because the upstream method is private.
+    num_codebooks: usize,
+}
+
+/// Replicate the upstream private `Config::num_quantizers()` calculation so
+/// callers can read the codebook count without holding a loaded model.
+///
+/// Mirrors `candle_transformers::models::encodec::Config::num_quantizers`
+/// (private in upstream): selects the **last** entry of `target_bandwidths`
+/// (the highest, kbps), multiplies by 1000 to get bits/s, then divides by
+/// `frame_rate * 10` (10 bits per codebook entry at codebook size 1024).
+///
+/// For the upstream `Config::default()` this yields
+/// `1000 * 24.0 / (75 * 10) = 32`.
+#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+fn config_num_codebooks(cfg: &upstream::Config) -> usize {
+    let last_bw = cfg.target_bandwidths.last().copied().unwrap_or(24.0_f64);
+    let hop_length: usize = cfg.upsampling_ratios.iter().product();
+    // `frame_rate = sampling_rate.div_ceil(hop_length)`; guard against a
+    // degenerate config with zero upsampling ratios.
+    let frame_rate = if hop_length == 0 {
+        1
+    } else {
+        cfg.sampling_rate.div_ceil(hop_length)
+    };
+    let bits_per_second = 1000.0_f64 * last_bw;
+    let denom = frame_rate.saturating_mul(10).max(1);
+    (bits_per_second as usize) / denom
 }
 
 /// EnCodec backend. Cheap to construct (no I/O); the model is lazily
@@ -181,6 +213,7 @@ impl EncodecBackend {
         let cfg = upstream::Config::default();
         #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
         let sample_rate = cfg.sampling_rate as u32;
+        let num_codebooks = config_num_codebooks(&cfg);
 
         // SAFETY: candle's `from_mmaped_safetensors` requires `unsafe`
         // because the safetensors file must outlive the mmap and the file
@@ -197,6 +230,7 @@ impl EncodecBackend {
             inner,
             device,
             sample_rate,
+            num_codebooks,
         })
     }
 }
@@ -267,7 +301,9 @@ impl CodecBackend for EncodecBackend {
     /// `tokens` must be a flat row-major `[codebooks * seqlen]` vector
     /// (the layout returned by [`Self::encode_pcm`]) with
     /// `num_codebooks` equal to the model's quantizer count
-    /// (4 for `encodec_24khz` at the default bandwidth).
+    /// (32 for `encodec_24khz` at the upstream `Config::default()`'s
+    /// 24 kbps target bandwidth — call [`Self::num_codebooks`] to read the
+    /// authoritative value instead of hardcoding).
     async fn decode_tokens(&self, tokens: &[u32], num_codebooks: usize) -> Result<Vec<f32>> {
         if num_codebooks == 0 {
             return Err(CodecError::invalid_input("num_codebooks must be > 0"));
@@ -303,9 +339,15 @@ impl CodecBackend for EncodecBackend {
     }
 
     fn num_codebooks(&self) -> usize {
-        // EnCodec 24 kHz at the default 6 kbps target bandwidth ships 4
-        // codebooks of 1024 entries each. Configurable codecs would override.
-        4
+        // Authoritative once the model is loaded: cached from the upstream
+        // `Config`'s (private) `num_quantizers()` calculation. Pre-load we
+        // derive the same value from `upstream::Config::default()` so the
+        // pre/post-load values agree for the default checkpoint.
+        if let Some(model) = self.loaded.get() {
+            model.num_codebooks
+        } else {
+            config_num_codebooks(&upstream::Config::default())
+        }
     }
 }
 
@@ -326,10 +368,21 @@ mod tests {
     fn default_24khz_constructor_matches_default_config() {
         let backend = EncodecBackend::default_24khz();
         assert_eq!(backend.config().hf_repo, "facebook/encodec_24khz");
-        // No weights loaded yet — sample_rate falls back to the upstream default.
+        // No weights loaded yet — sample_rate and num_codebooks fall back to
+        // the upstream `Config::default()`. At the default 24 kbps target
+        // bandwidth this yields 32 codebooks (1000 * 24 / (75 * 10)).
         assert_eq!(CodecBackend::sample_rate(&backend), 24_000);
-        assert_eq!(CodecBackend::num_codebooks(&backend), 4);
+        assert_eq!(CodecBackend::num_codebooks(&backend), 32);
         assert!(backend.sample_rate_loaded().is_none());
+    }
+
+    #[test]
+    fn config_num_codebooks_matches_default_24kbps() {
+        // Sanity-check our local replica of the upstream private
+        // `Config::num_quantizers()` formula: at the stock `Config::default()`
+        // it must resolve to 32 (24 kbps / (75 Hz frame rate * 10 bits)).
+        let cfg = upstream::Config::default();
+        assert_eq!(config_num_codebooks(&cfg), 32);
     }
 
     #[test]
