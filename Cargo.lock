@@ -1342,6 +1342,7 @@ version = "0.0.0-dev"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "blazen-3d",
  "blazen-controlplane",
  "blazen-core",
  "blazen-embed-fastembed",
@@ -1592,6 +1593,7 @@ version = "0.0.0-dev"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "blazen-3d",
  "blazen-controlplane",
  "blazen-core",
  "blazen-embed-fastembed",

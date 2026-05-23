@@ -40,6 +40,7 @@ uuid.workspace = true
 blazen-train = { workspace = true, optional = true }
 tokenizers = { workspace = true, optional = true }
 candle-core = { workspace = true, optional = true }
+blazen-3d = { version = "0.0.0-dev", path = "../blazen-3d", default-features = false, optional = true }
 
 [features]
 default = []
@@ -62,8 +63,8 @@ audio-tts-bark = ["blazen-llm/audio-tts-bark"]
 audio-tts-f5 = ["blazen-llm/audio-tts-f5"]
 audio-vc-rvc = ["blazen-llm/audio-vc-rvc"]
 # 3D-pipeline bridge surface (HTTP-proxy backend forwards to upstream 3D services).
-threed = ["blazen-llm/threed"]
-threed-compat-proxy = ["blazen-llm/threed-compat-proxy"]
+threed = ["blazen-llm/threed", "dep:blazen-3d"]
+threed-compat-proxy = ["threed", "blazen-llm/threed-compat-proxy", "blazen-3d/compat-proxy"]
 # `ModelManager.loadFromHf` auto-backend selection via the Hugging Face Hub
 # metadata probe. Forwards to `blazen-manager/hf-loader`.
 hf-loader = ["blazen-manager/hf-loader"]
@@ -102,6 +103,7 @@ training = [
     "dep:candle-core",
     "blazen-manager/training",
 ]
+blazen-3d = ["dep:blazen-3d"]
 
 [build-dependencies]
 napi-build = "2"
