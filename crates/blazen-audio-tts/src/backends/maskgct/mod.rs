@@ -37,10 +37,13 @@ mod s2a;
 mod t2s;
 mod weights;
 
+use std::pin::Pin;
+
 use async_trait::async_trait;
 use blazen_audio::{AudioBackend, CloneVoiceRequest, GeneratedAudio, VoiceHandle};
+use futures_core::Stream;
 
-use crate::traits::TtsBackend;
+use crate::traits::{StreamingAudioChunk, TtsBackend};
 use crate::{TtsError, TtsOptions};
 
 /// Stable backend identifier, exposed at runtime via
@@ -128,6 +131,18 @@ impl TtsBackend for MaskGctBackend {
             "MaskGCT Wave M.1 scaffolding — Wave M.2 lands T2S + S2A masked transformers".into(),
         ))
     }
+
+    async fn stream_synthesize(
+        &self,
+        _text: &str,
+        _voice: Option<&str>,
+        _options: TtsOptions,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamingAudioChunk, TtsError>> + Send>>, TtsError>
+    {
+        Err(TtsError::Unsupported(
+            "MaskGCT Wave M.2 scaffolding — stream_synthesize will land once T2S + S2A masked transformers ship".into(),
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -171,6 +186,22 @@ mod tests {
             .await
             .expect_err("Wave M.1 must return Unsupported");
         assert!(matches!(err, TtsError::Unsupported(_)));
+    }
+
+    #[tokio::test]
+    async fn stream_synthesize_returns_clear_pending_error() {
+        let backend = MaskGctBackend::default();
+        let result = backend
+            .stream_synthesize("hello", None, TtsOptions::default())
+            .await;
+        match result {
+            Err(TtsError::Unsupported(msg)) => {
+                assert!(msg.contains("Wave M.2"), "msg = {msg}");
+                assert!(msg.contains("T2S") || msg.contains("S2A"), "msg = {msg}");
+            }
+            Err(other) => panic!("expected Unsupported, got {other:?}"),
+            Ok(_) => panic!("scaffold must surface Unsupported"),
+        }
     }
 
     #[tokio::test]
