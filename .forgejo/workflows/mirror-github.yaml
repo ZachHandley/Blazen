@@ -2,6 +2,11 @@ name: Mirror to GitHub
 
 on:
   workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "yes" to confirm: this force-pushes main + v* tags to public GitHub.'
+        required: true
+        default: 'no'
 
 concurrency:
   group: mirror-github
@@ -11,13 +16,38 @@ jobs:
   mirror:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
+      - name: Refuse without confirmation
+        if: ${{ inputs.confirm != 'yes' }}
+        run: |
+          echo "::error::Mirror dispatch requires confirm=yes. Aborting."
+          exit 1
+
+      - name: Checkout main explicitly
+        # Always mirror main, regardless of which ref the workflow_dispatch
+        # was triggered from. Prevents accidental publication of feature
+        # branches (feat/*, enhanced/*) that must stay private on Forgejo.
         uses: actions/checkout@v4
         with:
+          ref: main
           fetch-depth: 0
+          fetch-tags: true
 
-      - name: Push to GitHub
+      - name: Sanity-check we are on main
+        run: |
+          branch=$(git rev-parse --abbrev-ref HEAD)
+          if [ "$branch" != "main" ]; then
+            echo "::error::Expected to be on main, got '$branch'. Aborting."
+            exit 1
+          fi
+          echo "Mirroring main @ $(git rev-parse HEAD)"
+
+      - name: Push main + release tags to GitHub
+        # Only release tags matching v* leave Forgejo. WIP / dev tags from
+        # feature branches (wip-*, dev-*, internal-*) stay private.
         run: |
           git remote add github https://x-access-token:${{ secrets.GH_ACCESS_TOKEN }}@github.com/ZachHandley/Blazen.git || true
           git push github HEAD:refs/heads/main --force
-          git push github --tags --force
+          # Push only v-prefixed tags reachable from main.
+          for tag in $(git tag --list 'v*' --merged HEAD); do
+            git push github "refs/tags/$tag" --force
+          done
