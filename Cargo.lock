@@ -1104,6 +1104,7 @@ dependencies = [
  "futures-core",
  "futures-util",
  "getrandom 0.4.2",
+ "image",
  "infer",
  "js-sys",
  "pyo3",

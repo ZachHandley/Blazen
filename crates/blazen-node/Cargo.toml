@@ -65,6 +65,10 @@ audio-vc-rvc = ["blazen-llm/audio-vc-rvc"]
 # 3D-pipeline bridge surface (HTTP-proxy backend forwards to upstream 3D services).
 threed = ["blazen-llm/threed", "dep:blazen-3d"]
 threed-compat-proxy = ["threed", "blazen-llm/threed-compat-proxy", "blazen-3d/compat-proxy"]
+# Native TripoSR single-image-to-3D backend (candle-based; downloads
+# weights from Hugging Face). Forwards into the `blazen-llm/triposr`
+# bridge feature.
+triposr = ["threed", "blazen-llm/triposr", "blazen-3d/triposr"]
 # `ModelManager.loadFromHf` auto-backend selection via the Hugging Face Hub
 # metadata probe. Forwards to `blazen-manager/hf-loader`.
 hf-loader = ["blazen-manager/hf-loader"]

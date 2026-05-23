@@ -42,8 +42,12 @@ local-audio = [
     "blazen-llm/audio-vc-rvc",
 ]
 # Modality-grouped local-3d toggle. Activates the HTTP-proxy backend for the
-# blazen-3d capability traits (texturizer, rigger, refiner, animator).
-local-3d = ["blazen-llm/threed-compat-proxy"]
+# blazen-3d capability traits (texturizer, rigger, refiner, animator) plus the
+# native candle-based TripoSR single-image-to-3D backend.
+local-3d = ["blazen-llm/threed-compat-proxy", "blazen-llm/triposr"]
+# Convenience alias for downstream binaries that only want the candle-based
+# native 3D path without the HTTP-proxy surface.
+triposr = ["blazen-llm/triposr"]
 local-all = ["local-embeddings", "local-llm", "local-image", "local-audio", "local-3d"]
 
 [dependencies]
