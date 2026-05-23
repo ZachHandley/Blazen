@@ -5,7 +5,7 @@ section: "guides"
 order: 20
 ---
 
-Blazen ships a unified compute provider for media generation through [fal.ai](https://fal.ai/) -- 600+ models covering image synthesis, video, TTS, music, 3D, background removal, and upscaling. The same `FalProvider` also acts as an `EmbeddingModel` and `Model`, so a single handle covers every fal capability.
+Blazen exposes media generation through both remote providers (e.g. [fal.ai](https://fal.ai/)) and a growing set of native local backends. The remote `FalProvider` covers 600+ models across image, video, TTS, music, 3D, background removal, and upscaling, while native crates (`blazen-audio-tts`, `blazen-audio-vc`, `blazen-audio-music`, `blazen-audio-codec`, `blazen-3d`) implement the same capability traits without leaving the host. The `FalProvider` also acts as an `EmbeddingModel` and `Model`, so a single handle covers every fal capability.
 
 ## Overview
 
@@ -185,6 +185,63 @@ let music = fal
     .await?;
 ```
 
+### Native TTS engines
+
+The `blazen-audio-tts` crate ships several local backends that implement the same `SpeechSynthesis` trait used by the fal client. An OpenAI-compatible HTTP backend is on by default; opt into native engines with crate features:
+
+- `anytts` -- multiplexed loader for Kokoro-82M, VibeVoice, and Qwen3-TTS
+- `bark` -- Suno's Bark
+- `f5-tts` -- F5-TTS flow-matching synthesizer
+- `piper` -- Piper neural TTS (ONNX runtime)
+
+```rust
+use blazen_audio_tts::{AnyTtsBackend, SpeechSynthesis, SpeechRequest};
+
+let tts = AnyTtsBackend::kokoro_from_pretrained().await?;
+let audio = tts
+    .synthesize(SpeechRequest::new("Hello from Kokoro").with_voice("af_heart"))
+    .await?;
+```
+
+### Voice conversion (RVC)
+
+The `blazen-audio-vc` crate (`rvc` feature) performs end-to-end RVC inference natively. It loads HuBERT-base v2 ContentVec for content embeddings and applies a v2 RVC speaker model on top; v1 RVC checkpoints are rejected at load time due to topology mismatch. Pass a reference utterance plus a source clip and you get the converted audio back.
+
+```rust
+use blazen_audio_vc::{RvcBackend, VoiceConversion, VoiceConversionRequest};
+
+let vc = RvcBackend::from_pretrained("./models/rvc/my-voice.pth").await?;
+let converted = vc
+    .convert(VoiceConversionRequest::new(source_audio).with_reference(reference_audio))
+    .await?;
+```
+
+### Native music & SFX
+
+The `blazen-audio-music` crate implements `MusicGeneration` (and SFX) using local diffusion / autoregressive models. Enable the backend you need:
+
+- `musicgen` -- Meta's MusicGen (text-to-music)
+- `audiogen` -- Meta's AudioGen (text-to-SFX/ambience)
+- `stable-audio` -- Stability's Stable Audio Open
+
+Each backend exposes the same `MusicRequest` API used by the fal path, so you can swap providers without touching call sites.
+
+### Audio codecs
+
+The `blazen-audio-codec` crate wraps neural audio codecs for compressing waveforms into discrete token streams (useful as inputs to LM-style audio models). Features:
+
+- `encodec` -- Meta's EnCodec (32 codebooks at the default 24 kbps bandwidth)
+- `dac` -- Descript Audio Codec
+- `snac` -- SNAC (multi-scale neural audio codec)
+
+```rust
+use blazen_audio_codec::{EncodecBackend, AudioCodec};
+
+let codec = EncodecBackend::from_pretrained_24khz().await?;
+let codes = codec.encode(&waveform).await?;
+let recon = codec.decode(&codes).await?;
+```
+
 ## 3D generation
 
 ```python
@@ -206,6 +263,25 @@ const mesh = await fal.generate3d({
   format: "glb",
 });
 ```
+
+### Native 3D (TripoSR)
+
+The `blazen-3d` crate (`triposr` feature) ships a fully native image-to-mesh pipeline -- no remote call, no API key. The backend implements the same `ThreeDGeneration` trait as the fal path and returns a mesh ready to serialize as GLB/OBJ.
+
+```rust
+use blazen_3d::{TripoSrBackend, ThreeDGeneration, ThreeDRequest};
+
+let triposr = TripoSrBackend::from_pretrained().await?;
+let mesh = triposr
+    .generate_3d(ThreeDRequest::from_image_path("./photo.png").with_format("glb"))
+    .await?;
+```
+
+### Compat3D HTTP proxy
+
+The `blazen-3d` crate also exposes a `threed-compat-proxy` feature that talks to a local HTTP service implementing the Compat3D surface. This adds the verbs that native single-shot generators don't cover: `texturize`, `rig`, `refine`, and `animate` against an existing mesh.
+
+The proxy is wired through all 8 bindings -- Rust, Python, Node, WASM, Go, Swift, Kotlin, and Ruby -- so the same API surface is available everywhere Blazen runs.
 
 ## Output format
 

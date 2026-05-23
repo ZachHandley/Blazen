@@ -56,6 +56,12 @@ const features = [
       "Native Rust performance with bindings for Python (PyO3), Node.js/TypeScript (napi-rs), WASM (wasm-bindgen), Go / Swift / Kotlin (UniFFI), and Ruby (C ABI). Use your preferred language.",
   },
   {
+    icon: "\uD83C\uDFA4",
+    title: "Native Media Pipelines",
+    description:
+      "Native TTS (Kokoro / Bark / F5-TTS / Piper), STT (Whisper), voice conversion (RVC), music gen (MusicGen / Stable Audio), and 3D mesh extraction (TripoSR) \u2014 all running on-device, no remote calls required.",
+  },
+  {
     icon: "\uD83D\uDEE0\uFE0F",
     title: "CLI Scaffolding",
     description:
@@ -204,6 +210,46 @@ const crates = [
     description: "LLM provider abstraction, 15+ integrations",
   },
   {
+    name: "blazen-manager",
+    description: "Provider manager with routing, fallback, and per-modality dispatch",
+  },
+  {
+    name: "blazen-embed",
+    description: "Local embeddings (Candle, fastembed, tract backends)",
+  },
+  {
+    name: "blazen-audio-tts",
+    description: "Native TTS engines: Kokoro, Bark, F5-TTS, Piper",
+  },
+  {
+    name: "blazen-audio-stt",
+    description: "Native Whisper transcription with streaming support",
+  },
+  {
+    name: "blazen-audio-vc",
+    description: "RVC voice conversion (real-time and offline)",
+  },
+  {
+    name: "blazen-audio-codec",
+    description: "Neural audio codecs: EnCodec, DAC, SNAC",
+  },
+  {
+    name: "blazen-audio-music",
+    description: "Music and ambient generation: MusicGen, AudioGen, Stable Audio",
+  },
+  {
+    name: "blazen-image-diffusion",
+    description: "Local diffusion image generation (SD / SDXL / Flux)",
+  },
+  {
+    name: "blazen-video-core",
+    description: "Temporal attention primitives for video models",
+  },
+  {
+    name: "blazen-3d",
+    description: "3D mesh extraction via TripoSR + Compat3D provider proxy",
+  },
+  {
     name: "blazen-pipeline",
     description:
       "Multi-workflow pipelines, sequential/parallel stages",
@@ -267,7 +313,7 @@ const crates = [
         Event-driven AI workflow engine with first-class LLM integration, written in Rust.
       </p>
       <p class="mx-auto mb-10 max-w-xl text-sm leading-relaxed text-gray-500">
-        Type-safe events &middot; 15+ LLM providers &middot; Multi-workflow pipelines &middot; Bindings for 7 languages
+        Type-safe events &middot; 15+ LLM providers &middot; Native media pipelines &middot; Bindings for 8 languages
       </p>
       <div class="flex flex-col items-center justify-center gap-4 sm:flex-row">
         <a

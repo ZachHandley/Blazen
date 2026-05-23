@@ -7,7 +7,7 @@ order: 1
 
 ## What is Blazen?
 
-Blazen is an event-driven AI workflow engine written in Rust with native Python and Node.js bindings. It gives you a structured, type-safe way to build complex LLM-powered workflows that can pause, resume, branch, and compose together into larger pipelines.
+Blazen is an event-driven AI workflow engine written in Rust with native Python and Node.js bindings. It gives you a structured, type-safe way to build complex LLM-powered workflows that can pause, resume, branch, and compose together into larger pipelines -- and it now ships native media pipelines alongside the LLM surface, covering 3D mesh extraction, voice conversion, TTS engines, audio codecs, and music generation out of the box.
 
 ## Why Blazen?
 
@@ -34,10 +34,25 @@ The engine is split into focused crates, each with a single responsibility:
 - **blazen-pipeline** -- Multi-workflow orchestration and routing
 - **blazen-persist** -- State serialization, checkpointing, and recovery
 - **blazen-prompts** -- Prompt templating, variable injection, and versioning
+- **blazen-3d** -- TripoSR image-to-mesh plus a Compat3D HTTP proxy for remote 3D backends
+- **blazen-audio-tts** -- Text-to-speech engines: Kokoro, VibeVoice, Qwen3-TTS, Bark, F5-TTS, and Piper
+- **blazen-audio-stt** -- Speech-to-text via Whisper (both whisper.cpp and Candle backends)
+- **blazen-audio-vc** -- RVC-based voice conversion
+- **blazen-audio-codec** -- Neural audio codecs: EnCodec, DAC, and SNAC
+- **blazen-audio-music** -- Music and ambient audio generation: MusicGen, AudioGen, Stable Audio
+- **blazen-image-diffusion** -- Local diffusion image generation
+- **blazen-video-core** -- Temporal attention primitives for video models
 
 ## Polyglot by Design
 
-Blazen exposes the same concepts across Rust, Python, and Node.js. Each language gets idiomatic APIs -- PyO3 bindings for Python, NAPI-RS for Node.js -- so you write natural code in your language of choice while the Rust engine handles the heavy lifting.
+Blazen exposes the same concepts across every binding surface, so you write natural code in your language of choice while the Rust engine handles the heavy lifting:
+
+- **Rust** -- native crates, the source of truth for the engine
+- **Python** -- PyO3 bindings (`blazen-py`)
+- **Node.js** -- napi-rs bindings (`blazen-node`)
+- **WASM** -- wasm-bindgen SDK (`blazen-wasm-sdk`) for the browser
+- **Go, Swift, Kotlin** -- UniFFI-generated bindings sharing a single `blazen-uniffi` surface
+- **Ruby** -- a hand-written cbindgen C ABI (`blazen-cabi`) wrapped by `FFI::Library`, with full callback and `Fiber.scheduler` support
 
 ## License
 

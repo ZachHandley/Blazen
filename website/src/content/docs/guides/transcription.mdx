@@ -1,16 +1,17 @@
 ---
 title: "Audio Transcription"
-description: "Convert speech to text with fal.ai or local whisper.cpp"
+description: "Convert speech to text with fal.ai, local whisper.cpp, or pure-Rust Candle Whisper"
 section: "guides"
 order: 21
 ---
 
-Blazen's `Transcription` provider converts audio into text with optional timestamped segments, language detection, and speaker diarization. Two backends ship out of the box:
+Blazen's `Transcription` provider converts audio into text with optional timestamped segments, language detection, and speaker diarization. Three backends ship out of the box:
 
 - **fal.ai** -- remote Whisper hosted on fal's compute platform. Accepts URL audio sources.
-- **whisper.cpp** -- fully local, offline transcription. Accepts local file paths only.
+- **Candle Whisper** -- fully local, offline, pure-Rust transcription via `candle-transformers`. Lives in `blazen-audio-stt`.
+- **whisper.cpp** -- fully local, offline transcription via the C++ Whisper binding. Accepts local file paths only.
 
-Both expose the same `Transcription` handle, the same `TranscriptionRequest`, and return the same `TranscriptionResult` shape.
+All three expose the same `Transcription` handle, the same `TranscriptionRequest`, and return the same `TranscriptionResult` shape.
 
 ## Overview
 
@@ -71,6 +72,48 @@ for seg in &result.segments {
     println!("[{:.2}-{:.2}] {}", seg.start_seconds, seg.end_seconds, seg.text);
 }
 ```
+
+## Candle Whisper (local, pure-Rust)
+
+The Candle backend lives in the `blazen-audio-stt` crate and runs Whisper through [`candle-transformers`](https://github.com/huggingface/candle) -- no C++ dependency, no `whisper.cpp` build. It's the recommended choice for environments where the C++ binding is unwanted (cross-compilation targets that hate `cmake`, `wasm32-wasi`, locked-down build sandboxes, or simply a smaller native footprint).
+
+Two backends are exposed from `blazen-audio-stt`:
+
+- `CandleWhisperBackend` -- one-shot file transcription, mirrors the `whisper.cpp` ergonomics.
+- `WhisperStreamingBackend` -- the same Candle decoder fronted by Silero VAD and a sliding-window chunker, for live microphone / long-form audio.
+
+Both share the same `SttBackend` trait and `TranscriptionResult` shape as the other backends. Weights stream from Hugging Face on first use and are cached on disk afterwards; no API key is required.
+
+```rust
+use std::path::Path;
+use blazen_audio_stt::{CandleWhisperBackend, CandleWhisperConfig, SttBackend};
+
+let backend = CandleWhisperBackend::new(CandleWhisperConfig {
+    language: Some("en".into()),
+    ..Default::default()
+});
+
+let result = backend
+    .transcribe(Path::new("/path/to/audio.wav"), None)
+    .await?;
+
+println!("{}", result.text);
+```
+
+For streaming, swap in `WhisperStreamingBackend`:
+
+```rust
+use blazen_audio_stt::{WhisperStreamingBackend, WhisperStreamingConfig};
+
+let streaming = WhisperStreamingBackend::new(WhisperStreamingConfig {
+    model_id: "openai/whisper-base".into(),
+    chunk_seconds: 30.0,
+    chunk_overlap_seconds: 5.0,
+    ..Default::default()
+});
+```
+
+GPU acceleration is selected by enabling the matching `candle-core` feature (`cuda`, `metal`, `accelerate`) on `blazen-audio-stt` at build time.
 
 ## whisper.cpp (local)
 

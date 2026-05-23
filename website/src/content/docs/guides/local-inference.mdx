@@ -17,7 +17,17 @@ Blazen can run every major model class entirely on your own hardware -- no API k
 | Embeddings | Blazen embed (fastembed on glibc/mac/windows, tract on musl/wasm) | `blazen-embed` | `embed` |
 | Embeddings | Candle | `blazen-embed-candle` | `candle-embed` |
 | Transcription | whisper.cpp | `blazen-audio-whispercpp` | `whispercpp` |
-| TTS | Piper | `blazen-audio-piper` | `piper` |
+| Transcription | Candle Whisper | `blazen-audio-stt` | `candle` |
+| TTS (native engines) | AnyTTS (Kokoro / VibeVoice / Qwen3-TTS) | `blazen-audio-tts` | `anytts` |
+| TTS (Bark) | Suno Bark | `blazen-audio-tts` | `bark` |
+| TTS (F5-TTS) | SWivid F5-TTS | `blazen-audio-tts` | `f5-tts` |
+| TTS (Piper) | Piper (vendored) | `blazen-audio-tts` | `piper` |
+| Voice conversion | RVC (HuBERT-base v2 ContentVec) | `blazen-audio-vc` | `rvc` |
+| Music generation | MusicGen / AudioGen | `blazen-audio-music` | `musicgen` / `audiogen` |
+| Music generation | Stable Audio | `blazen-audio-music` | `stable-audio` |
+| Audio codec | EnCodec / DAC / SNAC | `blazen-audio-codec` | `encodec` / `dac` / `snac` |
+| 3D generation | TripoSR (image-to-mesh) | `blazen-3d` | `triposr` |
+| 3D generation | Compat3D HTTP proxy | `blazen-3d` | `threed-compat-proxy` |
 | Image generation | Stable Diffusion | `blazen-image-diffusion` | `diffusion` |
 
 Every local provider implements the same trait as its remote counterpart -- `Model`, `EmbeddingModel`, `Transcription`, etc. -- so they slot into the exact same workflows and can be swapped with a one-line change.
@@ -151,6 +161,21 @@ print(result.text)
 
 See the dedicated [Transcription guide](/guides/transcription/) for audio format requirements and model-size tradeoffs.
 
+## Native 3D (TripoSR)
+
+`blazen-3d` ships a native TripoSR backend that turns a single image into a textured 3D mesh end-to-end on-device: DINOv2 image encoder, triplane transformer, NeRF/SDF field, and marching-cubes mesh extraction. No remote calls, no Python runtime -- weights download from Hugging Face on first use and cache locally. Enable with the `triposr` feature on `blazen-3d` (or the same feature on `blazen-py` / `blazen-node`). For sites that already have a hosted 3D service, the `threed-compat-proxy` feature exposes `Compat3dProvider`, which POSTs to any OpenAI-style upstream over multipart HTTP.
+
+```python
+from blazen import ThreeDGeneration, TripoSrOptions
+
+mesher = ThreeDGeneration.triposr(options=TripoSrOptions())
+mesh = await mesher.image_to_mesh("/path/to/photo.png")
+```
+
+## Native TTS / voice conversion
+
+`blazen-audio-tts` multiplexes several native text-to-speech engines behind a single backend trait. AnyTTS (feature `anytts`) covers Kokoro, VibeVoice, and Qwen3-TTS via the upstream `any-tts` crate; Bark (feature `bark`) runs Suno's 3-stage AR transformer with an EnCodec vocoder; F5-TTS (feature `f5-tts`) runs SWivid's flow-matching DiT with a Vocos vocoder for zero-shot voice cloning; Piper (feature `piper`) ships the vendored ONNX + espeak-ng pipeline. For speaker transformation, `blazen-audio-vc` (feature `rvc`) provides Retrieval-based Voice Conversion using a HuBERT-base v2 ContentVec encoder. Every backend implements the same `TtsBackend` / `VcBackend` trait so they swap with a one-line change.
+
 ## Memory budgeting with ModelManager (CPU RAM + GPU VRAM)
 
 When running several local models side by side, the `ModelManager` tracks per-pool memory budgets (host RAM and GPU VRAM as separate buckets) and evicts the least-recently-used model **in the same pool** when a new load would exceed that pool's budget. Models in different pools never evict each other.
@@ -207,7 +232,7 @@ Set a shared `cache_dir` across providers to keep everything in one place and ma
 - **CPU-only workloads** -- Blazen embed, whisper.cpp (without `cuda`/`metal`/`coreml`), llama.cpp CPU builds, Piper. Use when the deployment target has no GPU or when latency is not critical.
 - **GPU-accelerated** -- mistral.rs (`device=Cuda`/`Metal`), llama.cpp (`cuda`/`metal`), Candle, whisper.cpp with the right feature flag, Stable Diffusion. Use when per-token latency matters or the model is too large for CPU throughput.
 
-Feature flags are selected at build time. The default Python wheels ship with `embed`, `whispercpp`, and `mistralrs` enabled; enable more by building from source with extra flags.
+Feature flags are selected at build time. The default Python wheels build the `local-all` umbrella feature, which enables `embed`, `fastembed`, `tract`, `candle-embed`, `mistralrs`, `llamacpp`, `candle-llm`, `diffusion`, `whispercpp`, `tts`, `tiktoken`, `distributed`, `otlp`, `prometheus`, `langfuse`, `audio-music-stable-audio`, and `training`. Build from source with `maturin develop --features ...` to add anything outside that set (for example `triposr`, `bark`, `f5-tts`, `audio-vc-rvc`, or `threed-compat-proxy`).
 
 ## See also
 
