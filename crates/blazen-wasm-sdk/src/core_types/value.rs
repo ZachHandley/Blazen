@@ -51,6 +51,7 @@ impl WasmBytesWrapper {
     /// receive a `BytesWrapper` from the engine (e.g. when extracting a
     /// raw payload out of a `StateValue`).
     #[must_use]
+    #[allow(dead_code)]
     pub(crate) fn from_inner(inner: BytesWrapper) -> Self {
         Self { inner }
     }

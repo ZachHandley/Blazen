@@ -56,7 +56,7 @@ impl WasmFalProvider {
         let api_key = resolve_key("fal", api_key_opt)?;
         let mut provider = FalProvider::new_with_client(api_key, fetch_client());
         if let Some(m) = model_opt {
-            provider = provider.with_model(m);
+            provider = provider.with_llm_model(m);
         }
         if let Some(url) = base_url_opt {
             provider = provider.with_base_url(url);

@@ -764,8 +764,7 @@ impl ModelClient {
                 .headers
                 .iter()
                 .find(|(k, _)| k.eq_ignore_ascii_case("content-type"))
-                .map(|(_, v)| v.clone())
-                .unwrap_or_else(|| "application/octet-stream".to_owned());
+                .map_or_else(|| "application/octet-stream".to_owned(), |(_, v)| v.clone());
             let out = js_sys::Object::new();
             js_sys::Reflect::set(&out, &JsValue::from_str("mime"), &JsValue::from_str(&mime))
                 .map_err(|e| {

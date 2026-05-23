@@ -50,6 +50,9 @@ impl WasmPipeline {
     /// - the pipeline has already been consumed, or
     /// - the input cannot be deserialised as JSON.
     #[wasm_bindgen]
+    // `async` is part of the JS-facing contract (returns a Promise on the
+    // TS side) even though the current body is synchronous.
+    #[allow(clippy::unused_async)]
     pub async fn start(&self, input: JsValue) -> Result<WasmPipelineHandler, JsValue> {
         let pipeline = {
             let mut guard = self.inner.lock().expect("poisoned");
@@ -82,6 +85,9 @@ impl WasmPipeline {
     /// - the snapshot's stage layout doesn't match the pipeline (name
     ///   mismatch, stage-index out of range, completed-stage drift).
     #[wasm_bindgen]
+    // `async` is part of the JS-facing contract (returns a Promise on the
+    // TS side) even though the current body is synchronous.
+    #[allow(clippy::unused_async)]
     pub async fn resume(
         &self,
         snapshot: &WasmPipelineSnapshot,

@@ -21,7 +21,6 @@ use blazen_llm::traits::Model;
 use blazen_llm::types::{ModelRequest, ToolDefinition};
 
 use crate::chat_message::js_messages_to_vec;
-use crate::model::WasmModel;
 
 pub mod anthropic;
 pub mod api_protocol;

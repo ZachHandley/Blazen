@@ -22,7 +22,7 @@ use crate::model::WasmModel;
 ///
 /// Mirrors [`blazen_llm::batch::BatchConfig`] as a TypeScript-friendly plain
 /// object. Use `concurrency: 0` for unlimited concurrency.
-#[derive(Debug, Clone, Serialize, Deserialize, Tsify)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize, Tsify)]
 #[tsify(into_wasm_abi, from_wasm_abi)]
 pub struct BatchConfig {
     /// Maximum number of concurrent requests. `0` means unlimited.
@@ -33,12 +33,6 @@ impl BatchConfig {
     /// Convert this typed config into the underlying `blazen-llm` config.
     fn into_inner(self) -> InnerBatchConfig {
         InnerBatchConfig::new(self.concurrency)
-    }
-}
-
-impl Default for BatchConfig {
-    fn default() -> Self {
-        Self { concurrency: 0 }
     }
 }
 

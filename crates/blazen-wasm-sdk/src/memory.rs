@@ -574,7 +574,7 @@ impl JsMemoryBackend {
             &entry
                 .elid
                 .as_deref()
-                .map_or(JsValue::NULL, |s| JsValue::from_str(s)),
+                .map_or(JsValue::NULL, JsValue::from_str),
         );
         let _ = js_sys::Reflect::set(
             &obj,
@@ -582,7 +582,7 @@ impl JsMemoryBackend {
             &entry
                 .simhash_hex
                 .as_deref()
-                .map_or(JsValue::NULL, |s| JsValue::from_str(s)),
+                .map_or(JsValue::NULL, JsValue::from_str),
         );
         let _ = js_sys::Reflect::set(
             &obj,

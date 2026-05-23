@@ -308,8 +308,7 @@ pub fn run_agent(
 
             let is_exit = js_sys::Reflect::get(&tool_obj, &JsValue::from_str("isExit"))
                 .ok()
-                .map(|v| v.is_truthy())
-                .unwrap_or(false);
+                .is_some_and(|v| v.is_truthy());
 
             tool_impls.push(Arc::new(JsTool {
                 definition: ToolDefinition {

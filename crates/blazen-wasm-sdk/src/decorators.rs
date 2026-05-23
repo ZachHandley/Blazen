@@ -582,6 +582,9 @@ impl UsageEmitter for JsUsageEmitter {
 /// ```
 #[wasm_bindgen(js_name = "UsageEmitter")]
 pub struct WasmUsageEmitter {
+    // Held for future `UsageRecording*` factory wiring; constructed but
+    // not yet consumed by any JS-facing surface, hence the allow.
+    #[allow(dead_code)]
     inner: Arc<dyn UsageEmitter>,
 }
 
@@ -605,6 +608,7 @@ impl WasmUsageEmitter {
 
 impl WasmUsageEmitter {
     /// Internal accessor used by `UsageRecording*` factories.
+    #[allow(dead_code)]
     pub(crate) fn inner_arc(&self) -> Arc<dyn UsageEmitter> {
         Arc::clone(&self.inner)
     }
@@ -643,6 +647,7 @@ impl WasmNoopUsageEmitter {
 
 impl WasmNoopUsageEmitter {
     /// Internal accessor used by `UsageRecording*` factories.
+    #[allow(dead_code)]
     pub(crate) fn inner_arc() -> Arc<dyn UsageEmitter> {
         Arc::new(blazen_llm::usage_recording::NoopUsageEmitter)
     }
