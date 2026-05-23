@@ -247,6 +247,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "blazen-3d"
+version = "0.0.0-dev"
+dependencies = [
+ "async-trait",
+ "futures-core",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "blazen-controlplane"
 version = "0.0.0-dev"
 dependencies = [
@@ -522,6 +532,7 @@ version = "0.0.0-dev"
 dependencies = [
  "async-trait",
  "base64 0.22.1",
+ "blazen-3d",
  "blazen-controlplane",
  "blazen-core",
  "blazen-embed-tract",

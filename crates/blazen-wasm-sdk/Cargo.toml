@@ -69,6 +69,7 @@ uuid = { version = "1", default-features = false, features = ["v4", "serde"] }
 # and `JsValue` is `!Send` — wrapping in `SendWrapper` lets us pass the
 # original rejection value through the agent loop and re-throw it intact.
 send_wrapper = "0.6"
+blazen-3d = { version = "0.0.0-dev", path = "../blazen-3d", default-features = false, optional = true }
 
 [features]
 default = []
@@ -81,6 +82,14 @@ default = []
 # who don't bundle tiktoken can plug their own JS tokeniser through the
 # always-on `TokenCounter` JS-callback class in `tokens.rs` instead.
 tiktoken = ["blazen-llm/tiktoken"]
+# `threed` exposes the [`blazen_3d`] request/result data types as
+# `#[wasm_bindgen]` records so JS callers can construct them in Rust-land
+# and post them to their own HTTP backend. The `Compat3dProvider` HTTP
+# client itself stays *out* of WASM — `blazen-3d`'s `compat-proxy`
+# feature pulls `reqwest` which does not target `wasm32-unknown-unknown`
+# cleanly. The matching JS-side shim at `js/threed.ts` wraps the
+# native multipart wire format on top of the browser `fetch()` API.
+threed = ["dep:blazen-3d"]
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }

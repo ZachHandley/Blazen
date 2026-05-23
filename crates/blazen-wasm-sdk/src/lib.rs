@@ -57,6 +57,8 @@ pub mod providers;
 pub mod session_pause_policy;
 pub mod subworkflow_step;
 pub mod telemetry;
+#[cfg(feature = "threed")]
+pub mod threed;
 pub mod tokens;
 pub mod types;
 pub mod upstash;
