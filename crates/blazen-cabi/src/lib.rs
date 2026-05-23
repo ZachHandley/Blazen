@@ -50,6 +50,8 @@ pub mod streaming_records;
 pub mod string;
 pub mod telemetry;
 pub mod telemetry_records;
+#[cfg(feature = "threed-compat-proxy")]
+pub mod threed;
 pub mod tool_handler;
 pub mod training_records;
 pub mod workflow;

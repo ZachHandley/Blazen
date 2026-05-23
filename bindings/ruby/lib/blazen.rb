@@ -58,6 +58,7 @@ require_relative "blazen/controlplane"
 require_relative "blazen/model_client"
 require_relative "blazen/model_manager"
 require_relative "blazen/distributed_config"
+require_relative "blazen/threed"
 
 module Blazen
   # Initialises the native runtime (warms the cabi tokio runtime and

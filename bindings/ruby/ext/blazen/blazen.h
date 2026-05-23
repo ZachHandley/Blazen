@@ -188,6 +188,18 @@
 #define BLAZEN_ADAPTER_MOUNT_STRATEGY_MERGED 3
 
 /**
+ * PBR-channel discriminants accepted by
+ * [`blazen_compat3d_result_pbr_map_bytes`].
+ */
+#define BLAZEN_PBR_MAP_ALBEDO 0
+
+#define BLAZEN_PBR_MAP_NORMAL 1
+
+#define BLAZEN_PBR_MAP_ROUGHNESS 2
+
+#define BLAZEN_PBR_MAP_METALLIC 3
+
+/**
  * LR scheduler tag — peak LR stays flat after warmup.
  */
 #define BLAZEN_SCHEDULER_CONSTANT 0
@@ -302,6 +314,27 @@ typedef struct BlazenChatMessage BlazenChatMessage;
  * [`blazen_checkpoint_store_free`].
  */
 typedef struct BlazenCheckpointStore BlazenCheckpointStore;
+
+/**
+ * Opaque handle wrapping [`blazen_uniffi::threed::Compat3dProvider`].
+ *
+ * Produced by [`blazen_compat3d_provider_new`]; freed by
+ * [`blazen_compat3d_provider_free`]. The handle is `Send + Sync` — the
+ * inner [`Arc`] is cloned into each spawned task so the provider stays
+ * alive for the duration of the async call without pinning the caller's
+ * stack-local handle.
+ */
+typedef struct BlazenCompat3dProvider BlazenCompat3dProvider;
+
+/**
+ * Opaque handle holding the result of any of the four stages.
+ *
+ * Produced by the four `blazen_compat3d_*_blocking` wrappers (out
+ * param) or by the matching [`blazen_future_take_compat3d_result`] taker.
+ * Free with [`blazen_compat3d_result_free`]; do NOT call any stage-specific
+ * accessor after freeing.
+ */
+typedef struct BlazenCompat3dResult BlazenCompat3dResult;
 
 /**
  * Opaque wrapper around [`blazen_controlplane::Client`]. The inner
@@ -11363,6 +11396,361 @@ int32_t blazen_parse_workflow_history(const char *history_json,
  * same non-null pointer is a double-free.
  */
  void blazen_workflow_history_entry_free(BlazenWorkflowHistoryEntry *entry);
+
+/**
+ * Construct an HTTP-proxy 3D provider pointed at `base_url`.
+ *
+ * `api_key` and `timeout_secs` are optional — pass null / `0` to take
+ * the defaults (no bearer auth, 600-second per-request timeout). When
+ * `timeout_secs` is non-zero the inner client is rebuilt with that
+ * timeout via `with_timeout`.
+ *
+ * Returns null if `base_url` is null, not valid UTF-8, or contains an
+ * interior NUL byte. Otherwise returns a caller-owned pointer that
+ * must be released with [`blazen_compat3d_provider_free`].
+ *
+ * # Safety
+ *
+ * `base_url` must be a NUL-terminated UTF-8 buffer that remains valid
+ * for the duration of this call (the string is copied before return).
+ * `api_key` must be null OR a NUL-terminated UTF-8 buffer with the same
+ * liveness requirement.
+ */
+
+BlazenCompat3dProvider *blazen_compat3d_provider_new(const char *base_url,
+                                                     const char *api_key,
+                                                     uint32_t timeout_secs);
+
+/**
+ * Frees a [`BlazenCompat3dProvider`] previously produced by the cabi
+ * surface. No-op when `provider` is null.
+ *
+ * # Safety
+ *
+ * `provider` must be null OR a pointer previously produced by
+ * [`blazen_compat3d_provider_new`]. Double-free is undefined behavior.
+ */
+ void blazen_compat3d_provider_free(BlazenCompat3dProvider *provider);
+
+/**
+ * Frees a [`BlazenCompat3dResult`] handle. No-op on null. Double-free is
+ * undefined behavior.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a pointer previously produced by the cabi
+ * 3D surface (`blazen_compat3d_*_blocking` out-param or
+ * [`blazen_future_take_compat3d_result`]).
+ */
+ void blazen_compat3d_result_free(BlazenCompat3dResult *result);
+
+/**
+ * Returns the produced GLB bytes for any stage.
+ *
+ * Writes the raw pointer into `*out_ptr` (borrow into the result
+ * handle's internal `Vec<u8>`) and the length into `*out_len`. The
+ * borrow is valid until [`blazen_compat3d_result_free`] is called on the
+ * handle. Returns `0` on success, `-1` on null `result`.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a live `BlazenCompat3dResult` pointer.
+ * `out_ptr` / `out_len` must be null OR valid single-writer
+ * destinations for `*const u8` and `usize` respectively.
+ */
+
+int32_t blazen_compat3d_result_glb_bytes(const BlazenCompat3dResult *result,
+                                         const uint8_t **out_ptr,
+                                         uintptr_t *out_len);
+
+/**
+ * Returns the MIME type for any stage as a heap-allocated NUL-terminated
+ * UTF-8 C string. Caller frees with `blazen_string_free`. Returns null
+ * if `result` is null.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a live `BlazenCompat3dResult` pointer.
+ */
+ char *blazen_compat3d_result_mime_type(const BlazenCompat3dResult *result);
+
+/**
+ * Returns `1` if this result is a `Texturize` result carrying a PBR
+ * bundle, `0` otherwise (or if `result` is null).
+ *
+ * # Safety
+ *
+ * `result` must be null OR a live `BlazenCompat3dResult` pointer.
+ */
+ int32_t blazen_compat3d_result_has_pbr_maps(const BlazenCompat3dResult *result);
+
+/**
+ * Borrows the bytes of a single PBR channel for a `Texturize` result.
+ *
+ * `channel` is one of the `BLAZEN_PBR_MAP_*` constants. Writes the
+ * borrowed pointer into `*out_ptr` and length into `*out_len`. The
+ * borrow is valid until [`blazen_compat3d_result_free`] is called.
+ *
+ * Returns `0` if the channel is populated, `1` if the result is not a
+ * `Texturize` result / has no PBR bundle / the requested channel is
+ * `None`, `-1` if `result` is null or `channel` is out of range. The
+ * `1` return path zeros `*out_len` so callers can early-return on
+ * "channel not present".
+ *
+ * # Safety
+ *
+ * `result` must be null OR a live `BlazenCompat3dResult` pointer.
+ * `out_ptr` / `out_len` must be null OR valid single-writer
+ * destinations.
+ */
+
+int32_t blazen_compat3d_result_pbr_map_bytes(const BlazenCompat3dResult *result,
+                                             uint32_t channel,
+                                             const uint8_t **out_ptr,
+                                             uintptr_t *out_len);
+
+/**
+ * Returns the number of bone names carried by a `Rig` result, or `0`
+ * for any other result variant / null pointer.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a live `BlazenCompat3dResult` pointer.
+ */
+ uintptr_t blazen_compat3d_result_bone_names_count(const BlazenCompat3dResult *result);
+
+/**
+ * Returns a heap-allocated NUL-terminated UTF-8 C string for the bone
+ * name at `index` (caller frees with `blazen_string_free`). Returns
+ * null if `result` isn't a `Rig` result, `index` is out of bounds, or
+ * `result` is null.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a live `BlazenCompat3dResult` pointer.
+ */
+ char *blazen_compat3d_result_bone_name_get(const BlazenCompat3dResult *result, uintptr_t index);
+
+/**
+ * Returns the input triangle count for a `Refine` result, or `0` for
+ * any other variant / null pointer.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a live `BlazenCompat3dResult` pointer.
+ */
+ uint32_t blazen_compat3d_result_refine_input_tri_count(const BlazenCompat3dResult *result);
+
+/**
+ * Returns the output triangle count for a `Refine` result, or `0` for
+ * any other variant / null pointer.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a live `BlazenCompat3dResult` pointer.
+ */
+ uint32_t blazen_compat3d_result_refine_output_tri_count(const BlazenCompat3dResult *result);
+
+/**
+ * Returns the UV chart count for a `Refine` result. Returns `-1` when
+ * the field is `None` (UV unwrapping wasn't requested), the result
+ * isn't a `Refine` variant, or `result` is null.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a live `BlazenCompat3dResult` pointer.
+ */
+ int64_t blazen_compat3d_result_refine_uv_chart_count(const BlazenCompat3dResult *result);
+
+/**
+ * Returns the produced animation duration in seconds for an `Animate`
+ * result. Returns `0.0` for any other variant / null pointer.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a live `BlazenCompat3dResult` pointer.
+ */
+ float blazen_compat3d_result_animate_duration_seconds(const BlazenCompat3dResult *result);
+
+/**
+ * Returns the produced animation FPS for an `Animate` result. Returns
+ * `0` for any other variant / null pointer.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a live `BlazenCompat3dResult` pointer.
+ */
+ uint32_t blazen_compat3d_result_animate_fps(const BlazenCompat3dResult *result);
+
+/**
+ * Synchronously runs the `texturize` stage.
+ *
+ * Returns `0` on success (writing a caller-owned `*mut BlazenCompat3dResult`
+ * to `out_result`) or `-1` on failure (writing the inner error to
+ * `out_err`).
+ *
+ * `request_json` may be null or empty for an all-defaults request; see
+ * the module-level docs for the JSON shape. `mesh_ptr` / `mesh_len`
+ * describe the input mesh GLB bytes; `reference_image_ptr` /
+ * `reference_image_len` describe the optional reference image PNG/JPEG
+ * bytes (null / `0` for no reference).
+ *
+ * # Safety
+ *
+ * `provider` must be a valid pointer to a `BlazenCompat3dProvider`.
+ * `mesh_ptr` must be null OR point to a buffer of at least `mesh_len`
+ * bytes. Same for `reference_image_ptr` / `reference_image_len`.
+ * `request_json` follows the standard NUL+UTF-8 contract. `out_result`
+ * / `out_err` are null OR valid single-writer destinations.
+ */
+
+int32_t blazen_compat3d_texturize_blocking(const BlazenCompat3dProvider *provider,
+                                           const uint8_t *mesh_ptr,
+                                           uintptr_t mesh_len,
+                                           const uint8_t *reference_image_ptr,
+                                           uintptr_t reference_image_len,
+                                           const char *request_json,
+                                           BlazenCompat3dResult **out_result,
+                                           BlazenError **out_err);
+
+/**
+ * Future-returning variant of [`blazen_compat3d_texturize_blocking`].
+ *
+ * Returns a `BlazenFuture *` immediately (or null on null inputs / JSON
+ * parse failures). The result resolves via
+ * [`blazen_future_take_compat3d_result`].
+ *
+ * # Safety
+ *
+ * Same per-pointer contract as [`blazen_compat3d_texturize_blocking`];
+ * every input buffer is copied before the function returns, so callers
+ * may release their buffers as soon as this returns.
+ */
+
+BlazenFuture *blazen_compat3d_texturize(const BlazenCompat3dProvider *provider,
+                                        const uint8_t *mesh_ptr,
+                                        uintptr_t mesh_len,
+                                        const uint8_t *reference_image_ptr,
+                                        uintptr_t reference_image_len,
+                                        const char *request_json);
+
+/**
+ * Synchronously runs the `rig` stage. See
+ * [`blazen_compat3d_texturize_blocking`] for the shared semantics; the
+ * `rig`-specific request fields are `template` / `skin` / `pose_hint`.
+ *
+ * # Safety
+ *
+ * Same contract as [`blazen_compat3d_texturize_blocking`].
+ */
+
+int32_t blazen_compat3d_rig_blocking(const BlazenCompat3dProvider *provider,
+                                     const uint8_t *mesh_ptr,
+                                     uintptr_t mesh_len,
+                                     const char *request_json,
+                                     BlazenCompat3dResult **out_result,
+                                     BlazenError **out_err);
+
+/**
+ * Future-returning variant of [`blazen_compat3d_rig_blocking`].
+ *
+ * # Safety
+ *
+ * Same contract as [`blazen_compat3d_texturize`].
+ */
+
+BlazenFuture *blazen_compat3d_rig(const BlazenCompat3dProvider *provider,
+                                  const uint8_t *mesh_ptr,
+                                  uintptr_t mesh_len,
+                                  const char *request_json);
+
+/**
+ * Synchronously runs the `refine` stage.
+ *
+ * # Safety
+ *
+ * Same contract as [`blazen_compat3d_texturize_blocking`].
+ */
+
+int32_t blazen_compat3d_refine_blocking(const BlazenCompat3dProvider *provider,
+                                        const uint8_t *mesh_ptr,
+                                        uintptr_t mesh_len,
+                                        const char *request_json,
+                                        BlazenCompat3dResult **out_result,
+                                        BlazenError **out_err);
+
+/**
+ * Future-returning variant of [`blazen_compat3d_refine_blocking`].
+ *
+ * # Safety
+ *
+ * Same contract as [`blazen_compat3d_texturize`].
+ */
+
+BlazenFuture *blazen_compat3d_refine(const BlazenCompat3dProvider *provider,
+                                     const uint8_t *mesh_ptr,
+                                     uintptr_t mesh_len,
+                                     const char *request_json);
+
+/**
+ * Synchronously runs the `animate` stage. `rigged_glb` is the
+ * already-rigged input mesh; `driving_video_ptr` / `bvh_motion_ptr` are
+ * the optional motion-source byte buffers (null / `0` to omit each).
+ *
+ * # Safety
+ *
+ * Same contract as [`blazen_compat3d_texturize_blocking`], plus
+ * the `driving_video_ptr` / `bvh_motion_ptr` pointers follow the same
+ * (ptr,len) liveness rule.
+ */
+
+int32_t blazen_compat3d_animate_blocking(const BlazenCompat3dProvider *provider,
+                                         const uint8_t *rigged_glb_ptr,
+                                         uintptr_t rigged_glb_len,
+                                         const uint8_t *driving_video_ptr,
+                                         uintptr_t driving_video_len,
+                                         const uint8_t *bvh_motion_ptr,
+                                         uintptr_t bvh_motion_len,
+                                         const char *request_json,
+                                         BlazenCompat3dResult **out_result,
+                                         BlazenError **out_err);
+
+/**
+ * Future-returning variant of [`blazen_compat3d_animate_blocking`].
+ *
+ * # Safety
+ *
+ * Same contract as [`blazen_compat3d_texturize`], extended to the
+ * `driving_video_ptr` / `bvh_motion_ptr` inputs.
+ */
+
+BlazenFuture *blazen_compat3d_animate(const BlazenCompat3dProvider *provider,
+                                      const uint8_t *rigged_glb_ptr,
+                                      uintptr_t rigged_glb_len,
+                                      const uint8_t *driving_video_ptr,
+                                      uintptr_t driving_video_len,
+                                      const uint8_t *bvh_motion_ptr,
+                                      uintptr_t bvh_motion_len,
+                                      const char *request_json);
+
+/**
+ * Pops a [`BlazenCompat3dResult`] out of any 3D future produced by the
+ * `blazen_compat3d_{texturize,rig,refine,animate}` async wrappers.
+ * Returns `0` on success (writing the caller-owned result handle into
+ * `*out`), or `-1` on failure (writing the inner error into `*err`).
+ *
+ * # Safety
+ *
+ * `fut` must be null OR a live `BlazenFuture` produced by the cabi
+ * 3D async surface, already observed completed via
+ * `blazen_future_poll` / `_wait` / `_fd`. `out` / `err` follow the
+ * usual single-writer out-param contract (null is OK to discard the
+ * matching slot).
+ */
+
+int32_t blazen_future_take_compat3d_result(BlazenFuture *fut,
+                                           BlazenCompat3dResult **out,
+                                           BlazenError **err);
 
 /**
  * Constructs a [`BlazenAgent`] from a completion model, optional system

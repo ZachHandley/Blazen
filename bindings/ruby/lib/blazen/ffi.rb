@@ -387,14 +387,32 @@ module Blazen
                     [:pointer, :pointer, :pointer, :pointer], :int32
     attach_function :blazen_image_gen_model_new_fal,
                     [:pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_tts_model_new_piper,
-                    [:pointer, :int32, :int32, :pointer, :pointer], :int32
-    attach_function :blazen_stt_model_new_whisper,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_image_gen_model_new_diffusion,
-                    [:pointer, :pointer, :int32, :int32, :int32, :float,
-                     :pointer, :pointer],
-                    :int32
+    # Feature-gated symbols: tolerate FFI::NotFoundError so the loader
+    # works against any cabi build, full-features or minimal. Downstream
+    # callers in compute.rb / providers.rb already guard via
+    # +Blazen::FFI.respond_to?+ before invoking each.
+    begin
+      attach_function :blazen_tts_model_new_piper,
+                      [:pointer, :int32, :int32, :pointer, :pointer], :int32
+    rescue ::FFI::NotFoundError
+      # Optional: the local TTS factory was renamed away from "piper" in
+      # PR6; this symbol is kept attached only for older release builds
+      # that still export it.
+    end
+    begin
+      attach_function :blazen_stt_model_new_whisper,
+                      [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
+    rescue ::FFI::NotFoundError
+      # Optional: only present when libblazen_cabi was built with `whispercpp`.
+    end
+    begin
+      attach_function :blazen_image_gen_model_new_diffusion,
+                      [:pointer, :pointer, :int32, :int32, :int32, :float,
+                       :pointer, :pointer],
+                      :int32
+    rescue ::FFI::NotFoundError
+      # Optional: only present when libblazen_cabi was built with `diffusion`.
+    end
 
     # TtsResult accessors
     attach_function :blazen_tts_result_audio_base64, [:pointer], :pointer
@@ -1654,6 +1672,125 @@ module Blazen
                     %i[uint64 uint64 pointer pointer uint16],
                     :pointer
     attach_function :blazen_distributed_config_free, [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # 3D pipeline (Compat3dProvider — HTTP proxy backend)
+    #
+    # Built only when libblazen_cabi was compiled with the
+    # +threed-compat-proxy+ feature. The Ruby wrapper in
+    # +lib/blazen/threed.rb+ probes these symbols and falls back to a
+    # +UnsupportedError+ raiser when they're not present.
+    # -------------------------------------------------------------------
+
+    # PBR-channel discriminants (mirror BLAZEN_PBR_MAP_* in blazen.h)
+    PBR_MAP_ALBEDO    = 0
+    PBR_MAP_NORMAL    = 1
+    PBR_MAP_ROUGHNESS = 2
+    PBR_MAP_METALLIC  = 3
+
+    %i[
+      blazen_compat3d_provider_new
+      blazen_compat3d_provider_free
+      blazen_compat3d_result_free
+      blazen_compat3d_result_glb_bytes
+      blazen_compat3d_result_mime_type
+      blazen_compat3d_result_has_pbr_maps
+      blazen_compat3d_result_pbr_map_bytes
+      blazen_compat3d_result_bone_names_count
+      blazen_compat3d_result_bone_name_get
+      blazen_compat3d_result_refine_input_tri_count
+      blazen_compat3d_result_refine_output_tri_count
+      blazen_compat3d_result_refine_uv_chart_count
+      blazen_compat3d_result_animate_duration_seconds
+      blazen_compat3d_result_animate_fps
+      blazen_compat3d_texturize_blocking
+      blazen_compat3d_texturize
+      blazen_compat3d_rig_blocking
+      blazen_compat3d_rig
+      blazen_compat3d_refine_blocking
+      blazen_compat3d_refine
+      blazen_compat3d_animate_blocking
+      blazen_compat3d_animate
+      blazen_future_take_compat3d_result
+    ].each do |sym|
+      begin
+        case sym
+        when :blazen_compat3d_provider_new
+          attach_function sym, %i[pointer pointer uint32], :pointer
+        when :blazen_compat3d_provider_free
+          attach_function sym, [:pointer], :void
+        when :blazen_compat3d_result_free
+          attach_function sym, [:pointer], :void
+        when :blazen_compat3d_result_glb_bytes
+          attach_function sym, %i[pointer pointer pointer], :int32
+        when :blazen_compat3d_result_mime_type
+          attach_function sym, [:pointer], :pointer
+        when :blazen_compat3d_result_has_pbr_maps
+          attach_function sym, [:pointer], :int32
+        when :blazen_compat3d_result_pbr_map_bytes
+          attach_function sym, %i[pointer uint32 pointer pointer], :int32
+        when :blazen_compat3d_result_bone_names_count
+          attach_function sym, [:pointer], :size_t
+        when :blazen_compat3d_result_bone_name_get
+          attach_function sym, %i[pointer size_t], :pointer
+        when :blazen_compat3d_result_refine_input_tri_count,
+             :blazen_compat3d_result_refine_output_tri_count
+          attach_function sym, [:pointer], :uint32
+        when :blazen_compat3d_result_refine_uv_chart_count
+          attach_function sym, [:pointer], :int64
+        when :blazen_compat3d_result_animate_duration_seconds
+          attach_function sym, [:pointer], :float
+        when :blazen_compat3d_result_animate_fps
+          attach_function sym, [:pointer], :uint32
+        when :blazen_compat3d_texturize_blocking
+          attach_function sym,
+                          %i[pointer pointer size_t pointer size_t pointer pointer pointer],
+                          :int32, blocking: true
+        when :blazen_compat3d_texturize
+          attach_function sym,
+                          %i[pointer pointer size_t pointer size_t pointer],
+                          :pointer
+        when :blazen_compat3d_rig_blocking
+          attach_function sym,
+                          %i[pointer pointer size_t pointer pointer pointer],
+                          :int32, blocking: true
+        when :blazen_compat3d_rig
+          attach_function sym,
+                          %i[pointer pointer size_t pointer],
+                          :pointer
+        when :blazen_compat3d_refine_blocking
+          attach_function sym,
+                          %i[pointer pointer size_t pointer pointer pointer],
+                          :int32, blocking: true
+        when :blazen_compat3d_refine
+          attach_function sym,
+                          %i[pointer pointer size_t pointer],
+                          :pointer
+        when :blazen_compat3d_animate_blocking
+          attach_function sym,
+                          %i[pointer pointer size_t pointer size_t pointer size_t pointer pointer pointer],
+                          :int32, blocking: true
+        when :blazen_compat3d_animate
+          attach_function sym,
+                          %i[pointer pointer size_t pointer size_t pointer size_t pointer],
+                          :pointer
+        when :blazen_future_take_compat3d_result
+          attach_function sym, %i[pointer pointer pointer], :int32
+        end
+      rescue ::FFI::NotFoundError
+        # Library built without the threed-compat-proxy feature; the Ruby
+        # wrapper detects via +Blazen::FFI.respond_to?+ and raises
+        # +UnsupportedError+ at call-site.
+      end
+    end
+
+    # Returns +true+ when the native lib was built with the
+    # +threed-compat-proxy+ feature (i.e. every Compat3d symbol attached
+    # successfully).
+    def self.threed_available?
+      respond_to?(:blazen_compat3d_provider_new) &&
+        respond_to?(:blazen_compat3d_texturize_blocking)
+    end
 
     # -------------------------------------------------------------------
     # Ruby-side helpers
