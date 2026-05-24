@@ -79,10 +79,14 @@ f5-tts = [
 ]
 # `spark-tts` enables the SparkAudio/Spark-TTS backend — BiCodec neural
 # audio codec + Qwen2.5-0.5B autoregressive decoder for zero-shot
-# voice-cloning text-to-speech. Wave S.1 ships the scaffold only; real
-# model deps land in Wave S.2. Upstream code is Apache-2.0; the
-# published weights ship under CC-BY-NC-SA-4.0.
-spark-tts = []
+# voice-cloning text-to-speech. Wave S.2.1.a lands the BiCodec shared
+# low-level primitives (Snake1d, weight-norm Conv1d/ConvTranspose1d,
+# AdaLayerNorm, ResidualUnit, repeat_interleave_dim2). Upstream code is
+# Apache-2.0; the published weights ship under CC-BY-NC-SA-4.0.
+spark-tts = [
+    "dep:candle-core",
+    "dep:candle-nn",
+]
 # `maskgct` enables the Amphion MaskGCT masked-generative TTS backend
 # (Llama-NAR T2S + SoundStorm S2A + RepCodec/DAC + Vocos). Wave M.1
 # ships scaffolding only — every `TtsBackend` method returns
