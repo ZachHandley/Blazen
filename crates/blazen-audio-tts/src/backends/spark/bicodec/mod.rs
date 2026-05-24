@@ -58,3 +58,12 @@ pub(super) mod quantizer;
               speaker.rs exercise the public surface in the meantime."
 )]
 pub(super) mod speaker;
+
+#[allow(
+    dead_code,
+    reason = "Feature Decoder + DAC WaveGenerator (S.2.1.f) — the prenet, \
+              postnet, and vocoder — are consumed by the top-level \
+              BiCodec wiring in S.2.1.g. The unit tests in decoder.rs \
+              exercise the public surface in the meantime."
+)]
+pub(super) mod decoder;
