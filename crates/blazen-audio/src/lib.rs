@@ -27,11 +27,13 @@
 
 pub mod backend;
 pub mod error;
+pub mod nc_license;
 pub mod types;
 pub mod voice;
 
 pub use backend::AudioBackend;
 pub use error::AudioError;
+pub use nc_license::warn_nc_once;
 pub use types::{AudioFormat, AudioMetadata, GeneratedAudio, SampleFormat};
 pub use voice::{
     CloneVoiceRequest, DesignVoiceRequest, ListVoicesRequest, ListVoicesResponse, VoiceDto,
