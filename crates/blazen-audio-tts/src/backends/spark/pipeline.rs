@@ -22,15 +22,19 @@
 #![cfg(feature = "spark-tts")]
 
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::sync::Arc;
 
 use candle_core::{Device, Tensor};
 use candle_transformers::models::qwen2::Config as Qwen2Config;
+use futures_core::Stream;
+use tokio::sync::mpsc;
 
 use super::bicodec::{BiCodec, BiCodecConfig};
 use super::decoder::{SparkLlm, SparkLlmConfig};
-use super::tokenizer::SparkTokenizer;
+use super::tokenizer::{SparkTokenizer, parse_generation_str};
 use crate::TtsError;
+use crate::traits::StreamingAudioChunk;
 
 /// `BiCodec`'s speaker-encoder emits exactly 32 global tokens per
 /// utterance (the `token_num` field in `BiCodecConfig::spark_tts_05b`),
@@ -52,9 +56,12 @@ pub(super) const SPARK_TTS_SAMPLE_RATE_HZ: u32 = 16_000;
 /// End-to-end Spark-TTS pipeline. Built once via [`SparkPipeline::load`]
 /// and reused across every synthesis call.
 pub(super) struct SparkPipeline {
-    tokenizer: SparkTokenizer,
-    // Mutex because SparkLlm::generate takes &mut self (KV cache mutation).
-    llm: tokio::sync::Mutex<SparkLlm>,
+    tokenizer: Arc<SparkTokenizer>,
+    // `Arc<Mutex<_>>` because `SparkLlm::generate` takes `&mut self`
+    // (KV cache mutation) AND the streaming path needs to hand an
+    // `OwnedMutexGuard` to `tokio::task::spawn_blocking` so the AR loop
+    // can drive a non-Send token sink from a blocking worker.
+    llm: Arc<tokio::sync::Mutex<SparkLlm>>,
     bicodec: Arc<BiCodec>,
     device: Device,
 }
@@ -209,8 +216,8 @@ impl SparkPipeline {
             .map_err(|e| PipelineError::BiCodec(e.to_string()))?;
 
         Ok(Self {
-            tokenizer,
-            llm: tokio::sync::Mutex::new(llm),
+            tokenizer: Arc::new(tokenizer),
+            llm: Arc::new(tokio::sync::Mutex::new(llm)),
             bicodec: Arc::new(bicodec),
             device,
         })
@@ -327,7 +334,339 @@ impl SparkPipeline {
         let pcm = self.synthesize_pcm(text).await?;
         Ok(pcm_to_wav(&pcm, SPARK_TTS_SAMPLE_RATE_HZ, 1))
     }
+
+    /// Per-batch streaming variant of [`Self::synthesize_pcm`]. Yields
+    /// audio chunks as soon as the LLM has produced
+    /// [`BICODEC_STREAM_BATCH`] fresh semantic tokens (≈
+    /// `BICODEC_STREAM_BATCH * 320 / 16_000` seconds of audio per
+    /// chunk).
+    ///
+    /// # Architecture
+    ///
+    /// The wave decomposes into three concurrent stages:
+    ///
+    /// 1. **AR loop** (background, blocking): runs on a
+    ///    [`tokio::task::spawn_blocking`] worker via
+    ///    [`SparkLlm::generate_streaming`]. Each freshly sampled token
+    ///    id is pushed into a bounded mpsc channel; sender errors
+    ///    (consumer drop) cause the AR loop to break out early.
+    /// 2. **Token-to-chunk classifier** (async, on the consumer task):
+    ///    forwards each id from the channel, decodes the running
+    ///    suffix to text via [`SparkTokenizer`], runs the same
+    ///    `bicodec_semantic_(\d+)` / `bicodec_global_(\d+)` regexes
+    ///    that the offline pipeline uses ([`parse_generation_str`]),
+    ///    and accumulates indices. Once
+    ///    [`SPARK_GLOBAL_TOKEN_COUNT`] global tokens are known **and**
+    ///    [`BICODEC_STREAM_BATCH`] fresh semantic tokens have
+    ///    accumulated, dispatches a [`BiCodec::detokenize`] for that
+    ///    chunk on a blocking worker. The final partial batch is
+    ///    flushed when the AR loop terminates.
+    /// 3. **Output stream**: each [`BiCodec::detokenize`] result is
+    ///    converted into a [`StreamingAudioChunk`]. The last emitted
+    ///    chunk carries `is_final = true`.
+    ///
+    /// # Audio quality caveat
+    ///
+    /// `BiCodec`'s [`super::bicodec::WaveGenerator`] is a stack of
+    /// dilated convolutions whose total receptive field spans several
+    /// hundred input frames. Decoding semantic-index chunks
+    /// independently therefore yields per-chunk edge artefacts (clicks
+    /// at the seams) where the convolutions would otherwise have seen
+    /// neighbouring context. This first cut ships the simple
+    /// per-chunk decode and documents the artefact — a follow-up wave
+    /// can add an overlap-add window with pre-padding worth of the
+    /// vocoder's receptive field to mask the seams. The artefacts are
+    /// audible but the words remain intelligible, which is the
+    /// intended trade-off for sub-second latency-to-first-chunk.
+    ///
+    /// # Errors
+    ///
+    /// Errors surface as `Err(PipelineError)` items inside the stream.
+    /// A failure aborts the stream (no subsequent items will arrive).
+    /// The same error variants as [`Self::synthesize_pcm`] are used.
+    pub(super) fn synthesize_pcm_stream(
+        &self,
+        text: &str,
+    ) -> Pin<Box<dyn Stream<Item = Result<StreamingAudioChunk, PipelineError>> + Send>> {
+        let (tx, rx) =
+            mpsc::channel::<Result<StreamingAudioChunk, PipelineError>>(STREAM_CHANNEL_CAPACITY);
+
+        let tokenizer = Arc::clone(&self.tokenizer);
+        let bicodec = Arc::clone(&self.bicodec);
+        let llm = Arc::clone(&self.llm);
+        let device = self.device.clone();
+        let text = text.to_owned();
+
+        tokio::spawn(async move {
+            if let Err(err) =
+                run_stream_pipeline(text, tokenizer, bicodec, llm, device, tx.clone()).await
+            {
+                // Best-effort: if the consumer dropped rx we just drop
+                // the trailing error too.
+                let _ = tx.send(Err(err)).await;
+            }
+        });
+
+        receiver_into_stream(rx)
+    }
 }
+
+/// Per-yielded-chunk semantic-token batch size. With `BiCodec`'s
+/// `320x` temporal upsample (`upsample_rates = [8, 5, 4, 2]`) and a
+/// `16 000 Hz` output rate, `8` semantic tokens correspond to
+/// `8 * 320 / 16_000 = 0.16` s = **160 ms** of audio per chunk. This
+/// chooses the sweet spot between latency-to-first-chunk and the
+/// vocoder edge-effect overhead documented on
+/// [`SparkPipeline::synthesize_pcm_stream`]. Smaller chunks would
+/// reduce first-token latency further but worsen the seam clicks; the
+/// chosen value matches the order-of-magnitude latency users expect
+/// from a "true streaming" TTS backend.
+pub(super) const BICODEC_STREAM_BATCH: usize = 8;
+
+/// Bounded mpsc capacity feeding the output stream. Four chunks ≈ 640 ms
+/// of buffered audio worth of back-pressure headroom; matches the
+/// faster-whisper streaming pipeline's `OUTPUT_CHANNEL_CAPACITY`.
+const STREAM_CHANNEL_CAPACITY: usize = 4;
+
+/// Convert an mpsc receiver into a `Pin<Box<dyn Stream>>` of its items.
+/// Mirrors the helper that lives in the faster-whisper streaming
+/// pipeline — same shape, kept local to avoid a cross-crate re-export
+/// for a four-line helper.
+fn receiver_into_stream<T: Send + 'static>(
+    rx: mpsc::Receiver<T>,
+) -> Pin<Box<dyn Stream<Item = T> + Send>> {
+    Box::pin(futures_util::stream::unfold(rx, |mut rx| async move {
+        rx.recv().await.map(|v| (v, rx))
+    }))
+}
+
+/// Drive one streaming synthesis run end-to-end. Forwards every chunk
+/// it produces through `out`. Returning `Err(_)` signals the caller
+/// to forward one final error item on `out`.
+#[allow(
+    clippy::too_many_lines,
+    reason = "single-purpose orchestration that reads top-to-bottom; splitting hurts readability more than the linter's heuristic helps"
+)]
+async fn run_stream_pipeline(
+    text: String,
+    tokenizer: Arc<SparkTokenizer>,
+    bicodec: Arc<BiCodec>,
+    llm: Arc<tokio::sync::Mutex<SparkLlm>>,
+    device: Device,
+    out: mpsc::Sender<Result<StreamingAudioChunk, PipelineError>>,
+) -> Result<(), PipelineError> {
+    // 1. Build the TTS prompt token ids.
+    let prompt_ids = tokenizer
+        .build_tts_prompt(&text)
+        .map_err(|e| PipelineError::Tokenizer(e.to_string()))?;
+    let prompt_len = prompt_ids.len();
+    let prompt_tensor = Tensor::from_vec(prompt_ids, (1, prompt_len), &device)
+        .map_err(|e| PipelineError::Llm(format!("prompt tensor: {e}")))?;
+
+    // 2. Spawn the AR loop on a blocking worker. We hand it an
+    //    `OwnedMutexGuard` so it can mutate the KV cache without
+    //    holding a `&` into the pipeline. The token-id channel is
+    //    bounded so the AR loop applies back-pressure when the
+    //    consumer falls behind on `BiCodec::detokenize` dispatches.
+    let llm_guard = llm.clone().lock_owned().await;
+    let (id_tx, mut id_rx) = mpsc::channel::<u32>(AR_TOKEN_CHANNEL_CAPACITY);
+    let ar_handle = tokio::task::spawn_blocking(move || {
+        let mut guard = llm_guard;
+        guard.generate_streaming(&prompt_tensor, |tok| {
+            // `blocking_send` parks the AR thread when the consumer
+            // can't keep up; if the channel is closed we error so the
+            // AR loop can break out cleanly.
+            id_tx
+                .blocking_send(tok)
+                .map_err(|_| candle_core::Error::Msg("stream consumer dropped".into()))
+        })
+    });
+
+    // 3. Consume the id stream, classify tokens, and dispatch
+    //    BiCodec.detokenize once we have a full chunk worth of new
+    //    semantic indices (with the global tokens fully known).
+    let mut tokens_consumed: usize = 0;
+    let mut decoded_buf = String::with_capacity(text.len() * 4);
+    let mut semantic_acc: Vec<u32> = Vec::new();
+    let mut semantic_emitted: usize = 0;
+    let mut global_acc: Vec<u32> = Vec::new();
+    let mut global_locked: bool = false;
+    let mut last_chunk_was_sent: bool = false;
+
+    while let Some(tok) = id_rx.recv().await {
+        tokens_consumed += 1;
+        // Skip the prompt portion — `generate_streaming` only fires
+        // for newly sampled tokens, but `parse_generation_str` is
+        // applied to the LLM's output stream, not the prompt, so we
+        // don't have to filter here. (The hook in
+        // `generate_streaming` is documented as new-tokens-only.)
+
+        // Decode the single new id to its text form so we can extend
+        // the rolling buffer. With `skip_special_tokens=false` the
+        // `<|bicodec_*|>` markers survive as literal text — mirrors
+        // the offline `parse_generation` path.
+        let piece = match tokenizer.decode_single(tok) {
+            Ok(s) => s,
+            Err(e) => {
+                // Decode failures are fatal to the stream — the regex
+                // can't run against garbage. Forward and bail.
+                let _ = ar_handle.await;
+                return Err(PipelineError::Tokenizer(e.to_string()));
+            }
+        };
+        decoded_buf.push_str(&piece);
+
+        // Re-extract every chunk-boundary check. `parse_generation_str`
+        // returns NoSemanticTokens until we've seen the first
+        // `<|bicodec_semantic_K|>` marker, which is fine — we treat it
+        // as "no chunk to emit yet" rather than as a hard error.
+        if let Ok((semantics_so_far, globals_so_far)) = parse_generation_str(&decoded_buf) {
+            // Once we see all 32 globals, lock them in (the LLM emits
+            // them in a contiguous block at the start of generation).
+            if !global_locked && globals_so_far.len() >= SPARK_GLOBAL_TOKEN_COUNT {
+                global_acc = globals_so_far[..SPARK_GLOBAL_TOKEN_COUNT].to_vec();
+                global_locked = true;
+            }
+            semantic_acc = semantics_so_far;
+        }
+
+        // Chunk-boundary check: dispatch once we have enough semantic
+        // tokens for the next batch AND the global tokens are locked.
+        while global_locked && semantic_acc.len() >= semantic_emitted + BICODEC_STREAM_BATCH {
+            let batch_end = semantic_emitted + BICODEC_STREAM_BATCH;
+            let batch = semantic_acc[semantic_emitted..batch_end].to_vec();
+            semantic_emitted = batch_end;
+
+            let chunk = match dispatch_chunk(&bicodec, &device, &batch, &global_acc, false).await {
+                Ok(c) => c,
+                Err(e) => {
+                    let _ = ar_handle.await;
+                    return Err(e);
+                }
+            };
+            last_chunk_was_sent = true;
+            if out.send(Ok(chunk)).await.is_err() {
+                // Consumer dropped — abort. The AR loop's blocking_send
+                // will already be failing the next time it fires.
+                let _ = ar_handle.await;
+                return Ok(());
+            }
+        }
+    }
+
+    // 4. AR loop is done (channel closed). Join it to surface any
+    //    candle errors that fired AFTER the closure short-circuit.
+    let ar_result = match ar_handle.await {
+        Ok(r) => r,
+        Err(join_err) => {
+            return Err(PipelineError::Llm(format!(
+                "generate_streaming join: {join_err}"
+            )));
+        }
+    };
+    if let Err(e) = ar_result {
+        // "consumer dropped" is the canonical clean-stop path; any
+        // other candle error is real.
+        let msg = e.to_string();
+        if !msg.contains("stream consumer dropped") {
+            return Err(PipelineError::Llm(msg));
+        }
+    }
+    let _ = tokens_consumed; // diagnostic only; suppress unused-warn.
+
+    // 5. Flush any partial trailing batch. If `semantic_acc` has
+    //    leftover indices we haven't emitted yet, decode them as the
+    //    final chunk; otherwise emit a single empty `is_final = true`
+    //    terminator so consumers always observe the end-of-stream
+    //    marker.
+    if !global_locked {
+        return Err(PipelineError::UnexpectedGlobalCount {
+            expected: SPARK_GLOBAL_TOKEN_COUNT * SPARK_FSQ_NUM_QUANTIZERS,
+            token_num: SPARK_GLOBAL_TOKEN_COUNT,
+            quantizers: SPARK_FSQ_NUM_QUANTIZERS,
+            actual: global_acc.len(),
+        });
+    }
+    if semantic_emitted == 0 && semantic_acc.is_empty() {
+        return Err(PipelineError::Tokenizer(
+            "no semantic tokens emitted by the LLM".to_owned(),
+        ));
+    }
+    let tail = if semantic_acc.len() > semantic_emitted {
+        semantic_acc[semantic_emitted..].to_vec()
+    } else {
+        Vec::new()
+    };
+    if !tail.is_empty() {
+        match dispatch_chunk(&bicodec, &device, &tail, &global_acc, true).await {
+            Ok(c) => {
+                let _ = out.send(Ok(c)).await;
+            }
+            Err(e) => return Err(e),
+        }
+    } else if last_chunk_was_sent {
+        // Emit a final empty terminator so consumers observe
+        // is_final=true. Mirrors Bark's behaviour for empty trailing
+        // windows.
+        let _ = out
+            .send(Ok(StreamingAudioChunk {
+                samples: Vec::new(),
+                is_final: true,
+                latency_seconds: None,
+            }))
+            .await;
+    } else {
+        // Pathological: zero chunks ever emitted. Surface as an error
+        // rather than silently producing an empty stream.
+        return Err(PipelineError::Tokenizer(
+            "no semantic tokens emitted by the LLM".to_owned(),
+        ));
+    }
+
+    Ok(())
+}
+
+/// Dispatch one [`BiCodec::detokenize`] call for a single semantic
+/// chunk + the already-known global tokens. Returns a
+/// [`StreamingAudioChunk`] ready to forward downstream.
+async fn dispatch_chunk(
+    bicodec: &Arc<BiCodec>,
+    device: &Device,
+    semantic_batch: &[u32],
+    global_tokens: &[u32],
+    is_final: bool,
+) -> Result<StreamingAudioChunk, PipelineError> {
+    let t_sem = semantic_batch.len();
+    let semantic = Tensor::from_vec(semantic_batch.to_vec(), (1, t_sem), device)
+        .map_err(|e| PipelineError::BiCodec(format!("semantic tensor: {e}")))?;
+    let global = Tensor::from_vec(
+        global_tokens.to_vec(),
+        (1, SPARK_GLOBAL_TOKEN_COUNT, SPARK_FSQ_NUM_QUANTIZERS),
+        device,
+    )
+    .map_err(|e| PipelineError::BiCodec(format!("global tensor: {e}")))?;
+
+    let bicodec = Arc::clone(bicodec);
+    let wav_tensor = tokio::task::spawn_blocking(move || bicodec.detokenize(&semantic, &global))
+        .await
+        .map_err(|e| PipelineError::BiCodec(format!("detokenize join: {e}")))?
+        .map_err(|e| PipelineError::BiCodec(e.to_string()))?;
+    let pcm = wav_tensor
+        .flatten_all()
+        .and_then(|t| t.to_vec1::<f32>())
+        .map_err(|e| PipelineError::BiCodec(format!("flatten wav: {e}")))?;
+    Ok(StreamingAudioChunk {
+        samples: pcm,
+        is_final,
+        latency_seconds: None,
+    })
+}
+
+/// Bounded capacity for the AR-loop -> classifier channel. 64 tokens
+/// is ~1.3 s of audio worth of buffered ids (at the 50 Hz semantic
+/// rate) — plenty for the classifier to keep up with the AR loop on
+/// a CPU-only host without blocking the AR worker for long.
+const AR_TOKEN_CHANNEL_CAPACITY: usize = 64;
 
 /// Pack `f32` PCM in `[-1, 1]` into a 16-bit-PCM WAV byte vector
 /// (16 kHz, mono by default but `sample_rate` / `channels` are
@@ -461,6 +800,47 @@ mod tests {
     }
 
     #[test]
+    fn bicodec_stream_batch_yields_about_160ms_at_16khz() {
+        // 8 semantic tokens × 320× temporal upsample / 16 000 Hz ≈
+        // 0.16 s = 160 ms of audio per yielded chunk. Sanity check
+        // the per-chunk-batch geometry — see the
+        // `synthesize_pcm_stream` doc-comment for context.
+        let upsample = 320_u32; // BiCodec.upsample_rates = [8,5,4,2]
+        let chunk_samples = u32::try_from(BICODEC_STREAM_BATCH).unwrap() * upsample;
+        let chunk_seconds = f64::from(chunk_samples) / f64::from(SPARK_TTS_SAMPLE_RATE_HZ);
+        assert!(
+            (chunk_seconds - 0.16).abs() < 1e-9,
+            "expected ≈0.16 s per chunk; got {chunk_seconds}"
+        );
+        // Lock the batch constant against accidental churn — changing
+        // it without re-justifying the seam-artefact / latency
+        // trade-off documented on `synthesize_pcm_stream` would be a
+        // surprise.
+        assert_eq!(BICODEC_STREAM_BATCH, 8);
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn receiver_into_stream_terminates_on_sender_drop() {
+        use futures_util::StreamExt;
+        let (tx, rx) = mpsc::channel::<u32>(4);
+        drop(tx);
+        let mut s = receiver_into_stream(rx);
+        assert!(s.next().await.is_none(), "stream must end when tx drops");
+    }
+
+    #[tokio::test(flavor = "current_thread")]
+    async fn receiver_into_stream_forwards_items_in_order() {
+        use futures_util::StreamExt;
+        let (tx, rx) = mpsc::channel::<u32>(4);
+        tx.send(10).await.unwrap();
+        tx.send(20).await.unwrap();
+        tx.send(30).await.unwrap();
+        drop(tx);
+        let collected: Vec<u32> = receiver_into_stream(rx).collect().await;
+        assert_eq!(collected, vec![10, 20, 30]);
+    }
+
+    #[test]
     fn pcm_to_wav_emits_riff_wave_header_at_16khz_mono() {
         let pcm = vec![0.0_f32, 0.5, -0.5, 1.0, -1.0];
         let wav = pcm_to_wav(&pcm, SPARK_TTS_SAMPLE_RATE_HZ, 1);
@@ -521,6 +901,62 @@ mod tests {
             "WAV body must contain at least one non-silent sample"
         );
         // Side-channel sanity check on the backend id surface.
+        assert!(backend.id().starts_with("spark-tts:"));
+    }
+
+    /// End-to-end streaming variant — gated behind
+    /// `BLAZEN_TEST_SPARK_TTS=1`. Drives the streaming pipeline,
+    /// collects chunks, and asserts (a) at least one chunk arrived,
+    /// (b) exactly one chunk has `is_final = true`, and (c) the total
+    /// concatenated sample count is within ±25% of the non-streamed
+    /// `synthesize_pcm` length (the tail chunk's exact boundary
+    /// depends on where the LLM finishes emitting semantic tokens).
+    #[tokio::test]
+    #[ignore = "requires BLAZEN_TEST_SPARK_TTS=1 + downloads ~1.6 GB of Spark-TTS bytes from HF Hub"]
+    async fn synthesize_pcm_stream_matches_offline_length() {
+        use blazen_audio::AudioBackend;
+        use futures_util::StreamExt;
+
+        if std::env::var("BLAZEN_TEST_SPARK_TTS").ok().as_deref() != Some("1") {
+            eprintln!("skipping: BLAZEN_TEST_SPARK_TTS != 1");
+            return;
+        }
+
+        let backend = super::super::SparkTtsBackend::default();
+        // Force the lazy loader to materialise so we can call the
+        // pipeline directly.
+        let _ = crate::traits::TtsBackend::synthesize(
+            &backend,
+            "warmup",
+            &crate::TtsOptions::default(),
+        )
+        .await
+        .expect("warmup synthesise");
+        // Reach into the backend's lazy cell now that it's initialised.
+        let pipe = backend
+            .inner
+            .get()
+            .expect("pipeline initialised after warmup")
+            .clone();
+
+        let text = "Hello streaming world";
+        let offline_len = pipe.synthesize_pcm(text).await.expect("offline pcm").len();
+
+        let mut stream = pipe.synthesize_pcm_stream(text);
+        let mut chunks: Vec<StreamingAudioChunk> = Vec::new();
+        while let Some(item) = stream.next().await {
+            chunks.push(item.expect("chunk ok"));
+        }
+        assert!(!chunks.is_empty(), "stream must emit at least one chunk");
+        let finals = chunks.iter().filter(|c| c.is_final).count();
+        assert_eq!(finals, 1, "exactly one chunk must be marked final");
+        let total: usize = chunks.iter().map(|c| c.samples.len()).sum();
+        let lo = offline_len.saturating_sub(offline_len / 4);
+        let hi = offline_len + offline_len / 4;
+        assert!(
+            (lo..=hi).contains(&total),
+            "streaming total {total} should be within ±25% of offline {offline_len}"
+        );
         assert!(backend.id().starts_with("spark-tts:"));
     }
 }

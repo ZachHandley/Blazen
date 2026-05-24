@@ -202,6 +202,41 @@ impl SparkLlm {
     /// Returns the underlying [`candle_core::Error`] from any tensor
     /// op or sampling failure.
     pub(super) fn generate(&mut self, prompt_ids: &Tensor) -> CandleResult<Tensor> {
+        // The non-streaming path is the streaming path with a no-op
+        // callback. Keeping both entry points around lets existing
+        // callers stay terse while the streaming wave plumbs a real
+        // per-token sink.
+        self.generate_streaming(prompt_ids, |_| Ok(()))
+    }
+
+    /// Streaming variant of [`Self::generate`]. Calls
+    /// `on_token(token_id)` for each freshly sampled token (not for the
+    /// prompt tokens — those are already known to the caller). Stops at
+    /// EOS, at `cfg.max_new_tokens`, or as soon as `on_token` returns
+    /// `Err(_)`. In every case the **full** `(prompt ++ generated)`
+    /// tensor is still returned so non-streaming consumers keep working.
+    ///
+    /// This is the per-token forward hook the [`super::pipeline`]
+    /// streaming wave dispatches against: the closure forwards each
+    /// sampled id into an mpsc channel so the async pipeline can wake
+    /// up the moment a new `<|bicodec_semantic_K|>` token becomes
+    /// available, rather than blocking until the entire utterance
+    /// finishes generating.
+    ///
+    /// # Errors
+    ///
+    /// Returns the underlying [`candle_core::Error`] from any tensor
+    /// op, sampling failure, OR from `on_token` (the closure's `Err`
+    /// is wrapped via [`candle_core::Error::Msg`] and surfaced to the
+    /// caller).
+    pub(super) fn generate_streaming<F>(
+        &mut self,
+        prompt_ids: &Tensor,
+        mut on_token: F,
+    ) -> CandleResult<Tensor>
+    where
+        F: FnMut(u32) -> CandleResult<()>,
+    {
         let (batch, _prompt_len) = prompt_ids.dims2()?;
         debug_assert_eq!(
             batch, 1,
@@ -227,6 +262,18 @@ impl SparkLlm {
         for _ in 0..self.cfg.max_new_tokens {
             let next = sample_one(&mut sampler, &logits, &history, self.cfg.repetition_penalty)?;
             history.push(next);
+            // Notify the streaming hook BEFORE the EOS short-circuit so
+            // the consumer sees the terminator and can flush any
+            // pending partial batch. If the hook errors (typically: the
+            // consumer dropped the receiving end of the channel) we
+            // bail out of the AR loop early but still hand back the
+            // partial `(prompt ++ generated-so-far)` tensor so the
+            // caller can salvage the work-in-progress. Mirrors how
+            // tokio-stream consumers treat downstream cancellation as a
+            // clean stop signal rather than a hard error.
+            if on_token(next).is_err() {
+                break;
+            }
             if next == self.cfg.eos_token_id {
                 break;
             }

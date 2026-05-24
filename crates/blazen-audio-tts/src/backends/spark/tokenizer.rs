@@ -208,6 +208,24 @@ impl SparkTokenizer {
         parse_generation_str(&decoded)
     }
 
+    /// Decode a single token id back to its text form with special
+    /// tokens preserved (so `<|bicodec_semantic_K|>` markers survive
+    /// the round-trip).
+    ///
+    /// Used by the streaming pipeline ([`super::pipeline`]) to extend a
+    /// rolling text buffer one token at a time as the LLM emits them,
+    /// rather than re-decoding the entire history every chunk-boundary.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`TokenizerError::InvalidGeneration`] when the
+    /// underlying [`tokenizers::Tokenizer::decode`] fails.
+    pub(super) fn decode_single(&self, id: u32) -> Result<String, TokenizerError> {
+        self.inner
+            .decode(&[id], false)
+            .map_err(|e| TokenizerError::InvalidGeneration(e.to_string()))
+    }
+
     fn encode(&self, prompt_text: &str) -> Result<Vec<u32>, TokenizerError> {
         let encoding = self
             .inner
