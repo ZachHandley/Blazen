@@ -90,7 +90,7 @@ audio-stt-faster-whisper = ["audio-stt", "blazen-audio-stt/faster-whisper"]
 # Music / SFX bridge surface (DynMusicProvider impl of AudioGeneration).
 audio-music        = ["dep:blazen-audio", "dep:blazen-audio-music"]
 audio-music-musicgen = ["audio-music", "blazen-audio-music/musicgen"]
-audio-music-audiogen = ["audio-music"]
+audio-music-audiogen = ["audio-music", "blazen-audio-music/audiogen"]
 audio-music-stable-audio = ["audio-music", "blazen-audio-music/stable-audio"]
 
 # Neural audio codec bridge surface (DynCodecProvider impl of Codec).
