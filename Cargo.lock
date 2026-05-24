@@ -860,6 +860,7 @@ dependencies = [
  "futures-util",
  "hf-hub 0.5.0",
  "mockito",
+ "regex",
  "reqwest 0.13.3",
  "rustfft",
  "serde",
