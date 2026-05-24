@@ -80,7 +80,10 @@ f5-tts = [
 # audio codec + Qwen2.5-0.5B autoregressive decoder for zero-shot
 # voice-cloning text-to-speech. Upstream code is Apache-2.0; the
 # published weights ship under CC-BY-NC-SA-4.0.
-spark-tts = []
+spark-tts = [
+    "dep:candle-core",
+    "dep:candle-nn",
+]
 
 [lints]
 workspace = true
