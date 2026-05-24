@@ -42,10 +42,13 @@ mod pipeline;
 mod tokenizer;
 mod weights;
 
+use std::pin::Pin;
+
 use async_trait::async_trait;
 use blazen_audio::{AudioBackend, CloneVoiceRequest, GeneratedAudio, VoiceHandle};
+use futures_core::Stream;
 
-use crate::traits::TtsBackend;
+use crate::traits::{StreamingAudioChunk, TtsBackend};
 use crate::{TtsError, TtsOptions};
 
 /// Stable backend-id prefix surfaced via [`AudioBackend::id`].
@@ -148,6 +151,18 @@ impl TtsBackend for SparkTtsBackend {
             "Spark-TTS Wave S.1 scaffolding — Wave S.2 lands BiCodec + Qwen2.5 decoder".into(),
         ))
     }
+
+    async fn stream_synthesize(
+        &self,
+        _text: &str,
+        _voice: Option<&str>,
+        _options: TtsOptions,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamingAudioChunk, TtsError>> + Send>>, TtsError>
+    {
+        Err(TtsError::Unsupported(
+            "Spark-TTS Wave S.2 scaffolding — stream_synthesize will land once BiCodec + Qwen2.5 decoder ship".into(),
+        ))
+    }
 }
 
 #[cfg(test)]
@@ -187,6 +202,22 @@ mod tests {
                 assert!(msg.contains("BiCodec"), "msg = {msg}");
             }
             other => panic!("expected Unsupported, got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn stream_synthesize_returns_clear_pending_error() {
+        let backend = SparkTtsBackend::default();
+        let result = backend
+            .stream_synthesize("hello", None, TtsOptions::default())
+            .await;
+        match result {
+            Err(TtsError::Unsupported(msg)) => {
+                assert!(msg.contains("Wave S.2"), "msg = {msg}");
+                assert!(msg.contains("BiCodec"), "msg = {msg}");
+            }
+            Err(other) => panic!("expected Unsupported, got {other:?}"),
+            Ok(_) => panic!("scaffold must surface Unsupported"),
         }
     }
 
