@@ -26,6 +26,7 @@
 #![cfg(feature = "audiogen")]
 
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -33,12 +34,14 @@ use blazen_audio::{AudioBackend, AudioError, AudioFormat, GeneratedAudio};
 use candle_core::{DType, Device, Tensor};
 use candle_nn::VarBuilder;
 use candle_transformers::models::{encodec, t5};
+use futures_core::Stream;
 use serde::{Deserialize, Serialize};
 use tokenizers::Tokenizer;
-use tokio::sync::OnceCell;
+use tokio::sync::{OnceCell, mpsc};
+use tokio_stream::wrappers::ReceiverStream;
 
 use crate::error::MusicError;
-use crate::traits::MusicBackend;
+use crate::traits::{MusicBackend, MusicChunk};
 
 use super::musicgen::generation::{self, GenerationParams};
 use super::musicgen::model::{
@@ -54,6 +57,16 @@ pub const AUDIOGEN_SAMPLE_RATE: u32 = 16_000;
 
 /// EnCodec frame rate used by AudioGen (50 Hz, matches MusicGen).
 pub const AUDIOGEN_FRAME_RATE: u32 = 50;
+
+/// Number of EnCodec frames per streamed `MusicChunk`. 25 frames at the
+/// 50 Hz AudioGen frame rate = 500 ms of audio per chunk. At 16 kHz
+/// that's 8 000 f32 samples per chunk. Mirrors the MusicGen constant
+/// (same 25-frame budget; different sample rate).
+const STREAM_CHUNK_FRAMES: usize = 25;
+
+/// Bounded back-pressure on the streaming channel — 4 chunks ≈ 2 s of
+/// audio buffered between the blocking decoder worker and the consumer.
+const STREAM_CHANNEL_CAPACITY: usize = 4;
 
 /// Configuration for an [`AudioGenBackend`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -318,38 +331,16 @@ impl AudioGenBackend {
     ) -> Result<GeneratedAudio, MusicError> {
         self.validate_inputs(prompt, duration_seconds)?;
         let loaded = self.ensure_loaded().await?;
-        let frame_rate = f32::from(u16::try_from(AUDIOGEN_FRAME_RATE).unwrap_or(50));
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let target_frames = (duration_seconds * frame_rate).ceil() as usize;
-        let num_codebooks = {
-            let m = loaded.model.lock().await;
-            m.decoder.num_codebooks()
-        };
-        let max_steps = target_frames + num_codebooks.saturating_sub(1);
-
-        let encoded = loaded
-            .tokenizer
-            .encode(prompt, true)
-            .map_err(|e| MusicError::other(format!("tokenizer encode failed: {e}")))?;
-        let ids: Vec<u32> = encoded.get_ids().to_vec();
-        if ids.is_empty() {
-            return Err(MusicError::invalid_input(
-                "tokenizer returned 0 ids for prompt",
-            ));
-        }
-        let ids_len = ids.len();
-        let prompt_tokens = Tensor::from_vec(ids, (1, ids_len), &loaded.device)?;
-
-        let params = GenerationParams {
-            max_steps,
-            ..GenerationParams::default()
-        };
 
         let pcm = {
             let mut model = loaded.model.lock().await;
-            let tokens =
-                generation::generate_tokens(&mut model, &prompt_tokens, &params, &loaded.device)?;
-            decode_to_pcm(&model, &tokens, &loaded.device)?
+            run_pipeline_pcm(
+                &mut model,
+                &loaded.tokenizer,
+                &loaded.device,
+                prompt,
+                duration_seconds,
+            )?
         };
 
         let wav_bytes = pcm_to_wav(&pcm, AUDIOGEN_SAMPLE_RATE, 1);
@@ -363,6 +354,136 @@ impl AudioGenBackend {
             duration_seconds: Some(duration),
         })
     }
+
+    /// Shared streaming entry point used by both `stream_generate_music`
+    /// and `stream_generate_sfx`. AudioGen treats SFX and music as the
+    /// same autoregressive pipeline; only the prompt distinguishes them.
+    ///
+    /// Validates inputs and `ensure_loaded()` synchronously so weight
+    /// fetch / tokenizer load failures surface as a real `Err` instead of
+    /// the first stream item. Once loaded, spawns the AR loop +
+    /// EnCodec decode on a `spawn_blocking` worker and returns a
+    /// `ReceiverStream` whose items are `MusicChunk`s of
+    /// `STREAM_CHUNK_FRAMES * (AUDIOGEN_SAMPLE_RATE / AUDIOGEN_FRAME_RATE)`
+    /// samples each (= 8 000 samples at 16 kHz / 50 Hz).
+    async fn stream_generate(
+        &self,
+        prompt: &str,
+        duration_seconds: f32,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<MusicChunk, MusicError>> + Send>>, MusicError>
+    {
+        self.validate_inputs(prompt, duration_seconds)?;
+        self.ensure_loaded().await?;
+
+        // Snapshot everything the blocking worker needs. The Arc keeps
+        // the Loaded handle alive even if the caller drops the backend
+        // while the stream is in flight.
+        let loaded_arc = Arc::clone(&self.loaded);
+        let prompt = prompt.to_string();
+        let sample_rate = AUDIOGEN_SAMPLE_RATE as usize;
+        let frame_rate = AUDIOGEN_FRAME_RATE as usize;
+        let samples_per_chunk = STREAM_CHUNK_FRAMES * (sample_rate / frame_rate);
+
+        let (tx, rx) = mpsc::channel::<Result<MusicChunk, MusicError>>(STREAM_CHANNEL_CAPACITY);
+
+        tokio::task::spawn_blocking(move || {
+            // `ensure_loaded` was awaited above, so `.get()` is `Some`.
+            let Some(loaded) = loaded_arc.get() else {
+                let _ = tx.blocking_send(Err(MusicError::other(
+                    "audiogen backend not loaded (internal invariant violated)",
+                )));
+                return;
+            };
+
+            // `tokio::sync::Mutex::blocking_lock` is the supported way
+            // to acquire a tokio mutex from a `spawn_blocking` worker.
+            let mut model = loaded.model.blocking_lock();
+            let pcm = match run_pipeline_pcm(
+                &mut model,
+                &loaded.tokenizer,
+                &loaded.device,
+                &prompt,
+                duration_seconds,
+            ) {
+                Ok(pcm) => pcm,
+                Err(e) => {
+                    // Send the error and stop — do NOT emit a trailing
+                    // `is_final` chunk after an error.
+                    let _ = tx.blocking_send(Err(e));
+                    return;
+                }
+            };
+
+            // Per-N-frames EnCodec decode would introduce CNN-seam
+            // clicks; the candle EnCodec impl does not expose
+            // streaming-friendly decode state. Single full decode +
+            // post-hoc PCM slice trades first-chunk latency
+            // (≈ full-track gen time) for clean audio across chunk
+            // boundaries.
+            let n_chunks = pcm.len().div_ceil(samples_per_chunk).max(1);
+            for (idx, chunk) in pcm.chunks(samples_per_chunk).enumerate() {
+                let item = MusicChunk {
+                    samples: chunk.to_vec(),
+                    is_final: idx + 1 == n_chunks,
+                    latency_seconds: None,
+                };
+                if tx.blocking_send(Ok(item)).is_err() {
+                    // Consumer dropped — silently abort.
+                    return;
+                }
+            }
+        });
+
+        Ok(Box::pin(ReceiverStream::new(rx)))
+    }
+}
+
+/// Run the validate-and-tokenize-aware portion of the AudioGen pipeline
+/// (T5 encoder → decoder AR loop → EnCodec decode) and return the raw
+/// mono f32 PCM at AudioGen's native 16 kHz sample rate.
+///
+/// Extracted out of `AudioGenBackend::generate` so the streaming path
+/// (`AudioGenBackend::stream_generate`) can reuse the exact same
+/// pipeline from a `spawn_blocking` worker without duplicating logic.
+/// Takes the model by `&mut` because
+/// `MusicgenForConditionalGeneration` owns mutable sinusoidal
+/// embedding state.
+///
+/// # Errors
+///
+/// Propagates tokenizer / decoder / EnCodec errors as [`MusicError`].
+fn run_pipeline_pcm(
+    model: &mut MusicgenForConditionalGeneration,
+    tokenizer: &Tokenizer,
+    device: &Device,
+    prompt: &str,
+    duration_seconds: f32,
+) -> Result<Vec<f32>, MusicError> {
+    let frame_rate = f32::from(u16::try_from(AUDIOGEN_FRAME_RATE).unwrap_or(50));
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let target_frames = (duration_seconds * frame_rate).ceil() as usize;
+    let num_codebooks = model.decoder.num_codebooks();
+    let max_steps = target_frames + num_codebooks.saturating_sub(1);
+
+    let encoded = tokenizer
+        .encode(prompt, true)
+        .map_err(|e| MusicError::other(format!("tokenizer encode failed: {e}")))?;
+    let ids: Vec<u32> = encoded.get_ids().to_vec();
+    if ids.is_empty() {
+        return Err(MusicError::invalid_input(
+            "tokenizer returned 0 ids for prompt",
+        ));
+    }
+    let ids_len = ids.len();
+    let prompt_tokens = Tensor::from_vec(ids, (1, ids_len), device)?;
+
+    let params = GenerationParams {
+        max_steps,
+        ..GenerationParams::default()
+    };
+
+    let tokens = generation::generate_tokens(model, &prompt_tokens, &params, device)?;
+    decode_to_pcm(model, &tokens, device)
 }
 
 // ---------------------------------------------------------------------------
@@ -411,6 +532,25 @@ impl MusicBackend for AudioGenBackend {
         duration_seconds: f32,
     ) -> Result<GeneratedAudio, MusicError> {
         self.generate(prompt, duration_seconds).await
+    }
+
+    async fn stream_generate_music(
+        &self,
+        prompt: &str,
+        duration_seconds: f32,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<MusicChunk, MusicError>> + Send>>, MusicError>
+    {
+        self.stream_generate(prompt, duration_seconds).await
+    }
+
+    async fn stream_generate_sfx(
+        &self,
+        prompt: &str,
+        duration_seconds: f32,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<MusicChunk, MusicError>> + Send>>, MusicError>
+    {
+        // AudioGen treats music and SFX as the same autoregressive pipeline.
+        self.stream_generate(prompt, duration_seconds).await
     }
 }
 
@@ -539,6 +679,72 @@ mod tests {
         assert!(matches!(err, MusicError::InvalidInput(_)));
     }
 
+    #[tokio::test]
+    async fn rejects_empty_prompt_streaming() {
+        let b = AudioGenBackend::default();
+        // The Ok variant is a `Pin<Box<dyn Stream>>` which is not `Debug`,
+        // so destructure the `Err` directly instead of `unwrap_err`.
+        let Err(err) = b.stream_generate_music("   ", 1.0).await else {
+            panic!("expected InvalidInput for empty prompt");
+        };
+        match err {
+            MusicError::InvalidInput(m) => assert!(m.contains("empty")),
+            other => panic!("expected InvalidInput got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn rejects_duration_over_hard_limit_streaming() {
+        let b = AudioGenBackend::new(AudioGenConfig {
+            max_duration_seconds: 120.0,
+            ..AudioGenConfig::default()
+        });
+        let Err(err) = b.stream_generate_music("rain", 61.0).await else {
+            panic!("expected InvalidInput for over-hard-limit duration");
+        };
+        match err {
+            MusicError::InvalidInput(m) => {
+                assert!(m.contains("max 60s for AudioGen"));
+            }
+            other => panic!("expected InvalidInput got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn rejects_duration_over_configured_cap_streaming() {
+        let b = AudioGenBackend::new(AudioGenConfig {
+            max_duration_seconds: 3.0,
+            ..AudioGenConfig::default()
+        });
+        let Err(err) = b.stream_generate_sfx("dog barking", 10.0).await else {
+            panic!("expected InvalidInput for over-configured-cap duration");
+        };
+        match err {
+            MusicError::InvalidInput(m) => assert!(m.contains("exceeds configured cap")),
+            other => panic!("expected InvalidInput got {other:?}"),
+        }
+    }
+
+    #[tokio::test]
+    async fn stream_generate_sfx_shares_pipeline() {
+        // SFX and music streaming share validation + dispatch — empty
+        // prompt must surface as `InvalidInput` synchronously.
+        let b = AudioGenBackend::default();
+        let Err(err) = b.stream_generate_sfx("", 1.0).await else {
+            panic!("expected InvalidInput for empty prompt");
+        };
+        assert!(matches!(err, MusicError::InvalidInput(_)));
+    }
+
+    #[test]
+    fn stream_chunk_frames_constants_match_500ms_at_16khz() {
+        assert_eq!(
+            STREAM_CHUNK_FRAMES * (AUDIOGEN_SAMPLE_RATE as usize / AUDIOGEN_FRAME_RATE as usize),
+            8_000,
+        );
+        assert_eq!(STREAM_CHANNEL_CAPACITY, 4);
+    }
+
     #[cfg(feature = "live-models")]
     #[tokio::test]
     async fn generates_two_seconds_of_sfx() {
@@ -627,5 +833,84 @@ mod tests {
             sample_count.abs_diff(expected_samples) <= sample_tol,
             "sample_count {sample_count} should be within \u{00b1}{sample_tol} of {expected_samples}"
         );
+    }
+
+    // Live-models streaming test: drives the real
+    // `facebook/audiogen-medium` checkpoint via `stream_generate_sfx`,
+    // collects all chunks, and asserts the expected emission shape
+    // (≥ 1 chunk, exactly one final flag at the end, total length within
+    // ±50% of 2 s @ 16 kHz, all samples finite, intermediate chunks at
+    // the exact 500 ms / 8 000-sample boundary). Skip transparently on
+    // weight-fetch / candle-load failure for the same offline / no-auth
+    // / state_dict-only reasons as the non-streaming sibling test.
+    #[cfg(feature = "live-models")]
+    #[tokio::test]
+    async fn streams_two_seconds_of_sfx_with_final_flag() {
+        use futures_util::StreamExt;
+
+        let b = AudioGenBackend::new(AudioGenConfig {
+            max_duration_seconds: 5.0,
+            ..AudioGenConfig::default()
+        });
+        if let Err(e) = b.load().await {
+            eprintln!("live-models streaming test skipped: load failed: {e}");
+            return;
+        }
+        let stream = match b.stream_generate_sfx("dog barking", 2.0).await {
+            Ok(s) => s,
+            Err(MusicError::HfHub { repo, source }) => {
+                eprintln!(
+                    "live-models streaming test skipped: HF fetch failed for {repo}: {source}",
+                );
+                return;
+            }
+            Err(MusicError::Candle(msg)) => {
+                eprintln!("live-models streaming test skipped: candle load failed: {msg}");
+                return;
+            }
+            Err(other) => panic!("unexpected failure: {other}"),
+        };
+
+        let items: Vec<Result<MusicChunk, MusicError>> = stream.collect().await;
+        let chunks: Vec<MusicChunk> = items
+            .into_iter()
+            .map(|r| r.expect("stream item is Err"))
+            .collect();
+
+        assert!(!chunks.is_empty(), "expected at least one streamed chunk");
+
+        let final_count = chunks.iter().filter(|c| c.is_final).count();
+        assert_eq!(final_count, 1, "expected exactly one is_final chunk");
+        assert!(
+            chunks.last().expect("at least one chunk").is_final,
+            "the final-flagged chunk must be the last one",
+        );
+
+        let total_samples: usize = chunks.iter().map(|c| c.samples.len()).sum();
+        let expected: usize = 2 * AUDIOGEN_SAMPLE_RATE as usize;
+        let low = expected / 2;
+        let high = expected * 3 / 2;
+        assert!(
+            (low..=high).contains(&total_samples),
+            "total streamed samples {total_samples} outside [{low}, {high}] for 2s @ 16 kHz",
+        );
+
+        for chunk in &chunks {
+            for &s in &chunk.samples {
+                assert!(s.is_finite(), "streamed sample must be finite, got {s}");
+            }
+        }
+
+        // Intermediate (non-final) chunks must be exactly one
+        // STREAM_CHUNK_FRAMES window: 500 ms @ 16 kHz = 8 000 samples.
+        let per_chunk =
+            STREAM_CHUNK_FRAMES * (AUDIOGEN_SAMPLE_RATE as usize / AUDIOGEN_FRAME_RATE as usize);
+        for chunk in chunks.iter().filter(|c| !c.is_final) {
+            assert_eq!(
+                chunk.samples.len(),
+                per_chunk,
+                "non-final chunk must be exactly {per_chunk} samples",
+            );
+        }
     }
 }
