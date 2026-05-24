@@ -22,3 +22,12 @@
               public surface in the meantime."
 )]
 pub(super) mod primitives;
+
+#[allow(
+    dead_code,
+    reason = "Vocos backbone (S.2.1.b) is consumed by the Encoder, prenet, \
+              and postnet trunks in the S.2.1.{d..g} sub-waves. The unit \
+              tests in vocos.rs exercise the public surface in the \
+              meantime."
+)]
+pub(super) mod vocos;
