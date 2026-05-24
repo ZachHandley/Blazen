@@ -24,6 +24,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 tokenizers = { workspace = true, optional = true }
 tokio.workspace = true
+tokio-stream = { version = "0.1.18", default-features = false, features = ["sync"] }
 tracing.workspace = true
 
 [lints]

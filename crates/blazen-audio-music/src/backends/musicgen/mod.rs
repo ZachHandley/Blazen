@@ -31,6 +31,7 @@ pub mod model;
 pub mod sampler;
 
 use std::path::PathBuf;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use async_trait::async_trait;
@@ -38,15 +39,28 @@ use blazen_audio::{AudioBackend, AudioError, AudioFormat, GeneratedAudio};
 use blazen_audio_codec::backends::encodec::{EncodecBackend, EncodecConfig};
 use candle_core::{DType, Device, IndexOp, Tensor};
 use candle_nn::VarBuilder;
+use futures_core::Stream;
 use serde::{Deserialize, Serialize};
 use tokenizers::Tokenizer;
-use tokio::sync::OnceCell;
+use tokio::sync::{OnceCell, mpsc};
+use tokio_stream::wrappers::ReceiverStream;
 
 use crate::error::MusicError;
-use crate::traits::MusicBackend;
+use crate::traits::{MusicBackend, MusicChunk};
 
 use generation::GenerationParams;
 use model::{GenConfig, MusicgenForConditionalGeneration};
+
+/// Number of EnCodec frames to bundle into a single streamed `MusicChunk`.
+///
+/// EnCodec runs at 50 Hz, so 25 frames = 500 ms of audio per chunk. At
+/// MusicGen's 32 kHz native rate that's 16 000 f32 samples per chunk.
+const STREAM_CHUNK_FRAMES: usize = 25;
+
+/// Bounded back-pressure on the streaming channel — `4 * 500 ms` keeps
+/// at most ≈ 2 s of audio buffered between the producer (decoder) and
+/// consumer (downstream playback / encoder).
+const STREAM_CHANNEL_CAPACITY: usize = 4;
 
 // ---------------------------------------------------------------------------
 // Config types
@@ -303,50 +317,16 @@ impl MusicgenBackend {
     ) -> Result<GeneratedAudio, MusicError> {
         self.validate_inputs(prompt, duration_seconds)?;
         let loaded = self.ensure_loaded().await?;
-        let frame_rate = f32::from(u16::try_from(self.config.variant.frame_rate()).unwrap_or(50));
-        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-        let target_frames = (duration_seconds * frame_rate).ceil() as usize;
-        let num_codebooks = {
-            let m = loaded.model.lock().await;
-            m.decoder.num_codebooks()
-        };
-        let max_steps = target_frames + num_codebooks.saturating_sub(1);
-
-        // Tokenize prompt.
-        let encoded = loaded
-            .tokenizer
-            .encode(prompt, true)
-            .map_err(|e| MusicError::other(format!("tokenizer encode failed: {e}")))?;
-        let ids: Vec<u32> = encoded.get_ids().to_vec();
-        if ids.is_empty() {
-            return Err(MusicError::invalid_input(
-                "tokenizer returned 0 ids for prompt",
-            ));
-        }
-        let ids_len = ids.len();
-        let prompt_tokens = Tensor::from_vec(ids, (1, ids_len), &loaded.device)?;
-
-        let params = GenerationParams {
-            max_steps,
-            ..GenerationParams::default()
-        };
-
-        // Run the autoregressive loop + decode through EnCodec, on a
-        // blocking thread so the candle tensor ops don't stall the
-        // async runtime.
         let pcm = {
             let mut model = loaded.model.lock().await;
-            // We do all the heavy lifting inside the locked critical
-            // section because MusicgenForConditionalGeneration owns
-            // mutable sinusoidal embedding state. The lock + the
-            // `spawn_blocking` are mutually-exclusive only because we
-            // hold the lock first; the actual compute still runs on
-            // the current task -- candle's CPU ops are blocking-ish
-            // either way. (Using `spawn_blocking` here would force a
-            // `&'static mut` from `model`, which we cannot give.)
-            let tokens =
-                generation::generate_tokens(&mut model, &prompt_tokens, &params, &loaded.device)?;
-            decode_to_pcm(&model, &tokens, &loaded.device)?
+            run_pipeline_pcm(
+                &mut model,
+                &loaded.tokenizer,
+                &loaded.device,
+                self.config.variant,
+                prompt,
+                duration_seconds,
+            )?
         };
 
         let wav_bytes = pcm_to_wav(&pcm, self.config.variant.sample_rate(), 1);
@@ -360,12 +340,145 @@ impl MusicgenBackend {
             duration_seconds: Some(duration),
         })
     }
+
+    /// Shared streaming entry point used by both `stream_generate_music`
+    /// and `stream_generate_sfx` (MusicGen treats SFX and music as the
+    /// same pipeline — only the prompt differs).
+    ///
+    /// Validates inputs and `ensure_loaded()` synchronously so weight
+    /// fetch / tokenizer load failures surface as a real `Err` instead of
+    /// the first stream item. Once loaded, spawns the AR loop +
+    /// EnCodec decode on a `spawn_blocking` worker and returns a
+    /// `ReceiverStream` whose items are `MusicChunk`s of
+    /// `STREAM_CHUNK_FRAMES * (sample_rate / frame_rate)` samples each.
+    async fn stream_generate(
+        &self,
+        prompt: &str,
+        duration_seconds: f32,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<MusicChunk, MusicError>> + Send>>, MusicError>
+    {
+        self.validate_inputs(prompt, duration_seconds)?;
+        self.ensure_loaded().await?;
+
+        // Snapshot everything the blocking worker needs. The Arc keeps
+        // the Loaded handle alive even if the caller drops the backend
+        // while the stream is in flight.
+        let loaded_arc = Arc::clone(&self.loaded);
+        let variant = self.config.variant;
+        let prompt = prompt.to_string();
+        let sample_rate = variant.sample_rate() as usize;
+        let frame_rate = variant.frame_rate() as usize;
+        let samples_per_chunk = STREAM_CHUNK_FRAMES * (sample_rate / frame_rate);
+
+        let (tx, rx) = mpsc::channel::<Result<MusicChunk, MusicError>>(STREAM_CHANNEL_CAPACITY);
+
+        tokio::task::spawn_blocking(move || {
+            // `ensure_loaded` was awaited above, so `.get()` is `Some`.
+            let Some(loaded) = loaded_arc.get() else {
+                let _ = tx.blocking_send(Err(MusicError::other(
+                    "musicgen backend not loaded (internal invariant violated)",
+                )));
+                return;
+            };
+
+            // `tokio::sync::Mutex::blocking_lock` is the supported way
+            // to acquire a tokio mutex from a `spawn_blocking` worker.
+            let mut model = loaded.model.blocking_lock();
+            let pcm = match run_pipeline_pcm(
+                &mut model,
+                &loaded.tokenizer,
+                &loaded.device,
+                variant,
+                &prompt,
+                duration_seconds,
+            ) {
+                Ok(pcm) => pcm,
+                Err(e) => {
+                    // Send the error and stop — do NOT emit a trailing
+                    // `is_final` chunk after an error.
+                    let _ = tx.blocking_send(Err(e));
+                    return;
+                }
+            };
+
+            // Per-N-frames EnCodec decode would introduce CNN-seam
+            // clicks; the candle EnCodec impl does not expose
+            // streaming-friendly decode state. Single full decode +
+            // post-hoc PCM slice trades first-chunk latency
+            // (≈ full-track gen time) for clean audio across chunk
+            // boundaries.
+            let n_chunks = pcm.len().div_ceil(samples_per_chunk).max(1);
+            for (idx, chunk) in pcm.chunks(samples_per_chunk).enumerate() {
+                let item = MusicChunk {
+                    samples: chunk.to_vec(),
+                    is_final: idx + 1 == n_chunks,
+                    latency_seconds: None,
+                };
+                if tx.blocking_send(Ok(item)).is_err() {
+                    // Consumer dropped — silently abort.
+                    return;
+                }
+            }
+        });
+
+        Ok(Box::pin(ReceiverStream::new(rx)))
+    }
 }
 
 impl Default for MusicgenBackend {
     fn default() -> Self {
         Self::new(MusicgenConfig::default())
     }
+}
+
+/// Run the validate-and-tokenize-aware portion of the MusicGen pipeline
+/// (T5 encoder → decoder AR loop → EnCodec decode) and return the raw
+/// mono f32 PCM at the variant's native sample rate.
+///
+/// Extracted out of `MusicgenBackend::generate` so the streaming path
+/// (`MusicgenBackend::stream_generate`) can reuse the exact same
+/// pipeline from a `spawn_blocking` worker without duplicating logic.
+/// Takes the model by `&mut` because
+/// `MusicgenForConditionalGeneration` owns mutable sinusoidal
+/// embedding state.
+///
+/// # Errors
+///
+/// Propagates tokenizer / decoder / EnCodec errors as [`MusicError`].
+fn run_pipeline_pcm(
+    model: &mut MusicgenForConditionalGeneration,
+    tokenizer: &Tokenizer,
+    device: &Device,
+    variant: MusicgenVariant,
+    prompt: &str,
+    duration_seconds: f32,
+) -> Result<Vec<f32>, MusicError> {
+    let frame_rate = f32::from(u16::try_from(variant.frame_rate()).unwrap_or(50));
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let target_frames = (duration_seconds * frame_rate).ceil() as usize;
+    let num_codebooks = model.decoder.num_codebooks();
+    let max_steps = target_frames + num_codebooks.saturating_sub(1);
+
+    // Tokenize prompt.
+    let encoded = tokenizer
+        .encode(prompt, true)
+        .map_err(|e| MusicError::other(format!("tokenizer encode failed: {e}")))?;
+    let ids: Vec<u32> = encoded.get_ids().to_vec();
+    if ids.is_empty() {
+        return Err(MusicError::invalid_input(
+            "tokenizer returned 0 ids for prompt",
+        ));
+    }
+    let ids_len = ids.len();
+    let prompt_tokens = Tensor::from_vec(ids, (1, ids_len), device)?;
+
+    let params = GenerationParams {
+        max_steps,
+        ..GenerationParams::default()
+    };
+
+    let tokens = generation::generate_tokens(model, &prompt_tokens, &params, device)?;
+    decode_to_pcm(model, &tokens, device)
 }
 
 // ---------------------------------------------------------------------------
@@ -481,6 +594,26 @@ impl MusicBackend for MusicgenBackend {
         // is the same, only the prompt changes.
         self.generate(prompt, duration_seconds).await
     }
+
+    async fn stream_generate_music(
+        &self,
+        prompt: &str,
+        duration_seconds: f32,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<MusicChunk, MusicError>> + Send>>, MusicError>
+    {
+        self.stream_generate(prompt, duration_seconds).await
+    }
+
+    async fn stream_generate_sfx(
+        &self,
+        prompt: &str,
+        duration_seconds: f32,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<MusicChunk, MusicError>> + Send>>, MusicError>
+    {
+        // MusicGen treats SFX and music as the same pipeline — same as
+        // `generate_sfx`.
+        self.stream_generate(prompt, duration_seconds).await
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -593,6 +726,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn rejects_empty_prompt_streaming() {
+        let b = MusicgenBackend::default();
+        let Err(err) = b.stream_generate_music("   ", 1.0).await else {
+            panic!("expected Err for empty prompt");
+        };
+        assert!(matches!(err, MusicError::InvalidInput(_)));
+    }
+
+    #[tokio::test]
+    async fn rejects_duration_over_hard_limit_streaming() {
+        let b = MusicgenBackend::default();
+        let Err(err) = b.stream_generate_music("lofi piano", 61.0).await else {
+            panic!("expected Err for over-limit duration");
+        };
+        assert!(matches!(err, MusicError::InvalidInput(_)));
+    }
+
+    #[tokio::test]
+    async fn stream_generate_sfx_uses_same_pipeline() {
+        let b = MusicgenBackend::default();
+        let Err(err) = b.stream_generate_sfx("", 1.0).await else {
+            panic!("expected Err for empty sfx prompt");
+        };
+        assert!(matches!(err, MusicError::InvalidInput(_)));
+    }
+
+    #[tokio::test]
     async fn rejects_duration_over_configured_cap() {
         let b = MusicgenBackend::new(MusicgenConfig {
             max_duration_seconds: 5.0,
@@ -677,5 +837,71 @@ mod tests {
             (0.5..=4.0).contains(&dur),
             "duration {dur}s outside tolerant 2s window",
         );
+    }
+
+    // Live-models streaming test: drives the real
+    // `facebook/musicgen-small` checkpoint via `stream_generate_music`,
+    // collects all chunks, and asserts the expected emission shape
+    // (≥ 1 chunk, exactly one final flag at the end, total length
+    // within ±50% of 2 s @ 32 kHz, all samples finite). Gated alongside
+    // the non-streaming live test for the same weight-fetch reasons.
+    #[cfg(feature = "live-models")]
+    #[tokio::test]
+    async fn streams_two_seconds_of_lofi_with_final_flag() {
+        use futures_util::StreamExt;
+
+        let backend = MusicgenBackend::new(MusicgenConfig {
+            max_duration_seconds: 5.0,
+            ..MusicgenConfig::default()
+        });
+
+        if let Err(e) = backend.load().await {
+            eprintln!("live-models streaming test skipped: load() failed: {e}");
+            return;
+        }
+
+        let stream = match backend
+            .stream_generate_music("lo-fi hip hop beat", 2.0)
+            .await
+        {
+            Ok(s) => s,
+            Err(MusicError::HfHub { repo, source }) => {
+                eprintln!(
+                    "live-models streaming test skipped: HF fetch failed for {repo}: {source}",
+                );
+                return;
+            }
+            Err(other) => panic!("unexpected failure: {other}"),
+        };
+
+        let items: Vec<Result<MusicChunk, MusicError>> = stream.collect().await;
+        let chunks: Vec<MusicChunk> = items
+            .into_iter()
+            .map(|r| r.expect("stream item is Err"))
+            .collect();
+
+        assert!(!chunks.is_empty(), "expected at least one streamed chunk");
+
+        let final_count = chunks.iter().filter(|c| c.is_final).count();
+        assert_eq!(final_count, 1, "expected exactly one is_final chunk");
+        assert!(
+            chunks.last().expect("at least one chunk").is_final,
+            "the final-flagged chunk must be the last one",
+        );
+
+        let total_samples: usize = chunks.iter().map(|c| c.samples.len()).sum();
+        let expected: usize = 2 * 32_000;
+        let low = expected / 2;
+        let high = expected * 3 / 2;
+        assert!(
+            (low..=high).contains(&total_samples),
+            "total streamed samples {total_samples} outside [{low}, {high}] for 2s @ 32 kHz",
+        );
+
+        for chunk in &chunks {
+            for &s in &chunk.samples {
+                assert!(s.is_finite(), "streamed sample must be finite, got {s}");
+            }
+        }
     }
 }
