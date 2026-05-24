@@ -31,3 +31,11 @@ pub(super) mod primitives;
               meantime."
 )]
 pub(super) mod vocos;
+
+#[allow(
+    dead_code,
+    reason = "Sampler + Encoder (S.2.1.c) are consumed by the top-level \
+              BiCodec wiring in S.2.1.g. The unit tests in sampler.rs \
+              exercise the public surface in the meantime."
+)]
+pub(super) mod sampler;
