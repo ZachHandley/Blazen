@@ -46,7 +46,7 @@ pub mod traits;
 
 pub use error::MusicError;
 pub use provider::{DynMusicProvider, MusicProvider};
-pub use traits::MusicBackend;
+pub use traits::{MusicBackend, MusicChunk};
 
 #[cfg(feature = "audiogen")]
 pub use backends::audiogen::{
