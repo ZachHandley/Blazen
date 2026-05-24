@@ -737,6 +737,35 @@ internal interface UniffiCallbackInterfaceToolHandlerMethod0 : com.sun.jna.Callb
     )
 }
 
+internal interface UniffiCallbackInterfaceMusicStreamSinkMethod0 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `chunk`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceMusicStreamSinkMethod1 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceMusicStreamSinkMethod2 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `err`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
 internal interface UniffiCallbackInterfaceControlPlaneAssignmentHandlerMethod0 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
@@ -1104,6 +1133,32 @@ internal open class UniffiVTableCallbackInterfaceToolHandler(
     }
 }
 
+@Structure.FieldOrder("uniffiFree", "uniffiClone", "onChunk", "onDone", "onError")
+internal open class UniffiVTableCallbackInterfaceMusicStreamSink(
+    @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+    @JvmField internal var `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+    @JvmField internal var `onChunk`: UniffiCallbackInterfaceMusicStreamSinkMethod0? = null,
+    @JvmField internal var `onDone`: UniffiCallbackInterfaceMusicStreamSinkMethod1? = null,
+    @JvmField internal var `onError`: UniffiCallbackInterfaceMusicStreamSinkMethod2? = null,
+) : Structure() {
+    class UniffiByValue(
+        `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+        `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+        `onChunk`: UniffiCallbackInterfaceMusicStreamSinkMethod0? = null,
+        `onDone`: UniffiCallbackInterfaceMusicStreamSinkMethod1? = null,
+        `onError`: UniffiCallbackInterfaceMusicStreamSinkMethod2? = null,
+    ) : UniffiVTableCallbackInterfaceMusicStreamSink(`uniffiFree`, `uniffiClone`, `onChunk`, `onDone`, `onError`),
+        Structure.ByValue
+
+    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceMusicStreamSink) {
+        `uniffiFree` = other.`uniffiFree`
+        `uniffiClone` = other.`uniffiClone`
+        `onChunk` = other.`onChunk`
+        `onDone` = other.`onDone`
+        `onError` = other.`onError`
+    }
+}
+
 @Structure.FieldOrder("uniffiFree", "uniffiClone", "handle", "onCancel", "onDrain")
 internal open class UniffiVTableCallbackInterfaceControlPlaneAssignmentHandler(
     @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
@@ -1434,6 +1489,22 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_func_new_whisper_stt_model(): Short
 
+    external fun uniffi_blazen_uniffi_checksum_func_new_audiogen_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_fal_music_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_musicgen_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_new_stable_audio_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_stream_generate_music_to_sink(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_stream_generate_music_to_sink_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_stream_generate_sfx_to_sink(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_stream_generate_sfx_to_sink_blocking(): Short
+
     external fun uniffi_blazen_uniffi_checksum_func_new_redb_checkpoint_store(): Short
 
     external fun uniffi_blazen_uniffi_checksum_func_new_valkey_checkpoint_store(): Short
@@ -1537,6 +1608,20 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_blazen_uniffi_checksum_method_ttsmodel_synthesize(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_ttsmodel_synthesize_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_musicmodel_generate_music(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_musicmodel_generate_music_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_musicmodel_generate_sfx(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_musicmodel_generate_sfx_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_chunk(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_done(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_error(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle(): Short
 
@@ -1903,6 +1988,7 @@ internal object UniffiLib {
         uniffiCallbackInterfaceCustomProvider.register(this)
         uniffiCallbackInterfaceForeignLocalModel.register(this)
         uniffiCallbackInterfaceForeignTrainingProgress.register(this)
+        uniffiCallbackInterfaceMusicStreamSink.register(this)
         uniffiCallbackInterfaceStepHandler.register(this)
         uniffiCallbackInterfaceToolHandler.register(this)
     }
@@ -2033,6 +2119,66 @@ internal object UniffiLib {
         `language`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_musicmodel(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_musicmodel(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_musicmodel_generate_music(
+        `ptr`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `durationSeconds`: Float,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_musicmodel_generate_music_blocking(
+        `ptr`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `durationSeconds`: Float,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_musicmodel_generate_sfx(
+        `ptr`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `durationSeconds`: Float,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_musicmodel_generate_sfx_blocking(
+        `ptr`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `durationSeconds`: Float,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_musicstreamsink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_musicstreamsink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_init_callback_vtable_musicstreamsink(`vtable`: UniffiVTableCallbackInterfaceMusicStreamSink): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_musicstreamsink_on_chunk(
+        `ptr`: Long,
+        `chunk`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_musicstreamsink_on_done(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_musicstreamsink_on_error(
+        `ptr`: Long,
+        `err`: RustBuffer.ByValue,
+    ): Long
 
     external fun uniffi_blazen_uniffi_fn_clone_controlplaneassignmenthandler(
         `handle`: Long,
@@ -3297,6 +3443,67 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
+    external fun uniffi_blazen_uniffi_fn_func_new_audiogen_model(
+        `repoId`: RustBuffer.ByValue,
+        `revision`: RustBuffer.ByValue,
+        `device`: RustBuffer.ByValue,
+        `cacheDir`: RustBuffer.ByValue,
+        `maxDurationSeconds`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_fal_music_model(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_musicgen_model(
+        `variant`: RustBuffer.ByValue,
+        `device`: RustBuffer.ByValue,
+        `cacheDir`: RustBuffer.ByValue,
+        `maxDurationSeconds`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_new_stable_audio_model(
+        `variant`: RustBuffer.ByValue,
+        `tokenizerPath`: RustBuffer.ByValue,
+        `device`: RustBuffer.ByValue,
+        `maxDurationSeconds`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_stream_generate_music_to_sink(
+        `model`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `durationSeconds`: Float,
+        `sink`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_stream_generate_music_to_sink_blocking(
+        `model`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `durationSeconds`: Float,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_stream_generate_sfx_to_sink(
+        `model`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `durationSeconds`: Float,
+        `sink`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_stream_generate_sfx_to_sink_blocking(
+        `model`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `durationSeconds`: Float,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
     external fun uniffi_blazen_uniffi_fn_func_new_redb_checkpoint_store(
         `path`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
@@ -3828,6 +4035,30 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_func_new_whisper_stt_model() != 40916.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_audiogen_model() != 43231.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_fal_music_model() != 18015.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_musicgen_model() != 54644.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_stable_audio_model() != 2556.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_stream_generate_music_to_sink() != 62355.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_stream_generate_music_to_sink_blocking() != 23279.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_stream_generate_sfx_to_sink() != 10355.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_stream_generate_sfx_to_sink_blocking() != 49910.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_redb_checkpoint_store() != 15901.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -3982,6 +4213,27 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_ttsmodel_synthesize_blocking() != 50217.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_musicmodel_generate_music() != 60700.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_musicmodel_generate_music_blocking() != 33543.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_musicmodel_generate_sfx() != 21245.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_musicmodel_generate_sfx_blocking() != 60492.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_chunk() != 7832.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_done() != 61428.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_error() != 39358.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle() != 640.toShort()) {
@@ -14529,6 +14781,873 @@ public object FfiConverterTypeModelClient : FfiConverter<ModelClient, Long> {
 //
 
 /**
+ * A music / sound-effect generation model.
+ *
+ * Construct via one of the per-backend factory functions
+ * ([`new_musicgen_model`], [`new_stable_audio_model`],
+ * [`new_audiogen_model`], or [`new_fal_music_model`]). Use the async
+ * [`generate_music`](Self::generate_music) / [`generate_sfx`](Self::generate_sfx)
+ * methods for one-shot rendering, or [`stream_generate_music_to_sink`] /
+ * [`stream_generate_sfx_to_sink`] for chunk-level streaming.
+ */
+public interface MusicModelInterface {
+    /**
+     * Generate `duration_seconds` of music conditioned on `prompt`.
+     */
+    suspend fun `generateMusic`(
+        `prompt`: kotlin.String,
+        `durationSeconds`: kotlin.Float,
+    ): MusicResult
+
+    /**
+     * Synchronous variant of [`generate_music`](Self::generate_music).
+     */
+    fun `generateMusicBlocking`(
+        `prompt`: kotlin.String,
+        `durationSeconds`: kotlin.Float,
+    ): MusicResult
+
+    /**
+     * Generate `duration_seconds` of sound-effect audio conditioned on
+     * `prompt`.
+     */
+    suspend fun `generateSfx`(
+        `prompt`: kotlin.String,
+        `durationSeconds`: kotlin.Float,
+    ): MusicResult
+
+    /**
+     * Synchronous variant of [`generate_sfx`](Self::generate_sfx).
+     */
+    fun `generateSfxBlocking`(
+        `prompt`: kotlin.String,
+        `durationSeconds`: kotlin.Float,
+    ): MusicResult
+
+    companion object
+}
+
+/**
+ * A music / sound-effect generation model.
+ *
+ * Construct via one of the per-backend factory functions
+ * ([`new_musicgen_model`], [`new_stable_audio_model`],
+ * [`new_audiogen_model`], or [`new_fal_music_model`]). Use the async
+ * [`generate_music`](Self::generate_music) / [`generate_sfx`](Self::generate_sfx)
+ * methods for one-shot rendering, or [`stream_generate_music_to_sink`] /
+ * [`stream_generate_sfx_to_sink`] for chunk-level streaming.
+ */
+open class MusicModel :
+    Disposable,
+    AutoCloseable,
+    MusicModelInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_musicmodel(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_musicmodel(handle, status)
+        }
+    }
+
+    /**
+     * Generate `duration_seconds` of music conditioned on `prompt`.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `generateMusic`(
+        `prompt`: kotlin.String,
+        `durationSeconds`: kotlin.Float,
+    ): MusicResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_musicmodel_generate_music(
+                    uniffiHandle,
+                    FfiConverterString.lower(`prompt`),
+                    FfiConverterFloat.lower(`durationSeconds`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeMusicResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`generate_music`](Self::generate_music).
+     */
+    @Throws(BlazenException::class)
+    override fun `generateMusicBlocking`(
+        `prompt`: kotlin.String,
+        `durationSeconds`: kotlin.Float,
+    ): MusicResult =
+        FfiConverterTypeMusicResult.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_musicmodel_generate_music_blocking(
+                        it,
+                        FfiConverterString.lower(`prompt`),
+                        FfiConverterFloat.lower(`durationSeconds`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Generate `duration_seconds` of sound-effect audio conditioned on
+     * `prompt`.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `generateSfx`(
+        `prompt`: kotlin.String,
+        `durationSeconds`: kotlin.Float,
+    ): MusicResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_musicmodel_generate_sfx(
+                    uniffiHandle,
+                    FfiConverterString.lower(`prompt`),
+                    FfiConverterFloat.lower(`durationSeconds`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeMusicResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`generate_sfx`](Self::generate_sfx).
+     */
+    @Throws(BlazenException::class)
+    override fun `generateSfxBlocking`(
+        `prompt`: kotlin.String,
+        `durationSeconds`: kotlin.Float,
+    ): MusicResult =
+        FfiConverterTypeMusicResult.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_musicmodel_generate_sfx_blocking(
+                        it,
+                        FfiConverterString.lower(`prompt`),
+                        FfiConverterFloat.lower(`durationSeconds`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMusicModel : FfiConverter<MusicModel, Long> {
+    override fun lower(value: MusicModel): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): MusicModel = MusicModel(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): MusicModel = lift(buf.getLong())
+
+    override fun allocationSize(value: MusicModel) = 8UL
+
+    override fun write(
+        value: MusicModel,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Sink for streaming music / SFX output, implemented in foreign code.
+ *
+ * Symmetric to [`crate::streaming::CompletionStreamSink`]: the streaming
+ * engine calls [`on_chunk`](Self::on_chunk) for each emitted chunk, then
+ * exactly one of [`on_done`](Self::on_done) or [`on_error`](Self::on_error).
+ * Implementations should treat the terminal callbacks as cleanup hooks
+ * (close channels, complete async iterators, signal flow completion, ...).
+ */
+public interface MusicStreamSink {
+    /**
+     * Receive a single chunk from the streaming response.
+     *
+     * Returning an `Err` aborts the stream — the engine delivers the error
+     * via [`on_error`](Self::on_error) and stops dispatching further
+     * chunks.
+     */
+    suspend fun `onChunk`(`chunk`: MusicChunk)
+
+    /**
+     * Receive the terminal completion signal. Called exactly once at the
+     * end of a successful stream.
+     */
+    suspend fun `onDone`()
+
+    /**
+     * Receive a fatal error from the stream. Called exactly once when the
+     * stream fails midway (or fails to start at all).
+     */
+    suspend fun `onError`(`err`: BlazenException)
+
+    companion object
+}
+
+/**
+ * Sink for streaming music / SFX output, implemented in foreign code.
+ *
+ * Symmetric to [`crate::streaming::CompletionStreamSink`]: the streaming
+ * engine calls [`on_chunk`](Self::on_chunk) for each emitted chunk, then
+ * exactly one of [`on_done`](Self::on_done) or [`on_error`](Self::on_error).
+ * Implementations should treat the terminal callbacks as cleanup hooks
+ * (close channels, complete async iterators, signal flow completion, ...).
+ */
+open class MusicStreamSinkImpl :
+    Disposable,
+    AutoCloseable,
+    MusicStreamSink {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_musicstreamsink(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_musicstreamsink(handle, status)
+        }
+    }
+
+    /**
+     * Receive a single chunk from the streaming response.
+     *
+     * Returning an `Err` aborts the stream — the engine delivers the error
+     * via [`on_error`](Self::on_error) and stops dispatching further
+     * chunks.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `onChunk`(`chunk`: MusicChunk) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_musicstreamsink_on_chunk(
+                    uniffiHandle,
+                    FfiConverterTypeMusicChunk.lower(`chunk`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Receive the terminal completion signal. Called exactly once at the
+     * end of a successful stream.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `onDone`() =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_musicstreamsink_on_done(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Receive a fatal error from the stream. Called exactly once when the
+     * stream fails midway (or fails to start at all).
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `onError`(`err`: BlazenException) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_musicstreamsink_on_error(
+                    uniffiHandle,
+                    FfiConverterTypeBlazenError.lower(`err`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+// Put the implementation in an object so we don't pollute the top-level namespace
+internal object uniffiCallbackInterfaceMusicStreamSink {
+    internal object `onChunk` : UniffiCallbackInterfaceMusicStreamSinkMethod0 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `chunk`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeMusicStreamSink.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`onChunk`(
+                    FfiConverterTypeMusicChunk.lift(`chunk`),
+                )
+                }
+            val uniffiHandleSuccess = { _: Unit ->
+                val uniffiResult =
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `onDone` : UniffiCallbackInterfaceMusicStreamSinkMethod1 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeMusicStreamSink.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend { uniffiObj.`onDone`() }
+            val uniffiHandleSuccess = { _: Unit ->
+                val uniffiResult =
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `onError` : UniffiCallbackInterfaceMusicStreamSinkMethod2 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `err`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeMusicStreamSink.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`onError`(
+                    FfiConverterTypeBlazenError.lift(`err`),
+                )
+                }
+            val uniffiHandleSuccess = { _: Unit ->
+                val uniffiResult =
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object uniffiFree : UniffiCallbackInterfaceFree {
+        override fun callback(handle: Long) {
+            FfiConverterTypeMusicStreamSink.handleMap.remove(handle)
+        }
+    }
+
+    internal object uniffiClone : UniffiCallbackInterfaceClone {
+        override fun callback(handle: Long): Long = FfiConverterTypeMusicStreamSink.handleMap.clone(handle)
+    }
+
+    internal var vtable =
+        UniffiVTableCallbackInterfaceMusicStreamSink.UniffiByValue(
+            uniffiFree,
+            uniffiClone,
+            `onChunk`,
+            `onDone`,
+            `onError`,
+        )
+
+    // Registers the foreign callback with the Rust side.
+    // This method is generated for each callback interface.
+    internal fun register(lib: UniffiLib) {
+        lib.uniffi_blazen_uniffi_fn_init_callback_vtable_musicstreamsink(vtable)
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMusicStreamSink : FfiConverter<MusicStreamSink, Long> {
+    internal val handleMap = UniffiHandleMap<MusicStreamSink>()
+
+    override fun lower(value: MusicStreamSink): Long {
+        if (value is MusicStreamSinkImpl) {
+            // Rust-implemented object.  Clone the handle and return it
+            return value.uniffiCloneHandle()
+        } else {
+            // Kotlin object, generate a new vtable handle and return that.
+            return handleMap.insert(value)
+        }
+    }
+
+    override fun lift(value: Long): MusicStreamSink {
+        if ((value and 1.toLong()) == 0.toLong()) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return MusicStreamSinkImpl(UniffiWithHandle, value)
+        } else {
+            // Kotlin-generated handle, get the object from the handle map
+            return handleMap.remove(value)
+        }
+    }
+
+    override fun read(buf: ByteBuffer): MusicStreamSink = lift(buf.getLong())
+
+    override fun allocationSize(value: MusicStreamSink) = 8UL
+
+    override fun write(
+        value: MusicStreamSink,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
  * Client handle for invoking workflows on a remote [`PeerServer`].
  *
  * Construct with [`PeerClient::connect`]. RPCs go out over a multiplexed
@@ -22215,6 +23334,68 @@ public object FfiConverterTypeModelStatusRecord : FfiConverterRustBuffer<ModelSt
 }
 
 /**
+ * One emission from a streaming music backend.
+ *
+ * `samples` is 32-bit float PCM in `[-1.0, 1.0]` at the backend's expected
+ * output sample rate (the same `sample_rate` field on the
+ * [`MusicResult`] returned by the non-streaming
+ * `generate_music` / `generate_sfx` calls).
+ *
+ * `is_final` is `true` for the final chunk of a generation call;
+ * implementations should treat it as a UI hint rather than the
+ * authoritative completion signal — the sink's `on_done` callback is the
+ * canonical end-of-stream marker.
+ *
+ * `latency_seconds`, when present, is the measured latency from the
+ * stream's call-start to the moment this chunk was produced — handy for
+ * surfacing first-token-latency metrics through the binding.
+ */
+data class MusicChunk(
+    /**
+     * 32-bit float PCM samples in `[-1, 1]` at the backend's sample rate.
+     */
+    var `samples`: List<kotlin.Float>,
+    /**
+     * `true` on the final emitted chunk; otherwise `false`.
+     */
+    var `isFinal`: kotlin.Boolean,
+    /**
+     * Optional per-chunk latency from call-start in seconds.
+     */
+    var `latencySeconds`: kotlin.Float?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMusicChunk : FfiConverterRustBuffer<MusicChunk> {
+    override fun read(buf: ByteBuffer): MusicChunk =
+        MusicChunk(
+            FfiConverterSequenceFloat.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalFloat.read(buf),
+        )
+
+    override fun allocationSize(value: MusicChunk) =
+        (
+            FfiConverterSequenceFloat.allocationSize(value.`samples`) +
+                FfiConverterBoolean.allocationSize(value.`isFinal`) +
+                FfiConverterOptionalFloat.allocationSize(value.`latencySeconds`)
+        )
+
+    override fun write(
+        value: MusicChunk,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterSequenceFloat.write(value.`samples`, buf)
+        FfiConverterBoolean.write(value.`isFinal`, buf)
+        FfiConverterOptionalFloat.write(value.`latencySeconds`, buf)
+    }
+}
+
+/**
  * Request to generate music or sound effects.
  */
 data class MusicRequest(
@@ -22254,6 +23435,86 @@ public object FfiConverterTypeMusicRequest : FfiConverterRustBuffer<MusicRequest
         FfiConverterOptionalFloat.write(value.`durationSeconds`, buf)
         FfiConverterOptionalString.write(value.`model`, buf)
         FfiConverterString.write(value.`parameters`, buf)
+    }
+}
+
+/**
+ * A fully-rendered music / SFX result.
+ *
+ * `bytes` carries the encoded audio (typically a WAV container for the
+ * native backends; whatever the cloud provider returned for fal.ai). The
+ * non-empty `url` field signals a URL-only response (e.g. fal.ai returning
+ * a CDN link without inlining bytes); `bytes` will be empty in that case.
+ * Callers should pick whichever payload is present.
+ */
+data class MusicResult(
+    /**
+     * Encoded audio bytes. Empty when the upstream provider only returned
+     * a URL.
+     */
+    var `bytes`: kotlin.ByteArray,
+    /**
+     * IANA MIME type of `bytes` (e.g. `"audio/wav"`, `"audio/mpeg"`).
+     */
+    var `mimeType`: kotlin.String,
+    /**
+     * Sample rate in Hz. Zero when the upstream provider didn't report
+     * one.
+     */
+    var `sampleRate`: kotlin.UInt,
+    /**
+     * Channel count (1 = mono, 2 = stereo). Zero when the upstream
+     * provider didn't report it.
+     */
+    var `channels`: kotlin.UInt,
+    /**
+     * Duration of the clip in seconds. Zero when the upstream provider
+     * didn't report a duration.
+     */
+    var `durationSeconds`: kotlin.Float,
+    /**
+     * URL of the audio asset when the upstream provider only returned a
+     * link. Empty string for inline-bytes results.
+     */
+    var `url`: kotlin.String,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMusicResult : FfiConverterRustBuffer<MusicResult> {
+    override fun read(buf: ByteBuffer): MusicResult =
+        MusicResult(
+            FfiConverterByteArray.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterString.read(buf),
+        )
+
+    override fun allocationSize(value: MusicResult) =
+        (
+            FfiConverterByteArray.allocationSize(value.`bytes`) +
+                FfiConverterString.allocationSize(value.`mimeType`) +
+                FfiConverterUInt.allocationSize(value.`sampleRate`) +
+                FfiConverterUInt.allocationSize(value.`channels`) +
+                FfiConverterFloat.allocationSize(value.`durationSeconds`) +
+                FfiConverterString.allocationSize(value.`url`)
+        )
+
+    override fun write(
+        value: MusicResult,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterByteArray.write(value.`bytes`, buf)
+        FfiConverterString.write(value.`mimeType`, buf)
+        FfiConverterUInt.write(value.`sampleRate`, buf)
+        FfiConverterUInt.write(value.`channels`, buf)
+        FfiConverterFloat.write(value.`durationSeconds`, buf)
+        FfiConverterString.write(value.`url`, buf)
     }
 }
 
@@ -26127,6 +27388,34 @@ public object FfiConverterOptionalTypeHfBackendHint : FfiConverterRustBuffer<HfB
 /**
  * @suppress
  */
+public object FfiConverterSequenceFloat : FfiConverterRustBuffer<List<kotlin.Float>> {
+    override fun read(buf: ByteBuffer): List<kotlin.Float> {
+        val len = buf.getInt()
+        return List<kotlin.Float>(len) {
+            FfiConverterFloat.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<kotlin.Float>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterFloat.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<kotlin.Float>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterFloat.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceDouble : FfiConverterRustBuffer<List<kotlin.Double>> {
     override fun read(buf: ByteBuffer): List<kotlin.Double> {
         val len = buf.getInt()
@@ -27201,6 +28490,225 @@ fun `newWhisperSttModel`(
             )
         },
     )
+
+/**
+ * Build a native AudioGen-backed [`MusicModel`].
+ *
+ * `repo_id` overrides the default Hugging Face repo (defaults to
+ * `facebook/audiogen-medium`). `revision` pins a specific commit / tag.
+ * `device` / `cache_dir` / `max_duration_seconds` follow the MusicGen
+ * factory's conventions.
+ */
+@Throws(BlazenException::class)
+fun `newAudiogenModel`(
+    `repoId`: kotlin.String?,
+    `revision`: kotlin.String?,
+    `device`: kotlin.String?,
+    `cacheDir`: kotlin.String?,
+    `maxDurationSeconds`: kotlin.Float?,
+): MusicModel =
+    FfiConverterTypeMusicModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_audiogen_model(
+                FfiConverterOptionalString.lower(`repoId`),
+                FfiConverterOptionalString.lower(`revision`),
+                FfiConverterOptionalString.lower(`device`),
+                FfiConverterOptionalString.lower(`cacheDir`),
+                FfiConverterOptionalFloat.lower(`maxDurationSeconds`),
+                _status,
+            )
+        },
+    )
+
+/**
+ * Build a fal.ai-backed [`MusicModel`].
+ *
+ * `api_key` may be empty when the provider resolves it from `FAL_KEY`.
+ * `model` overrides the default fal music / SFX endpoint (the same
+ * override is applied to both `generate_music` and `generate_sfx` calls
+ * — fal's per-endpoint dispatch handles the routing).
+ */
+@Throws(BlazenException::class)
+fun `newFalMusicModel`(
+    `apiKey`: kotlin.String,
+    `model`: kotlin.String?,
+): MusicModel =
+    FfiConverterTypeMusicModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_music_model(
+                FfiConverterString.lower(`apiKey`),
+                FfiConverterOptionalString.lower(`model`),
+                _status,
+            )
+        },
+    )
+
+/**
+ * Build a native MusicGen-backed [`MusicModel`].
+ *
+ * `variant` selects the MusicGen checkpoint by name (case-insensitive:
+ * `"small"`, `"medium"`, `"large"`); unrecognised values default to
+ * `Small`. `device` accepts the same format strings as
+ * `blazen_llm::Device::parse` (`"cpu"`, `"cuda"`, `"cuda:N"`, `"metal"`);
+ * `None` defers to the backend's auto-detection (CUDA → Metal → CPU).
+ * `cache_dir` overrides the Hugging Face Hub cache directory.
+ * `max_duration_seconds` overrides the default 30 s per-call safety cap
+ * (hard ceiling stays at `MUSICGEN_MAX_DURATION_HARD_LIMIT`).
+ */
+@Throws(BlazenException::class)
+fun `newMusicgenModel`(
+    `variant`: kotlin.String?,
+    `device`: kotlin.String?,
+    `cacheDir`: kotlin.String?,
+    `maxDurationSeconds`: kotlin.Float?,
+): MusicModel =
+    FfiConverterTypeMusicModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_musicgen_model(
+                FfiConverterOptionalString.lower(`variant`),
+                FfiConverterOptionalString.lower(`device`),
+                FfiConverterOptionalString.lower(`cacheDir`),
+                FfiConverterOptionalFloat.lower(`maxDurationSeconds`),
+                _status,
+            )
+        },
+    )
+
+/**
+ * Build a native Stable Audio Open-backed [`MusicModel`].
+ *
+ * `variant` selects the Stable Audio Open checkpoint by name
+ * (case-insensitive: `"small"`, `"open-1.0"` / `"open1.0"`); unrecognised
+ * values default to `Small`. `tokenizer_path` must point at the T5
+ * SentencePiece `tokenizer.json` shipped with the Stable Audio Open repo
+ * — required because Stable Audio's tokenizer is not auto-downloaded by
+ * the backend today. `device` follows the same device-string format as
+ * the MusicGen factory. `max_duration_seconds` is accepted for API
+ * symmetry but Stable Audio enforces its own variant-dependent ceiling
+ * internally.
+ */
+@Throws(BlazenException::class)
+fun `newStableAudioModel`(
+    `variant`: kotlin.String?,
+    `tokenizerPath`: kotlin.String,
+    `device`: kotlin.String?,
+    `maxDurationSeconds`: kotlin.Float?,
+): MusicModel =
+    FfiConverterTypeMusicModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_stable_audio_model(
+                FfiConverterOptionalString.lower(`variant`),
+                FfiConverterString.lower(`tokenizerPath`),
+                FfiConverterOptionalString.lower(`device`),
+                FfiConverterOptionalFloat.lower(`maxDurationSeconds`),
+                _status,
+            )
+        },
+    )
+
+/**
+ * Drive a streaming music-generation call, dispatching each chunk to the
+ * sink.
+ *
+ * On success, calls `sink.on_done()` exactly once and returns `Ok(())`.
+ * On a backend-side or sink-side failure, calls `sink.on_error(...)` and
+ * returns `Ok(())` — error delivery is the sink's responsibility, matching
+ * the convention `complete_streaming` established for chat completions.
+ *
+ * The only failure mode that propagates back to the caller is a panic in
+ * the sink itself or the runtime; init errors (e.g. fal.ai not supporting
+ * streaming, MusicGen weight-download failure) are delivered through
+ * `on_error`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `streamGenerateMusicToSink`(
+    `model`: MusicModel,
+    `prompt`: kotlin.String,
+    `durationSeconds`: kotlin.Float,
+    `sink`: MusicStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_stream_generate_music_to_sink(
+        FfiConverterTypeMusicModel.lower(`model`),
+        FfiConverterString.lower(`prompt`),
+        FfiConverterFloat.lower(`durationSeconds`),
+        FfiConverterTypeMusicStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`stream_generate_music_to_sink`] — blocks the
+ * current thread on the shared Tokio runtime.
+ */
+@Throws(BlazenException::class)
+fun `streamGenerateMusicToSinkBlocking`(
+    `model`: MusicModel,
+    `prompt`: kotlin.String,
+    `durationSeconds`: kotlin.Float,
+    `sink`: MusicStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_stream_generate_music_to_sink_blocking(
+        FfiConverterTypeMusicModel.lower(`model`),
+        FfiConverterString.lower(`prompt`),
+        FfiConverterFloat.lower(`durationSeconds`),
+        FfiConverterTypeMusicStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Drive a streaming SFX-generation call, dispatching each chunk to the
+ * sink. Same semantics as [`stream_generate_music_to_sink`].
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `streamGenerateSfxToSink`(
+    `model`: MusicModel,
+    `prompt`: kotlin.String,
+    `durationSeconds`: kotlin.Float,
+    `sink`: MusicStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_stream_generate_sfx_to_sink(
+        FfiConverterTypeMusicModel.lower(`model`),
+        FfiConverterString.lower(`prompt`),
+        FfiConverterFloat.lower(`durationSeconds`),
+        FfiConverterTypeMusicStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`stream_generate_sfx_to_sink`] — blocks the
+ * current thread on the shared Tokio runtime.
+ */
+@Throws(BlazenException::class)
+fun `streamGenerateSfxToSinkBlocking`(
+    `model`: MusicModel,
+    `prompt`: kotlin.String,
+    `durationSeconds`: kotlin.Float,
+    `sink`: MusicStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_stream_generate_sfx_to_sink_blocking(
+        FfiConverterTypeMusicModel.lower(`model`),
+        FfiConverterString.lower(`prompt`),
+        FfiConverterFloat.lower(`durationSeconds`),
+        FfiConverterTypeMusicStreamSink.lower(`sink`),
+        _status,
+    )
+}
 
 /**
  * Build an embedded redb-backed checkpoint store rooted at `path`.

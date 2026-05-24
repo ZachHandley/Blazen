@@ -904,7 +904,7 @@ pub fn new_fal_image_gen_model(
 /// Empty `api_key` falls back to the `FAL_KEY` environment variable via
 /// `blazen_llm::keys::resolve_api_key`. Errors are mapped to
 /// [`BlazenError::Provider`] with `kind = "FalInit"`.
-fn build_fal_provider(
+pub(crate) fn build_fal_provider(
     api_key: String,
 ) -> BlazenResult<Arc<blazen_llm::providers::fal::FalProvider>> {
     let opts = blazen_llm::types::provider_options::FalOptions {

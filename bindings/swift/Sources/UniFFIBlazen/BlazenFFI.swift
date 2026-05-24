@@ -7702,6 +7702,605 @@ public func FfiConverterTypeModelClient_lower(_ value: ModelClient) -> UInt64 {
 
 
 /**
+ * A music / sound-effect generation model.
+ *
+ * Construct via one of the per-backend factory functions
+ * ([`new_musicgen_model`], [`new_stable_audio_model`],
+ * [`new_audiogen_model`], or [`new_fal_music_model`]). Use the async
+ * [`generate_music`](Self::generate_music) / [`generate_sfx`](Self::generate_sfx)
+ * methods for one-shot rendering, or [`stream_generate_music_to_sink`] /
+ * [`stream_generate_sfx_to_sink`] for chunk-level streaming.
+ */
+public protocol MusicModelProtocol: AnyObject, Sendable {
+    
+    /**
+     * Generate `duration_seconds` of music conditioned on `prompt`.
+     */
+    func generateMusic(prompt: String, durationSeconds: Float) async throws  -> MusicResult
+    
+    /**
+     * Synchronous variant of [`generate_music`](Self::generate_music).
+     */
+    func generateMusicBlocking(prompt: String, durationSeconds: Float) throws  -> MusicResult
+    
+    /**
+     * Generate `duration_seconds` of sound-effect audio conditioned on
+     * `prompt`.
+     */
+    func generateSfx(prompt: String, durationSeconds: Float) async throws  -> MusicResult
+    
+    /**
+     * Synchronous variant of [`generate_sfx`](Self::generate_sfx).
+     */
+    func generateSfxBlocking(prompt: String, durationSeconds: Float) throws  -> MusicResult
+    
+}
+/**
+ * A music / sound-effect generation model.
+ *
+ * Construct via one of the per-backend factory functions
+ * ([`new_musicgen_model`], [`new_stable_audio_model`],
+ * [`new_audiogen_model`], or [`new_fal_music_model`]). Use the async
+ * [`generate_music`](Self::generate_music) / [`generate_sfx`](Self::generate_sfx)
+ * methods for one-shot rendering, or [`stream_generate_music_to_sink`] /
+ * [`stream_generate_sfx_to_sink`] for chunk-level streaming.
+ */
+open class MusicModel: MusicModelProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_musicmodel(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_musicmodel(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Generate `duration_seconds` of music conditioned on `prompt`.
+     */
+open func generateMusic(prompt: String, durationSeconds: Float)async throws  -> MusicResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_musicmodel_generate_music(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(prompt),FfiConverterFloat.lower(durationSeconds)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeMusicResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`generate_music`](Self::generate_music).
+     */
+open func generateMusicBlocking(prompt: String, durationSeconds: Float)throws  -> MusicResult  {
+    return try  FfiConverterTypeMusicResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_musicmodel_generate_music_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(prompt),
+        FfiConverterFloat.lower(durationSeconds),$0
+    )
+})
+}
+    
+    /**
+     * Generate `duration_seconds` of sound-effect audio conditioned on
+     * `prompt`.
+     */
+open func generateSfx(prompt: String, durationSeconds: Float)async throws  -> MusicResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_musicmodel_generate_sfx(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(prompt),FfiConverterFloat.lower(durationSeconds)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeMusicResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`generate_sfx`](Self::generate_sfx).
+     */
+open func generateSfxBlocking(prompt: String, durationSeconds: Float)throws  -> MusicResult  {
+    return try  FfiConverterTypeMusicResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_musicmodel_generate_sfx_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(prompt),
+        FfiConverterFloat.lower(durationSeconds),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMusicModel: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = MusicModel
+
+    public static func lift(_ handle: UInt64) throws -> MusicModel {
+        return MusicModel(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: MusicModel) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MusicModel {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: MusicModel, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMusicModel_lift(_ handle: UInt64) throws -> MusicModel {
+    return try FfiConverterTypeMusicModel.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMusicModel_lower(_ value: MusicModel) -> UInt64 {
+    return FfiConverterTypeMusicModel.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Sink for streaming music / SFX output, implemented in foreign code.
+ *
+ * Symmetric to [`crate::streaming::CompletionStreamSink`]: the streaming
+ * engine calls [`on_chunk`](Self::on_chunk) for each emitted chunk, then
+ * exactly one of [`on_done`](Self::on_done) or [`on_error`](Self::on_error).
+ * Implementations should treat the terminal callbacks as cleanup hooks
+ * (close channels, complete async iterators, signal flow completion, ...).
+ */
+public protocol MusicStreamSink: AnyObject, Sendable {
+    
+    /**
+     * Receive a single chunk from the streaming response.
+     *
+     * Returning an `Err` aborts the stream — the engine delivers the error
+     * via [`on_error`](Self::on_error) and stops dispatching further
+     * chunks.
+     */
+    func onChunk(chunk: MusicChunk) async throws 
+    
+    /**
+     * Receive the terminal completion signal. Called exactly once at the
+     * end of a successful stream.
+     */
+    func onDone() async throws 
+    
+    /**
+     * Receive a fatal error from the stream. Called exactly once when the
+     * stream fails midway (or fails to start at all).
+     */
+    func onError(err: BlazenError) async throws 
+    
+}
+/**
+ * Sink for streaming music / SFX output, implemented in foreign code.
+ *
+ * Symmetric to [`crate::streaming::CompletionStreamSink`]: the streaming
+ * engine calls [`on_chunk`](Self::on_chunk) for each emitted chunk, then
+ * exactly one of [`on_done`](Self::on_done) or [`on_error`](Self::on_error).
+ * Implementations should treat the terminal callbacks as cleanup hooks
+ * (close channels, complete async iterators, signal flow completion, ...).
+ */
+open class MusicStreamSinkImpl: MusicStreamSink, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_musicstreamsink(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_musicstreamsink(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Receive a single chunk from the streaming response.
+     *
+     * Returning an `Err` aborts the stream — the engine delivers the error
+     * via [`on_error`](Self::on_error) and stops dispatching further
+     * chunks.
+     */
+open func onChunk(chunk: MusicChunk)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_musicstreamsink_on_chunk(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeMusicChunk_lower(chunk)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Receive the terminal completion signal. Called exactly once at the
+     * end of a successful stream.
+     */
+open func onDone()async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_musicstreamsink_on_done(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Receive a fatal error from the stream. Called exactly once when the
+     * stream fails midway (or fails to start at all).
+     */
+open func onError(err: BlazenError)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_musicstreamsink_on_error(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeBlazenError_lower(err)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceMusicStreamSink {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceMusicStreamSink = UniffiVTableCallbackInterfaceMusicStreamSink(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeMusicStreamSink.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface MusicStreamSink: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeMusicStreamSink.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface MusicStreamSink: handle missing in uniffiClone")
+            }
+        },
+        onChunk: { (
+            uniffiHandle: UInt64,
+            chunk: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteVoid,
+            uniffiCallbackData: UInt64,
+            uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+        ) in
+            let makeCall = {
+                () async throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeMusicStreamSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.onChunk(
+                     chunk: try FfiConverterTypeMusicChunk_lift(chunk)
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: ()) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { (statusCode, errorBuf) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeBlazenError_lower,
+                droppedCallback: uniffiOutDroppedCallback
+            )
+        },
+        onDone: { (
+            uniffiHandle: UInt64,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteVoid,
+            uniffiCallbackData: UInt64,
+            uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+        ) in
+            let makeCall = {
+                () async throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeMusicStreamSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.onDone(
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: ()) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { (statusCode, errorBuf) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeBlazenError_lower,
+                droppedCallback: uniffiOutDroppedCallback
+            )
+        },
+        onError: { (
+            uniffiHandle: UInt64,
+            err: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteVoid,
+            uniffiCallbackData: UInt64,
+            uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+        ) in
+            let makeCall = {
+                () async throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeMusicStreamSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.onError(
+                     err: try FfiConverterTypeBlazenError_lift(err)
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: ()) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { (statusCode, errorBuf) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeBlazenError_lower,
+                droppedCallback: uniffiOutDroppedCallback
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceMusicStreamSink> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceMusicStreamSink>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitMusicStreamSink() {
+    uniffi_blazen_uniffi_fn_init_callback_vtable_musicstreamsink(UniffiCallbackInterfaceMusicStreamSink.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMusicStreamSink: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<MusicStreamSink>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = MusicStreamSink
+
+    public static func lift(_ handle: UInt64) throws -> MusicStreamSink {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return MusicStreamSinkImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: MusicStreamSink) -> UInt64 {
+         if let rustImpl = value as? MusicStreamSinkImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MusicStreamSink {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: MusicStreamSink, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMusicStreamSink_lift(_ handle: UInt64) throws -> MusicStreamSink {
+    return try FfiConverterTypeMusicStreamSink.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMusicStreamSink_lower(_ value: MusicStreamSink) -> UInt64 {
+    return FfiConverterTypeMusicStreamSink.lower(value)
+}
+
+
+
+
+
+
+/**
  * Client handle for invoking workflows on a remote [`PeerServer`].
  *
  * Construct with [`PeerClient::connect`]. RPCs go out over a multiplexed
@@ -14649,6 +15248,99 @@ public func FfiConverterTypeModelStatusRecord_lower(_ value: ModelStatusRecord) 
 
 
 /**
+ * One emission from a streaming music backend.
+ *
+ * `samples` is 32-bit float PCM in `[-1.0, 1.0]` at the backend's expected
+ * output sample rate (the same `sample_rate` field on the
+ * [`MusicResult`] returned by the non-streaming
+ * `generate_music` / `generate_sfx` calls).
+ *
+ * `is_final` is `true` for the final chunk of a generation call;
+ * implementations should treat it as a UI hint rather than the
+ * authoritative completion signal — the sink's `on_done` callback is the
+ * canonical end-of-stream marker.
+ *
+ * `latency_seconds`, when present, is the measured latency from the
+ * stream's call-start to the moment this chunk was produced — handy for
+ * surfacing first-token-latency metrics through the binding.
+ */
+public struct MusicChunk: Equatable, Hashable {
+    /**
+     * 32-bit float PCM samples in `[-1, 1]` at the backend's sample rate.
+     */
+    public var samples: [Float]
+    /**
+     * `true` on the final emitted chunk; otherwise `false`.
+     */
+    public var isFinal: Bool
+    /**
+     * Optional per-chunk latency from call-start in seconds.
+     */
+    public var latencySeconds: Float?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * 32-bit float PCM samples in `[-1, 1]` at the backend's sample rate.
+         */samples: [Float], 
+        /**
+         * `true` on the final emitted chunk; otherwise `false`.
+         */isFinal: Bool, 
+        /**
+         * Optional per-chunk latency from call-start in seconds.
+         */latencySeconds: Float?) {
+        self.samples = samples
+        self.isFinal = isFinal
+        self.latencySeconds = latencySeconds
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension MusicChunk: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMusicChunk: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MusicChunk {
+        return
+            try MusicChunk(
+                samples: FfiConverterSequenceFloat.read(from: &buf), 
+                isFinal: FfiConverterBool.read(from: &buf), 
+                latencySeconds: FfiConverterOptionFloat.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MusicChunk, into buf: inout [UInt8]) {
+        FfiConverterSequenceFloat.write(value.samples, into: &buf)
+        FfiConverterBool.write(value.isFinal, into: &buf)
+        FfiConverterOptionFloat.write(value.latencySeconds, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMusicChunk_lift(_ buf: RustBuffer) throws -> MusicChunk {
+    return try FfiConverterTypeMusicChunk.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMusicChunk_lower(_ value: MusicChunk) -> RustBuffer {
+    return FfiConverterTypeMusicChunk.lower(value)
+}
+
+
+/**
  * Request to generate music or sound effects.
  */
 public struct MusicRequest: Equatable, Hashable {
@@ -14710,6 +15402,131 @@ public func FfiConverterTypeMusicRequest_lift(_ buf: RustBuffer) throws -> Music
 #endif
 public func FfiConverterTypeMusicRequest_lower(_ value: MusicRequest) -> RustBuffer {
     return FfiConverterTypeMusicRequest.lower(value)
+}
+
+
+/**
+ * A fully-rendered music / SFX result.
+ *
+ * `bytes` carries the encoded audio (typically a WAV container for the
+ * native backends; whatever the cloud provider returned for fal.ai). The
+ * non-empty `url` field signals a URL-only response (e.g. fal.ai returning
+ * a CDN link without inlining bytes); `bytes` will be empty in that case.
+ * Callers should pick whichever payload is present.
+ */
+public struct MusicResult: Equatable, Hashable {
+    /**
+     * Encoded audio bytes. Empty when the upstream provider only returned
+     * a URL.
+     */
+    public var bytes: Data
+    /**
+     * IANA MIME type of `bytes` (e.g. `"audio/wav"`, `"audio/mpeg"`).
+     */
+    public var mimeType: String
+    /**
+     * Sample rate in Hz. Zero when the upstream provider didn't report
+     * one.
+     */
+    public var sampleRate: UInt32
+    /**
+     * Channel count (1 = mono, 2 = stereo). Zero when the upstream
+     * provider didn't report it.
+     */
+    public var channels: UInt32
+    /**
+     * Duration of the clip in seconds. Zero when the upstream provider
+     * didn't report a duration.
+     */
+    public var durationSeconds: Float
+    /**
+     * URL of the audio asset when the upstream provider only returned a
+     * link. Empty string for inline-bytes results.
+     */
+    public var url: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Encoded audio bytes. Empty when the upstream provider only returned
+         * a URL.
+         */bytes: Data, 
+        /**
+         * IANA MIME type of `bytes` (e.g. `"audio/wav"`, `"audio/mpeg"`).
+         */mimeType: String, 
+        /**
+         * Sample rate in Hz. Zero when the upstream provider didn't report
+         * one.
+         */sampleRate: UInt32, 
+        /**
+         * Channel count (1 = mono, 2 = stereo). Zero when the upstream
+         * provider didn't report it.
+         */channels: UInt32, 
+        /**
+         * Duration of the clip in seconds. Zero when the upstream provider
+         * didn't report a duration.
+         */durationSeconds: Float, 
+        /**
+         * URL of the audio asset when the upstream provider only returned a
+         * link. Empty string for inline-bytes results.
+         */url: String) {
+        self.bytes = bytes
+        self.mimeType = mimeType
+        self.sampleRate = sampleRate
+        self.channels = channels
+        self.durationSeconds = durationSeconds
+        self.url = url
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension MusicResult: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMusicResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MusicResult {
+        return
+            try MusicResult(
+                bytes: FfiConverterData.read(from: &buf), 
+                mimeType: FfiConverterString.read(from: &buf), 
+                sampleRate: FfiConverterUInt32.read(from: &buf), 
+                channels: FfiConverterUInt32.read(from: &buf), 
+                durationSeconds: FfiConverterFloat.read(from: &buf), 
+                url: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: MusicResult, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.bytes, into: &buf)
+        FfiConverterString.write(value.mimeType, into: &buf)
+        FfiConverterUInt32.write(value.sampleRate, into: &buf)
+        FfiConverterUInt32.write(value.channels, into: &buf)
+        FfiConverterFloat.write(value.durationSeconds, into: &buf)
+        FfiConverterString.write(value.url, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMusicResult_lift(_ buf: RustBuffer) throws -> MusicResult {
+    return try FfiConverterTypeMusicResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMusicResult_lower(_ value: MusicResult) -> RustBuffer {
+    return FfiConverterTypeMusicResult.lower(value)
 }
 
 
@@ -19316,6 +20133,31 @@ fileprivate struct FfiConverterOptionTypeHfBackendHint: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceFloat: FfiConverterRustBuffer {
+    typealias SwiftType = [Float]
+
+    public static func write(_ value: [Float], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterFloat.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [Float] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [Float]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterFloat.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceDouble: FfiConverterRustBuffer {
     typealias SwiftType = [Double]
 
@@ -20352,6 +21194,158 @@ public func newWhisperSttModel(model: String?, device: String?, language: String
 })
 }
 /**
+ * Build a native AudioGen-backed [`MusicModel`].
+ *
+ * `repo_id` overrides the default Hugging Face repo (defaults to
+ * `facebook/audiogen-medium`). `revision` pins a specific commit / tag.
+ * `device` / `cache_dir` / `max_duration_seconds` follow the MusicGen
+ * factory's conventions.
+ */
+public func newAudiogenModel(repoId: String?, revision: String?, device: String?, cacheDir: String?, maxDurationSeconds: Float?)throws  -> MusicModel  {
+    return try  FfiConverterTypeMusicModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_audiogen_model(
+        FfiConverterOptionString.lower(repoId),
+        FfiConverterOptionString.lower(revision),
+        FfiConverterOptionString.lower(device),
+        FfiConverterOptionString.lower(cacheDir),
+        FfiConverterOptionFloat.lower(maxDurationSeconds),$0
+    )
+})
+}
+/**
+ * Build a fal.ai-backed [`MusicModel`].
+ *
+ * `api_key` may be empty when the provider resolves it from `FAL_KEY`.
+ * `model` overrides the default fal music / SFX endpoint (the same
+ * override is applied to both `generate_music` and `generate_sfx` calls
+ * — fal's per-endpoint dispatch handles the routing).
+ */
+public func newFalMusicModel(apiKey: String, model: String?)throws  -> MusicModel  {
+    return try  FfiConverterTypeMusicModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_fal_music_model(
+        FfiConverterString.lower(apiKey),
+        FfiConverterOptionString.lower(model),$0
+    )
+})
+}
+/**
+ * Build a native MusicGen-backed [`MusicModel`].
+ *
+ * `variant` selects the MusicGen checkpoint by name (case-insensitive:
+ * `"small"`, `"medium"`, `"large"`); unrecognised values default to
+ * `Small`. `device` accepts the same format strings as
+ * `blazen_llm::Device::parse` (`"cpu"`, `"cuda"`, `"cuda:N"`, `"metal"`);
+ * `None` defers to the backend's auto-detection (CUDA → Metal → CPU).
+ * `cache_dir` overrides the Hugging Face Hub cache directory.
+ * `max_duration_seconds` overrides the default 30 s per-call safety cap
+ * (hard ceiling stays at `MUSICGEN_MAX_DURATION_HARD_LIMIT`).
+ */
+public func newMusicgenModel(variant: String?, device: String?, cacheDir: String?, maxDurationSeconds: Float?)throws  -> MusicModel  {
+    return try  FfiConverterTypeMusicModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_musicgen_model(
+        FfiConverterOptionString.lower(variant),
+        FfiConverterOptionString.lower(device),
+        FfiConverterOptionString.lower(cacheDir),
+        FfiConverterOptionFloat.lower(maxDurationSeconds),$0
+    )
+})
+}
+/**
+ * Build a native Stable Audio Open-backed [`MusicModel`].
+ *
+ * `variant` selects the Stable Audio Open checkpoint by name
+ * (case-insensitive: `"small"`, `"open-1.0"` / `"open1.0"`); unrecognised
+ * values default to `Small`. `tokenizer_path` must point at the T5
+ * SentencePiece `tokenizer.json` shipped with the Stable Audio Open repo
+ * — required because Stable Audio's tokenizer is not auto-downloaded by
+ * the backend today. `device` follows the same device-string format as
+ * the MusicGen factory. `max_duration_seconds` is accepted for API
+ * symmetry but Stable Audio enforces its own variant-dependent ceiling
+ * internally.
+ */
+public func newStableAudioModel(variant: String?, tokenizerPath: String, device: String?, maxDurationSeconds: Float?)throws  -> MusicModel  {
+    return try  FfiConverterTypeMusicModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_stable_audio_model(
+        FfiConverterOptionString.lower(variant),
+        FfiConverterString.lower(tokenizerPath),
+        FfiConverterOptionString.lower(device),
+        FfiConverterOptionFloat.lower(maxDurationSeconds),$0
+    )
+})
+}
+/**
+ * Drive a streaming music-generation call, dispatching each chunk to the
+ * sink.
+ *
+ * On success, calls `sink.on_done()` exactly once and returns `Ok(())`.
+ * On a backend-side or sink-side failure, calls `sink.on_error(...)` and
+ * returns `Ok(())` — error delivery is the sink's responsibility, matching
+ * the convention `complete_streaming` established for chat completions.
+ *
+ * The only failure mode that propagates back to the caller is a panic in
+ * the sink itself or the runtime; init errors (e.g. fal.ai not supporting
+ * streaming, MusicGen weight-download failure) are delivered through
+ * `on_error`.
+ */
+public func streamGenerateMusicToSink(model: MusicModel, prompt: String, durationSeconds: Float, sink: MusicStreamSink)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_func_stream_generate_music_to_sink(FfiConverterTypeMusicModel_lower(model),FfiConverterString.lower(prompt),FfiConverterFloat.lower(durationSeconds),FfiConverterTypeMusicStreamSink_lower(sink)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+/**
+ * Synchronous variant of [`stream_generate_music_to_sink`] — blocks the
+ * current thread on the shared Tokio runtime.
+ */
+public func streamGenerateMusicToSinkBlocking(model: MusicModel, prompt: String, durationSeconds: Float, sink: MusicStreamSink)throws   {try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_stream_generate_music_to_sink_blocking(
+        FfiConverterTypeMusicModel_lower(model),
+        FfiConverterString.lower(prompt),
+        FfiConverterFloat.lower(durationSeconds),
+        FfiConverterTypeMusicStreamSink_lower(sink),$0
+    )
+}
+}
+/**
+ * Drive a streaming SFX-generation call, dispatching each chunk to the
+ * sink. Same semantics as [`stream_generate_music_to_sink`].
+ */
+public func streamGenerateSfxToSink(model: MusicModel, prompt: String, durationSeconds: Float, sink: MusicStreamSink)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_func_stream_generate_sfx_to_sink(FfiConverterTypeMusicModel_lower(model),FfiConverterString.lower(prompt),FfiConverterFloat.lower(durationSeconds),FfiConverterTypeMusicStreamSink_lower(sink)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+/**
+ * Synchronous variant of [`stream_generate_sfx_to_sink`] — blocks the
+ * current thread on the shared Tokio runtime.
+ */
+public func streamGenerateSfxToSinkBlocking(model: MusicModel, prompt: String, durationSeconds: Float, sink: MusicStreamSink)throws   {try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_stream_generate_sfx_to_sink_blocking(
+        FfiConverterTypeMusicModel_lower(model),
+        FfiConverterString.lower(prompt),
+        FfiConverterFloat.lower(durationSeconds),
+        FfiConverterTypeMusicStreamSink_lower(sink),$0
+    )
+}
+}
+/**
  * Build an embedded redb-backed checkpoint store rooted at `path`.
  *
  * The database file is created if it does not exist. Re-opening an
@@ -21157,6 +22151,30 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_func_new_whisper_stt_model() != 40916) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_func_new_audiogen_model() != 43231) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_func_new_fal_music_model() != 18015) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_func_new_musicgen_model() != 54644) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_func_new_stable_audio_model() != 2556) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_func_stream_generate_music_to_sink() != 62355) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_func_stream_generate_music_to_sink_blocking() != 23279) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_func_stream_generate_sfx_to_sink() != 10355) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_func_stream_generate_sfx_to_sink_blocking() != 49910) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_func_new_redb_checkpoint_store() != 15901) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -21311,6 +22329,27 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_ttsmodel_synthesize_blocking() != 50217) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_musicmodel_generate_music() != 60700) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_musicmodel_generate_music_blocking() != 33543) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_musicmodel_generate_sfx() != 21245) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_musicmodel_generate_sfx_blocking() != 60492) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_chunk() != 7832) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_done() != 61428) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_error() != 39358) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle() != 640) {
@@ -21842,6 +22881,7 @@ private let initializationResult: InitializationResult = {
     uniffiCallbackInitCustomProvider()
     uniffiCallbackInitForeignLocalModel()
     uniffiCallbackInitForeignTrainingProgress()
+    uniffiCallbackInitMusicStreamSink()
     uniffiCallbackInitStepHandler()
     uniffiCallbackInitToolHandler()
     return InitializationResult.ok

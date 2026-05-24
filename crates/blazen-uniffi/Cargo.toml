@@ -103,6 +103,8 @@ local-all = [
     "whispercpp",
     "tts",
     "audio-music-stable-audio",
+    "audio-music-musicgen",
+    "audio-music-audiogen",
     "tiktoken",
     "distributed",
     "otlp",
@@ -113,7 +115,11 @@ local-all = [
 ]
 
 # Stable Audio (latent diffusion text-to-music).
-audio-music-stable-audio = ["blazen-llm/audio-music-stable-audio"]
+audio-music-stable-audio = ["blazen-llm/audio-music-stable-audio", "dep:candle-core"]
+# MusicGen native text-to-music (Meta, candle port).
+audio-music-musicgen = ["blazen-llm/audio-music-musicgen", "dep:candle-core"]
+# AudioGen native text-to-SFX (Meta, candle port; shares the MusicGen LM head).
+audio-music-audiogen = ["blazen-llm/audio-music-audiogen", "dep:candle-core"]
 audio-stt-whisper-streaming = ["blazen-llm/audio-stt-whisper-streaming"]
 audio-stt-faster-whisper = ["blazen-llm/audio-stt-faster-whisper"]
 audio-tts-bark = ["blazen-llm/audio-tts-bark"]

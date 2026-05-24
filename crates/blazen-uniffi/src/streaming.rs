@@ -254,7 +254,7 @@ pub fn complete_streaming_blocking(
 /// callback chain needs to deliver an error to both `on_chunk` callers and
 /// `on_error` in a few edge cases. Re-builds the variant by hand rather
 /// than going through `to_string()` so structured fields survive.
-fn clone_error(err: &BlazenError) -> BlazenError {
+pub(crate) fn clone_error(err: &BlazenError) -> BlazenError {
     match err {
         BlazenError::Auth { message } => BlazenError::Auth {
             message: message.clone(),

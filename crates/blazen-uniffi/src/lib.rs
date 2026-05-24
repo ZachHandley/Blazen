@@ -29,6 +29,7 @@ uniffi::include_scaffolding!("blazen");
 pub mod agent;
 pub mod batch;
 pub mod compute;
+pub mod compute_music;
 pub mod compute_types;
 #[cfg(feature = "distributed")]
 pub mod controlplane;
@@ -58,6 +59,17 @@ pub mod workflow;
 pub use agent::{Agent, AgentResult, ToolHandler};
 pub use batch::{BatchItem, BatchResult, complete_batch, complete_batch_blocking};
 pub use compute::{ImageGenModel, ImageGenResult, SttModel, SttResult, TtsModel, TtsResult};
+#[cfg(feature = "audio-music-audiogen")]
+pub use compute_music::new_audiogen_model;
+#[cfg(feature = "audio-music-musicgen")]
+pub use compute_music::new_musicgen_model;
+#[cfg(feature = "audio-music-stable-audio")]
+pub use compute_music::new_stable_audio_model;
+pub use compute_music::{
+    MusicChunk, MusicModel, MusicResult, MusicStreamSink, new_fal_music_model,
+    stream_generate_music_to_sink, stream_generate_music_to_sink_blocking,
+    stream_generate_sfx_to_sink, stream_generate_sfx_to_sink_blocking,
+};
 pub use compute_types::{
     AudioResult, BackgroundRemovalRequest, Generated3DModel, GeneratedAudio, GeneratedImage,
     GeneratedVideo, ImageRequest, ImageResult, MediaOutput, MusicRequest, RequestTiming,

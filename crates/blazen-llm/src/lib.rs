@@ -287,7 +287,24 @@ pub use blazen_audio_tts::{DynTtsProvider, TtsError, TtsModel, TtsOptions, TtsPr
 pub use blazen_audio_tts::AnyTtsBackend;
 
 #[cfg(feature = "audio-music")]
-pub use blazen_audio_music::{DynMusicProvider, MusicError, MusicProvider};
+pub use blazen_audio::{AudioFormat as AudioMusicFormat, GeneratedAudio as MusicGeneratedAudio};
+#[cfg(feature = "audio-music-audiogen")]
+pub use blazen_audio_music::backends::audiogen::{
+    AUDIOGEN_FRAME_RATE, AUDIOGEN_MAX_DURATION_HARD_LIMIT, AUDIOGEN_SAMPLE_RATE, AudioGenBackend,
+    AudioGenConfig,
+};
+#[cfg(feature = "audio-music-musicgen")]
+pub use blazen_audio_music::backends::musicgen::{
+    MUSICGEN_MAX_DURATION_HARD_LIMIT, MusicgenBackend, MusicgenConfig, MusicgenVariant,
+};
+#[cfg(feature = "audio-music-stable-audio")]
+pub use blazen_audio_music::backends::stable_audio::{
+    StableAudioBackend, StableAudioConfig, StableAudioVariant,
+};
+#[cfg(feature = "audio-music")]
+pub use blazen_audio_music::{
+    DynMusicProvider, MusicBackend, MusicChunk, MusicError, MusicProvider,
+};
 
 #[cfg(feature = "audio-codec")]
 pub use blazen_audio_codec::{CodecError, CodecProvider, DynCodecProvider};
