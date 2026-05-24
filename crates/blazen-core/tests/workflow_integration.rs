@@ -1743,7 +1743,7 @@ async fn test_workflow_result_carries_registry() {
 // ===========================================================================
 // 18b. Sub-workflow session ref handoff via a shared registry Arc
 // ===========================================================================
-// Regression test for `FUTURE_ROADMAP.md` §0 (Phase 0.3). When a parent
+// Regression test for sub-workflow session-ref handoff. When a parent
 // workflow invokes a sub-workflow and passes its own `SessionRefRegistry`
 // via `run_with_registry`, the sub-workflow's inserts must remain
 // resolvable via the PARENT registry **after** the sub-workflow handler
