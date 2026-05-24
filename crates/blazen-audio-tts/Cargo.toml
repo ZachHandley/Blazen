@@ -83,6 +83,7 @@ f5-tts = [
 spark-tts = [
     "dep:candle-core",
     "dep:candle-nn",
+    "dep:candle-transformers",
 ]
 
 [lints]
