@@ -87,6 +87,8 @@ spark-tts = [
     "dep:candle-core",
     "dep:candle-nn",
     "dep:candle-transformers",
+    "dep:tokenizers",
+    "dep:regex",
 ]
 # `maskgct` enables the Amphion MaskGCT masked-generative TTS backend
 # (Llama-NAR T2S + SoundStorm S2A + RepCodec/DAC + Vocos). Wave M.1
