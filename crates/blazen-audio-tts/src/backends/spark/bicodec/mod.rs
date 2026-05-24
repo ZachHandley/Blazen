@@ -39,3 +39,13 @@ pub(super) mod vocos;
               exercise the public surface in the meantime."
 )]
 pub(super) mod sampler;
+
+#[allow(
+    dead_code,
+    reason = "Quantizers (S.2.1.d) — FactorizedVectorQuantize for the \
+              semantic stream, FSQ + ResidualFSQ for the global stream — \
+              are consumed by the SpeakerEncoder (S.2.1.e) and the \
+              top-level BiCodec wiring (S.2.1.g). The unit tests in \
+              quantizer.rs exercise the public surface in the meantime."
+)]
+pub(super) mod quantizer;
