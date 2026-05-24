@@ -257,6 +257,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "blazen-audio"
+version = "0.0.0-dev"
+dependencies = [
+ "async-trait",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tracing",
+]
+
+[[package]]
+name = "blazen-audio-music"
+version = "0.0.0-dev"
+dependencies = [
+ "async-trait",
+ "blazen-audio",
+ "futures-core",
+ "futures-util",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "tokio-stream",
+ "tracing",
+]
+
+[[package]]
 name = "blazen-controlplane"
 version = "0.0.0-dev"
 dependencies = [
@@ -533,6 +560,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "blazen-3d",
+ "blazen-audio-music",
  "blazen-controlplane",
  "blazen-core",
  "blazen-embed-tract",

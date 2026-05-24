@@ -20,6 +20,7 @@ use super::{
     apply_request_options, as_dyn_completion, complete_promise, fetch_client, resolve_key,
     stream_promise,
 };
+use crate::compute::results::WasmMusicChunk;
 use crate::model::WasmModel;
 
 /// A fal.ai provider with LLM, image, video, audio, transcription, 3-D and
@@ -224,6 +225,77 @@ impl WasmFalProvider {
             let result = AudioGeneration::generate_sfx(provider.as_ref(), req)
                 .await
                 .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+        })
+    }
+
+    /// Stream-generate music from a text prompt.
+    ///
+    /// fal.ai's music endpoints do not stream — they return the entire
+    /// rendered clip in a single response — so this method behaves
+    /// identically to [`generate_music`](Self::generate_music) at the
+    /// network level. The `callback` is still invoked exactly once
+    /// (after the underlying non-streaming call completes) with an
+    /// empty-samples [`WasmMusicChunk`] carrying `isFinal: true`, and
+    /// the returned promise resolves to the same `AudioResult` payload
+    /// as [`generate_music`](Self::generate_music). This shape exists
+    /// so JS callers can treat fal interchangeably with backends that
+    /// truly stream (e.g. MusicGen / Stable Audio in the native SDK)
+    /// without branching on provider identity.
+    #[wasm_bindgen(js_name = "streamGenerateMusic")]
+    pub fn stream_generate_music(
+        &self,
+        request: JsValue,
+        callback: js_sys::Function,
+    ) -> js_sys::Promise {
+        let provider = Arc::clone(&self.inner);
+        future_to_promise(async move {
+            let req: blazen_llm::compute::MusicRequest = serde_wasm_bindgen::from_value(request)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            let result = AudioGeneration::generate_music(provider.as_ref(), req)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            let chunk = WasmMusicChunk {
+                samples: Vec::new(),
+                is_final: true,
+                latency_seconds: None,
+            };
+            let js_chunk = serde_wasm_bindgen::to_value(&chunk)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            let _ = callback.call1(&JsValue::NULL, &js_chunk);
+            serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
+        })
+    }
+
+    /// Stream-generate a sound effect from a text prompt.
+    ///
+    /// Mirrors [`stream_generate_music`](Self::stream_generate_music):
+    /// fal does not stream SFX, so the `callback` fires exactly once
+    /// with an empty-samples [`WasmMusicChunk`] (`isFinal: true`) after
+    /// the underlying non-streaming call completes, and the returned
+    /// promise resolves to the same `AudioResult` as
+    /// [`generate_sfx`](Self::generate_sfx).
+    #[wasm_bindgen(js_name = "streamGenerateSfx")]
+    pub fn stream_generate_sfx(
+        &self,
+        request: JsValue,
+        callback: js_sys::Function,
+    ) -> js_sys::Promise {
+        let provider = Arc::clone(&self.inner);
+        future_to_promise(async move {
+            let req: blazen_llm::compute::MusicRequest = serde_wasm_bindgen::from_value(request)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            let result = AudioGeneration::generate_sfx(provider.as_ref(), req)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            let chunk = WasmMusicChunk {
+                samples: Vec::new(),
+                is_final: true,
+                latency_seconds: None,
+            };
+            let js_chunk = serde_wasm_bindgen::to_value(&chunk)
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            let _ = callback.call1(&JsValue::NULL, &js_chunk);
             serde_wasm_bindgen::to_value(&result).map_err(|e| JsValue::from_str(&e.to_string()))
         })
     }

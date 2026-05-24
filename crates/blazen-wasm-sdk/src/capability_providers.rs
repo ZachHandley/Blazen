@@ -77,6 +77,40 @@ async fn call_handler(
     }
 }
 
+/// Extract a named handler function from a JS object and call it with
+/// `(request, callback)`, awaiting the returned promise (which, by
+/// streaming-handler convention, resolves to `undefined` once the
+/// handler has emitted every chunk through `callback`).
+async fn call_handler_with_callback(
+    handlers: &JsValue,
+    method: &str,
+    request: &JsValue,
+    callback: &js_sys::Function,
+) -> Result<JsValue, JsValue> {
+    let handler = js_sys::Reflect::get(handlers, &JsValue::from_str(method))
+        .map_err(|e| JsValue::from_str(&format!("failed to get handler '{method}': {e:?}")))?;
+
+    if !handler.is_function() {
+        return Err(JsValue::from_str(&format!(
+            "handler '{method}' is not a function"
+        )));
+    }
+
+    let func: &js_sys::Function = handler.unchecked_ref();
+    let result = func
+        .call2(&JsValue::NULL, request, callback.as_ref())
+        .map_err(|e| JsValue::from_str(&format!("handler '{method}' threw: {e:?}")))?;
+
+    if result.has_type::<js_sys::Promise>() {
+        let promise: js_sys::Promise = result.unchecked_into();
+        wasm_bindgen_futures::JsFuture::from(promise)
+            .await
+            .map_err(|e| JsValue::from_str(&format!("handler '{method}' rejected: {e:?}")))
+    } else {
+        Ok(result)
+    }
+}
+
 /// Call a nullary handler (no request argument).
 async fn call_handler_nullary(handlers: &JsValue, method: &str) -> Result<JsValue, JsValue> {
     let handler = js_sys::Reflect::get(handlers, &JsValue::from_str(method))
@@ -115,7 +149,9 @@ export type CapabilityHandler = (request: any) => Promise<any> | any;
 /** Handlers for MusicProvider. */
 export interface MusicHandlers {
     generateMusic: (request: any) => Promise<any> | any;
-    generateSfx: (request: any) => Promise<any> | any;
+    generateSfx:   (request: any) => Promise<any> | any;
+    streamGenerateMusic?: (request: any, onChunk: (chunk: WasmMusicChunk) => void) => Promise<void>;
+    streamGenerateSfx?:   (request: any, onChunk: (chunk: WasmMusicChunk) => void) => Promise<void>;
 }
 
 /** Handlers for ImageProvider. */
@@ -260,6 +296,44 @@ impl WasmMusicProvider {
         let handlers = self.handlers.clone();
         future_to_promise(SendFuture(async move {
             call_handler(&handlers, "generateSfx", &request).await
+        }))
+    }
+
+    /// Stream-generate music from a prompt.
+    ///
+    /// Delegates to the JS-side `streamGenerateMusic` handler on the
+    /// handlers object, which must invoke `callback(chunk)` for each
+    /// emitted `WasmMusicChunk` and resolve its returned promise once
+    /// the final chunk has been delivered. Backends that don't truly
+    /// stream are expected to emit a single chunk with `isFinal: true`
+    /// (see `FalProvider.streamGenerateMusic` for that exact pattern).
+    #[wasm_bindgen(js_name = "streamGenerateMusic")]
+    pub fn stream_generate_music(
+        &self,
+        request: JsValue,
+        callback: js_sys::Function,
+    ) -> js_sys::Promise {
+        let handlers = self.handlers.clone();
+        future_to_promise(SendFuture(async move {
+            call_handler_with_callback(&handlers, "streamGenerateMusic", &request, &callback).await
+        }))
+    }
+
+    /// Stream-generate a sound effect from a prompt.
+    ///
+    /// Mirrors [`stream_generate_music`](Self::stream_generate_music):
+    /// delegates to the JS-side `streamGenerateSfx` handler, which
+    /// must invoke `callback(chunk)` per chunk and resolve once the
+    /// final chunk has been delivered.
+    #[wasm_bindgen(js_name = "streamGenerateSfx")]
+    pub fn stream_generate_sfx(
+        &self,
+        request: JsValue,
+        callback: js_sys::Function,
+    ) -> js_sys::Promise {
+        let handlers = self.handlers.clone();
+        future_to_promise(SendFuture(async move {
+            call_handler_with_callback(&handlers, "streamGenerateSfx", &request, &callback).await
         }))
     }
 }

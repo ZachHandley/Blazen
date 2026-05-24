@@ -70,6 +70,7 @@ uuid = { version = "1", default-features = false, features = ["v4", "serde"] }
 # original rejection value through the agent loop and re-throw it intact.
 send_wrapper = "0.6"
 blazen-3d = { version = "0.0.0-dev", path = "../blazen-3d", default-features = false, optional = true }
+blazen-audio-music = { version = "0.0.0-dev", path = "../blazen-audio-music", default-features = false }
 
 [features]
 default = []
