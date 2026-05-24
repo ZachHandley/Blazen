@@ -297,6 +297,11 @@ class FastEmbedError(ProviderError):
 class TractError(ProviderError):
     """Tract ONNX embedding backend error (feature: `tract`)."""
     ...
+
+class MusicGenError(ProviderError):
+    """Music / SFX generation backend error (features:
+    `audio-music-musicgen`, `audio-music-audiogen`, `audio-music-stable-audio`)."""
+    ...
 "#;
 
     // Insert exception names into __all__ alphabetically. Existing __all__
@@ -313,6 +318,7 @@ class TractError(ProviderError):
         "LlamaCppError",
         "MediaError",
         "MistralRsError",
+        "MusicGenError",
         "ProviderError",
         "RateLimitError",
         "TimeoutError",

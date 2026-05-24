@@ -46,6 +46,12 @@ pub mod error;
 pub mod events;
 pub mod manager;
 pub mod model_cache;
+#[cfg(any(
+    feature = "audio-music-musicgen",
+    feature = "audio-music-audiogen",
+    feature = "audio-music-stable-audio",
+))]
+pub mod music;
 pub mod peer;
 pub mod persist;
 pub mod pipeline;
@@ -567,6 +573,20 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // BaseProvider -- wraps any Model with defaults applied
     // before delegation.
     m.add_class::<providers::base::PyBaseProvider>()?;
+
+    // Music / SFX backends (feature-gated; each backend factory is
+    // individually feature-gated so a single-backend build registers
+    // exactly the classes it can construct).
+    #[cfg(any(
+        feature = "audio-music-musicgen",
+        feature = "audio-music-audiogen",
+        feature = "audio-music-stable-audio",
+    ))]
+    {
+        m.add_class::<music::chunk::PyMusicChunk>()?;
+        m.add_class::<music::model::PyMusicModel>()?;
+        m.add_class::<music::stream::PyMusicStream>()?;
+    }
 
     // Capability providers (subclassable)
     m.add_class::<providers::capability_providers::TTSProvider>()?;

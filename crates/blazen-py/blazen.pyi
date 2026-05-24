@@ -13,8 +13,6 @@ __all__ = [
     "AgentConfig",
     "AgentEvent",
     "AgentResult",
-    "AnimateRequest",
-    "AnimateResult",
     "AnthropicProvider",
     "ApiProtocol",
     "Artifact",
@@ -65,7 +63,6 @@ __all__ = [
     "CheckpointStore",
     "Citation",
     "CohereProvider",
-    "Compat3dProvider",
     "CompletionStream",
     "Compute",
     "ComputeError",
@@ -193,8 +190,12 @@ __all__ = [
     "ModelRequest",
     "ModelResponse",
     "ModelStatus",
+    "MusicChunk",
+    "MusicGenError",
+    "MusicModel",
     "MusicProvider",
     "MusicRequest",
+    "MusicStream",
     "NoopUsageEmitter",
     "OpenAiCompatConfig",
     "OpenAiCompatEmbeddingModel",
@@ -208,7 +209,6 @@ __all__ = [
     "ParallelStage",
     "ParallelSubWorkflowsStep",
     "PauseReason",
-    "PbrMaps",
     "PeerClient",
     "PeerRemoteRefDescriptor",
     "PerplexityProvider",
@@ -242,9 +242,6 @@ __all__ = [
     "ReasoningTrace",
     "RedbCheckpointStore",
     "RefLifetime",
-    "RefineRequest",
-    "RefineResult",
-    "RefineStats",
     "RegistryKey",
     "ReleaseRequest",
     "ReleaseResponse",
@@ -261,8 +258,6 @@ __all__ = [
     "RetryMiddleware",
     "RetryModel",
     "RetryStack",
-    "RigRequest",
-    "RigResult",
     "Role",
     "RunEventStream",
     "RunStatus",
@@ -295,8 +290,6 @@ __all__ = [
     "SubWorkflowStep",
     "TTSProvider",
     "TemplateRole",
-    "TexturizeRequest",
-    "TexturizeResult",
     "ThreeDProvider",
     "ThreeDProviderDefaults",
     "ThreeDRequest",
@@ -640,64 +633,6 @@ class AgentResult:
     def total_cost(self) -> typing.Optional[builtins.float]:
         r"""
         Aggregated cost across all rounds, if available.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class AnimateRequest:
-    r"""
-    Request parameters for :meth:`Compat3dProvider.animate`.
-    """
-    @property
-    def prompt(self) -> typing.Optional[builtins.str]: ...
-    @property
-    def driving_video(self) -> typing.Optional[bytes]: ...
-    @property
-    def bvh_motion(self) -> typing.Optional[bytes]: ...
-    @property
-    def duration_seconds(self) -> typing.Optional[builtins.float]: ...
-    @property
-    def fps(self) -> typing.Optional[builtins.int]: ...
-    @property
-    def loop_animation(self) -> builtins.bool: ...
-    def __new__(cls, *, prompt: typing.Optional[builtins.str] = None, driving_video: typing.Optional[typing.Sequence[builtins.int]] = None, bvh_motion: typing.Optional[typing.Sequence[builtins.int]] = None, duration_seconds: typing.Optional[builtins.float] = None, fps: typing.Optional[builtins.int] = None, loop_animation: builtins.bool = False) -> AnimateRequest:
-        r"""
-        Construct a new animate request.
-        
-        Args:
-            prompt: Text-guided motion prompt (e.g. ``"walks forward and waves"``).
-            driving_video: Optional MP4 bytes for video-driven motion transfer.
-            bvh_motion: Optional BVH motion-capture clip bytes.
-            duration_seconds: Requested animation duration in seconds.
-            fps: Requested animation framerate.
-            loop_animation: ``True`` to mark the produced animation as a seamless loop.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class AnimateResult:
-    r"""
-    Result of a successful :meth:`Compat3dProvider.animate` call.
-    """
-    @property
-    def animated_glb(self) -> bytes:
-        r"""
-        GLB bytes with the animation track(s) embedded.
-        """
-    @property
-    def mime_type(self) -> builtins.str:
-        r"""
-        MIME type of :attr:`animated_glb`; always ``"model/gltf-binary"``.
-        """
-    @property
-    def duration_seconds(self) -> builtins.float:
-        r"""
-        Actual produced duration in seconds (may differ from the request).
-        """
-    @property
-    def fps(self) -> builtins.int:
-        r"""
-        Actual produced framerate in frames per second (may differ from the request).
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -2436,78 +2371,6 @@ class CohereProvider:
     def http_client(self) -> HttpClientHandle:
         r"""
         Return an opaque handle to the underlying HTTP client.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class Compat3dProvider:
-    r"""
-    HTTP-proxy backend that implements all four 3D-pipeline capability
-    traits against a configurable upstream service.
-    
-    For every stage, this provider POSTs a ``multipart/form-data`` request
-    with the mesh GLB and a JSON request body to
-    ``{base_url}/v1/3d/{texturize,rig,refine,animate}``, and decodes a
-    base64-wrapped JSON response into the corresponding result class.
-    
-    Example:
-        >>> provider = Compat3dProvider("https://my-3d-server.example.com", api_key="...")
-        >>> result = await provider.texturize(mesh_glb, TexturizeRequest(prompt="bronze", pbr=True))
-    """
-    def __new__(cls, base_url: builtins.str, api_key: typing.Optional[builtins.str] = None, timeout_secs: typing.Optional[builtins.int] = None) -> Compat3dProvider:
-        r"""
-        Construct a new HTTP-proxy provider.
-        
-        Args:
-            base_url: Upstream base URL (e.g. ``"https://3d.example.com"``).
-            api_key: Optional bearer token for ``Authorization: Bearer ...``.
-            timeout_secs: Optional per-request timeout in seconds (default 600).
-        """
-    async def texturize(self, mesh_glb: typing.Sequence[builtins.int], request: TexturizeRequest) -> TexturizeResult:
-        r"""
-        Apply or generate a texture/material for an existing 3D mesh.
-        
-        Args:
-            mesh_glb: Input mesh as GLB or OBJ bytes.
-            request: A :class:`TexturizeRequest` describing the desired texture.
-        
-        Returns:
-            A :class:`TexturizeResult` with the textured GLB and optional PBR maps.
-        """
-    async def rig(self, mesh_glb: typing.Sequence[builtins.int], request: RigRequest) -> RigResult:
-        r"""
-        Auto-rig a 3D mesh, producing a GLB with skeletal armature and
-        (optionally) skin weights embedded.
-        
-        Args:
-            mesh_glb: Input mesh as GLB bytes.
-            request: A :class:`RigRequest` describing the desired rig.
-        
-        Returns:
-            A :class:`RigResult` with the rigged GLB and bone names.
-        """
-    async def refine(self, mesh_glb: typing.Sequence[builtins.int], request: RefineRequest) -> RefineResult:
-        r"""
-        Refine a 3D mesh: decimate, fill holes, unwrap UVs, retopologize, smooth.
-        
-        Args:
-            mesh_glb: Input mesh as GLB bytes.
-            request: A :class:`RefineRequest` describing the passes to apply.
-        
-        Returns:
-            A :class:`RefineResult` with the refined GLB and statistics.
-        """
-    async def animate(self, rigged_glb: typing.Sequence[builtins.int], request: AnimateRequest) -> AnimateResult:
-        r"""
-        Animate a rigged 3D mesh from a text prompt, motion-capture clip,
-        or driving video.
-        
-        Args:
-            rigged_glb: Rigged mesh as GLB bytes (output of :meth:`rig`).
-            request: An :class:`AnimateRequest` describing the desired motion.
-        
-        Returns:
-            An :class:`AnimateResult` with the animated GLB.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -8212,6 +8075,149 @@ class ModelStatus:
         """
     def __repr__(self) -> builtins.str: ...
 
+@typing.final
+class MusicChunk:
+    r"""
+    A single PCM audio chunk emitted by a [`PyMusicModel`](super::PyMusicModel).
+    
+    Each chunk owns its own f32 sample buffer; consumers can concatenate
+    chunk samples in arrival order to reconstruct the full clip equivalent
+    to a non-streaming `generate_music` / `generate_sfx` call.
+    """
+    @property
+    def samples(self) -> builtins.list[builtins.float]:
+        r"""
+        32-bit float PCM samples in `[-1.0, 1.0]` at the backend's
+        `sample_rate` (mono).
+        """
+    @property
+    def is_final(self) -> builtins.bool:
+        r"""
+        `True` if this is the last chunk for the generation call.
+        """
+    @property
+    def latency_seconds(self) -> typing.Optional[builtins.float]:
+        r"""
+        Latency-from-call-start in seconds for this chunk, if the backend
+        measured it.
+        """
+    @property
+    def sample_rate(self) -> typing.Optional[builtins.int]:
+        r"""
+        Sample rate (Hz) of the f32 samples carried by this chunk.
+        
+        `None` on intermediate streamed chunks (consult the producing
+        `MusicModel.sample_rate` accessor for those). Always populated on
+        non-streaming `generate_*` results.
+        """
+    @property
+    def sample_count(self) -> builtins.int:
+        r"""
+        Number of f32 PCM samples carried by this chunk.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class MusicModel:
+    r"""
+    Opaque handle around a `dyn MusicBackend`.
+    
+    Constructed via one of the feature-gated `@staticmethod` factories
+    (`MusicModel.musicgen(...)`, `MusicModel.audiogen(...)`,
+    `MusicModel.stable_audio(...)`) — there is no public `__init__`.
+    
+    The handle is cheap to clone (internally `Arc<dyn MusicBackend>`); the
+    underlying weights are lazily downloaded on the first `generate_*`
+    call.
+    """
+    @property
+    def id(self) -> builtins.str:
+        r"""
+        Stable backend identifier (e.g. `"musicgen-small"`,
+        `"audiogen:facebook/audiogen-medium"`, `"stable-audio:small"`).
+        """
+    @property
+    def sample_rate(self) -> builtins.int:
+        r"""
+        Output sample rate in hertz.
+        """
+    @staticmethod
+    def musicgen(*, variant: builtins.str = 'small', device: typing.Optional[Device] = None, cache_dir: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None, max_duration_seconds: builtins.float = 30.0) -> MusicModel:
+        r"""
+        Construct a MusicGen backend (`facebook/musicgen-{small,medium,large}`).
+        
+        Args:
+            variant: One of `"small"` (default), `"medium"`, `"large"`.
+            device: Optional [`Device`] override (default: auto-detect
+                CUDA -> Metal -> CPU).
+            cache_dir: Optional Hugging Face cache directory override.
+            max_duration_seconds: Per-backend hard cap on a single call
+                (default 30.0; absolute upper bound is 60.0 regardless).
+        
+        Output sample rate: 32 kHz mono.
+        """
+    @staticmethod
+    def audiogen(*, repo_id: typing.Optional[builtins.str] = None, revision: typing.Optional[builtins.str] = None, device: typing.Optional[Device] = None, cache_dir: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None, max_duration_seconds: builtins.float = 30.0) -> MusicModel:
+        r"""
+        Construct an AudioGen backend (default `facebook/audiogen-medium`).
+        
+        Args:
+            repo_id: Hugging Face repo (default `"facebook/audiogen-medium"`).
+            revision: Optional pinned revision (commit SHA or tag).
+            device: Optional [`Device`] override (default: auto-detect
+                CUDA -> Metal -> CPU).
+            cache_dir: Optional Hugging Face cache directory override.
+            max_duration_seconds: Per-backend hard cap on a single call
+                (default 30.0).
+        
+        Output sample rate: 16 kHz mono.
+        """
+    @staticmethod
+    async def stable_audio(*, variant: builtins.str = 'small', tokenizer_path: builtins.str | os.PathLike | pathlib.Path, device: typing.Optional[Device] = None, dtype: builtins.str = 'f32') -> MusicModel:
+        r"""
+        Construct a Stable Audio Open backend (small or 1.0 variant).
+        
+        Args:
+            variant: One of `"small"` (default) or `"open-1.0"`.
+            tokenizer_path: Path to a local `tokenizer.json` for the T5
+                conditioner (Stable Audio Open does not ship one inside
+                the model repo).
+            device: Optional [`Device`] override (default: auto-detect).
+            dtype: Inference dtype — `"f32"` (default) or `"f16"`.
+        
+        Output sample rate: 44.1 kHz stereo.
+        """
+    def __repr__(self) -> builtins.str: ...
+    async def generate_music(self, prompt: builtins.str, duration_seconds: builtins.float) -> MusicChunk:
+        r"""
+        Generate `duration_seconds` of music conditioned on `prompt`.
+        
+        Returns a coroutine that resolves to a final [`MusicChunk`] with
+        `is_final=True`, `sample_rate=self.sample_rate`, and the full f32
+        PCM sample buffer.
+        """
+    async def generate_sfx(self, prompt: builtins.str, duration_seconds: builtins.float) -> MusicChunk:
+        r"""
+        Generate `duration_seconds` of sound-effect audio conditioned on
+        `prompt`.
+        
+        Returns a coroutine that resolves to a final [`MusicChunk`] with
+        `is_final=True`.
+        """
+    def stream_generate_music(self, prompt: builtins.str, duration_seconds: builtins.float) -> MusicStream:
+        r"""
+        Stream music chunks for low-latency progressive playback.
+        
+        Returns a [`MusicStream`] async-iterator that yields
+        [`MusicChunk`] instances (each one a slice of f32 PCM samples)
+        as the backend produces them. Concatenating all chunks in order
+        reconstructs the equivalent of a single `generate_music` call.
+        """
+    def stream_generate_sfx(self, prompt: builtins.str, duration_seconds: builtins.float) -> MusicStream:
+        r"""
+        Stream SFX chunks for low-latency progressive playback.
+        """
+
 class MusicProvider:
     r"""
     Base class for music generation providers.
@@ -8269,6 +8275,20 @@ class MusicRequest:
     @property
     def model(self) -> typing.Optional[builtins.str]: ...
     def __new__(cls, *, prompt: builtins.str, duration_seconds: typing.Optional[builtins.float] = None, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> MusicRequest: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class MusicStream:
+    r"""
+    Async iterator over streamed [`MusicChunk`] emissions.
+    
+    Each `__anext__` resolves to a fresh
+    [`MusicChunk`](crate::music::chunk::PyMusicChunk). When the underlying
+    backend stream ends, the next call raises `StopAsyncIteration`. The
+    iterator is single-pass: once exhausted it stays exhausted.
+    """
+    def __aiter__(self) -> MusicStream: ...
+    async def __anext__(self) -> MusicChunk: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -8688,34 +8708,6 @@ class ParallelSubWorkflowsStep:
             branches: List of `SubWorkflowStep` instances to run concurrently.
             join_strategy: How to join the branch results. Defaults to
                 `JoinStrategy.WaitAll`.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class PbrMaps:
-    r"""
-    Bundle of PBR (physically-based rendering) material maps produced by
-    a texturizer backend.
-    """
-    @property
-    def albedo_png(self) -> bytes:
-        r"""
-        Base-color / diffuse texture as PNG bytes. Always present.
-        """
-    @property
-    def normal_png(self) -> typing.Optional[bytes]:
-        r"""
-        Tangent-space normal map as PNG bytes, if produced.
-        """
-    @property
-    def roughness_png(self) -> typing.Optional[bytes]:
-        r"""
-        Linear roughness map as PNG bytes, if produced.
-        """
-    @property
-    def metallic_png(self) -> typing.Optional[bytes]:
-        r"""
-        Linear metallic map as PNG bytes, if produced.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -9821,79 +9813,6 @@ class RedbCheckpointStore:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
-class RefineRequest:
-    r"""
-    Request parameters for :meth:`Compat3dProvider.refine`.
-    """
-    @property
-    def decimate_target_tris(self) -> typing.Optional[builtins.int]: ...
-    @property
-    def fill_holes(self) -> builtins.bool: ...
-    @property
-    def unwrap_uvs(self) -> builtins.bool: ...
-    @property
-    def retopologize(self) -> builtins.bool: ...
-    @property
-    def smooth_iterations(self) -> typing.Optional[builtins.int]: ...
-    def __new__(cls, *, decimate_target_tris: typing.Optional[builtins.int] = None, fill_holes: builtins.bool = False, unwrap_uvs: builtins.bool = False, retopologize: builtins.bool = False, smooth_iterations: typing.Optional[builtins.int] = None) -> RefineRequest:
-        r"""
-        Construct a new refine request.
-        
-        Args:
-            decimate_target_tris: Decimate the mesh towards this triangle count.
-            fill_holes: ``True`` to fill holes via screened poisson reconstruction.
-            unwrap_uvs: ``True`` to compute a new UV unwrap.
-            retopologize: ``True`` to retopologize the mesh.
-            smooth_iterations: Laplacian / Taubin smoothing iteration count.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class RefineResult:
-    r"""
-    Result of a successful :meth:`Compat3dProvider.refine` call.
-    """
-    @property
-    def refined_glb(self) -> bytes:
-        r"""
-        GLB bytes with the requested refinement passes applied.
-        """
-    @property
-    def mime_type(self) -> builtins.str:
-        r"""
-        MIME type of :attr:`refined_glb`; always ``"model/gltf-binary"``.
-        """
-    @property
-    def stats(self) -> RefineStats:
-        r"""
-        Before/after statistics for the refinement run.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class RefineStats:
-    r"""
-    Summary statistics emitted by a :meth:`Compat3dProvider.refine` call.
-    """
-    @property
-    def input_tri_count(self) -> builtins.int:
-        r"""
-        Triangle count of the input mesh.
-        """
-    @property
-    def output_tri_count(self) -> builtins.int:
-        r"""
-        Triangle count of the output (refined) mesh.
-        """
-    @property
-    def uv_chart_count(self) -> typing.Optional[builtins.int]:
-        r"""
-        When UV unwrapping ran, the number of UV charts the unwrap produced.
-        ``None`` when UV unwrapping did not run for this call.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
 class RegistryKey:
     r"""
     Strongly-typed UUID key identifying an entry in a
@@ -10393,50 +10312,6 @@ class RetryStack:
         Resolve the stack against an optional per-call override and return
         the effective `RetryConfig`. Precedence: call > step > workflow >
         pipeline > provider; falls back to `RetryConfig()` defaults.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class RigRequest:
-    r"""
-    Request parameters for :meth:`Compat3dProvider.rig`.
-    """
-    @property
-    def template(self) -> typing.Optional[builtins.str]: ...
-    @property
-    def skin(self) -> builtins.bool: ...
-    @property
-    def pose_hint(self) -> typing.Optional[builtins.str]: ...
-    def __new__(cls, *, template: typing.Optional[builtins.str] = None, skin: builtins.bool = True, pose_hint: typing.Optional[builtins.str] = None) -> RigRequest:
-        r"""
-        Construct a new rig request.
-        
-        Args:
-            template: Target rig template (``"humanoid"``, ``"quadruped"``, ``"auto"``).
-            skin: ``True`` to apply skin-weight painting after armature placement.
-            pose_hint: Optional pose hint (``"t-pose"``, ``"a-pose"``, or backend JSON).
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class RigResult:
-    r"""
-    Result of a successful :meth:`Compat3dProvider.rig` call.
-    """
-    @property
-    def rigged_glb(self) -> bytes:
-        r"""
-        GLB bytes with the new armature (and skin weights, if requested) embedded.
-        """
-    @property
-    def mime_type(self) -> builtins.str:
-        r"""
-        MIME type of :attr:`rigged_glb`; always ``"model/gltf-binary"``.
-        """
-    @property
-    def bone_names(self) -> builtins.list[builtins.str]:
-        r"""
-        Names of bones in the produced armature, in depth-first traversal order.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -11385,57 +11260,6 @@ class TTSProvider:
         r"""
         Synthesize speech from text.
         """
-
-@typing.final
-class TexturizeRequest:
-    r"""
-    Request parameters for :meth:`Compat3dProvider.texturize`.
-    """
-    @property
-    def prompt(self) -> typing.Optional[builtins.str]: ...
-    @property
-    def reference_image(self) -> typing.Optional[bytes]: ...
-    @property
-    def style(self) -> typing.Optional[builtins.str]: ...
-    @property
-    def resolution(self) -> typing.Optional[builtins.int]: ...
-    @property
-    def pbr(self) -> builtins.bool: ...
-    def __new__(cls, *, prompt: typing.Optional[builtins.str] = None, reference_image: typing.Optional[typing.Sequence[builtins.int]] = None, style: typing.Optional[builtins.str] = None, resolution: typing.Optional[builtins.int] = None, pbr: builtins.bool = False) -> TexturizeRequest:
-        r"""
-        Construct a new texturize request.
-        
-        Args:
-            prompt: Text-guided texture prompt (e.g. ``"weathered bronze"``).
-            reference_image: Optional PNG/JPEG bytes used as a style anchor.
-            style: Backend-specific style preset (``"stylized"``, ``"realistic"``, ...).
-            resolution: Target square texture resolution in pixels.
-            pbr: ``True`` to request a full PBR material bundle.
-        """
-    def __repr__(self) -> builtins.str: ...
-
-@typing.final
-class TexturizeResult:
-    r"""
-    Result of a successful :meth:`Compat3dProvider.texturize` call.
-    """
-    @property
-    def textured_glb(self) -> bytes:
-        r"""
-        GLB bytes with the new texture (and PBR maps if any) embedded.
-        """
-    @property
-    def mime_type(self) -> builtins.str:
-        r"""
-        MIME type of :attr:`textured_glb`; always ``"model/gltf-binary"``.
-        """
-    @property
-    def pbr_maps(self) -> typing.Optional[PbrMaps]:
-        r"""
-        Optional out-of-band PBR map bundle. Duplicates of the maps
-        embedded in :attr:`textured_glb` when present.
-        """
-    def __repr__(self) -> builtins.str: ...
 
 class ThreeDProvider:
     r"""
@@ -15063,6 +14887,11 @@ class FastEmbedError(ProviderError):
 
 class TractError(ProviderError):
     """Tract ONNX embedding backend error (feature: `tract`)."""
+    ...
+
+class MusicGenError(ProviderError):
+    """Music / SFX generation backend error (features:
+    `audio-music-musicgen`, `audio-music-audiogen`, `audio-music-stable-audio`)."""
     ...
 
 # --- Module-level type aliases -----------------------------------------

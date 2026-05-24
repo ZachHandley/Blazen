@@ -44,6 +44,12 @@ pyo3::create_exception!(blazen, DiffusionError, ProviderError);
 pyo3::create_exception!(blazen, FastEmbedError, ProviderError);
 #[cfg(feature = "tract")]
 pyo3::create_exception!(blazen, TractError, ProviderError);
+#[cfg(any(
+    feature = "audio-music-musicgen",
+    feature = "audio-music-audiogen",
+    feature = "audio-music-stable-audio",
+))]
+pyo3::create_exception!(blazen, MusicGenError, ProviderError);
 
 /// Register all custom exception types on the Python module.
 pub fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -79,6 +85,12 @@ pub fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add("FastEmbedError", m.py().get_type::<FastEmbedError>())?;
     #[cfg(feature = "tract")]
     m.add("TractError", m.py().get_type::<TractError>())?;
+    #[cfg(any(
+        feature = "audio-music-musicgen",
+        feature = "audio-music-audiogen",
+        feature = "audio-music-stable-audio",
+    ))]
+    m.add("MusicGenError", m.py().get_type::<MusicGenError>())?;
 
     Ok(())
 }
@@ -261,6 +273,29 @@ pub fn blazen_error_to_pyerr(err: blazen_llm::BlazenError) -> PyErr {
             BlazenException::new_err(message.clone())
         }
         _ => BlazenException::new_err(err.to_string()),
+    }
+}
+
+/// Convert a [`MusicError`](blazen_audio_music::MusicError) to a rich
+/// [`PyErr`] with the appropriate exception subclass.
+///
+/// - [`MusicError::InvalidInput`] -> `ValueError`
+/// - [`MusicError::NotYetImplemented`] / [`MusicError::EngineNotAvailable`]
+///   -> [`UnsupportedError`]
+/// - everything else -> [`MusicGenError`] (subclass of [`ProviderError`])
+#[cfg(any(
+    feature = "audio-music-musicgen",
+    feature = "audio-music-audiogen",
+    feature = "audio-music-stable-audio",
+))]
+pub fn music_error_to_pyerr(err: blazen_audio_music::MusicError) -> PyErr {
+    use blazen_audio_music::MusicError as M;
+    match &err {
+        M::InvalidInput(_) => PyValueError::new_err(err.to_string()),
+        M::NotYetImplemented(_) | M::EngineNotAvailable => {
+            UnsupportedError::new_err(err.to_string())
+        }
+        _ => MusicGenError::new_err(err.to_string()),
     }
 }
 
