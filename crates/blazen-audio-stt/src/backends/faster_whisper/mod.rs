@@ -273,15 +273,37 @@ impl SttBackend for FasterWhisperBackend {
         Ok(decoder::into_transcription_result(decoded))
     }
 
+    /// Window-based streaming transcription (Wave F.2.4).
+    ///
+    /// `audio` must yield 16 kHz mono f32 PCM (the
+    /// `prepare_for_whisper` resampler is **not** applied to streaming
+    /// input — callers are responsible for upstream resampling, matching
+    /// the `whisper-streaming` backend's contract). The pipeline buffers
+    /// incoming samples until it has a full 30-second window (480 000
+    /// samples), then dispatches one [`FasterWhisperDecoder::transcribe`]
+    /// per window on the blocking pool. Each window's transcript is
+    /// emitted as a single [`StreamingTranscript`] with
+    /// `is_final = true` and `latency_seconds` carrying the window's
+    /// start-offset (in seconds) from the stream's first sample. The
+    /// final partial window (if non-empty) flushes on EOS.
+    ///
+    /// See [`pipeline`] for the rationale on window-based dispatch
+    /// (ct2rs exposes no native streaming/callback hook).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`SttError::ModelLoad`] if the lazy [`ensure_loaded`] call
+    /// fails (HF download or ct2rs init); per-window inference failures
+    /// surface as `Err` items on the returned stream.
     async fn stream(
         &self,
-        _audio: Pin<Box<dyn Stream<Item = Vec<f32>> + Send>>,
-        _language: Option<&str>,
+        audio: Pin<Box<dyn Stream<Item = Vec<f32>> + Send>>,
+        language: Option<&str>,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamingTranscript, SttError>> + Send>>, SttError>
     {
-        Err(SttError::Unsupported(
-            "faster-whisper streaming override lands in Wave F.2.7".into(),
-        ))
+        let decoder = self.ensure_loaded().await?;
+        let lang = language.map(str::to_owned);
+        Ok(pipeline::streaming_transcribe(decoder, audio, lang))
     }
 }
 
@@ -366,21 +388,82 @@ mod tests {
         );
     }
 
+    /// Streaming-surface live test (Wave F.2.4) — replaces the
+    /// obsolete `stream_returns_wave_f0_unsupported` from the F.0
+    /// scaffold. Feeds 90 s of silence (split into 90 × 16 000-sample
+    /// chunks) through [`SttBackend::stream`] and asserts the pipeline
+    /// emits exactly 3 windows (no partial trailing window — 90 s is an
+    /// exact multiple of the 30 s window). Gated on
+    /// `BLAZEN_TEST_FASTER_WHISPER=1` because it pulls the
+    /// `Systran/faster-whisper-tiny` weights on first run.
     #[tokio::test]
-    async fn stream_returns_wave_f0_unsupported() {
-        use futures_util::stream;
+    #[ignore = "requires BLAZEN_TEST_FASTER_WHISPER=1 and pulls ~75 MB of CTranslate2 Whisper weights from HF Hub"]
+    async fn stream_yields_one_transcript_per_30s_window() {
+        use futures_util::{StreamExt, stream};
+
+        if std::env::var("BLAZEN_TEST_FASTER_WHISPER").ok().as_deref() != Some("1") {
+            eprintln!("skipping: BLAZEN_TEST_FASTER_WHISPER != 1");
+            return;
+        }
+
+        // 90 chunks × 16 000 samples each = 90 s of silence at 16 kHz =
+        // 3 full 30 s windows, no partial tail.
+        let chunks: Vec<Vec<f32>> = (0..90).map(|_| vec![0.0_f32; 16_000]).collect();
+        let audio: Pin<Box<dyn Stream<Item = Vec<f32>> + Send>> = Box::pin(stream::iter(chunks));
 
         let backend = FasterWhisperBackend::default();
-        let audio: Pin<Box<dyn Stream<Item = Vec<f32>> + Send>> = Box::pin(stream::empty());
-        let result = backend.stream(audio, None).await;
-        match result {
-            Err(SttError::Unsupported(msg)) => {
-                assert!(msg.contains("Wave F."), "msg = {msg}");
-                assert!(msg.contains("streaming"), "msg = {msg}");
-            }
-            Err(other) => panic!("expected Unsupported, got {other:?}"),
-            Ok(_) => panic!("scaffold must surface Unsupported"),
+        let mut out = backend
+            .stream(audio, Some("en"))
+            .await
+            .expect("stream construction must succeed");
+
+        let mut emissions: Vec<StreamingTranscript> = Vec::new();
+        while let Some(item) = out.next().await {
+            emissions.push(item.expect("no per-window inference errors on silence"));
         }
+        assert_eq!(
+            emissions.len(),
+            3,
+            "90 s of input must produce exactly 3 × 30 s windows"
+        );
+        // Every emission is committed (window-based dispatch never
+        // produces interim guesses).
+        assert!(emissions.iter().all(|t| t.is_final));
+        // Window start offsets must be 0, 30, 60 seconds.
+        let starts: Vec<f32> = emissions
+            .iter()
+            .map(|t| t.latency_seconds.unwrap_or(f32::NAN))
+            .collect();
+        assert!((starts[0] - 0.0).abs() < 1e-3, "starts = {starts:?}");
+        assert!((starts[1] - 30.0).abs() < 1e-3, "starts = {starts:?}");
+        assert!((starts[2] - 60.0).abs() < 1e-3, "starts = {starts:?}");
+    }
+
+    /// Streaming-surface live test — confirms the public contract for
+    /// an empty input stream: [`SttBackend::stream`] returns `Ok(_)`
+    /// (the lazy weight load still has to succeed) and the resulting
+    /// stream terminates immediately with no emissions. Gated on
+    /// `BLAZEN_TEST_FASTER_WHISPER=1` for the same reason as
+    /// [`stream_yields_one_transcript_per_30s_window`] — the
+    /// `ensure_loaded` call still pulls weights.
+    #[tokio::test]
+    #[ignore = "requires BLAZEN_TEST_FASTER_WHISPER=1 and pulls ~75 MB of CTranslate2 Whisper weights from HF Hub"]
+    async fn stream_returns_ok_for_empty_input() {
+        use futures_util::{StreamExt, stream};
+
+        if std::env::var("BLAZEN_TEST_FASTER_WHISPER").ok().as_deref() != Some("1") {
+            eprintln!("skipping: BLAZEN_TEST_FASTER_WHISPER != 1");
+            return;
+        }
+
+        let backend = FasterWhisperBackend::default();
+        let empty: Pin<Box<dyn Stream<Item = Vec<f32>> + Send>> = Box::pin(stream::empty());
+        let mut out = backend
+            .stream(empty, None)
+            .await
+            .expect("stream construction must succeed even on empty input");
+        let count = out.by_ref().count().await;
+        assert_eq!(count, 0, "empty input must yield zero emissions");
     }
 
     /// End-to-end Wave F.2.5 sanity test — constructs a default
