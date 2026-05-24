@@ -254,14 +254,16 @@ impl TtsBackend for SparkTtsBackend {
 
     async fn stream_synthesize(
         &self,
-        _text: &str,
+        text: &str,
         _voice: Option<&str>,
         _options: TtsOptions,
     ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamingAudioChunk, TtsError>> + Send>>, TtsError>
     {
-        Err(TtsError::Unsupported(
-            "Spark-TTS Wave S.2 scaffolding — stream_synthesize will land once BiCodec + Qwen2.5 decoder ship".into(),
-        ))
+        use futures_util::StreamExt;
+        let pipeline = self.ensure_loaded().await?;
+        blazen_audio::warn_nc_once(&self.id, &self.config.model_id, SPARK_WEIGHTS_LICENSE);
+        let inner = pipeline.synthesize_pcm_stream(text);
+        Ok(Box::pin(inner.map(|item| item.map_err(TtsError::from))))
     }
 }
 
@@ -320,18 +322,27 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn stream_synthesize_returns_clear_pending_error() {
-        let backend = SparkTtsBackend::default();
+    async fn stream_synthesize_with_invalid_model_dir_surfaces_model_load_error() {
+        // Mirrors synthesize_with_invalid_model_dir_surfaces_model_load_error
+        // but exercises the streaming path so the wiring through
+        // ensure_loaded + synthesize_pcm_stream is covered without network.
+        let backend = SparkTtsBackend::new(SparkTtsConfig {
+            model_id: "SparkAudio/Spark-TTS-0.5B".into(),
+            model_dir: Some(PathBuf::from("/nonexistent/spark-tts-stream-test")),
+            revision: None,
+        });
         let result = backend
             .stream_synthesize("hello", None, TtsOptions::default())
             .await;
         match result {
-            Err(TtsError::Unsupported(msg)) => {
-                assert!(msg.contains("Wave S.2"), "msg = {msg}");
-                assert!(msg.contains("BiCodec"), "msg = {msg}");
+            Err(TtsError::ModelLoad(msg)) => {
+                assert!(
+                    msg.contains("/nonexistent/spark-tts-stream-test"),
+                    "expected path in error, got: {msg}"
+                );
             }
-            Err(other) => panic!("expected Unsupported, got {other:?}"),
-            Ok(_) => panic!("scaffold must surface Unsupported"),
+            Err(other) => panic!("expected ModelLoad, got {other:?}"),
+            Ok(_) => panic!("nonexistent model_dir must error before any chunks arrive"),
         }
     }
 
