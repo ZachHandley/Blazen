@@ -310,6 +310,25 @@ pub fn tts_error_to_napi(err: blazen_llm::TtsError) -> napi::Error {
     napi::Error::with_class(class, err.to_string())
 }
 
+/// Convert a [`blazen_audio_music::MusicError`] to a [`napi::Error`] tagged
+/// with one of the registered `Music*` error classes.
+#[cfg(feature = "audio-music")]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn music_error_to_napi(err: blazen_audio_music::MusicError) -> napi::Error {
+    use blazen_audio_music::MusicError;
+    let class = match &err {
+        MusicError::EngineNotAvailable => "MusicEngineNotAvailableError",
+        MusicError::NotYetImplemented(_) => "MusicNotYetImplementedError",
+        MusicError::HfHub { .. } => "MusicHfHubError",
+        MusicError::Io(_) => "MusicIoError",
+        MusicError::Candle(_) => "MusicCandleError",
+        MusicError::InvalidInput(_) => "MusicInvalidInputError",
+        MusicError::Other(_) => "MusicError",
+    };
+    napi::Error::with_class(class, err.to_string())
+}
+
 /// Convert a [`blazen_llm::EmbedError`] (fastembed on non-musl, tract on musl)
 /// to a [`napi::Error`].
 #[cfg(feature = "embed")]

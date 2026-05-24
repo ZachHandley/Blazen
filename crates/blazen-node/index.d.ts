@@ -113,6 +113,53 @@ export declare class AssignmentContext {
 }
 export type JsAssignmentContext = AssignmentContext
 
+/**
+ * AudioGen text-to-SFX + text-to-music backend.
+ *
+ * Use the [`JsAudioGenBackend::create`] factory to construct an instance.
+ */
+export declare class AudioGenBackend {
+  /** Construct an AudioGen backend handle. */
+  static create(options?: JsAudioGenOptions | undefined | null): AudioGenBackend
+  /** Backend identifier, always `"audiogen-medium"`. */
+  get modelId(): string
+  /**
+   * Generate music conditioned on `prompt`.
+   *
+   * # Errors
+   * Returns `MusicInvalidInputError` for empty prompts or non-positive
+   * / out-of-range durations, `MusicHfHubError` on weight-download
+   * failure, `MusicCandleError` on inference failure, or
+   * `MusicEngineNotAvailableError` when the engine feature was
+   * compiled out.
+   */
+  generateMusic(prompt: string, durationSeconds: number): Promise<JsMusicResult>
+  /**
+   * Generate sound-effect audio conditioned on `prompt`.
+   *
+   * # Errors
+   * Same surface as [`Self::generate_music`].
+   */
+  generateSfx(prompt: string, durationSeconds: number): Promise<JsMusicResult>
+  /**
+   * Stream music generation, invoking `onChunk` for each emitted
+   * `JsMusicChunk` until the final chunk arrives (`isFinal === true`).
+   *
+   * # Errors
+   * Same surface as [`Self::generate_music`].
+   */
+  streamGenerateMusic(prompt: string, durationSeconds: number, onChunk: StreamMusicChunkCallbackTsfn): Promise<void>
+  /**
+   * Stream SFX generation, invoking `onChunk` for each emitted
+   * `JsMusicChunk` until the final chunk arrives (`isFinal === true`).
+   *
+   * # Errors
+   * Same surface as [`Self::generate_music`].
+   */
+  streamGenerateSfx(prompt: string, durationSeconds: number, onChunk: StreamMusicChunkCallbackTsfn): Promise<void>
+}
+export type JsAudioGenBackend = AudioGenBackend
+
 export declare class AudioMusicProviderDefaults {
   /** Construct role-specific defaults. */
   constructor(base?: BaseProviderDefaults | undefined | null, before?: BeforeRoleTsfn | undefined | null)
@@ -3785,6 +3832,122 @@ export declare class ModelRegistry {
 export type JsModelRegistry = ModelRegistry
 
 /**
+ * MusicGen text-to-music + text-to-SFX backend.
+ *
+ * Use the [`JsMusicgenBackend::create`] factory to construct an instance.
+ */
+export declare class MusicgenBackend {
+  /**
+   * Construct a MusicGen backend handle.
+   *
+   * # Errors
+   * Returns the resulting `napi::Error` if option conversion fails;
+   * in practice always succeeds.
+   */
+  static create(options?: JsMusicgenOptions | undefined | null): MusicgenBackend
+  /** Backend identifier, e.g. `"musicgen-small"`. */
+  get modelId(): string
+  /**
+   * Generate music conditioned on `prompt`.
+   *
+   * # Errors
+   * Returns `MusicInvalidInputError` for empty prompts or non-positive
+   * / out-of-range durations, `MusicHfHubError` on weight-download
+   * failure, `MusicCandleError` on inference failure, or
+   * `MusicEngineNotAvailableError` when the engine feature was
+   * compiled out.
+   */
+  generateMusic(prompt: string, durationSeconds: number): Promise<JsMusicResult>
+  /**
+   * Generate sound-effect audio conditioned on `prompt`.
+   *
+   * MusicGen treats music and SFX as the same autoregressive pipeline
+   * (the prompt is the only discriminator).
+   *
+   * # Errors
+   * Same surface as [`Self::generate_music`].
+   */
+  generateSfx(prompt: string, durationSeconds: number): Promise<JsMusicResult>
+  /**
+   * Stream music generation, invoking `onChunk` for each emitted
+   * `JsMusicChunk` until the final chunk arrives (`isFinal === true`).
+   *
+   * # Errors
+   * Same surface as [`Self::generate_music`].
+   */
+  streamGenerateMusic(prompt: string, durationSeconds: number, onChunk: StreamMusicChunkCallbackTsfn): Promise<void>
+  /**
+   * Stream SFX generation, invoking `onChunk` for each emitted
+   * `JsMusicChunk` until the final chunk arrives (`isFinal === true`).
+   *
+   * # Errors
+   * Same surface as [`Self::generate_music`].
+   */
+  streamGenerateSfx(prompt: string, durationSeconds: number, onChunk: StreamMusicChunkCallbackTsfn): Promise<void>
+}
+export type JsMusicgenBackend = MusicgenBackend
+
+/**
+ * Unified music + SFX backend aggregator.
+ *
+ * ```javascript
+ * // Pick a backend at construction time:
+ * const m = MusicModel.musicgen({ variant: "small" });
+ * const wav = await m.generateMusic("uplifting piano", 8);
+ *
+ * // Or swap to AudioGen / Stable Audio with the same method surface:
+ * const sfx = MusicModel.audioGen({});
+ * const ambient = MusicModel.stableAudio({});
+ * ```
+ */
+export declare class MusicModel {
+  /** Build a [`JsMusicModel`] backed by MusicGen. */
+  static musicgen(options?: JsMusicgenOptions | undefined | null): MusicModel
+  /** Build a [`JsMusicModel`] backed by AudioGen. */
+  static audioGen(options?: JsAudioGenOptions | undefined | null): MusicModel
+  /** Build a [`JsMusicModel`] backed by Stable Audio Open. */
+  static stableAudio(options?: JsStableAudioOptions | undefined | null): MusicModel
+  /**
+   * Backend identifier — same value `modelId` returns on the per-
+   * backend `#[napi]` class (e.g. `"musicgen-small"`,
+   * `"audiogen-medium"`, `"stable-audio"`).
+   */
+  get modelId(): string
+  /**
+   * Generate music conditioned on `prompt`.
+   *
+   * # Errors
+   * See per-backend documentation
+   * ([`JsMusicgenBackend::generate_music`], etc.).
+   */
+  generateMusic(prompt: string, durationSeconds: number): Promise<JsMusicResult>
+  /**
+   * Generate sound-effect audio conditioned on `prompt`.
+   *
+   * # Errors
+   * See per-backend documentation.
+   */
+  generateSfx(prompt: string, durationSeconds: number): Promise<JsMusicResult>
+  /**
+   * Stream music generation, invoking `onChunk` for each emitted
+   * `JsMusicChunk` until the final chunk arrives (`isFinal === true`).
+   *
+   * # Errors
+   * See per-backend documentation.
+   */
+  streamGenerateMusic(prompt: string, durationSeconds: number, onChunk: StreamMusicChunkCallbackTsfn): Promise<void>
+  /**
+   * Stream SFX generation, invoking `onChunk` for each emitted
+   * `JsMusicChunk` until the final chunk arrives (`isFinal === true`).
+   *
+   * # Errors
+   * See per-backend documentation.
+   */
+  streamGenerateSfx(prompt: string, durationSeconds: number, onChunk: StreamMusicChunkCallbackTsfn): Promise<void>
+}
+export type JsMusicModel = MusicModel
+
+/**
  * r" Base class for music generation providers.
  * r"
  * r" Subclass and override `generateMusic()` and `generateSfx()` to
@@ -4790,6 +4953,63 @@ export declare class SessionRefRegistry {
   hasUuid(uuid: string): Promise<boolean>
 }
 export type JsSessionRefRegistry = SessionRefRegistry
+
+/**
+ * Stable Audio Open backend.
+ *
+ * Use the [`JsStableAudioBackend::create`] factory to construct an
+ * instance. In stub mode (feature `audio-music-stable-audio` OFF), every
+ * `generate*` entry point surfaces `MusicNotYetImplementedError`.
+ */
+export declare class StableAudioBackend {
+  /**
+   * Construct a Stable Audio backend handle.
+   *
+   * In stub mode (`audio-music-stable-audio` OFF), the returned
+   * handle's `generate*` calls all surface
+   * `MusicNotYetImplementedError`. With the feature ON, the first
+   * `generate*` call lazily downloads weights and loads the model.
+   */
+  static create(options?: JsStableAudioOptions | undefined | null): StableAudioBackend
+  /** Backend identifier, always `"stable-audio"`. */
+  get modelId(): string
+  /**
+   * Generate music conditioned on `prompt`.
+   *
+   * # Errors
+   * Returns `MusicNotYetImplementedError` in stub mode (feature
+   * `audio-music-stable-audio` OFF). With the feature ON, may return
+   * `MusicInvalidInputError`, `MusicHfHubError`, or `MusicCandleError`.
+   */
+  generateMusic(prompt: string, durationSeconds: number): Promise<JsMusicResult>
+  /**
+   * Generate sound-effect audio conditioned on `prompt`.
+   *
+   * # Errors
+   * Same surface as [`Self::generate_music`].
+   */
+  generateSfx(prompt: string, durationSeconds: number): Promise<JsMusicResult>
+  /**
+   * Stream music generation, invoking `onChunk` for each emitted
+   * `JsMusicChunk` until the final chunk arrives (`isFinal === true`).
+   *
+   * # Errors
+   * Same surface as [`Self::generate_music`]. In stub mode (without
+   * the streaming path on the upstream trait), this surfaces
+   * `MusicNotYetImplementedError` because the trait default
+   * implementation routes there.
+   */
+  streamGenerateMusic(prompt: string, durationSeconds: number, onChunk: StreamMusicChunkCallbackTsfn): Promise<void>
+  /**
+   * Stream SFX generation, invoking `onChunk` for each emitted
+   * `JsMusicChunk` until the final chunk arrives (`isFinal === true`).
+   *
+   * # Errors
+   * Same surface as [`Self::stream_generate_music`].
+   */
+  streamGenerateSfx(prompt: string, durationSeconds: number, onChunk: StreamMusicChunkCallbackTsfn): Promise<void>
+}
+export type JsStableAudioBackend = StableAudioBackend
 
 /**
  * A single sequential pipeline stage.
@@ -7219,6 +7439,28 @@ export interface JsAudioContent {
   durationSeconds?: number
 }
 
+/**
+ * Construction-time options for [`JsAudioGenBackend`]. All fields
+ * optional — defaults match `facebook/audiogen-medium`.
+ */
+export interface JsAudioGenOptions {
+  /**
+   * Override the Hugging Face Hub repo id. Defaults to
+   * `"facebook/audiogen-medium"`.
+   */
+  repoId?: string
+  /** Optional pinned revision (commit SHA or tag) for the HF repo. */
+  revision?: string
+  /** Optional override for the Hugging Face cache directory. */
+  cacheDir?: string
+  /**
+   * Hard safety cap on the requested duration (seconds). Defaults to
+   * 30 s. AudioGen-medium's absolute upper bound is 30 s; requests past
+   * either limit surface `MusicInvalidInputError`.
+   */
+  maxDurationSeconds?: number
+}
+
 export interface JsAudioResult {
   audio: Array<JsGeneratedAudio>
   timing: JsRequestTiming
@@ -8132,11 +8374,91 @@ export interface JsMtlsOptions {
   ca: string
 }
 
+/**
+ * One emission from a streaming music backend.
+ *
+ * Carries a `Float32Array` slice of 32-bit float PCM samples in `[-1, 1]`
+ * at the backend's native output sample rate (32 kHz for MusicGen,
+ * 16 kHz for AudioGen, 44.1 kHz stereo for Stable Audio), an `isFinal`
+ * flag, and an optional measured per-chunk latency in seconds.
+ */
+export interface JsMusicChunk {
+  /**
+   * 32-bit float PCM samples in `[-1, 1]` at the backend's native
+   * output sample rate (interleaved for multi-channel outputs).
+   */
+  samples: Float32Array
+  /**
+   * `true` when this is the final chunk emitted for the generation
+   * call; `false` for intermediate chunks.
+   */
+  isFinal: boolean
+  /**
+   * Optional measured latency-from-call-start for this chunk, in
+   * seconds. `null` when the backend does not surface a timestamp.
+   */
+  latencySeconds?: number
+}
+
+/**
+ * Construction-time options for [`JsMusicgenBackend`]. All fields
+ * optional — defaults match the small CPU-friendly variant.
+ */
+export interface JsMusicgenOptions {
+  /** Which checkpoint to load. Defaults to `"small"`. */
+  variant?: JsMusicgenVariant
+  /** Optional override for the Hugging Face cache directory. */
+  cacheDir?: string
+  /**
+   * Hard safety cap on the requested duration (seconds). Defaults to
+   * 30 s. The absolute upper bound enforced by MusicGen itself is
+   * 60 s — requests past either limit surface `MusicInvalidInputError`.
+   */
+  maxDurationSeconds?: number
+}
+
+/** Available MusicGen checkpoints on Hugging Face Hub. */
+export declare const enum JsMusicgenVariant {
+  /** `facebook/musicgen-small` -- ~300M params, 32 kHz mono. */
+  Small = 'small',
+  /** `facebook/musicgen-medium` -- ~1.5B params, 32 kHz mono. */
+  Medium = 'medium',
+  /** `facebook/musicgen-large` -- ~3.3B params, 32 kHz mono. */
+  Large = 'large'
+}
+
 export interface JsMusicRequest {
   prompt: string
   durationSeconds?: number
   model?: string
   parameters?: any
+}
+
+/**
+ * Fully-rendered music + SFX result returned by the non-streaming
+ * `generateMusic` / `generateSfx` entry points.
+ *
+ * `bytes` carries the encoded clip — typically a WAV container holding
+ * PCM samples; `format` distinguishes the container so callers can route
+ * directly to a player without re-sniffing the payload.
+ */
+export interface JsMusicResult {
+  /**
+   * Encoded audio bytes (typically WAV for MusicGen / AudioGen /
+   * Stable Audio).
+   */
+  bytes: Uint8Array
+  /**
+   * Container format: one of `"wav"`, `"mp3"`, `"flac"`, `"opus"`,
+   * or `"pcm"`.
+   */
+  format: string
+  /** Sample rate in hertz. */
+  sampleRate: number
+  /** Channel count (mono = 1, stereo = 2). */
+  channels: number
+  /** Duration of the clip in seconds, if known. */
+  durationSeconds?: number
 }
 
 /**
@@ -8442,6 +8764,46 @@ export interface JsSpeechRequest {
   speed?: number
   model?: string
   parameters?: any
+}
+
+/**
+ * Construction-time options for [`JsStableAudioBackend`]. All fields
+ * optional — defaults to the Small variant on CPU with F32 precision.
+ */
+export interface JsStableAudioOptions {
+  /** Which variant to load. Defaults to `"small"`. */
+  variant?: JsStableAudioVariant
+  /**
+   * Override the Hugging Face Hub repo id. Defaults to the variant's
+   * canonical repo (`stabilityai/stable-audio-open-{small,1.0}`).
+   */
+  hfRepo?: string
+  /**
+   * Path to a local `tokenizer.json` for the T5 conditioner. Required
+   * when the `audio-music-stable-audio` feature is enabled; ignored in
+   * stub mode.
+   */
+  tokenizerPath?: string
+  /**
+   * Optional override for a pre-downloaded safetensors weights file.
+   * When `None`, weights are pulled from the configured HF repo on
+   * first generation.
+   */
+  localWeightsPath?: string
+}
+
+/** Hyperparameter pack describing which Stable Audio Open checkpoint to load. */
+export declare const enum JsStableAudioVariant {
+  /**
+   * `stabilityai/stable-audio-open-small` -- 341 M params, 8-step
+   * distilled sampler, 11 s output cap.
+   */
+  Small = 'small',
+  /**
+   * `stabilityai/stable-audio-open-1.0` -- 1.21 B params, 100-step
+   * DPM-Solver++, 47 s output cap.
+   */
+  Open10 = 'open1_0'
 }
 
 /**
@@ -10324,3 +10686,10 @@ export class CacheError extends BlazenError {}
 export class DownloadError extends CacheError {}
 export class CacheDirError extends CacheError {}
 export class IoError extends CacheError {}
+export class MusicError extends BlazenError {}
+export class MusicEngineNotAvailableError extends MusicError {}
+export class MusicNotYetImplementedError extends MusicError {}
+export class MusicHfHubError extends MusicError {}
+export class MusicIoError extends MusicError {}
+export class MusicCandleError extends MusicError {}
+export class MusicInvalidInputError extends MusicError {}

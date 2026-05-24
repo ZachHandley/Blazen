@@ -162,6 +162,8 @@ const workersDtsPath = new URL('../blazen.workers.d.ts', import.meta.url)
       'MemoryError', 'MemoryNoEmbedderError', 'MemoryElidError',
       'MemoryEmbeddingError', 'MemoryNotFoundError', 'MemorySerializationError',
       'MemoryIoError', 'MemoryBackendError',
+      'MusicError', 'MusicEngineNotAvailableError', 'MusicNotYetImplementedError',
+      'MusicHfHubError', 'MusicIoError', 'MusicCandleError', 'MusicInvalidInputError',
     ]
     const lines = classNames.map((n) => `module.exports.${n} = module.exports.${n}`)
     const block = `\n${sentinel}\n${lines.join('\n')}\n`
@@ -269,6 +271,13 @@ const workersDtsPath = new URL('../blazen.workers.d.ts', import.meta.url)
       'export class DownloadError extends CacheError {}',
       'export class CacheDirError extends CacheError {}',
       'export class IoError extends CacheError {}',
+      'export class MusicError extends BlazenError {}',
+      'export class MusicEngineNotAvailableError extends MusicError {}',
+      'export class MusicNotYetImplementedError extends MusicError {}',
+      'export class MusicHfHubError extends MusicError {}',
+      'export class MusicIoError extends MusicError {}',
+      'export class MusicCandleError extends MusicError {}',
+      'export class MusicInvalidInputError extends MusicError {}',
     ]
     const banner = `\n${sentinel}\n`
     const block = `${current.endsWith('\n') ? '' : '\n'}${banner}${decls.join('\n')}\n`

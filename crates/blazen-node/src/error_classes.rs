@@ -165,6 +165,19 @@ const ERROR_CLASS_HIERARCHY: &[(&str, Option<&str>)] = &[
     ("MemorySerializationError", Some("MemoryError")),
     ("MemoryIoError", Some("MemoryError")),
     ("MemoryBackendError", Some("MemoryError")),
+    // Music + SFX generation (MusicGen / AudioGen / Stable Audio).
+    // Registered unconditionally — matches the LlamaCpp / Mistral /
+    // Whisper / TTS / Diffusion / FastEmbed convention so `instanceof
+    // MusicError` type-checks regardless of which Rust features the
+    // build was compiled with. The Rust mapper in `error.rs` that emits
+    // these classes is still gated on `feature = "audio-music"`.
+    ("MusicError", Some("BlazenError")),
+    ("MusicEngineNotAvailableError", Some("MusicError")),
+    ("MusicNotYetImplementedError", Some("MusicError")),
+    ("MusicHfHubError", Some("MusicError")),
+    ("MusicIoError", Some("MusicError")),
+    ("MusicCandleError", Some("MusicError")),
+    ("MusicInvalidInputError", Some("MusicError")),
 ];
 
 /// Register every JS error class Blazen exposes and bind each onto the

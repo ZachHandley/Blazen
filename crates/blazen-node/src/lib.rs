@@ -28,6 +28,8 @@ pub mod generated;
 pub mod manager;
 #[cfg(not(target_os = "wasi"))]
 pub mod model_cache;
+#[cfg(feature = "audio-music")]
+pub mod music;
 pub mod peer;
 pub mod peer_http;
 #[cfg(not(target_os = "wasi"))]
