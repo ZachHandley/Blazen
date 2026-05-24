@@ -49,3 +49,12 @@ pub(super) mod sampler;
               quantizer.rs exercise the public surface in the meantime."
 )]
 pub(super) mod quantizer;
+
+#[allow(
+    dead_code,
+    reason = "SpeakerEncoder tower (S.2.1.e) — ECAPA-TDNN-GLOB-c512 + \
+              PerceiverResampler + ResidualFSQ — is consumed by the \
+              top-level BiCodec wiring in S.2.1.g. The unit tests in \
+              speaker.rs exercise the public surface in the meantime."
+)]
+pub(super) mod speaker;
