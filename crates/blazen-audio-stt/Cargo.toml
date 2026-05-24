@@ -102,7 +102,7 @@ whisper-streaming = ["candle", "dep:tract-onnx"]
 # fast on incremental rebuilds). See `crates/blazen-audio-stt/README.md`
 # for system requirements (cmake ≥ 3.18, C++ toolchain, optional
 # CUDA/MKL/OpenBLAS/Accelerate for acceleration).
-faster-whisper = ["dep:ct2rs"]
+faster-whisper = ["dep:ct2rs", "dep:hf-hub", "dep:blazen-model-cache"]
 
 [lints]
 workspace = true

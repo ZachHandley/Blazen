@@ -94,11 +94,19 @@ pub struct FasterWhisperConfig {
     /// bundle directory (the layout documented on
     /// [`FasterWhisperDecoder::load`]).
     ///
-    /// `None` (the default) means "wait for Wave F.2.5's HF download
-    /// helper" — until that wave lands, every
-    /// [`SttBackend::transcribe`] call returns [`SttError::Unsupported`]
-    /// unless the caller fills this field explicitly.
+    /// `None` (the default) routes through
+    /// [`weights::ensure_downloaded`] on the first transcription call to
+    /// fetch and cache the [`model_id`][Self::model_id] bundle from
+    /// Hugging Face Hub. Set this explicitly to point at a manually
+    /// populated bundle directory and skip the HF download entirely.
     pub model_dir: Option<PathBuf>,
+    /// Optional Hugging Face Hub revision pin (branch, tag, or commit
+    /// SHA). `None` (the default) follows the upstream `main` branch,
+    /// matching the `faster-whisper` Python project's default behavior.
+    /// Passing an explicit revision causes the cache to be keyed by
+    /// `{model_id}@{revision}` so multiple revisions of the same repo
+    /// can coexist on disk.
+    pub revision: Option<String>,
     /// Decoder knobs (beam size, compute type, etc.). See
     /// [`FasterWhisperDecoderConfig`].
     pub decoder: FasterWhisperDecoderConfig,
@@ -109,6 +117,7 @@ impl Default for FasterWhisperConfig {
         Self {
             model_id: "Systran/faster-whisper-tiny".to_owned(),
             model_dir: None,
+            revision: None,
             decoder: FasterWhisperDecoderConfig::default(),
         }
     }
@@ -163,25 +172,32 @@ impl FasterWhisperBackend {
     /// Ensure the ct2rs decoder is loaded; returns a cheap `Arc` clone
     /// of the cached handle.
     ///
+    /// When [`FasterWhisperConfig::model_dir`] is `Some`, that directory
+    /// is used as-is. When it is `None`, the bundle is fetched on demand
+    /// from Hugging Face Hub via [`weights::ensure_downloaded`] using
+    /// [`FasterWhisperConfig::model_id`] (and the optional
+    /// [`FasterWhisperConfig::revision`]) and cached under the shared
+    /// `blazen_model_cache` root.
+    ///
     /// # Errors
     ///
-    /// - [`SttError::Unsupported`] when [`FasterWhisperConfig::model_dir`]
-    ///   is `None`. The message mentions Wave F.2.5 so callers know how
-    ///   to unblock themselves manually in the meantime.
-    /// - [`SttError::ModelLoad`] when the bundle is malformed or ct2rs
-    ///   refuses to initialise.
+    /// - [`SttError::ModelLoad`] when the Hugging Face download fails,
+    ///   the bundle is malformed, or ct2rs refuses to initialise.
+    /// - [`SttError::Io`] when a filesystem operation fails while
+    ///   resolving the cache directory.
     async fn ensure_loaded(&self) -> Result<Arc<FasterWhisperDecoder>, SttError> {
-        let model_dir = self.config.model_dir.clone().ok_or_else(|| {
-            SttError::Unsupported(
-                "faster-whisper backend requires FasterWhisperConfig::model_dir until Wave F.2.5 \
-                 wires automatic Hugging Face download — set model_dir manually to a \
-                 CTranslate2 Whisper bundle for now"
-                    .to_owned(),
-            )
-        })?;
+        let cfg_model_dir = self.config.model_dir.clone();
+        let model_id = self.config.model_id.clone();
+        let revision = self.config.revision.clone();
         let decoder_cfg = self.config.decoder.clone();
         self.inner
             .get_or_try_init(|| async move {
+                let model_dir = match cfg_model_dir {
+                    Some(dir) => dir,
+                    None => weights::ensure_downloaded(&model_id, revision.as_deref())
+                        .await
+                        .map_err(SttError::from)?,
+                };
                 tokio::task::spawn_blocking(move || {
                     FasterWhisperDecoder::load(&model_dir, decoder_cfg)
                         .map(Arc::new)
@@ -300,22 +316,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn transcribe_without_model_dir_returns_unsupported() {
-        // With model_dir: None (the default), transcribe must short-circuit
-        // before touching audio I/O with an Unsupported error that points
-        // at Wave F.2.5 (the wave that will land the HF download helper).
-        let backend = FasterWhisperBackend::default();
+    async fn transcribe_with_invalid_repo_id_surfaces_model_load_error() {
+        // With model_dir: None (the default) we route through
+        // weights::ensure_downloaded. An empty model_id is rejected
+        // before any network I/O and surfaces as ModelLoad (the
+        // `WeightsError -> SttError` mapping flattens InvalidRepoId).
+        let cfg = FasterWhisperConfig {
+            model_id: String::new(),
+            ..FasterWhisperConfig::default()
+        };
+        let backend = FasterWhisperBackend::new(cfg);
         let err = backend
             .transcribe(Path::new("/nonexistent.wav"), None)
             .await
-            .expect_err("missing model_dir must surface Unsupported");
-        match err {
-            SttError::Unsupported(msg) => {
-                assert!(msg.contains("model_dir"), "msg = {msg}");
-                assert!(msg.contains("F.2.5"), "msg = {msg}");
-            }
-            other => panic!("expected Unsupported, got {other:?}"),
-        }
+            .expect_err("empty model_id must surface an error");
+        assert!(
+            matches!(err, SttError::ModelLoad(_)),
+            "expected ModelLoad, got {err:?}"
+        );
+    }
+
+    #[test]
+    fn config_default_revision_is_none() {
+        // Sanity check that the new `revision` field defaults to None,
+        // matching upstream `faster-whisper`'s "follow main" behavior.
+        let cfg = FasterWhisperConfig::default();
+        assert!(cfg.revision.is_none());
     }
 
     #[tokio::test]
@@ -355,6 +381,89 @@ mod tests {
             Err(other) => panic!("expected Unsupported, got {other:?}"),
             Ok(_) => panic!("scaffold must surface Unsupported"),
         }
+    }
+
+    /// End-to-end Wave F.2.5 sanity test — constructs a default
+    /// [`FasterWhisperBackend`] (no `model_dir`), writes a tiny
+    /// 1-second silent 16 kHz mono WAV to a repo-local scratch dir,
+    /// calls [`SttBackend::transcribe`] on it, and asserts that the HF
+    /// download → ct2rs load → transcribe path returns `Ok(_)`.
+    ///
+    /// Gated by `BLAZEN_TEST_FASTER_WHISPER=1` (matches the
+    /// `BLAZEN_TEST_BARK` pattern) because it downloads the ~75 MB
+    /// `Systran/faster-whisper-tiny` `CTranslate2` bundle from HF Hub on
+    /// first run.
+    #[tokio::test]
+    #[ignore = "requires BLAZEN_TEST_FASTER_WHISPER=1 and pulls ~75 MB of CTranslate2 Whisper weights from HF Hub"]
+    async fn transcribe_uses_hf_download_when_model_dir_none() {
+        if std::env::var("BLAZEN_TEST_FASTER_WHISPER").ok().as_deref() != Some("1") {
+            eprintln!("skipping: BLAZEN_TEST_FASTER_WHISPER != 1");
+            return;
+        }
+
+        // Honor the "no /tmp scratch" project rule: root the tempdir
+        // under the user's cache directory ($HOME/.cache on Linux), or
+        // fall back to the CWD if HOME is unset.
+        let cache_root = std::env::var_os("HOME")
+            .map_or_else(
+                || std::env::current_dir().expect("cwd"),
+                |h| PathBuf::from(h).join(".cache"),
+            )
+            .join("blazen-faster-whisper-tests");
+        std::fs::create_dir_all(&cache_root).expect("create cache root");
+        let tmp = tempfile::Builder::new()
+            .prefix("transcribe-")
+            .tempdir_in(&cache_root)
+            .expect("tempdir");
+
+        // 1-second 16 kHz mono silence as PCM16 LE.
+        let wav_path = tmp.path().join("silence.wav");
+        let pcm_samples: Vec<i16> = vec![0; 16_000];
+        write_pcm16_wav(&wav_path, 16_000, &pcm_samples).expect("write wav");
+
+        let backend = FasterWhisperBackend::default();
+        let result = backend
+            .transcribe(&wav_path, Some("en"))
+            .await
+            .expect("transcribe succeeds end-to-end with HF download");
+
+        // Silence may yield zero segments, but the call must complete
+        // successfully — i.e. the download + load + decode pipeline
+        // produced a TranscriptionResult, not an error.
+        let _ = result.segments;
+    }
+
+    /// Write a minimal PCM16 LE WAV (RIFF/WAVE) — 44-byte header + samples.
+    /// Used by the live transcribe test; kept inside `cfg(test)` so it
+    /// doesn't bloat the public surface.
+    #[cfg(test)]
+    fn write_pcm16_wav(path: &Path, sample_rate: u32, samples: &[i16]) -> std::io::Result<()> {
+        use std::io::Write;
+        let n_channels: u16 = 1;
+        let bits_per_sample: u16 = 16;
+        let byte_rate = sample_rate * u32::from(n_channels) * u32::from(bits_per_sample) / 8;
+        let block_align = n_channels * bits_per_sample / 8;
+        let data_size = u32::try_from(samples.len() * 2).unwrap_or(u32::MAX);
+        let riff_size = 36u32.saturating_add(data_size);
+
+        let mut f = std::fs::File::create(path)?;
+        f.write_all(b"RIFF")?;
+        f.write_all(&riff_size.to_le_bytes())?;
+        f.write_all(b"WAVE")?;
+        f.write_all(b"fmt ")?;
+        f.write_all(&16u32.to_le_bytes())?; // PCM fmt chunk size
+        f.write_all(&1u16.to_le_bytes())?; // PCM format
+        f.write_all(&n_channels.to_le_bytes())?;
+        f.write_all(&sample_rate.to_le_bytes())?;
+        f.write_all(&byte_rate.to_le_bytes())?;
+        f.write_all(&block_align.to_le_bytes())?;
+        f.write_all(&bits_per_sample.to_le_bytes())?;
+        f.write_all(b"data")?;
+        f.write_all(&data_size.to_le_bytes())?;
+        for s in samples {
+            f.write_all(&s.to_le_bytes())?;
+        }
+        Ok(())
     }
 
     /// Wave F.1 link probe — confirms the `ct2rs` crate (and the
