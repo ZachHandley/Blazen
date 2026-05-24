@@ -85,6 +85,7 @@ audio-stt          = ["dep:blazen-audio", "dep:blazen-audio-stt"]
 audio-stt-whispercpp = ["audio-stt", "blazen-audio-stt/whispercpp"]
 audio-stt-candle   = ["audio-stt", "blazen-audio-stt/candle"]
 audio-stt-whisper-streaming = ["audio-stt", "blazen-audio-stt/whisper-streaming"]
+audio-stt-faster-whisper = ["audio-stt", "blazen-audio-stt/faster-whisper"]
 
 # Music / SFX bridge surface (DynMusicProvider impl of AudioGeneration).
 audio-music        = ["dep:blazen-audio", "dep:blazen-audio-music"]

@@ -35,6 +35,7 @@ local-audio = [
     "blazen-llm/audio-stt-whispercpp",
     "blazen-llm/audio-stt-candle",
     "blazen-llm/audio-stt-whisper-streaming",
+    "blazen-llm/audio-stt-faster-whisper",
     "blazen-llm/audio-music-musicgen",
     "blazen-llm/audio-music-audiogen",
     "blazen-llm/audio-codec-encodec",
