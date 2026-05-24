@@ -20,6 +20,9 @@ pub mod bark;
 #[cfg(feature = "f5-tts")]
 pub mod f5;
 
+#[cfg(feature = "spark-tts")]
+pub mod spark;
+
 #[cfg(feature = "openai")]
 pub mod openai;
 
