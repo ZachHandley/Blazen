@@ -40,6 +40,8 @@ pub mod telemetry;
 #[cfg(feature = "threed-compat-proxy")]
 pub mod threed;
 pub mod types;
+#[cfg(feature = "audio-vc")]
+pub mod vc;
 #[cfg(all(target_arch = "wasm32", target_os = "wasi"))]
 pub mod wasi_async;
 pub mod workflow;

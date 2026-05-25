@@ -164,6 +164,8 @@ const workersDtsPath = new URL('../blazen.workers.d.ts', import.meta.url)
       'MemoryIoError', 'MemoryBackendError',
       'MusicError', 'MusicEngineNotAvailableError', 'MusicNotYetImplementedError',
       'MusicHfHubError', 'MusicIoError', 'MusicCandleError', 'MusicInvalidInputError',
+      'VcError', 'VcEngineNotAvailableError', 'VcModelLoadError',
+      'VcConversionError', 'VcVoiceNotFoundError', 'VcUnsupportedError', 'VcIoError',
     ]
     const lines = classNames.map((n) => `module.exports.${n} = module.exports.${n}`)
     const block = `\n${sentinel}\n${lines.join('\n')}\n`
@@ -278,6 +280,13 @@ const workersDtsPath = new URL('../blazen.workers.d.ts', import.meta.url)
       'export class MusicIoError extends MusicError {}',
       'export class MusicCandleError extends MusicError {}',
       'export class MusicInvalidInputError extends MusicError {}',
+      'export class VcError extends BlazenError {}',
+      'export class VcEngineNotAvailableError extends VcError {}',
+      'export class VcModelLoadError extends VcError {}',
+      'export class VcConversionError extends VcError {}',
+      'export class VcVoiceNotFoundError extends VcError {}',
+      'export class VcUnsupportedError extends VcError {}',
+      'export class VcIoError extends VcError {}',
     ]
     const banner = `\n${sentinel}\n`
     const block = `${current.endsWith('\n') ? '' : '\n'}${banner}${decls.join('\n')}\n`

@@ -178,6 +178,18 @@ const ERROR_CLASS_HIERARCHY: &[(&str, Option<&str>)] = &[
     ("MusicIoError", Some("MusicError")),
     ("MusicCandleError", Some("MusicError")),
     ("MusicInvalidInputError", Some("MusicError")),
+    // Voice-conversion (RVC + future engines). Registered unconditionally
+    // — matches the Music* convention so `instanceof VcError` type-checks
+    // regardless of which Rust features the build was compiled with. The
+    // Rust mapper in `error.rs` that emits these classes is still gated on
+    // `feature = "audio-vc"`.
+    ("VcError", Some("BlazenError")),
+    ("VcEngineNotAvailableError", Some("VcError")),
+    ("VcModelLoadError", Some("VcError")),
+    ("VcConversionError", Some("VcError")),
+    ("VcVoiceNotFoundError", Some("VcError")),
+    ("VcUnsupportedError", Some("VcError")),
+    ("VcIoError", Some("VcError")),
 ];
 
 /// Register every JS error class Blazen exposes and bind each onto the

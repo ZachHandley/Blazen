@@ -329,6 +329,24 @@ pub fn music_error_to_napi(err: blazen_audio_music::MusicError) -> napi::Error {
     napi::Error::with_class(class, err.to_string())
 }
 
+/// Convert a [`blazen_audio_vc::VcError`] to a [`napi::Error`] tagged
+/// with one of the registered `Vc*` error classes.
+#[cfg(feature = "audio-vc")]
+#[must_use]
+#[allow(clippy::needless_pass_by_value)]
+pub fn vc_error_to_napi(err: blazen_audio_vc::VcError) -> napi::Error {
+    use blazen_audio_vc::VcError;
+    let class = match &err {
+        VcError::EngineNotAvailable(_) => "VcEngineNotAvailableError",
+        VcError::ModelLoad(_) => "VcModelLoadError",
+        VcError::Conversion(_) => "VcConversionError",
+        VcError::VoiceNotFound(_) => "VcVoiceNotFoundError",
+        VcError::Unsupported(_) => "VcUnsupportedError",
+        VcError::Io(_) => "VcIoError",
+    };
+    napi::Error::with_class(class, err.to_string())
+}
+
 /// Convert a [`blazen_llm::EmbedError`] (fastembed on non-musl, tract on musl)
 /// to a [`napi::Error`].
 #[cfg(feature = "embed")]

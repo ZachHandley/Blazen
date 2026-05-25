@@ -43,6 +43,7 @@ candle-core = { workspace = true, optional = true }
 blazen-3d = { version = "0.0.0-dev", path = "../blazen-3d", default-features = false, optional = true }
 blazen-audio-music = { workspace = true, optional = true }
 blazen-audio = { workspace = true, optional = true }
+blazen-audio-vc = { workspace = true, optional = true }
 
 [features]
 default = []
@@ -67,7 +68,8 @@ audio-stt-whisper-streaming = ["blazen-llm/audio-stt-whisper-streaming"]
 audio-stt-faster-whisper = ["blazen-llm/audio-stt-faster-whisper"]
 audio-tts-bark = ["blazen-llm/audio-tts-bark"]
 audio-tts-f5 = ["blazen-llm/audio-tts-f5"]
-audio-vc-rvc = ["blazen-llm/audio-vc-rvc"]
+audio-vc = ["blazen-llm/audio-vc", "dep:blazen-audio-vc", "dep:blazen-audio"]
+audio-vc-rvc = ["audio-vc", "blazen-llm/audio-vc-rvc", "blazen-audio-vc/rvc"]
 # 3D-pipeline bridge surface (HTTP-proxy backend forwards to upstream 3D services).
 threed = ["blazen-llm/threed", "dep:blazen-3d"]
 threed-compat-proxy = ["threed", "blazen-llm/threed-compat-proxy", "blazen-3d/compat-proxy"]
@@ -90,7 +92,7 @@ hf-loader = ["blazen-manager/hf-loader"]
 # unconditionally pulls in `blazen-embed-fastembed` (and ort-sys C++ runtime)
 # on non-musl targets.
 wasi = ["tiktoken", "distributed-http", "otlp-http", "langfuse"]
-local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "tts", "tiktoken", "distributed", "otlp", "prometheus", "langfuse", "audio-music-musicgen", "audio-music-audiogen", "audio-music-stable-audio", "hf-loader", "training"]
+local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "tts", "tiktoken", "distributed", "otlp", "prometheus", "langfuse", "audio-music-musicgen", "audio-music-audiogen", "audio-music-stable-audio", "audio-vc-rvc", "hf-loader", "training"]
 # Distributed peer-to-peer execution (cross-node sub-workflow invocation).
 # Native: gRPC client+server via tonic.
 distributed = ["blazen-core/distributed", "blazen-peer/server", "blazen-peer/client"]
@@ -114,6 +116,7 @@ training = [
     "blazen-manager/training",
 ]
 blazen-3d = ["dep:blazen-3d"]
+blazen-audio-vc = ["dep:blazen-audio-vc"]
 
 [build-dependencies]
 napi-build = "2"

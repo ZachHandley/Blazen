@@ -4841,6 +4841,73 @@ export declare class RetryModel {
 export type JsRetryModel = RetryModel
 
 /**
+ * Retrieval-based Voice Conversion backend.
+ *
+ * Use the [`JsRvcBackend::create`] factory to construct an instance.
+ */
+export declare class RvcBackend {
+  /** Construct an RVC backend handle. */
+  static create(options?: JsRvcOptions | undefined | null): RvcBackend
+  /** Backend identifier, always `"rvc"`. */
+  get modelId(): string
+  /**
+   * Convert a source utterance to the voice of a registered target
+   * speaker, returning the rendered audio as a self-describing WAV
+   * payload + parsed sample-rate / duration metadata.
+   *
+   * # Errors
+   * Returns `VcVoiceNotFoundError` when `targetVoiceId` is not
+   * registered, `VcIoError` on file-read failures, `VcModelLoadError`
+   * on weight-load failures, `VcConversionError` on inference
+   * failures, or `VcEngineNotAvailableError` when the engine
+   * feature was compiled out.
+   */
+  convertVoice(inputAudioPath: string, targetVoiceId: string): Promise<JsVcResult>
+  /**
+   * Stream voice conversion over an in-memory PCM buffer, invoking
+   * `onChunk` for each emitted [`crate::vc::JsVcChunk`] until the
+   * stream ends (the last chunk arrives with `isFinal === true`).
+   *
+   * The input samples are wrapped in a single-item stream and fed to
+   * the backend's chunked streaming entry point; the backend
+   * internally buffers windows (typically 2 seconds at 16 kHz) and
+   * emits the converted PCM at the target voice's native sample
+   * rate.
+   *
+   * # Errors
+   * Same surface as [`Self::convert_voice`]; additionally surfaces
+   * `VcUnsupportedError` from a backend that does not support
+   * streaming (the default-impl path).
+   */
+  streamConvertPcm(inputSamples: Float32Array, targetVoiceId: string, onChunk: StreamVcChunkCallbackTsfn): Promise<void>
+  /**
+   * List the target voices this backend can currently render.
+   *
+   * # Errors
+   * Returns `VcUnsupportedError` from backends that don't expose a
+   * voice catalogue; `VcIoError` when probing the voice directory
+   * fails.
+   */
+  listTargetVoices(): Promise<Array<JsTargetVoice>>
+  /**
+   * Register a new target voice from a reference utterance.
+   *
+   * RVC voice registration is intentionally unsupported at runtime
+   * (training a voice profile requires an offline pipeline of 1+
+   * hours); this method therefore surfaces
+   * `VcUnsupportedError`. Pre-trained voice profiles can be placed
+   * under `$BLAZEN_RVC_VOICE_DIR/<voice_id>/` and will surface
+   * through [`Self::list_target_voices`] / [`Self::convert_voice`].
+   *
+   * # Errors
+   * Returns `VcUnsupportedError` from RVC; other backends may
+   * override this with a real implementation.
+   */
+  registerTargetVoice(voiceId: string, referenceAudioPath: string): Promise<void>
+}
+export type JsRvcBackend = RvcBackend
+
+/**
  * Namespace for in-process-only workflow values.
  *
  * Values stored via `session.set` are kept in the
@@ -5945,6 +6012,57 @@ export declare class ValkeyCheckpointStore {
   delete(runId: string): Promise<void>
 }
 export type JsValkeyCheckpointStore = ValkeyCheckpointStore
+
+/**
+ * Unified voice-conversion backend aggregator.
+ *
+ * ```javascript
+ * // Pick a backend at construction time:
+ * const m = VcModel.rvc({ topK: 8, retrievalBlend: 0.75 });
+ * const result = await m.convertVoice('input.wav', 'speaker-01');
+ * ```
+ */
+export declare class VcModel {
+  /** Build a [`JsVcModel`] backed by RVC. */
+  static rvc(options?: JsRvcOptions | undefined | null): VcModel
+  /**
+   * Backend identifier — same value `modelId` returns on the per-
+   * backend `#[napi]` class (e.g. `"rvc"`).
+   */
+  get modelId(): string
+  /**
+   * Convert a source utterance to the voice of a registered target
+   * speaker.
+   *
+   * # Errors
+   * See per-backend documentation
+   * ([`JsRvcBackend::convert_voice`]).
+   */
+  convertVoice(inputAudioPath: string, targetVoiceId: string): Promise<JsVcResult>
+  /**
+   * Stream voice conversion over an in-memory PCM buffer.
+   *
+   * # Errors
+   * See per-backend documentation
+   * ([`JsRvcBackend::stream_convert_pcm`]).
+   */
+  streamConvertPcm(inputSamples: Float32Array, targetVoiceId: string, onChunk: StreamVcChunkCallbackTsfn): Promise<void>
+  /**
+   * List the target voices the active backend can currently render.
+   *
+   * # Errors
+   * See per-backend documentation.
+   */
+  listTargetVoices(): Promise<Array<JsTargetVoice>>
+  /**
+   * Register a new target voice from a reference utterance.
+   *
+   * # Errors
+   * See per-backend documentation.
+   */
+  registerTargetVoice(voiceId: string, referenceAudioPath: string): Promise<void>
+}
+export type JsVcModel = VcModel
 
 /**
  * r" Base class for video generation providers.
@@ -8729,6 +8847,30 @@ export declare const enum JsRunStatus {
   Cancelled = 'Cancelled'
 }
 
+/**
+ * Construction-time options for [`JsRvcBackend`]. All fields optional
+ * — defaults match the upstream RVC reference (top-k = 8, blend = 0.75,
+ * V2 content encoder).
+ */
+export interface JsRvcOptions {
+  /**
+   * kNN neighbour count for the retrieval blend (`top_k`). Defaults
+   * to 8. Clamped to `>= 1` at query time.
+   */
+  topK?: number
+  /**
+   * Retrieval blend factor (`index_rate` in the upstream
+   * reference). Defaults to 0.75. Clamped into `[0.0, 1.0]`.
+   */
+  retrievalBlend?: number
+  /**
+   * Which ContentVec family to use for the shared HuBERT encoder.
+   * One of `"v1"` or `"v2"` (case-insensitive). Defaults to `"v2"`
+   * — the family contemporary RVC checkpoints target.
+   */
+  rvcVersion?: string
+}
+
 /** Learning-rate scheduler configuration. */
 export interface JsSchedulerConfig {
   /** Schedule shape. Default `Cosine`. */
@@ -8953,6 +9095,26 @@ export interface JsSubWorkflowResponse {
    * should ignore `result` and `state_json`.
    */
   error?: string
+}
+
+/**
+ * A registered target voice descriptor.
+ *
+ * Returned by [`crate::vc::JsRvcBackend::list_target_voices`] /
+ * [`crate::vc::JsVcModel::list_target_voices`] and accepted by the
+ * matching `convertVoice` / `streamConvertPcm` calls (the `id` field
+ * is the lookup key).
+ */
+export interface JsTargetVoice {
+  /**
+   * Backend-scoped identifier for this voice. Passed to
+   * `convertVoice` / `streamConvertPcm`.
+   */
+  id: string
+  /** Optional human-readable display name for UIs. */
+  label?: string
+  /** Native sample rate the backend renders this voice at, in Hz. */
+  sampleRateHz: number
 }
 
 export interface JsThreeDRequest {
@@ -9217,6 +9379,56 @@ export interface JsUpscaleRequest {
   scale: number
   model?: string
   parameters?: any
+}
+
+/**
+ * One emission from a streaming voice-conversion backend.
+ *
+ * Carries a `Float32Array` slice of 32-bit float PCM samples in `[-1, 1]`
+ * at the target voice's native sample rate (typically 32 kHz or 40 kHz
+ * for RVC-family backends), an `isFinal` flag, and an optional measured
+ * per-chunk latency in seconds.
+ */
+export interface JsVcChunk {
+  /**
+   * 32-bit float PCM samples in `[-1, 1]` at the target voice's
+   * native sample rate (mono).
+   */
+  samples: Float32Array
+  /**
+   * `true` when this is the final chunk emitted for the conversion
+   * call; `false` for intermediate chunks.
+   */
+  isFinal: boolean
+  /**
+   * Optional measured latency-from-call-start for this chunk, in
+   * seconds. `null` when the backend does not surface a timestamp
+   * (RVC backends today do not).
+   */
+  latencySeconds?: number
+}
+
+/**
+ * Fully-rendered voice-conversion result returned by the non-streaming
+ * `convertVoice` entry point.
+ *
+ * `bytes` carries a self-describing WAV (RIFF/`fmt `/`data`) container
+ * holding 16-bit signed little-endian PCM samples at the target voice's
+ * native sample rate. `sampleRate` and `durationSeconds` are parsed out
+ * of the WAV header so callers don't need to re-sniff the payload to
+ * route it to a player.
+ */
+export interface JsVcResult {
+  /** Encoded WAV bytes (16-bit signed little-endian PCM). */
+  bytes: Uint8Array
+  /** Sample rate in hertz, parsed from the WAV `fmt ` chunk. */
+  sampleRate: number
+  /**
+   * Duration of the clip in seconds, derived from the WAV `data`
+   * chunk size + frame stride. `null` if the WAV header could not be
+   * parsed (in which case `sampleRate` falls back to `0`).
+   */
+  durationSeconds?: number
 }
 
 /** Video content for multimodal messages. */
@@ -10693,3 +10905,10 @@ export class MusicHfHubError extends MusicError {}
 export class MusicIoError extends MusicError {}
 export class MusicCandleError extends MusicError {}
 export class MusicInvalidInputError extends MusicError {}
+export class VcError extends BlazenError {}
+export class VcEngineNotAvailableError extends VcError {}
+export class VcModelLoadError extends VcError {}
+export class VcConversionError extends VcError {}
+export class VcVoiceNotFoundError extends VcError {}
+export class VcUnsupportedError extends VcError {}
+export class VcIoError extends VcError {}
