@@ -261,6 +261,7 @@ __all__ = [
     "Role",
     "RunEventStream",
     "RunStatus",
+    "RvcError",
     "SchedulerConfig",
     "SchedulerKind",
     "SessionNamespace",
@@ -289,6 +290,7 @@ __all__ = [
     "SubWorkflowResponse",
     "SubWorkflowStep",
     "TTSProvider",
+    "TargetVoice",
     "TemplateRole",
     "ThreeDProvider",
     "ThreeDProviderDefaults",
@@ -331,6 +333,9 @@ __all__ = [
     "ValidationError",
     "ValkeyBackend",
     "ValkeyCheckpointStore",
+    "VcChunk",
+    "VcModel",
+    "VcStream",
     "VideoContent",
     "VideoProvider",
     "VideoProviderDefaults",
@@ -11261,6 +11266,33 @@ class TTSProvider:
         Synthesize speech from text.
         """
 
+@typing.final
+class TargetVoice:
+    r"""
+    A registered target speaker that a [`PyVcModel`](super::PyVcModel)
+    can render source audio into.
+    """
+    @property
+    def id(self) -> builtins.str:
+        r"""
+        Backend-scoped identifier for this voice. Pass to
+        [`PyVcModel.convert_voice`](super::PyVcModel) and
+        [`PyVcModel.stream_convert_pcm`](super::PyVcModel).
+        """
+    @property
+    def label(self) -> typing.Optional[builtins.str]:
+        r"""
+        Optional human-readable display name. `None` for voices that ship
+        without a label in their on-disk profile.
+        """
+    @property
+    def sample_rate_hz(self) -> builtins.int:
+        r"""
+        Native sample rate (Hz) the backend renders this voice at.
+        Callers must resample if a different downstream rate is required.
+        """
+    def __repr__(self) -> builtins.str: ...
+
 class ThreeDProvider:
     r"""
     Base class for 3D model generation providers.
@@ -12652,6 +12684,152 @@ class ValkeyCheckpointStore:
         r"""
         Delete the checkpoint for the given ``run_id`` (UUID string).
         """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class VcChunk:
+    r"""
+    A single PCM audio chunk emitted by a [`PyVcModel`](super::PyVcModel).
+    
+    Each chunk owns its own f32 sample buffer; consumers can concatenate
+    chunk samples in arrival order to reconstruct the full converted
+    utterance equivalent to a non-streaming `convert_voice` call.
+    """
+    @property
+    def samples(self) -> builtins.list[builtins.float]:
+        r"""
+        32-bit float PCM samples in `[-1.0, 1.0]` at the target voice's
+        sample rate (mono).
+        """
+    @property
+    def is_final(self) -> builtins.bool:
+        r"""
+        `True` if this is the last chunk for the conversion call.
+        
+        Stream items emitted by [`PyVcStream`](super::PyVcStream) carry
+        `is_final = false`; end-of-stream is signalled to Python callers
+        via `StopAsyncIteration`. Final chunks produced by the
+        non-streaming `convert_voice` path carry `is_final = true`.
+        """
+    @property
+    def latency_seconds(self) -> typing.Optional[builtins.float]:
+        r"""
+        Latency-from-call-start in seconds for this chunk, if the backend
+        measured it. RVC backends today do not surface per-chunk latency
+        metrics, so this is typically `None`.
+        """
+    @property
+    def sample_rate(self) -> typing.Optional[builtins.int]:
+        r"""
+        Sample rate (Hz) of the f32 samples carried by this chunk.
+        
+        Always set on the final chunk produced by `convert_voice`; may be
+        `None` on intermediate streamed chunks (consult the producing
+        `VcModel` via the registered [`PyTargetVoice`](super::PyTargetVoice)
+        for the rate in that case).
+        """
+    @property
+    def sample_count(self) -> builtins.int:
+        r"""
+        Number of f32 PCM samples carried by this chunk.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class VcModel:
+    r"""
+    Opaque handle around a `dyn VoiceConversionBackend`.
+    
+    Constructed via one of the feature-gated `@staticmethod` factories
+    (currently `VcModel.rvc(...)`) — there is no public `__init__`.
+    
+    The handle is cheap to clone (internally `Arc<dyn VoiceConversionBackend>`);
+    the underlying weights are lazily downloaded on the first `convert_voice`
+    or `stream_convert_pcm` call.
+    """
+    @property
+    def id(self) -> builtins.str:
+        r"""
+        Stable backend identifier (e.g. `"rvc"`).
+        """
+    @staticmethod
+    def rvc(*, voice_dir: typing.Optional[builtins.str | os.PathLike | pathlib.Path] = None, device: typing.Optional[Device] = None) -> VcModel:
+        r"""
+        Construct an RVC (Retrieval-based Voice Conversion) backend.
+        
+        Args:
+            voice_dir: Optional directory containing per-voice profile
+                subdirectories (`<voice_dir>/<voice_id>/model.pth`, etc).
+                When provided, the `BLAZEN_RVC_VOICE_DIR` environment
+                variable is set for the lifetime of this process so the
+                RVC backend can discover voice profiles from disk.
+            device: Optional [`Device`] override (default: CPU). RVC
+                backends today are CPU-bound; the parameter is accepted
+                for forward-compat and currently ignored.
+        
+        Voice profiles must already exist on disk; runtime registration
+        via [`register_target_voice`](Self::register_target_voice) is not
+        supported by the current RVC backend (raises `UnsupportedError`).
+        """
+    def __repr__(self) -> builtins.str: ...
+    async def list_target_voices(self) -> typing.List[TargetVoice]:
+        r"""
+        List the target voices the active backend can currently render.
+        
+        Returns a coroutine that resolves to a list of
+        [`TargetVoice`](super::PyTargetVoice) descriptors. The RVC
+        backend reads voice profiles from `$BLAZEN_RVC_VOICE_DIR` lazily;
+        passing an empty / non-existent directory returns an empty list.
+        """
+    async def register_target_voice(self, voice_id: builtins.str, reference_audio_path: builtins.str | os.PathLike | pathlib.Path) -> None:
+        r"""
+        Register a new target voice with the active backend, using
+        `reference_audio_path` as the speaker-embedding source.
+        
+        The current RVC backend does not support runtime voice
+        registration — voice profiles must be placed on disk under
+        `$BLAZEN_RVC_VOICE_DIR/<voice_id>/` ahead of time. Always
+        raises [`UnsupportedError`](crate::error::UnsupportedError) on
+        this build.
+        """
+    async def convert_voice(self, input_audio_path: builtins.str | os.PathLike | pathlib.Path, target_voice_id: builtins.str) -> bytes:
+        r"""
+        Convert a source utterance on disk into the voice of a
+        previously-registered target speaker.
+        
+        Returns a coroutine that resolves to a self-describing WAV byte
+        buffer (16-bit PCM at the target voice's native sample rate; see
+        [`TargetVoice.sample_rate_hz`](super::PyTargetVoice)).
+        """
+    def stream_convert_pcm(self, input_pcm: typing.Sequence[builtins.float], target_voice_id: builtins.str) -> VcStream:
+        r"""
+        Stream-convert a single PCM utterance for low-latency progressive
+        playback.
+        
+        Wraps the provided `input_pcm` f32 sample buffer in a single-item
+        source stream, hands it to the backend's `stream_convert`, and
+        returns a [`VcStream`](super::PyVcStream) async-iterator over the
+        converted output chunks.
+        
+        Future revisions (per the binding-parity follow-up) will expand
+        this to a true bidirectional stream over an async iterator of
+        source chunks; the current single-utterance variant matches the
+        surface exposed by every other binding.
+        """
+
+@typing.final
+class VcStream:
+    r"""
+    Async iterator over streamed [`VcChunk`](super::PyVcChunk) emissions.
+    
+    Each `__anext__` resolves to a fresh
+    [`VcChunk`](super::PyVcChunk) carrying a chunk of converted PCM
+    samples at the target voice's native sample rate. When the underlying
+    backend stream ends, the next call raises `StopAsyncIteration`. The
+    iterator is single-pass: once exhausted it stays exhausted.
+    """
+    def __aiter__(self) -> VcStream: ...
+    async def __anext__(self) -> VcChunk: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -14892,6 +15070,10 @@ class TractError(ProviderError):
 class MusicGenError(ProviderError):
     """Music / SFX generation backend error (features:
     `audio-music-musicgen`, `audio-music-audiogen`, `audio-music-stable-audio`)."""
+    ...
+
+class RvcError(ProviderError):
+    """RVC voice-conversion backend error (feature: `audio-vc-rvc`)."""
     ...
 
 # --- Module-level type aliases -----------------------------------------

@@ -50,6 +50,8 @@ pyo3::create_exception!(blazen, TractError, ProviderError);
     feature = "audio-music-stable-audio",
 ))]
 pyo3::create_exception!(blazen, MusicGenError, ProviderError);
+#[cfg(feature = "audio-vc-rvc")]
+pyo3::create_exception!(blazen, RvcError, ProviderError);
 
 /// Register all custom exception types on the Python module.
 pub fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
@@ -91,6 +93,8 @@ pub fn register_exceptions(m: &Bound<'_, PyModule>) -> PyResult<()> {
         feature = "audio-music-stable-audio",
     ))]
     m.add("MusicGenError", m.py().get_type::<MusicGenError>())?;
+    #[cfg(feature = "audio-vc-rvc")]
+    m.add("RvcError", m.py().get_type::<RvcError>())?;
 
     Ok(())
 }
@@ -296,6 +300,26 @@ pub fn music_error_to_pyerr(err: blazen_audio_music::MusicError) -> PyErr {
             UnsupportedError::new_err(err.to_string())
         }
         _ => MusicGenError::new_err(err.to_string()),
+    }
+}
+
+/// Convert a [`VcError`](blazen_audio_vc::VcError) to a rich [`PyErr`]
+/// with the appropriate exception subclass.
+///
+/// - [`VcError::EngineNotAvailable`] / [`VcError::Unsupported`]
+///   -> [`UnsupportedError`]
+/// - [`VcError::VoiceNotFound`] -> `ValueError`
+/// - [`VcError::Io`] -> `OSError`
+/// - [`VcError::ModelLoad`] / [`VcError::Conversion`] -> [`RvcError`]
+///   (subclass of [`ProviderError`])
+#[cfg(feature = "audio-vc-rvc")]
+pub fn vc_error_to_pyerr(err: blazen_audio_vc::VcError) -> PyErr {
+    use blazen_audio_vc::VcError as V;
+    match &err {
+        V::EngineNotAvailable(_) | V::Unsupported(_) => UnsupportedError::new_err(err.to_string()),
+        V::VoiceNotFound(_) => PyValueError::new_err(err.to_string()),
+        V::Io(_) => pyo3::exceptions::PyOSError::new_err(err.to_string()),
+        V::ModelLoad(_) | V::Conversion(_) => RvcError::new_err(err.to_string()),
     }
 }
 

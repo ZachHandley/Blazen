@@ -302,6 +302,10 @@ class MusicGenError(ProviderError):
     """Music / SFX generation backend error (features:
     `audio-music-musicgen`, `audio-music-audiogen`, `audio-music-stable-audio`)."""
     ...
+
+class RvcError(ProviderError):
+    """RVC voice-conversion backend error (feature: `audio-vc-rvc`)."""
+    ...
 "#;
 
     // Insert exception names into __all__ alphabetically. Existing __all__
@@ -321,6 +325,7 @@ class MusicGenError(ProviderError):
         "MusicGenError",
         "ProviderError",
         "RateLimitError",
+        "RvcError",
         "TimeoutError",
         "TractError",
         "TtsError",

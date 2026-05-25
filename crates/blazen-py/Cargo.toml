@@ -60,6 +60,7 @@ tonic = { workspace = true, optional = true }
 blazen-3d = { version = "0.0.0-dev", path = "../blazen-3d", default-features = false, optional = true }
 blazen-audio-music = { workspace = true, optional = true }
 blazen-audio = { workspace = true, optional = true }
+blazen-audio-vc = { workspace = true, optional = true }
 
 [features]
 default = ["local-all"]
@@ -83,7 +84,12 @@ audio-stt-whisper-streaming = ["blazen-llm/audio-stt-whisper-streaming"]
 audio-stt-faster-whisper = ["blazen-llm/audio-stt-faster-whisper"]
 audio-tts-bark = ["blazen-llm/audio-tts-bark"]
 audio-tts-f5 = ["blazen-llm/audio-tts-f5"]
-audio-vc-rvc = ["blazen-llm/audio-vc-rvc"]
+audio-vc-rvc = [
+    "blazen-llm/audio-vc-rvc",
+    "dep:blazen-audio-vc",
+    "blazen-audio-vc/rvc",
+    "dep:blazen-audio",
+]
 # 3D-pipeline bridge surface (HTTP-proxy backend forwards to upstream 3D services).
 threed = ["blazen-llm/threed", "dep:blazen-3d"]
 threed-compat-proxy = ["threed", "blazen-llm/threed-compat-proxy", "blazen-3d/compat-proxy"]
@@ -97,7 +103,7 @@ tract = ["dep:blazen-embed-tract"]
 # ORT-backed embedding backend (faster than tract on x86_64/aarch64 where ORT
 # ships prebuilts; target-gated optional dep so musl builds skip it).
 fastembed = ["blazen-llm/embed", "dep:blazen-embed-fastembed"]
-local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "tts", "tiktoken", "distributed", "otlp", "prometheus", "langfuse", "audio-music-musicgen", "audio-music-audiogen", "audio-music-stable-audio", "training"]
+local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "tts", "tiktoken", "distributed", "otlp", "prometheus", "langfuse", "audio-music-musicgen", "audio-music-audiogen", "audio-music-stable-audio", "audio-vc-rvc", "training"]
 # Telemetry exporters
 otlp = ["blazen-telemetry/otlp"]
 prometheus = ["blazen-telemetry/prometheus"]
@@ -127,6 +133,7 @@ training = [
     "dep:candle-core",
     "blazen-manager/training",
 ]
+blazen-audio-vc = ["dep:blazen-audio-vc"]
 [lints]
 workspace = true
 

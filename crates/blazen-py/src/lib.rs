@@ -62,6 +62,8 @@ pub mod telemetry;
 #[cfg(feature = "threed-compat-proxy")]
 pub mod threed;
 pub mod types;
+#[cfg(feature = "audio-vc-rvc")]
+pub mod vc;
 pub mod workflow;
 
 use pyo3::prelude::*;
@@ -586,6 +588,16 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<music::chunk::PyMusicChunk>()?;
         m.add_class::<music::model::PyMusicModel>()?;
         m.add_class::<music::stream::PyMusicStream>()?;
+    }
+
+    // Voice-conversion backend (RVC). Feature-gated; a build without
+    // `audio-vc-rvc` registers none of these classes.
+    #[cfg(feature = "audio-vc-rvc")]
+    {
+        m.add_class::<vc::chunk::PyVcChunk>()?;
+        m.add_class::<vc::target_voice::PyTargetVoice>()?;
+        m.add_class::<vc::model::PyVcModel>()?;
+        m.add_class::<vc::stream::PyVcStream>()?;
     }
 
     // Capability providers (subclassable)
