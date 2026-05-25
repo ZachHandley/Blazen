@@ -672,6 +672,24 @@ typedef struct BlazenSttModel BlazenSttModel;
 typedef struct BlazenSttResult BlazenSttResult;
 
 /**
+ * Opaque snapshot of one registered voice the backend can render — wraps
+ * [`InnerTargetVoice`].
+ *
+ * The `label` accessor returns an empty string when the upstream backend
+ * did not record a display name (matches the [`BlazenSttResult::language`]
+ * convention rather than threading `Option<String>` through C).
+ */
+typedef struct BlazenTargetVoice BlazenTargetVoice;
+
+/**
+ * Opaque list of [`BlazenTargetVoice`] snapshots. Mirrors
+ * [`crate::manager_records::BlazenModelStatusList`]: borrow-by-index
+ * (`_get`) for read-only iteration; move-by-index (`_take`) to peel off a
+ * caller-owned handle.
+ */
+typedef struct BlazenTargetVoiceList BlazenTargetVoiceList;
+
+/**
  * Opaque wrapper around [`blazen_uniffi::llm::TokenUsage`].
  */
 typedef struct BlazenTokenUsage BlazenTokenUsage;
@@ -702,6 +720,44 @@ typedef struct BlazenTtsModel BlazenTtsModel;
  * only), a MIME type string, and a duration in milliseconds.
  */
 typedef struct BlazenTtsResult BlazenTtsResult;
+
+/**
+ * Opaque handle wrapping [`InnerVcChunk`].
+ *
+ * Produced by the voice-conversion stream sink trampoline (one allocation
+ * per streamed chunk) and handed to the foreign-side `on_chunk` callback.
+ * The foreign callback OWNS the chunk and MUST release it via
+ * [`blazen_vc_chunk_free`] before returning.
+ *
+ * Wire-format: `samples` is 32-bit float PCM in `[-1.0, 1.0]` at the
+ * target voice's native sample rate; `is_final` is a UI hint (the
+ * canonical end-of-stream marker is the sink's `on_done` callback);
+ * `latency_seconds` is the per-chunk measured latency from call-start
+ * (None when unreported).
+ */
+typedef struct BlazenVcChunk BlazenVcChunk;
+
+/**
+ * Opaque handle wrapping an `Arc<blazen_uniffi::compute_vc::VcModel>`.
+ *
+ * Produced by the per-backend factory functions ([`blazen_vc_model_new_rvc`]
+ * today). Free with [`blazen_vc_model_free`].
+ */
+typedef struct BlazenVcModel BlazenVcModel;
+
+/**
+ * Opaque handle wrapping [`InnerVcResult`].
+ *
+ * Produced by the cabi `VcModel::convert_voice` wrappers and by the typed
+ * `blazen_future_take_vc_result` taker. Holds a complete WAV
+ * (RIFF/`fmt `/`data`) container with 16-bit signed PCM samples at the
+ * target voice's native sample rate, a MIME type string, the sample rate
+ * in Hz, and a duration in seconds. There is no `channels` field — the
+ * RVC backend renders mono and stamps the rate from the resolved target
+ * voice — and no `url` field (voice conversion is always rendered to
+ * inline bytes today).
+ */
+typedef struct BlazenVcResult BlazenVcResult;
 
 /**
  * Opaque handle wrapping a [`blazen_core::distributed::WorkerInfo`].
@@ -1942,6 +1998,54 @@ typedef struct {
      */
     int32_t (*on_error)(void *user_data, BlazenError *err, BlazenError **out_err);
 } BlazenMusicStreamSinkVTable;
+
+/**
+ * Function-pointer vtable a foreign caller fills out to implement
+ * [`VcStreamSink`] across the C ABI.
+ *
+ * All three callbacks plus `drop_user_data` are required. The vtable is
+ * consumed by the voice-conversion stream-pump functions below
+ * ([`blazen_vc_model_stream_convert_pcm_to_sink`] /
+ * [`blazen_vc_model_stream_convert_pcm_to_sink_blocking`]); they take
+ * ownership of `user_data` and the function pointers for the lifetime of
+ * the streaming call. `drop_user_data` runs exactly once when the wrapping
+ * [`CVcStreamSink`] drops (after the stream has terminated, or on an
+ * early-return failure path before the stream starts).
+ */
+typedef struct {
+    /**
+     * Opaque foreign-side context handed back to each callback. Owned by
+     * this vtable struct; released via `drop_user_data` when the wrapper
+     * drops.
+     */
+    void *user_data;
+    /**
+     * Invoked exactly once when the wrapping `CVcStreamSink` drops.
+     * Implementations should reclaim and release `user_data`.
+     */
+    void (*drop_user_data)(void *user_data);
+    /**
+     * Receive a single chunk. `chunk` is caller-owned; the callback MUST
+     * free it via [`crate::compute_records::blazen_vc_chunk_free`] (or
+     * consume it into a derivative structure). Returns `0` on success or
+     * `-1` on failure (writing a fresh `*mut BlazenError` into `*out_err`).
+     * A `-1` aborts the stream.
+     */
+    int32_t (*on_chunk)(void *user_data, BlazenVcChunk *chunk, BlazenError **out_err);
+    /**
+     * Receive the terminal completion signal. Voice-conversion streams
+     * carry no auxiliary `on_done` payload. Returns `0` on success or
+     * `-1` on failure (writing a fresh `*mut BlazenError` into `*out_err`).
+     */
+    int32_t (*on_done)(void *user_data, BlazenError **out_err);
+    /**
+     * Receive a fatal error from the stream. `err` is a caller-owned
+     * `*mut BlazenError` freed via `blazen_error_free`. Returns `0` on
+     * success or `-1` on failure (writing the callback's own error into
+     * `*out_err`).
+     */
+    int32_t (*on_error)(void *user_data, BlazenError *err, BlazenError **out_err);
+} BlazenVcStreamSinkVTable;
 
 /**
  * Function-pointer vtable a foreign caller fills out to implement
@@ -3192,6 +3296,216 @@ int32_t blazen_future_take_music_result(BlazenFuture *fut,
  * music-generation wrapper. Double-free is undefined behavior.
  */
  void blazen_music_result_free(BlazenMusicResult *result);
+
+/**
+ * Borrows the chunk's PCM sample slice. Writes the slice length (in
+ * `f32` elements) into `*out_len` and returns the pointer to the first
+ * sample. The returned pointer is valid for the lifetime of the chunk
+ * handle (i.e. until [`blazen_vc_chunk_free`] is called); callers must
+ * NOT free the sample buffer directly.
+ *
+ * Returns null and writes `0` into `*out_len` if `handle` is null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a valid pointer to a `BlazenVcChunk` produced
+ * by the cabi surface. `out_len` must be null OR a writable pointer to a
+ * single `usize` slot. The returned pointer aliases the chunk's internal
+ * `Vec<f32>` — keep the chunk alive for as long as the pointer is in
+ * use, and do not mutate the buffer through it.
+ */
+ const float *blazen_vc_chunk_samples(const BlazenVcChunk *handle, uintptr_t *out_len);
+
+/**
+ * Returns `true` if this is the final emitted chunk of the streaming
+ * voice-conversion call, `false` otherwise. Returns `false` if `handle`
+ * is null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a valid pointer to a `BlazenVcChunk` produced
+ * by the cabi surface.
+ */
+ bool blazen_vc_chunk_is_final(const BlazenVcChunk *handle);
+
+/**
+ * Returns the per-chunk latency in seconds, or NaN when the backend did
+ * not report a measurement (or when `handle` is null). The NaN sentinel
+ * mirrors the encoding used elsewhere in the cabi surface for
+ * `Option<f32>` returns.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a valid pointer to a `BlazenVcChunk` produced
+ * by the cabi surface.
+ */
+ float blazen_vc_chunk_latency_seconds(const BlazenVcChunk *handle);
+
+/**
+ * Frees a `BlazenVcChunk` previously produced by the cabi surface
+ * (typically inside a voice-conversion stream sink's `on_chunk`
+ * callback). Passing null is a no-op.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer previously produced by the cabi
+ * surface's voice-conversion stream trampoline. Double-free is undefined
+ * behavior.
+ */
+ void blazen_vc_chunk_free(BlazenVcChunk *handle);
+
+/**
+ * Borrows the result's encoded audio bytes. Writes the slice length
+ * into `*out_len` and returns the pointer to the first byte. The
+ * returned pointer is valid for the lifetime of the result handle
+ * (i.e. until [`blazen_vc_result_free`] is called); callers must NOT
+ * free the buffer directly.
+ *
+ * Returns null and writes `0` into `*out_len` if `result` is null.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenVcResult` produced
+ * by the cabi surface. `out_len` must be null OR a writable pointer to
+ * a single `usize` slot.
+ */
+ const uint8_t *blazen_vc_result_bytes(const BlazenVcResult *result, uintptr_t *out_len);
+
+/**
+ * Returns the IANA MIME type of the encoded audio as a heap-allocated
+ * C string. Caller frees with `blazen_string_free`. Returns null if
+ * `result` is null.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenVcResult`
+ * produced by the cabi surface.
+ */
+ char *blazen_vc_result_mime_type(const BlazenVcResult *result);
+
+/**
+ * Returns the sample rate in Hz. Returns `0` if `result` is null or
+ * the upstream backend did not report a sample rate.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenVcResult`
+ * produced by the cabi surface.
+ */
+ uint32_t blazen_vc_result_sample_rate(const BlazenVcResult *result);
+
+/**
+ * Returns the duration of the clip in seconds. Returns `0.0` if `result`
+ * is null or the upstream backend did not report a duration.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenVcResult`
+ * produced by the cabi surface.
+ */
+ float blazen_vc_result_duration_seconds(const BlazenVcResult *result);
+
+/**
+ * Frees a `BlazenVcResult` produced by the cabi surface. Passing null is
+ * a no-op.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a pointer produced by the cabi surface's
+ * voice-conversion wrapper. Double-free is undefined behavior.
+ */
+ void blazen_vc_result_free(BlazenVcResult *result);
+
+/**
+ * Returns the backend-scoped voice identifier as a heap-allocated C
+ * string. Caller frees with `blazen_string_free`. Returns null if
+ * `voice` is null.
+ *
+ * # Safety
+ *
+ * `voice` must be null OR a valid pointer to a `BlazenTargetVoice`
+ * produced by the cabi surface.
+ */
+ char *blazen_target_voice_id(const BlazenTargetVoice *voice);
+
+/**
+ * Returns the human-readable display label as a heap-allocated C string.
+ * The returned string is empty when the upstream backend did not record
+ * a label (mirrors the `BlazenSttResult::language` empty-string
+ * convention). Caller frees with `blazen_string_free`. Returns null if
+ * `voice` is null.
+ *
+ * # Safety
+ *
+ * `voice` must be null OR a valid pointer to a `BlazenTargetVoice`
+ * produced by the cabi surface.
+ */
+ char *blazen_target_voice_label(const BlazenTargetVoice *voice);
+
+/**
+ * Returns the native sample rate (Hz) the backend renders this voice at.
+ * Returns `0` if `voice` is null.
+ *
+ * # Safety
+ *
+ * `voice` must be null OR a valid pointer to a `BlazenTargetVoice`
+ * produced by the cabi surface.
+ */
+ uint32_t blazen_target_voice_sample_rate_hz(const BlazenTargetVoice *voice);
+
+/**
+ * Frees a `BlazenTargetVoice` produced by the cabi surface. Passing null
+ * is a no-op.
+ *
+ * # Safety
+ *
+ * `voice` must be null OR a pointer produced by the cabi surface.
+ * Double-free is undefined behavior.
+ */
+ void blazen_target_voice_free(BlazenTargetVoice *voice);
+
+/**
+ * Returns the number of entries in the list. Returns `0` on a null
+ * handle.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a live [`BlazenTargetVoiceList`].
+ */
+ uintptr_t blazen_target_voice_list_len(const BlazenTargetVoiceList *list);
+
+/**
+ * Borrows the `idx`-th entry. Returns null if `list` is null or `idx` is
+ * out of range. The returned pointer is valid for the lifetime of the
+ * list — do NOT call `blazen_target_voice_free` on it.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a live [`BlazenTargetVoiceList`].
+ */
+
+const BlazenTargetVoice *blazen_target_voice_list_get(const BlazenTargetVoiceList *list,
+                                                      uintptr_t idx);
+
+/**
+ * Pops the `idx`-th entry and returns it as a caller-owned handle. Free
+ * the returned handle with [`blazen_target_voice_free`]. Returns null if
+ * `list` is null or `idx` is out of range.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a live [`BlazenTargetVoiceList`].
+ */
+ BlazenTargetVoice *blazen_target_voice_list_take(BlazenTargetVoiceList *list, uintptr_t idx);
+
+/**
+ * Frees a [`BlazenTargetVoiceList`], dropping any remaining entries.
+ *
+ * # Safety
+ *
+ * `list` must be null OR a pointer produced by the cabi surface.
+ */
+ void blazen_target_voice_list_free(BlazenTargetVoiceList *list);
 
 /**
  * Constructs a new `ImageRequest` with the given prompt and every optional
@@ -4810,6 +5124,198 @@ BlazenVoiceHandleArray *blazen_voice_handle_array_from_json(const char *json,
  * non-null pointer is a double-free.
  */
  void blazen_voice_handle_array_free(BlazenVoiceHandleArray *handle);
+
+/**
+ * Frees a `BlazenVcModel` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by the cabi
+ * surface's voice-conversion factory functions. Double-free is undefined
+ * behavior.
+ */
+ void blazen_vc_model_free(BlazenVcModel *model);
+
+/**
+ * Build a native RVC-backed [`BlazenVcModel`].
+ *
+ * `voice_dir` may be null to leave the per-process
+ * `BLAZEN_RVC_VOICE_DIR` environment variable untouched; pass a
+ * NUL-terminated UTF-8 buffer to override it (the RVC pipeline reads the
+ * variable lazily on the first conversion call, so callers who construct
+ * the model up-front before spinning off threads are safe). `device`
+ * follows the `blazen_llm::Device::parse` format
+ * (`"cpu"`, `"cuda"`, `"cuda:N"`, `"metal"`, `"metal:N"`); null defers to
+ * CPU.
+ *
+ * On success returns `0` and writes a fresh `BlazenVcModel*` into
+ * `*out_model`. On failure returns `-1` and writes a fresh `BlazenError*`
+ * into `*out_err`.
+ *
+ * # Safety
+ *
+ * - `voice_dir` / `device` must each be null OR a valid NUL-terminated
+ *   UTF-8 buffer.
+ * - `out_model` and `out_err` must each be null OR point to a writable
+ *   slot of the matching pointer type.
+ */
+
+int32_t blazen_vc_model_new_rvc(const char *voice_dir,
+                                const char *device,
+                                BlazenVcModel **out_model,
+                                BlazenError **out_err);
+
+/**
+ * Synchronously convert the source utterance at `input_audio_path` into
+ * the voice of registered target speaker `target_voice_id` and write the
+ * result into `out_result` on success, or a `BlazenError` into `out_err`
+ * on failure.
+ *
+ * Returns `0` on success, `-1` on failure, `-2` on invalid input (null
+ * model / null or non-UTF-8 path / null or non-UTF-8 voice id).
+ *
+ * # Safety
+ *
+ * - `model` must be a valid pointer to a `BlazenVcModel` produced by the
+ *   cabi surface.
+ * - `input_audio_path` / `target_voice_id` must each be valid
+ *   NUL-terminated UTF-8 buffers.
+ * - `out_result` / `out_err` must each be null OR writable pointers to
+ *   the appropriate slot.
+ */
+
+int32_t blazen_vc_model_convert_voice_blocking(const BlazenVcModel *model,
+                                               const char *input_audio_path,
+                                               const char *target_voice_id,
+                                               BlazenVcResult **out_result,
+                                               BlazenError **out_err);
+
+/**
+ * Asynchronously convert the source utterance at `input_audio_path` into
+ * the voice of registered target speaker `target_voice_id`. Returns a
+ * `*mut BlazenFuture` the caller polls / waits on; the typed result is
+ * popped with [`blazen_future_take_vc_result`].
+ *
+ * Returns null if `model` is null or either string is null / non-UTF-8.
+ *
+ * # Safety
+ *
+ * Same string contracts as [`blazen_vc_model_convert_voice_blocking`].
+ */
+
+BlazenFuture *blazen_vc_model_convert_voice(const BlazenVcModel *model,
+                                            const char *input_audio_path,
+                                            const char *target_voice_id);
+
+/**
+ * Pops a typed `VcResult` out of `fut`. On success returns `0` and writes
+ * a caller-owned `*mut BlazenVcResult` into `out`; on failure returns
+ * `-1` and writes a caller-owned `*mut BlazenError` into `err`.
+ *
+ * `out` / `err` may be null when the caller wants to discard the value.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by
+ * [`blazen_vc_model_convert_voice`], not yet freed, and not concurrently
+ * freed from another thread. `out` / `err` must be null OR writable
+ * pointers to the appropriate slot.
+ */
+ int32_t blazen_future_take_vc_result(BlazenFuture *fut, BlazenVcResult **out, BlazenError **err);
+
+/**
+ * Pops a typed `Vec<TargetVoice>` out of `fut`, wraps it in a
+ * caller-owned [`BlazenTargetVoiceList`], and writes the handle into
+ * `out`. On failure returns `-1` and writes a caller-owned
+ * `*mut BlazenError` into `err`.
+ *
+ * `out` / `err` may be null when the caller wants to discard the value.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by
+ * [`blazen_vc_model_list_target_voices`], not yet freed, and not
+ * concurrently freed from another thread. `out` / `err` must be null OR
+ * writable pointers to the appropriate slot.
+ */
+
+int32_t blazen_future_take_target_voice_list(BlazenFuture *fut,
+                                             BlazenTargetVoiceList **out,
+                                             BlazenError **err);
+
+/**
+ * Synchronously list the target voices this backend can currently
+ * render. Writes a caller-owned [`BlazenTargetVoiceList`] into `out_list`
+ * on success, or a `BlazenError` into `out_err` on failure.
+ *
+ * Returns `0` on success, `-1` on failure, `-2` on null `model`.
+ *
+ * # Safety
+ *
+ * - `model` must be a valid pointer to a `BlazenVcModel` produced by the
+ *   cabi surface.
+ * - `out_list` / `out_err` must each be null OR writable pointers to the
+ *   appropriate slot.
+ */
+
+int32_t blazen_vc_model_list_target_voices_blocking(const BlazenVcModel *model,
+                                                    BlazenTargetVoiceList **out_list,
+                                                    BlazenError **out_err);
+
+/**
+ * Asynchronously list the target voices this backend can render. Returns
+ * a `*mut BlazenFuture` the caller polls / waits on; the typed list is
+ * popped with [`blazen_future_take_target_voice_list`].
+ *
+ * Returns null if `model` is null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a valid pointer to a `BlazenVcModel` produced
+ * by the cabi surface.
+ */
+ BlazenFuture *blazen_vc_model_list_target_voices(const BlazenVcModel *model);
+
+/**
+ * Synchronously register a new target voice for the backend, sourcing
+ * its identity from the reference utterance at `reference_audio_path`.
+ *
+ * Returns `0` on success, `-1` on backend failure, `-2` on invalid input
+ * (null model / null or non-UTF-8 voice id / null or non-UTF-8
+ * reference path).
+ *
+ * # Safety
+ *
+ * - `model` must be a valid pointer to a `BlazenVcModel` produced by the
+ *   cabi surface.
+ * - `voice_id` / `reference_audio_path` must each be valid
+ *   NUL-terminated UTF-8 buffers.
+ * - `out_err` must be null OR a writable slot for a single
+ *   `*mut BlazenError` write.
+ */
+
+int32_t blazen_vc_model_register_target_voice_blocking(const BlazenVcModel *model,
+                                                       const char *voice_id,
+                                                       const char *reference_audio_path,
+                                                       BlazenError **out_err);
+
+/**
+ * Asynchronously register a new target voice for the backend, sourcing
+ * its identity from the reference utterance at `reference_audio_path`.
+ * Returns a `*mut BlazenFuture` whose result is popped with
+ * [`crate::persist::blazen_future_take_unit`].
+ *
+ * Returns null if `model` is null or either string is null / non-UTF-8.
+ *
+ * # Safety
+ *
+ * Same string contracts as
+ * [`blazen_vc_model_register_target_voice_blocking`].
+ */
+
+BlazenFuture *blazen_vc_model_register_target_voice(const BlazenVcModel *model,
+                                                    const char *voice_id,
+                                                    const char *reference_audio_path);
 
 /**
  * Synchronously open a connection to the control plane at `endpoint`.
@@ -11569,6 +12075,89 @@ BlazenFuture *blazen_music_model_stream_generate_sfx(const BlazenMusicModel *mod
                                                      const char *prompt,
                                                      float duration_seconds,
                                                      BlazenMusicStreamSinkVTable sink);
+
+/**
+ * Synchronously drive a voice-conversion streaming call, dispatching each
+ * chunk to the supplied sink. Blocks the calling thread on the upstream
+ * tokio runtime.
+ *
+ * `input_pcm` / `input_pcm_len` describe the source utterance as 32-bit
+ * float PCM at the backend's expected source sample rate (typically
+ * 16 kHz mono for RVC). The buffer is copied into an owned `Vec<f32>`
+ * before the stream starts, so the caller may free / reuse the buffer the
+ * instant this function returns. A null `input_pcm` is treated as an
+ * empty input vector.
+ *
+ * On success returns `0` (the sink's `on_done` has fired). On a
+ * stream-start failure returns `-1` and writes a fresh `*mut BlazenError`
+ * into `*out_err`; backend-side and sink-side failures during the stream
+ * are delivered through `on_error` rather than this return path — see
+ * [`blazen_uniffi::compute_vc::stream_convert_pcm_to_sink`] for the full
+ * contract.
+ *
+ * ## Ownership transfer
+ *
+ * - `model` is BORROWED — the underlying `Arc<VcModel>` is cloned into
+ *   the streaming call. Caller retains its handle.
+ * - `sink` (the vtable) is CONSUMED — ownership of `user_data` transfers
+ *   to the wrapping `CVcStreamSink`, which releases it via
+ *   `drop_user_data` on drop. On every early-return failure path that
+ *   aborts BEFORE constructing `CVcStreamSink`, this function explicitly
+ *   invokes `(sink.drop_user_data)(sink.user_data)` to honour the same
+ *   contract.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenVcModel` produced by the cabi
+ * surface. `input_pcm` must be null OR point to a readable `f32` buffer
+ * of at least `input_pcm_len` elements. `target_voice_id` must be null
+ * OR a valid NUL-terminated UTF-8 buffer. `sink.user_data` and the four
+ * `sink` function pointers must satisfy the contracts documented on
+ * [`BlazenVcStreamSinkVTable`]. `out_err` must be null OR a writable slot
+ * for a single `*mut BlazenError` write.
+ */
+
+int32_t blazen_vc_model_stream_convert_pcm_to_sink_blocking(const BlazenVcModel *model,
+                                                            const float *input_pcm,
+                                                            uintptr_t input_pcm_len,
+                                                            const char *target_voice_id,
+                                                            BlazenVcStreamSinkVTable sink,
+                                                            BlazenError **out_err);
+
+/**
+ * Asynchronously drive a voice-conversion streaming call onto the upstream
+ * tokio runtime, returning an opaque future handle that resolves to `()`
+ * on completion. The caller observes completion via the future's fd /
+ * [`crate::future::blazen_future_poll`] /
+ * [`crate::future::blazen_future_wait`], then calls
+ * [`crate::persist::blazen_future_take_unit`] to pop the result. Free the
+ * future with [`crate::future::blazen_future_free`].
+ *
+ * Returns null if `model` is null or `target_voice_id` is null /
+ * non-UTF-8. On those error paths `sink.drop_user_data` is still invoked
+ * so no resources leak.
+ *
+ * ## Ownership transfer
+ *
+ * Same as [`blazen_vc_model_stream_convert_pcm_to_sink_blocking`]:
+ * `model` is BORROWED, `sink` is CONSUMED. `input_pcm` is copied into an
+ * owned `Vec<f32>` before the future is spawned, so the caller may free /
+ * reuse the buffer the instant this function returns.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenVcModel`. `input_pcm` must be
+ * null OR point to a readable `f32` buffer of at least `input_pcm_len`
+ * elements. `target_voice_id` must be null OR a valid NUL-terminated
+ * UTF-8 buffer. `sink` satisfies the [`BlazenVcStreamSinkVTable`]
+ * contract; its `user_data` is consumed.
+ */
+
+BlazenFuture *blazen_vc_model_stream_convert_pcm_to_sink(const BlazenVcModel *model,
+                                                         const float *input_pcm,
+                                                         uintptr_t input_pcm_len,
+                                                         const char *target_voice_id,
+                                                         BlazenVcStreamSinkVTable sink);
 
 /**
  * Constructs a new `StreamChunk` with the given `content_delta` and

@@ -19,6 +19,9 @@ use blazen_uniffi::compute::{
 use blazen_uniffi::compute_music::{
     MusicChunk as InnerMusicChunk, MusicResult as InnerMusicResult,
 };
+use blazen_uniffi::compute_vc::{
+    TargetVoice as InnerTargetVoice, VcChunk as InnerVcChunk, VcResult as InnerVcResult,
+};
 
 use crate::llm_records::BlazenMedia;
 use crate::string::alloc_cstring;
@@ -602,4 +605,467 @@ pub unsafe extern "C" fn blazen_music_result_free(result: *mut BlazenMusicResult
     }
     // SAFETY: caller upholds the unique-ownership contract documented above.
     drop(unsafe { Box::from_raw(result) });
+}
+
+// ---------------------------------------------------------------------------
+// VcChunk
+// ---------------------------------------------------------------------------
+
+/// Opaque handle wrapping [`InnerVcChunk`].
+///
+/// Produced by the voice-conversion stream sink trampoline (one allocation
+/// per streamed chunk) and handed to the foreign-side `on_chunk` callback.
+/// The foreign callback OWNS the chunk and MUST release it via
+/// [`blazen_vc_chunk_free`] before returning.
+///
+/// Wire-format: `samples` is 32-bit float PCM in `[-1.0, 1.0]` at the
+/// target voice's native sample rate; `is_final` is a UI hint (the
+/// canonical end-of-stream marker is the sink's `on_done` callback);
+/// `latency_seconds` is the per-chunk measured latency from call-start
+/// (None when unreported).
+pub struct BlazenVcChunk(pub(crate) InnerVcChunk);
+
+impl BlazenVcChunk {
+    /// Heap-allocate the handle and return the raw pointer the caller owns.
+    pub(crate) fn into_ptr(self) -> *mut BlazenVcChunk {
+        Box::into_raw(Box::new(self))
+    }
+}
+
+impl From<InnerVcChunk> for BlazenVcChunk {
+    fn from(inner: InnerVcChunk) -> Self {
+        Self(inner)
+    }
+}
+
+/// Borrows the chunk's PCM sample slice. Writes the slice length (in
+/// `f32` elements) into `*out_len` and returns the pointer to the first
+/// sample. The returned pointer is valid for the lifetime of the chunk
+/// handle (i.e. until [`blazen_vc_chunk_free`] is called); callers must
+/// NOT free the sample buffer directly.
+///
+/// Returns null and writes `0` into `*out_len` if `handle` is null.
+///
+/// # Safety
+///
+/// `handle` must be null OR a valid pointer to a `BlazenVcChunk` produced
+/// by the cabi surface. `out_len` must be null OR a writable pointer to a
+/// single `usize` slot. The returned pointer aliases the chunk's internal
+/// `Vec<f32>` — keep the chunk alive for as long as the pointer is in
+/// use, and do not mutate the buffer through it.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_vc_chunk_samples(
+    handle: *const BlazenVcChunk,
+    out_len: *mut usize,
+) -> *const f32 {
+    if handle.is_null() {
+        if !out_len.is_null() {
+            // SAFETY: caller upholds the out-pointer contract.
+            unsafe {
+                *out_len = 0;
+            }
+        }
+        return std::ptr::null();
+    }
+    // SAFETY: caller upholds the live-pointer contract documented above.
+    let handle = unsafe { &*handle };
+    let slice = handle.0.samples.as_slice();
+    if !out_len.is_null() {
+        // SAFETY: caller upholds the out-pointer contract.
+        unsafe {
+            *out_len = slice.len();
+        }
+    }
+    slice.as_ptr()
+}
+
+/// Returns `true` if this is the final emitted chunk of the streaming
+/// voice-conversion call, `false` otherwise. Returns `false` if `handle`
+/// is null.
+///
+/// # Safety
+///
+/// `handle` must be null OR a valid pointer to a `BlazenVcChunk` produced
+/// by the cabi surface.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_vc_chunk_is_final(handle: *const BlazenVcChunk) -> bool {
+    if handle.is_null() {
+        return false;
+    }
+    // SAFETY: caller upholds the live-pointer contract documented above.
+    let handle = unsafe { &*handle };
+    handle.0.is_final
+}
+
+/// Returns the per-chunk latency in seconds, or NaN when the backend did
+/// not report a measurement (or when `handle` is null). The NaN sentinel
+/// mirrors the encoding used elsewhere in the cabi surface for
+/// `Option<f32>` returns.
+///
+/// # Safety
+///
+/// `handle` must be null OR a valid pointer to a `BlazenVcChunk` produced
+/// by the cabi surface.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_vc_chunk_latency_seconds(handle: *const BlazenVcChunk) -> f32 {
+    if handle.is_null() {
+        return f32::NAN;
+    }
+    // SAFETY: caller upholds the live-pointer contract documented above.
+    let handle = unsafe { &*handle };
+    handle.0.latency_seconds.unwrap_or(f32::NAN)
+}
+
+/// Frees a `BlazenVcChunk` previously produced by the cabi surface
+/// (typically inside a voice-conversion stream sink's `on_chunk`
+/// callback). Passing null is a no-op.
+///
+/// # Safety
+///
+/// `handle` must be null OR a pointer previously produced by the cabi
+/// surface's voice-conversion stream trampoline. Double-free is undefined
+/// behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_vc_chunk_free(handle: *mut BlazenVcChunk) {
+    if handle.is_null() {
+        return;
+    }
+    // SAFETY: caller upholds the unique-ownership contract documented above.
+    drop(unsafe { Box::from_raw(handle) });
+}
+
+// ---------------------------------------------------------------------------
+// VcResult
+// ---------------------------------------------------------------------------
+
+/// Opaque handle wrapping [`InnerVcResult`].
+///
+/// Produced by the cabi `VcModel::convert_voice` wrappers and by the typed
+/// `blazen_future_take_vc_result` taker. Holds a complete WAV
+/// (RIFF/`fmt `/`data`) container with 16-bit signed PCM samples at the
+/// target voice's native sample rate, a MIME type string, the sample rate
+/// in Hz, and a duration in seconds. There is no `channels` field — the
+/// RVC backend renders mono and stamps the rate from the resolved target
+/// voice — and no `url` field (voice conversion is always rendered to
+/// inline bytes today).
+pub struct BlazenVcResult(pub(crate) InnerVcResult);
+
+impl BlazenVcResult {
+    /// Heap-allocate the handle and return the raw pointer the caller owns.
+    pub(crate) fn into_ptr(self) -> *mut BlazenVcResult {
+        Box::into_raw(Box::new(self))
+    }
+}
+
+impl From<InnerVcResult> for BlazenVcResult {
+    fn from(inner: InnerVcResult) -> Self {
+        Self(inner)
+    }
+}
+
+/// Borrows the result's encoded audio bytes. Writes the slice length
+/// into `*out_len` and returns the pointer to the first byte. The
+/// returned pointer is valid for the lifetime of the result handle
+/// (i.e. until [`blazen_vc_result_free`] is called); callers must NOT
+/// free the buffer directly.
+///
+/// Returns null and writes `0` into `*out_len` if `result` is null.
+///
+/// # Safety
+///
+/// `result` must be null OR a valid pointer to a `BlazenVcResult` produced
+/// by the cabi surface. `out_len` must be null OR a writable pointer to
+/// a single `usize` slot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_vc_result_bytes(
+    result: *const BlazenVcResult,
+    out_len: *mut usize,
+) -> *const u8 {
+    if result.is_null() {
+        if !out_len.is_null() {
+            // SAFETY: caller upholds the out-pointer contract.
+            unsafe {
+                *out_len = 0;
+            }
+        }
+        return std::ptr::null();
+    }
+    // SAFETY: caller upholds the live-pointer contract documented above.
+    let result = unsafe { &*result };
+    let slice = result.0.bytes.as_slice();
+    if !out_len.is_null() {
+        // SAFETY: caller upholds the out-pointer contract.
+        unsafe {
+            *out_len = slice.len();
+        }
+    }
+    slice.as_ptr()
+}
+
+/// Returns the IANA MIME type of the encoded audio as a heap-allocated
+/// C string. Caller frees with `blazen_string_free`. Returns null if
+/// `result` is null.
+///
+/// # Safety
+///
+/// `result` must be null OR a valid pointer to a `BlazenVcResult`
+/// produced by the cabi surface.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_vc_result_mime_type(result: *const BlazenVcResult) -> *mut c_char {
+    if result.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the live-pointer contract documented above.
+    let result = unsafe { &*result };
+    alloc_cstring(&result.0.mime_type)
+}
+
+/// Returns the sample rate in Hz. Returns `0` if `result` is null or
+/// the upstream backend did not report a sample rate.
+///
+/// # Safety
+///
+/// `result` must be null OR a valid pointer to a `BlazenVcResult`
+/// produced by the cabi surface.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_vc_result_sample_rate(result: *const BlazenVcResult) -> u32 {
+    if result.is_null() {
+        return 0;
+    }
+    // SAFETY: caller upholds the live-pointer contract documented above.
+    let result = unsafe { &*result };
+    result.0.sample_rate
+}
+
+/// Returns the duration of the clip in seconds. Returns `0.0` if `result`
+/// is null or the upstream backend did not report a duration.
+///
+/// # Safety
+///
+/// `result` must be null OR a valid pointer to a `BlazenVcResult`
+/// produced by the cabi surface.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_vc_result_duration_seconds(result: *const BlazenVcResult) -> f32 {
+    if result.is_null() {
+        return 0.0;
+    }
+    // SAFETY: caller upholds the live-pointer contract documented above.
+    let result = unsafe { &*result };
+    result.0.duration_seconds
+}
+
+/// Frees a `BlazenVcResult` produced by the cabi surface. Passing null is
+/// a no-op.
+///
+/// # Safety
+///
+/// `result` must be null OR a pointer produced by the cabi surface's
+/// voice-conversion wrapper. Double-free is undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_vc_result_free(result: *mut BlazenVcResult) {
+    if result.is_null() {
+        return;
+    }
+    // SAFETY: caller upholds the unique-ownership contract documented above.
+    drop(unsafe { Box::from_raw(result) });
+}
+
+// ---------------------------------------------------------------------------
+// TargetVoice
+// ---------------------------------------------------------------------------
+
+/// Opaque snapshot of one registered voice the backend can render — wraps
+/// [`InnerTargetVoice`].
+///
+/// The `label` accessor returns an empty string when the upstream backend
+/// did not record a display name (matches the [`BlazenSttResult::language`]
+/// convention rather than threading `Option<String>` through C).
+pub struct BlazenTargetVoice(pub(crate) InnerTargetVoice);
+
+impl BlazenTargetVoice {
+    /// Heap-allocate the handle and return the raw pointer the caller owns.
+    pub(crate) fn into_ptr(self) -> *mut BlazenTargetVoice {
+        Box::into_raw(Box::new(self))
+    }
+}
+
+impl From<InnerTargetVoice> for BlazenTargetVoice {
+    fn from(inner: InnerTargetVoice) -> Self {
+        Self(inner)
+    }
+}
+
+/// Returns the backend-scoped voice identifier as a heap-allocated C
+/// string. Caller frees with `blazen_string_free`. Returns null if
+/// `voice` is null.
+///
+/// # Safety
+///
+/// `voice` must be null OR a valid pointer to a `BlazenTargetVoice`
+/// produced by the cabi surface.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_target_voice_id(voice: *const BlazenTargetVoice) -> *mut c_char {
+    if voice.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the live-pointer contract documented above.
+    let voice = unsafe { &*voice };
+    alloc_cstring(&voice.0.id)
+}
+
+/// Returns the human-readable display label as a heap-allocated C string.
+/// The returned string is empty when the upstream backend did not record
+/// a label (mirrors the `BlazenSttResult::language` empty-string
+/// convention). Caller frees with `blazen_string_free`. Returns null if
+/// `voice` is null.
+///
+/// # Safety
+///
+/// `voice` must be null OR a valid pointer to a `BlazenTargetVoice`
+/// produced by the cabi surface.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_target_voice_label(voice: *const BlazenTargetVoice) -> *mut c_char {
+    if voice.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the live-pointer contract documented above.
+    let voice = unsafe { &*voice };
+    alloc_cstring(voice.0.label.as_deref().unwrap_or(""))
+}
+
+/// Returns the native sample rate (Hz) the backend renders this voice at.
+/// Returns `0` if `voice` is null.
+///
+/// # Safety
+///
+/// `voice` must be null OR a valid pointer to a `BlazenTargetVoice`
+/// produced by the cabi surface.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_target_voice_sample_rate_hz(
+    voice: *const BlazenTargetVoice,
+) -> u32 {
+    if voice.is_null() {
+        return 0;
+    }
+    // SAFETY: caller upholds the live-pointer contract documented above.
+    let voice = unsafe { &*voice };
+    voice.0.sample_rate_hz
+}
+
+/// Frees a `BlazenTargetVoice` produced by the cabi surface. Passing null
+/// is a no-op.
+///
+/// # Safety
+///
+/// `voice` must be null OR a pointer produced by the cabi surface.
+/// Double-free is undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_target_voice_free(voice: *mut BlazenTargetVoice) {
+    if voice.is_null() {
+        return;
+    }
+    // SAFETY: caller upholds the unique-ownership contract documented above.
+    drop(unsafe { Box::from_raw(voice) });
+}
+
+// ---------------------------------------------------------------------------
+// BlazenTargetVoiceList
+// ---------------------------------------------------------------------------
+
+/// Opaque list of [`BlazenTargetVoice`] snapshots. Mirrors
+/// [`crate::manager_records::BlazenModelStatusList`]: borrow-by-index
+/// (`_get`) for read-only iteration; move-by-index (`_take`) to peel off a
+/// caller-owned handle.
+pub struct BlazenTargetVoiceList {
+    pub(crate) inner: Vec<BlazenTargetVoice>,
+}
+
+impl BlazenTargetVoiceList {
+    /// Heap-allocate the list and return the raw pointer the caller owns.
+    pub(crate) fn into_ptr(self) -> *mut BlazenTargetVoiceList {
+        Box::into_raw(Box::new(self))
+    }
+}
+
+impl From<Vec<InnerTargetVoice>> for BlazenTargetVoiceList {
+    fn from(items: Vec<InnerTargetVoice>) -> Self {
+        Self {
+            inner: items.into_iter().map(BlazenTargetVoice::from).collect(),
+        }
+    }
+}
+
+/// Returns the number of entries in the list. Returns `0` on a null
+/// handle.
+///
+/// # Safety
+///
+/// `list` must be null OR a live [`BlazenTargetVoiceList`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_target_voice_list_len(list: *const BlazenTargetVoiceList) -> usize {
+    if list.is_null() {
+        return 0;
+    }
+    // SAFETY: live-pointer contract per the per-fn docs.
+    let l = unsafe { &*list };
+    l.inner.len()
+}
+
+/// Borrows the `idx`-th entry. Returns null if `list` is null or `idx` is
+/// out of range. The returned pointer is valid for the lifetime of the
+/// list — do NOT call `blazen_target_voice_free` on it.
+///
+/// # Safety
+///
+/// `list` must be null OR a live [`BlazenTargetVoiceList`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_target_voice_list_get(
+    list: *const BlazenTargetVoiceList,
+    idx: usize,
+) -> *const BlazenTargetVoice {
+    if list.is_null() {
+        return std::ptr::null();
+    }
+    // SAFETY: live-pointer contract per the per-fn docs.
+    let l = unsafe { &*list };
+    l.inner
+        .get(idx)
+        .map_or(std::ptr::null(), std::ptr::from_ref)
+}
+
+/// Pops the `idx`-th entry and returns it as a caller-owned handle. Free
+/// the returned handle with [`blazen_target_voice_free`]. Returns null if
+/// `list` is null or `idx` is out of range.
+///
+/// # Safety
+///
+/// `list` must be null OR a live [`BlazenTargetVoiceList`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_target_voice_list_take(
+    list: *mut BlazenTargetVoiceList,
+    idx: usize,
+) -> *mut BlazenTargetVoice {
+    if list.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: live-pointer contract per the per-fn docs.
+    let l = unsafe { &mut *list };
+    if idx >= l.inner.len() {
+        return std::ptr::null_mut();
+    }
+    l.inner.remove(idx).into_ptr()
+}
+
+/// Frees a [`BlazenTargetVoiceList`], dropping any remaining entries.
+///
+/// # Safety
+///
+/// `list` must be null OR a pointer produced by the cabi surface.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_target_voice_list_free(list: *mut BlazenTargetVoiceList) {
+    if list.is_null() {
+        return;
+    }
+    // SAFETY: per the `Box::into_raw` provenance contract.
+    drop(unsafe { Box::from_raw(list) });
 }

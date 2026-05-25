@@ -20,6 +20,7 @@ pub mod compute_music;
 pub mod compute_records;
 pub mod compute_requests;
 pub mod compute_results;
+pub mod compute_vc;
 #[cfg(feature = "distributed")]
 pub mod controlplane;
 #[cfg(feature = "distributed")]

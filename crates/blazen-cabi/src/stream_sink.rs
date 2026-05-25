@@ -53,6 +53,10 @@ use blazen_uniffi::compute_music::{
     stream_generate_music_to_sink_blocking, stream_generate_sfx_to_sink,
     stream_generate_sfx_to_sink_blocking,
 };
+use blazen_uniffi::compute_vc::{
+    VcChunk as InnerVcChunk, VcStreamSink, stream_convert_pcm_to_sink,
+    stream_convert_pcm_to_sink_blocking,
+};
 use blazen_uniffi::errors::{BlazenError as InnerError, BlazenResult};
 use blazen_uniffi::llm::{Model as InnerModel, TokenUsage as InnerTokenUsage};
 use blazen_uniffi::streaming::{
@@ -61,7 +65,8 @@ use blazen_uniffi::streaming::{
 };
 
 use crate::compute_music::BlazenMusicModel;
-use crate::compute_records::BlazenMusicChunk;
+use crate::compute_records::{BlazenMusicChunk, BlazenVcChunk};
+use crate::compute_vc::BlazenVcModel;
 use crate::error::BlazenError;
 use crate::future::BlazenFuture;
 use crate::llm::BlazenModel;
@@ -1002,5 +1007,406 @@ pub unsafe extern "C" fn blazen_music_model_stream_generate_sfx(
 
     BlazenFuture::spawn::<(), _>(async move {
         stream_generate_sfx_to_sink(model_arc, prompt, duration_seconds, sink_arc).await
+    })
+}
+
+// ===========================================================================
+// VcStreamSink trampoline + stream pump entry points
+// ===========================================================================
+//
+// Symmetric to the `MusicStreamSink` trampoline above. Foreign callers
+// implement [`VcStreamSink`] (`on_chunk` + `on_done` + `on_error`) via a
+// flat `#[repr(C)]` vtable; the cabi side wraps that vtable in a Rust trait
+// impl that dispatches through `tokio::task::spawn_blocking` (same rationale
+// as the music sink: foreign callbacks may block, we don't want a slow sink
+// starving the async runtime).
+//
+// Wire-format differences vs the music sink:
+//
+// - `on_chunk` receives `*mut BlazenVcChunk` instead of
+//   `*mut BlazenMusicChunk`. Caller-owned; foreign callback frees via
+//   [`crate::compute_records::blazen_vc_chunk_free`].
+// - `on_done` matches the music-sink shape (no auxiliary payload).
+// - `on_error` matches the completion-sink shape: receives a caller-owned
+//   `*mut BlazenError` the foreign callback frees via `blazen_error_free`.
+
+/// Function-pointer vtable a foreign caller fills out to implement
+/// [`VcStreamSink`] across the C ABI.
+///
+/// All three callbacks plus `drop_user_data` are required. The vtable is
+/// consumed by the voice-conversion stream-pump functions below
+/// ([`blazen_vc_model_stream_convert_pcm_to_sink`] /
+/// [`blazen_vc_model_stream_convert_pcm_to_sink_blocking`]); they take
+/// ownership of `user_data` and the function pointers for the lifetime of
+/// the streaming call. `drop_user_data` runs exactly once when the wrapping
+/// [`CVcStreamSink`] drops (after the stream has terminated, or on an
+/// early-return failure path before the stream starts).
+#[repr(C)]
+pub struct BlazenVcStreamSinkVTable {
+    /// Opaque foreign-side context handed back to each callback. Owned by
+    /// this vtable struct; released via `drop_user_data` when the wrapper
+    /// drops.
+    pub user_data: *mut c_void,
+
+    /// Invoked exactly once when the wrapping `CVcStreamSink` drops.
+    /// Implementations should reclaim and release `user_data`.
+    pub drop_user_data: extern "C" fn(user_data: *mut c_void),
+
+    /// Receive a single chunk. `chunk` is caller-owned; the callback MUST
+    /// free it via [`crate::compute_records::blazen_vc_chunk_free`] (or
+    /// consume it into a derivative structure). Returns `0` on success or
+    /// `-1` on failure (writing a fresh `*mut BlazenError` into `*out_err`).
+    /// A `-1` aborts the stream.
+    pub on_chunk: extern "C" fn(
+        user_data: *mut c_void,
+        chunk: *mut BlazenVcChunk,
+        out_err: *mut *mut BlazenError,
+    ) -> i32,
+
+    /// Receive the terminal completion signal. Voice-conversion streams
+    /// carry no auxiliary `on_done` payload. Returns `0` on success or
+    /// `-1` on failure (writing a fresh `*mut BlazenError` into `*out_err`).
+    pub on_done: extern "C" fn(user_data: *mut c_void, out_err: *mut *mut BlazenError) -> i32,
+
+    /// Receive a fatal error from the stream. `err` is a caller-owned
+    /// `*mut BlazenError` freed via `blazen_error_free`. Returns `0` on
+    /// success or `-1` on failure (writing the callback's own error into
+    /// `*out_err`).
+    pub on_error: extern "C" fn(
+        user_data: *mut c_void,
+        err: *mut BlazenError,
+        out_err: *mut *mut BlazenError,
+    ) -> i32,
+}
+
+// SAFETY: the foreign side guarantees thread-safety of `user_data` and the
+// function pointers, matching the documented contract on
+// `BlazenCompletionStreamSinkVTable`.
+unsafe impl Send for BlazenVcStreamSinkVTable {}
+// SAFETY: see the `Send` impl above — same foreign-side guarantee covers
+// shared-reference access from multiple threads.
+unsafe impl Sync for BlazenVcStreamSinkVTable {}
+
+/// Rust-side trampoline wrapping a foreign [`BlazenVcStreamSinkVTable`].
+/// Implements the [`VcStreamSink`] trait by dispatching through the
+/// vtable's function pointers.
+///
+/// Owns the vtable's `user_data` — drops it via `drop_user_data` exactly
+/// once when this wrapper drops (after the stream terminates, or on an
+/// early-return failure path before the stream starts).
+pub(crate) struct CVcStreamSink {
+    vtable: BlazenVcStreamSinkVTable,
+}
+
+impl Drop for CVcStreamSink {
+    fn drop(&mut self) {
+        // SAFETY: by the vtable contract, `drop_user_data` is the foreign
+        // side's release thunk for `user_data` and is safe to call exactly
+        // once when the wrapper is destroyed. Every early-return path in
+        // the stream pump functions below that aborts BEFORE constructing
+        // `CVcStreamSink` calls `drop_user_data` directly; once the
+        // wrapper is constructed only this `Drop` impl invokes it.
+        (self.vtable.drop_user_data)(self.vtable.user_data);
+    }
+}
+
+#[async_trait]
+impl VcStreamSink for CVcStreamSink {
+    // `InnerError` is large (it carries every variant's payload inline), but
+    // it's the shared error type across `blazen_uniffi` and we don't get to
+    // choose its representation here. Mirrors the same `allow` on
+    // `CStreamSink::on_chunk` above.
+    #[allow(clippy::result_large_err)]
+    async fn on_chunk(&self, chunk: InnerVcChunk) -> BlazenResult<()> {
+        // Wrap the chunk in a cabi handle the foreign callback can free.
+        let chunk_ptr = BlazenVcChunk::from(chunk).into_ptr();
+
+        // Capture pointer + fn-pointer as primitives so the
+        // `spawn_blocking` closure can be `'static + Send`. Cast the raw
+        // pointers to `usize` so the closure doesn't need to capture a
+        // `*mut c_void` (which is `!Send`).
+        let user_data_addr = self.vtable.user_data as usize;
+        let on_chunk_fn = self.vtable.on_chunk;
+        let chunk_addr = chunk_ptr as usize;
+
+        // SAFETY: see the `CStreamSink::on_chunk` impl above — same
+        // foreign-side thread-safety guarantee covers `user_data`; the
+        // function pointer is `Copy + Send + Sync`; the chunk pointer was
+        // just minted from `Box::into_raw` so it's a unique allocation we're
+        // handing off.
+        let join = tokio::task::spawn_blocking(move || -> Result<(), InnerError> {
+            let user_data = user_data_addr as *mut c_void;
+            let chunk_ptr = chunk_addr as *mut BlazenVcChunk;
+            let mut out_err: *mut BlazenError = std::ptr::null_mut();
+
+            let status = on_chunk_fn(user_data, chunk_ptr, &raw mut out_err);
+            if status == 0 {
+                Ok(())
+            } else {
+                if out_err.is_null() {
+                    return Err(InnerError::Internal {
+                        message: format!(
+                            "vc stream sink on_chunk returned non-zero status ({status}) without setting out_err"
+                        ),
+                    });
+                }
+                // SAFETY: per the vtable contract, on a failure return the
+                // foreign callback has written a valid `*mut BlazenError`.
+                let be = unsafe { Box::from_raw(out_err) };
+                Err(be.inner)
+            }
+        })
+        .await;
+
+        match join {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(join_err) => Err(InnerError::Internal {
+                message: format!("vc stream sink on_chunk task panicked: {join_err}"),
+            }),
+        }
+    }
+
+    #[allow(clippy::result_large_err)]
+    async fn on_done(&self) -> BlazenResult<()> {
+        let user_data_addr = self.vtable.user_data as usize;
+        let on_done_fn = self.vtable.on_done;
+
+        // SAFETY: same thread-safety justification as `on_chunk`.
+        let join = tokio::task::spawn_blocking(move || -> Result<(), InnerError> {
+            let user_data = user_data_addr as *mut c_void;
+            let mut out_err: *mut BlazenError = std::ptr::null_mut();
+
+            let status = on_done_fn(user_data, &raw mut out_err);
+            if status == 0 {
+                Ok(())
+            } else {
+                if out_err.is_null() {
+                    return Err(InnerError::Internal {
+                        message: format!(
+                            "vc stream sink on_done returned non-zero status ({status}) without setting out_err"
+                        ),
+                    });
+                }
+                // SAFETY: per the vtable contract.
+                let be = unsafe { Box::from_raw(out_err) };
+                Err(be.inner)
+            }
+        })
+        .await;
+
+        match join {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(join_err) => Err(InnerError::Internal {
+                message: format!("vc stream sink on_done task panicked: {join_err}"),
+            }),
+        }
+    }
+
+    #[allow(clippy::result_large_err)]
+    async fn on_error(&self, err: InnerError) -> BlazenResult<()> {
+        // Wrap the inner error in a cabi handle the foreign callback can
+        // free.
+        let err_ptr = BlazenError::from(err).into_ptr();
+
+        let user_data_addr = self.vtable.user_data as usize;
+        let on_error_fn = self.vtable.on_error;
+        let err_addr = err_ptr as usize;
+
+        // SAFETY: same thread-safety justification as `on_chunk`.
+        let join = tokio::task::spawn_blocking(move || -> Result<(), InnerError> {
+            let user_data = user_data_addr as *mut c_void;
+            let err_ptr = err_addr as *mut BlazenError;
+            let mut out_err: *mut BlazenError = std::ptr::null_mut();
+
+            let status = on_error_fn(user_data, err_ptr, &raw mut out_err);
+            if status == 0 {
+                Ok(())
+            } else {
+                if out_err.is_null() {
+                    return Err(InnerError::Internal {
+                        message: format!(
+                            "vc stream sink on_error returned non-zero status ({status}) without setting out_err"
+                        ),
+                    });
+                }
+                // SAFETY: per the vtable contract.
+                let be = unsafe { Box::from_raw(out_err) };
+                Err(be.inner)
+            }
+        })
+        .await;
+
+        match join {
+            Ok(Ok(())) => Ok(()),
+            Ok(Err(e)) => Err(e),
+            Err(join_err) => Err(InnerError::Internal {
+                message: format!("vc stream sink on_error task panicked: {join_err}"),
+            }),
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Voice-conversion stream-pump entry points
+// ---------------------------------------------------------------------------
+
+/// Synchronously drive a voice-conversion streaming call, dispatching each
+/// chunk to the supplied sink. Blocks the calling thread on the upstream
+/// tokio runtime.
+///
+/// `input_pcm` / `input_pcm_len` describe the source utterance as 32-bit
+/// float PCM at the backend's expected source sample rate (typically
+/// 16 kHz mono for RVC). The buffer is copied into an owned `Vec<f32>`
+/// before the stream starts, so the caller may free / reuse the buffer the
+/// instant this function returns. A null `input_pcm` is treated as an
+/// empty input vector.
+///
+/// On success returns `0` (the sink's `on_done` has fired). On a
+/// stream-start failure returns `-1` and writes a fresh `*mut BlazenError`
+/// into `*out_err`; backend-side and sink-side failures during the stream
+/// are delivered through `on_error` rather than this return path — see
+/// [`blazen_uniffi::compute_vc::stream_convert_pcm_to_sink`] for the full
+/// contract.
+///
+/// ## Ownership transfer
+///
+/// - `model` is BORROWED — the underlying `Arc<VcModel>` is cloned into
+///   the streaming call. Caller retains its handle.
+/// - `sink` (the vtable) is CONSUMED — ownership of `user_data` transfers
+///   to the wrapping `CVcStreamSink`, which releases it via
+///   `drop_user_data` on drop. On every early-return failure path that
+///   aborts BEFORE constructing `CVcStreamSink`, this function explicitly
+///   invokes `(sink.drop_user_data)(sink.user_data)` to honour the same
+///   contract.
+///
+/// # Safety
+///
+/// `model` must be null OR a live `BlazenVcModel` produced by the cabi
+/// surface. `input_pcm` must be null OR point to a readable `f32` buffer
+/// of at least `input_pcm_len` elements. `target_voice_id` must be null
+/// OR a valid NUL-terminated UTF-8 buffer. `sink.user_data` and the four
+/// `sink` function pointers must satisfy the contracts documented on
+/// [`BlazenVcStreamSinkVTable`]. `out_err` must be null OR a writable slot
+/// for a single `*mut BlazenError` write.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_vc_model_stream_convert_pcm_to_sink_blocking(
+    model: *const BlazenVcModel,
+    input_pcm: *const f32,
+    input_pcm_len: usize,
+    target_voice_id: *const c_char,
+    sink: BlazenVcStreamSinkVTable,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if model.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        // SAFETY: `out_err` upholds the function-level contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_vc_model_stream_convert_pcm_to_sink: null model",
+            )
+        };
+    }
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract on
+    // `target_voice_id`.
+    let Some(target_voice_id) = (unsafe { crate::string::cstr_to_str(target_voice_id) }) else {
+        (sink.drop_user_data)(sink.user_data);
+        // SAFETY: `out_err` upholds the function-level contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_vc_model_stream_convert_pcm_to_sink: null or non-UTF-8 target_voice_id",
+            )
+        };
+    };
+    let target_voice_id = target_voice_id.to_owned();
+
+    let pcm = if input_pcm.is_null() || input_pcm_len == 0 {
+        Vec::<f32>::new()
+    } else {
+        // SAFETY: caller has guaranteed `input_pcm` points to at least
+        // `input_pcm_len` readable `f32` elements.
+        unsafe { std::slice::from_raw_parts(input_pcm, input_pcm_len) }.to_vec()
+    };
+
+    // SAFETY: caller has guaranteed `model` is a live `BlazenVcModel`.
+    let model_handle = unsafe { &*model };
+    let model_arc = Arc::clone(&model_handle.0);
+
+    // Wrap the vtable; from here on, `CVcStreamSink::drop` is responsible
+    // for calling `drop_user_data`.
+    let sink_arc: Arc<dyn VcStreamSink> = Arc::new(CVcStreamSink { vtable: sink });
+
+    match stream_convert_pcm_to_sink_blocking(model_arc, pcm, target_voice_id, sink_arc) {
+        Ok(()) => 0,
+        // SAFETY: `out_err` upholds the function-level contract.
+        Err(e) => unsafe { write_error(out_err, e) },
+    }
+}
+
+/// Asynchronously drive a voice-conversion streaming call onto the upstream
+/// tokio runtime, returning an opaque future handle that resolves to `()`
+/// on completion. The caller observes completion via the future's fd /
+/// [`crate::future::blazen_future_poll`] /
+/// [`crate::future::blazen_future_wait`], then calls
+/// [`crate::persist::blazen_future_take_unit`] to pop the result. Free the
+/// future with [`crate::future::blazen_future_free`].
+///
+/// Returns null if `model` is null or `target_voice_id` is null /
+/// non-UTF-8. On those error paths `sink.drop_user_data` is still invoked
+/// so no resources leak.
+///
+/// ## Ownership transfer
+///
+/// Same as [`blazen_vc_model_stream_convert_pcm_to_sink_blocking`]:
+/// `model` is BORROWED, `sink` is CONSUMED. `input_pcm` is copied into an
+/// owned `Vec<f32>` before the future is spawned, so the caller may free /
+/// reuse the buffer the instant this function returns.
+///
+/// # Safety
+///
+/// `model` must be null OR a live `BlazenVcModel`. `input_pcm` must be
+/// null OR point to a readable `f32` buffer of at least `input_pcm_len`
+/// elements. `target_voice_id` must be null OR a valid NUL-terminated
+/// UTF-8 buffer. `sink` satisfies the [`BlazenVcStreamSinkVTable`]
+/// contract; its `user_data` is consumed.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_vc_model_stream_convert_pcm_to_sink(
+    model: *const BlazenVcModel,
+    input_pcm: *const f32,
+    input_pcm_len: usize,
+    target_voice_id: *const c_char,
+    sink: BlazenVcStreamSinkVTable,
+) -> *mut BlazenFuture {
+    if model.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract on
+    // `target_voice_id`.
+    let Some(target_voice_id) = (unsafe { crate::string::cstr_to_str(target_voice_id) }) else {
+        (sink.drop_user_data)(sink.user_data);
+        return std::ptr::null_mut();
+    };
+    let target_voice_id = target_voice_id.to_owned();
+
+    let pcm = if input_pcm.is_null() || input_pcm_len == 0 {
+        Vec::<f32>::new()
+    } else {
+        // SAFETY: caller has guaranteed `input_pcm` points to at least
+        // `input_pcm_len` readable `f32` elements.
+        unsafe { std::slice::from_raw_parts(input_pcm, input_pcm_len) }.to_vec()
+    };
+
+    // SAFETY: caller has guaranteed `model` is a live `BlazenVcModel`.
+    let model_handle = unsafe { &*model };
+    let model_arc = Arc::clone(&model_handle.0);
+
+    let sink_arc: Arc<dyn VcStreamSink> = Arc::new(CVcStreamSink { vtable: sink });
+
+    BlazenFuture::spawn::<(), _>(async move {
+        stream_convert_pcm_to_sink(model_arc, pcm, target_voice_id, sink_arc).await
     })
 }
