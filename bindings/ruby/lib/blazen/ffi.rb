@@ -126,6 +126,21 @@ module Blazen
              [:pointer, :pointer, :pointer],
              :int32
 
+    # MusicStreamSink vtable callbacks (distinct from completion-stream:
+    # music chunks carry PCM samples + a final-flag and the +on_done+
+    # signal has no finish-reason / token-usage payload — see
+    # +BlazenMusicStreamSinkVTable+ in +blazen.h+).
+    callback :music_stream_sink_drop_user_data, [:pointer], :void
+    callback :music_stream_sink_on_chunk,
+             [:pointer, :pointer, :pointer],
+             :int32
+    callback :music_stream_sink_on_done,
+             [:pointer, :pointer],
+             :int32
+    callback :music_stream_sink_on_error,
+             [:pointer, :pointer, :pointer],
+             :int32
+
     # CustomProvider vtable callbacks — 16 typed-method fn-pointers + 2 lifecycle.
     # Every typed callback receives a request pointer (caller-owned, the callback
     # must free or consume it before returning) and writes either a success
@@ -207,6 +222,19 @@ module Blazen
              :on_chunk,        :stream_sink_on_chunk,
              :on_done,         :stream_sink_on_done,
              :on_error,        :stream_sink_on_error
+    end
+
+    # Vtable a foreign caller fills in to receive streaming-music events
+    # (mirrors +BlazenMusicStreamSinkVTable+ in +blazen.h+). Distinct from
+    # +BlazenCompletionStreamSinkVTable+ — music's +on_done+ carries no
+    # payload, and +on_chunk+ receives a +BlazenMusicChunk+ rather than a
+    # +BlazenStreamChunk+.
+    class BlazenMusicStreamSinkVTable < ::FFI::Struct
+      layout :user_data,       :pointer,
+             :drop_user_data,  :music_stream_sink_drop_user_data,
+             :on_chunk,        :music_stream_sink_on_chunk,
+             :on_done,         :music_stream_sink_on_done,
+             :on_error,        :music_stream_sink_on_error
     end
 
     # Vtable a foreign caller fills in to implement a custom provider.
@@ -430,6 +458,103 @@ module Blazen
     attach_function :blazen_image_gen_result_images_count, [:pointer], :size_t
     attach_function :blazen_image_gen_result_images_get,   [:pointer, :size_t], :pointer
     attach_function :blazen_image_gen_result_free,         [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # Compute — Music / SFX (MusicModel + MusicChunk + MusicResult)
+    # -------------------------------------------------------------------
+    #
+    # The fal factory is always present (no feature gate). The three native
+    # factories (+musicgen+ / +stable_audio+ / +audiogen+) are feature-gated
+    # in the cabi build; we rescue +::FFI::NotFoundError+ so a minimal
+    # libblazen_cabi loads cleanly and downstream callers can probe via
+    # +Blazen::FFI.respond_to?+.
+    attach_function :blazen_music_model_new_fal,
+                    [:pointer, :pointer, :pointer, :pointer], :int32
+    begin
+      attach_function :blazen_music_model_new_musicgen,
+                      [:pointer, :pointer, :pointer, :float, :pointer, :pointer], :int32
+    rescue ::FFI::NotFoundError
+      # Optional: only present when libblazen_cabi was built with the
+      # +music-musicgen+ feature.
+    end
+    begin
+      attach_function :blazen_music_model_new_stable_audio,
+                      [:pointer, :pointer, :pointer, :float, :pointer, :pointer], :int32
+    rescue ::FFI::NotFoundError
+      # Optional: only present when libblazen_cabi was built with the
+      # +music-stable-audio+ feature.
+    end
+    begin
+      attach_function :blazen_music_model_new_audiogen,
+                      [:pointer, :pointer, :pointer, :pointer, :float, :pointer, :pointer],
+                      :int32
+    rescue ::FFI::NotFoundError
+      # Optional: only present when libblazen_cabi was built with the
+      # +music-audiogen+ feature.
+    end
+
+    # Lifecycle + non-streaming generate
+    attach_function :blazen_music_model_free, [:pointer], :void
+    attach_function :blazen_music_model_generate_music_blocking,
+                    [:pointer, :pointer, :float, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_music_model_generate_music,
+                    [:pointer, :pointer, :float], :pointer
+    attach_function :blazen_music_model_generate_sfx_blocking,
+                    [:pointer, :pointer, :float, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_music_model_generate_sfx,
+                    [:pointer, :pointer, :float], :pointer
+    attach_function :blazen_future_take_music_result,
+                    [:pointer, :pointer, :pointer], :int32
+
+    # Streaming pumps (4: music + SFX, each in blocking / async flavor).
+    # +sink+ is passed by value so the cabi consumes the +user_data+ even
+    # on early-return failure paths.
+    attach_function :blazen_music_model_stream_generate_music_blocking,
+                    [:pointer, :pointer, :float,
+                     BlazenMusicStreamSinkVTable.by_value, :pointer],
+                    :int32,
+                    blocking: true
+    attach_function :blazen_music_model_stream_generate_music,
+                    [:pointer, :pointer, :float,
+                     BlazenMusicStreamSinkVTable.by_value],
+                    :pointer
+    attach_function :blazen_music_model_stream_generate_sfx_blocking,
+                    [:pointer, :pointer, :float,
+                     BlazenMusicStreamSinkVTable.by_value, :pointer],
+                    :int32,
+                    blocking: true
+    attach_function :blazen_music_model_stream_generate_sfx,
+                    [:pointer, :pointer, :float,
+                     BlazenMusicStreamSinkVTable.by_value],
+                    :pointer
+
+    # MusicChunk accessors (caller-owned chunk handed to +on_chunk+ sink)
+    attach_function :blazen_music_chunk_samples,
+                    [:pointer, :pointer], :pointer
+    attach_function :blazen_music_chunk_is_final,
+                    [:pointer], :bool
+    attach_function :blazen_music_chunk_latency_seconds,
+                    [:pointer], :float
+    attach_function :blazen_music_chunk_free,
+                    [:pointer], :void
+
+    # MusicResult accessors
+    attach_function :blazen_music_result_bytes,
+                    [:pointer, :pointer], :pointer
+    attach_function :blazen_music_result_mime_type,
+                    [:pointer], :pointer
+    attach_function :blazen_music_result_sample_rate,
+                    [:pointer], :uint32
+    attach_function :blazen_music_result_channels,
+                    [:pointer], :uint32
+    attach_function :blazen_music_result_duration_seconds,
+                    [:pointer], :float
+    attach_function :blazen_music_result_url,
+                    [:pointer], :pointer
+    attach_function :blazen_music_result_free,
+                    [:pointer], :void
 
     # -------------------------------------------------------------------
     # LLM — Model / EmbeddingModel

@@ -242,6 +242,104 @@ module Blazen
       end,
     )
 
+    # ---------------------------------------------------------------------
+    # Music stream-sink thunks (mirrors the completion thunks above but
+    # speaks the +BlazenMusicStreamSinkVTable+ ABI: chunk is a
+    # +BlazenMusicChunk+, +on_done+ has no payload).
+    # ---------------------------------------------------------------------
+
+    # +on_chunk+ thunk for music streams. Receives a caller-owned
+    # +*mut BlazenMusicChunk+ — wrapped by {Blazen::Compute::MusicChunk}'s
+    # AutoPointer so Ruby GC frees it once the user's handler returns.
+    ON_MUSIC_CHUNK_FN = ::FFI::Function.new(
+      :int32,
+      %i[pointer pointer pointer],
+      proc do |user_data_ptr, chunk_ptr, _out_err|
+        id = user_data_ptr.address
+        handlers = lookup_sink(id)
+        if handlers.nil?
+          warn "[blazen streaming] music sink not found for id=#{id}"
+          # Still free the chunk so we don't leak — Rust handed
+          # ownership across regardless of whether we found a handler.
+          Blazen::FFI.blazen_music_chunk_free(chunk_ptr) unless chunk_ptr.null?
+          next(-1)
+        end
+
+        begin
+          chunk = Blazen::Compute::MusicChunk.new(chunk_ptr)
+          on_chunk = handlers[:on_chunk]
+          on_chunk&.call(chunk)
+          0
+        rescue StandardError => e
+          warn "[blazen streaming music on_chunk] #{e.class}: #{e.message}"
+          warn e.backtrace.join("\n") if e.backtrace
+          -1
+        end
+      end,
+      blocking: true,
+    )
+
+    # +on_done+ thunk for music streams. Music carries no auxiliary
+    # payload — the handler is called with no arguments.
+    ON_MUSIC_DONE_FN = ::FFI::Function.new(
+      :int32,
+      %i[pointer pointer],
+      proc do |user_data_ptr, _out_err|
+        id = user_data_ptr.address
+        handlers = lookup_sink(id)
+        if handlers.nil?
+          warn "[blazen streaming] music sink not found for id=#{id}"
+          next(-1)
+        end
+
+        begin
+          on_done = handlers[:on_done]
+          on_done&.call
+          0
+        rescue StandardError => e
+          warn "[blazen streaming music on_done] #{e.class}: #{e.message}"
+          warn e.backtrace.join("\n") if e.backtrace
+          -1
+        end
+      end,
+      blocking: true,
+    )
+
+    # +on_error+ thunk for music streams. Identical to the completion
+    # variant — decode the +*mut BlazenError+ into a Ruby exception (via
+    # {Blazen.build_error_from_ptr}, which consumes / frees the pointer).
+    ON_MUSIC_ERROR_FN = ::FFI::Function.new(
+      :int32,
+      %i[pointer pointer pointer],
+      proc do |user_data_ptr, err_ptr, _out_err|
+        id = user_data_ptr.address
+        handlers = lookup_sink(id)
+        if handlers.nil?
+          warn "[blazen streaming] music sink not found for id=#{id}"
+          Blazen::FFI.blazen_error_free(err_ptr) unless err_ptr.null?
+          next(-1)
+        end
+
+        ruby_err =
+          if err_ptr.nil? || err_ptr.null?
+            Blazen::InternalError.new("on_error called with null BlazenError")
+          else
+            Blazen.build_error_from_ptr(err_ptr)
+          end
+
+        begin
+          on_error = handlers[:on_error]
+          on_error&.call(ruby_err)
+          0
+        rescue StandardError => e
+          warn "[blazen streaming music on_error] #{e.class}: #{e.message}"
+          warn e.backtrace.join("\n") if e.backtrace
+          -1
+        end
+      end,
+      blocking: true,
+    )
+
     module_function
 
     # ---------------------------------------------------------------------
@@ -341,6 +439,107 @@ module Blazen
       end
     end
 
+    # Drives a streaming music (or SFX) generation, dispatching each
+    # {Blazen::Compute::MusicChunk} to the supplied callbacks (or block).
+    #
+    # When +blocking:+ is +true+, blocks the calling thread on the cabi
+    # tokio runtime until +on_done+ or +on_error+ fires. When +false+,
+    # returns when the resolving future completes (composes with
+    # +Fiber.scheduler+).
+    #
+    # Either pass explicit per-event handlers via the +on_chunk:+,
+    # +on_done:+, +on_error:+ kwargs, OR pass a single block that receives
+    # +(kind, *args)+:
+    #
+    # * +:chunk+ — +args = [chunk]+, where +chunk+ is a
+    #   {Blazen::Compute::MusicChunk}.
+    # * +:done+  — +args = []+ (music streams carry no done payload).
+    # * +:error+ — +args = [err]+, where +err+ is a {Blazen::Error}
+    #   subclass.
+    #
+    # @param model [Blazen::Compute::MusicModel]
+    # @param prompt [String]
+    # @param duration_seconds [Float]
+    # @param mode [Symbol] +:music+ (default) or +:sfx+ to select which
+    #   pump pair to drive
+    # @param blocking [Boolean] +true+ for the blocking variant,
+    #   +false+ for the async (future-returning) variant
+    # @param on_chunk [#call(chunk)] called for each {Blazen::Compute::MusicChunk}
+    # @param on_done [#call] called once when the stream completes normally
+    # @param on_error [#call(err)] called once on fatal stream errors
+    # @yield [kind, *args] block-form alternative to the kwargs
+    # @return [void]
+    def stream_music(model, prompt, duration_seconds,
+                     mode: :music, blocking: true,
+                     on_chunk: nil, on_done: nil, on_error: nil, &block)
+      unless model.is_a?(Blazen::Compute::MusicModel)
+        raise ArgumentError, "model must be Blazen::Compute::MusicModel"
+      end
+      unless %i[music sfx].include?(mode)
+        raise ArgumentError, "mode must be :music or :sfx (got #{mode.inspect})"
+      end
+
+      handlers = build_music_handlers(on_chunk, on_done, on_error, block)
+      sink_id = register_sink(handlers)
+      registered = true
+      dur = Float(duration_seconds)
+
+      begin
+        vtable = build_music_vtable(sink_id)
+
+        if blocking
+          out_err = ::FFI::MemoryPointer.new(:pointer)
+          Blazen::FFI.with_cstring(prompt.to_s) do |p|
+            if mode == :music
+              Blazen::FFI.blazen_music_model_stream_generate_music_blocking(
+                model.ptr, p, dur, vtable, out_err,
+              )
+            else
+              Blazen::FFI.blazen_music_model_stream_generate_sfx_blocking(
+                model.ptr, p, dur, vtable, out_err,
+              )
+            end
+          end
+          # The cabi has now consumed +user_data+ and will eventually
+          # invoke +drop_user_data+ (which unregisters the sink). Mark
+          # +registered+ false BEFORE +check_error!+ so an exception
+          # doesn't trigger a double-drop in the +ensure+ arm.
+          registered = false
+          Blazen::FFI.check_error!(out_err)
+        else
+          fut = Blazen::FFI.with_cstring(prompt.to_s) do |p|
+            if mode == :music
+              Blazen::FFI.blazen_music_model_stream_generate_music(
+                model.ptr, p, dur, vtable,
+              )
+            else
+              Blazen::FFI.blazen_music_model_stream_generate_sfx(
+                model.ptr, p, dur, vtable,
+              )
+            end
+          end
+          # The cabi has consumed +user_data+ regardless of whether
+          # +fut+ is null — the null-return paths still invoke
+          # +drop_user_data+ — so mark +registered+ false now.
+          registered = false
+
+          if fut.nil? || fut.null?
+            raise Blazen::InternalError,
+                  "blazen_music_model_stream_generate_#{mode} returned null"
+          end
+
+          Blazen::FFI.await_future(fut) do |f|
+            out_err = ::FFI::MemoryPointer.new(:pointer)
+            Blazen::FFI.blazen_future_take_unit(f, out_err)
+            Blazen::FFI.check_error!(out_err)
+          end
+        end
+        nil
+      ensure
+        unregister_sink(sink_id) if registered
+      end
+    end
+
     # ---------------------------------------------------------------------
     # Internals
     # ---------------------------------------------------------------------
@@ -373,6 +572,36 @@ module Blazen
       vt
     end
     private_class_method :build_vtable
+
+    # @api private
+    # Normalises the +on_chunk:+ / +on_done:+ / +on_error:+ + block argument
+    # combinations for music streams into a single
+    # +{on_chunk:, on_done:, on_error:}+ hash. Music's +on_done+ takes no
+    # arguments (no finish-reason / no token-usage payload).
+    def self.build_music_handlers(on_chunk, on_done, on_error, block)
+      if block
+        on_chunk ||= ->(c) { block.call(:chunk, c) }
+        on_done  ||= ->    { block.call(:done) }
+        on_error ||= ->(e) { block.call(:error, e) }
+      end
+      { on_chunk: on_chunk, on_done: on_done, on_error: on_error }
+    end
+    private_class_method :build_music_handlers
+
+    # @api private
+    # Builds a fresh +BlazenMusicStreamSinkVTable+ struct keyed to the
+    # given registry +sink_id+. Passed by value into the cabi music
+    # stream-pump functions.
+    def self.build_music_vtable(sink_id)
+      vt = Blazen::FFI::BlazenMusicStreamSinkVTable.new
+      vt[:user_data]      = ::FFI::Pointer.new(sink_id)
+      vt[:drop_user_data] = DROP_SINK_USER_DATA_FN
+      vt[:on_chunk]       = ON_MUSIC_CHUNK_FN
+      vt[:on_done]        = ON_MUSIC_DONE_FN
+      vt[:on_error]       = ON_MUSIC_ERROR_FN
+      vt
+    end
+    private_class_method :build_music_vtable
 
     # @api private
     # Consumes a +Blazen::Llm::ModelRequest+ wrapper into a bare
