@@ -11416,6 +11416,657 @@ public func FfiConverterTypeUniffiRatedJsonlDataset_lower(_ value: UniffiRatedJs
 
 
 /**
+ * A voice-conversion model.
+ *
+ * Construct via one of the per-backend factory functions (currently just
+ * [`new_rvc_model`], gated on `audio-vc-rvc`). Use the async
+ * [`convert_voice`](Self::convert_voice) method for one-shot rendering,
+ * [`list_target_voices`](Self::list_target_voices) /
+ * [`register_target_voice`](Self::register_target_voice) for voice
+ * management, or [`stream_convert_pcm_to_sink`] for chunk-level
+ * streaming.
+ */
+public protocol VcModelProtocol: AnyObject, Sendable {
+    
+    /**
+     * Convert the source utterance at `input_audio_path` into the voice
+     * of the registered target speaker `target_voice_id`.
+     */
+    func convertVoice(inputAudioPath: String, targetVoiceId: String) async throws  -> VcResult
+    
+    /**
+     * Synchronous variant of [`convert_voice`](Self::convert_voice).
+     */
+    func convertVoiceBlocking(inputAudioPath: String, targetVoiceId: String) throws  -> VcResult
+    
+    /**
+     * List the target voices this backend can currently render.
+     */
+    func listTargetVoices() async throws  -> [TargetVoice]
+    
+    /**
+     * Synchronous variant of
+     * [`list_target_voices`](Self::list_target_voices).
+     */
+    func listTargetVoicesBlocking() throws  -> [TargetVoice]
+    
+    /**
+     * Register a new target voice from the reference utterance at
+     * `reference_audio_path`.
+     */
+    func registerTargetVoice(voiceId: String, referenceAudioPath: String) async throws 
+    
+    /**
+     * Synchronous variant of
+     * [`register_target_voice`](Self::register_target_voice).
+     */
+    func registerTargetVoiceBlocking(voiceId: String, referenceAudioPath: String) throws 
+    
+}
+/**
+ * A voice-conversion model.
+ *
+ * Construct via one of the per-backend factory functions (currently just
+ * [`new_rvc_model`], gated on `audio-vc-rvc`). Use the async
+ * [`convert_voice`](Self::convert_voice) method for one-shot rendering,
+ * [`list_target_voices`](Self::list_target_voices) /
+ * [`register_target_voice`](Self::register_target_voice) for voice
+ * management, or [`stream_convert_pcm_to_sink`] for chunk-level
+ * streaming.
+ */
+open class VcModel: VcModelProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_vcmodel(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_vcmodel(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Convert the source utterance at `input_audio_path` into the voice
+     * of the registered target speaker `target_voice_id`.
+     */
+open func convertVoice(inputAudioPath: String, targetVoiceId: String)async throws  -> VcResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_vcmodel_convert_voice(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(inputAudioPath),FfiConverterString.lower(targetVoiceId)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeVcResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`convert_voice`](Self::convert_voice).
+     */
+open func convertVoiceBlocking(inputAudioPath: String, targetVoiceId: String)throws  -> VcResult  {
+    return try  FfiConverterTypeVcResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_vcmodel_convert_voice_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(inputAudioPath),
+        FfiConverterString.lower(targetVoiceId),$0
+    )
+})
+}
+    
+    /**
+     * List the target voices this backend can currently render.
+     */
+open func listTargetVoices()async throws  -> [TargetVoice]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_vcmodel_list_target_voices(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeTargetVoice.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of
+     * [`list_target_voices`](Self::list_target_voices).
+     */
+open func listTargetVoicesBlocking()throws  -> [TargetVoice]  {
+    return try  FfiConverterSequenceTypeTargetVoice.lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_vcmodel_list_target_voices_blocking(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Register a new target voice from the reference utterance at
+     * `reference_audio_path`.
+     */
+open func registerTargetVoice(voiceId: String, referenceAudioPath: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_vcmodel_register_target_voice(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(voiceId),FfiConverterString.lower(referenceAudioPath)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of
+     * [`register_target_voice`](Self::register_target_voice).
+     */
+open func registerTargetVoiceBlocking(voiceId: String, referenceAudioPath: String)throws   {try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_vcmodel_register_target_voice_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(voiceId),
+        FfiConverterString.lower(referenceAudioPath),$0
+    )
+}
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeVcModel: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = VcModel
+
+    public static func lift(_ handle: UInt64) throws -> VcModel {
+        return VcModel(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: VcModel) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> VcModel {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: VcModel, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeVcModel_lift(_ handle: UInt64) throws -> VcModel {
+    return try FfiConverterTypeVcModel.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeVcModel_lower(_ value: VcModel) -> UInt64 {
+    return FfiConverterTypeVcModel.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Sink for streaming voice-conversion output, implemented in foreign
+ * code.
+ *
+ * Symmetric to [`crate::compute_music::MusicStreamSink`] and
+ * [`crate::streaming::CompletionStreamSink`]: the streaming engine calls
+ * [`on_chunk`](Self::on_chunk) for each emitted chunk, then exactly one
+ * of [`on_done`](Self::on_done) or [`on_error`](Self::on_error).
+ * Implementations should treat the terminal callbacks as cleanup hooks
+ * (close channels, complete async iterators, signal flow completion).
+ */
+public protocol VcStreamSink: AnyObject, Sendable {
+    
+    /**
+     * Receive a single chunk from the streaming response.
+     *
+     * Returning an `Err` aborts the stream — the engine delivers the
+     * error via [`on_error`](Self::on_error) and stops dispatching
+     * further chunks.
+     */
+    func onChunk(chunk: VcChunk) async throws 
+    
+    /**
+     * Receive the terminal completion signal. Called exactly once at the
+     * end of a successful stream.
+     */
+    func onDone() async throws 
+    
+    /**
+     * Receive a fatal error from the stream. Called exactly once when
+     * the stream fails midway (or fails to start at all).
+     */
+    func onError(err: BlazenError) async throws 
+    
+}
+/**
+ * Sink for streaming voice-conversion output, implemented in foreign
+ * code.
+ *
+ * Symmetric to [`crate::compute_music::MusicStreamSink`] and
+ * [`crate::streaming::CompletionStreamSink`]: the streaming engine calls
+ * [`on_chunk`](Self::on_chunk) for each emitted chunk, then exactly one
+ * of [`on_done`](Self::on_done) or [`on_error`](Self::on_error).
+ * Implementations should treat the terminal callbacks as cleanup hooks
+ * (close channels, complete async iterators, signal flow completion).
+ */
+open class VcStreamSinkImpl: VcStreamSink, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_vcstreamsink(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_vcstreamsink(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Receive a single chunk from the streaming response.
+     *
+     * Returning an `Err` aborts the stream — the engine delivers the
+     * error via [`on_error`](Self::on_error) and stops dispatching
+     * further chunks.
+     */
+open func onChunk(chunk: VcChunk)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_vcstreamsink_on_chunk(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeVcChunk_lower(chunk)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Receive the terminal completion signal. Called exactly once at the
+     * end of a successful stream.
+     */
+open func onDone()async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_vcstreamsink_on_done(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Receive a fatal error from the stream. Called exactly once when
+     * the stream fails midway (or fails to start at all).
+     */
+open func onError(err: BlazenError)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_vcstreamsink_on_error(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeBlazenError_lower(err)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceVcStreamSink {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceVcStreamSink = UniffiVTableCallbackInterfaceVcStreamSink(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeVcStreamSink.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface VcStreamSink: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeVcStreamSink.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface VcStreamSink: handle missing in uniffiClone")
+            }
+        },
+        onChunk: { (
+            uniffiHandle: UInt64,
+            chunk: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteVoid,
+            uniffiCallbackData: UInt64,
+            uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+        ) in
+            let makeCall = {
+                () async throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeVcStreamSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.onChunk(
+                     chunk: try FfiConverterTypeVcChunk_lift(chunk)
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: ()) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { (statusCode, errorBuf) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeBlazenError_lower,
+                droppedCallback: uniffiOutDroppedCallback
+            )
+        },
+        onDone: { (
+            uniffiHandle: UInt64,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteVoid,
+            uniffiCallbackData: UInt64,
+            uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+        ) in
+            let makeCall = {
+                () async throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeVcStreamSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.onDone(
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: ()) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { (statusCode, errorBuf) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeBlazenError_lower,
+                droppedCallback: uniffiOutDroppedCallback
+            )
+        },
+        onError: { (
+            uniffiHandle: UInt64,
+            err: RustBuffer,
+            uniffiFutureCallback: @escaping UniffiForeignFutureCompleteVoid,
+            uniffiCallbackData: UInt64,
+            uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
+        ) in
+            let makeCall = {
+                () async throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeVcStreamSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return try await uniffiObj.onError(
+                     err: try FfiConverterTypeBlazenError_lift(err)
+                )
+            }
+
+            let uniffiHandleSuccess = { (returnValue: ()) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus()
+                    )
+                )
+            }
+            let uniffiHandleError = { (statusCode, errorBuf) in
+                uniffiFutureCallback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid(
+                        callStatus: RustCallStatus(code: statusCode, errorBuf: errorBuf)
+                    )
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall: makeCall,
+                handleSuccess: uniffiHandleSuccess,
+                handleError: uniffiHandleError,
+                lowerError: FfiConverterTypeBlazenError_lower,
+                droppedCallback: uniffiOutDroppedCallback
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceVcStreamSink> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceVcStreamSink>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitVcStreamSink() {
+    uniffi_blazen_uniffi_fn_init_callback_vtable_vcstreamsink(UniffiCallbackInterfaceVcStreamSink.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeVcStreamSink: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<VcStreamSink>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = VcStreamSink
+
+    public static func lift(_ handle: UInt64) throws -> VcStreamSink {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return VcStreamSinkImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: VcStreamSink) -> UInt64 {
+         if let rustImpl = value as? VcStreamSinkImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> VcStreamSink {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: VcStreamSink, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeVcStreamSink_lift(_ handle: UInt64) throws -> VcStreamSink {
+    return try FfiConverterTypeVcStreamSink.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeVcStreamSink_lower(_ value: VcStreamSink) -> UInt64 {
+    return FfiConverterTypeVcStreamSink.lower(value)
+}
+
+
+
+
+
+
+/**
  * A built workflow ready to run.
  */
 public protocol WorkflowProtocol: AnyObject, Sendable {
@@ -16522,6 +17173,95 @@ public func FfiConverterTypeSttResult_lower(_ value: SttResult) -> RustBuffer {
 }
 
 
+/**
+ * A registered target speaker that a [`VcModel`] can render source audio
+ * into.
+ *
+ * Mirrors [`blazen_llm::TargetVoice`] (when the `audio-vc` feature is on)
+ * 1:1 across the FFI boundary so foreign code sees a stable record shape
+ * regardless of whether the underlying engine is the native RVC backend
+ * or a cloud-side provider added later.
+ */
+public struct TargetVoice: Equatable, Hashable {
+    /**
+     * Backend-scoped identifier passed back to
+     * [`VcModel::convert_voice`] / [`VcModel::register_target_voice`].
+     */
+    public var id: String
+    /**
+     * Optional human-readable display name. `None` when the backend did
+     * not record one.
+     */
+    public var label: String?
+    /**
+     * Native sample rate (Hz) the backend renders this voice at.
+     */
+    public var sampleRateHz: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Backend-scoped identifier passed back to
+         * [`VcModel::convert_voice`] / [`VcModel::register_target_voice`].
+         */id: String, 
+        /**
+         * Optional human-readable display name. `None` when the backend did
+         * not record one.
+         */label: String?, 
+        /**
+         * Native sample rate (Hz) the backend renders this voice at.
+         */sampleRateHz: UInt32) {
+        self.id = id
+        self.label = label
+        self.sampleRateHz = sampleRateHz
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension TargetVoice: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTargetVoice: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TargetVoice {
+        return
+            try TargetVoice(
+                id: FfiConverterString.read(from: &buf), 
+                label: FfiConverterOptionString.read(from: &buf), 
+                sampleRateHz: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TargetVoice, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.id, into: &buf)
+        FfiConverterOptionString.write(value.label, into: &buf)
+        FfiConverterUInt32.write(value.sampleRateHz, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTargetVoice_lift(_ buf: RustBuffer) throws -> TargetVoice {
+    return try FfiConverterTypeTargetVoice.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTargetVoice_lower(_ value: TargetVoice) -> RustBuffer {
+    return FfiConverterTypeTargetVoice.lower(value)
+}
+
+
 public struct ThreeDProviderDefaults: Equatable, Hashable {
     public var base: BaseProviderDefaults?
 
@@ -17610,6 +18350,202 @@ public func FfiConverterTypeUpscaleRequest_lift(_ buf: RustBuffer) throws -> Ups
 #endif
 public func FfiConverterTypeUpscaleRequest_lower(_ value: UpscaleRequest) -> RustBuffer {
     return FfiConverterTypeUpscaleRequest.lower(value)
+}
+
+
+/**
+ * One emission from a streaming voice-conversion call.
+ *
+ * `samples` is 32-bit float PCM in `[-1.0, 1.0]` at the target voice's
+ * native sample rate (see [`TargetVoice::sample_rate_hz`]).
+ *
+ * `is_final` is purely an advisory hint — the sink's `on_done` callback
+ * is the canonical end-of-stream signal, matching the contract used by
+ * [`crate::compute_music::MusicChunk`].
+ *
+ * `latency_seconds`, when present, is the measured latency from the
+ * stream's call-start to the moment this chunk was produced — handy for
+ * surfacing first-token-latency metrics through the binding.
+ */
+public struct VcChunk: Equatable, Hashable {
+    /**
+     * 32-bit float PCM samples in `[-1, 1]` at the voice's native sample
+     * rate.
+     */
+    public var samples: [Float]
+    /**
+     * `true` on the final emitted chunk; otherwise `false`. Always
+     * `false` for the RVC backend today (end-of-stream is signalled by
+     * the sink's `on_done` callback).
+     */
+    public var isFinal: Bool
+    /**
+     * Optional per-chunk latency from call-start in seconds.
+     */
+    public var latencySeconds: Float?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * 32-bit float PCM samples in `[-1, 1]` at the voice's native sample
+         * rate.
+         */samples: [Float], 
+        /**
+         * `true` on the final emitted chunk; otherwise `false`. Always
+         * `false` for the RVC backend today (end-of-stream is signalled by
+         * the sink's `on_done` callback).
+         */isFinal: Bool, 
+        /**
+         * Optional per-chunk latency from call-start in seconds.
+         */latencySeconds: Float?) {
+        self.samples = samples
+        self.isFinal = isFinal
+        self.latencySeconds = latencySeconds
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension VcChunk: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeVcChunk: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> VcChunk {
+        return
+            try VcChunk(
+                samples: FfiConverterSequenceFloat.read(from: &buf), 
+                isFinal: FfiConverterBool.read(from: &buf), 
+                latencySeconds: FfiConverterOptionFloat.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: VcChunk, into buf: inout [UInt8]) {
+        FfiConverterSequenceFloat.write(value.samples, into: &buf)
+        FfiConverterBool.write(value.isFinal, into: &buf)
+        FfiConverterOptionFloat.write(value.latencySeconds, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeVcChunk_lift(_ buf: RustBuffer) throws -> VcChunk {
+    return try FfiConverterTypeVcChunk.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeVcChunk_lower(_ value: VcChunk) -> RustBuffer {
+    return FfiConverterTypeVcChunk.lower(value)
+}
+
+
+/**
+ * A fully-rendered voice-conversion result.
+ *
+ * `bytes` carries a complete WAV (RIFF/`fmt `/`data`) container holding
+ * 16-bit signed little-endian PCM samples at the target voice's native
+ * sample rate. `sample_rate` echoes that rate for convenience so callers
+ * don't have to re-parse the WAV header.
+ */
+public struct VcResult: Equatable, Hashable {
+    /**
+     * Encoded audio bytes (WAV container, 16-bit signed PCM).
+     */
+    public var bytes: Data
+    /**
+     * IANA MIME type of `bytes` (always `"audio/wav"` for the native
+     * backends shipped today).
+     */
+    public var mimeType: String
+    /**
+     * Sample rate in Hz, taken from the target voice's
+     * [`TargetVoice::sample_rate_hz`].
+     */
+    public var sampleRate: UInt32
+    /**
+     * Duration of the clip in seconds. Zero when the backend did not
+     * report one (no extra WAV header parsing happens here).
+     */
+    public var durationSeconds: Float
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Encoded audio bytes (WAV container, 16-bit signed PCM).
+         */bytes: Data, 
+        /**
+         * IANA MIME type of `bytes` (always `"audio/wav"` for the native
+         * backends shipped today).
+         */mimeType: String, 
+        /**
+         * Sample rate in Hz, taken from the target voice's
+         * [`TargetVoice::sample_rate_hz`].
+         */sampleRate: UInt32, 
+        /**
+         * Duration of the clip in seconds. Zero when the backend did not
+         * report one (no extra WAV header parsing happens here).
+         */durationSeconds: Float) {
+        self.bytes = bytes
+        self.mimeType = mimeType
+        self.sampleRate = sampleRate
+        self.durationSeconds = durationSeconds
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension VcResult: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeVcResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> VcResult {
+        return
+            try VcResult(
+                bytes: FfiConverterData.read(from: &buf), 
+                mimeType: FfiConverterString.read(from: &buf), 
+                sampleRate: FfiConverterUInt32.read(from: &buf), 
+                durationSeconds: FfiConverterFloat.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: VcResult, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.bytes, into: &buf)
+        FfiConverterString.write(value.mimeType, into: &buf)
+        FfiConverterUInt32.write(value.sampleRate, into: &buf)
+        FfiConverterFloat.write(value.durationSeconds, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeVcResult_lift(_ buf: RustBuffer) throws -> VcResult {
+    return try FfiConverterTypeVcResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeVcResult_lower(_ value: VcResult) -> RustBuffer {
+    return FfiConverterTypeVcResult.lower(value)
 }
 
 
@@ -20633,6 +21569,31 @@ fileprivate struct FfiConverterSequenceTypePoolStatusRecord: FfiConverterRustBuf
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterSequenceTypeTargetVoice: FfiConverterRustBuffer {
+    typealias SwiftType = [TargetVoice]
+
+    public static func write(_ value: [TargetVoice], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterTypeTargetVoice.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [TargetVoice] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [TargetVoice]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterTypeTargetVoice.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterSequenceTypeTool: FfiConverterRustBuffer {
     typealias SwiftType = [Tool]
 
@@ -21342,6 +22303,74 @@ public func streamGenerateSfxToSinkBlocking(model: MusicModel, prompt: String, d
         FfiConverterString.lower(prompt),
         FfiConverterFloat.lower(durationSeconds),
         FfiConverterTypeMusicStreamSink_lower(sink),$0
+    )
+}
+}
+/**
+ * Build a native RVC-backed [`VcModel`].
+ *
+ * `voice_dir` overrides the per-process `BLAZEN_RVC_VOICE_DIR`
+ * environment variable that the RVC pipeline reads to locate voice
+ * profiles on disk (each voice is expected to live at
+ * `<voice_dir>/<voice_id>/` with `model.pth`, `index.index`, and
+ * `metadata.json`). When `None`, the existing process-environment value
+ * is used unchanged. Setting this from inside the factory mutates global
+ * process state via `std::env::set_var` — callers running multiple RVC
+ * instances in the same process should pick a single voice directory
+ * rather than racing factory calls.
+ *
+ * `device` accepts the same format strings as `blazen_llm::Device::parse`
+ * (`"cpu"`, `"cuda"`, `"cuda:N"`, `"metal"`); `None` defers to CPU.
+ */
+public func newRvcModel(voiceDir: String?, device: String?)throws  -> VcModel  {
+    return try  FfiConverterTypeVcModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_rvc_model(
+        FfiConverterOptionString.lower(voiceDir),
+        FfiConverterOptionString.lower(device),$0
+    )
+})
+}
+/**
+ * Drive a streaming voice-conversion call, dispatching each chunk to the
+ * sink.
+ *
+ * `input_pcm` is the full source utterance as 32-bit float PCM at the
+ * backend's expected source sample rate (typically 16 kHz mono for RVC).
+ *
+ * On success, calls `sink.on_done()` exactly once and returns `Ok(())`.
+ * On a backend-side or sink-side failure, calls `sink.on_error(...)` and
+ * returns `Ok(())` — error delivery is the sink's responsibility, matching
+ * the convention `complete_streaming` and `stream_generate_music_to_sink`
+ * established.
+ *
+ * The only failure mode that propagates back to the caller is a panic in
+ * the sink itself or the runtime; init errors (e.g. voice-not-found,
+ * backend-not-built-with-feature) are delivered through `on_error`.
+ */
+public func streamConvertPcmToSink(model: VcModel, inputPcm: [Float], targetVoiceId: String, sink: VcStreamSink)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_func_stream_convert_pcm_to_sink(FfiConverterTypeVcModel_lower(model),FfiConverterSequenceFloat.lower(inputPcm),FfiConverterString.lower(targetVoiceId),FfiConverterTypeVcStreamSink_lower(sink)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+/**
+ * Synchronous variant of [`stream_convert_pcm_to_sink`] — blocks the
+ * current thread on the shared Tokio runtime.
+ */
+public func streamConvertPcmToSinkBlocking(model: VcModel, inputPcm: [Float], targetVoiceId: String, sink: VcStreamSink)throws   {try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_stream_convert_pcm_to_sink_blocking(
+        FfiConverterTypeVcModel_lower(model),
+        FfiConverterSequenceFloat.lower(inputPcm),
+        FfiConverterString.lower(targetVoiceId),
+        FfiConverterTypeVcStreamSink_lower(sink),$0
     )
 }
 }
@@ -22175,6 +23204,15 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_func_stream_generate_sfx_to_sink_blocking() != 49910) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_func_new_rvc_model() != 51978) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_func_stream_convert_pcm_to_sink() != 29415) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_func_stream_convert_pcm_to_sink_blocking() != 36415) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_func_new_redb_checkpoint_store() != 15901) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -22350,6 +23388,33 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_error() != 39358) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_vcmodel_convert_voice() != 46177) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_vcmodel_convert_voice_blocking() != 59967) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_vcmodel_list_target_voices() != 2307) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_vcmodel_list_target_voices_blocking() != 32701) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_vcmodel_register_target_voice() != 15373) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_vcmodel_register_target_voice_blocking() != 31343) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_chunk() != 1538) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_done() != 20371) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_error() != 37574) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle() != 640) {
@@ -22884,6 +23949,7 @@ private let initializationResult: InitializationResult = {
     uniffiCallbackInitMusicStreamSink()
     uniffiCallbackInitStepHandler()
     uniffiCallbackInitToolHandler()
+    uniffiCallbackInitVcStreamSink()
     return InitializationResult.ok
 }()
 

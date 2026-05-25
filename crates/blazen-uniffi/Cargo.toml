@@ -105,6 +105,7 @@ local-all = [
     "audio-music-stable-audio",
     "audio-music-musicgen",
     "audio-music-audiogen",
+    "audio-vc-rvc",
     "tiktoken",
     "distributed",
     "otlp",
@@ -124,7 +125,8 @@ audio-stt-whisper-streaming = ["blazen-llm/audio-stt-whisper-streaming"]
 audio-stt-faster-whisper = ["blazen-llm/audio-stt-faster-whisper"]
 audio-tts-bark = ["blazen-llm/audio-tts-bark"]
 audio-tts-f5 = ["blazen-llm/audio-tts-f5"]
-audio-vc-rvc = ["blazen-llm/audio-vc-rvc"]
+audio-vc = ["blazen-llm/audio-vc"]
+audio-vc-rvc = ["audio-vc", "blazen-llm/audio-vc-rvc", "dep:candle-core"]
 
 # 3D-pipeline bridge surface (HTTP-proxy backend forwards to upstream 3D services).
 # `threed` pulls in the bridge surface through `blazen-llm` plus the

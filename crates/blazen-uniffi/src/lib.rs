@@ -31,6 +31,7 @@ pub mod batch;
 pub mod compute;
 pub mod compute_music;
 pub mod compute_types;
+pub mod compute_vc;
 #[cfg(feature = "distributed")]
 pub mod controlplane;
 pub mod errors;
@@ -76,6 +77,12 @@ pub use compute_types::{
     SpeechRequest, ThreeDRequest, ThreeDResult, TranscriptionRequest, TranscriptionResult,
     TranscriptionSegment, UpscaleRequest, VideoRequest, VideoResult, VoiceCloneRequest,
     VoiceHandle,
+};
+#[cfg(feature = "audio-vc-rvc")]
+pub use compute_vc::new_rvc_model;
+pub use compute_vc::{
+    TargetVoice, VcChunk, VcModel, VcResult, VcStreamSink, stream_convert_pcm_to_sink,
+    stream_convert_pcm_to_sink_blocking,
 };
 #[cfg(feature = "distributed")]
 pub use controlplane::{

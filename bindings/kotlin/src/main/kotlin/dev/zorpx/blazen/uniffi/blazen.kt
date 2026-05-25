@@ -766,6 +766,35 @@ internal interface UniffiCallbackInterfaceMusicStreamSinkMethod2 : com.sun.jna.C
     )
 }
 
+internal interface UniffiCallbackInterfaceVcStreamSinkMethod0 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `chunk`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceVcStreamSinkMethod1 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
+internal interface UniffiCallbackInterfaceVcStreamSinkMethod2 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `err`: RustBuffer.ByValue,
+        `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+        `uniffiCallbackData`: Long,
+        `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+    )
+}
+
 internal interface UniffiCallbackInterfaceControlPlaneAssignmentHandlerMethod0 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
@@ -1159,6 +1188,32 @@ internal open class UniffiVTableCallbackInterfaceMusicStreamSink(
     }
 }
 
+@Structure.FieldOrder("uniffiFree", "uniffiClone", "onChunk", "onDone", "onError")
+internal open class UniffiVTableCallbackInterfaceVcStreamSink(
+    @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+    @JvmField internal var `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+    @JvmField internal var `onChunk`: UniffiCallbackInterfaceVcStreamSinkMethod0? = null,
+    @JvmField internal var `onDone`: UniffiCallbackInterfaceVcStreamSinkMethod1? = null,
+    @JvmField internal var `onError`: UniffiCallbackInterfaceVcStreamSinkMethod2? = null,
+) : Structure() {
+    class UniffiByValue(
+        `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+        `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+        `onChunk`: UniffiCallbackInterfaceVcStreamSinkMethod0? = null,
+        `onDone`: UniffiCallbackInterfaceVcStreamSinkMethod1? = null,
+        `onError`: UniffiCallbackInterfaceVcStreamSinkMethod2? = null,
+    ) : UniffiVTableCallbackInterfaceVcStreamSink(`uniffiFree`, `uniffiClone`, `onChunk`, `onDone`, `onError`),
+        Structure.ByValue
+
+    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfaceVcStreamSink) {
+        `uniffiFree` = other.`uniffiFree`
+        `uniffiClone` = other.`uniffiClone`
+        `onChunk` = other.`onChunk`
+        `onDone` = other.`onDone`
+        `onError` = other.`onError`
+    }
+}
+
 @Structure.FieldOrder("uniffiFree", "uniffiClone", "handle", "onCancel", "onDrain")
 internal open class UniffiVTableCallbackInterfaceControlPlaneAssignmentHandler(
     @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
@@ -1505,6 +1560,12 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_func_stream_generate_sfx_to_sink_blocking(): Short
 
+    external fun uniffi_blazen_uniffi_checksum_func_new_rvc_model(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_stream_convert_pcm_to_sink(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_stream_convert_pcm_to_sink_blocking(): Short
+
     external fun uniffi_blazen_uniffi_checksum_func_new_redb_checkpoint_store(): Short
 
     external fun uniffi_blazen_uniffi_checksum_func_new_valkey_checkpoint_store(): Short
@@ -1622,6 +1683,24 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_done(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_error(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_vcmodel_convert_voice(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_vcmodel_convert_voice_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_vcmodel_list_target_voices(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_vcmodel_list_target_voices_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_vcmodel_register_target_voice(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_vcmodel_register_target_voice_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_chunk(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_done(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_error(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle(): Short
 
@@ -1991,6 +2070,7 @@ internal object UniffiLib {
         uniffiCallbackInterfaceMusicStreamSink.register(this)
         uniffiCallbackInterfaceStepHandler.register(this)
         uniffiCallbackInterfaceToolHandler.register(this)
+        uniffiCallbackInterfaceVcStreamSink.register(this)
     }
 
     external fun uniffi_blazen_uniffi_fn_clone_agent(
@@ -2176,6 +2256,73 @@ internal object UniffiLib {
     external fun uniffi_blazen_uniffi_fn_method_musicstreamsink_on_done(`ptr`: Long): Long
 
     external fun uniffi_blazen_uniffi_fn_method_musicstreamsink_on_error(
+        `ptr`: Long,
+        `err`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_clone_vcmodel(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_vcmodel(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_vcmodel_convert_voice(
+        `ptr`: Long,
+        `inputAudioPath`: RustBuffer.ByValue,
+        `targetVoiceId`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_vcmodel_convert_voice_blocking(
+        `ptr`: Long,
+        `inputAudioPath`: RustBuffer.ByValue,
+        `targetVoiceId`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_vcmodel_list_target_voices(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_vcmodel_list_target_voices_blocking(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_vcmodel_register_target_voice(
+        `ptr`: Long,
+        `voiceId`: RustBuffer.ByValue,
+        `referenceAudioPath`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_vcmodel_register_target_voice_blocking(
+        `ptr`: Long,
+        `voiceId`: RustBuffer.ByValue,
+        `referenceAudioPath`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_clone_vcstreamsink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_vcstreamsink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_init_callback_vtable_vcstreamsink(`vtable`: UniffiVTableCallbackInterfaceVcStreamSink): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_vcstreamsink_on_chunk(
+        `ptr`: Long,
+        `chunk`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_vcstreamsink_on_done(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_vcstreamsink_on_error(
         `ptr`: Long,
         `err`: RustBuffer.ByValue,
     ): Long
@@ -3504,6 +3651,27 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
+    external fun uniffi_blazen_uniffi_fn_func_new_rvc_model(
+        `voiceDir`: RustBuffer.ByValue,
+        `device`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_stream_convert_pcm_to_sink(
+        `model`: Long,
+        `inputPcm`: RustBuffer.ByValue,
+        `targetVoiceId`: RustBuffer.ByValue,
+        `sink`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_stream_convert_pcm_to_sink_blocking(
+        `model`: Long,
+        `inputPcm`: RustBuffer.ByValue,
+        `targetVoiceId`: RustBuffer.ByValue,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
     external fun uniffi_blazen_uniffi_fn_func_new_redb_checkpoint_store(
         `path`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
@@ -4059,6 +4227,15 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_func_stream_generate_sfx_to_sink_blocking() != 49910.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_rvc_model() != 51978.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_stream_convert_pcm_to_sink() != 29415.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_stream_convert_pcm_to_sink_blocking() != 36415.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_redb_checkpoint_store() != 15901.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -4234,6 +4411,33 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_error() != 39358.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_vcmodel_convert_voice() != 46177.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_vcmodel_convert_voice_blocking() != 59967.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_vcmodel_list_target_voices() != 2307.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_vcmodel_list_target_voices_blocking() != 32701.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_vcmodel_register_target_voice() != 15373.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_vcmodel_register_target_voice_blocking() != 31343.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_chunk() != 1538.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_done() != 20371.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_error() != 37574.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle() != 640.toShort()) {
@@ -20494,6 +20698,928 @@ public object FfiConverterTypeUniffiRatedJsonlDataset : FfiConverter<UniffiRated
 //
 
 /**
+ * A voice-conversion model.
+ *
+ * Construct via one of the per-backend factory functions (currently just
+ * [`new_rvc_model`], gated on `audio-vc-rvc`). Use the async
+ * [`convert_voice`](Self::convert_voice) method for one-shot rendering,
+ * [`list_target_voices`](Self::list_target_voices) /
+ * [`register_target_voice`](Self::register_target_voice) for voice
+ * management, or [`stream_convert_pcm_to_sink`] for chunk-level
+ * streaming.
+ */
+public interface VcModelInterface {
+    /**
+     * Convert the source utterance at `input_audio_path` into the voice
+     * of the registered target speaker `target_voice_id`.
+     */
+    suspend fun `convertVoice`(
+        `inputAudioPath`: kotlin.String,
+        `targetVoiceId`: kotlin.String,
+    ): VcResult
+
+    /**
+     * Synchronous variant of [`convert_voice`](Self::convert_voice).
+     */
+    fun `convertVoiceBlocking`(
+        `inputAudioPath`: kotlin.String,
+        `targetVoiceId`: kotlin.String,
+    ): VcResult
+
+    /**
+     * List the target voices this backend can currently render.
+     */
+    suspend fun `listTargetVoices`(): List<TargetVoice>
+
+    /**
+     * Synchronous variant of
+     * [`list_target_voices`](Self::list_target_voices).
+     */
+    fun `listTargetVoicesBlocking`(): List<TargetVoice>
+
+    /**
+     * Register a new target voice from the reference utterance at
+     * `reference_audio_path`.
+     */
+    suspend fun `registerTargetVoice`(
+        `voiceId`: kotlin.String,
+        `referenceAudioPath`: kotlin.String,
+    )
+
+    /**
+     * Synchronous variant of
+     * [`register_target_voice`](Self::register_target_voice).
+     */
+    fun `registerTargetVoiceBlocking`(
+        `voiceId`: kotlin.String,
+        `referenceAudioPath`: kotlin.String,
+    )
+
+    companion object
+}
+
+/**
+ * A voice-conversion model.
+ *
+ * Construct via one of the per-backend factory functions (currently just
+ * [`new_rvc_model`], gated on `audio-vc-rvc`). Use the async
+ * [`convert_voice`](Self::convert_voice) method for one-shot rendering,
+ * [`list_target_voices`](Self::list_target_voices) /
+ * [`register_target_voice`](Self::register_target_voice) for voice
+ * management, or [`stream_convert_pcm_to_sink`] for chunk-level
+ * streaming.
+ */
+open class VcModel :
+    Disposable,
+    AutoCloseable,
+    VcModelInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_vcmodel(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_vcmodel(handle, status)
+        }
+    }
+
+    /**
+     * Convert the source utterance at `input_audio_path` into the voice
+     * of the registered target speaker `target_voice_id`.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `convertVoice`(
+        `inputAudioPath`: kotlin.String,
+        `targetVoiceId`: kotlin.String,
+    ): VcResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_vcmodel_convert_voice(
+                    uniffiHandle,
+                    FfiConverterString.lower(`inputAudioPath`),
+                    FfiConverterString.lower(`targetVoiceId`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeVcResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`convert_voice`](Self::convert_voice).
+     */
+    @Throws(BlazenException::class)
+    override fun `convertVoiceBlocking`(
+        `inputAudioPath`: kotlin.String,
+        `targetVoiceId`: kotlin.String,
+    ): VcResult =
+        FfiConverterTypeVcResult.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_vcmodel_convert_voice_blocking(
+                        it,
+                        FfiConverterString.lower(`inputAudioPath`),
+                        FfiConverterString.lower(`targetVoiceId`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * List the target voices this backend can currently render.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `listTargetVoices`(): List<TargetVoice> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_vcmodel_list_target_voices(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceTypeTargetVoice.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of
+     * [`list_target_voices`](Self::list_target_voices).
+     */
+    @Throws(BlazenException::class)
+    override fun `listTargetVoicesBlocking`(): List<TargetVoice> =
+        FfiConverterSequenceTypeTargetVoice.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_vcmodel_list_target_voices_blocking(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Register a new target voice from the reference utterance at
+     * `reference_audio_path`.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `registerTargetVoice`(
+        `voiceId`: kotlin.String,
+        `referenceAudioPath`: kotlin.String,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_blazen_uniffi_fn_method_vcmodel_register_target_voice(
+                uniffiHandle,
+                FfiConverterString.lower(`voiceId`),
+                FfiConverterString.lower(`referenceAudioPath`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        BlazenException.ErrorHandler,
+    )
+
+    /**
+     * Synchronous variant of
+     * [`register_target_voice`](Self::register_target_voice).
+     */
+    @Throws(BlazenException::class)
+    override fun `registerTargetVoiceBlocking`(
+        `voiceId`: kotlin.String,
+        `referenceAudioPath`: kotlin.String,
+    ) = callWithHandle {
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_method_vcmodel_register_target_voice_blocking(
+                it,
+                FfiConverterString.lower(`voiceId`),
+                FfiConverterString.lower(`referenceAudioPath`),
+                _status,
+            )
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeVcModel : FfiConverter<VcModel, Long> {
+    override fun lower(value: VcModel): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): VcModel = VcModel(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): VcModel = lift(buf.getLong())
+
+    override fun allocationSize(value: VcModel) = 8UL
+
+    override fun write(
+        value: VcModel,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Sink for streaming voice-conversion output, implemented in foreign
+ * code.
+ *
+ * Symmetric to [`crate::compute_music::MusicStreamSink`] and
+ * [`crate::streaming::CompletionStreamSink`]: the streaming engine calls
+ * [`on_chunk`](Self::on_chunk) for each emitted chunk, then exactly one
+ * of [`on_done`](Self::on_done) or [`on_error`](Self::on_error).
+ * Implementations should treat the terminal callbacks as cleanup hooks
+ * (close channels, complete async iterators, signal flow completion).
+ */
+public interface VcStreamSink {
+    /**
+     * Receive a single chunk from the streaming response.
+     *
+     * Returning an `Err` aborts the stream — the engine delivers the
+     * error via [`on_error`](Self::on_error) and stops dispatching
+     * further chunks.
+     */
+    suspend fun `onChunk`(`chunk`: VcChunk)
+
+    /**
+     * Receive the terminal completion signal. Called exactly once at the
+     * end of a successful stream.
+     */
+    suspend fun `onDone`()
+
+    /**
+     * Receive a fatal error from the stream. Called exactly once when
+     * the stream fails midway (or fails to start at all).
+     */
+    suspend fun `onError`(`err`: BlazenException)
+
+    companion object
+}
+
+/**
+ * Sink for streaming voice-conversion output, implemented in foreign
+ * code.
+ *
+ * Symmetric to [`crate::compute_music::MusicStreamSink`] and
+ * [`crate::streaming::CompletionStreamSink`]: the streaming engine calls
+ * [`on_chunk`](Self::on_chunk) for each emitted chunk, then exactly one
+ * of [`on_done`](Self::on_done) or [`on_error`](Self::on_error).
+ * Implementations should treat the terminal callbacks as cleanup hooks
+ * (close channels, complete async iterators, signal flow completion).
+ */
+open class VcStreamSinkImpl :
+    Disposable,
+    AutoCloseable,
+    VcStreamSink {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_vcstreamsink(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_vcstreamsink(handle, status)
+        }
+    }
+
+    /**
+     * Receive a single chunk from the streaming response.
+     *
+     * Returning an `Err` aborts the stream — the engine delivers the
+     * error via [`on_error`](Self::on_error) and stops dispatching
+     * further chunks.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `onChunk`(`chunk`: VcChunk) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_vcstreamsink_on_chunk(
+                    uniffiHandle,
+                    FfiConverterTypeVcChunk.lower(`chunk`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Receive the terminal completion signal. Called exactly once at the
+     * end of a successful stream.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `onDone`() =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_vcstreamsink_on_done(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Receive a fatal error from the stream. Called exactly once when
+     * the stream fails midway (or fails to start at all).
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `onError`(`err`: BlazenException) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_vcstreamsink_on_error(
+                    uniffiHandle,
+                    FfiConverterTypeBlazenError.lower(`err`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+// Put the implementation in an object so we don't pollute the top-level namespace
+internal object uniffiCallbackInterfaceVcStreamSink {
+    internal object `onChunk` : UniffiCallbackInterfaceVcStreamSinkMethod0 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `chunk`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeVcStreamSink.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`onChunk`(
+                    FfiConverterTypeVcChunk.lift(`chunk`),
+                )
+                }
+            val uniffiHandleSuccess = { _: Unit ->
+                val uniffiResult =
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `onDone` : UniffiCallbackInterfaceVcStreamSinkMethod1 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeVcStreamSink.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend { uniffiObj.`onDone`() }
+            val uniffiHandleSuccess = { _: Unit ->
+                val uniffiResult =
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object `onError` : UniffiCallbackInterfaceVcStreamSinkMethod2 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `err`: RustBuffer.ByValue,
+            `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
+            `uniffiCallbackData`: Long,
+            `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
+        ) {
+            val uniffiObj = FfiConverterTypeVcStreamSink.handleMap.get(uniffiHandle)
+            val makeCall =
+                suspend {  uniffiObj.`onError`(
+                    FfiConverterTypeBlazenError.lift(`err`),
+                )
+                }
+            val uniffiHandleSuccess = { _: Unit ->
+                val uniffiResult =
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        UniffiRustCallStatus.ByValue(),
+                    )
+                uniffiResult.write()
+                uniffiFutureCallback.callback(uniffiCallbackData, uniffiResult)
+            }
+            val uniffiHandleError = { callStatus: UniffiRustCallStatus.ByValue ->
+                uniffiFutureCallback.callback(
+                    uniffiCallbackData,
+                    UniffiForeignFutureResultVoid.UniffiByValue(
+                        callStatus,
+                    ),
+                )
+            }
+            uniffiTraitInterfaceCallAsyncWithError(
+                makeCall,
+                uniffiHandleSuccess,
+                uniffiHandleError,
+                { e: BlazenException -> FfiConverterTypeBlazenError.lower(e) },
+                uniffiOutDroppedCallback,
+            )
+        }
+    }
+
+    internal object uniffiFree : UniffiCallbackInterfaceFree {
+        override fun callback(handle: Long) {
+            FfiConverterTypeVcStreamSink.handleMap.remove(handle)
+        }
+    }
+
+    internal object uniffiClone : UniffiCallbackInterfaceClone {
+        override fun callback(handle: Long): Long = FfiConverterTypeVcStreamSink.handleMap.clone(handle)
+    }
+
+    internal var vtable =
+        UniffiVTableCallbackInterfaceVcStreamSink.UniffiByValue(
+            uniffiFree,
+            uniffiClone,
+            `onChunk`,
+            `onDone`,
+            `onError`,
+        )
+
+    // Registers the foreign callback with the Rust side.
+    // This method is generated for each callback interface.
+    internal fun register(lib: UniffiLib) {
+        lib.uniffi_blazen_uniffi_fn_init_callback_vtable_vcstreamsink(vtable)
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeVcStreamSink : FfiConverter<VcStreamSink, Long> {
+    internal val handleMap = UniffiHandleMap<VcStreamSink>()
+
+    override fun lower(value: VcStreamSink): Long {
+        if (value is VcStreamSinkImpl) {
+            // Rust-implemented object.  Clone the handle and return it
+            return value.uniffiCloneHandle()
+        } else {
+            // Kotlin object, generate a new vtable handle and return that.
+            return handleMap.insert(value)
+        }
+    }
+
+    override fun lift(value: Long): VcStreamSink {
+        if ((value and 1.toLong()) == 0.toLong()) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return VcStreamSinkImpl(UniffiWithHandle, value)
+        } else {
+            // Kotlin-generated handle, get the object from the handle map
+            return handleMap.remove(value)
+        }
+    }
+
+    override fun read(buf: ByteBuffer): VcStreamSink = lift(buf.getLong())
+
+    override fun allocationSize(value: VcStreamSink) = 8UL
+
+    override fun write(
+        value: VcStreamSink,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
  * A built workflow ready to run.
  */
 public interface WorkflowInterface {
@@ -24161,6 +25287,62 @@ public object FfiConverterTypeSttResult : FfiConverterRustBuffer<SttResult> {
     }
 }
 
+/**
+ * A registered target speaker that a [`VcModel`] can render source audio
+ * into.
+ *
+ * Mirrors [`blazen_llm::TargetVoice`] (when the `audio-vc` feature is on)
+ * 1:1 across the FFI boundary so foreign code sees a stable record shape
+ * regardless of whether the underlying engine is the native RVC backend
+ * or a cloud-side provider added later.
+ */
+data class TargetVoice(
+    /**
+     * Backend-scoped identifier passed back to
+     * [`VcModel::convert_voice`] / [`VcModel::register_target_voice`].
+     */
+    var `id`: kotlin.String,
+    /**
+     * Optional human-readable display name. `None` when the backend did
+     * not record one.
+     */
+    var `label`: kotlin.String?,
+    /**
+     * Native sample rate (Hz) the backend renders this voice at.
+     */
+    var `sampleRateHz`: kotlin.UInt,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTargetVoice : FfiConverterRustBuffer<TargetVoice> {
+    override fun read(buf: ByteBuffer): TargetVoice =
+        TargetVoice(
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+
+    override fun allocationSize(value: TargetVoice) =
+        (
+            FfiConverterString.allocationSize(value.`id`) +
+                FfiConverterOptionalString.allocationSize(value.`label`) +
+                FfiConverterUInt.allocationSize(value.`sampleRateHz`)
+        )
+
+    override fun write(
+        value: TargetVoice,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`id`, buf)
+        FfiConverterOptionalString.write(value.`label`, buf)
+        FfiConverterUInt.write(value.`sampleRateHz`, buf)
+    }
+}
+
 data class ThreeDProviderDefaults(
     var `base`: BaseProviderDefaults? = null,
 ) {
@@ -24906,6 +26088,131 @@ public object FfiConverterTypeUpscaleRequest : FfiConverterRustBuffer<UpscaleReq
         FfiConverterFloat.write(value.`scale`, buf)
         FfiConverterOptionalString.write(value.`model`, buf)
         FfiConverterString.write(value.`parameters`, buf)
+    }
+}
+
+/**
+ * One emission from a streaming voice-conversion call.
+ *
+ * `samples` is 32-bit float PCM in `[-1.0, 1.0]` at the target voice's
+ * native sample rate (see [`TargetVoice::sample_rate_hz`]).
+ *
+ * `is_final` is purely an advisory hint — the sink's `on_done` callback
+ * is the canonical end-of-stream signal, matching the contract used by
+ * [`crate::compute_music::MusicChunk`].
+ *
+ * `latency_seconds`, when present, is the measured latency from the
+ * stream's call-start to the moment this chunk was produced — handy for
+ * surfacing first-token-latency metrics through the binding.
+ */
+data class VcChunk(
+    /**
+     * 32-bit float PCM samples in `[-1, 1]` at the voice's native sample
+     * rate.
+     */
+    var `samples`: List<kotlin.Float>,
+    /**
+     * `true` on the final emitted chunk; otherwise `false`. Always
+     * `false` for the RVC backend today (end-of-stream is signalled by
+     * the sink's `on_done` callback).
+     */
+    var `isFinal`: kotlin.Boolean,
+    /**
+     * Optional per-chunk latency from call-start in seconds.
+     */
+    var `latencySeconds`: kotlin.Float?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeVcChunk : FfiConverterRustBuffer<VcChunk> {
+    override fun read(buf: ByteBuffer): VcChunk =
+        VcChunk(
+            FfiConverterSequenceFloat.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalFloat.read(buf),
+        )
+
+    override fun allocationSize(value: VcChunk) =
+        (
+            FfiConverterSequenceFloat.allocationSize(value.`samples`) +
+                FfiConverterBoolean.allocationSize(value.`isFinal`) +
+                FfiConverterOptionalFloat.allocationSize(value.`latencySeconds`)
+        )
+
+    override fun write(
+        value: VcChunk,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterSequenceFloat.write(value.`samples`, buf)
+        FfiConverterBoolean.write(value.`isFinal`, buf)
+        FfiConverterOptionalFloat.write(value.`latencySeconds`, buf)
+    }
+}
+
+/**
+ * A fully-rendered voice-conversion result.
+ *
+ * `bytes` carries a complete WAV (RIFF/`fmt `/`data`) container holding
+ * 16-bit signed little-endian PCM samples at the target voice's native
+ * sample rate. `sample_rate` echoes that rate for convenience so callers
+ * don't have to re-parse the WAV header.
+ */
+data class VcResult(
+    /**
+     * Encoded audio bytes (WAV container, 16-bit signed PCM).
+     */
+    var `bytes`: kotlin.ByteArray,
+    /**
+     * IANA MIME type of `bytes` (always `"audio/wav"` for the native
+     * backends shipped today).
+     */
+    var `mimeType`: kotlin.String,
+    /**
+     * Sample rate in Hz, taken from the target voice's
+     * [`TargetVoice::sample_rate_hz`].
+     */
+    var `sampleRate`: kotlin.UInt,
+    /**
+     * Duration of the clip in seconds. Zero when the backend did not
+     * report one (no extra WAV header parsing happens here).
+     */
+    var `durationSeconds`: kotlin.Float,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeVcResult : FfiConverterRustBuffer<VcResult> {
+    override fun read(buf: ByteBuffer): VcResult =
+        VcResult(
+            FfiConverterByteArray.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterFloat.read(buf),
+        )
+
+    override fun allocationSize(value: VcResult) =
+        (
+            FfiConverterByteArray.allocationSize(value.`bytes`) +
+                FfiConverterString.allocationSize(value.`mimeType`) +
+                FfiConverterUInt.allocationSize(value.`sampleRate`) +
+                FfiConverterFloat.allocationSize(value.`durationSeconds`)
+        )
+
+    override fun write(
+        value: VcResult,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterByteArray.write(value.`bytes`, buf)
+        FfiConverterString.write(value.`mimeType`, buf)
+        FfiConverterUInt.write(value.`sampleRate`, buf)
+        FfiConverterFloat.write(value.`durationSeconds`, buf)
     }
 }
 
@@ -27948,6 +29255,34 @@ public object FfiConverterSequenceTypePoolStatusRecord : FfiConverterRustBuffer<
 /**
  * @suppress
  */
+public object FfiConverterSequenceTypeTargetVoice : FfiConverterRustBuffer<List<TargetVoice>> {
+    override fun read(buf: ByteBuffer): List<TargetVoice> {
+        val len = buf.getInt()
+        return List<TargetVoice>(len) {
+            FfiConverterTypeTargetVoice.read(buf)
+        }
+    }
+
+    override fun allocationSize(value: List<TargetVoice>): ULong {
+        val sizeForLength = 4UL
+        val sizeForItems = value.map { FfiConverterTypeTargetVoice.allocationSize(it) }.sum()
+        return sizeForLength + sizeForItems
+    }
+
+    override fun write(
+        value: List<TargetVoice>,
+        buf: ByteBuffer,
+    ) {
+        buf.putInt(value.size)
+        value.iterator().forEach {
+            FfiConverterTypeTargetVoice.write(it, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterSequenceTypeTool : FfiConverterRustBuffer<List<Tool>> {
     override fun read(buf: ByteBuffer): List<Tool> {
         val len = buf.getInt()
@@ -28706,6 +30041,97 @@ fun `streamGenerateSfxToSinkBlocking`(
         FfiConverterString.lower(`prompt`),
         FfiConverterFloat.lower(`durationSeconds`),
         FfiConverterTypeMusicStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Build a native RVC-backed [`VcModel`].
+ *
+ * `voice_dir` overrides the per-process `BLAZEN_RVC_VOICE_DIR`
+ * environment variable that the RVC pipeline reads to locate voice
+ * profiles on disk (each voice is expected to live at
+ * `<voice_dir>/<voice_id>/` with `model.pth`, `index.index`, and
+ * `metadata.json`). When `None`, the existing process-environment value
+ * is used unchanged. Setting this from inside the factory mutates global
+ * process state via `std::env::set_var` — callers running multiple RVC
+ * instances in the same process should pick a single voice directory
+ * rather than racing factory calls.
+ *
+ * `device` accepts the same format strings as `blazen_llm::Device::parse`
+ * (`"cpu"`, `"cuda"`, `"cuda:N"`, `"metal"`); `None` defers to CPU.
+ */
+@Throws(BlazenException::class)
+fun `newRvcModel`(
+    `voiceDir`: kotlin.String?,
+    `device`: kotlin.String?,
+): VcModel =
+    FfiConverterTypeVcModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_rvc_model(
+                FfiConverterOptionalString.lower(`voiceDir`),
+                FfiConverterOptionalString.lower(`device`),
+                _status,
+            )
+        },
+    )
+
+/**
+ * Drive a streaming voice-conversion call, dispatching each chunk to the
+ * sink.
+ *
+ * `input_pcm` is the full source utterance as 32-bit float PCM at the
+ * backend's expected source sample rate (typically 16 kHz mono for RVC).
+ *
+ * On success, calls `sink.on_done()` exactly once and returns `Ok(())`.
+ * On a backend-side or sink-side failure, calls `sink.on_error(...)` and
+ * returns `Ok(())` — error delivery is the sink's responsibility, matching
+ * the convention `complete_streaming` and `stream_generate_music_to_sink`
+ * established.
+ *
+ * The only failure mode that propagates back to the caller is a panic in
+ * the sink itself or the runtime; init errors (e.g. voice-not-found,
+ * backend-not-built-with-feature) are delivered through `on_error`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `streamConvertPcmToSink`(
+    `model`: VcModel,
+    `inputPcm`: List<kotlin.Float>,
+    `targetVoiceId`: kotlin.String,
+    `sink`: VcStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_stream_convert_pcm_to_sink(
+        FfiConverterTypeVcModel.lower(`model`),
+        FfiConverterSequenceFloat.lower(`inputPcm`),
+        FfiConverterString.lower(`targetVoiceId`),
+        FfiConverterTypeVcStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`stream_convert_pcm_to_sink`] — blocks the
+ * current thread on the shared Tokio runtime.
+ */
+@Throws(BlazenException::class)
+fun `streamConvertPcmToSinkBlocking`(
+    `model`: VcModel,
+    `inputPcm`: List<kotlin.Float>,
+    `targetVoiceId`: kotlin.String,
+    `sink`: VcStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_stream_convert_pcm_to_sink_blocking(
+        FfiConverterTypeVcModel.lower(`model`),
+        FfiConverterSequenceFloat.lower(`inputPcm`),
+        FfiConverterString.lower(`targetVoiceId`),
+        FfiConverterTypeVcStreamSink.lower(`sink`),
         _status,
     )
 }

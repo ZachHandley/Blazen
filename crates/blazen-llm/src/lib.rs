@@ -308,3 +308,8 @@ pub use blazen_audio_music::{
 
 #[cfg(feature = "audio-codec")]
 pub use blazen_audio_codec::{CodecError, CodecProvider, DynCodecProvider};
+
+#[cfg(feature = "audio-vc-rvc")]
+pub use blazen_audio_vc::RvcBackend;
+#[cfg(feature = "audio-vc")]
+pub use blazen_audio_vc::{TargetVoice, VcError, VoiceConversionBackend};

@@ -371,6 +371,7 @@ func init() {
 	FfiConverterMusicStreamSinkINSTANCE.register()
 	FfiConverterStepHandlerINSTANCE.register()
 	FfiConverterToolHandlerINSTANCE.register()
+	FfiConverterVcStreamSinkINSTANCE.register()
 	uniffiCheckChecksums()
 }
 
@@ -536,6 +537,33 @@ func uniffiCheckChecksums() {
 		if checksum != 49910 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_func_stream_generate_sfx_to_sink_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_func_new_rvc_model()
+		})
+		if checksum != 51978 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_func_new_rvc_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_func_stream_convert_pcm_to_sink()
+		})
+		if checksum != 29415 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_func_stream_convert_pcm_to_sink: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_func_stream_convert_pcm_to_sink_blocking()
+		})
+		if checksum != 36415 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_func_stream_convert_pcm_to_sink_blocking: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -1067,6 +1095,87 @@ func uniffiCheckChecksums() {
 		if checksum != 39358 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_error: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_vcmodel_convert_voice()
+		})
+		if checksum != 46177 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_vcmodel_convert_voice: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_vcmodel_convert_voice_blocking()
+		})
+		if checksum != 59967 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_vcmodel_convert_voice_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_vcmodel_list_target_voices()
+		})
+		if checksum != 2307 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_vcmodel_list_target_voices: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_vcmodel_list_target_voices_blocking()
+		})
+		if checksum != 32701 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_vcmodel_list_target_voices_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_vcmodel_register_target_voice()
+		})
+		if checksum != 15373 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_vcmodel_register_target_voice: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_vcmodel_register_target_voice_blocking()
+		})
+		if checksum != 31343 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_vcmodel_register_target_voice_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_chunk()
+		})
+		if checksum != 1538 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_chunk: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_done()
+		})
+		if checksum != 20371 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_done: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_error()
+		})
+		if checksum != 37574 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_error: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -14053,6 +14162,675 @@ func (_ FfiDestroyerUniffiRatedJsonlDataset) Destroy(value *UniffiRatedJsonlData
 	value.Destroy()
 }
 
+// A voice-conversion model.
+//
+// Construct via one of the per-backend factory functions (currently just
+// [`new_rvc_model`], gated on `audio-vc-rvc`). Use the async
+// [`convert_voice`](Self::convert_voice) method for one-shot rendering,
+// [`list_target_voices`](Self::list_target_voices) /
+// [`register_target_voice`](Self::register_target_voice) for voice
+// management, or [`stream_convert_pcm_to_sink`] for chunk-level
+// streaming.
+type VcModelInterface interface {
+	// Convert the source utterance at `input_audio_path` into the voice
+	// of the registered target speaker `target_voice_id`.
+	ConvertVoice(inputAudioPath string, targetVoiceId string) (VcResult, error)
+	// Synchronous variant of [`convert_voice`](Self::convert_voice).
+	ConvertVoiceBlocking(inputAudioPath string, targetVoiceId string) (VcResult, error)
+	// List the target voices this backend can currently render.
+	ListTargetVoices() ([]TargetVoice, error)
+	// Synchronous variant of
+	// [`list_target_voices`](Self::list_target_voices).
+	ListTargetVoicesBlocking() ([]TargetVoice, error)
+	// Register a new target voice from the reference utterance at
+	// `reference_audio_path`.
+	RegisterTargetVoice(voiceId string, referenceAudioPath string) error
+	// Synchronous variant of
+	// [`register_target_voice`](Self::register_target_voice).
+	RegisterTargetVoiceBlocking(voiceId string, referenceAudioPath string) error
+}
+
+// A voice-conversion model.
+//
+// Construct via one of the per-backend factory functions (currently just
+// [`new_rvc_model`], gated on `audio-vc-rvc`). Use the async
+// [`convert_voice`](Self::convert_voice) method for one-shot rendering,
+// [`list_target_voices`](Self::list_target_voices) /
+// [`register_target_voice`](Self::register_target_voice) for voice
+// management, or [`stream_convert_pcm_to_sink`] for chunk-level
+// streaming.
+type VcModel struct {
+	ffiObject FfiObject
+}
+
+// Convert the source utterance at `input_audio_path` into the voice
+// of the registered target speaker `target_voice_id`.
+func (_self *VcModel) ConvertVoice(inputAudioPath string, targetVoiceId string) (VcResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*VcModel")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) VcResult {
+			return FfiConverterVcResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_vcmodel_convert_voice(
+			_pointer, FfiConverterStringINSTANCE.Lower(inputAudioPath), FfiConverterStringINSTANCE.Lower(targetVoiceId)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`convert_voice`](Self::convert_voice).
+func (_self *VcModel) ConvertVoiceBlocking(inputAudioPath string, targetVoiceId string) (VcResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*VcModel")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_vcmodel_convert_voice_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(inputAudioPath), FfiConverterStringINSTANCE.Lower(targetVoiceId), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue VcResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterVcResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// List the target voices this backend can currently render.
+func (_self *VcModel) ListTargetVoices() ([]TargetVoice, error) {
+	_pointer := _self.ffiObject.incrementPointer("*VcModel")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) []TargetVoice {
+			return FfiConverterSequenceTargetVoiceINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_vcmodel_list_target_voices(
+			_pointer),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of
+// [`list_target_voices`](Self::list_target_voices).
+func (_self *VcModel) ListTargetVoicesBlocking() ([]TargetVoice, error) {
+	_pointer := _self.ffiObject.incrementPointer("*VcModel")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_vcmodel_list_target_voices_blocking(
+				_pointer, _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue []TargetVoice
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterSequenceTargetVoiceINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Register a new target voice from the reference utterance at
+// `reference_audio_path`.
+func (_self *VcModel) RegisterTargetVoice(voiceId string, referenceAudioPath string) error {
+	_pointer := _self.ffiObject.incrementPointer("*VcModel")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_vcmodel_register_target_voice(
+			_pointer, FfiConverterStringINSTANCE.Lower(voiceId), FfiConverterStringINSTANCE.Lower(referenceAudioPath)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+// Synchronous variant of
+// [`register_target_voice`](Self::register_target_voice).
+func (_self *VcModel) RegisterTargetVoiceBlocking(voiceId string, referenceAudioPath string) error {
+	_pointer := _self.ffiObject.incrementPointer("*VcModel")
+	defer _self.ffiObject.decrementPointer()
+	_, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) bool {
+		C.uniffi_blazen_uniffi_fn_method_vcmodel_register_target_voice_blocking(
+			_pointer, FfiConverterStringINSTANCE.Lower(voiceId), FfiConverterStringINSTANCE.Lower(referenceAudioPath), _uniffiStatus)
+		return false
+	})
+	return _uniffiErr.AsError()
+}
+func (object *VcModel) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterVcModel struct{}
+
+var FfiConverterVcModelINSTANCE = FfiConverterVcModel{}
+
+func (c FfiConverterVcModel) Lift(handle C.uint64_t) *VcModel {
+	result := &VcModel{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_vcmodel(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_vcmodel(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*VcModel).Destroy)
+	return result
+}
+
+func (c FfiConverterVcModel) Read(reader io.Reader) *VcModel {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterVcModel) Lower(value *VcModel) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*VcModel")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterVcModel) Write(writer io.Writer, value *VcModel) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalVcModel(handle uint64) *VcModel {
+	return FfiConverterVcModelINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalVcModel(value *VcModel) uint64 {
+	return uint64(FfiConverterVcModelINSTANCE.Lower(value))
+}
+
+type FfiDestroyerVcModel struct{}
+
+func (_ FfiDestroyerVcModel) Destroy(value *VcModel) {
+	value.Destroy()
+}
+
+// Sink for streaming voice-conversion output, implemented in foreign
+// code.
+//
+// Symmetric to [`crate::compute_music::MusicStreamSink`] and
+// [`crate::streaming::CompletionStreamSink`]: the streaming engine calls
+// [`on_chunk`](Self::on_chunk) for each emitted chunk, then exactly one
+// of [`on_done`](Self::on_done) or [`on_error`](Self::on_error).
+// Implementations should treat the terminal callbacks as cleanup hooks
+// (close channels, complete async iterators, signal flow completion).
+type VcStreamSink interface {
+	// Receive a single chunk from the streaming response.
+	//
+	// Returning an `Err` aborts the stream — the engine delivers the
+	// error via [`on_error`](Self::on_error) and stops dispatching
+	// further chunks.
+	OnChunk(chunk VcChunk) error
+	// Receive the terminal completion signal. Called exactly once at the
+	// end of a successful stream.
+	OnDone() error
+	// Receive a fatal error from the stream. Called exactly once when
+	// the stream fails midway (or fails to start at all).
+	OnError(err *BlazenError) error
+}
+
+// Sink for streaming voice-conversion output, implemented in foreign
+// code.
+//
+// Symmetric to [`crate::compute_music::MusicStreamSink`] and
+// [`crate::streaming::CompletionStreamSink`]: the streaming engine calls
+// [`on_chunk`](Self::on_chunk) for each emitted chunk, then exactly one
+// of [`on_done`](Self::on_done) or [`on_error`](Self::on_error).
+// Implementations should treat the terminal callbacks as cleanup hooks
+// (close channels, complete async iterators, signal flow completion).
+type VcStreamSinkImpl struct {
+	ffiObject FfiObject
+}
+
+// Receive a single chunk from the streaming response.
+//
+// Returning an `Err` aborts the stream — the engine delivers the
+// error via [`on_error`](Self::on_error) and stops dispatching
+// further chunks.
+func (_self *VcStreamSinkImpl) OnChunk(chunk VcChunk) error {
+	_pointer := _self.ffiObject.incrementPointer("VcStreamSink")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_vcstreamsink_on_chunk(
+			_pointer, FfiConverterVcChunkINSTANCE.Lower(chunk)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+// Receive the terminal completion signal. Called exactly once at the
+// end of a successful stream.
+func (_self *VcStreamSinkImpl) OnDone() error {
+	_pointer := _self.ffiObject.incrementPointer("VcStreamSink")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_vcstreamsink_on_done(
+			_pointer),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+// Receive a fatal error from the stream. Called exactly once when
+// the stream fails midway (or fails to start at all).
+func (_self *VcStreamSinkImpl) OnError(err *BlazenError) error {
+	_pointer := _self.ffiObject.incrementPointer("VcStreamSink")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_vcstreamsink_on_error(
+			_pointer, FfiConverterBlazenErrorINSTANCE.Lower(err)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+func (object *VcStreamSinkImpl) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterVcStreamSink struct {
+	handleMap *concurrentHandleMap[VcStreamSink]
+}
+
+var FfiConverterVcStreamSinkINSTANCE = FfiConverterVcStreamSink{
+	handleMap: newConcurrentHandleMap[VcStreamSink](),
+}
+
+func (c FfiConverterVcStreamSink) Lift(handle C.uint64_t) VcStreamSink {
+	if uint64(handle)&1 == 0 {
+		// Rust-generated handle (even), construct a new object wrapping the handle
+		result := &VcStreamSinkImpl{
+			newFfiObject(
+				handle,
+				func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+					return C.uniffi_blazen_uniffi_fn_clone_vcstreamsink(handle, status)
+				},
+				func(handle C.uint64_t, status *C.RustCallStatus) {
+					C.uniffi_blazen_uniffi_fn_free_vcstreamsink(handle, status)
+				},
+			),
+		}
+		runtime.SetFinalizer(result, (*VcStreamSinkImpl).Destroy)
+		return result
+	} else {
+		// Go-generated handle (odd), retrieve from the handle map
+		val, ok := c.handleMap.tryGet(uint64(handle))
+		if !ok {
+			panic(fmt.Errorf("no callback in handle map: %d", handle))
+		}
+		c.handleMap.remove(uint64(handle))
+		return val
+	}
+}
+
+func (c FfiConverterVcStreamSink) Read(reader io.Reader) VcStreamSink {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterVcStreamSink) Lower(value VcStreamSink) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	if val, ok := value.(*VcStreamSinkImpl); ok {
+		// Rust-backed object, clone the handle
+		handle := val.ffiObject.incrementPointer("VcStreamSink")
+		defer val.ffiObject.decrementPointer()
+		return handle
+	} else {
+		// Go-backed object, insert into handle map
+		return C.uint64_t(c.handleMap.insert(value))
+	}
+}
+
+func (c FfiConverterVcStreamSink) Write(writer io.Writer, value VcStreamSink) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalVcStreamSink(handle uint64) VcStreamSink {
+	return FfiConverterVcStreamSinkINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalVcStreamSink(value VcStreamSink) uint64 {
+	return uint64(FfiConverterVcStreamSinkINSTANCE.Lower(value))
+}
+
+type FfiDestroyerVcStreamSink struct{}
+
+func (_ FfiDestroyerVcStreamSink) Destroy(value VcStreamSink) {
+	if val, ok := value.(*VcStreamSinkImpl); ok {
+		val.Destroy()
+	}
+}
+
+//export blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkMethod0
+func blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkMethod0(uniffiHandle C.uint64_t, chunk C.RustBuffer, uniffiFutureCallback C.UniffiForeignFutureCompleteVoid, uniffiCallbackData C.uint64_t, uniffiOutDroppedCallback *C.UniffiForeignFutureDroppedCallbackStruct) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterVcStreamSinkINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	result := make(chan C.UniffiForeignFutureResultVoid, 1)
+	cancel := make(chan struct{}, 1)
+	guardHandle := cgo.NewHandle(cancel)
+	*uniffiOutDroppedCallback = C.UniffiForeignFutureDroppedCallbackStruct{
+		handle: C.uint64_t(guardHandle),
+		free:   C.UniffiForeignFutureDroppedCallback(C.blazen_uniffiFreeGorutine),
+	}
+
+	// Wait for compleation or cancel
+	go func() {
+		select {
+		case <-cancel:
+		case res := <-result:
+			C.call_UniffiForeignFutureCompleteVoid(uniffiFutureCallback, uniffiCallbackData, res)
+		}
+	}()
+
+	// Eval callback asynchroniously
+	go func() {
+		asyncResult := &C.UniffiForeignFutureResultVoid{}
+		callStatus := &asyncResult.callStatus
+		defer func() {
+			result <- *asyncResult
+		}()
+
+		err :=
+			uniffiObj.OnChunk(
+				FfiConverterVcChunkINSTANCE.Lift(GoRustBuffer{
+					inner: chunk,
+				}),
+			)
+
+		if err != nil {
+			var actualError *BlazenError
+			if errors.As(err, &actualError) {
+				*callStatus = C.RustCallStatus{
+					code:     C.int8_t(uniffiCallbackResultError),
+					errorBuf: FfiConverterBlazenErrorINSTANCE.Lower(actualError),
+				}
+			} else {
+				*callStatus = C.RustCallStatus{
+					code: C.int8_t(uniffiCallbackUnexpectedResultError),
+				}
+			}
+			return
+		}
+
+	}()
+}
+
+//export blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkMethod1
+func blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkMethod1(uniffiHandle C.uint64_t, uniffiFutureCallback C.UniffiForeignFutureCompleteVoid, uniffiCallbackData C.uint64_t, uniffiOutDroppedCallback *C.UniffiForeignFutureDroppedCallbackStruct) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterVcStreamSinkINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	result := make(chan C.UniffiForeignFutureResultVoid, 1)
+	cancel := make(chan struct{}, 1)
+	guardHandle := cgo.NewHandle(cancel)
+	*uniffiOutDroppedCallback = C.UniffiForeignFutureDroppedCallbackStruct{
+		handle: C.uint64_t(guardHandle),
+		free:   C.UniffiForeignFutureDroppedCallback(C.blazen_uniffiFreeGorutine),
+	}
+
+	// Wait for compleation or cancel
+	go func() {
+		select {
+		case <-cancel:
+		case res := <-result:
+			C.call_UniffiForeignFutureCompleteVoid(uniffiFutureCallback, uniffiCallbackData, res)
+		}
+	}()
+
+	// Eval callback asynchroniously
+	go func() {
+		asyncResult := &C.UniffiForeignFutureResultVoid{}
+		callStatus := &asyncResult.callStatus
+		defer func() {
+			result <- *asyncResult
+		}()
+
+		err :=
+			uniffiObj.OnDone()
+
+		if err != nil {
+			var actualError *BlazenError
+			if errors.As(err, &actualError) {
+				*callStatus = C.RustCallStatus{
+					code:     C.int8_t(uniffiCallbackResultError),
+					errorBuf: FfiConverterBlazenErrorINSTANCE.Lower(actualError),
+				}
+			} else {
+				*callStatus = C.RustCallStatus{
+					code: C.int8_t(uniffiCallbackUnexpectedResultError),
+				}
+			}
+			return
+		}
+
+	}()
+}
+
+//export blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkMethod2
+func blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkMethod2(uniffiHandle C.uint64_t, err C.RustBuffer, uniffiFutureCallback C.UniffiForeignFutureCompleteVoid, uniffiCallbackData C.uint64_t, uniffiOutDroppedCallback *C.UniffiForeignFutureDroppedCallbackStruct) {
+	handle := uint64(uniffiHandle)
+	uniffiObj, ok := FfiConverterVcStreamSinkINSTANCE.handleMap.tryGet(handle)
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+
+	result := make(chan C.UniffiForeignFutureResultVoid, 1)
+	cancel := make(chan struct{}, 1)
+	guardHandle := cgo.NewHandle(cancel)
+	*uniffiOutDroppedCallback = C.UniffiForeignFutureDroppedCallbackStruct{
+		handle: C.uint64_t(guardHandle),
+		free:   C.UniffiForeignFutureDroppedCallback(C.blazen_uniffiFreeGorutine),
+	}
+
+	// Wait for compleation or cancel
+	go func() {
+		select {
+		case <-cancel:
+		case res := <-result:
+			C.call_UniffiForeignFutureCompleteVoid(uniffiFutureCallback, uniffiCallbackData, res)
+		}
+	}()
+
+	// Eval callback asynchroniously
+	go func() {
+		asyncResult := &C.UniffiForeignFutureResultVoid{}
+		callStatus := &asyncResult.callStatus
+		defer func() {
+			result <- *asyncResult
+		}()
+
+		err :=
+			uniffiObj.OnError(
+				FfiConverterBlazenErrorINSTANCE.Lift(GoRustBuffer{
+					inner: err,
+				}),
+			)
+
+		if err != nil {
+			var actualError *BlazenError
+			if errors.As(err, &actualError) {
+				*callStatus = C.RustCallStatus{
+					code:     C.int8_t(uniffiCallbackResultError),
+					errorBuf: FfiConverterBlazenErrorINSTANCE.Lower(actualError),
+				}
+			} else {
+				*callStatus = C.RustCallStatus{
+					code: C.int8_t(uniffiCallbackUnexpectedResultError),
+				}
+			}
+			return
+		}
+
+	}()
+}
+
+var UniffiVTableCallbackInterfaceVcStreamSinkINSTANCE = C.UniffiVTableCallbackInterfaceVcStreamSink{
+	uniffiFree:  (C.UniffiCallbackInterfaceFree)(C.blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkFree),
+	uniffiClone: (C.UniffiCallbackInterfaceClone)(C.blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkClone),
+	onChunk:     (C.UniffiCallbackInterfaceVcStreamSinkMethod0)(C.blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkMethod0),
+	onDone:      (C.UniffiCallbackInterfaceVcStreamSinkMethod1)(C.blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkMethod1),
+	onError:     (C.UniffiCallbackInterfaceVcStreamSinkMethod2)(C.blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkMethod2),
+}
+
+//export blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkFree
+func blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkFree(handle C.uint64_t) {
+	FfiConverterVcStreamSinkINSTANCE.handleMap.remove(uint64(handle))
+}
+
+//export blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkClone
+func blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkClone(handle C.uint64_t) C.uint64_t {
+	val, ok := FfiConverterVcStreamSinkINSTANCE.handleMap.tryGet(uint64(handle))
+	if !ok {
+		panic(fmt.Errorf("no callback in handle map: %d", handle))
+	}
+	return C.uint64_t(FfiConverterVcStreamSinkINSTANCE.handleMap.insert(val))
+}
+
+func (c FfiConverterVcStreamSink) register() {
+	C.uniffi_blazen_uniffi_fn_init_callback_vtable_vcstreamsink(&UniffiVTableCallbackInterfaceVcStreamSinkINSTANCE)
+}
+
 // A built workflow ready to run.
 type WorkflowInterface interface {
 	// Run the workflow to completion with the given JSON input as the
@@ -17964,6 +18742,66 @@ func (_ FfiDestroyerSttResult) Destroy(value SttResult) {
 	value.Destroy()
 }
 
+// A registered target speaker that a [`VcModel`] can render source audio
+// into.
+//
+// Mirrors [`blazen_llm::TargetVoice`] (when the `audio-vc` feature is on)
+// 1:1 across the FFI boundary so foreign code sees a stable record shape
+// regardless of whether the underlying engine is the native RVC backend
+// or a cloud-side provider added later.
+type TargetVoice struct {
+	// Backend-scoped identifier passed back to
+	// [`VcModel::convert_voice`] / [`VcModel::register_target_voice`].
+	Id string
+	// Optional human-readable display name. `None` when the backend did
+	// not record one.
+	Label *string
+	// Native sample rate (Hz) the backend renders this voice at.
+	SampleRateHz uint32
+}
+
+func (r *TargetVoice) Destroy() {
+	FfiDestroyerString{}.Destroy(r.Id)
+	FfiDestroyerOptionalString{}.Destroy(r.Label)
+	FfiDestroyerUint32{}.Destroy(r.SampleRateHz)
+}
+
+type FfiConverterTargetVoice struct{}
+
+var FfiConverterTargetVoiceINSTANCE = FfiConverterTargetVoice{}
+
+func (c FfiConverterTargetVoice) Lift(rb RustBufferI) TargetVoice {
+	return LiftFromRustBuffer[TargetVoice](c, rb)
+}
+
+func (c FfiConverterTargetVoice) Read(reader io.Reader) TargetVoice {
+	return TargetVoice{
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+		FfiConverterUint32INSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterTargetVoice) Lower(value TargetVoice) C.RustBuffer {
+	return LowerIntoRustBuffer[TargetVoice](c, value)
+}
+
+func (c FfiConverterTargetVoice) LowerExternal(value TargetVoice) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[TargetVoice](c, value))
+}
+
+func (c FfiConverterTargetVoice) Write(writer io.Writer, value TargetVoice) {
+	FfiConverterStringINSTANCE.Write(writer, value.Id)
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.Label)
+	FfiConverterUint32INSTANCE.Write(writer, value.SampleRateHz)
+}
+
+type FfiDestroyerTargetVoice struct{}
+
+func (_ FfiDestroyerTargetVoice) Destroy(value TargetVoice) {
+	value.Destroy()
+}
+
 type ThreeDProviderDefaults struct {
 	Base *BaseProviderDefaults
 }
@@ -18857,6 +19695,137 @@ func (c FfiConverterUpscaleRequest) Write(writer io.Writer, value UpscaleRequest
 type FfiDestroyerUpscaleRequest struct{}
 
 func (_ FfiDestroyerUpscaleRequest) Destroy(value UpscaleRequest) {
+	value.Destroy()
+}
+
+// One emission from a streaming voice-conversion call.
+//
+// `samples` is 32-bit float PCM in `[-1.0, 1.0]` at the target voice's
+// native sample rate (see [`TargetVoice::sample_rate_hz`]).
+//
+// `is_final` is purely an advisory hint — the sink's `on_done` callback
+// is the canonical end-of-stream signal, matching the contract used by
+// [`crate::compute_music::MusicChunk`].
+//
+// `latency_seconds`, when present, is the measured latency from the
+// stream's call-start to the moment this chunk was produced — handy for
+// surfacing first-token-latency metrics through the binding.
+type VcChunk struct {
+	// 32-bit float PCM samples in `[-1, 1]` at the voice's native sample
+	// rate.
+	Samples []float32
+	// `true` on the final emitted chunk; otherwise `false`. Always
+	// `false` for the RVC backend today (end-of-stream is signalled by
+	// the sink's `on_done` callback).
+	IsFinal bool
+	// Optional per-chunk latency from call-start in seconds.
+	LatencySeconds *float32
+}
+
+func (r *VcChunk) Destroy() {
+	FfiDestroyerSequenceFloat32{}.Destroy(r.Samples)
+	FfiDestroyerBool{}.Destroy(r.IsFinal)
+	FfiDestroyerOptionalFloat32{}.Destroy(r.LatencySeconds)
+}
+
+type FfiConverterVcChunk struct{}
+
+var FfiConverterVcChunkINSTANCE = FfiConverterVcChunk{}
+
+func (c FfiConverterVcChunk) Lift(rb RustBufferI) VcChunk {
+	return LiftFromRustBuffer[VcChunk](c, rb)
+}
+
+func (c FfiConverterVcChunk) Read(reader io.Reader) VcChunk {
+	return VcChunk{
+		FfiConverterSequenceFloat32INSTANCE.Read(reader),
+		FfiConverterBoolINSTANCE.Read(reader),
+		FfiConverterOptionalFloat32INSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterVcChunk) Lower(value VcChunk) C.RustBuffer {
+	return LowerIntoRustBuffer[VcChunk](c, value)
+}
+
+func (c FfiConverterVcChunk) LowerExternal(value VcChunk) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[VcChunk](c, value))
+}
+
+func (c FfiConverterVcChunk) Write(writer io.Writer, value VcChunk) {
+	FfiConverterSequenceFloat32INSTANCE.Write(writer, value.Samples)
+	FfiConverterBoolINSTANCE.Write(writer, value.IsFinal)
+	FfiConverterOptionalFloat32INSTANCE.Write(writer, value.LatencySeconds)
+}
+
+type FfiDestroyerVcChunk struct{}
+
+func (_ FfiDestroyerVcChunk) Destroy(value VcChunk) {
+	value.Destroy()
+}
+
+// A fully-rendered voice-conversion result.
+//
+// `bytes` carries a complete WAV (RIFF/`fmt `/`data`) container holding
+// 16-bit signed little-endian PCM samples at the target voice's native
+// sample rate. `sample_rate` echoes that rate for convenience so callers
+// don't have to re-parse the WAV header.
+type VcResult struct {
+	// Encoded audio bytes (WAV container, 16-bit signed PCM).
+	Bytes []byte
+	// IANA MIME type of `bytes` (always `"audio/wav"` for the native
+	// backends shipped today).
+	MimeType string
+	// Sample rate in Hz, taken from the target voice's
+	// [`TargetVoice::sample_rate_hz`].
+	SampleRate uint32
+	// Duration of the clip in seconds. Zero when the backend did not
+	// report one (no extra WAV header parsing happens here).
+	DurationSeconds float32
+}
+
+func (r *VcResult) Destroy() {
+	FfiDestroyerBytes{}.Destroy(r.Bytes)
+	FfiDestroyerString{}.Destroy(r.MimeType)
+	FfiDestroyerUint32{}.Destroy(r.SampleRate)
+	FfiDestroyerFloat32{}.Destroy(r.DurationSeconds)
+}
+
+type FfiConverterVcResult struct{}
+
+var FfiConverterVcResultINSTANCE = FfiConverterVcResult{}
+
+func (c FfiConverterVcResult) Lift(rb RustBufferI) VcResult {
+	return LiftFromRustBuffer[VcResult](c, rb)
+}
+
+func (c FfiConverterVcResult) Read(reader io.Reader) VcResult {
+	return VcResult{
+		FfiConverterBytesINSTANCE.Read(reader),
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterUint32INSTANCE.Read(reader),
+		FfiConverterFloat32INSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterVcResult) Lower(value VcResult) C.RustBuffer {
+	return LowerIntoRustBuffer[VcResult](c, value)
+}
+
+func (c FfiConverterVcResult) LowerExternal(value VcResult) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[VcResult](c, value))
+}
+
+func (c FfiConverterVcResult) Write(writer io.Writer, value VcResult) {
+	FfiConverterBytesINSTANCE.Write(writer, value.Bytes)
+	FfiConverterStringINSTANCE.Write(writer, value.MimeType)
+	FfiConverterUint32INSTANCE.Write(writer, value.SampleRate)
+	FfiConverterFloat32INSTANCE.Write(writer, value.DurationSeconds)
+}
+
+type FfiDestroyerVcResult struct{}
+
+func (_ FfiDestroyerVcResult) Destroy(value VcResult) {
 	value.Destroy()
 }
 
@@ -22721,6 +23690,53 @@ func (FfiDestroyerSequencePoolStatusRecord) Destroy(sequence []PoolStatusRecord)
 	}
 }
 
+type FfiConverterSequenceTargetVoice struct{}
+
+var FfiConverterSequenceTargetVoiceINSTANCE = FfiConverterSequenceTargetVoice{}
+
+func (c FfiConverterSequenceTargetVoice) Lift(rb RustBufferI) []TargetVoice {
+	return LiftFromRustBuffer[[]TargetVoice](c, rb)
+}
+
+func (c FfiConverterSequenceTargetVoice) Read(reader io.Reader) []TargetVoice {
+	length := readInt32(reader)
+	if length == 0 {
+		return nil
+	}
+	result := make([]TargetVoice, 0, length)
+	for i := int32(0); i < length; i++ {
+		result = append(result, FfiConverterTargetVoiceINSTANCE.Read(reader))
+	}
+	return result
+}
+
+func (c FfiConverterSequenceTargetVoice) Lower(value []TargetVoice) C.RustBuffer {
+	return LowerIntoRustBuffer[[]TargetVoice](c, value)
+}
+
+func (c FfiConverterSequenceTargetVoice) LowerExternal(value []TargetVoice) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[[]TargetVoice](c, value))
+}
+
+func (c FfiConverterSequenceTargetVoice) Write(writer io.Writer, value []TargetVoice) {
+	if len(value) > math.MaxInt32 {
+		panic("[]TargetVoice is too large to fit into Int32")
+	}
+
+	writeInt32(writer, int32(len(value)))
+	for _, item := range value {
+		FfiConverterTargetVoiceINSTANCE.Write(writer, item)
+	}
+}
+
+type FfiDestroyerSequenceTargetVoice struct{}
+
+func (FfiDestroyerSequenceTargetVoice) Destroy(sequence []TargetVoice) {
+	for _, value := range sequence {
+		FfiDestroyerTargetVoice{}.Destroy(value)
+	}
+}
+
 type FfiConverterSequenceTool struct{}
 
 var FfiConverterSequenceToolINSTANCE = FfiConverterSequenceTool{}
@@ -23619,6 +24635,85 @@ func StreamGenerateSfxToSink(model *MusicModel, prompt string, durationSeconds f
 func StreamGenerateSfxToSinkBlocking(model *MusicModel, prompt string, durationSeconds float32, sink MusicStreamSink) error {
 	_, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) bool {
 		C.uniffi_blazen_uniffi_fn_func_stream_generate_sfx_to_sink_blocking(FfiConverterMusicModelINSTANCE.Lower(model), FfiConverterStringINSTANCE.Lower(prompt), FfiConverterFloat32INSTANCE.Lower(durationSeconds), FfiConverterMusicStreamSinkINSTANCE.Lower(sink), _uniffiStatus)
+		return false
+	})
+	return _uniffiErr.AsError()
+}
+
+// Build a native RVC-backed [`VcModel`].
+//
+// `voice_dir` overrides the per-process `BLAZEN_RVC_VOICE_DIR`
+// environment variable that the RVC pipeline reads to locate voice
+// profiles on disk (each voice is expected to live at
+// `<voice_dir>/<voice_id>/` with `model.pth`, `index.index`, and
+// `metadata.json`). When `None`, the existing process-environment value
+// is used unchanged. Setting this from inside the factory mutates global
+// process state via `std::env::set_var` — callers running multiple RVC
+// instances in the same process should pick a single voice directory
+// rather than racing factory calls.
+//
+// `device` accepts the same format strings as `blazen_llm::Device::parse`
+// (`"cpu"`, `"cuda"`, `"cuda:N"`, `"metal"`); `None` defers to CPU.
+func NewRvcModel(voiceDir *string, device *string) (*VcModel, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_func_new_rvc_model(FfiConverterOptionalStringINSTANCE.Lower(voiceDir), FfiConverterOptionalStringINSTANCE.Lower(device), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *VcModel
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterVcModelINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Drive a streaming voice-conversion call, dispatching each chunk to the
+// sink.
+//
+// `input_pcm` is the full source utterance as 32-bit float PCM at the
+// backend's expected source sample rate (typically 16 kHz mono for RVC).
+//
+// On success, calls `sink.on_done()` exactly once and returns `Ok(())`.
+// On a backend-side or sink-side failure, calls `sink.on_error(...)` and
+// returns `Ok(())` — error delivery is the sink's responsibility, matching
+// the convention `complete_streaming` and `stream_generate_music_to_sink`
+// established.
+//
+// The only failure mode that propagates back to the caller is a panic in
+// the sink itself or the runtime; init errors (e.g. voice-not-found,
+// backend-not-built-with-feature) are delivered through `on_error`.
+func StreamConvertPcmToSink(model *VcModel, inputPcm []float32, targetVoiceId string, sink VcStreamSink) error {
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_func_stream_convert_pcm_to_sink(FfiConverterVcModelINSTANCE.Lower(model), FfiConverterSequenceFloat32INSTANCE.Lower(inputPcm), FfiConverterStringINSTANCE.Lower(targetVoiceId), FfiConverterVcStreamSinkINSTANCE.Lower(sink)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+// Synchronous variant of [`stream_convert_pcm_to_sink`] — blocks the
+// current thread on the shared Tokio runtime.
+func StreamConvertPcmToSinkBlocking(model *VcModel, inputPcm []float32, targetVoiceId string, sink VcStreamSink) error {
+	_, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) bool {
+		C.uniffi_blazen_uniffi_fn_func_stream_convert_pcm_to_sink_blocking(FfiConverterVcModelINSTANCE.Lower(model), FfiConverterSequenceFloat32INSTANCE.Lower(inputPcm), FfiConverterStringINSTANCE.Lower(targetVoiceId), FfiConverterVcStreamSinkINSTANCE.Lower(sink), _uniffiStatus)
 		return false
 	})
 	return _uniffiErr.AsError()
