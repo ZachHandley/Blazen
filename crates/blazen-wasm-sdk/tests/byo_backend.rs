@@ -63,8 +63,7 @@ async fn byo_complete_roundtrip() {
     "#;
     let backend = make_minimal_backend("byo-test", body);
 
-    let model = byo_backend_as_model(backend)
-        .expect("BYO backend should construct as a Model");
+    let model = byo_backend_as_model(backend).expect("BYO backend should construct as a Model");
 
     // Sanity: model id round-trips (WasmModel.modelId getter returns String).
     assert_eq!(model.model_id(), "byo-test".to_string());

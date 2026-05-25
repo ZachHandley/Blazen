@@ -22,18 +22,18 @@ use blazen_events::UsageEvent;
 use blazen_llm::cache::{CacheConfig, CacheStrategy, CachedModel};
 use blazen_llm::fallback::FallbackModel;
 use blazen_llm::http::HttpClient;
-use blazen_llm::retry::{RetryModel, RetryConfig, RetryEmbeddingModel, RetryHttpClient};
-use blazen_llm::traits::{Model, EmbeddingModel};
+use blazen_llm::retry::{RetryConfig, RetryEmbeddingModel, RetryHttpClient, RetryModel};
+use blazen_llm::traits::{EmbeddingModel, Model};
 use blazen_llm::types::ModelRequest;
 use blazen_llm::usage_recording::{
-    UsageEmitter, UsageRecordingModel, UsageRecordingEmbeddingModel,
+    UsageEmitter, UsageRecordingEmbeddingModel, UsageRecordingModel,
 };
 use uuid::Uuid;
 
 use crate::chat_message::js_messages_to_vec;
-use crate::model::WasmModel;
 use crate::embedding::WasmEmbeddingModel;
 use crate::http_client::WasmHttpClient;
+use crate::model::WasmModel;
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -171,8 +171,7 @@ impl WasmFallbackModel {
                 "FallbackModel requires at least one provider",
             ));
         }
-        let providers: Vec<Arc<dyn Model>> =
-            models.into_iter().map(|m| m.inner_arc()).collect();
+        let providers: Vec<Arc<dyn Model>> = models.into_iter().map(|m| m.inner_arc()).collect();
         Ok(Self {
             inner: Arc::new(FallbackModel::new(providers)),
         })
@@ -710,12 +709,8 @@ impl WasmUsageRecordingModel {
             Uuid::new_v4()
         };
         let emitter_arc: Arc<dyn UsageEmitter> = Arc::new(JsUsageEmitter { callback: emitter });
-        let wrapped = UsageRecordingModel::from_arc(
-            model.inner_arc(),
-            emitter_arc,
-            provider_label,
-            run_id,
-        );
+        let wrapped =
+            UsageRecordingModel::from_arc(model.inner_arc(), emitter_arc, provider_label, run_id);
         Self {
             inner: Arc::new(wrapped),
         }

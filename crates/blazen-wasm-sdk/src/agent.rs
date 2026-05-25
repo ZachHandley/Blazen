@@ -107,9 +107,7 @@ fn js_to_tool_output(
             })?;
             let payload: blazen_llm::types::LlmPayload =
                 wasm_payload.try_into().map_err(|e: String| {
-                    blazen_llm::BlazenError::tool_error(format!(
-                        "invalid llmOverride payload: {e}"
-                    ))
+                    blazen_llm::BlazenError::tool_error(format!("invalid llmOverride payload: {e}"))
                 })?;
             Some(payload)
         }
@@ -137,18 +135,15 @@ impl JsTool {
         // Call the JS handler. JS-thrown Errors are preserved as
         // `CallerError` with the original `JsValue` payload so the JS caller
         // can still `instanceof` / inspect properties after the rejection.
-        let result = self
-            .handler
-            .call1(&JsValue::NULL, &js_args)
-            .map_err(|e| {
-                blazen_llm::BlazenError::caller_error(
-                    format!(
-                        "tool handler `{}` threw on invocation",
-                        self.definition.name
-                    ),
-                    send_wrapper::SendWrapper::new(e),
-                )
-            })?;
+        let result = self.handler.call1(&JsValue::NULL, &js_args).map_err(|e| {
+            blazen_llm::BlazenError::caller_error(
+                format!(
+                    "tool handler `{}` threw on invocation",
+                    self.definition.name
+                ),
+                send_wrapper::SendWrapper::new(e),
+            )
+        })?;
 
         // If the result is a Promise, await it. Rejections preserve the
         // original `JsValue` the same way.
@@ -158,10 +153,7 @@ impl JsTool {
                 .await
                 .map_err(|e| {
                     blazen_llm::BlazenError::caller_error(
-                        format!(
-                            "tool handler `{}` promise rejected",
-                            self.definition.name
-                        ),
+                        format!("tool handler `{}` promise rejected", self.definition.name),
                         send_wrapper::SendWrapper::new(e),
                     )
                 })?

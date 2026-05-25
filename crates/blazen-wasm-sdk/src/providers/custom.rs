@@ -63,7 +63,7 @@ use blazen_llm::compute::{
 use blazen_llm::error::BlazenError;
 use blazen_llm::providers::custom::{self as core_custom, CustomProvider, CustomProviderHandle};
 use blazen_llm::traits::Model;
-use blazen_llm::types::{ModelRequest, ModelResponse, EmbeddingResponse, StreamChunk};
+use blazen_llm::types::{EmbeddingResponse, ModelRequest, ModelResponse, StreamChunk};
 
 use super::base::WasmBaseProvider;
 use super::defaults::WasmProviderDefaults;
@@ -228,10 +228,7 @@ impl CustomProvider for WasmCustomProviderAdapter {
         &self.provider_id
     }
 
-    async fn complete(
-        &self,
-        request: ModelRequest,
-    ) -> Result<ModelResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         if !self.has("complete") {
             return Err(BlazenError::unsupported(
                 "CustomProvider::complete not implemented",

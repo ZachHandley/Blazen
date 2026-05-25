@@ -99,10 +99,10 @@ use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::JsFuture;
 
 use blazen_llm::traits::{
-    AdapterHandle, AdapterMountStrategy, AdapterOptions, AdapterStatus, Model,
-    EmbeddingModel, LocalModel,
+    AdapterHandle, AdapterMountStrategy, AdapterOptions, AdapterStatus, EmbeddingModel, LocalModel,
+    Model,
 };
-use blazen_llm::types::{ModelRequest, ModelResponse, EmbeddingResponse, StreamChunk};
+use blazen_llm::types::{EmbeddingResponse, ModelRequest, ModelResponse, StreamChunk};
 use blazen_llm::{BlazenError, Device};
 
 // ---------------------------------------------------------------------------
@@ -386,10 +386,7 @@ impl JsBackendShim {
     // the trait boundary).
     // -----------------------------------------------------------------------
 
-    async fn complete_impl(
-        &self,
-        request: ModelRequest,
-    ) -> Result<ModelResponse, BlazenError> {
+    async fn complete_impl(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         let js_req = serde_wasm_bindgen::to_value(&request)
             .map_err(|e| BlazenError::provider("byo_backend", e.to_string()))?;
 
@@ -710,10 +707,7 @@ impl Model for JsBackendShim {
         &self.model_id
     }
 
-    async fn complete(
-        &self,
-        request: ModelRequest,
-    ) -> Result<ModelResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         SendFuture(self.complete_impl(request)).await
     }
 
@@ -813,9 +807,7 @@ export interface BlazenJsBackend {
 /// not a JS object, the required `complete` method is missing or not a
 /// function, or any optional method key is present but not a function.
 #[wasm_bindgen(js_name = "byoBackendAsModel")]
-pub fn byo_backend_as_model(
-    backend: JsValue,
-) -> Result<crate::model::WasmModel, JsValue> {
+pub fn byo_backend_as_model(backend: JsValue) -> Result<crate::model::WasmModel, JsValue> {
     let shim: Arc<dyn Model> = Arc::new(JsBackendShim::from_js(backend)?);
     Ok(crate::model::WasmModel::from_arc(shim))
 }

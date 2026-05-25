@@ -16,7 +16,7 @@ use blazen_llm::providers::azure::AzureOpenAiProvider;
 use blazen_llm::providers::fal::FalProvider;
 use blazen_llm::providers::gemini::GeminiProvider;
 use blazen_llm::providers::openai_compat::{AuthMethod, OpenAiCompatConfig, OpenAiCompatProvider};
-use blazen_llm::retry::{RetryModel, RetryConfig};
+use blazen_llm::retry::{RetryConfig, RetryModel};
 use blazen_llm::traits::Model;
 use blazen_llm::types::ModelRequest;
 
@@ -366,10 +366,7 @@ impl WasmModel {
     /// Requires `resourceName` and `deploymentName` — Azure does not have a
     /// single global endpoint.
     #[wasm_bindgen(js_name = "azure")]
-    pub fn azure(
-        resource_name: &str,
-        deployment_name: &str,
-    ) -> Result<WasmModel, JsValue> {
+    pub fn azure(resource_name: &str, deployment_name: &str) -> Result<WasmModel, JsValue> {
         let api_key = blazen_llm::keys::resolve_api_key("azure", None)
             .map_err(|e| JsValue::from_str(&e.to_string()))?;
         let client: Arc<dyn HttpClient> = FetchHttpClient::new().into_arc();
@@ -499,10 +496,7 @@ impl WasmModel {
     /// ```
     #[allow(clippy::needless_pass_by_value)] // wasm_bindgen requires owned args
     #[wasm_bindgen(js_name = "webLlm")]
-    pub fn web_llm(
-        model_id: String,
-        options: Option<WebLlmOptions>,
-    ) -> Result<WasmModel, JsValue> {
+    pub fn web_llm(model_id: String, options: Option<WebLlmOptions>) -> Result<WasmModel, JsValue> {
         let temperature = options.as_ref().map_or(0.7, |o| o.temperature);
         let max_tokens = options.as_ref().map_or(512, |o| o.max_tokens);
 
@@ -604,10 +598,7 @@ impl WasmModel {
             ..RetryConfig::default()
         };
         WasmModel {
-            inner: Arc::new(RetryModel::from_arc(
-                Arc::clone(&self.inner),
-                config,
-            )),
+            inner: Arc::new(RetryModel::from_arc(Arc::clone(&self.inner), config)),
         }
     }
 
@@ -625,8 +616,7 @@ impl WasmModel {
     /// ```
     #[wasm_bindgen(js_name = "withFallback")]
     pub fn with_fallback(models: Vec<WasmModel>) -> WasmModel {
-        let providers: Vec<Arc<dyn Model>> =
-            models.into_iter().map(|m| m.inner).collect();
+        let providers: Vec<Arc<dyn Model>> = models.into_iter().map(|m| m.inner).collect();
         WasmModel {
             inner: Arc::new(FallbackModel::new(providers)),
         }
@@ -646,21 +636,14 @@ impl WasmModel {
     /// const cached = model.withCache(600, 500);
     /// ```
     #[wasm_bindgen(js_name = "withCache")]
-    pub fn with_cache(
-        &self,
-        ttl_seconds: Option<u32>,
-        max_entries: Option<u32>,
-    ) -> WasmModel {
+    pub fn with_cache(&self, ttl_seconds: Option<u32>, max_entries: Option<u32>) -> WasmModel {
         let config = CacheConfig {
             ttl_seconds: u64::from(ttl_seconds.unwrap_or(300)),
             max_entries: max_entries.unwrap_or(1000) as usize,
             ..CacheConfig::default()
         };
         WasmModel {
-            inner: Arc::new(CachedModel::from_arc(
-                Arc::clone(&self.inner),
-                config,
-            )),
+            inner: Arc::new(CachedModel::from_arc(Arc::clone(&self.inner), config)),
         }
     }
 
@@ -823,11 +806,7 @@ impl WasmModel {
 /// const res = await model.complete([ChatMessage.user('Hello!')]);
 /// ```
 #[wasm_bindgen(js_name = "createOllamaProvider")]
-pub fn create_ollama_provider(
-    host: &str,
-    port: u16,
-    model: &str,
-) -> Result<WasmModel, JsValue> {
+pub fn create_ollama_provider(host: &str, port: u16, model: &str) -> Result<WasmModel, JsValue> {
     let provider = blazen_llm::ollama(host, port, model);
     Ok(WasmModel::from_arc(Arc::new(provider)))
 }
@@ -842,11 +821,7 @@ pub fn create_ollama_provider(
 /// const model = createLmStudioProvider('localhost', 1234, 'qwen2.5-7b-instruct');
 /// ```
 #[wasm_bindgen(js_name = "createLmStudioProvider")]
-pub fn create_lm_studio_provider(
-    host: &str,
-    port: u16,
-    model: &str,
-) -> Result<WasmModel, JsValue> {
+pub fn create_lm_studio_provider(host: &str, port: u16, model: &str) -> Result<WasmModel, JsValue> {
     let provider = blazen_llm::lm_studio(host, port, model);
     Ok(WasmModel::from_arc(Arc::new(provider)))
 }

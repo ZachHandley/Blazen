@@ -133,10 +133,7 @@ impl JsModelHandler {
     }
 
     /// Internal non-Send async complete implementation.
-    async fn complete_impl(
-        &self,
-        request: ModelRequest,
-    ) -> Result<ModelResponse, BlazenError> {
+    async fn complete_impl(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         // Serialize the request to a JS value.
         let js_request = serde_wasm_bindgen::to_value(&request)
             .map_err(|e| BlazenError::provider("js_handler", e.to_string()))?;
@@ -217,10 +214,7 @@ impl blazen_llm::traits::Model for JsModelHandler {
         &self.model_id
     }
 
-    async fn complete(
-        &self,
-        request: ModelRequest,
-    ) -> Result<ModelResponse, BlazenError> {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
         // SAFETY: WASM is single-threaded, Send is vacuously satisfied.
         SendFuture(self.complete_impl(request)).await
     }

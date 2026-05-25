@@ -283,7 +283,10 @@ fn require_string_field(
         })
 }
 
-fn parse_json_value(resp: &HttpResponse, label: &'static str) -> Result<serde_json::Value, JsValue> {
+fn parse_json_value(
+    resp: &HttpResponse,
+    label: &'static str,
+) -> Result<serde_json::Value, JsValue> {
     if resp.body.is_empty() {
         return Ok(serde_json::Value::Null);
     }
@@ -657,9 +660,8 @@ impl ModelClient {
             let url = join_url(&endpoint, &format!("/v1/blazen/adapters/{model_id}"));
             let resp = http_get_json(&http, url, token.as_deref(), "listAdapters").await?;
             let json = parse_json_value(&resp, "listAdapters")?;
-            serde_wasm_bindgen::to_value(&json).map_err(|e| {
-                JsValue::from_str(&format!("listAdapters: serialize JSON to JS: {e}"))
-            })
+            serde_wasm_bindgen::to_value(&json)
+                .map_err(|e| JsValue::from_str(&format!("listAdapters: serialize JSON to JS: {e}")))
         }))
     }
 
@@ -728,8 +730,7 @@ impl ModelClient {
             let _ = require_string_field(&body, "model", "generateImage")?;
             let _ = require_string_field(&body, "prompt", "generateImage")?;
             let url = join_url(&endpoint, "/v1/images/generations");
-            let resp =
-                http_post_json(&http, url, &body, token.as_deref(), "generateImage").await?;
+            let resp = http_post_json(&http, url, &body, token.as_deref(), "generateImage").await?;
             let json = parse_json_value(&resp, "generateImage")?;
             serde_wasm_bindgen::to_value(&json).map_err(|e| {
                 JsValue::from_str(&format!("generateImage: serialize JSON to JS: {e}"))
@@ -824,8 +825,8 @@ impl ModelClient {
         future_to_promise(SendFuture(async move {
             // Pull the audio bytes off the JS object directly so we can
             // accept Uint8Array without round-tripping through JSON.
-            let audio_val = js_sys::Reflect::get(&request, &JsValue::from_str("audio"))
-                .map_err(|e| {
+            let audio_val =
+                js_sys::Reflect::get(&request, &JsValue::from_str("audio")).map_err(|e| {
                     JsValue::from_str(&format!("transcribe: read 'audio' field: {e:?}"))
                 })?;
             if audio_val.is_undefined() || audio_val.is_null() {
@@ -877,7 +878,10 @@ impl ModelClient {
             let push_str = |b: &mut Vec<u8>, s: &str| b.extend_from_slice(s.as_bytes());
 
             push_str(&mut body, &format!("--{boundary}\r\n"));
-            push_str(&mut body, "Content-Disposition: form-data; name=\"model\"\r\n\r\n");
+            push_str(
+                &mut body,
+                "Content-Disposition: form-data; name=\"model\"\r\n\r\n",
+            );
             push_str(&mut body, &model);
             push_str(&mut body, "\r\n");
 
@@ -955,9 +959,8 @@ impl ModelClient {
         if let Some(obj) = body.as_object_mut() {
             obj.insert("stream".to_owned(), serde_json::Value::Bool(true));
         }
-        let body_bytes = serde_json::to_vec(&body).map_err(|e| {
-            JsValue::from_str(&format!("streamComplete: serialize body: {e}"))
-        })?;
+        let body_bytes = serde_json::to_vec(&body)
+            .map_err(|e| JsValue::from_str(&format!("streamComplete: serialize body: {e}")))?;
 
         let url = join_url(&self.endpoint, "/v1/chat/completions");
         let token = self.bearer_token.clone();
@@ -974,7 +977,9 @@ impl ModelClient {
                 let token = token.clone();
                 let body_bytes = body_bytes.clone();
                 wasm_bindgen_futures::spawn_local(async move {
-                    if let Err(err) = drive_stream_complete(&controller, url, token, body_bytes).await {
+                    if let Err(err) =
+                        drive_stream_complete(&controller, url, token, body_bytes).await
+                    {
                         controller.error_with_e(&err);
                     }
                 });
@@ -1139,9 +1144,9 @@ async fn drive_stream_complete(
     if !response.ok() {
         // Drain the body for a clean error message, then bail.
         let status = response.status();
-        let text_promise = response.text().map_err(|e| {
-            JsValue::from_str(&format!("streamComplete: error body text(): {e:?}"))
-        })?;
+        let text_promise = response
+            .text()
+            .map_err(|e| JsValue::from_str(&format!("streamComplete: error body text(): {e:?}")))?;
         let text = wasm_bindgen_futures::JsFuture::from(text_promise)
             .await
             .map_err(|e| JsValue::from_str(&format!("streamComplete: error body await: {e:?}")))?;
@@ -1295,9 +1300,8 @@ fn process_event(
             "streamComplete: parse SSE data JSON: {e} (payload: {data})"
         ))
     })?;
-    let js_value = serde_wasm_bindgen::to_value(&parsed).map_err(|e| {
-        JsValue::from_str(&format!("streamComplete: serialize SSE chunk: {e}"))
-    })?;
+    let js_value = serde_wasm_bindgen::to_value(&parsed)
+        .map_err(|e| JsValue::from_str(&format!("streamComplete: serialize SSE chunk: {e}")))?;
     controller
         .enqueue_with_chunk(&js_value)
         .map_err(|e| JsValue::from_str(&format!("streamComplete: enqueue: {e:?}")))?;

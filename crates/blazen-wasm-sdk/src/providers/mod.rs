@@ -49,9 +49,8 @@ pub use compat_providers::{
 pub use custom::WasmCustomProvider;
 pub use defaults::{
     WasmAudioMusicProviderDefaults, WasmAudioSpeechProviderDefaults,
-    WasmBackgroundRemovalProviderDefaults, WasmBaseProviderDefaults,
-    WasmProviderDefaults, WasmEmbeddingProviderDefaults,
-    WasmImageGenerationProviderDefaults, WasmImageUpscaleProviderDefaults,
+    WasmBackgroundRemovalProviderDefaults, WasmBaseProviderDefaults, WasmEmbeddingProviderDefaults,
+    WasmImageGenerationProviderDefaults, WasmImageUpscaleProviderDefaults, WasmProviderDefaults,
     WasmThreeDProviderDefaults, WasmTranscriptionProviderDefaults, WasmVideoProviderDefaults,
     WasmVoiceCloningProviderDefaults,
 };
@@ -146,10 +145,7 @@ pub(crate) fn apply_request_options(
 
 /// Run a non-streaming completion through `model`, converting messages from
 /// a JS array and the response back to a JS object.
-pub(crate) fn complete_promise(
-    model: Arc<dyn Model>,
-    messages: JsValue,
-) -> js_sys::Promise {
+pub(crate) fn complete_promise(model: Arc<dyn Model>, messages: JsValue) -> js_sys::Promise {
     future_to_promise(async move {
         let msgs = js_messages_to_vec(&messages)?;
         let request = ModelRequest::new(msgs);

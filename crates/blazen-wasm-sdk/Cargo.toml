@@ -71,6 +71,7 @@ uuid = { version = "1", default-features = false, features = ["v4", "serde"] }
 send_wrapper = "0.6"
 blazen-3d = { version = "0.0.0-dev", path = "../blazen-3d", default-features = false, optional = true }
 blazen-audio-music = { version = "0.0.0-dev", path = "../blazen-audio-music", default-features = false }
+blazen-audio-vc = { version = "0.0.0-dev", path = "../blazen-audio-vc", default-features = false }
 
 [features]
 default = []

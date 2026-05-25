@@ -33,11 +33,11 @@ use wasm_bindgen::prelude::*;
 
 use blazen_llm::cache::{CacheConfig, CachedModel};
 use blazen_llm::middleware::{CacheMiddleware, Middleware, RetryMiddleware};
-use blazen_llm::retry::{RetryModel, RetryConfig};
+use blazen_llm::retry::{RetryConfig, RetryModel};
 use blazen_llm::traits::Model;
 
-use crate::model::WasmModel;
 use crate::decorators::{build_cache_config, build_retry_config};
+use crate::model::WasmModel;
 
 // ---------------------------------------------------------------------------
 // Internal: a Middleware impl that delegates to a JS function.
@@ -119,10 +119,8 @@ impl WasmRetryMiddleware {
     /// configuration object be reused across multiple stacks.
     #[wasm_bindgen]
     pub fn wrap(&self, model: &WasmModel) -> WasmModel {
-        let wrapped: Arc<dyn Model> = Arc::new(RetryModel::from_arc(
-            model.inner_arc(),
-            self.config.clone(),
-        ));
+        let wrapped: Arc<dyn Model> =
+            Arc::new(RetryModel::from_arc(model.inner_arc(), self.config.clone()));
         WasmModel::from_arc(wrapped)
     }
 }

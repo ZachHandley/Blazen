@@ -172,6 +172,14 @@ export interface VoiceHandlers {
     listVoices: () => Promise<any> | any;
     deleteVoice: (voice: any) => Promise<any> | any;
 }
+
+/** Handlers for VcProvider. */
+export interface VcHandlers {
+    convertVoice:         (request: any) => Promise<WasmVcResult> | WasmVcResult;
+    listTargetVoices?:    () => Promise<WasmTargetVoice[]> | WasmTargetVoice[];
+    registerTargetVoice?: (request: any) => Promise<void> | void;
+    streamConvert?:       (request: any, onChunk: (chunk: WasmVcChunk) => void) => Promise<void>;
+}
 "#;
 
 // ===========================================================================
@@ -657,6 +665,130 @@ impl WasmVoiceProvider {
         let handlers = self.handlers.clone();
         future_to_promise(SendFuture(async move {
             call_handler(&handlers, "deleteVoice", &voice).await
+        }))
+    }
+}
+
+// ===========================================================================
+// 8. VcProvider (Retrieval-based Voice Conversion)
+// ===========================================================================
+
+/// A voice-conversion provider (RVC and friends) backed by JavaScript
+/// handler functions.
+///
+/// RVC's native `rvc` feature does not compile to `wasm32` (the
+/// underlying `tract-onnx` / `candle` / `instant-distance` / `hf-hub`
+/// stack is native-only), so the WASM SDK only exposes the
+/// JS-implementable capability surface. A typical JS handler will
+/// forward the request to a remote inference endpoint:
+///
+/// ```js
+/// const vc = new VcProvider('my-rvc', {
+///   convertVoice: async (req) => {
+///     const res = await fetch('/api/vc/convert', { method: 'POST', body: JSON.stringify(req) });
+///     return await res.json(); // shape: WasmVcResult
+///   },
+///   listTargetVoices: async () => {
+///     const res = await fetch('/api/vc/voices');
+///     return await res.json(); // shape: WasmTargetVoice[]
+///   },
+///   registerTargetVoice: async (req) => {
+///     await fetch('/api/vc/voices', { method: 'POST', body: JSON.stringify(req) });
+///   },
+///   streamConvert: async (req, onChunk) => {
+///     const reader = (await fetch('/api/vc/stream', { method: 'POST', body: JSON.stringify(req) })).body.getReader();
+///     for (;;) {
+///       const { value, done } = await reader.read();
+///       if (done) break;
+///       onChunk(JSON.parse(new TextDecoder().decode(value))); // shape: WasmVcChunk
+///     }
+///   },
+/// });
+/// const result = await vc.convertVoice({ sourceWavBytes: pcm, targetVoiceId: 'alice' });
+/// ```
+#[wasm_bindgen(js_name = "VcProvider")]
+pub struct WasmVcProvider {
+    provider_id: String,
+    handlers: JsValue,
+}
+
+// SAFETY: WASM is single-threaded.
+unsafe impl Send for WasmVcProvider {}
+unsafe impl Sync for WasmVcProvider {}
+
+#[wasm_bindgen(js_class = "VcProvider")]
+impl WasmVcProvider {
+    /// Create a new voice-conversion provider.
+    ///
+    /// @param providerId - Short identifier (e.g. `"rvc"`).
+    /// @param handlers   - Object implementing the [`VcHandlers`]
+    ///                     interface: `convertVoice` is required,
+    ///                     `listTargetVoices`, `registerTargetVoice`,
+    ///                     and `streamConvert` are optional.
+    #[wasm_bindgen(constructor)]
+    pub fn new(provider_id: &str, handlers: JsValue) -> Self {
+        Self {
+            provider_id: provider_id.to_owned(),
+            handlers,
+        }
+    }
+
+    /// The provider identifier.
+    #[wasm_bindgen(getter, js_name = "providerId")]
+    pub fn provider_id(&self) -> String {
+        self.provider_id.clone()
+    }
+
+    /// Convert source audio to the requested target voice.
+    ///
+    /// Delegates to the JS-side `convertVoice` handler; the handler
+    /// must resolve to an object matching the `WasmVcResult` shape.
+    #[wasm_bindgen(js_name = "convertVoice")]
+    pub fn convert_voice(&self, request: JsValue) -> js_sys::Promise {
+        let handlers = self.handlers.clone();
+        future_to_promise(SendFuture(async move {
+            call_handler(&handlers, "convertVoice", &request).await
+        }))
+    }
+
+    /// List target voices known to the backend.
+    ///
+    /// Delegates to the JS-side `listTargetVoices` handler (optional);
+    /// the handler must resolve to an array matching the
+    /// `WasmTargetVoice[]` shape.
+    #[wasm_bindgen(js_name = "listTargetVoices")]
+    pub fn list_target_voices(&self) -> js_sys::Promise {
+        let handlers = self.handlers.clone();
+        future_to_promise(SendFuture(async move {
+            call_handler_nullary(&handlers, "listTargetVoices").await
+        }))
+    }
+
+    /// Register (upload / install) a new target voice with the backend.
+    ///
+    /// Delegates to the JS-side `registerTargetVoice` handler (optional);
+    /// the handler should resolve to `undefined` on success.
+    #[wasm_bindgen(js_name = "registerTargetVoice")]
+    pub fn register_target_voice(&self, request: JsValue) -> js_sys::Promise {
+        let handlers = self.handlers.clone();
+        future_to_promise(SendFuture(async move {
+            call_handler(&handlers, "registerTargetVoice", &request).await
+        }))
+    }
+
+    /// Stream-convert source audio to the requested target voice.
+    ///
+    /// Delegates to the JS-side `streamConvert` handler (optional),
+    /// which must invoke `callback(chunk)` for each emitted
+    /// [`crate::compute::results::WasmVcChunk`] and resolve its
+    /// returned promise once the final chunk has been delivered.
+    /// Backends that don't truly stream are expected to emit a single
+    /// chunk with `isFinal: true`.
+    #[wasm_bindgen(js_name = "streamConvert")]
+    pub fn stream_convert(&self, request: JsValue, callback: js_sys::Function) -> js_sys::Promise {
+        let handlers = self.handlers.clone();
+        future_to_promise(SendFuture(async move {
+            call_handler_with_callback(&handlers, "streamConvert", &request, &callback).await
         }))
     }
 }

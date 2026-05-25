@@ -258,9 +258,7 @@ fn js_to_tool_output(
             })?;
             let payload: blazen_llm::types::LlmPayload =
                 wasm_payload.try_into().map_err(|e: String| {
-                    blazen_llm::BlazenError::tool_error(format!(
-                        "invalid llmOverride payload: {e}"
-                    ))
+                    blazen_llm::BlazenError::tool_error(format!("invalid llmOverride payload: {e}"))
                 })?;
             Some(payload)
         }
@@ -280,18 +278,15 @@ impl JsTool {
         // JS-thrown Errors are preserved as `CallerError` with the original
         // `JsValue` payload so JS callers can still `instanceof` / inspect
         // properties after the rejection.
-        let result = self
-            .handler
-            .call1(&JsValue::NULL, &js_args)
-            .map_err(|e| {
-                blazen_llm::BlazenError::caller_error(
-                    format!(
-                        "tool handler `{}` threw on invocation",
-                        self.definition.name
-                    ),
-                    send_wrapper::SendWrapper::new(e),
-                )
-            })?;
+        let result = self.handler.call1(&JsValue::NULL, &js_args).map_err(|e| {
+            blazen_llm::BlazenError::caller_error(
+                format!(
+                    "tool handler `{}` threw on invocation",
+                    self.definition.name
+                ),
+                send_wrapper::SendWrapper::new(e),
+            )
+        })?;
 
         let result = if result.has_type::<js_sys::Promise>() {
             let promise: js_sys::Promise = result.unchecked_into();
@@ -299,10 +294,7 @@ impl JsTool {
                 .await
                 .map_err(|e| {
                     blazen_llm::BlazenError::caller_error(
-                        format!(
-                            "tool handler `{}` promise rejected",
-                            self.definition.name
-                        ),
+                        format!("tool handler `{}` promise rejected", self.definition.name),
                         send_wrapper::SendWrapper::new(e),
                     )
                 })?
@@ -681,9 +673,7 @@ impl TryFrom<WasmLlmPayload> for blazen_llm::types::LlmPayload {
 fn wasm_content_part_to_rust(
     part: WasmContentPart,
 ) -> Result<blazen_llm::types::ContentPart, String> {
-    use blazen_llm::types::{
-        AudioContent, ContentPart, FileContent, ImageContent, VideoContent,
-    };
+    use blazen_llm::types::{AudioContent, ContentPart, FileContent, ImageContent, VideoContent};
 
     match part.part_type.as_str() {
         "text" => Ok(ContentPart::Text {
@@ -734,9 +724,7 @@ fn wasm_content_part_to_rust(
     }
 }
 
-fn wasm_image_source_to_rust(
-    s: WasmImageSource,
-) -> Result<blazen_llm::types::ImageSource, String> {
+fn wasm_image_source_to_rust(s: WasmImageSource) -> Result<blazen_llm::types::ImageSource, String> {
     use blazen_llm::types::ImageSource;
     match s.source_type.as_str() {
         "url" => Ok(ImageSource::Url {
@@ -753,9 +741,7 @@ fn wasm_image_source_to_rust(
     }
 }
 
-fn wasm_media_source_to_rust(
-    s: WasmMediaSource,
-) -> Result<blazen_llm::types::MediaSource, String> {
+fn wasm_media_source_to_rust(s: WasmMediaSource) -> Result<blazen_llm::types::MediaSource, String> {
     use blazen_llm::types::MediaSource;
     match s.source_type.as_str() {
         "url" => Ok(MediaSource::Url {
