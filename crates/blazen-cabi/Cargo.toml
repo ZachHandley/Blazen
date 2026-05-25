@@ -75,6 +75,8 @@ local-all = [
     "whispercpp",
     "tts",
     "audio-music-stable-audio",
+    "audio-music-musicgen",
+    "audio-music-audiogen",
     "tiktoken",
     "distributed",
     "otlp",
@@ -86,6 +88,10 @@ local-all = [
 
 # Stable Audio (latent diffusion text-to-music).
 audio-music-stable-audio = ["blazen-uniffi/audio-music-stable-audio"]
+# MusicGen (Meta's text-to-music; small / medium / large variants).
+audio-music-musicgen = ["blazen-uniffi/audio-music-musicgen"]
+# AudioGen (Meta's text-to-SFX).
+audio-music-audiogen = ["blazen-uniffi/audio-music-audiogen"]
 audio-stt-whisper-streaming = ["blazen-uniffi/audio-stt-whisper-streaming"]
 audio-stt-faster-whisper = ["blazen-uniffi/audio-stt-faster-whisper"]
 audio-tts-bark = ["blazen-uniffi/audio-tts-bark"]

@@ -489,6 +489,44 @@ typedef struct BlazenModelStatus BlazenModelStatus;
 typedef struct BlazenModelStatusList BlazenModelStatusList;
 
 /**
+ * Opaque handle wrapping [`InnerMusicChunk`].
+ *
+ * Produced by the music-stream sink trampoline (one allocation per
+ * streamed chunk) and handed to the foreign-side `on_chunk` callback. The
+ * foreign callback OWNS the chunk and MUST release it via
+ * [`blazen_music_chunk_free`] before returning.
+ *
+ * Wire-format: `samples` is 32-bit float PCM in `[-1.0, 1.0]` at the
+ * backend's sample rate; `is_final` is a UI hint (the canonical
+ * end-of-stream marker is the sink's `on_done` callback);
+ * `latency_seconds` is the per-chunk measured latency from call-start
+ * (None when unreported).
+ */
+typedef struct BlazenMusicChunk BlazenMusicChunk;
+
+/**
+ * Opaque handle wrapping an `Arc<blazen_uniffi::compute_music::MusicModel>`.
+ *
+ * Produced by the per-backend factory functions
+ * ([`blazen_music_model_new_fal`], [`blazen_music_model_new_musicgen`],
+ * [`blazen_music_model_new_stable_audio`],
+ * [`blazen_music_model_new_audiogen`]). Free with
+ * [`blazen_music_model_free`].
+ */
+typedef struct BlazenMusicModel BlazenMusicModel;
+
+/**
+ * Opaque handle wrapping [`InnerMusicResult`].
+ *
+ * Produced by the cabi `MusicModel::generate_music` / `generate_sfx`
+ * wrappers and by the typed `blazen_future_take_music_result` taker.
+ * Holds the encoded audio payload (empty when the provider only returned
+ * a URL), MIME type, sample rate, channel count, duration, and an
+ * optional URL.
+ */
+typedef struct BlazenMusicResult BlazenMusicResult;
+
+/**
  * Opaque wrapper around `blazen_uniffi::peer::PeerClient`.
  *
  * The inner `Arc` matches the `self: Arc<Self>` shape of the underlying
@@ -1856,6 +1894,57 @@ typedef struct {
 
 /**
  * Function-pointer vtable a foreign caller fills out to implement
+ * [`MusicStreamSink`] across the C ABI.
+ *
+ * All three callbacks plus `drop_user_data` are required. The vtable is
+ * consumed by the music stream-pump functions below
+ * ([`blazen_music_model_stream_generate_music`] /
+ * [`blazen_music_model_stream_generate_music_blocking`] /
+ * [`blazen_music_model_stream_generate_sfx`] /
+ * [`blazen_music_model_stream_generate_sfx_blocking`]); they take ownership
+ * of `user_data` and the function pointers for the lifetime of the streaming
+ * call. `drop_user_data` runs exactly once when the wrapping
+ * [`CMusicStreamSink`] drops (after the stream has terminated, or on an
+ * early-return failure path before the stream starts).
+ */
+typedef struct {
+    /**
+     * Opaque foreign-side context handed back to each callback. Owned by
+     * this vtable struct; released via `drop_user_data` when the wrapper
+     * drops.
+     */
+    void *user_data;
+    /**
+     * Invoked exactly once when the wrapping `CMusicStreamSink` drops.
+     * Implementations should reclaim and release `user_data`.
+     */
+    void (*drop_user_data)(void *user_data);
+    /**
+     * Receive a single chunk. `chunk` is caller-owned; the callback MUST
+     * free it via [`crate::compute_records::blazen_music_chunk_free`] (or
+     * consume it into a derivative structure). Returns `0` on success or
+     * `-1` on failure (writing a fresh `*mut BlazenError` into `*out_err`).
+     * A `-1` aborts the stream.
+     */
+    int32_t (*on_chunk)(void *user_data, BlazenMusicChunk *chunk, BlazenError **out_err);
+    /**
+     * Receive the terminal completion signal. Music streams carry no
+     * auxiliary `on_done` payload (no finish reason, no token usage).
+     * Returns `0` on success or `-1` on failure (writing a fresh
+     * `*mut BlazenError` into `*out_err`).
+     */
+    int32_t (*on_done)(void *user_data, BlazenError **out_err);
+    /**
+     * Receive a fatal error from the stream. `err` is a caller-owned
+     * `*mut BlazenError` freed via `blazen_error_free`. Returns `0` on
+     * success or `-1` on failure (writing the callback's own error into
+     * `*out_err`).
+     */
+    int32_t (*on_error)(void *user_data, BlazenError *err, BlazenError **out_err);
+} BlazenMusicStreamSinkVTable;
+
+/**
+ * Function-pointer vtable a foreign caller fills out to implement
  * [`ToolHandler`] across the C ABI.
  *
  * `user_data` is opaque to Rust — it's whatever the foreign side wants to
@@ -2618,6 +2707,221 @@ int32_t blazen_image_gen_model_new_diffusion(const char *model_id,
                                              BlazenError **out_err);
 
 /**
+ * Frees a `BlazenMusicModel` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by the cabi
+ * surface's music factory functions. Double-free is undefined behavior.
+ */
+ void blazen_music_model_free(BlazenMusicModel *model);
+
+/**
+ * Build a fal.ai-backed [`BlazenMusicModel`].
+ *
+ * `api_key` must be a NUL-terminated UTF-8 buffer (empty is allowed — the
+ * upstream factory resolves `FAL_KEY` from the environment in that case).
+ * `model` may be null to leave the default fal music / SFX endpoint in
+ * place; pass a NUL-terminated UTF-8 buffer to override.
+ *
+ * On success returns `0` and writes a fresh `BlazenMusicModel*` into
+ * `*out_model`. On failure returns `-1` and writes a fresh `BlazenError*`
+ * into `*out_err`. Returns `-2` on invalid argument shape (null
+ * `api_key`).
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `model` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_model` and `out_err` must each be null OR point to a writable slot
+ *   of the matching pointer type.
+ */
+
+int32_t blazen_music_model_new_fal(const char *api_key,
+                                   const char *model,
+                                   BlazenMusicModel **out_model,
+                                   BlazenError **out_err);
+
+/**
+ * Build a native MusicGen-backed [`BlazenMusicModel`].
+ *
+ * `variant` selects the `MusicGen` checkpoint by name (case-insensitive:
+ * `"small"`, `"medium"`, `"large"`); pass null to default to `"small"`.
+ * `device` follows `blazen_llm::Device::parse` (`"cpu"`, `"cuda"`,
+ * `"cuda:N"`, `"metal"`, `"metal:N"`); null defers to the backend's
+ * auto-detection. `cache_dir` overrides the Hugging Face Hub cache
+ * directory. `max_duration_seconds` follows the NaN-as-`None` encoding
+ * (see [`opt_f32_from_f32`]); `None` defaults to 30 s upstream.
+ *
+ * # Safety
+ *
+ * - `variant` / `device` / `cache_dir` must each be null OR a valid
+ *   NUL-terminated UTF-8 buffer.
+ * - `out_model` and `out_err` must each be null OR point to a writable slot
+ *   of the matching pointer type.
+ */
+
+int32_t blazen_music_model_new_musicgen(const char *variant,
+                                        const char *device,
+                                        const char *cache_dir,
+                                        float max_duration_seconds,
+                                        BlazenMusicModel **out_model,
+                                        BlazenError **out_err);
+
+/**
+ * Build a native Stable Audio Open-backed [`BlazenMusicModel`].
+ *
+ * `variant` selects the Stable Audio Open checkpoint by name
+ * (case-insensitive: `"small"`, `"open-1.0"` / `"open1.0"`); pass null to
+ * default to `"small"`. `tokenizer_path` is REQUIRED — it must point at
+ * the T5 `SentencePiece` `tokenizer.json` shipped with the Stable Audio
+ * Open repo (Stable Audio's tokenizer is not auto-downloaded by the
+ * backend today). `device` follows the same device-string format as the
+ * `MusicGen` factory. `max_duration_seconds` follows the NaN-as-`None`
+ * encoding; Stable Audio enforces its own variant-dependent ceiling
+ * internally regardless.
+ *
+ * Returns `0` on success, `-1` on a backend init failure, or `-2` on an
+ * invalid argument shape (null `tokenizer_path`).
+ *
+ * # Safety
+ *
+ * - `tokenizer_path` must be a valid NUL-terminated UTF-8 buffer
+ *   (non-null).
+ * - `variant` / `device` must each be null OR a valid NUL-terminated UTF-8
+ *   buffer.
+ * - `out_model` and `out_err` must each be null OR point to a writable slot
+ *   of the matching pointer type.
+ */
+
+int32_t blazen_music_model_new_stable_audio(const char *variant,
+                                            const char *tokenizer_path,
+                                            const char *device,
+                                            float max_duration_seconds,
+                                            BlazenMusicModel **out_model,
+                                            BlazenError **out_err);
+
+/**
+ * Build a native AudioGen-backed [`BlazenMusicModel`].
+ *
+ * `repo_id` overrides the default Hugging Face repo
+ * (`facebook/audiogen-medium`); pass null to use the default. `revision`
+ * pins a specific commit / tag. `device` / `cache_dir` /
+ * `max_duration_seconds` follow the `MusicGen` factory's conventions.
+ *
+ * # Safety
+ *
+ * - `repo_id` / `revision` / `device` / `cache_dir` must each be null OR a
+ *   valid NUL-terminated UTF-8 buffer.
+ * - `out_model` and `out_err` must each be null OR point to a writable slot
+ *   of the matching pointer type.
+ */
+
+int32_t blazen_music_model_new_audiogen(const char *repo_id,
+                                        const char *revision,
+                                        const char *device,
+                                        const char *cache_dir,
+                                        float max_duration_seconds,
+                                        BlazenMusicModel **out_model,
+                                        BlazenError **out_err);
+
+/**
+ * Synchronously generate `duration_seconds` of music conditioned on
+ * `prompt` and write the result into `out_result` on success, or a
+ * `BlazenError` into `out_err` on failure.
+ *
+ * Returns `0` on success, `-1` on failure, `-2` on invalid input (null
+ * model / null or non-UTF-8 `prompt`).
+ *
+ * # Safety
+ *
+ * - `model` must be a valid pointer to a `BlazenMusicModel` produced by
+ *   the cabi surface.
+ * - `prompt` must be a valid NUL-terminated UTF-8 buffer.
+ * - `out_result` / `out_err` must each be null OR writable pointers to the
+ *   appropriate slot.
+ */
+
+int32_t blazen_music_model_generate_music_blocking(const BlazenMusicModel *model,
+                                                   const char *prompt,
+                                                   float duration_seconds,
+                                                   BlazenMusicResult **out_result,
+                                                   BlazenError **out_err);
+
+/**
+ * Asynchronously generate `duration_seconds` of music conditioned on
+ * `prompt`. Returns a `*mut BlazenFuture` the caller polls / waits on;
+ * the typed result is popped with
+ * [`blazen_future_take_music_result`].
+ *
+ * Returns null if `model` is null or `prompt` is null / non-UTF-8.
+ *
+ * # Safety
+ *
+ * Same string contracts as
+ * [`blazen_music_model_generate_music_blocking`].
+ */
+
+BlazenFuture *blazen_music_model_generate_music(const BlazenMusicModel *model,
+                                                const char *prompt,
+                                                float duration_seconds);
+
+/**
+ * Synchronously generate `duration_seconds` of sound-effect audio
+ * conditioned on `prompt`. Result / error / status codes mirror
+ * [`blazen_music_model_generate_music_blocking`].
+ *
+ * # Safety
+ *
+ * Same string contracts as
+ * [`blazen_music_model_generate_music_blocking`].
+ */
+
+int32_t blazen_music_model_generate_sfx_blocking(const BlazenMusicModel *model,
+                                                 const char *prompt,
+                                                 float duration_seconds,
+                                                 BlazenMusicResult **out_result,
+                                                 BlazenError **out_err);
+
+/**
+ * Asynchronously generate `duration_seconds` of sound-effect audio
+ * conditioned on `prompt`. Returns a `*mut BlazenFuture` the caller
+ * polls / waits on; the typed result is popped with
+ * [`blazen_future_take_music_result`].
+ *
+ * Returns null if `model` is null or `prompt` is null / non-UTF-8.
+ *
+ * # Safety
+ *
+ * Same string contracts as
+ * [`blazen_music_model_generate_music_blocking`].
+ */
+
+BlazenFuture *blazen_music_model_generate_sfx(const BlazenMusicModel *model,
+                                              const char *prompt,
+                                              float duration_seconds);
+
+/**
+ * Pops a typed `MusicResult` out of `fut`. On success returns `0` and
+ * writes a caller-owned `*mut BlazenMusicResult` into `out`; on failure
+ * returns `-1` and writes a caller-owned `*mut BlazenError` into `err`.
+ *
+ * `out` / `err` may be null when the caller wants to discard the value.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by either
+ * [`blazen_music_model_generate_music`] or
+ * [`blazen_music_model_generate_sfx`], not yet freed, and not
+ * concurrently freed from another thread. `out` / `err` must be null OR
+ * writable pointers to the appropriate slot.
+ */
+
+int32_t blazen_future_take_music_result(BlazenFuture *fut,
+                                        BlazenMusicResult **out,
+                                        BlazenError **err);
+
+/**
  * Returns the synthesized audio as a heap-allocated C string of
  * base64-encoded bytes. Caller frees with `blazen_string_free`. Returns
  * null if `result` is null. The returned string is empty when the upstream
@@ -2744,6 +3048,150 @@ int32_t blazen_image_gen_model_new_diffusion(const char *model_id,
  * image-generation wrapper. Double-free is undefined behavior.
  */
  void blazen_image_gen_result_free(BlazenImageGenResult *result);
+
+/**
+ * Borrows the chunk's PCM sample slice. Writes the slice length (in
+ * `f32` elements) into `*out_len` and returns the pointer to the first
+ * sample. The returned pointer is valid for the lifetime of the chunk
+ * handle (i.e. until [`blazen_music_chunk_free`] is called); callers
+ * must NOT free the sample buffer directly.
+ *
+ * Returns null and writes `0` into `*out_len` if `handle` is null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a valid pointer to a `BlazenMusicChunk`
+ * produced by the cabi surface. `out_len` must be null OR a writable
+ * pointer to a single `usize` slot. The returned pointer aliases the
+ * chunk's internal `Vec<f32>` — keep the chunk alive for as long as the
+ * pointer is in use, and do not mutate the buffer through it.
+ */
+ const float *blazen_music_chunk_samples(const BlazenMusicChunk *handle, uintptr_t *out_len);
+
+/**
+ * Returns `true` if this is the final emitted chunk of the streaming
+ * generation, `false` otherwise. Returns `false` if `handle` is null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a valid pointer to a `BlazenMusicChunk`
+ * produced by the cabi surface.
+ */
+ bool blazen_music_chunk_is_final(const BlazenMusicChunk *handle);
+
+/**
+ * Returns the per-chunk latency in seconds, or NaN when the backend did
+ * not report a measurement (or when `handle` is null). The NaN sentinel
+ * mirrors the encoding used elsewhere in the cabi surface for
+ * `Option<f32>` returns.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a valid pointer to a `BlazenMusicChunk`
+ * produced by the cabi surface.
+ */
+ float blazen_music_chunk_latency_seconds(const BlazenMusicChunk *handle);
+
+/**
+ * Frees a `BlazenMusicChunk` previously produced by the cabi surface
+ * (typically inside a music-stream sink's `on_chunk` callback). Passing
+ * null is a no-op.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer previously produced by the cabi
+ * surface's music-stream trampoline. Double-free is undefined behavior.
+ */
+ void blazen_music_chunk_free(BlazenMusicChunk *handle);
+
+/**
+ * Borrows the result's encoded audio bytes. Writes the slice length
+ * into `*out_len` and returns the pointer to the first byte. The
+ * returned pointer is valid for the lifetime of the result handle
+ * (i.e. until [`blazen_music_result_free`] is called); callers must NOT
+ * free the buffer directly.
+ *
+ * Returns null and writes `0` into `*out_len` if `result` is null.
+ * The returned slice is empty when the upstream provider only returned
+ * a URL (check [`blazen_music_result_url`] in that case).
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenMusicResult`
+ * produced by the cabi surface. `out_len` must be null OR a writable
+ * pointer to a single `usize` slot.
+ */
+ const uint8_t *blazen_music_result_bytes(const BlazenMusicResult *result, uintptr_t *out_len);
+
+/**
+ * Returns the IANA MIME type of the encoded audio as a heap-allocated
+ * C string. Caller frees with `blazen_string_free`. Returns null if
+ * `result` is null.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenMusicResult`
+ * produced by the cabi surface.
+ */
+ char *blazen_music_result_mime_type(const BlazenMusicResult *result);
+
+/**
+ * Returns the sample rate in Hz. Returns `0` if `result` is null or
+ * the upstream provider did not report a sample rate.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenMusicResult`
+ * produced by the cabi surface.
+ */
+ uint32_t blazen_music_result_sample_rate(const BlazenMusicResult *result);
+
+/**
+ * Returns the channel count (1 = mono, 2 = stereo). Returns `0` if
+ * `result` is null or the upstream provider did not report a channel
+ * count.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenMusicResult`
+ * produced by the cabi surface.
+ */
+ uint32_t blazen_music_result_channels(const BlazenMusicResult *result);
+
+/**
+ * Returns the duration of the clip in seconds. Returns `0.0` if `result`
+ * is null or the upstream provider did not report a duration.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenMusicResult`
+ * produced by the cabi surface.
+ */
+ float blazen_music_result_duration_seconds(const BlazenMusicResult *result);
+
+/**
+ * Returns the URL of the audio asset as a heap-allocated C string when
+ * the upstream provider returned a link rather than inline bytes;
+ * returns an empty string for inline-bytes results. Caller frees with
+ * `blazen_string_free`. Returns null if `result` is null.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a `BlazenMusicResult`
+ * produced by the cabi surface.
+ */
+ char *blazen_music_result_url(const BlazenMusicResult *result);
+
+/**
+ * Frees a `BlazenMusicResult` produced by the cabi surface. Passing
+ * null is a no-op.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a pointer produced by the cabi surface's
+ * music-generation wrapper. Double-free is undefined behavior.
+ */
+ void blazen_music_result_free(BlazenMusicResult *result);
 
 /**
  * Constructs a new `ImageRequest` with the given prompt and every optional
@@ -11019,6 +11467,108 @@ int32_t blazen_complete_streaming_blocking(const BlazenModel *model,
 BlazenFuture *blazen_complete_streaming(const BlazenModel *model,
                                         BlazenModelRequest *request,
                                         BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronously drive a music streaming generation, dispatching each
+ * chunk to the supplied sink. Blocks the calling thread on the upstream
+ * tokio runtime.
+ *
+ * On success returns `0` (the sink's `on_done` has fired). On a
+ * stream-start failure returns `-1` and writes a fresh `*mut BlazenError`
+ * into `*out_err`; backend-side and sink-side failures during the stream
+ * are delivered through `on_error` rather than this return path — see
+ * [`blazen_uniffi::compute_music::stream_generate_music_to_sink`] for the
+ * full contract.
+ *
+ * ## Ownership transfer
+ *
+ * - `model` is BORROWED — the underlying `Arc<MusicModel>` is cloned
+ *   into the streaming call. Caller retains its handle.
+ * - `sink` (the vtable) is CONSUMED — ownership of `user_data` transfers
+ *   to the wrapping `CMusicStreamSink`, which releases it via
+ *   `drop_user_data` on drop. On every early-return failure path that
+ *   aborts BEFORE constructing `CMusicStreamSink`, this function
+ *   explicitly invokes `(sink.drop_user_data)(sink.user_data)` to honour
+ *   the same contract.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenMusicModel` produced by the cabi
+ * surface. `prompt` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * `sink.user_data` and the four `sink` function pointers must satisfy
+ * the contracts documented on [`BlazenMusicStreamSinkVTable`]. `out_err`
+ * must be null OR a writable slot for a single `*mut BlazenError` write.
+ */
+
+int32_t blazen_music_model_stream_generate_music_blocking(const BlazenMusicModel *model,
+                                                          const char *prompt,
+                                                          float duration_seconds,
+                                                          BlazenMusicStreamSinkVTable sink,
+                                                          BlazenError **out_err);
+
+/**
+ * Asynchronously drive a music streaming generation onto the upstream
+ * tokio runtime, returning an opaque future handle that resolves to
+ * `()` on completion. The caller observes completion via the future's
+ * fd / [`crate::future::blazen_future_poll`] /
+ * [`crate::future::blazen_future_wait`], then calls
+ * [`crate::persist::blazen_future_take_unit`] to pop the result. Free
+ * the future with [`crate::future::blazen_future_free`].
+ *
+ * Returns null if `model` is null or `prompt` is null / non-UTF-8. On
+ * those error paths `sink.drop_user_data` is still invoked so no
+ * resources leak.
+ *
+ * ## Ownership transfer
+ *
+ * Same as [`blazen_music_model_stream_generate_music_blocking`]:
+ * `model` is BORROWED, `sink` is CONSUMED.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenMusicModel`. `prompt` must be
+ * null OR a valid NUL-terminated UTF-8 buffer. `sink` satisfies the
+ * [`BlazenMusicStreamSinkVTable`] contract; its `user_data` is consumed.
+ */
+
+BlazenFuture *blazen_music_model_stream_generate_music(const BlazenMusicModel *model,
+                                                       const char *prompt,
+                                                       float duration_seconds,
+                                                       BlazenMusicStreamSinkVTable sink);
+
+/**
+ * Synchronously drive an SFX streaming generation, dispatching each chunk
+ * to the supplied sink. Mirrors
+ * [`blazen_music_model_stream_generate_music_blocking`] semantics
+ * (including the early-return `drop_user_data` discipline).
+ *
+ * # Safety
+ *
+ * Same contracts as
+ * [`blazen_music_model_stream_generate_music_blocking`].
+ */
+
+int32_t blazen_music_model_stream_generate_sfx_blocking(const BlazenMusicModel *model,
+                                                        const char *prompt,
+                                                        float duration_seconds,
+                                                        BlazenMusicStreamSinkVTable sink,
+                                                        BlazenError **out_err);
+
+/**
+ * Asynchronously drive an SFX streaming generation. Mirrors
+ * [`blazen_music_model_stream_generate_music`] semantics; the returned
+ * future resolves to `()`, popped via
+ * [`crate::persist::blazen_future_take_unit`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_music_model_stream_generate_music`].
+ */
+
+BlazenFuture *blazen_music_model_stream_generate_sfx(const BlazenMusicModel *model,
+                                                     const char *prompt,
+                                                     float duration_seconds,
+                                                     BlazenMusicStreamSinkVTable sink);
 
 /**
  * Constructs a new `StreamChunk` with the given `content_delta` and

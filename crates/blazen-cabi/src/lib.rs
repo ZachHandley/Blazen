@@ -16,6 +16,7 @@ pub mod batch;
 pub mod batch_records;
 pub mod compute;
 pub mod compute_factories;
+pub mod compute_music;
 pub mod compute_records;
 pub mod compute_requests;
 pub mod compute_results;
