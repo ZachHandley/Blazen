@@ -141,6 +141,19 @@ module Blazen
              [:pointer, :pointer, :pointer],
              :int32
 
+    # VcStreamSink vtable callbacks (mirror +BlazenVcStreamSinkVTable+ in
+    # +blazen.h+). Distinct from the music sink: voice-conversion chunks
+    # carry PCM samples + a final-flag and the +on_done+ signal has no
+    # auxiliary payload (matches the music sink shape — but the chunk
+    # handle type is +BlazenVcChunk+).
+    callback :vc_stream_sink_drop_user_data, [:pointer], :void
+    callback :vc_stream_sink_on_chunk,
+             [:pointer, :pointer, :pointer], :int32
+    callback :vc_stream_sink_on_done,
+             [:pointer, :pointer], :int32
+    callback :vc_stream_sink_on_error,
+             [:pointer, :pointer, :pointer], :int32
+
     # CustomProvider vtable callbacks — 16 typed-method fn-pointers + 2 lifecycle.
     # Every typed callback receives a request pointer (caller-owned, the callback
     # must free or consume it before returning) and writes either a success
@@ -235,6 +248,19 @@ module Blazen
              :on_chunk,        :music_stream_sink_on_chunk,
              :on_done,         :music_stream_sink_on_done,
              :on_error,        :music_stream_sink_on_error
+    end
+
+    # Vtable a foreign caller fills in to receive streaming
+    # voice-conversion events (mirrors +BlazenVcStreamSinkVTable+ in
+    # +blazen.h+). Same shape as the music sink — chunks carry PCM
+    # samples and +on_done+ is payload-free — but the chunk handle type
+    # is +BlazenVcChunk+ rather than +BlazenMusicChunk+.
+    class BlazenVcStreamSinkVTable < ::FFI::Struct
+      layout :user_data,       :pointer,
+             :drop_user_data,  :vc_stream_sink_drop_user_data,
+             :on_chunk,        :vc_stream_sink_on_chunk,
+             :on_done,         :vc_stream_sink_on_done,
+             :on_error,        :vc_stream_sink_on_error
     end
 
     # Vtable a foreign caller fills in to implement a custom provider.
@@ -555,6 +581,87 @@ module Blazen
                     [:pointer], :pointer
     attach_function :blazen_music_result_free,
                     [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # Compute — Voice Conversion (RVC) (VcModel + VcChunk + VcResult +
+    # TargetVoice + TargetVoiceList)
+    # -------------------------------------------------------------------
+    #
+    # The RVC factory (+blazen_vc_model_new_rvc+) is feature-gated under
+    # +audio-vc-rvc+ in the cabi build, so we rescue +FFI::NotFoundError+
+    # for it and surface the absence via +Blazen::FFI.respond_to?+ in
+    # +compute.rb+. All accessor / lifecycle / streaming / future-taker
+    # entry points are always present.
+    begin
+      attach_function :blazen_vc_model_new_rvc,
+                      [:pointer, :pointer, :pointer, :pointer], :int32
+    rescue ::FFI::NotFoundError
+      # Optional: only present when libblazen_cabi was built with the
+      # +audio-vc-rvc+ feature.
+    end
+
+    attach_function :blazen_vc_model_free, [:pointer], :void
+
+    attach_function :blazen_vc_model_convert_voice_blocking,
+                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_vc_model_convert_voice,
+                    [:pointer, :pointer, :pointer], :pointer
+
+    attach_function :blazen_vc_model_list_target_voices_blocking,
+                    [:pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_vc_model_list_target_voices,
+                    [:pointer], :pointer
+
+    attach_function :blazen_vc_model_register_target_voice_blocking,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    attach_function :blazen_vc_model_register_target_voice,
+                    [:pointer, :pointer, :pointer], :pointer
+
+    attach_function :blazen_future_take_vc_result,
+                    [:pointer, :pointer, :pointer], :int32
+    attach_function :blazen_future_take_target_voice_list,
+                    [:pointer, :pointer, :pointer], :int32
+
+    # Streaming pumps (2: blocking / async). +sink+ is passed by value so
+    # the cabi consumes the +user_data+ even on early-return failure
+    # paths.
+    attach_function :blazen_vc_model_stream_convert_pcm_to_sink_blocking,
+                    [:pointer, :pointer, :size_t, :pointer,
+                     BlazenVcStreamSinkVTable.by_value, :pointer],
+                    :int32,
+                    blocking: true
+    attach_function :blazen_vc_model_stream_convert_pcm_to_sink,
+                    [:pointer, :pointer, :size_t, :pointer,
+                     BlazenVcStreamSinkVTable.by_value],
+                    :pointer
+
+    # VcChunk accessors (caller-owned chunk handed to +on_chunk+ sink)
+    attach_function :blazen_vc_chunk_samples,         [:pointer, :pointer], :pointer
+    attach_function :blazen_vc_chunk_is_final,        [:pointer], :bool
+    attach_function :blazen_vc_chunk_latency_seconds, [:pointer], :float
+    attach_function :blazen_vc_chunk_free,            [:pointer], :void
+
+    # VcResult accessors
+    attach_function :blazen_vc_result_bytes,            [:pointer, :pointer], :pointer
+    attach_function :blazen_vc_result_mime_type,        [:pointer], :pointer
+    attach_function :blazen_vc_result_sample_rate,      [:pointer], :uint32
+    attach_function :blazen_vc_result_duration_seconds, [:pointer], :float
+    attach_function :blazen_vc_result_free,             [:pointer], :void
+
+    # TargetVoice accessors
+    attach_function :blazen_target_voice_id,             [:pointer], :pointer
+    attach_function :blazen_target_voice_label,          [:pointer], :pointer
+    attach_function :blazen_target_voice_sample_rate_hz, [:pointer], :uint32
+    attach_function :blazen_target_voice_free,           [:pointer], :void
+
+    # TargetVoiceList lifecycle / iteration
+    attach_function :blazen_target_voice_list_len,  [:pointer], :size_t
+    attach_function :blazen_target_voice_list_get,  [:pointer, :size_t], :pointer
+    attach_function :blazen_target_voice_list_take, [:pointer, :size_t], :pointer
+    attach_function :blazen_target_voice_list_free, [:pointer], :void
 
     # -------------------------------------------------------------------
     # LLM — Model / EmbeddingModel

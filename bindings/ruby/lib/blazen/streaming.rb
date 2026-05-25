@@ -340,6 +340,105 @@ module Blazen
       blocking: true,
     )
 
+    # ---------------------------------------------------------------------
+    # VC stream-sink thunks (mirror the music thunks above but speak the
+    # +BlazenVcStreamSinkVTable+ ABI: chunk is a +BlazenVcChunk+,
+    # +on_done+ has no payload).
+    # ---------------------------------------------------------------------
+
+    # +on_chunk+ thunk for vc streams. Receives a caller-owned
+    # +*mut BlazenVcChunk+ — wrapped by {Blazen::Compute::VcChunk}'s
+    # AutoPointer so Ruby GC frees it once the user's handler returns.
+    ON_VC_CHUNK_FN = ::FFI::Function.new(
+      :int32,
+      %i[pointer pointer pointer],
+      proc do |user_data_ptr, chunk_ptr, _out_err|
+        id = user_data_ptr.address
+        handlers = lookup_sink(id)
+        if handlers.nil?
+          warn "[blazen streaming vc] sink not found for id=#{id}"
+          # Still free the chunk so we don't leak — Rust handed
+          # ownership across regardless of whether we found a handler.
+          Blazen::FFI.blazen_vc_chunk_free(chunk_ptr) unless chunk_ptr.null?
+          next(-1)
+        end
+
+        begin
+          chunk = Blazen::Compute::VcChunk.new(chunk_ptr)
+          on_chunk = handlers[:on_chunk]
+          on_chunk&.call(chunk)
+          0
+        rescue StandardError => e
+          warn "[blazen streaming vc on_chunk] #{e.class}: #{e.message}"
+          warn e.backtrace.join("\n") if e.backtrace
+          -1
+        end
+      end,
+      blocking: true,
+    )
+
+    # +on_done+ thunk for vc streams. Voice-conversion carries no
+    # auxiliary payload — the handler is called with no arguments.
+    ON_VC_DONE_FN = ::FFI::Function.new(
+      :int32,
+      %i[pointer pointer],
+      proc do |user_data_ptr, _out_err|
+        id = user_data_ptr.address
+        handlers = lookup_sink(id)
+        if handlers.nil?
+          warn "[blazen streaming vc] sink not found for id=#{id}"
+          next(-1)
+        end
+
+        begin
+          on_done = handlers[:on_done]
+          on_done&.call
+          0
+        rescue StandardError => e
+          warn "[blazen streaming vc on_done] #{e.class}: #{e.message}"
+          warn e.backtrace.join("\n") if e.backtrace
+          -1
+        end
+      end,
+      blocking: true,
+    )
+
+    # +on_error+ thunk for vc streams. Identical shape to the music /
+    # completion variants — decode the +*mut BlazenError+ into a Ruby
+    # exception (via {Blazen.build_error_from_ptr}, which consumes /
+    # frees the pointer).
+    ON_VC_ERROR_FN = ::FFI::Function.new(
+      :int32,
+      %i[pointer pointer pointer],
+      proc do |user_data_ptr, err_ptr, _out_err|
+        id = user_data_ptr.address
+        handlers = lookup_sink(id)
+        if handlers.nil?
+          warn "[blazen streaming vc] sink not found for id=#{id}"
+          Blazen::FFI.blazen_error_free(err_ptr) unless err_ptr.null?
+          next(-1)
+        end
+
+        ruby_err =
+          if err_ptr.nil? || err_ptr.null?
+            Blazen::InternalError.new("on_error called with null BlazenError")
+          else
+            Blazen.build_error_from_ptr(err_ptr)
+          end
+
+        begin
+          on_error = handlers[:on_error]
+          on_error&.call(ruby_err)
+          0
+        rescue StandardError => e
+          warn "[blazen streaming vc on_error] #{e.class}: #{e.message}"
+          warn e.backtrace.join("\n") if e.backtrace
+          -1
+        end
+      end,
+      blocking: true,
+    )
+
     module_function
 
     # ---------------------------------------------------------------------
@@ -540,6 +639,95 @@ module Blazen
       end
     end
 
+    # Drives a streaming voice-conversion call over +pcm_samples+
+    # (Array of f32 PCM samples), dispatching each
+    # {Blazen::Compute::VcChunk} to the supplied callbacks (or block).
+    #
+    # When +blocking:+ is +true+, blocks the calling thread on the cabi
+    # tokio runtime until +on_done+ or +on_error+ fires. When +false+,
+    # returns when the resolving future completes (composes with
+    # +Fiber.scheduler+).
+    #
+    # Either pass explicit per-event handlers via the +on_chunk:+,
+    # +on_done:+, +on_error:+ kwargs, OR pass a single block that
+    # receives +(kind, *args)+:
+    #
+    # * +:chunk+ — +args = [chunk]+, where +chunk+ is a
+    #   {Blazen::Compute::VcChunk}.
+    # * +:done+  — +args = []+ (vc streams carry no done payload).
+    # * +:error+ — +args = [err]+, where +err+ is a {Blazen::Error}
+    #   subclass.
+    #
+    # @param model [Blazen::Compute::VcModel]
+    # @param pcm_samples [Array<Float>, #to_a]
+    # @param target_voice_id [String]
+    # @param blocking [Boolean] +true+ for the blocking variant,
+    #   +false+ for the async (future-returning) variant
+    # @param on_chunk [#call(chunk)] called for each {Blazen::Compute::VcChunk}
+    # @param on_done [#call] called once when the stream completes normally
+    # @param on_error [#call(err)] called once on fatal stream errors
+    # @yield [kind, *args] block-form alternative to the kwargs
+    # @return [void]
+    def stream_convert(model, pcm_samples, target_voice_id,
+                       blocking: true,
+                       on_chunk: nil, on_done: nil, on_error: nil, &block)
+      unless model.is_a?(Blazen::Compute::VcModel)
+        raise ArgumentError, "model must be Blazen::Compute::VcModel"
+      end
+
+      arr = pcm_samples.to_a
+      len = arr.length
+      buf = ::FFI::MemoryPointer.new(:float, [len, 1].max)
+      buf.write_array_of_float(arr) unless len.zero?
+
+      handlers   = build_vc_handlers(on_chunk, on_done, on_error, block)
+      sink_id    = register_sink(handlers)
+      registered = true
+
+      begin
+        vtable = build_vc_vtable(sink_id)
+
+        if blocking
+          out_err = ::FFI::MemoryPointer.new(:pointer)
+          Blazen::FFI.with_cstring(target_voice_id.to_s) do |v|
+            Blazen::FFI.blazen_vc_model_stream_convert_pcm_to_sink_blocking(
+              model.ptr, buf, len, v, vtable, out_err,
+            )
+          end
+          # The cabi has now consumed +user_data+ and will eventually
+          # invoke +drop_user_data+ (which unregisters the sink). Mark
+          # +registered+ false BEFORE +check_error!+ so an exception
+          # doesn't trigger a double-drop in the +ensure+ arm.
+          registered = false
+          Blazen::FFI.check_error!(out_err)
+        else
+          fut = Blazen::FFI.with_cstring(target_voice_id.to_s) do |v|
+            Blazen::FFI.blazen_vc_model_stream_convert_pcm_to_sink(
+              model.ptr, buf, len, v, vtable,
+            )
+          end
+          # The cabi has consumed +user_data+ regardless of whether
+          # +fut+ is null — the null-return paths still invoke
+          # +drop_user_data+ — so mark +registered+ false now.
+          registered = false
+
+          if fut.nil? || fut.null?
+            raise Blazen::InternalError,
+                  "blazen_vc_model_stream_convert_pcm_to_sink returned null"
+          end
+
+          Blazen::FFI.await_future(fut) do |f|
+            out_err = ::FFI::MemoryPointer.new(:pointer)
+            Blazen::FFI.blazen_future_take_unit(f, out_err)
+            Blazen::FFI.check_error!(out_err)
+          end
+        end
+        nil
+      ensure
+        unregister_sink(sink_id) if registered
+      end
+    end
+
     # ---------------------------------------------------------------------
     # Internals
     # ---------------------------------------------------------------------
@@ -602,6 +790,36 @@ module Blazen
       vt
     end
     private_class_method :build_music_vtable
+
+    # @api private
+    # Normalises the +on_chunk:+ / +on_done:+ / +on_error:+ + block
+    # argument combinations for vc streams into a single
+    # +{on_chunk:, on_done:, on_error:}+ hash. Vc's +on_done+ takes no
+    # arguments (no auxiliary payload).
+    def self.build_vc_handlers(on_chunk, on_done, on_error, block)
+      if block
+        on_chunk ||= ->(c) { block.call(:chunk, c) }
+        on_done  ||= ->    { block.call(:done) }
+        on_error ||= ->(e) { block.call(:error, e) }
+      end
+      { on_chunk: on_chunk, on_done: on_done, on_error: on_error }
+    end
+    private_class_method :build_vc_handlers
+
+    # @api private
+    # Builds a fresh +BlazenVcStreamSinkVTable+ struct keyed to the
+    # given registry +sink_id+. Passed by value into the cabi vc
+    # stream-pump functions.
+    def self.build_vc_vtable(sink_id)
+      vt = Blazen::FFI::BlazenVcStreamSinkVTable.new
+      vt[:user_data]      = ::FFI::Pointer.new(sink_id)
+      vt[:drop_user_data] = DROP_SINK_USER_DATA_FN
+      vt[:on_chunk]       = ON_VC_CHUNK_FN
+      vt[:on_done]        = ON_VC_DONE_FN
+      vt[:on_error]       = ON_VC_ERROR_FN
+      vt
+    end
+    private_class_method :build_vc_vtable
 
     # @api private
     # Consumes a +Blazen::Llm::ModelRequest+ wrapper into a bare
