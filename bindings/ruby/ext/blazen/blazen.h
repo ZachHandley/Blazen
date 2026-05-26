@@ -690,6 +690,26 @@ typedef struct BlazenTargetVoice BlazenTargetVoice;
 typedef struct BlazenTargetVoiceList BlazenTargetVoiceList;
 
 /**
+ * Opaque handle wrapping
+ * [`blazen_uniffi::compute::ThreeDGenerateResult`].
+ *
+ * Produced by the cabi `ThreeDModel::generate_from_image` wrappers and
+ * by the typed [`blazen_future_take_three_d_generate_result`] taker.
+ * Holds the encoded 3D model bytes (typically GLB / gltf-binary) and an
+ * IANA MIME type string so foreign callers can dispatch on the format
+ * without sniffing the buffer.
+ */
+typedef struct BlazenThreeDGenerateResult BlazenThreeDGenerateResult;
+
+/**
+ * Opaque handle wrapping an `Arc<blazen_uniffi::compute::ThreeDModel>`.
+ *
+ * Produced by [`blazen_three_d_model_new_triposr`]. Free with
+ * [`blazen_three_d_model_free`].
+ */
+typedef struct BlazenThreeDModel BlazenThreeDModel;
+
+/**
  * Opaque wrapper around [`blazen_uniffi::llm::TokenUsage`].
  */
 typedef struct BlazenTokenUsage BlazenTokenUsage;
@@ -2665,6 +2685,157 @@ BlazenFuture *blazen_image_gen_model_generate(const BlazenImageGenModel *model,
 int32_t blazen_future_take_image_gen_result(BlazenFuture *fut,
                                             BlazenImageGenResult **out,
                                             BlazenError **err);
+
+/**
+ * Frees a `BlazenThreeDModel` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_three_d_model_new_triposr`]. Double-free is undefined
+ * behavior.
+ */
+ void blazen_three_d_model_free(BlazenThreeDModel *model);
+
+/**
+ * Build a local `TripoSR` single-image-to-3D model.
+ *
+ * `hf_repo_id` selects the Hugging Face repo (default
+ * `"stabilityai/TripoSR"`). `revision` pins a specific branch / tag /
+ * commit on that repo. `weights_path` provides a pre-resolved local
+ * directory containing the `image_encoder.safetensors` /
+ * `transformer.safetensors` / `nerf_field.safetensors` triple; when
+ * supplied, the HF download is skipped entirely.
+ *
+ * All three inputs are optional — pass null to use the upstream
+ * defaults (HF download from `stabilityai/TripoSR` at `main`).
+ *
+ * Returns `0` on success and writes a fresh `BlazenThreeDModel*` into
+ * `*out_model`. Returns `-1` on backend init failure and writes a fresh
+ * `BlazenError*` into `*out_err`.
+ *
+ * # Safety
+ *
+ * - `hf_repo_id` / `revision` / `weights_path` must each be null OR a
+ *   valid NUL-terminated UTF-8 buffer.
+ * - `out_model` and `out_err` must each be null OR point to a writable
+ *   slot of the matching pointer type.
+ */
+
+int32_t blazen_three_d_model_new_triposr(const char *hf_repo_id,
+                                         const char *revision,
+                                         const char *weights_path,
+                                         BlazenThreeDModel **out_model,
+                                         BlazenError **out_err);
+
+/**
+ * Synchronously render a 3D mesh from a single input image.
+ *
+ * `image_bytes` + `image_bytes_len` describe an encoded PNG or JPEG
+ * payload. `mesh_resolution` controls the side length of the density
+ * grid sampled from the triplane during marching cubes; `256` matches
+ * the upstream `TripoSR` reference and is a reasonable default.
+ *
+ * Returns `0` on success, `-1` on backend failure, `-2` on invalid
+ * argument shape (null model / null `image_bytes`).
+ *
+ * # Safety
+ *
+ * - `model` must be a valid pointer to a `BlazenThreeDModel` produced
+ *   by the cabi surface.
+ * - `image_bytes` must be a valid pointer to a buffer of at least
+ *   `image_bytes_len` bytes (or null, which yields `-2`).
+ * - `out_result` / `out_err` must each be null OR writable pointers to
+ *   the appropriate slot.
+ */
+
+int32_t blazen_three_d_model_generate_from_image_blocking(const BlazenThreeDModel *model,
+                                                          const uint8_t *image_bytes,
+                                                          uintptr_t image_bytes_len,
+                                                          uint32_t mesh_resolution,
+                                                          BlazenThreeDGenerateResult **out_result,
+                                                          BlazenError **out_err);
+
+/**
+ * Asynchronously render a 3D mesh from a single input image. Returns a
+ * `*mut BlazenFuture` the caller polls / waits on; the typed result is
+ * popped with [`blazen_future_take_three_d_generate_result`].
+ *
+ * Returns null if `model` is null or `image_bytes` is null with a
+ * non-zero `image_bytes_len`.
+ *
+ * # Safety
+ *
+ * Same buffer contracts as
+ * [`blazen_three_d_model_generate_from_image_blocking`].
+ */
+
+BlazenFuture *blazen_three_d_model_generate_from_image(const BlazenThreeDModel *model,
+                                                       const uint8_t *image_bytes,
+                                                       uintptr_t image_bytes_len,
+                                                       uint32_t mesh_resolution);
+
+/**
+ * Pops a typed `ThreeDGenerateResult` out of `fut`. On success returns
+ * `0` and writes a caller-owned `*mut BlazenThreeDGenerateResult` into
+ * `out`; on failure returns `-1` and writes a caller-owned
+ * `*mut BlazenError` into `err`.
+ *
+ * `out` / `err` may be null when the caller wants to discard the value.
+ *
+ * # Safety
+ *
+ * `fut` must be a non-null pointer produced by
+ * [`blazen_three_d_model_generate_from_image`], not yet freed, and not
+ * concurrently freed from another thread. `out` / `err` must be null OR
+ * writable pointers to the appropriate slot.
+ */
+
+int32_t blazen_future_take_three_d_generate_result(BlazenFuture *fut,
+                                                   BlazenThreeDGenerateResult **out,
+                                                   BlazenError **err);
+
+/**
+ * Borrows the result's encoded 3D model bytes (GLB / gltf-binary).
+ * Writes the slice length into `*out_len` and returns the pointer to
+ * the first byte. The returned pointer is valid for the lifetime of the
+ * result handle (i.e. until [`blazen_three_d_generate_result_free`] is
+ * called); callers must NOT free the buffer directly.
+ *
+ * Returns null and writes `0` into `*out_len` if `result` is null.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a
+ * `BlazenThreeDGenerateResult` produced by the cabi surface.
+ * `out_len` must be null OR a writable pointer to a single `usize` slot.
+ */
+
+const uint8_t *blazen_three_d_generate_result_model_bytes(const BlazenThreeDGenerateResult *result,
+                                                          uintptr_t *out_len);
+
+/**
+ * Returns the IANA MIME type of the encoded 3D model as a
+ * heap-allocated C string (typically `"model/gltf-binary"`). Caller
+ * frees with `blazen_string_free`. Returns null if `result` is null.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a valid pointer to a
+ * `BlazenThreeDGenerateResult` produced by the cabi surface.
+ */
+ char *blazen_three_d_generate_result_mime_type(const BlazenThreeDGenerateResult *result);
+
+/**
+ * Frees a `BlazenThreeDGenerateResult` produced by the cabi surface.
+ * Passing null is a no-op.
+ *
+ * # Safety
+ *
+ * `result` must be null OR a pointer produced by the cabi surface's
+ * 3D-generation wrapper. Double-free is undefined behavior.
+ */
+ void blazen_three_d_generate_result_free(BlazenThreeDGenerateResult *result);
 
 /**
  * Build a fal.ai-backed TTS model.
