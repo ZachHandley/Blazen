@@ -61,6 +61,9 @@ pub use capabilities::{
     MusicProvider, SttProvider, ThreeDProvider, TtsProvider, VcProvider, VideoProvider,
 };
 
+// Concrete per-engine provider classes (PiperProvider, TripoSrProvider, …).
+pub mod concrete;
+
 // OpenAI-compatible dedicated providers
 pub mod bedrock;
 pub mod cohere;
