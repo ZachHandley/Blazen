@@ -39,8 +39,6 @@
 //! The backend emits a single [`blazen_audio::warn_nc_once`] the first
 //! time it materialises a pipeline.
 
-#![cfg(feature = "spark-tts")]
-
 mod bicodec;
 mod decoder;
 mod pipeline;
