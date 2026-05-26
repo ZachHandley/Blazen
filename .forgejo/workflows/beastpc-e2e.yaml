@@ -76,11 +76,6 @@ jobs:
         # sccache (this is a heavy GPU box, not the shared ubuntu pool).
         uses: https://github.com/dtolnay/rust-toolchain@stable
 
-      - name: Setup CUDA Toolkit
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
-        with:
-          required: 'true'
-
       - name: Install nextest
         uses: https://github.com/taiki-e/install-action@v2
         with:
