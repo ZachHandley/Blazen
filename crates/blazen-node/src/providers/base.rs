@@ -1,8 +1,8 @@
-//! JavaScript binding for [`blazen_llm::providers::base::BaseProvider`].
+//! JavaScript binding for [`blazen_llm::providers::base::LlmProviderDefaults`].
 //!
 //! Exposes [`JsBaseProvider`] as a NAPI class with a constructor (so JS
-//! users can subclass it via `class MyLLM extends BaseProvider`) and
-//! builder methods that mirror the Rust [`BaseProvider`] surface:
+//! users can subclass it via `class MyLLM extends LlmProviderDefaults`) and
+//! builder methods that mirror the Rust [`LlmProviderDefaults`] surface:
 //! `withSystemPrompt`, `withTools`, `withResponseFormat`,
 //! `withBeforeRequest`, `withBeforeModel`, `withDefaults`.
 //!
@@ -23,7 +23,7 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
 use blazen_llm::Model;
-use blazen_llm::providers::base::BaseProvider;
+use blazen_llm::providers::base::LlmProviderDefaults;
 use blazen_llm::types::{ChatMessage, ModelRequest, ToolDefinition};
 
 use crate::error::llm_error_to_napi;
@@ -40,12 +40,12 @@ use crate::types::JsChatMessage;
 /// [`JsProviderDefaults`] to every completion request before
 /// delegating to the inner model.
 ///
-/// `BaseProvider` is intended to be subclassed from JavaScript:
+/// `LlmProviderDefaults` is intended to be subclassed from JavaScript:
 ///
 /// ```javascript
-/// import { BaseProvider, Model } from "blazen";
+/// import { LlmProviderDefaults, Model } from "blazen";
 ///
-/// class TerseLlm extends BaseProvider {
+/// class TerseLlm extends LlmProviderDefaults {
 ///   constructor() {
 ///     const inner = Model.openai({ apiKey: "sk-..." });
 ///     super(inner);
@@ -57,7 +57,7 @@ use crate::types::JsChatMessage;
 /// Today (V1) the constructor stores an opaque reference to the inner
 /// object — Phase D will wire `class extends` to fire the JS `complete`
 /// override before falling back to the inner Rust model.
-#[napi(js_name = "BaseProvider")]
+#[napi(js_name = "LlmProviderDefaults")]
 pub struct JsBaseProvider {
     /// The configured defaults. Stored behind a Mutex so the builder
     /// methods can mutate in place without taking `self` by value (napi
@@ -81,7 +81,7 @@ pub struct JsBaseProvider {
     clippy::return_self_not_must_use
 )]
 impl JsBaseProvider {
-    /// Construct a new [`BaseProvider`].
+    /// Construct a new [`LlmProviderDefaults`].
     ///
     /// `inner` is the underlying completion model — pass a
     /// [`JsModel`] instance. JS subclasses that fully
@@ -268,18 +268,18 @@ impl JsBaseProvider {
         schema: serde_json::Value,
         messages: Vec<&JsChatMessage>,
     ) -> Result<serde_json::Value> {
-        // BaseProvider.extract requires a concrete underlying Rust model.
+        // LlmProviderDefaults.extract requires a concrete underlying Rust model.
         // Subclass-only providers (no `inner`) hit the Phase D dispatch path
         // for `complete`; until that lands `extract` is unsupported for them.
         let inner = self.inner.clone().ok_or_else(|| {
             napi::Error::from_reason(
-                "BaseProvider.extract requires a concrete inner Model; subclass-only providers should override `complete` and call `extract` from there",
+                "LlmProviderDefaults.extract requires a concrete inner Model; subclass-only providers should override `complete` and call `extract` from there",
             )
         })?;
 
         // Snapshot the defaults bag so we get the same system_prompt /
         // tools / response_format treatment as `complete()` would. We
-        // route through `BaseProvider::with_defaults` to share the apply
+        // route through `LlmProviderDefaults::with_defaults` to share the apply
         // logic that lives next to the production code path.
         let defaults_rust = self
             .defaults
@@ -287,7 +287,7 @@ impl JsBaseProvider {
             .ok()
             .map(|g| g.to_rust())
             .unwrap_or_default();
-        let provider = BaseProvider::with_defaults(inner, defaults_rust);
+        let provider = LlmProviderDefaults::with_defaults(inner, defaults_rust);
 
         // Build the response_format envelope expected by every provider's
         // schema adapter. Using a fixed name keeps the wire shape stable;
@@ -316,24 +316,24 @@ impl JsBaseProvider {
         let content = response.content.unwrap_or_default();
         if content.trim().is_empty() {
             return Err(napi::Error::from_reason(
-                "BaseProvider.extract: model returned empty content; unable to parse JSON",
+                "LlmProviderDefaults.extract: model returned empty content; unable to parse JSON",
             ));
         }
         serde_json::from_str::<serde_json::Value>(&content).map_err(|e| {
             napi::Error::from_reason(format!(
-                "BaseProvider.extract: failed to parse model response as JSON ({e}); raw content: {content}"
+                "LlmProviderDefaults.extract: failed to parse model response as JSON ({e}); raw content: {content}"
             ))
         })
     }
 }
 
 impl JsBaseProvider {
-    /// Internal: snapshot into a Rust [`BaseProvider`] for downstream
+    /// Internal: snapshot into a Rust [`LlmProviderDefaults`] for downstream
     /// dispatch. Returns `None` if no inner Rust model is configured
     /// (subclass-only path; Phase D will route those through the JS
     /// `complete` override).
     #[allow(dead_code)]
-    pub(crate) fn to_rust(&self) -> Option<BaseProvider> {
+    pub(crate) fn to_rust(&self) -> Option<LlmProviderDefaults> {
         let inner = self.inner.as_ref().map(Arc::clone)?;
         let defaults = self
             .defaults
@@ -341,7 +341,7 @@ impl JsBaseProvider {
             .ok()
             .map(|g| g.to_rust())
             .unwrap_or_default();
-        Some(BaseProvider::with_defaults(inner, defaults))
+        Some(LlmProviderDefaults::with_defaults(inner, defaults))
     }
 
     /// Clone the JS wrapper preserving the shared `Arc<Mutex>` slots so

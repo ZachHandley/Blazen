@@ -572,7 +572,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<providers::defaults::ThreeDProviderDefaults>()?;
     m.add_class::<providers::defaults::BackgroundRemovalProviderDefaults>()?;
 
-    // BaseProvider -- wraps any Model with defaults applied
+    // LlmProviderDefaults -- wraps any Model with defaults applied
     // before delegation.
     m.add_class::<providers::base::PyBaseProvider>()?;
 

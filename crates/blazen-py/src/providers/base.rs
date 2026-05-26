@@ -1,4 +1,4 @@
-//! Python wrapper for [`blazen_llm::BaseProvider`].
+//! Python wrapper for [`blazen_llm::LlmProviderDefaults`].
 //!
 //! Wraps any [`Model`] together with a
 //! [`PyProviderDefaults`] that is applied to every completion
@@ -9,7 +9,7 @@
 //! to Phase B; for now the defaults bag stores the Python callables
 //! and propagates them through builders unchanged.
 //!
-//! Once Phase D wires up Python subclassing of `BaseProvider`, the
+//! Once Phase D wires up Python subclassing of `LlmProviderDefaults`, the
 //! `inner` slot stays as the user-supplied [`PyModel`] and a
 //! true `BlzBaseProvider` is built on demand.
 
@@ -39,20 +39,20 @@ use crate::types::{PyChatMessage, PyToolDefinition};
 /// arrives in Phase B.
 ///
 /// Example:
-///     >>> from blazen import BaseProvider, Model
+///     >>> from blazen import LlmProviderDefaults, Model
 ///     >>> inner = Model.openai()
 ///     >>> provider = (
-///     ...     BaseProvider(inner)
+///     ...     LlmProviderDefaults(inner)
 ///     ...     .with_system_prompt("be terse")
 ///     ...     .with_response_format({"type": "json_object"})
 ///     ... )
 #[gen_stub_pyclass]
-#[pyclass(name = "BaseProvider", subclass, from_py_object)]
+#[pyclass(name = "LlmProviderDefaults", subclass, from_py_object)]
 pub struct PyBaseProvider {
     /// User-supplied completion model. Held as the original Py wrapper so
     /// the underlying `Arc<dyn Model>` (or subclass payload) can
     /// be re-extracted when Phase B/D actually constructs a Rust
-    /// [`blazen_llm::BaseProvider`].
+    /// [`blazen_llm::LlmProviderDefaults`].
     pub(crate) inner: Py<PyModel>,
     /// The configured completion-role defaults. Cloned on every builder
     /// step so callers see Rust-style chainable, value-returning methods.
@@ -187,7 +187,7 @@ impl PyBaseProvider {
     }
 
     fn __repr__(&self) -> String {
-        format!("BaseProvider(model_id={:?})", self.model_id())
+        format!("LlmProviderDefaults(model_id={:?})", self.model_id())
     }
 
     // -----------------------------------------------------------------
@@ -247,7 +247,7 @@ impl PyBaseProvider {
         let mut request = ModelRequest::new(rust_messages).with_response_format(response_format);
         if let Some(prompt) = self.defaults.system_prompt.clone() {
             // Prepend a system message if none exists already. Matches the
-            // behavior of `BaseProvider`'s defaults application path.
+            // behavior of `LlmProviderDefaults`'s defaults application path.
             let has_system = request
                 .messages
                 .first()
@@ -300,11 +300,11 @@ impl PyBaseProvider {
 }
 
 // Silence "unused" warnings while Phase B/D have yet to wire the inner
-// trait object directly into a Rust `BaseProvider`. The import path is
+// trait object directly into a Rust `LlmProviderDefaults`. The import path is
 // kept so it surfaces in editor jump-to-definition.
 #[allow(dead_code)]
 fn _phase_b_anchor(_p: &PyBaseProvider) -> Option<Arc<dyn blazen_llm::Model>> {
     // Phase B/D will populate this from `_p.inner.bind(py).borrow().inner.clone()`
-    // and construct a `blazen_llm::BaseProvider` for actual dispatch.
+    // and construct a `blazen_llm::LlmProviderDefaults` for actual dispatch.
     None
 }

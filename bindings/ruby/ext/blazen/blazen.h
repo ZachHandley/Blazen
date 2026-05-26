@@ -1662,10 +1662,10 @@ typedef struct {
 } BlazenApiProtocol;
 
 /**
- * Opaque wrapper around [`BaseProvider`].
+ * Opaque wrapper around [`LlmProviderDefaults`].
  */
 typedef struct {
-    BaseProvider _0;
+    LlmProviderDefaults _0;
 } BlazenBaseProvider;
 
 /**
@@ -10601,7 +10601,7 @@ BlazenCustomProvider *blazen_custom_provider_lm_studio(const char *model,
  * This lets the host attach base-provider builder mutations (system
  * prompts, default tools, defaults bundles) without reaching into the
  * private `base` field on `CustomProviderHandle`. The returned
- * `BaseProvider` holds an `Arc<CustomProviderHandle>` as its inner
+ * `LlmProviderDefaults` holds an `Arc<CustomProviderHandle>` as its inner
  * `Model`, so `complete()` / `stream()` on the result delegate
  * back through the `CustomProviderHandle` (including any vtable dispatch).
  *

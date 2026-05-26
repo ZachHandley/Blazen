@@ -3,7 +3,7 @@
 //! media). Role-specific subtypes (`ProviderDefaults`, etc.)
 //! compose `BaseProviderDefaults` and add role-specific fields.
 //!
-//! These are applied by `BaseProvider` (for completion) and by the trait
+//! These are applied by `LlmProviderDefaults` (for completion) and by the trait
 //! impls on `CustomProvider` (for compute roles), via each type's `apply()`
 //! method which fires the universal `before_request` hook first, then the
 //! role-specific hook.

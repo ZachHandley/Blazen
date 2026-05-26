@@ -1,4 +1,4 @@
-//! [`BaseProvider`] — wraps any [`Model`] with a
+//! [`LlmProviderDefaults`] — wraps any [`Model`] with a
 //! [`ProviderDefaults`] that is applied to every completion request
 //! before delegating to the inner model.
 //!
@@ -24,21 +24,21 @@ use crate::types::{ModelRequest, ModelResponse, StreamChunk, ToolDefinition};
 
 /// Wraps any `Model` with instance-level defaults that are
 /// applied to every `complete()` / `stream()` call before delegation.
-pub struct BaseProvider {
+pub struct LlmProviderDefaults {
     inner: Arc<dyn Model>,
     defaults: ProviderDefaults,
 }
 
-impl std::fmt::Debug for BaseProvider {
+impl std::fmt::Debug for LlmProviderDefaults {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("BaseProvider")
+        f.debug_struct("LlmProviderDefaults")
             .field("model_id", &self.inner.model_id())
             .field("defaults", &self.defaults)
             .finish()
     }
 }
 
-impl Clone for BaseProvider {
+impl Clone for LlmProviderDefaults {
     fn clone(&self) -> Self {
         Self {
             inner: Arc::clone(&self.inner),
@@ -47,7 +47,7 @@ impl Clone for BaseProvider {
     }
 }
 
-impl BaseProvider {
+impl LlmProviderDefaults {
     /// Construct with no defaults — equivalent to using `inner` directly,
     /// but lets the user attach defaults via builder methods.
     #[must_use]
@@ -122,7 +122,7 @@ impl BaseProvider {
 }
 
 #[async_trait]
-impl Model for BaseProvider {
+impl Model for LlmProviderDefaults {
     fn model_id(&self) -> &str {
         self.inner.model_id()
     }
@@ -209,7 +209,7 @@ mod tests {
 
     #[tokio::test]
     async fn base_provider_prepends_system_prompt() {
-        let bp = BaseProvider::new(Arc::new(EchoModel)).with_system_prompt("be terse");
+        let bp = LlmProviderDefaults::new(Arc::new(EchoModel)).with_system_prompt("be terse");
         let req = ModelRequest::new(vec![ChatMessage::user("hi")]);
         // EchoModel returns the LAST message; since defaults insert the system
         // message at the front, the last message remains "hi".
@@ -244,7 +244,7 @@ mod tests {
         }
 
         let recorded: Arc<Mutex<Vec<ModelRequest>>> = Arc::new(Mutex::new(Vec::new()));
-        let bp = BaseProvider::new(Arc::new(RecordingModel(Arc::clone(&recorded))))
+        let bp = LlmProviderDefaults::new(Arc::new(RecordingModel(Arc::clone(&recorded))))
             .with_system_prompt("be helpful")
             .with_response_format(serde_json::json!({"type": "json_object"}));
 

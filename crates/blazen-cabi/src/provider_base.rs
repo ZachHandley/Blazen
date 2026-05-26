@@ -1,8 +1,8 @@
-//! C ABI wrapper for [`blazen_llm::providers::BaseProvider`].
+//! C ABI wrapper for [`blazen_llm::providers::LlmProviderDefaults`].
 //!
-//! `BaseProvider` wraps an `Arc<dyn Model>` and applies a
+//! `LlmProviderDefaults` wraps an `Arc<dyn Model>` and applies a
 //! [`ProviderDefaults`](blazen_llm::providers::ProviderDefaults)
-//! to every completion call. For V1 we cannot construct a `BaseProvider` from
+//! to every completion call. For V1 we cannot construct a `LlmProviderDefaults` from
 //! C alone — the `Arc<dyn Model>` it needs has no FFI representation
 //! today. The wrapper therefore exposes only:
 //!
@@ -16,10 +16,10 @@
 //!
 //! ## Builder mutation pattern
 //!
-//! The inner `BaseProvider::with_*` methods consume `self` and return `Self`.
+//! The inner `LlmProviderDefaults::with_*` methods consume `self` and return `Self`.
 //! Since the C side owns the handle as a `*mut BlazenBaseProvider`, we mutate
 //! in place by using `std::ptr::read` to take ownership of the inner
-//! `BaseProvider`, running the builder, and writing the result back with
+//! `LlmProviderDefaults`, running the builder, and writing the result back with
 //! `std::ptr::write`. The pointer remains valid and continues to identify the
 //! same handle slot — the caller does not need to re-bind their pointer.
 
@@ -27,7 +27,7 @@
 
 use std::ffi::c_char;
 
-use blazen_llm::providers::base::BaseProvider;
+use blazen_llm::providers::base::LlmProviderDefaults;
 use blazen_llm::traits::Model;
 use blazen_llm::types::{ChatMessage, ModelRequest, ToolDefinition};
 
@@ -40,9 +40,9 @@ use crate::string::{alloc_cstring, cstr_to_str};
 // Handle
 // ---------------------------------------------------------------------------
 
-/// Opaque wrapper around [`BaseProvider`].
+/// Opaque wrapper around [`LlmProviderDefaults`].
 #[repr(C)]
-pub struct BlazenBaseProvider(pub(crate) BaseProvider);
+pub struct BlazenBaseProvider(pub(crate) LlmProviderDefaults);
 
 impl BlazenBaseProvider {
     pub(crate) fn into_ptr(self) -> *mut BlazenBaseProvider {
@@ -50,8 +50,8 @@ impl BlazenBaseProvider {
     }
 }
 
-impl From<BaseProvider> for BlazenBaseProvider {
-    fn from(inner: BaseProvider) -> Self {
+impl From<LlmProviderDefaults> for BlazenBaseProvider {
+    fn from(inner: LlmProviderDefaults) -> Self {
         Self(inner)
     }
 }
@@ -60,18 +60,18 @@ impl From<BaseProvider> for BlazenBaseProvider {
 // Internal builder helper
 // ---------------------------------------------------------------------------
 
-/// Run a builder method (`fn(BaseProvider) -> BaseProvider`) against the
+/// Run a builder method (`fn(LlmProviderDefaults) -> LlmProviderDefaults`) against the
 /// inner provider behind the supplied handle, mutating the slot in place.
 ///
 /// # Safety
 ///
 /// `handle` must be a non-null pointer to a live `BlazenBaseProvider`.
-unsafe fn with_inner<F: FnOnce(BaseProvider) -> BaseProvider>(
+unsafe fn with_inner<F: FnOnce(LlmProviderDefaults) -> LlmProviderDefaults>(
     handle: *mut BlazenBaseProvider,
     f: F,
 ) {
     // SAFETY: caller has guaranteed `handle` is non-null and live. We take
-    // the inner `BaseProvider` by value (`ptr::read`), run the builder, then
+    // the inner `LlmProviderDefaults` by value (`ptr::read`), run the builder, then
     // write the new value back into the same slot. Between the read and the
     // write there are no other live references to the slot, so this is a
     // straight-line move that preserves the handle pointer's identity.
@@ -317,7 +317,7 @@ pub unsafe extern "C" fn blazen_base_provider_extract(
         return std::ptr::null_mut();
     };
 
-    // Clone the BaseProvider out of the handle so the spawned task owns its
+    // Clone the LlmProviderDefaults out of the handle so the spawned task owns its
     // own copy; the original handle stays usable afterwards.
     // SAFETY: caller guarantees live handle.
     let provider = unsafe { &*handle }.0.clone();

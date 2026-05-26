@@ -60,7 +60,7 @@ use crate::compute::traits::{
 };
 use crate::error::BlazenError;
 use crate::http::HttpClient;
-use crate::providers::base::BaseProvider;
+use crate::providers::base::LlmProviderDefaults;
 use crate::providers::defaults::{
     AudioMusicProviderDefaults, AudioSpeechProviderDefaults, BackgroundRemovalProviderDefaults,
     BaseProviderDefaults, BeforeModelRequestHook, BeforeRequestHook,
@@ -260,7 +260,7 @@ pub trait CustomProvider: Send + Sync + 'static {
 // ---------------------------------------------------------------------------
 
 /// Internal adapter that turns an `Arc<dyn CustomProvider>` into an
-/// `Arc<dyn Model>`, so [`BaseProvider::new`] can wrap it for
+/// `Arc<dyn Model>`, so [`LlmProviderDefaults::new`] can wrap it for
 /// completion-defaults application.
 pub(crate) struct CustomProviderAsModel(pub Arc<dyn CustomProvider>);
 
@@ -312,7 +312,7 @@ impl Model for CustomProviderAsModel {
 /// `CustomProvider` itself for clean nesting).
 pub struct CustomProviderHandle {
     inner: Arc<dyn CustomProvider>,
-    base: BaseProvider,
+    base: LlmProviderDefaults,
     retry_config: Option<Arc<RetryConfig>>,
     audio_speech_defaults: Option<AudioSpeechProviderDefaults>,
     audio_music_defaults: Option<AudioMusicProviderDefaults>,
@@ -365,7 +365,7 @@ impl CustomProviderHandle {
         let model: Arc<dyn Model> = Arc::new(CustomProviderAsModel(Arc::clone(&inner)));
         Self {
             inner,
-            base: BaseProvider::new(model),
+            base: LlmProviderDefaults::new(model),
             retry_config: None,
             audio_speech_defaults: None,
             audio_music_defaults: None,
@@ -578,7 +578,7 @@ impl CustomProvider for CustomProviderHandle {
     }
 
     async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
-        // `BaseProvider` applies completion defaults then calls the inner
+        // `LlmProviderDefaults` applies completion defaults then calls the inner
         // Model adapter, which forwards to `self.inner.complete`.
         self.base.complete(request).await
     }
@@ -1004,7 +1004,7 @@ mod tests {
     }
 
     /// Stub provider that implements `complete` only. Used to exercise the
-    /// completion path (including `BaseProvider`-applied defaults).
+    /// completion path (including `LlmProviderDefaults`-applied defaults).
     struct StubCompleteProvider;
 
     #[async_trait]

@@ -10,7 +10,7 @@
 //! - [`VoiceHandle`](blazen_llm::compute::VoiceHandle)
 //!
 //! Results are not constructed by the caller — they fall out of the
-//! `BaseProvider` compute methods (wired in Phase A and beyond). The cabi
+//! `LlmProviderDefaults` compute methods (wired in Phase A and beyond). The cabi
 //! surface exposes getters + `_free` only.
 //!
 //! # Ownership

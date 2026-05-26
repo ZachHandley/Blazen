@@ -35,7 +35,7 @@
 //!   to upstream `Vec::new()`.
 //!
 //! These records are consumed by Phase B's `CustomProvider` factories and
-//! by Phase A's [`crate::provider_base::BaseProvider`].
+//! by Phase A's [`crate::provider_base::LlmProviderDefaults`].
 
 use blazen_llm::providers::defaults::{
     AudioMusicProviderDefaults as CoreAudioMusicProviderDefaults,

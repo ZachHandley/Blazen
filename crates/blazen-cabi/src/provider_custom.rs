@@ -54,7 +54,7 @@
 //!   request handle — ownership transferred.
 //! - [`blazen_custom_provider_as_base_provider`] clones the inner
 //!   `CustomProviderHandle` (which implements `Model`) into a brand-
-//!   new `BaseProvider` whose inner `Model` is an
+//!   new `LlmProviderDefaults` whose inner `Model` is an
 //!   `Arc<CustomProviderHandle>`. The returned `BlazenBaseProvider` is
 //!   independent of the source handle's lifetime and must be freed with
 //!   [`crate::provider_base::blazen_base_provider_free`].
@@ -84,7 +84,7 @@ use blazen_llm::compute::{
     VoiceCloneRequest as InnerVoiceCloneRequest, VoiceHandle as InnerVoiceHandle,
 };
 use blazen_llm::error::BlazenError as LlmError;
-use blazen_llm::providers::base::BaseProvider as InnerBaseProvider;
+use blazen_llm::providers::base::LlmProviderDefaults as InnerBaseProvider;
 use blazen_llm::providers::custom::{
     self as inner_custom, CustomProvider as InnerCustomProviderTrait,
     CustomProviderHandle as InnerCustomProviderHandle,
@@ -1582,7 +1582,7 @@ pub unsafe extern "C" fn blazen_custom_provider_model_id(
 /// This lets the host attach base-provider builder mutations (system
 /// prompts, default tools, defaults bundles) without reaching into the
 /// private `base` field on `CustomProviderHandle`. The returned
-/// `BaseProvider` holds an `Arc<CustomProviderHandle>` as its inner
+/// `LlmProviderDefaults` holds an `Arc<CustomProviderHandle>` as its inner
 /// `Model`, so `complete()` / `stream()` on the result delegate
 /// back through the `CustomProviderHandle` (including any vtable dispatch).
 ///

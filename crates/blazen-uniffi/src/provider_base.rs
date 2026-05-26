@@ -1,8 +1,8 @@
-//! [`BaseProvider`] — wraps any [`crate::llm::Model`] with a
+//! [`LlmProviderDefaults`] — wraps any [`crate::llm::Model`] with a
 //! [`ProviderDefaults`] that is applied to every completion
 //! request before delegating to the inner model.
 //!
-//! Mirrors [`blazen_llm::providers::base::BaseProvider`]. Used as the
+//! Mirrors [`blazen_llm::providers::base::LlmProviderDefaults`]. Used as the
 //! foundation for Phase B's `CustomProvider`, and accessible directly so
 //! foreign-language callers can wrap any built-in provider with a system
 //! prompt + default tools + `response_format`.
@@ -16,7 +16,7 @@
 //!
 //! ```kotlin
 //! val provider = newOpenaiModel("sk-...")
-//!     .let { BaseProvider.fromModel(it) }
+//!     .let { LlmProviderDefaults.fromModel(it) }
 //!     .withSystemPrompt("be terse")
 //!     .withToolsJson(toolsJson)
 //! ```
@@ -24,7 +24,7 @@
 use std::sync::Arc;
 
 use blazen_llm::Model as CoreModel;
-use blazen_llm::providers::base::BaseProvider as CoreBaseProvider;
+use blazen_llm::providers::base::LlmProviderDefaults as CoreBaseProvider;
 use blazen_llm::types::{ChatMessage as CoreChatMessage, ModelRequest as CoreModelRequest};
 use parking_lot::RwLock;
 
@@ -35,15 +35,15 @@ use crate::provider_defaults::ProviderDefaults;
 /// A [`crate::llm::Model`] wrapped with applied
 /// [`ProviderDefaults`].
 ///
-/// Construct via [`BaseProvider::from_model`] (wraps an existing
-/// model with no defaults) or [`BaseProvider::with_defaults`]
+/// Construct via [`LlmProviderDefaults::from_model`] (wraps an existing
+/// model with no defaults) or [`LlmProviderDefaults::with_defaults`]
 /// (wraps with explicit defaults). Mutate via the `with_*` builder methods.
 ///
-/// Phase B's `CustomProvider` factories will return `Arc<BaseProvider>`
+/// Phase B's `CustomProvider` factories will return `Arc<LlmProviderDefaults>`
 /// directly; for Phase A this class is reachable by lifting any existing
 /// `Model` factory result.
 #[derive(uniffi::Object)]
-pub struct BaseProvider {
+pub struct LlmProviderDefaults {
     /// Mutable handle so the builder methods (`with_system_prompt`, etc.)
     /// can produce a new `Arc<Self>` without re-implementing every upstream
     /// builder. The lock is uncontended in practice — builders run on a
@@ -51,22 +51,22 @@ pub struct BaseProvider {
     inner: RwLock<CoreBaseProvider>,
 }
 
-impl BaseProvider {
-    /// Internal: wrap an upstream `BaseProvider` in the FFI handle.
+impl LlmProviderDefaults {
+    /// Internal: wrap an upstream `LlmProviderDefaults` in the FFI handle.
     pub(crate) fn from_core(core: CoreBaseProvider) -> Arc<Self> {
         Arc::new(Self {
             inner: RwLock::new(core),
         })
     }
 
-    /// Internal: snapshot the current upstream `BaseProvider` (clone).
+    /// Internal: snapshot the current upstream `LlmProviderDefaults` (clone).
     fn snapshot(&self) -> CoreBaseProvider {
         self.inner.read().clone()
     }
 }
 
 #[uniffi::export]
-impl BaseProvider {
+impl LlmProviderDefaults {
     /// Wrap an existing [`Model`] with empty defaults.
     ///
     /// Equivalent to using the wrapped model directly, but lets callers
@@ -89,7 +89,7 @@ impl BaseProvider {
     }
 
     /// Replace the entire [`ProviderDefaults`] on this provider,
-    /// returning a new `Arc<BaseProvider>` (clone-with-mutation).
+    /// returning a new `Arc<LlmProviderDefaults>` (clone-with-mutation).
     #[must_use]
     pub fn with_defaults(self: Arc<Self>, defaults: ProviderDefaults) -> Arc<Self> {
         let next = self.snapshot().set_defaults(defaults.into());
@@ -154,7 +154,7 @@ impl BaseProvider {
     /// steps, etc.).
     #[must_use]
     pub fn as_model(self: Arc<Self>) -> Arc<Model> {
-        // BaseProvider implements Model — wrap it in the FFI
+        // LlmProviderDefaults implements Model — wrap it in the FFI
         // Model handle so the wrapping defaults are applied on
         // every call.
         let core = self.snapshot();
@@ -164,7 +164,7 @@ impl BaseProvider {
 }
 
 #[uniffi::export(async_runtime = "tokio")]
-impl BaseProvider {
+impl LlmProviderDefaults {
     /// Extract structured output from the model by constraining its
     /// response to a JSON Schema.
     ///
@@ -197,7 +197,7 @@ impl BaseProvider {
             .map(CoreChatMessage::try_from)
             .collect::<Result<Vec<_>, _>>()?;
 
-        // The defaults-aware `BaseProvider::complete` upstream will apply
+        // The defaults-aware `LlmProviderDefaults::complete` upstream will apply
         // any configured `response_format` ONLY when the request itself
         // doesn't already specify one — `extract` always supplies one, so
         // the caller's schema wins.

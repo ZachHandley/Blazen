@@ -1,9 +1,9 @@
-//! `wasm-bindgen` wrapper for [`blazen_llm::providers::base::BaseProvider`].
+//! `wasm-bindgen` wrapper for [`blazen_llm::providers::base::LlmProviderDefaults`].
 //!
 //! V1 surface: a chainable builder that JS callers obtain indirectly (Phase B
 //! adds the `CustomProvider.withDispatch` factory that produces one). The
 //! wrapper has no `#[wasm_bindgen(constructor)]` because WASM does not
-//! support `class extends BaseProvider` — JS users compose behavior through
+//! support `class extends LlmProviderDefaults` — JS users compose behavior through
 //! the dispatch/factory surface, not subclassing.
 //!
 //! Hook fields are stored as [`js_sys::Function`] references; actual
@@ -32,9 +32,9 @@ use super::defaults::WasmProviderDefaults;
 /// [`WasmProviderDefaults`] applied to every completion call.
 ///
 /// JS does not construct this directly. Phase B exposes factories on
-/// `CustomProvider` (and other providers) that return a `BaseProvider`
+/// `CustomProvider` (and other providers) that return a `LlmProviderDefaults`
 /// handle which the user then configures via the builder methods below.
-#[wasm_bindgen(js_name = "BaseProvider")]
+#[wasm_bindgen(js_name = "LlmProviderDefaults")]
 pub struct WasmBaseProvider {
     defaults: Rc<RefCell<WasmProviderDefaults>>,
     model_id: Rc<RefCell<String>>,
@@ -68,7 +68,7 @@ impl Clone for WasmBaseProvider {
     }
 }
 
-#[wasm_bindgen(js_class = "BaseProvider")]
+#[wasm_bindgen(js_class = "LlmProviderDefaults")]
 impl WasmBaseProvider {
     /// Set the default system prompt. Chainable.
     #[wasm_bindgen(js_name = "withSystemPrompt")]
@@ -158,7 +158,7 @@ impl WasmBaseProvider {
             .inner
             .borrow()
             .clone()
-            .ok_or_else(|| JsValue::from_str("extract() requires an inner completion model; build the BaseProvider via a CustomProvider factory"))?;
+            .ok_or_else(|| JsValue::from_str("extract() requires an inner completion model; build the LlmProviderDefaults via a CustomProvider factory"))?;
 
         let schema_json: serde_json::Value = serde_wasm_bindgen::from_value(schema)
             .map_err(|e| JsValue::from_str(&format!("invalid JSON Schema object: {e}")))?;
@@ -189,7 +189,7 @@ impl WasmBaseProvider {
 impl WasmBaseProvider {
     /// Internal constructor used by Phase B factories on `CustomProvider`
     /// and other providers. Not exposed to JS — JS callers obtain a
-    /// `BaseProvider` handle by calling those factories.
+    /// `LlmProviderDefaults` handle by calling those factories.
     #[must_use]
     #[allow(dead_code)] // Used by Phase B factories (CustomProvider.withDispatch, etc).
     pub(crate) fn new_internal(

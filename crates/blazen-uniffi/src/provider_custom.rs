@@ -24,7 +24,7 @@
 //!   this via one of the four factory free functions ([`ollama`],
 //!   [`lm_studio`], [`openai_compat`], [`custom_provider_from_foreign`]).
 //!   Then they call any of the 16 typed methods on it, or chain
-//!   `.as_base()` to reach the [`BaseProvider`] surface for system-prompt /
+//!   `.as_base()` to reach the [`LlmProviderDefaults`] surface for system-prompt /
 //!   tool / response-format defaults.
 //!
 //! ## Adapter
@@ -53,7 +53,7 @@ use blazen_llm::compute::{
     VideoGeneration, VoiceCloning,
 };
 use blazen_llm::error::BlazenError as CoreBlazenError;
-use blazen_llm::providers::base::BaseProvider as CoreBaseProvider;
+use blazen_llm::providers::base::LlmProviderDefaults as CoreBaseProvider;
 use blazen_llm::providers::custom::CustomProvider as CoreCustomProvider;
 use blazen_llm::providers::custom::CustomProviderHandle as CoreCustomProviderHandle;
 use blazen_llm::providers::openai_compat::{
@@ -76,7 +76,7 @@ use crate::llm::{
     ChatMessage, EmbeddingResponse, ModelRequest, ModelResponse, TokenUsage, ToolCall,
 };
 use crate::provider_api_protocol::OpenAiCompatConfig;
-use crate::provider_base::BaseProvider;
+use crate::provider_base::LlmProviderDefaults;
 use crate::streaming::{CompletionStreamSink, StreamChunk as UniffiStreamChunk};
 
 // ---------------------------------------------------------------------------
@@ -699,7 +699,7 @@ impl CoreCustomProvider for UniffiToCoreCustomProviderAdapter {
 /// which applies any per-instance defaults attached via the builders before
 /// forwarding to the underlying [`CustomProvider`].
 ///
-/// The paired [`BaseProvider`] handle returned by [`as_base`](Self::as_base)
+/// The paired [`LlmProviderDefaults`] handle returned by [`as_base`](Self::as_base)
 /// exposes builder-style completion-defaults customisation
 /// (`with_system_prompt`, `with_tools_json`, ...).
 #[derive(uniffi::Object)]
@@ -707,10 +707,10 @@ pub struct CustomProviderHandle {
     /// Upstream handle. Holds the `Arc<dyn CoreCustomProvider>` plus all
     /// per-instance defaults the builders configure.
     inner: parking_lot::RwLock<CoreCustomProviderHandle>,
-    /// Paired [`BaseProvider`] handle so foreign callers can chain
+    /// Paired [`LlmProviderDefaults`] handle so foreign callers can chain
     /// `.with_system_prompt(...)` etc. via [`as_base`](Self::as_base) and
     /// hand the result to APIs taking a generic `Model`.
-    base: Arc<BaseProvider>,
+    base: Arc<LlmProviderDefaults>,
 }
 
 impl CustomProviderHandle {
@@ -718,7 +718,7 @@ impl CustomProviderHandle {
     /// [`CoreCustomProviderHandle`].
     fn from_core(core: CoreCustomProviderHandle) -> Arc<Self> {
         let model: Arc<dyn CoreModel> = Arc::new(core.clone());
-        let base = BaseProvider::from_core(CoreBaseProvider::new(model));
+        let base = LlmProviderDefaults::from_core(CoreBaseProvider::new(model));
         Arc::new(Self {
             inner: parking_lot::RwLock::new(core),
             base,
@@ -733,13 +733,13 @@ impl CustomProviderHandle {
 
 #[uniffi::export]
 impl CustomProviderHandle {
-    /// Return the paired [`BaseProvider`] handle for builder-style chaining.
+    /// Return the paired [`LlmProviderDefaults`] handle for builder-style chaining.
     ///
     /// Use for `.with_system_prompt(...)`, `.with_tools_json(...)`,
     /// `.with_response_format_json(...)`, or to hand the provider to an API
     /// expecting an opaque `Model`-shaped handle.
     #[must_use]
-    pub fn as_base(self: Arc<Self>) -> Arc<BaseProvider> {
+    pub fn as_base(self: Arc<Self>) -> Arc<LlmProviderDefaults> {
         Arc::clone(&self.base)
     }
 

@@ -117,7 +117,7 @@ pub use persist::{
 };
 pub use pipeline::{Pipeline, PipelineBuilder};
 pub use provider_api_protocol::{ApiProtocol, AuthMethod, KeyValue, OpenAiCompatConfig};
-pub use provider_base::BaseProvider;
+pub use provider_base::LlmProviderDefaults;
 pub use provider_custom::{
     CustomProvider, CustomProviderHandle, custom_provider_from_foreign, lm_studio,
     new_openai_compat_config, ollama, openai_compat,

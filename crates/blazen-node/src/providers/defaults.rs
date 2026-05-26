@@ -269,7 +269,7 @@ impl JsProviderDefaults {
 
 impl JsProviderDefaults {
     /// Internal: snapshot the JS-side defaults into a Rust
-    /// [`ProviderDefaults`] for use by `BaseProvider`. V1
+    /// [`ProviderDefaults`] for use by `LlmProviderDefaults`. V1
     /// snapshots field values only — hooks are dropped because they
     /// require the Phase B dispatch wiring to convert TSFs into the
     /// Rust closure aliases.

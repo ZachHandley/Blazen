@@ -114,7 +114,7 @@ pub mod typed_tool;
 pub mod types;
 pub mod usage_recording;
 
-pub use providers::base::BaseProvider;
+pub use providers::base::LlmProviderDefaults;
 pub use providers::custom::{ApiProtocol, CustomProvider, CustomProviderHandle};
 #[cfg(any(
     all(target_arch = "wasm32", not(target_os = "wasi")),

@@ -5,7 +5,7 @@
 //! the 9 request types (image / upscale / video / speech / voice-clone / music
 //! / transcription / 3D / background-removal) and 7 result types (image /
 //! video / audio / 3D / transcription / segment / voice handle) that drive
-//! the `BaseProvider` + `CustomProvider` foreign-side extension surface.
+//! the `LlmProviderDefaults` + `CustomProvider` foreign-side extension surface.
 //!
 //! Distinct from [`crate::compute`], which exposes a parallel "job model"
 //! abstraction (`TtsModel` / `SttModel` / `ImageGenModel`) with flattened
