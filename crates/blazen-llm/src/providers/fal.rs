@@ -3619,6 +3619,51 @@ impl crate::traits::ProviderInfo for FalProvider {
 }
 
 // ---------------------------------------------------------------------------
+// BaseProvider + LLMProvider impls (polymorphic provider class hierarchy)
+// ---------------------------------------------------------------------------
+
+impl crate::providers::root::BaseProvider for FalProvider {
+    fn metadata(&self) -> &crate::providers::root::ProviderMetadata {
+        static META: std::sync::LazyLock<crate::providers::root::ProviderMetadata> =
+            std::sync::LazyLock::new(|| {
+                crate::providers::root::ProviderMetadata::new(
+                    "fal",
+                    crate::providers::root::CapabilityKind::Llm,
+                )
+            });
+        &META
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::providers::capabilities::LLMProvider for FalProvider {
+    async fn complete(
+        &self,
+        request: crate::types::ModelRequest,
+    ) -> Result<crate::types::ModelResponse, crate::error::BlazenError> {
+        <Self as crate::traits::Model>::complete(self, request).await
+    }
+    async fn stream(
+        &self,
+        request: crate::types::ModelRequest,
+    ) -> Result<
+        std::pin::Pin<
+            Box<
+                dyn futures_util::Stream<
+                        Item = Result<crate::types::StreamChunk, crate::error::BlazenError>,
+                    > + Send,
+            >,
+        >,
+        crate::error::BlazenError,
+    > {
+        <Self as crate::traits::Model>::stream(self, request).await
+    }
+    fn model_id(&self) -> &str {
+        <Self as crate::traits::Model>::model_id(self)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 

@@ -1117,6 +1117,7 @@ dependencies = [
  "blazen-llm-tgi",
  "blazen-llm-vllm",
  "bytes",
+ "candle-core",
  "chrono",
  "futures-core",
  "futures-util",

@@ -131,7 +131,7 @@ threed-compat-proxy = ["threed", "blazen-3d/compat-proxy"]
 # fetch the image bytes from HTTP / HTTPS / data: URIs. The trait
 # bridge lives at `src/backends/triposr.rs` and is gated on this
 # feature.
-triposr = ["threed", "blazen-3d/triposr", "dep:image", "dep:reqwest"]
+triposr = ["threed", "blazen-3d/triposr", "dep:image", "dep:reqwest", "dep:candle-core"]
 
 [dependencies]
 blazen-events.workspace = true
@@ -175,6 +175,7 @@ blazen-llm-lmstudio = { workspace = true, optional = true }
 blazen-audio-vc = { workspace = true, optional = true }
 blazen-3d = { version = "0.0.0-dev", path = "../blazen-3d", optional = true }
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"], optional = true }
+candle-core = { workspace = true, optional = true }
 
 # Timer/runtime features only on native targets (mio doesn't support any wasm32 target)
 [target.'cfg(not(any(target_os = "wasi", target_arch = "wasm32")))'.dependencies]
