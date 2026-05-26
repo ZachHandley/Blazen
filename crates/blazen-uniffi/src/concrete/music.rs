@@ -485,3 +485,217 @@ impl FalMusicProvider {
         runtime().block_on(async move { this.generate_sfx(prompt, duration_seconds).await })
     }
 }
+
+// ===========================================================================
+// Polymorphic capability-base trait impls (P4.2.x.3.music)
+// ===========================================================================
+//
+// Each `<Engine>Provider` implements `BaseProvider` + `MusicProvider`
+// from `crate::concrete::bases` so foreign callers can hold a
+// `MusicProvider` reference / `Arc<dyn BaseProvider>` and dispatch
+// polymorphically. The trait methods use `&self` receivers (UniFFI 0.31
+// requirement); the existing `Arc<Self>`-receiver inherent methods on
+// each class remain in place as the per-class ergonomic surface, and
+// Rust's inherent-first method resolution keeps them the default
+// callable for `self.generate_music(...)` call sites.
+//
+// Engines that don't natively support a method (MusicGen has no SFX,
+// AudioGen has no music) explicitly return `BlazenError::Unsupported`
+// because UniFFI 0.31 forbids default bodies on `#[uniffi::export]`'d
+// trait methods.
+
+#[cfg(feature = "audio-music-musicgen")]
+impl crate::concrete::bases::BaseProvider for MusicGenProvider {
+    fn provider_id(&self) -> String {
+        "musicgen".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Music
+    }
+}
+
+#[cfg(feature = "audio-music-musicgen")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::MusicProvider for MusicGenProvider {
+    fn provider_id(&self) -> String {
+        "musicgen".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Music
+    }
+
+    async fn generate_music(
+        &self,
+        prompt: String,
+        duration_seconds: f32,
+    ) -> Result<MusicResult, BlazenError> {
+        use blazen_llm::MusicProvider as _;
+        let req = build_request(prompt, duration_seconds);
+        let result = self
+            .inner
+            .generate_music(req)
+            .await
+            .map_err(|e| provider_err("MusicGeneration", "musicgen", e))?;
+        Ok(audio_result_to_music_result(result))
+    }
+
+    async fn generate_sfx(
+        &self,
+        _prompt: String,
+        _duration_seconds: f32,
+    ) -> Result<MusicResult, BlazenError> {
+        Err(BlazenError::Unsupported {
+            message: "MusicGenProvider does not support generate_sfx — MusicGen is music-only. \
+                      Use AudioGenProvider or StableAudioProvider for SFX."
+                .to_string(),
+        })
+    }
+}
+
+#[cfg(feature = "audio-music-audiogen")]
+impl crate::concrete::bases::BaseProvider for AudioGenProvider {
+    fn provider_id(&self) -> String {
+        "audiogen".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Music
+    }
+}
+
+#[cfg(feature = "audio-music-audiogen")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::MusicProvider for AudioGenProvider {
+    fn provider_id(&self) -> String {
+        "audiogen".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Music
+    }
+
+    async fn generate_music(
+        &self,
+        _prompt: String,
+        _duration_seconds: f32,
+    ) -> Result<MusicResult, BlazenError> {
+        Err(BlazenError::Unsupported {
+            message: "AudioGenProvider does not support generate_music — AudioGen is sfx-only. \
+                      Use MusicGenProvider or StableAudioProvider for music."
+                .to_string(),
+        })
+    }
+
+    async fn generate_sfx(
+        &self,
+        prompt: String,
+        duration_seconds: f32,
+    ) -> Result<MusicResult, BlazenError> {
+        use blazen_llm::MusicProvider as _;
+        let req = build_request(prompt, duration_seconds);
+        let result = self
+            .inner
+            .generate_sfx(req)
+            .await
+            .map_err(|e| provider_err("MusicGeneration", "audiogen", e))?;
+        Ok(audio_result_to_music_result(result))
+    }
+}
+
+#[cfg(feature = "audio-music-stable-audio")]
+impl crate::concrete::bases::BaseProvider for StableAudioProvider {
+    fn provider_id(&self) -> String {
+        "stable-audio".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Music
+    }
+}
+
+#[cfg(feature = "audio-music-stable-audio")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::MusicProvider for StableAudioProvider {
+    fn provider_id(&self) -> String {
+        "stable-audio".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Music
+    }
+
+    async fn generate_music(
+        &self,
+        prompt: String,
+        duration_seconds: f32,
+    ) -> Result<MusicResult, BlazenError> {
+        use blazen_llm::MusicProvider as _;
+        let req = build_request(prompt, duration_seconds);
+        let result = self
+            .inner
+            .generate_music(req)
+            .await
+            .map_err(|e| provider_err("MusicGeneration", "stable-audio", e))?;
+        Ok(audio_result_to_music_result(result))
+    }
+
+    async fn generate_sfx(
+        &self,
+        prompt: String,
+        duration_seconds: f32,
+    ) -> Result<MusicResult, BlazenError> {
+        use blazen_llm::MusicProvider as _;
+        let req = build_request(prompt, duration_seconds);
+        let result = self
+            .inner
+            .generate_sfx(req)
+            .await
+            .map_err(|e| provider_err("MusicGeneration", "stable-audio", e))?;
+        Ok(audio_result_to_music_result(result))
+    }
+}
+
+impl crate::concrete::bases::BaseProvider for FalMusicProvider {
+    fn provider_id(&self) -> String {
+        "fal-music".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Music
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::concrete::bases::MusicProvider for FalMusicProvider {
+    fn provider_id(&self) -> String {
+        "fal-music".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Music
+    }
+
+    async fn generate_music(
+        &self,
+        prompt: String,
+        duration_seconds: f32,
+    ) -> Result<MusicResult, BlazenError> {
+        use blazen_llm::MusicProvider as _;
+        let req = build_request(prompt, duration_seconds);
+        let result = self
+            .inner
+            .generate_music(req)
+            .await
+            .map_err(|e| provider_err("MusicGeneration", "fal", e))?;
+        Ok(audio_result_to_music_result(result))
+    }
+
+    async fn generate_sfx(
+        &self,
+        prompt: String,
+        duration_seconds: f32,
+    ) -> Result<MusicResult, BlazenError> {
+        use blazen_llm::MusicProvider as _;
+        let req = build_request(prompt, duration_seconds);
+        let result = self
+            .inner
+            .generate_sfx(req)
+            .await
+            .map_err(|e| provider_err("MusicGeneration", "fal", e))?;
+        Ok(audio_result_to_music_result(result))
+    }
+}
