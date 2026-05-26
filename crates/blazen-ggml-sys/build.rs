@@ -33,6 +33,12 @@ fn main() {
     cfg.define("GGML_STATIC", "ON");
     cfg.define("GGML_BUILD_EXAMPLES", "OFF");
     cfg.define("GGML_BUILD_TESTS", "OFF");
+
+    // The vendored ggml header has been patched to set GGML_MAX_NAME=128
+    // (instead of the upstream default 64) so stable-diffusion.cpp — which
+    // requires the constant to be at least 128 — can find_package this
+    // build and have its static_assert pass. See
+    // vendor/ggml/include/ggml.h around line 229 for the patch.
     // Install layout: `${install_prefix}/{lib,include,lib/cmake/ggml}` so
     // downstream `find_package(ggml REQUIRED)` resolves against our build.
     cfg.define("CMAKE_INSTALL_PREFIX", &install_prefix);

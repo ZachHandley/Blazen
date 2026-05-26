@@ -2994,10 +2994,9 @@ dependencies = [
 [[package]]
 name = "diffusion-rs-sys"
 version = "0.1.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8412bc63c3e1d8ddd8825e46ffb17a0fe2056446a61b86dfd8a2344c87342bdc"
 dependencies = [
  "bindgen 0.71.1",
+ "blazen-ggml-sys",
  "cmake",
  "fs_extra",
 ]

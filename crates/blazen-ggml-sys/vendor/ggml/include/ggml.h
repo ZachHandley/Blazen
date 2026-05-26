@@ -226,7 +226,11 @@
 #define GGML_MAX_OP_PARAMS      64
 
 #ifndef GGML_MAX_NAME
-#   define GGML_MAX_NAME        64
+// Blazen: bumped from upstream default 64 to 128 so stable-diffusion.cpp's
+// `static_assert(GGML_MAX_NAME >= 128)` in src/ggml_extend.hpp:91 passes
+// when we use this ggml as the system ggml. llama-cpp / whisper-rs use
+// GGML_MAX_NAME as an upper bound — 128 is a superset of 64.
+#   define GGML_MAX_NAME        128
 #endif
 
 #define GGML_DEFAULT_N_THREADS  4

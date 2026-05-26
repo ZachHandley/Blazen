@@ -50,6 +50,7 @@ members = [
     "crates/blazen-video-core",
     "crates/blazen-ggml-sys",
     "crates/blazen-whisper-sys",
+    "crates/blazen-diffusion-sys",
 ]
 exclude = [
     "crates/blazen-wasm",
@@ -265,3 +266,12 @@ napi = { path = "crates/napi-patched" }
 # `-Wl,--allow-multiple-definition` band-aid in bindings/go/cgo_link.go
 # papers over.
 whisper-rs-sys = { path = "crates/blazen-whisper-sys" }
+
+# Blazen fork of diffusion-rs-sys 0.1.19. Same surgery as the
+# whisper-rs-sys fork above: adds a `system-ggml` cargo feature whose
+# build.rs sets `SD_USE_SYSTEM_GGML=ON` + `CMAKE_PREFIX_PATH=
+# $DEP_GGML_PREFIX` and skips the historic `cargo:rustc-link-lib=
+# static=ggml*` emit so stable-diffusion.cpp's cmake build picks up
+# blazen-ggml-sys's install tree instead of compiling its own in-tree
+# ggml. Second of three ggml duplications eliminated.
+diffusion-rs-sys = { path = "crates/blazen-diffusion-sys" }
