@@ -258,9 +258,44 @@ impl crate::providers::capabilities::ThreeDProvider for Compat3dProvider {
             "Compat3dProvider is an HTTP-proxy for the texturize / rig / refine / animate \
              post-processing stages — text-to-3D / image-to-3D generation is not part of the \
              compat-proxy wire contract. Use TripoSrProvider (or another generation backend) to \
-             produce the base mesh, then forward the result through Compat3dProvider's inner \
-             `Texturizer3dBackend` / `Rigger3dBackend` / `Refiner3dBackend` / `Animator3dBackend` \
-             trait methods.",
+             produce the base mesh, then forward the result through Compat3dProvider's post-proc \
+             methods (texturize / rig / refine / animate).",
         ))
+    }
+
+    async fn texturize(
+        &self,
+        mesh_glb: &[u8],
+        request: crate::compute::requests::TexturizeRequest,
+    ) -> Result<crate::compute::results::TexturizeResult, crate::error::BlazenError> {
+        use blazen_3d::Texturizer3dBackend;
+        Ok(self.inner.texturize(mesh_glb, request).await?)
+    }
+
+    async fn rig(
+        &self,
+        mesh_glb: &[u8],
+        request: crate::compute::requests::RigRequest,
+    ) -> Result<crate::compute::results::RigResult, crate::error::BlazenError> {
+        use blazen_3d::Rigger3dBackend;
+        Ok(self.inner.rig(mesh_glb, request).await?)
+    }
+
+    async fn refine(
+        &self,
+        mesh_glb: &[u8],
+        request: crate::compute::requests::RefineRequest,
+    ) -> Result<crate::compute::results::RefineResult, crate::error::BlazenError> {
+        use blazen_3d::Refiner3dBackend;
+        Ok(self.inner.refine(mesh_glb, request).await?)
+    }
+
+    async fn animate(
+        &self,
+        rigged_glb: &[u8],
+        request: crate::compute::requests::AnimateRequest,
+    ) -> Result<crate::compute::results::AnimateResult, crate::error::BlazenError> {
+        use blazen_3d::Animator3dBackend;
+        Ok(self.inner.animate(rigged_glb, request).await?)
     }
 }

@@ -405,6 +405,84 @@ impl From<serde_json::Error> for BlazenError {
     }
 }
 
+// ---------------------------------------------------------------------------
+// blazen-3d capability-trait errors
+// ---------------------------------------------------------------------------
+//
+// The four post-proc capability traits in `blazen-3d` (`Texturizer3dBackend`
+// / `Rigger3dBackend` / `Refiner3dBackend` / `Animator3dBackend`) each
+// return a parallel error enum with the same variant set
+// (`Io` / `EngineNotAvailable` / `InvalidInput` / `Backend` / `Unsupported`).
+// The `From` impls below let providers in `crates/blazen-llm/src/providers/`
+// delegate to those backends with `?` and surface a `BlazenError` with a
+// stage-tagged message that callers can match on.
+
+#[cfg(feature = "threed")]
+impl From<blazen_3d::Texturizer3dError> for BlazenError {
+    fn from(err: blazen_3d::Texturizer3dError) -> Self {
+        use blazen_3d::Texturizer3dError as E;
+        match err {
+            E::Io(e) => Self::provider("compat-3d", format!("texturize io: {e}")),
+            E::EngineNotAvailable(s) => {
+                Self::unsupported(format!("texturize engine not available: {s}"))
+            }
+            E::InvalidInput(s) => Self::validation(format!("invalid texturize input: {s}")),
+            E::Backend(s) => Self::provider("compat-3d", format!("texturize backend: {s}")),
+            E::Unsupported(s) => {
+                Self::unsupported(format!("texturize capability not supported: {s}"))
+            }
+        }
+    }
+}
+
+#[cfg(feature = "threed")]
+impl From<blazen_3d::Rigger3dError> for BlazenError {
+    fn from(err: blazen_3d::Rigger3dError) -> Self {
+        use blazen_3d::Rigger3dError as E;
+        match err {
+            E::Io(e) => Self::provider("compat-3d", format!("rig io: {e}")),
+            E::EngineNotAvailable(s) => Self::unsupported(format!("rig engine not available: {s}")),
+            E::InvalidInput(s) => Self::validation(format!("invalid rig input: {s}")),
+            E::Backend(s) => Self::provider("compat-3d", format!("rig backend: {s}")),
+            E::Unsupported(s) => Self::unsupported(format!("rig capability not supported: {s}")),
+        }
+    }
+}
+
+#[cfg(feature = "threed")]
+impl From<blazen_3d::Refiner3dError> for BlazenError {
+    fn from(err: blazen_3d::Refiner3dError) -> Self {
+        use blazen_3d::Refiner3dError as E;
+        match err {
+            E::Io(e) => Self::provider("compat-3d", format!("refine io: {e}")),
+            E::EngineNotAvailable(s) => {
+                Self::unsupported(format!("refine engine not available: {s}"))
+            }
+            E::InvalidInput(s) => Self::validation(format!("invalid refine input: {s}")),
+            E::Backend(s) => Self::provider("compat-3d", format!("refine backend: {s}")),
+            E::Unsupported(s) => Self::unsupported(format!("refine capability not supported: {s}")),
+        }
+    }
+}
+
+#[cfg(feature = "threed")]
+impl From<blazen_3d::Animator3dError> for BlazenError {
+    fn from(err: blazen_3d::Animator3dError) -> Self {
+        use blazen_3d::Animator3dError as E;
+        match err {
+            E::Io(e) => Self::provider("compat-3d", format!("animate io: {e}")),
+            E::EngineNotAvailable(s) => {
+                Self::unsupported(format!("animate engine not available: {s}"))
+            }
+            E::InvalidInput(s) => Self::validation(format!("invalid animate input: {s}")),
+            E::Backend(s) => Self::provider("compat-3d", format!("animate backend: {s}")),
+            E::Unsupported(s) => {
+                Self::unsupported(format!("animate capability not supported: {s}"))
+            }
+        }
+    }
+}
+
 /// Backwards-compatible alias.
 #[deprecated(note = "use BlazenError instead")]
 pub type LlmError = BlazenError;
