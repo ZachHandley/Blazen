@@ -1,3 +1,7 @@
+// Forked from upstream diffusion-rs-sys 0.1.19 — keep clippy quiet on
+// upstream patterns the Blazen workspace's lint policy normally flags.
+#![allow(clippy::all)]
+
 use std::{
     env,
     fs::{create_dir_all, read_dir},

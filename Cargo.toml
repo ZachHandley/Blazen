@@ -49,10 +49,16 @@ members = [
     "crates/blazen-3d-core",
     "crates/blazen-video-core",
     "crates/blazen-ggml-sys",
-    "crates/blazen-whisper-sys",
-    "crates/blazen-diffusion-sys",
-    "crates/blazen-llama-cpp-sys-2",
 ]
+# NOTE: The three -sys forks (blazen-whisper-sys, blazen-diffusion-sys,
+# blazen-llama-cpp-sys-2) are intentionally NOT workspace members.
+# They're consumed via `[patch.crates-io]` only — making them members
+# would cause `cargo --workspace --all-features` to activate every
+# upstream feature (openblas, cuda, hipblas, intel-sycl, ...) which
+# requires platform-specific toolchains the CI hosts don't carry.
+# Their build paths are still cargo-checked because the consumer crates
+# (blazen-llm-llamacpp, blazen-audio-stt, blazen-image-diffusion) pull
+# them in via the patched dep edge.
 exclude = [
     "crates/blazen-wasm",
     "crates/blazen-wasm-sdk",

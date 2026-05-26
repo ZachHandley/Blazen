@@ -1,3 +1,7 @@
+// Forked from upstream llama-cpp-sys-2 0.1.146 — keep clippy quiet on
+// upstream patterns the Blazen workspace's lint policy normally flags.
+#![allow(clippy::all)]
+
 use cmake::Config;
 use glob::glob;
 use std::env;
@@ -1121,7 +1125,13 @@ fn main() {
             let dst = target_dir.join(filename);
             debug_log!("HARD LINK {} TO {}", asset.display(), dst.display());
             if !dst.exists() {
-                std::fs::hard_link(asset.clone(), dst).unwrap();
+                // Tolerate races: another build may have just created
+                // this link. EEXIST is fine — the link is good either way.
+                if let Err(e) = std::fs::hard_link(asset.clone(), &dst) {
+                    if e.kind() != std::io::ErrorKind::AlreadyExists {
+                        panic!("hard_link {:?}: {e}", dst);
+                    }
+                }
             }
 
             // Copy DLLs to examples as well
@@ -1129,7 +1139,11 @@ fn main() {
                 let dst = target_dir.join("examples").join(filename);
                 debug_log!("HARD LINK {} TO {}", asset.display(), dst.display());
                 if !dst.exists() {
-                    std::fs::hard_link(asset.clone(), dst).unwrap();
+                    if let Err(e) = std::fs::hard_link(asset.clone(), &dst) {
+                        if e.kind() != std::io::ErrorKind::AlreadyExists {
+                            panic!("hard_link {:?}: {e}", dst);
+                        }
+                    }
                 }
             }
 
@@ -1137,7 +1151,13 @@ fn main() {
             let dst = target_dir.join("deps").join(filename);
             debug_log!("HARD LINK {} TO {}", asset.display(), dst.display());
             if !dst.exists() {
-                std::fs::hard_link(asset.clone(), dst).unwrap();
+                // Tolerate races: another build may have just created
+                // this link. EEXIST is fine — the link is good either way.
+                if let Err(e) = std::fs::hard_link(asset.clone(), &dst) {
+                    if e.kind() != std::io::ErrorKind::AlreadyExists {
+                        panic!("hard_link {:?}: {e}", dst);
+                    }
+                }
             }
         }
     }

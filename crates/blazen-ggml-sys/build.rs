@@ -57,36 +57,14 @@ fn main() {
         cfg.define("GGML_METAL", "OFF");
     }
 
-    if feature_enabled("blas") {
-        cfg.define("GGML_BLAS", "ON");
-        if let Some(blas_vendor) = env::var("GGML_BLAS_VENDOR")
-            .ok()
-            .or_else(|| env::var("BLA_VENDOR").ok())
-            .filter(|v| !v.trim().is_empty())
-        {
-            cfg.define("BLA_VENDOR", &blas_vendor);
-        }
-        if target.contains("apple") {
-            cfg.define("GGML_ACCELERATE", "ON");
-        }
-    } else {
-        cfg.define("GGML_BLAS", "OFF");
-    }
+    cfg.define("GGML_BLAS", "OFF");
 
-    map_feature_cmake(&mut cfg, "cuda", "GGML_CUDA");
-    map_feature_cmake(&mut cfg, "vulkan", "GGML_VULKAN");
-    map_feature_cmake(&mut cfg, "hip", "GGML_HIP");
-    map_feature_cmake(&mut cfg, "musa", "GGML_MUSA");
-    map_feature_cmake(&mut cfg, "opencl", "GGML_OPENCL");
-    map_feature_cmake(&mut cfg, "rpc", "GGML_RPC");
-    map_feature_cmake(&mut cfg, "sycl", "GGML_SYCL");
-    map_feature_cmake(&mut cfg, "webgpu", "GGML_WEBGPU");
-    map_feature_cmake(&mut cfg, "openvino", "GGML_OPENVINO");
-    map_feature_cmake(&mut cfg, "hexagon", "GGML_HEXAGON");
-    map_feature_cmake(&mut cfg, "cann", "GGML_CANN");
-    map_feature_cmake(&mut cfg, "zendnn", "GGML_ZENDNN");
-    map_feature_cmake(&mut cfg, "zdnn", "GGML_ZDNN");
-    map_feature_cmake(&mut cfg, "virtgpu", "GGML_VIRTGPU");
+    // Force-disable GPU backends — we don't expose cargo features for
+    // them today (see Cargo.toml). Setting these explicitly prevents
+    // ggml's CMakeLists.txt defaults from auto-detecting host toolchains.
+    cfg.define("GGML_CUDA", "OFF");
+    cfg.define("GGML_VULKAN", "OFF");
+    cfg.define("GGML_HIP", "OFF");
 
     // `cmake::Config::build()` runs cmake + cmake --build + cmake
     // --install (the install step honors CMAKE_INSTALL_PREFIX).
@@ -126,52 +104,7 @@ fn main() {
     if feature_enabled("metal") && target.contains("apple") {
         println!("cargo:rustc-link-lib=static=ggml-metal");
     }
-    if feature_enabled("cuda") {
-        println!("cargo:rustc-link-lib=static=ggml-cuda");
-    }
-    if feature_enabled("vulkan") {
-        println!("cargo:rustc-link-lib=static=ggml-vulkan");
-        emit_vulkan_loader_links(&target);
-    }
-    if feature_enabled("hip") {
-        println!("cargo:rustc-link-lib=static=ggml-hip");
-    }
-    if feature_enabled("musa") {
-        println!("cargo:rustc-link-lib=static=ggml-musa");
-    }
-    if feature_enabled("opencl") {
-        println!("cargo:rustc-link-lib=static=ggml-opencl");
-    }
-    if feature_enabled("blas") {
-        println!("cargo:rustc-link-lib=static=ggml-blas");
-    }
-    if feature_enabled("rpc") {
-        println!("cargo:rustc-link-lib=static=ggml-rpc");
-    }
-    if feature_enabled("sycl") {
-        println!("cargo:rustc-link-lib=static=ggml-sycl");
-    }
-    if feature_enabled("webgpu") {
-        println!("cargo:rustc-link-lib=static=ggml-webgpu");
-    }
-    if feature_enabled("openvino") {
-        println!("cargo:rustc-link-lib=static=ggml-openvino");
-    }
-    if feature_enabled("hexagon") {
-        println!("cargo:rustc-link-lib=static=ggml-hexagon");
-    }
-    if feature_enabled("cann") {
-        println!("cargo:rustc-link-lib=static=ggml-cann");
-    }
-    if feature_enabled("zendnn") {
-        println!("cargo:rustc-link-lib=static=ggml-zendnn");
-    }
-    if feature_enabled("zdnn") {
-        println!("cargo:rustc-link-lib=static=ggml-zdnn");
-    }
-    if feature_enabled("virtgpu") {
-        println!("cargo:rustc-link-lib=static=ggml-virtgpu");
-    }
+    // GPU-backend link lines intentionally omitted — see Cargo.toml.
 
     println!("cargo:rustc-link-lib=static=ggml-cpu");
     println!("cargo:rustc-link-lib=static=ggml-base");
@@ -209,6 +142,7 @@ fn feature_enabled(name: &str) -> bool {
     .is_ok()
 }
 
+#[allow(dead_code)]
 fn map_feature_cmake(cfg: &mut cmake::Config, feature: &str, cmake_opt: &str) {
     if feature_enabled(feature) {
         cfg.define(cmake_opt, "ON");
@@ -221,46 +155,8 @@ fn validate_features(target: &str) {
             "cargo:warning=blazen-ggml-sys: `metal` feature ignored on non-Apple target ({target})"
         );
     }
-    if feature_enabled("cuda") && target.contains("apple") {
-        panic!("blazen-ggml-sys: `cuda` feature is not supported on Apple targets");
-    }
 }
 
-fn emit_vulkan_loader_links(target: &str) {
-    for dir in vulkan_search_dirs(target) {
-        if dir.exists() {
-            println!("cargo:rustc-link-search=native={}", dir.display());
-        }
-    }
-    let lib = if target.contains("apple") {
-        "dylib=vulkan"
-    } else if target.contains("windows") {
-        "vulkan-1"
-    } else {
-        "vulkan"
-    };
-    println!("cargo:rustc-link-lib={lib}");
-}
-
-fn vulkan_search_dirs(target: &str) -> Vec<PathBuf> {
-    let mut dirs = Vec::new();
-    if let Ok(sdk) = env::var("VULKAN_SDK") {
-        let sdk = PathBuf::from(sdk);
-        if target.contains("windows") {
-            dirs.push(sdk.join("Lib"));
-        } else {
-            dirs.push(sdk.join("lib"));
-            if target.contains("apple") {
-                dirs.push(sdk.join("macOS").join("lib"));
-            }
-        }
-    }
-    if target.contains("apple") {
-        dirs.push(PathBuf::from("/opt/homebrew/lib"));
-        dirs.push(PathBuf::from("/usr/local/lib"));
-    }
-    dirs
-}
 
 // Tell rustc about the `Path` import even though we don't use it directly.
 const _: fn() = || {

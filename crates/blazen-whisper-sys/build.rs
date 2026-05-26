@@ -1,4 +1,6 @@
-#![allow(clippy::uninlined_format_args)]
+// Forked from upstream whisper-rs-sys 0.15.0 — keep clippy quiet on
+// upstream patterns the Blazen workspace's lint policy normally flags.
+#![allow(clippy::all)]
 
 extern crate bindgen;
 extern crate semver;

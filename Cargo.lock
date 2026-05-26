@@ -2996,7 +2996,6 @@ name = "diffusion-rs-sys"
 version = "0.1.19"
 dependencies = [
  "bindgen 0.71.1",
- "blazen-ggml-sys",
  "cmake",
  "fs_extra",
 ]
@@ -11183,7 +11182,6 @@ name = "whisper-rs-sys"
 version = "0.15.0"
 dependencies = [
  "bindgen 0.72.1",
- "blazen-ggml-sys",
  "cfg-if",
  "cmake",
  "fs_extra",

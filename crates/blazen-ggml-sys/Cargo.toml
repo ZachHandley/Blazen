@@ -27,23 +27,21 @@ crate-type = ["rlib"]
 default = []
 # Build with -march=native (host-tuned). Off by default for portability.
 native = []
-# Backends. Each pulls the matching `GGML_<BACKEND>=ON` cmake flag.
-cuda = []
+# Metal backend — Apple-only. On non-Apple targets the build.rs ignores
+# this feature even when active, so `cargo build --all-features` on
+# Linux/Windows is a no-op rather than a hard cmake failure.
 metal = []
-vulkan = []
-hip = []
-musa = []
-opencl = []
-blas = []
-rpc = []
-sycl = []
-webgpu = []
-openvino = []
-hexagon = []
-cann = []
-zendnn = []
-zdnn = []
-virtgpu = []
+# NOTE: cuda / hip / vulkan backends are intentionally NOT exposed
+# here as cargo features. Activating them via `--all-features` on a
+# host without the matching toolchain (nvcc / HIP runtime / Vulkan
+# SDK) triggers hard cmake errors that block CI on every platform we
+# care about. Until the workspace has a way to mark these as
+# platform-gated, the shared blazen-ggml-sys is CPU+Metal only.
+# Consumer crates (llama-cpp-sys-2, whisper-rs-sys, diffusion-rs-sys)
+# remain free to enable cuda/hip/vulkan in their OWN cmake builds;
+# those paths just won't dedupe against this crate today. Follow-up:
+# add gated GPU-backend cargo features here that detect the toolchain
+# in build.rs before emitting the cmake `GGML_<BACKEND>=ON` flag.
 
 [build-dependencies]
 cmake = "0.1"
