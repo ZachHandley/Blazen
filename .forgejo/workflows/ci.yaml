@@ -32,6 +32,14 @@ env:
   # (Ada — covers the 4070 Ti minibeast + 4090 BeastPC). Bump to "89;120"
   # when the inbound 5070 Ti / 5090 Blackwell rig joins CI.
   CUDA_COMPUTE_CAP: "89"
+  # cudarc's build.rs probes `nvcc --version` via PATH and panics when nvcc
+  # isn't found. The forgejo-runner systemd unit runs with an empty
+  # Environment= and doesn't pick up /opt/cuda/bin from the user shell, so
+  # set CUDA_HOME explicitly — cudarc, candle-kernels (bindgen-cuda) and
+  # candle-core all honor it and resolve ${CUDA_HOME}/bin/nvcc directly,
+  # skipping the PATH lookup. /opt/cuda matches the Arch `cuda` package
+  # layout on our minibeast + BeastPC runners.
+  CUDA_HOME: "/opt/cuda"
 
 jobs:
   # ===========================================
