@@ -460,6 +460,18 @@ module Blazen
       # Optional: only present when libblazen_cabi was built with `whispercpp`.
     end
     begin
+      attach_function :blazen_tts_model_new_spark,
+                      [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
+    rescue ::FFI::NotFoundError
+      # Optional: only present when libblazen_cabi was built with `audio-tts-spark`.
+    end
+    begin
+      attach_function :blazen_stt_model_new_faster_whisper,
+                      [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
+    rescue ::FFI::NotFoundError
+      # Optional: only present when libblazen_cabi was built with `audio-stt-faster-whisper`.
+    end
+    begin
       attach_function :blazen_image_gen_model_new_diffusion,
                       [:pointer, :pointer, :int32, :int32, :int32, :float,
                        :pointer, :pointer],

@@ -303,6 +303,37 @@ module Blazen
       TtsModel.new(out_model.read_pointer)
     end
 
+    # Build a local Spark-TTS text-to-speech model (when the native
+    # library is built with the +audio-tts-spark+ feature).
+    #
+    # Spark-TTS bundle weights ship under CC-BY-NC-SA-4.0 — non-commercial
+    # use only. The backend emits a one-shot warning on first synthesis.
+    #
+    # @param model_id [String, nil] Hugging Face bundle id (default
+    #   +"SparkAudio/Spark-TTS-0.5B"+)
+    # @param model_dir [String, nil] pre-resolved local bundle directory;
+    #   when non-nil, the HF download is skipped
+    # @param revision [String, nil] HF revision pin (branch / tag / commit)
+    # @return [Blazen::Compute::TtsModel]
+    # @raise [Blazen::UnsupportedError] when the +audio-tts-spark+ feature is missing
+    def self.spark_tts(model_id: nil, model_dir: nil, revision: nil)
+      unless Blazen::FFI.respond_to?(:blazen_tts_model_new_spark)
+        raise Blazen::UnsupportedError, "blazen was built without the 'audio-tts-spark' feature"
+      end
+
+      out_model = ::FFI::MemoryPointer.new(:pointer)
+      out_err   = ::FFI::MemoryPointer.new(:pointer)
+      Blazen::FFI.with_cstring(model_id) do |mid|
+        Blazen::FFI.with_cstring(model_dir) do |mdir|
+          Blazen::FFI.with_cstring(revision) do |rev|
+            Blazen::FFI.blazen_tts_model_new_spark(mid, mdir, rev, out_model, out_err)
+          end
+        end
+      end
+      Blazen::FFI.check_error!(out_err)
+      TtsModel.new(out_model.read_pointer)
+    end
+
     # Build a local whisper.cpp speech-to-text model (when the native
     # library is built with the +whispercpp+ feature).
     #
@@ -323,6 +354,38 @@ module Blazen
         Blazen::FFI.with_cstring(device) do |dev|
           Blazen::FFI.with_cstring(language) do |lang|
             Blazen::FFI.blazen_stt_model_new_whisper(m, dev, lang, out_model, out_err)
+          end
+        end
+      end
+      Blazen::FFI.check_error!(out_err)
+      SttModel.new(out_model.read_pointer)
+    end
+
+    # Build a local faster-whisper (CTranslate2 / ct2rs) speech-to-text
+    # model (when the native library is built with the
+    # +audio-stt-faster-whisper+ feature).
+    #
+    # @param model_id [String, nil] Hugging Face bundle id (default
+    #   +"Systran/faster-whisper-tiny"+); larger variants like
+    #   +"Systran/faster-whisper-{base,small,medium,large-v3}"+ are
+    #   drop-in replacements
+    # @param model_dir [String, nil] pre-resolved CTranslate2 bundle dir;
+    #   when non-nil, the HF download is skipped
+    # @param revision [String, nil] HF revision pin (branch / tag / commit)
+    # @return [Blazen::Compute::SttModel]
+    # @raise [Blazen::UnsupportedError] when the +audio-stt-faster-whisper+
+    #   feature is missing
+    def self.faster_whisper_stt(model_id: nil, model_dir: nil, revision: nil)
+      unless Blazen::FFI.respond_to?(:blazen_stt_model_new_faster_whisper)
+        raise Blazen::UnsupportedError, "blazen was built without the 'audio-stt-faster-whisper' feature"
+      end
+
+      out_model = ::FFI::MemoryPointer.new(:pointer)
+      out_err   = ::FFI::MemoryPointer.new(:pointer)
+      Blazen::FFI.with_cstring(model_id) do |mid|
+        Blazen::FFI.with_cstring(model_dir) do |mdir|
+          Blazen::FFI.with_cstring(revision) do |rev|
+            Blazen::FFI.blazen_stt_model_new_faster_whisper(mid, mdir, rev, out_model, out_err)
           end
         end
       end
