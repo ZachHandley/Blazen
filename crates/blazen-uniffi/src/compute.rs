@@ -803,6 +803,12 @@ pub fn new_local_tts_model(
 /// `en/en_US/amy/medium/en_US-amy-medium.onnx[.json]` and the two files
 /// are downloaded (or read from cache) before the backend is built.
 ///
+/// `model_id` is required at the value level — pass `None` and the factory
+/// returns a `PiperInit` error. The optional wrapper exists so foreign
+/// language wrappers (Swift, Go) can default it to `nil` / `*string` and
+/// surface the requirement as a runtime error instead of an unchecked
+/// optional parameter on every call site.
+///
 /// `speaker_id` is forwarded to the Piper ONNX session for
 /// multi-speaker voices (e.g. `en_US-libritts_r-medium` exposes 904
 /// speakers). `None` defaults to speaker 0 / the voice's single
@@ -814,7 +820,7 @@ pub fn new_local_tts_model(
 #[cfg(all(feature = "tts", feature = "audio-tts-piper"))]
 #[uniffi::export]
 pub fn new_piper_tts_model(
-    model_id: String,
+    model_id: Option<String>,
     speaker_id: Option<u32>,
     sample_rate: Option<u32>,
 ) -> BlazenResult<Arc<TtsModel>> {
@@ -826,6 +832,17 @@ pub fn new_piper_tts_model(
             "new_piper_tts_model: sample_rate arg ignored — Piper voice file is authoritative"
         );
     }
+
+    let model_id = model_id.ok_or_else(|| BlazenError::Provider {
+        kind: "PiperInit".into(),
+        message: "model_id is required for Piper: pass a voice id like \"en_US-amy-medium\" — the rhasspy/piper-voices repo has no default voice".to_owned(),
+        provider: Some("piper".into()),
+        status: None,
+        endpoint: None,
+        request_id: None,
+        detail: None,
+        retry_after_ms: None,
+    })?;
 
     // Parse "en_US-amy-medium" -> "en/en_US/amy/medium/en_US-amy-medium".
     let voice_path = piper_voice_id_to_hf_path(&model_id).ok_or_else(|| BlazenError::Provider {

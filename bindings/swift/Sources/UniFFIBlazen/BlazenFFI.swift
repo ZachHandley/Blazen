@@ -22140,6 +22140,12 @@ public func newLocalTtsModel(model: String?, voice: String?, language: String?, 
  * `en/en_US/amy/medium/en_US-amy-medium.onnx[.json]` and the two files
  * are downloaded (or read from cache) before the backend is built.
  *
+ * `model_id` is required at the value level — pass `None` and the factory
+ * returns a `PiperInit` error. The optional wrapper exists so foreign
+ * language wrappers (Swift, Go) can default it to `nil` / `*string` and
+ * surface the requirement as a runtime error instead of an unchecked
+ * optional parameter on every call site.
+ *
  * `speaker_id` is forwarded to the Piper ONNX session for
  * multi-speaker voices (e.g. `en_US-libritts_r-medium` exposes 904
  * speakers). `None` defaults to speaker 0 / the voice's single
@@ -22149,10 +22155,10 @@ public func newLocalTtsModel(model: String?, voice: String?, language: String?, 
  * for the output sample rate. If provided, it is logged at trace
  * level and otherwise ignored.
  */
-public func newPiperTtsModel(modelId: String, speakerId: UInt32?, sampleRate: UInt32?)throws  -> TtsModel  {
+public func newPiperTtsModel(modelId: String?, speakerId: UInt32?, sampleRate: UInt32?)throws  -> TtsModel  {
     return try  FfiConverterTypeTtsModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
     uniffi_blazen_uniffi_fn_func_new_piper_tts_model(
-        FfiConverterString.lower(modelId),
+        FfiConverterOptionString.lower(modelId),
         FfiConverterOptionUInt32.lower(speakerId),
         FfiConverterOptionUInt32.lower(sampleRate),$0
     )
@@ -23200,7 +23206,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_func_new_local_tts_model() != 31651) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_piper_tts_model() != 62202) {
+    if (uniffi_blazen_uniffi_checksum_func_new_piper_tts_model() != 32182) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_func_new_whisper_stt_model() != 40916) {

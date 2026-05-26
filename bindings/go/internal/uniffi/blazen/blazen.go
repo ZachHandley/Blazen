@@ -462,7 +462,7 @@ func uniffiCheckChecksums() {
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_func_new_piper_tts_model()
 		})
-		if checksum != 62202 {
+		if checksum != 32182 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_func_new_piper_tts_model: UniFFI API checksum mismatch")
 		}
@@ -24462,6 +24462,12 @@ func NewLocalTtsModel(model *string, voice *string, language *string, sampleRate
 // `en/en_US/amy/medium/en_US-amy-medium.onnx[.json]` and the two files
 // are downloaded (or read from cache) before the backend is built.
 //
+// `model_id` is required at the value level — pass `None` and the factory
+// returns a `PiperInit` error. The optional wrapper exists so foreign
+// language wrappers (Swift, Go) can default it to `nil` / `*string` and
+// surface the requirement as a runtime error instead of an unchecked
+// optional parameter on every call site.
+//
 // `speaker_id` is forwarded to the Piper ONNX session for
 // multi-speaker voices (e.g. `en_US-libritts_r-medium` exposes 904
 // speakers). `None` defaults to speaker 0 / the voice's single
@@ -24470,9 +24476,9 @@ func NewLocalTtsModel(model *string, voice *string, language *string, sampleRate
 // `sample_rate` is reserved; the Piper voice file is authoritative
 // for the output sample rate. If provided, it is logged at trace
 // level and otherwise ignored.
-func NewPiperTtsModel(modelId string, speakerId *uint32, sampleRate *uint32) (*TtsModel, error) {
+func NewPiperTtsModel(modelId *string, speakerId *uint32, sampleRate *uint32) (*TtsModel, error) {
 	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
-		return C.uniffi_blazen_uniffi_fn_func_new_piper_tts_model(FfiConverterStringINSTANCE.Lower(modelId), FfiConverterOptionalUint32INSTANCE.Lower(speakerId), FfiConverterOptionalUint32INSTANCE.Lower(sampleRate), _uniffiStatus)
+		return C.uniffi_blazen_uniffi_fn_func_new_piper_tts_model(FfiConverterOptionalStringINSTANCE.Lower(modelId), FfiConverterOptionalUint32INSTANCE.Lower(speakerId), FfiConverterOptionalUint32INSTANCE.Lower(sampleRate), _uniffiStatus)
 	})
 	if _uniffiErr != nil {
 		var _uniffiDefaultValue *TtsModel
