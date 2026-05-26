@@ -644,3 +644,341 @@ impl FalTtsProvider {
             .block_on(async move { this.synthesize(text, voice, language).await })
     }
 }
+
+// ---------------------------------------------------------------------------
+// Polymorphic capability-base trait impls
+// ---------------------------------------------------------------------------
+//
+// Each engine implements both [`crate::concrete::bases::BaseProvider`] and
+// [`crate::concrete::bases::TtsProvider`] so foreign (Kotlin/Swift/Go)
+// consumers can hold a polymorphic `TtsProvider` reference and Rust-side
+// code can collect engines into capability-erased
+// `Arc<dyn BaseProvider>` containers. The inherent `synthesize` methods
+// on each engine (which use `self: Arc<Self>`) continue to take
+// precedence at the call site `engine.synthesize(...)`; the trait
+// methods (which use `&self`) are reachable via UFCS / `dyn TtsProvider`
+// dispatch.
+
+// PiperProvider ------------------------------------------------------------
+
+#[cfg(feature = "audio-tts-piper")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for PiperProvider {
+    fn provider_id(&self) -> String {
+        "piper".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Tts
+    }
+}
+
+#[cfg(feature = "audio-tts-piper")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::TtsProvider for PiperProvider {
+    fn provider_id(&self) -> String {
+        "piper".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Tts
+    }
+
+    async fn synthesize(
+        &self,
+        text: String,
+        voice: Option<String>,
+        language: Option<String>,
+    ) -> Result<TtsResult, BlazenError> {
+        use blazen_llm::TtsProvider as _;
+        let req = build_request(text, voice, language);
+        let audio = self
+            .inner
+            .synthesize(req)
+            .await
+            .map_err(|e| synth_error("piper", e))?;
+        audio_to_tts_result(audio, "piper")
+    }
+}
+
+// KokoroProvider -----------------------------------------------------------
+
+#[cfg(feature = "tts")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for KokoroProvider {
+    fn provider_id(&self) -> String {
+        "kokoro".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Tts
+    }
+}
+
+#[cfg(feature = "tts")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::TtsProvider for KokoroProvider {
+    fn provider_id(&self) -> String {
+        "kokoro".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Tts
+    }
+
+    async fn synthesize(
+        &self,
+        text: String,
+        voice: Option<String>,
+        language: Option<String>,
+    ) -> Result<TtsResult, BlazenError> {
+        use blazen_llm::TtsProvider as _;
+        let req = build_request(text, voice, language);
+        let audio = self
+            .inner
+            .synthesize(req)
+            .await
+            .map_err(|e| synth_error("kokoro", e))?;
+        audio_to_tts_result(audio, "kokoro")
+    }
+}
+
+// VibeVoiceProvider --------------------------------------------------------
+
+#[cfg(feature = "tts")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for VibeVoiceProvider {
+    fn provider_id(&self) -> String {
+        "vibevoice".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Tts
+    }
+}
+
+#[cfg(feature = "tts")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::TtsProvider for VibeVoiceProvider {
+    fn provider_id(&self) -> String {
+        "vibevoice".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Tts
+    }
+
+    async fn synthesize(
+        &self,
+        text: String,
+        voice: Option<String>,
+        language: Option<String>,
+    ) -> Result<TtsResult, BlazenError> {
+        use blazen_llm::TtsProvider as _;
+        let req = build_request(text, voice, language);
+        let audio = self
+            .inner
+            .synthesize(req)
+            .await
+            .map_err(|e| synth_error("vibevoice", e))?;
+        audio_to_tts_result(audio, "vibevoice")
+    }
+}
+
+// Qwen3TtsProvider ---------------------------------------------------------
+
+#[cfg(feature = "tts")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for Qwen3TtsProvider {
+    fn provider_id(&self) -> String {
+        "qwen3-tts".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Tts
+    }
+}
+
+#[cfg(feature = "tts")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::TtsProvider for Qwen3TtsProvider {
+    fn provider_id(&self) -> String {
+        "qwen3-tts".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Tts
+    }
+
+    async fn synthesize(
+        &self,
+        text: String,
+        voice: Option<String>,
+        language: Option<String>,
+    ) -> Result<TtsResult, BlazenError> {
+        use blazen_llm::TtsProvider as _;
+        let req = build_request(text, voice, language);
+        let audio = self
+            .inner
+            .synthesize(req)
+            .await
+            .map_err(|e| synth_error("qwen3-tts", e))?;
+        audio_to_tts_result(audio, "qwen3-tts")
+    }
+}
+
+// SparkTtsProvider ---------------------------------------------------------
+
+#[cfg(feature = "audio-tts-spark")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for SparkTtsProvider {
+    fn provider_id(&self) -> String {
+        "spark-tts".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Tts
+    }
+}
+
+#[cfg(feature = "audio-tts-spark")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::TtsProvider for SparkTtsProvider {
+    fn provider_id(&self) -> String {
+        "spark-tts".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Tts
+    }
+
+    async fn synthesize(
+        &self,
+        text: String,
+        voice: Option<String>,
+        language: Option<String>,
+    ) -> Result<TtsResult, BlazenError> {
+        use blazen_llm::TtsProvider as _;
+        let req = build_request(text, voice, language);
+        let audio = self
+            .inner
+            .synthesize(req)
+            .await
+            .map_err(|e| synth_error("spark-tts", e))?;
+        audio_to_tts_result(audio, "spark-tts")
+    }
+}
+
+// BarkProvider -------------------------------------------------------------
+
+#[cfg(feature = "audio-tts-bark")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for BarkProvider {
+    fn provider_id(&self) -> String {
+        "bark".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Tts
+    }
+}
+
+#[cfg(feature = "audio-tts-bark")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::TtsProvider for BarkProvider {
+    fn provider_id(&self) -> String {
+        "bark".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Tts
+    }
+
+    async fn synthesize(
+        &self,
+        text: String,
+        voice: Option<String>,
+        language: Option<String>,
+    ) -> Result<TtsResult, BlazenError> {
+        use blazen_llm::TtsProvider as _;
+        let req = build_request(text, voice, language);
+        let audio = self
+            .inner
+            .synthesize(req)
+            .await
+            .map_err(|e| synth_error("bark", e))?;
+        audio_to_tts_result(audio, "bark")
+    }
+}
+
+// F5Provider ---------------------------------------------------------------
+
+#[cfg(feature = "audio-tts-f5")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for F5Provider {
+    fn provider_id(&self) -> String {
+        "f5-tts".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Tts
+    }
+}
+
+#[cfg(feature = "audio-tts-f5")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::TtsProvider for F5Provider {
+    fn provider_id(&self) -> String {
+        "f5-tts".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Tts
+    }
+
+    async fn synthesize(
+        &self,
+        text: String,
+        voice: Option<String>,
+        language: Option<String>,
+    ) -> Result<TtsResult, BlazenError> {
+        use blazen_llm::TtsProvider as _;
+        let req = build_request(text, voice, language);
+        let audio = self
+            .inner
+            .synthesize(req)
+            .await
+            .map_err(|e| synth_error("f5-tts", e))?;
+        audio_to_tts_result(audio, "f5-tts")
+    }
+}
+
+// FalTtsProvider -----------------------------------------------------------
+//
+// No feature gate — `FalTtsProvider` itself is unconditionally compiled,
+// but the [`crate::concrete::bases::TtsProvider`] trait is only declared
+// under `feature = "tts"`, so the trait impls are gated to match.
+
+#[cfg(feature = "tts")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for FalTtsProvider {
+    fn provider_id(&self) -> String {
+        "fal-tts".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Tts
+    }
+}
+
+#[cfg(feature = "tts")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::TtsProvider for FalTtsProvider {
+    fn provider_id(&self) -> String {
+        "fal-tts".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Tts
+    }
+
+    async fn synthesize(
+        &self,
+        text: String,
+        voice: Option<String>,
+        language: Option<String>,
+    ) -> Result<TtsResult, BlazenError> {
+        use blazen_llm::TtsProvider as _;
+        let req = build_request(text, voice, language);
+        let audio = self
+            .inner
+            .synthesize(req)
+            .await
+            .map_err(|e| synth_error("fal-tts", e))?;
+        audio_to_tts_result(audio, "fal-tts")
+    }
+}
