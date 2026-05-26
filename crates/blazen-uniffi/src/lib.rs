@@ -32,6 +32,9 @@ pub mod compute;
 pub mod compute_music;
 pub mod compute_types;
 pub mod compute_vc;
+// P4.2: per-engine `#[uniffi::Object]` providers wrapping the
+// canonical Rust concretes in `blazen_llm::providers::concrete::*`.
+pub mod concrete;
 #[cfg(feature = "distributed")]
 pub mod controlplane;
 pub mod errors;
