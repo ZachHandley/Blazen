@@ -68,6 +68,7 @@ audio-stt-whisper-streaming = ["blazen-llm/audio-stt-whisper-streaming"]
 audio-stt-faster-whisper = ["blazen-llm/audio-stt-faster-whisper"]
 audio-tts-bark = ["blazen-llm/audio-tts-bark"]
 audio-tts-f5 = ["blazen-llm/audio-tts-f5"]
+audio-tts-spark = ["blazen-llm/audio-tts-spark"]
 audio-vc = ["blazen-llm/audio-vc", "dep:blazen-audio-vc", "dep:blazen-audio"]
 audio-vc-rvc = ["audio-vc", "blazen-llm/audio-vc-rvc", "blazen-audio-vc/rvc"]
 # 3D-pipeline bridge surface (HTTP-proxy backend forwards to upstream 3D services).

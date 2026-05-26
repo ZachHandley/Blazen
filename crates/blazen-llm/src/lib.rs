@@ -254,6 +254,9 @@ pub use blazen_audio_stt::backends::whispercpp::{
     WhisperCppOptions as WhisperOptions, WhisperModel,
 };
 
+#[cfg(feature = "audio-stt-faster-whisper")]
+pub use blazen_audio_stt::backends::faster_whisper::{FasterWhisperBackend, FasterWhisperConfig};
+
 /// Backwards-compatibility shims for legacy crate names that were
 /// dissolved in the PR-AUDIO restructure. Slated for removal in two
 /// releases — new code should reach for the canonical types directly.
@@ -285,6 +288,9 @@ pub use blazen_audio_tts::{DynTtsProvider, TtsError, TtsModel, TtsOptions, TtsPr
 
 #[cfg(feature = "audio-tts-anytts")]
 pub use blazen_audio_tts::AnyTtsBackend;
+
+#[cfg(feature = "audio-tts-spark")]
+pub use blazen_audio_tts::backends::spark::{SparkTtsBackend, SparkTtsConfig};
 
 #[cfg(feature = "audio-music")]
 pub use blazen_audio::{AudioFormat as AudioMusicFormat, GeneratedAudio as MusicGeneratedAudio};

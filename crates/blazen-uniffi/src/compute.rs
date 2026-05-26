@@ -933,6 +933,86 @@ fn piper_voice_id_to_hf_path(voice_id: &str) -> Option<String> {
 }
 
 // ---------------------------------------------------------------------------
+// Spark-TTS adapter + factory (feature-gated)
+// ---------------------------------------------------------------------------
+
+/// Adapter implementing the uniffi-side [`TtsBackend`] over the native
+/// Spark-TTS (SparkAudio) BiCodec + Qwen2.5-0.5B AR decoder backend.
+///
+/// Unlike [`LocalTtsAdapter`] which goes through `DynTtsProvider`, this
+/// adapter wraps the concrete [`blazen_audio_tts::backends::spark::SparkTtsBackend`]
+/// directly. The Spark-TTS bundle is materialised lazily on the first
+/// `synthesize` call (HF download + cache, then `SparkPipeline::load`).
+#[cfg(all(feature = "tts", feature = "audio-tts-spark"))]
+struct SparkTtsLocalAdapter {
+    inner: Arc<blazen_audio_tts::backends::spark::SparkTtsBackend>,
+}
+
+#[cfg(all(feature = "tts", feature = "audio-tts-spark"))]
+#[async_trait]
+impl TtsBackend for SparkTtsLocalAdapter {
+    async fn synthesize(
+        &self,
+        text: String,
+        voice: Option<String>,
+        language: Option<String>,
+    ) -> Result<TtsResult, blazen_llm::BlazenError> {
+        use base64::Engine as _;
+        let opts = blazen_llm::TtsOptions {
+            voice,
+            language,
+            ..blazen_llm::TtsOptions::default()
+        };
+        let synth = blazen_audio_tts::TtsBackend::synthesize(self.inner.as_ref(), &text, &opts)
+            .await
+            .map_err(|e| blazen_llm::BlazenError::provider("spark-tts", e.to_string()))?;
+        let audio_base64 = base64::engine::general_purpose::STANDARD.encode(&synth.bytes);
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let duration_ms =
+            (f64::from(synth.duration_seconds.unwrap_or(0.0)) * 1000.0).round() as u64;
+        Ok(TtsResult {
+            audio_base64,
+            mime_type: "audio/wav".into(),
+            duration_ms,
+        })
+    }
+}
+
+/// Build a local Spark-TTS text-to-speech model.
+///
+/// `model_id` selects a Hugging Face bundle id; default is
+/// `"SparkAudio/Spark-TTS-0.5B"` when omitted. `revision` pins a specific
+/// branch / tag / commit on the repo (default `main`). `model_dir` provides
+/// a pre-resolved local bundle directory containing the `LLM/` + `BiCodec/`
+/// subtrees; when supplied, the HF download step is skipped entirely.
+///
+/// The bundle ships under the **CC-BY-NC-SA-4.0** license — non-commercial
+/// use only. The backend emits a one-shot warning via `warn_nc_once` on
+/// first synthesis.
+#[cfg(all(feature = "tts", feature = "audio-tts-spark"))]
+#[uniffi::export]
+pub fn new_spark_tts_model(
+    model_id: Option<String>,
+    model_dir: Option<String>,
+    revision: Option<String>,
+) -> BlazenResult<Arc<TtsModel>> {
+    use blazen_audio_tts::backends::spark::{SparkTtsBackend, SparkTtsConfig};
+    use std::path::PathBuf;
+
+    let mut config = SparkTtsConfig::default();
+    if let Some(id) = model_id {
+        config.model_id = id;
+    }
+    config.model_dir = model_dir.map(PathBuf::from);
+    config.revision = revision;
+
+    let backend = SparkTtsBackend::new(config);
+    Ok(TtsModel::from_arc(Arc::new(SparkTtsLocalAdapter {
+        inner: Arc::new(backend),
+    })))
+}
+
+// ---------------------------------------------------------------------------
 // Whisper STT factory
 // ---------------------------------------------------------------------------
 
@@ -981,6 +1061,78 @@ pub fn new_whisper_stt_model(
         inner: Arc::new(provider),
     };
     Ok(SttModel::from_arc(Arc::new(adapter)))
+}
+
+// ---------------------------------------------------------------------------
+// faster-whisper STT adapter + factory (feature-gated)
+// ---------------------------------------------------------------------------
+
+/// Adapter implementing the uniffi-side [`SttBackend`] over the native
+/// faster-whisper (CTranslate2 / ct2rs) backend.
+///
+/// Wraps the concrete
+/// [`blazen_audio_stt::backends::faster_whisper::FasterWhisperBackend`]
+/// directly; the ct2rs decoder is materialised lazily on the first
+/// transcription call (HF download + CTranslate2 model load).
+#[cfg(feature = "audio-stt-faster-whisper")]
+struct FasterWhisperSttAdapter {
+    inner: Arc<blazen_audio_stt::backends::faster_whisper::FasterWhisperBackend>,
+}
+
+#[cfg(feature = "audio-stt-faster-whisper")]
+#[async_trait]
+impl SttBackend for FasterWhisperSttAdapter {
+    async fn transcribe(
+        &self,
+        audio_source: String,
+        language: Option<String>,
+    ) -> Result<SttResult, blazen_llm::BlazenError> {
+        use std::path::Path;
+        let path = Path::new(&audio_source);
+        let result = blazen_audio_stt::SttBackend::transcribe(
+            self.inner.as_ref(),
+            path,
+            language.as_deref(),
+        )
+        .await
+        .map_err(|e| blazen_llm::BlazenError::provider("faster-whisper", e.to_string()))?;
+        Ok(SttResult {
+            transcript: result.text,
+            language: result.language.unwrap_or_default(),
+            duration_ms: 0,
+        })
+    }
+}
+
+/// Build a local faster-whisper speech-to-text model.
+///
+/// `model_id` selects a Hugging Face bundle id (default
+/// `"Systran/faster-whisper-tiny"`). Larger variants
+/// (`"Systran/faster-whisper-{base,small,medium,large-v3}"`) are drop-in
+/// replacements. `model_dir` provides a pre-resolved local CTranslate2
+/// bundle directory; when supplied the HF download is skipped. `revision`
+/// pins a specific branch / tag / commit on the repo (default `main`).
+#[cfg(feature = "audio-stt-faster-whisper")]
+#[uniffi::export]
+pub fn new_faster_whisper_stt_model(
+    model_id: Option<String>,
+    model_dir: Option<String>,
+    revision: Option<String>,
+) -> BlazenResult<Arc<SttModel>> {
+    use blazen_audio_stt::backends::faster_whisper::{FasterWhisperBackend, FasterWhisperConfig};
+    use std::path::PathBuf;
+
+    let mut config = FasterWhisperConfig::default();
+    if let Some(id) = model_id {
+        config.model_id = id;
+    }
+    config.model_dir = model_dir.map(PathBuf::from);
+    config.revision = revision;
+
+    let backend = FasterWhisperBackend::new(config);
+    Ok(SttModel::from_arc(Arc::new(FasterWhisperSttAdapter {
+        inner: Arc::new(backend),
+    })))
 }
 
 // ---------------------------------------------------------------------------

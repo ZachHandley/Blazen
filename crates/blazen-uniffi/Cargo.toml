@@ -52,6 +52,7 @@ base64.workspace = true
 tonic = { workspace = true, optional = true, features = ["tls-aws-lc"] }
 blazen-3d = { version = "0.0.0-dev", path = "../blazen-3d", default-features = false, optional = true }
 blazen-audio-tts = { workspace = true, optional = true }
+blazen-audio-stt = { workspace = true, optional = true }
 
 [build-dependencies]
 uniffi_build.workspace = true
@@ -124,10 +125,11 @@ audio-music-musicgen = ["blazen-llm/audio-music-musicgen", "dep:candle-core"]
 # AudioGen native text-to-SFX (Meta, candle port; shares the MusicGen LM head).
 audio-music-audiogen = ["blazen-llm/audio-music-audiogen", "dep:candle-core"]
 audio-stt-whisper-streaming = ["blazen-llm/audio-stt-whisper-streaming"]
-audio-stt-faster-whisper = ["blazen-llm/audio-stt-faster-whisper"]
+audio-stt-faster-whisper = ["blazen-llm/audio-stt-faster-whisper", "dep:blazen-audio-stt", "blazen-audio-stt/faster-whisper"]
 audio-tts-bark = ["blazen-llm/audio-tts-bark"]
 audio-tts-f5 = ["blazen-llm/audio-tts-f5"]
 audio-tts-piper = ["blazen-llm/audio-tts-piper", "dep:blazen-audio-tts", "blazen-audio-tts/piper"]
+audio-tts-spark = ["blazen-llm/audio-tts-spark", "dep:blazen-audio-tts", "blazen-audio-tts/spark-tts"]
 audio-vc = ["blazen-llm/audio-vc"]
 audio-vc-rvc = ["audio-vc", "blazen-llm/audio-vc-rvc", "dep:candle-core"]
 

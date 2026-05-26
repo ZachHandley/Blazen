@@ -79,6 +79,7 @@ audio-tts-openai   = ["audio-tts", "blazen-audio-tts/openai"]
 audio-tts-piper    = ["audio-tts", "blazen-audio-tts/piper"]
 audio-tts-bark     = ["audio-tts", "blazen-audio-tts/bark"]
 audio-tts-f5       = ["audio-tts", "blazen-audio-tts/f5-tts"]
+audio-tts-spark    = ["audio-tts", "blazen-audio-tts/spark-tts"]
 
 # Speech-to-text bridge surface (DynSttProvider impl of Transcription).
 audio-stt          = ["dep:blazen-audio", "dep:blazen-audio-stt"]
