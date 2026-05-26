@@ -160,6 +160,41 @@ impl WhisperCppProvider {
     }
 }
 
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for WhisperCppProvider {
+    fn provider_id(&self) -> String {
+        "whisper-cpp".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Stt
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::concrete::bases::SttProvider for WhisperCppProvider {
+    fn provider_id(&self) -> String {
+        "whisper-cpp".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Stt
+    }
+
+    async fn transcribe(
+        &self,
+        audio_source: String,
+        language: Option<String>,
+    ) -> Result<SttResult, BlazenError> {
+        use blazen_llm::providers::capabilities::SttProvider as _;
+        let request = build_transcription_request(audio_source, language);
+        let result = self
+            .inner
+            .transcribe(request)
+            .await
+            .map_err(|e| provider_err("SttTranscribe", "whisper-cpp", e))?;
+        Ok(map_transcription_result(result))
+    }
+}
+
 // ---------------------------------------------------------------------------
 // FasterWhisperProvider — local faster-whisper (CTranslate2 / ct2rs)
 // ---------------------------------------------------------------------------
@@ -235,6 +270,43 @@ impl FasterWhisperProvider {
     ) -> Result<SttResult, BlazenError> {
         let this = Arc::clone(&self);
         runtime().block_on(async move { this.transcribe(audio_source, language).await })
+    }
+}
+
+#[cfg(feature = "audio-stt-faster-whisper")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for FasterWhisperProvider {
+    fn provider_id(&self) -> String {
+        "faster-whisper".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Stt
+    }
+}
+
+#[cfg(feature = "audio-stt-faster-whisper")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::SttProvider for FasterWhisperProvider {
+    fn provider_id(&self) -> String {
+        "faster-whisper".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Stt
+    }
+
+    async fn transcribe(
+        &self,
+        audio_source: String,
+        language: Option<String>,
+    ) -> Result<SttResult, BlazenError> {
+        use blazen_llm::providers::capabilities::SttProvider as _;
+        let request = build_transcription_request(audio_source, language);
+        let result = self
+            .inner
+            .transcribe(request)
+            .await
+            .map_err(|e| provider_err("SttTranscribe", "faster-whisper", e))?;
+        Ok(map_transcription_result(result))
     }
 }
 
@@ -325,6 +397,43 @@ impl WhisperStreamingProvider {
     }
 }
 
+#[cfg(feature = "audio-stt-whisper-streaming")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for WhisperStreamingProvider {
+    fn provider_id(&self) -> String {
+        "whisper-streaming".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Stt
+    }
+}
+
+#[cfg(feature = "audio-stt-whisper-streaming")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::SttProvider for WhisperStreamingProvider {
+    fn provider_id(&self) -> String {
+        "whisper-streaming".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Stt
+    }
+
+    async fn transcribe(
+        &self,
+        audio_source: String,
+        language: Option<String>,
+    ) -> Result<SttResult, BlazenError> {
+        use blazen_llm::providers::capabilities::SttProvider as _;
+        let request = build_transcription_request(audio_source, language);
+        let result = self
+            .inner
+            .transcribe(request)
+            .await
+            .map_err(|e| provider_err("SttTranscribe", "whisper-streaming", e))?;
+        Ok(map_transcription_result(result))
+    }
+}
+
 // ---------------------------------------------------------------------------
 // FalSttProvider — hosted fal.ai Whisper / Wizper endpoints
 // ---------------------------------------------------------------------------
@@ -387,5 +496,40 @@ impl FalSttProvider {
     ) -> Result<SttResult, BlazenError> {
         let this = Arc::clone(&self);
         runtime().block_on(async move { this.transcribe(audio_source, language).await })
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for FalSttProvider {
+    fn provider_id(&self) -> String {
+        "fal-stt".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Stt
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::concrete::bases::SttProvider for FalSttProvider {
+    fn provider_id(&self) -> String {
+        "fal-stt".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Stt
+    }
+
+    async fn transcribe(
+        &self,
+        audio_source: String,
+        language: Option<String>,
+    ) -> Result<SttResult, BlazenError> {
+        use blazen_llm::providers::capabilities::SttProvider as _;
+        let request = build_transcription_request(audio_source, language);
+        let result = self
+            .inner
+            .transcribe(request)
+            .await
+            .map_err(|e| provider_err("SttTranscribe", "fal-stt", e))?;
+        Ok(map_transcription_result(result))
     }
 }
