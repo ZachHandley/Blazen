@@ -25,8 +25,6 @@
 //! [`DiT::new`]: super::dit::DiT::new
 //! [`Conditioner::new`]: super::conditioner::Conditioner::new
 
-#![cfg(feature = "stable-audio")]
-
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 

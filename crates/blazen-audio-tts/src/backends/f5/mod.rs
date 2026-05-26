@@ -36,7 +36,6 @@
 //! Fairytaler that Fakes Fluent and Faithful Speech with Flow
 //! Matching*, Chen et al. 2024.
 
-#![cfg(feature = "f5-tts")]
 // Wave-1 stubs in sub-modules are intentionally not all public — the
 // pipeline composes them privately.
 #![allow(dead_code)]

@@ -47,7 +47,6 @@
 //! file is intentionally key-agnostic and treats the `VarBuilder` paths as
 //! the source of truth.
 
-#![cfg(feature = "stable-audio")]
 // NOTE: This module is feature-gated on `stable-audio` (Wave 3.5+); the
 // feature activates the same candle / candle-nn dep set MusicGen uses.
 // a dedicated `stable-audio` feature and migrate the gate; until then the

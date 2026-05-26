@@ -36,7 +36,6 @@
 //! [`super`] and [`StableAudioBackend`] is re-exported as the real
 //! `StableAudioBackend` whenever the `stable-audio` cargo feature is on.
 
-#![cfg(feature = "stable-audio")]
 #![allow(clippy::module_name_repetitions)]
 #![allow(clippy::needless_pass_by_value)]
 #![allow(

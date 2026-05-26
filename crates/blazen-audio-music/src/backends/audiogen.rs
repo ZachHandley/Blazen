@@ -23,8 +23,6 @@
 //! license as MusicGen and is **not licensed for commercial use**.
 //! Surface this restriction to your end users.
 
-#![cfg(feature = "audiogen")]
-
 use std::path::PathBuf;
 use std::pin::Pin;
 use std::sync::Arc;

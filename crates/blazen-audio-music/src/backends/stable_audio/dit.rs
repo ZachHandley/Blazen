@@ -43,7 +43,6 @@
 //! *not yet* wired into `super::mod`; that happens in Wave 3.5 once the
 //! Oobleck VAE, conditioner, sampler, and pipeline land.
 
-#![cfg(feature = "stable-audio")]
 #![allow(clippy::similar_names)] // shift_msa / scale_msa / gate_msa etc.
 #![allow(clippy::module_name_repetitions)]
 // `VarBuilder` is the candle convention for module construction — every

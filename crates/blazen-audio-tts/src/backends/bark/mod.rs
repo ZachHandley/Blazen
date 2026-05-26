@@ -32,7 +32,6 @@
 //!   stages → `EnCodec` → 24 kHz WAV and wires the live `synthesize` /
 //!   `clone_voice` paths.
 
-#![cfg(feature = "bark")]
 // A handful of constants surfaced by the lower stages (e.g.
 // `SEMANTIC_VOCAB_SIZE`, `BlockConfig.block_size`) document upstream
 // invariants and are referenced from prose; suppressed crate-wide rather
