@@ -95,6 +95,22 @@ fn main() {
     let lib_dir = install_prefix.join("lib");
     let include_dir = install_prefix.join("include");
 
+    // Copy ggml's internal `ggml-ext.h` into the install/include tree.
+    // llama.cpp (when consuming us via LLAMA_USE_SYSTEM_GGML=ON) directly
+    // `#include "../src/ggml-ext.h"` from `src/llama.cpp` + `src/llama-model.cpp`
+    // — that include is satisfied by llama.cpp's own internal path
+    // resolution when ggml is built as a subproject, but when we install
+    // ggml standalone, cmake's `install(FILES ...)` only copies the
+    // `include/*.h` public surface and skips this private header. Copy
+    // it manually so downstream cmake consumers can `find_package(ggml)`
+    // and still get this header on the include path via
+    // `${ggml_INCLUDE_DIRS}`.
+    let private_header = ggml_root.join("src/ggml-ext.h");
+    if private_header.exists() {
+        std::fs::copy(&private_header, include_dir.join("ggml-ext.h"))
+            .expect("install ggml-ext.h to include dir");
+    }
+
     // Cargo metadata that downstream `-sys` build scripts read via
     // `DEP_GGML_PREFIX` / `DEP_GGML_INCLUDE` / `DEP_GGML_LIB`.
     println!("cargo:prefix={}", install_prefix.display());

@@ -51,6 +51,7 @@ members = [
     "crates/blazen-ggml-sys",
     "crates/blazen-whisper-sys",
     "crates/blazen-diffusion-sys",
+    "crates/blazen-llama-cpp-sys-2",
 ]
 exclude = [
     "crates/blazen-wasm",
@@ -275,3 +276,14 @@ whisper-rs-sys = { path = "crates/blazen-whisper-sys" }
 # blazen-ggml-sys's install tree instead of compiling its own in-tree
 # ggml. Second of three ggml duplications eliminated.
 diffusion-rs-sys = { path = "crates/blazen-diffusion-sys" }
+
+# Blazen fork of llama-cpp-sys-2 0.1.146. Upstream already exposes a
+# `system-ggml` cargo feature that toggles `LLAMA_USE_SYSTEM_GGML=ON` in
+# its cmake invocation, but does NOT auto-set `CMAKE_PREFIX_PATH` from a
+# DEP_GGML_PREFIX env var — so upstream-as-is wouldn't find our
+# blazen-ggml-sys install tree. The fork adds three lines to build.rs
+# (around the existing `system-ggml` branch) that read DEP_GGML_PREFIX
+# and pass it as CMAKE_PREFIX_PATH alongside LLAMA_USE_SYSTEM_GGML=ON.
+# Cargo.toml: makes `system-ggml` pull in `dep:blazen-ggml-sys`. Third of
+# three ggml duplications eliminated.
+llama-cpp-sys-2 = { path = "crates/blazen-llama-cpp-sys-2" }

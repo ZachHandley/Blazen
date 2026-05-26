@@ -32,6 +32,14 @@ default = ["cpu"]
 engine = [
     "dep:llama-cpp-2",
     "dep:llama-cpp-sys-2",
+    # Route ggml through the Blazen shared blazen-ggml-sys instead of
+    # llama-cpp-sys-2's bundled in-tree copy. The `[patch.crates-io]`
+    # entry in the workspace Cargo.toml replaces upstream llama-cpp-sys-2
+    # with our Blazen fork that wires DEP_GGML_PREFIX into
+    # CMAKE_PREFIX_PATH so `find_package(ggml)` resolves correctly. Pairs
+    # with the whisper-rs-sys and diffusion-rs-sys forks to eliminate
+    # all three ggml triple-vendoring duplications.
+    "llama-cpp-sys-2/system-ggml-static",
     "dep:encoding_rs",
     "dep:tokio-stream",
 ]
