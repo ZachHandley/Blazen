@@ -1,0 +1,52 @@
+[package]
+name = "blazen-ggml-sys"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Vendored ggml C library, built once and reused by Blazen's whisper-rs-sys / llama-cpp-sys-2 / diffusion-rs-sys consumers via patch.crates-io."
+links = "ggml"
+
+# The vendored ggml tree at `vendor/ggml/` is upstream `ggml-org/ggml` pinned
+# to the commit shipped with `llama-cpp-sys-2 0.1.146` (the most actively
+# maintained downstream). Cargo's `links = "ggml"` attribute enforces a
+# single copy in the dep graph — the three -sys crates that previously
+# triple-vendored their own ggml are patched (via the workspace
+# `[patch.crates-io]` block) to compile against this one instead, killing
+# the `-Wl,--allow-multiple-definition` band-aid the Go cgo link relies on.
+
+[lib]
+# `links =` requires a real lib; rlib is the cheapest path. No public Rust
+# surface — consumers go through the upstream `-sys` crates' bindings.
+crate-type = ["rlib"]
+
+[features]
+# CPU-only by default; vendors all the CPU SIMD kernels.
+default = []
+# Build with -march=native (host-tuned). Off by default for portability.
+native = []
+# Backends. Each pulls the matching `GGML_<BACKEND>=ON` cmake flag.
+cuda = []
+metal = []
+vulkan = []
+hip = []
+musa = []
+opencl = []
+blas = []
+rpc = []
+sycl = []
+webgpu = []
+openvino = []
+hexagon = []
+cann = []
+zendnn = []
+zdnn = []
+virtgpu = []
+
+[build-dependencies]
+cmake = "0.1"
+
+[lints]
+workspace = true

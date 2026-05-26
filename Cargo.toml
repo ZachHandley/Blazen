@@ -48,6 +48,7 @@ members = [
     "crates/blazen-3d",
     "crates/blazen-3d-core",
     "crates/blazen-video-core",
+    "crates/blazen-ggml-sys",
 ]
 exclude = [
     "crates/blazen-wasm",

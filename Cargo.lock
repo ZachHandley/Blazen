@@ -1070,6 +1070,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "blazen-ggml-sys"
+version = "0.0.0-dev"
+dependencies = [
+ "cmake",
+]
+
+[[package]]
 name = "blazen-image-diffusion"
 version = "0.0.0-dev"
 dependencies = [
