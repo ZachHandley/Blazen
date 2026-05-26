@@ -220,9 +220,9 @@ new_b = (
 )
 count_a = src.count(old_a)
 count_b = src.count(old_b)
-if count_a != 35:
+if count_a != 36:
     sys.exit(
-        f"ERROR: expected 35 'TODO: this is bad' blocks in blazen.go, found {count_a}. "
+        f"ERROR: expected 36 'TODO: this is bad' blocks in blazen.go, found {count_a}. "
         "Upstream uniffi-bindgen-go codegen likely changed — re-audit and update "
         "the patch in scripts/regen-bindings.sh."
     )

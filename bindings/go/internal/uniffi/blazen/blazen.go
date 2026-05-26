@@ -451,6 +451,15 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_func_new_faster_whisper_stt_model()
+		})
+		if checksum != 65529 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_func_new_faster_whisper_stt_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_func_new_local_tts_model()
 		})
 		if checksum != 31651 {
@@ -465,6 +474,24 @@ func uniffiCheckChecksums() {
 		if checksum != 32182 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_func_new_piper_tts_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_func_new_spark_tts_model()
+		})
+		if checksum != 28081 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_func_new_spark_tts_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_func_new_triposr_3d_model()
+		})
+		if checksum != 57200 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_func_new_triposr_3d_model: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -1023,6 +1050,24 @@ func uniffiCheckChecksums() {
 		if checksum != 20646 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_sttmodel_transcribe_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_threedmodel_generate_from_image()
+		})
+		if checksum != 56800 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_threedmodel_generate_from_image: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_threedmodel_generate_from_image_blocking()
+		})
+		if checksum != 16990 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_threedmodel_generate_from_image_blocking: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -12500,6 +12545,150 @@ func (_ FfiDestroyerSttModel) Destroy(value *SttModel) {
 	value.Destroy()
 }
 
+// A native single-image-to-3D model handle.
+//
+// Construct via [`new_triposr_3d_model`] (local, feature-gated). Once
+// obtained, call [`generate_from_image`](Self::generate_from_image)
+// (async) or [`generate_from_image_blocking`](Self::generate_from_image_blocking)
+// (sync) to render a 3D mesh from a PNG / JPEG image.
+type ThreeDModelInterface interface {
+	// Generate a 3D mesh from a single input image.
+	//
+	// `image_bytes` is encoded PNG or JPEG payload. `mesh_resolution`
+	// controls the side length of the density grid sampled from the
+	// triplane during marching cubes; `256` matches the upstream
+	// `TripoSR` reference and is a reasonable default.
+	GenerateFromImage(imageBytes []byte, meshResolution uint32) (ThreeDGenerateResult, error)
+	// Synchronous variant of [`generate_from_image`](Self::generate_from_image).
+	GenerateFromImageBlocking(imageBytes []byte, meshResolution uint32) (ThreeDGenerateResult, error)
+}
+
+// A native single-image-to-3D model handle.
+//
+// Construct via [`new_triposr_3d_model`] (local, feature-gated). Once
+// obtained, call [`generate_from_image`](Self::generate_from_image)
+// (async) or [`generate_from_image_blocking`](Self::generate_from_image_blocking)
+// (sync) to render a 3D mesh from a PNG / JPEG image.
+type ThreeDModel struct {
+	ffiObject FfiObject
+}
+
+// Generate a 3D mesh from a single input image.
+//
+// `image_bytes` is encoded PNG or JPEG payload. `mesh_resolution`
+// controls the side length of the density grid sampled from the
+// triplane during marching cubes; `256` matches the upstream
+// `TripoSR` reference and is a reasonable default.
+func (_self *ThreeDModel) GenerateFromImage(imageBytes []byte, meshResolution uint32) (ThreeDGenerateResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ThreeDModel")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) ThreeDGenerateResult {
+			return FfiConverterThreeDGenerateResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_threedmodel_generate_from_image(
+			_pointer, FfiConverterBytesINSTANCE.Lower(imageBytes), FfiConverterUint32INSTANCE.Lower(meshResolution)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`generate_from_image`](Self::generate_from_image).
+func (_self *ThreeDModel) GenerateFromImageBlocking(imageBytes []byte, meshResolution uint32) (ThreeDGenerateResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ThreeDModel")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_threedmodel_generate_from_image_blocking(
+				_pointer, FfiConverterBytesINSTANCE.Lower(imageBytes), FfiConverterUint32INSTANCE.Lower(meshResolution), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue ThreeDGenerateResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterThreeDGenerateResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *ThreeDModel) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterThreeDModel struct{}
+
+var FfiConverterThreeDModelINSTANCE = FfiConverterThreeDModel{}
+
+func (c FfiConverterThreeDModel) Lift(handle C.uint64_t) *ThreeDModel {
+	result := &ThreeDModel{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_threedmodel(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_threedmodel(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*ThreeDModel).Destroy)
+	return result
+}
+
+func (c FfiConverterThreeDModel) Read(reader io.Reader) *ThreeDModel {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterThreeDModel) Lower(value *ThreeDModel) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*ThreeDModel")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterThreeDModel) Write(writer io.Writer, value *ThreeDModel) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalThreeDModel(handle uint64) *ThreeDModel {
+	return FfiConverterThreeDModelINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalThreeDModel(value *ThreeDModel) uint64 {
+	return uint64(FfiConverterThreeDModelINSTANCE.Lower(value))
+}
+
+type FfiDestroyerThreeDModel struct{}
+
+func (_ FfiDestroyerThreeDModel) Destroy(value *ThreeDModel) {
+	value.Destroy()
+}
+
 // Foreign-language tool executor invoked by the agent loop.
 //
 // Implementations receive the LLM's chosen `tool_name` plus a JSON-encoded
@@ -18811,6 +19000,58 @@ func (_ FfiDestroyerTargetVoice) Destroy(value TargetVoice) {
 	value.Destroy()
 }
 
+// Result of a [`ThreeDModel::generate_from_image`] call.
+//
+// Carries the rendered model as bytes (typically GLB / glTF-binary at
+// `model/gltf-binary`) plus the IANA MIME type so foreign callers can
+// dispatch on the format without sniffing the buffer.
+type ThreeDGenerateResult struct {
+	// Encoded 3D model bytes (GLB container with embedded vertices /
+	// indices / vertex colors).
+	ModelBytes []byte
+	// IANA MIME type of `model_bytes`. Typically `"model/gltf-binary"`.
+	MimeType string
+}
+
+func (r *ThreeDGenerateResult) Destroy() {
+	FfiDestroyerBytes{}.Destroy(r.ModelBytes)
+	FfiDestroyerString{}.Destroy(r.MimeType)
+}
+
+type FfiConverterThreeDGenerateResult struct{}
+
+var FfiConverterThreeDGenerateResultINSTANCE = FfiConverterThreeDGenerateResult{}
+
+func (c FfiConverterThreeDGenerateResult) Lift(rb RustBufferI) ThreeDGenerateResult {
+	return LiftFromRustBuffer[ThreeDGenerateResult](c, rb)
+}
+
+func (c FfiConverterThreeDGenerateResult) Read(reader io.Reader) ThreeDGenerateResult {
+	return ThreeDGenerateResult{
+		FfiConverterBytesINSTANCE.Read(reader),
+		FfiConverterStringINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterThreeDGenerateResult) Lower(value ThreeDGenerateResult) C.RustBuffer {
+	return LowerIntoRustBuffer[ThreeDGenerateResult](c, value)
+}
+
+func (c FfiConverterThreeDGenerateResult) LowerExternal(value ThreeDGenerateResult) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[ThreeDGenerateResult](c, value))
+}
+
+func (c FfiConverterThreeDGenerateResult) Write(writer io.Writer, value ThreeDGenerateResult) {
+	FfiConverterBytesINSTANCE.Write(writer, value.ModelBytes)
+	FfiConverterStringINSTANCE.Write(writer, value.MimeType)
+}
+
+type FfiDestroyerThreeDGenerateResult struct{}
+
+func (_ FfiDestroyerThreeDGenerateResult) Destroy(value ThreeDGenerateResult) {
+	value.Destroy()
+}
+
 type ThreeDProviderDefaults struct {
 	Base *BaseProviderDefaults
 }
@@ -24436,6 +24677,26 @@ func NewFalTtsModel(apiKey string, model *string) (*TtsModel, error) {
 	}
 }
 
+// Build a local faster-whisper speech-to-text model.
+//
+// `model_id` selects a Hugging Face bundle id (default
+// `"Systran/faster-whisper-tiny"`). Larger variants
+// (`"Systran/faster-whisper-{base,small,medium,large-v3}"`) are drop-in
+// replacements. `model_dir` provides a pre-resolved local CTranslate2
+// bundle directory; when supplied the HF download is skipped. `revision`
+// pins a specific branch / tag / commit on the repo (default `main`).
+func NewFasterWhisperSttModel(modelId *string, modelDir *string, revision *string) (*SttModel, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_func_new_faster_whisper_stt_model(FfiConverterOptionalStringINSTANCE.Lower(modelId), FfiConverterOptionalStringINSTANCE.Lower(modelDir), FfiConverterOptionalStringINSTANCE.Lower(revision), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *SttModel
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterSttModelINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
 // Build a local TTS model backed by `any-tts`.
 //
 // `model` is one of `"kokoro82m"`, `"vibevoice"`, or `"qwen3_tts"` (or
@@ -24485,6 +24746,51 @@ func NewPiperTtsModel(modelId *string, speakerId *uint32, sampleRate *uint32) (*
 		return _uniffiDefaultValue, _uniffiErr
 	} else {
 		return FfiConverterTtsModelINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Build a local Spark-TTS text-to-speech model.
+//
+// `model_id` selects a Hugging Face bundle id; default is
+// `"SparkAudio/Spark-TTS-0.5B"` when omitted. `revision` pins a specific
+// branch / tag / commit on the repo (default `main`). `model_dir` provides
+// a pre-resolved local bundle directory containing the `LLM/` + `BiCodec/`
+// subtrees; when supplied, the HF download step is skipped entirely.
+//
+// The bundle ships under the **CC-BY-NC-SA-4.0** license — non-commercial
+// use only. The backend emits a one-shot warning via `warn_nc_once` on
+// first synthesis.
+func NewSparkTtsModel(modelId *string, modelDir *string, revision *string) (*TtsModel, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_func_new_spark_tts_model(FfiConverterOptionalStringINSTANCE.Lower(modelId), FfiConverterOptionalStringINSTANCE.Lower(modelDir), FfiConverterOptionalStringINSTANCE.Lower(revision), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *TtsModel
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterTtsModelINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Build a local TripoSR single-image-to-3D model.
+//
+// `hf_repo_id` selects the Hugging Face repo to fetch weights from
+// (default `"stabilityai/TripoSR"`). `revision` pins a specific branch
+// / tag / commit on that repo (default `main`). `weights_path` provides
+// a pre-resolved local directory containing the `image_encoder.safetensors`
+// / `transformer.safetensors` / `nerf_field.safetensors` triple; when
+// supplied, the HF download is skipped entirely.
+//
+// Weights ship under MIT (matches the upstream TripoSR code license).
+func NewTriposr3dModel(hfRepoId *string, revision *string, weightsPath *string) (*ThreeDModel, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_func_new_triposr_3d_model(FfiConverterOptionalStringINSTANCE.Lower(hfRepoId), FfiConverterOptionalStringINSTANCE.Lower(revision), FfiConverterOptionalStringINSTANCE.Lower(weightsPath), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *ThreeDModel
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterThreeDModelINSTANCE.Lift(_uniffiRV), nil
 	}
 }
 

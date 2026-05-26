@@ -9709,6 +9709,181 @@ public func FfiConverterTypeSttModel_lower(_ value: SttModel) -> UInt64 {
 
 
 /**
+ * A native single-image-to-3D model handle.
+ *
+ * Construct via [`new_triposr_3d_model`] (local, feature-gated). Once
+ * obtained, call [`generate_from_image`](Self::generate_from_image)
+ * (async) or [`generate_from_image_blocking`](Self::generate_from_image_blocking)
+ * (sync) to render a 3D mesh from a PNG / JPEG image.
+ */
+public protocol ThreeDModelProtocol: AnyObject, Sendable {
+    
+    /**
+     * Generate a 3D mesh from a single input image.
+     *
+     * `image_bytes` is encoded PNG or JPEG payload. `mesh_resolution`
+     * controls the side length of the density grid sampled from the
+     * triplane during marching cubes; `256` matches the upstream
+     * `TripoSR` reference and is a reasonable default.
+     */
+    func generateFromImage(imageBytes: Data, meshResolution: UInt32) async throws  -> ThreeDGenerateResult
+    
+    /**
+     * Synchronous variant of [`generate_from_image`](Self::generate_from_image).
+     */
+    func generateFromImageBlocking(imageBytes: Data, meshResolution: UInt32) throws  -> ThreeDGenerateResult
+    
+}
+/**
+ * A native single-image-to-3D model handle.
+ *
+ * Construct via [`new_triposr_3d_model`] (local, feature-gated). Once
+ * obtained, call [`generate_from_image`](Self::generate_from_image)
+ * (async) or [`generate_from_image_blocking`](Self::generate_from_image_blocking)
+ * (sync) to render a 3D mesh from a PNG / JPEG image.
+ */
+open class ThreeDModel: ThreeDModelProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_threedmodel(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_threedmodel(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Generate a 3D mesh from a single input image.
+     *
+     * `image_bytes` is encoded PNG or JPEG payload. `mesh_resolution`
+     * controls the side length of the density grid sampled from the
+     * triplane during marching cubes; `256` matches the upstream
+     * `TripoSR` reference and is a reasonable default.
+     */
+open func generateFromImage(imageBytes: Data, meshResolution: UInt32)async throws  -> ThreeDGenerateResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_threedmodel_generate_from_image(
+                    self.uniffiCloneHandle(),
+                    FfiConverterData.lower(imageBytes),FfiConverterUInt32.lower(meshResolution)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeThreeDGenerateResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`generate_from_image`](Self::generate_from_image).
+     */
+open func generateFromImageBlocking(imageBytes: Data, meshResolution: UInt32)throws  -> ThreeDGenerateResult  {
+    return try  FfiConverterTypeThreeDGenerateResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_threedmodel_generate_from_image_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(imageBytes),
+        FfiConverterUInt32.lower(meshResolution),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeThreeDModel: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = ThreeDModel
+
+    public static func lift(_ handle: UInt64) throws -> ThreeDModel {
+        return ThreeDModel(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: ThreeDModel) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ThreeDModel {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: ThreeDModel, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeThreeDModel_lift(_ handle: UInt64) throws -> ThreeDModel {
+    return try FfiConverterTypeThreeDModel.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeThreeDModel_lower(_ value: ThreeDModel) -> UInt64 {
+    return FfiConverterTypeThreeDModel.lower(value)
+}
+
+
+
+
+
+
+/**
  * Foreign-language tool executor invoked by the agent loop.
  *
  * Implementations receive the LLM's chosen `tool_name` plus a JSON-encoded
@@ -17262,6 +17437,81 @@ public func FfiConverterTypeTargetVoice_lower(_ value: TargetVoice) -> RustBuffe
 }
 
 
+/**
+ * Result of a [`ThreeDModel::generate_from_image`] call.
+ *
+ * Carries the rendered model as bytes (typically GLB / glTF-binary at
+ * `model/gltf-binary`) plus the IANA MIME type so foreign callers can
+ * dispatch on the format without sniffing the buffer.
+ */
+public struct ThreeDGenerateResult: Equatable, Hashable {
+    /**
+     * Encoded 3D model bytes (GLB container with embedded vertices /
+     * indices / vertex colors).
+     */
+    public var modelBytes: Data
+    /**
+     * IANA MIME type of `model_bytes`. Typically `"model/gltf-binary"`.
+     */
+    public var mimeType: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Encoded 3D model bytes (GLB container with embedded vertices /
+         * indices / vertex colors).
+         */modelBytes: Data, 
+        /**
+         * IANA MIME type of `model_bytes`. Typically `"model/gltf-binary"`.
+         */mimeType: String) {
+        self.modelBytes = modelBytes
+        self.mimeType = mimeType
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension ThreeDGenerateResult: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeThreeDGenerateResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ThreeDGenerateResult {
+        return
+            try ThreeDGenerateResult(
+                modelBytes: FfiConverterData.read(from: &buf), 
+                mimeType: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: ThreeDGenerateResult, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.modelBytes, into: &buf)
+        FfiConverterString.write(value.mimeType, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeThreeDGenerateResult_lift(_ buf: RustBuffer) throws -> ThreeDGenerateResult {
+    return try FfiConverterTypeThreeDGenerateResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeThreeDGenerateResult_lower(_ value: ThreeDGenerateResult) -> RustBuffer {
+    return FfiConverterTypeThreeDGenerateResult.lower(value)
+}
+
+
 public struct ThreeDProviderDefaults: Equatable, Hashable {
     public var base: BaseProviderDefaults?
 
@@ -22114,6 +22364,25 @@ public func newFalTtsModel(apiKey: String, model: String?)throws  -> TtsModel  {
 })
 }
 /**
+ * Build a local faster-whisper speech-to-text model.
+ *
+ * `model_id` selects a Hugging Face bundle id (default
+ * `"Systran/faster-whisper-tiny"`). Larger variants
+ * (`"Systran/faster-whisper-{base,small,medium,large-v3}"`) are drop-in
+ * replacements. `model_dir` provides a pre-resolved local CTranslate2
+ * bundle directory; when supplied the HF download is skipped. `revision`
+ * pins a specific branch / tag / commit on the repo (default `main`).
+ */
+public func newFasterWhisperSttModel(modelId: String?, modelDir: String?, revision: String?)throws  -> SttModel  {
+    return try  FfiConverterTypeSttModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_faster_whisper_stt_model(
+        FfiConverterOptionString.lower(modelId),
+        FfiConverterOptionString.lower(modelDir),
+        FfiConverterOptionString.lower(revision),$0
+    )
+})
+}
+/**
  * Build a local TTS model backed by `any-tts`.
  *
  * `model` is one of `"kokoro82m"`, `"vibevoice"`, or `"qwen3_tts"` (or
@@ -22161,6 +22430,49 @@ public func newPiperTtsModel(modelId: String?, speakerId: UInt32?, sampleRate: U
         FfiConverterOptionString.lower(modelId),
         FfiConverterOptionUInt32.lower(speakerId),
         FfiConverterOptionUInt32.lower(sampleRate),$0
+    )
+})
+}
+/**
+ * Build a local Spark-TTS text-to-speech model.
+ *
+ * `model_id` selects a Hugging Face bundle id; default is
+ * `"SparkAudio/Spark-TTS-0.5B"` when omitted. `revision` pins a specific
+ * branch / tag / commit on the repo (default `main`). `model_dir` provides
+ * a pre-resolved local bundle directory containing the `LLM/` + `BiCodec/`
+ * subtrees; when supplied, the HF download step is skipped entirely.
+ *
+ * The bundle ships under the **CC-BY-NC-SA-4.0** license — non-commercial
+ * use only. The backend emits a one-shot warning via `warn_nc_once` on
+ * first synthesis.
+ */
+public func newSparkTtsModel(modelId: String?, modelDir: String?, revision: String?)throws  -> TtsModel  {
+    return try  FfiConverterTypeTtsModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_spark_tts_model(
+        FfiConverterOptionString.lower(modelId),
+        FfiConverterOptionString.lower(modelDir),
+        FfiConverterOptionString.lower(revision),$0
+    )
+})
+}
+/**
+ * Build a local TripoSR single-image-to-3D model.
+ *
+ * `hf_repo_id` selects the Hugging Face repo to fetch weights from
+ * (default `"stabilityai/TripoSR"`). `revision` pins a specific branch
+ * / tag / commit on that repo (default `main`). `weights_path` provides
+ * a pre-resolved local directory containing the `image_encoder.safetensors`
+ * / `transformer.safetensors` / `nerf_field.safetensors` triple; when
+ * supplied, the HF download is skipped entirely.
+ *
+ * Weights ship under MIT (matches the upstream TripoSR code license).
+ */
+public func newTriposr3dModel(hfRepoId: String?, revision: String?, weightsPath: String?)throws  -> ThreeDModel  {
+    return try  FfiConverterTypeThreeDModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_triposr_3d_model(
+        FfiConverterOptionString.lower(hfRepoId),
+        FfiConverterOptionString.lower(revision),
+        FfiConverterOptionString.lower(weightsPath),$0
     )
 })
 }
@@ -23203,10 +23515,19 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_func_new_fal_tts_model() != 32558) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_func_new_faster_whisper_stt_model() != 65529) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_func_new_local_tts_model() != 31651) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_func_new_piper_tts_model() != 32182) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_func_new_spark_tts_model() != 28081) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_func_new_triposr_3d_model() != 57200) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_func_new_whisper_stt_model() != 40916) {
@@ -23393,6 +23714,12 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_sttmodel_transcribe_blocking() != 20646) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_threedmodel_generate_from_image() != 56800) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_threedmodel_generate_from_image_blocking() != 16990) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_ttsmodel_synthesize() != 59860) {

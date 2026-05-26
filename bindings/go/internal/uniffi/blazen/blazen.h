@@ -1180,6 +1180,26 @@ uint64_t uniffi_blazen_uniffi_fn_method_sttmodel_transcribe(uint64_t ptr, RustBu
 RustBuffer uniffi_blazen_uniffi_fn_method_sttmodel_transcribe_blocking(uint64_t ptr, RustBuffer audio_source, RustBuffer language, RustCallStatus *out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_THREEDMODEL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_THREEDMODEL
+uint64_t uniffi_blazen_uniffi_fn_clone_threedmodel(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_THREEDMODEL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_THREEDMODEL
+void uniffi_blazen_uniffi_fn_free_threedmodel(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDMODEL_GENERATE_FROM_IMAGE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDMODEL_GENERATE_FROM_IMAGE
+uint64_t uniffi_blazen_uniffi_fn_method_threedmodel_generate_from_image(uint64_t ptr, RustBuffer image_bytes, uint32_t mesh_resolution
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDMODEL_GENERATE_FROM_IMAGE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDMODEL_GENERATE_FROM_IMAGE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_threedmodel_generate_from_image_blocking(uint64_t ptr, RustBuffer image_bytes, uint32_t mesh_resolution, RustCallStatus *out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_TTSMODEL
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_TTSMODEL
 uint64_t uniffi_blazen_uniffi_fn_clone_ttsmodel(uint64_t handle, RustCallStatus *out_status
@@ -2527,6 +2547,11 @@ uint64_t uniffi_blazen_uniffi_fn_func_new_fal_stt_model(RustBuffer api_key, Rust
 uint64_t uniffi_blazen_uniffi_fn_func_new_fal_tts_model(RustBuffer api_key, RustBuffer model, RustCallStatus *out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_NEW_FASTER_WHISPER_STT_MODEL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_NEW_FASTER_WHISPER_STT_MODEL
+uint64_t uniffi_blazen_uniffi_fn_func_new_faster_whisper_stt_model(RustBuffer model_id, RustBuffer model_dir, RustBuffer revision, RustCallStatus *out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_NEW_LOCAL_TTS_MODEL
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_NEW_LOCAL_TTS_MODEL
 uint64_t uniffi_blazen_uniffi_fn_func_new_local_tts_model(RustBuffer model, RustBuffer voice, RustBuffer language, RustBuffer sample_rate, RustCallStatus *out_status
@@ -2535,6 +2560,16 @@ uint64_t uniffi_blazen_uniffi_fn_func_new_local_tts_model(RustBuffer model, Rust
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_NEW_PIPER_TTS_MODEL
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_NEW_PIPER_TTS_MODEL
 uint64_t uniffi_blazen_uniffi_fn_func_new_piper_tts_model(RustBuffer model_id, RustBuffer speaker_id, RustBuffer sample_rate, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_NEW_SPARK_TTS_MODEL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_NEW_SPARK_TTS_MODEL
+uint64_t uniffi_blazen_uniffi_fn_func_new_spark_tts_model(RustBuffer model_id, RustBuffer model_dir, RustBuffer revision, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_NEW_TRIPOSR_3D_MODEL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_NEW_TRIPOSR_3D_MODEL
+uint64_t uniffi_blazen_uniffi_fn_func_new_triposr_3d_model(RustBuffer hf_repo_id, RustBuffer revision, RustBuffer weights_path, RustCallStatus *out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_NEW_WHISPER_STT_MODEL
@@ -3116,6 +3151,12 @@ uint16_t uniffi_blazen_uniffi_checksum_func_new_fal_tts_model(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_NEW_FASTER_WHISPER_STT_MODEL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_NEW_FASTER_WHISPER_STT_MODEL
+uint16_t uniffi_blazen_uniffi_checksum_func_new_faster_whisper_stt_model(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_NEW_LOCAL_TTS_MODEL
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_NEW_LOCAL_TTS_MODEL
 uint16_t uniffi_blazen_uniffi_checksum_func_new_local_tts_model(void
@@ -3125,6 +3166,18 @@ uint16_t uniffi_blazen_uniffi_checksum_func_new_local_tts_model(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_NEW_PIPER_TTS_MODEL
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_NEW_PIPER_TTS_MODEL
 uint16_t uniffi_blazen_uniffi_checksum_func_new_piper_tts_model(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_NEW_SPARK_TTS_MODEL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_NEW_SPARK_TTS_MODEL
+uint16_t uniffi_blazen_uniffi_checksum_func_new_spark_tts_model(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_NEW_TRIPOSR_3D_MODEL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_NEW_TRIPOSR_3D_MODEL
+uint16_t uniffi_blazen_uniffi_checksum_func_new_triposr_3d_model(void
     
 );
 #endif
@@ -3497,6 +3550,18 @@ uint16_t uniffi_blazen_uniffi_checksum_method_sttmodel_transcribe(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STTMODEL_TRANSCRIBE_BLOCKING
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STTMODEL_TRANSCRIBE_BLOCKING
 uint16_t uniffi_blazen_uniffi_checksum_method_sttmodel_transcribe_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDMODEL_GENERATE_FROM_IMAGE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDMODEL_GENERATE_FROM_IMAGE
+uint16_t uniffi_blazen_uniffi_checksum_method_threedmodel_generate_from_image(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDMODEL_GENERATE_FROM_IMAGE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDMODEL_GENERATE_FROM_IMAGE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_threedmodel_generate_from_image_blocking(void
     
 );
 #endif
