@@ -35,7 +35,6 @@
 //! runtime used by every native Blazen ML backend).
 
 mod image_encoder;
-mod marching_cubes;
 mod nerf_field;
 mod pipeline;
 mod triplane_transformer;
