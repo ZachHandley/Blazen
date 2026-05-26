@@ -20,8 +20,6 @@
 //! it into the spawned pipeline task (which has a `'static` lifetime
 //! bound from the boxed `Stream` return type).
 
-#![cfg(feature = "whisper-streaming")]
-
 use std::path::Path;
 use std::pin::Pin;
 use std::sync::Arc;

@@ -46,8 +46,6 @@
 //! The whole stack is commercial-safe — unlike Spark-TTS, `MaskGCT`,
 //! and `AudioLDM`, no non-commercial weights restriction applies.
 
-#![cfg(feature = "faster-whisper")]
-
 mod audio;
 mod decoder;
 mod pipeline;
