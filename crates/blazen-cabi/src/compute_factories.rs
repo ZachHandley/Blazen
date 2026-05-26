@@ -10,7 +10,9 @@
 //! | [`blazen_stt_model_new_fal`]              | `new_fal_stt_model`            | (always on)   |
 //! | [`blazen_image_gen_model_new_fal`]        | `new_fal_image_gen_model`      | (always on)   |
 //! | [`blazen_tts_model_new_piper`]            | `new_piper_tts_model`          | `piper`       |
+//! | [`blazen_tts_model_new_spark`]            | `new_spark_tts_model`          | `audio-tts-spark` |
 //! | [`blazen_stt_model_new_whisper`]          | `new_whisper_stt_model`        | `whispercpp`  |
+//! | [`blazen_stt_model_new_faster_whisper`]   | `new_faster_whisper_stt_model` | `audio-stt-faster-whisper` |
 //! | [`blazen_image_gen_model_new_diffusion`]  | `new_diffusion_model`          | `diffusion`   |
 //!
 //! ## Optional-numeric encodings
@@ -321,6 +323,105 @@ pub unsafe extern "C" fn blazen_stt_model_new_whisper(
     let language = unsafe { cstr_to_opt_string(language) };
 
     match blazen_uniffi::compute::new_whisper_stt_model(model, device, language) {
+        Ok(arc) => {
+            if !out_model.is_null() {
+                // SAFETY: caller has guaranteed `out_model` is writable.
+                unsafe {
+                    *out_model = BlazenSttModel::from(arc).into_ptr();
+                }
+            }
+            0
+        }
+        Err(e) => write_error(out_err, e),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Spark-TTS factory (feature = "audio-tts-spark")
+// ---------------------------------------------------------------------------
+
+/// Build a local Spark-TTS text-to-speech model.
+///
+/// `model_id` selects a Hugging Face bundle id (default
+/// `"SparkAudio/Spark-TTS-0.5B"`); pass null to use the upstream default.
+/// `model_dir` is an optional pre-resolved local bundle directory (when
+/// non-null, the HF download is skipped). `revision` pins a specific
+/// branch / tag / commit (default `main`).
+///
+/// Spark-TTS bundle weights ship under CC-BY-NC-SA-4.0 — non-commercial
+/// use only. The underlying backend emits a one-shot warning on first
+/// synthesis.
+///
+/// # Safety
+///
+/// - `model_id` / `model_dir` / `revision` must each be null OR a valid
+///   NUL-terminated UTF-8 buffer.
+/// - `out_model` and `out_err` must each be null OR point to a writable slot
+///   of the matching pointer type.
+#[cfg(feature = "audio-tts-spark")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_tts_model_new_spark(
+    model_id: *const c_char,
+    model_dir: *const c_char,
+    revision: *const c_char,
+    out_model: *mut *mut BlazenTtsModel,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let model_id = unsafe { cstr_to_opt_string(model_id) };
+    let model_dir = unsafe { cstr_to_opt_string(model_dir) };
+    let revision = unsafe { cstr_to_opt_string(revision) };
+
+    match blazen_uniffi::compute::new_spark_tts_model(model_id, model_dir, revision) {
+        Ok(arc) => {
+            if !out_model.is_null() {
+                // SAFETY: caller has guaranteed `out_model` is writable.
+                unsafe {
+                    *out_model = BlazenTtsModel::from(arc).into_ptr();
+                }
+            }
+            0
+        }
+        Err(e) => write_error(out_err, e),
+    }
+}
+
+// ---------------------------------------------------------------------------
+// faster-whisper STT factory (feature = "audio-stt-faster-whisper")
+// ---------------------------------------------------------------------------
+
+/// Build a local faster-whisper (`CTranslate2` / ct2rs) speech-to-text model.
+///
+/// `model_id` selects a Hugging Face bundle id (default
+/// `"Systran/faster-whisper-tiny"`). Larger variants like
+/// `"Systran/faster-whisper-{base,small,medium,large-v3}"` are drop-in
+/// replacements. `model_dir` is an optional pre-resolved `CTranslate2` bundle
+/// directory (skips HF download when non-null). `revision` pins a specific
+/// branch / tag / commit (default `main`).
+///
+/// faster-whisper is MIT-licensed (ct2rs + `CTranslate2`).
+///
+/// # Safety
+///
+/// - `model_id` / `model_dir` / `revision` must each be null OR a valid
+///   NUL-terminated UTF-8 buffer.
+/// - `out_model` and `out_err` must each be null OR point to a writable slot
+///   of the matching pointer type.
+#[cfg(feature = "audio-stt-faster-whisper")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_stt_model_new_faster_whisper(
+    model_id: *const c_char,
+    model_dir: *const c_char,
+    revision: *const c_char,
+    out_model: *mut *mut BlazenSttModel,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let model_id = unsafe { cstr_to_opt_string(model_id) };
+    let model_dir = unsafe { cstr_to_opt_string(model_dir) };
+    let revision = unsafe { cstr_to_opt_string(revision) };
+
+    match blazen_uniffi::compute::new_faster_whisper_stt_model(model_id, model_dir, revision) {
         Ok(arc) => {
             if !out_model.is_null() {
                 // SAFETY: caller has guaranteed `out_model` is writable.

@@ -2780,6 +2780,59 @@ int32_t blazen_stt_model_new_whisper(const char *model,
                                      BlazenError **out_err);
 
 /**
+ * Build a local Spark-TTS text-to-speech model.
+ *
+ * `model_id` selects a Hugging Face bundle id (default
+ * `"SparkAudio/Spark-TTS-0.5B"`); pass null to use the upstream default.
+ * `model_dir` is an optional pre-resolved local bundle directory (when
+ * non-null, the HF download is skipped). `revision` pins a specific
+ * branch / tag / commit (default `main`).
+ *
+ * Spark-TTS bundle weights ship under CC-BY-NC-SA-4.0 — non-commercial
+ * use only. The underlying backend emits a one-shot warning on first
+ * synthesis.
+ *
+ * # Safety
+ *
+ * - `model_id` / `model_dir` / `revision` must each be null OR a valid
+ *   NUL-terminated UTF-8 buffer.
+ * - `out_model` and `out_err` must each be null OR point to a writable slot
+ *   of the matching pointer type.
+ */
+
+int32_t blazen_tts_model_new_spark(const char *model_id,
+                                   const char *model_dir,
+                                   const char *revision,
+                                   BlazenTtsModel **out_model,
+                                   BlazenError **out_err);
+
+/**
+ * Build a local faster-whisper (`CTranslate2` / ct2rs) speech-to-text model.
+ *
+ * `model_id` selects a Hugging Face bundle id (default
+ * `"Systran/faster-whisper-tiny"`). Larger variants like
+ * `"Systran/faster-whisper-{base,small,medium,large-v3}"` are drop-in
+ * replacements. `model_dir` is an optional pre-resolved `CTranslate2` bundle
+ * directory (skips HF download when non-null). `revision` pins a specific
+ * branch / tag / commit (default `main`).
+ *
+ * faster-whisper is MIT-licensed (ct2rs + `CTranslate2`).
+ *
+ * # Safety
+ *
+ * - `model_id` / `model_dir` / `revision` must each be null OR a valid
+ *   NUL-terminated UTF-8 buffer.
+ * - `out_model` and `out_err` must each be null OR point to a writable slot
+ *   of the matching pointer type.
+ */
+
+int32_t blazen_stt_model_new_faster_whisper(const char *model_id,
+                                            const char *model_dir,
+                                            const char *revision,
+                                            BlazenSttModel **out_model,
+                                            BlazenError **out_err);
+
+/**
  * Build a local diffusion-rs image-generation model.
  *
  * `model_id` is a Hugging Face repo id (e.g. `"stabilityai/stable-diffusion-2-1"`);
