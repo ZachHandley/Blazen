@@ -64,7 +64,7 @@ jobs:
         # dtolnay action is enough because the runner already has the toolchain
         # cached locally. Matches live-models.yaml's setup style — light, no
         # sccache (this is a heavy GPU box, not the shared ubuntu pool).
-        uses: dtolnay/rust-toolchain@stable
+        uses: https://github.com/dtolnay/rust-toolchain@stable
 
       - name: Install nextest
         uses: taiki-e/install-action@v2
