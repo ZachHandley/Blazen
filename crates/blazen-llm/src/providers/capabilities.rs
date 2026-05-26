@@ -34,10 +34,14 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures_util::Stream;
 
+#[cfg(feature = "threed")]
+use crate::compute::requests::{AnimateRequest, RefineRequest, RigRequest, TexturizeRequest};
 use crate::compute::requests::{
     BackgroundRemovalRequest, ImageRequest, MusicRequest, SpeechRequest, ThreeDRequest,
     TranscriptionRequest, UpscaleRequest, VideoRequest, VoiceCloneRequest,
 };
+#[cfg(feature = "threed")]
+use crate::compute::results::{AnimateResult, RefineResult, RigResult, TexturizeResult};
 use crate::compute::results::{
     AudioResult, ImageResult, ThreeDResult, TranscriptionResult, VideoResult, VoiceHandle,
 };
@@ -180,13 +184,75 @@ pub trait VcProvider: BaseProvider {
 // ThreeDProvider — 3D mesh generation
 // ---------------------------------------------------------------------------
 
-/// 3D mesh generation capability — image-to-3D or text-to-3D.
+/// 3D mesh generation + post-processing capability.
+///
+/// Carries one *generation* method (`generate_3d`, which produces a fresh
+/// mesh from a text prompt or image) plus four *post-processing* methods —
+/// `texturize`, `rig`, `refine`, `animate` — that operate on an existing
+/// mesh. Post-proc methods default to `BlazenError::Unsupported`, so a
+/// generation-only backend (e.g. `TripoSrProvider`) doesn't need to
+/// override them; HTTP-proxy / multi-stage backends like `Compat3dProvider`
+/// override them by delegating to the inner `blazen-3d` capability traits.
+///
+/// Post-proc DTOs (`TexturizeRequest` / `TexturizeResult` / `PbrMaps` /
+/// `RigRequest` / `RigResult` / `RefineRequest` / `RefineResult` /
+/// `RefineStats` / `AnimateRequest` / `AnimateResult`) live in
+/// [`crate::compute::requests`] + [`crate::compute::results`] as
+/// re-exports of the canonical `blazen-3d` types.
 #[async_trait]
 pub trait ThreeDProvider: BaseProvider {
     /// Generate a 3D mesh from a generic [`ThreeDRequest`] (carries
     /// either a text prompt or a source image; the provider picks
     /// whichever mode it supports).
     async fn generate_3d(&self, request: ThreeDRequest) -> Result<ThreeDResult, BlazenError>;
+
+    /// Apply or generate a texture / material for an existing 3D mesh.
+    /// Defaults to `BlazenError::Unsupported`.
+    #[cfg(feature = "threed")]
+    async fn texturize(
+        &self,
+        _mesh_glb: &[u8],
+        _request: TexturizeRequest,
+    ) -> Result<TexturizeResult, BlazenError> {
+        Err(BlazenError::unsupported(
+            "ThreeDProvider::texturize not implemented by this provider",
+        ))
+    }
+
+    /// Auto-rig a 3D mesh (skeletal armature + optional skin weights).
+    /// Defaults to `BlazenError::Unsupported`.
+    #[cfg(feature = "threed")]
+    async fn rig(&self, _mesh_glb: &[u8], _request: RigRequest) -> Result<RigResult, BlazenError> {
+        Err(BlazenError::unsupported(
+            "ThreeDProvider::rig not implemented by this provider",
+        ))
+    }
+
+    /// Refine a 3D mesh (decimate / fill holes / unwrap UVs /
+    /// retopologize / smooth). Defaults to `BlazenError::Unsupported`.
+    #[cfg(feature = "threed")]
+    async fn refine(
+        &self,
+        _mesh_glb: &[u8],
+        _request: RefineRequest,
+    ) -> Result<RefineResult, BlazenError> {
+        Err(BlazenError::unsupported(
+            "ThreeDProvider::refine not implemented by this provider",
+        ))
+    }
+
+    /// Animate a rigged 3D mesh from a text prompt, motion-capture
+    /// clip, or driving video. Defaults to `BlazenError::Unsupported`.
+    #[cfg(feature = "threed")]
+    async fn animate(
+        &self,
+        _rigged_glb: &[u8],
+        _request: AnimateRequest,
+    ) -> Result<AnimateResult, BlazenError> {
+        Err(BlazenError::unsupported(
+            "ThreeDProvider::animate not implemented by this provider",
+        ))
+    }
 }
 
 // ---------------------------------------------------------------------------

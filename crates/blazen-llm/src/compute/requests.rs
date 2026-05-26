@@ -556,6 +556,20 @@ impl ThreeDRequest {
 }
 
 // ---------------------------------------------------------------------------
+// 3D post-processing — texturize / rig / refine / animate
+// ---------------------------------------------------------------------------
+//
+// Re-exports of the canonical blazen-3d post-processing request DTOs so the
+// `ThreeDProvider` capability trait can declare the four post-proc methods
+// (texturize/rig/refine/animate) without duplicating the type definitions.
+// Single source of truth lives in `blazen-3d`; this module just re-projects
+// them under the blazen-llm public path so downstream consumers don't have
+// to add blazen-3d as a direct dep.
+
+#[cfg(feature = "threed")]
+pub use blazen_3d::{AnimateRequest, RefineRequest, RigRequest, TexturizeRequest};
+
+// ---------------------------------------------------------------------------
 // Background removal
 // ---------------------------------------------------------------------------
 

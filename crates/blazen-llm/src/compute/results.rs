@@ -107,6 +107,15 @@ pub struct ThreeDResult {
 }
 
 // ---------------------------------------------------------------------------
+// 3D post-processing — texturize / rig / refine / animate result types
+// ---------------------------------------------------------------------------
+
+#[cfg(feature = "threed")]
+pub use blazen_3d::{
+    AnimateResult, PbrMaps, RefineResult, RefineStats, RigResult, TexturizeResult,
+};
+
+// ---------------------------------------------------------------------------
 // Transcription result
 // ---------------------------------------------------------------------------
 
