@@ -92,7 +92,15 @@ export type MediaSource = ImageSource;
 ///
 /// Sets the panic hook so that Rust panics produce readable console
 /// error messages instead of `unreachable` traps.
-#[wasm_bindgen(start)]
+///
+/// The `start` attribute is suppressed under `cfg(test)` to avoid a
+/// wasm-bindgen-cli post-processing collision with wasm-bindgen-test's
+/// own `WasmBindgenTestContext` start registration ("Cannot define
+/// export over existing namespace WasmBindgenTestContext"). Test
+/// binaries that pull `lib.rs` symbols still get a normal exported
+/// `init` fn; only the auto-invoked-on-load behaviour is dropped, which
+/// the test runner re-establishes via its own start shim.
+#[cfg_attr(not(test), wasm_bindgen(start))]
 pub fn init() {
     console_error_panic_hook::set_once();
 }
