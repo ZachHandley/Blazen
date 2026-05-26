@@ -116,6 +116,16 @@ pub mod usage_recording;
 
 pub use providers::base::LlmProviderDefaults;
 pub use providers::root::{BaseProvider, CapabilityKind, ProviderMetadata};
+// New capability sub-traits live at `providers::capabilities::*`. They
+// are NOT yet re-exported at the crate root because their names
+// collide with the existing generic-struct wrappers
+// `blazen_audio_tts::TtsProvider<B>` / `blazen_audio_stt::SttProvider<B>`
+// / `blazen_audio_music::MusicProvider<B>` /
+// `blazen_audio_codec::CodecProvider<B>` that this crate already
+// re-exports below (audio_stt L247, audio_tts L292, audio_music L317,
+// audio_codec L321). P4.1.c.1 renames the audio-side typed wrappers
+// to `<Capability>BackendHandle<B>` and then this `pub use` returns to
+// the crate root.
 pub use providers::custom::{ApiProtocol, CustomProvider, CustomProviderHandle};
 #[cfg(any(
     all(target_arch = "wasm32", not(target_os = "wasi")),

@@ -50,9 +50,16 @@ pub mod openai_compat;
 // Polymorphic root: `BaseProvider` trait + `CapabilityKind` + `ProviderMetadata`.
 // Every concrete provider (LLM / TTS / STT / Music / VC / 3D / Image-gen /
 // Embedding / Codec) implements `BaseProvider` either directly or via one of
-// the capability sub-traits added in P4.1.c.
+// the capability sub-traits in `capabilities`.
 pub mod root;
 pub use root::{BaseProvider, CapabilityKind, ProviderMetadata};
+
+// Capability sub-traits — one per modality, all extend `BaseProvider`.
+pub mod capabilities;
+pub use capabilities::{
+    BackgroundRemovalProvider, CodecProvider, EmbeddingProvider, ImageGenProvider, LLMProvider,
+    MusicProvider, SttProvider, ThreeDProvider, TtsProvider, VcProvider, VideoProvider,
+};
 
 // OpenAI-compatible dedicated providers
 pub mod bedrock;
