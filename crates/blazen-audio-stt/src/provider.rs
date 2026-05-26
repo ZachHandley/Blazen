@@ -1,7 +1,7 @@
 //! Dual-shape provider wrappers around an [`SttBackend`].
 //!
 //! See `Appendix B` of the PR-AUDIO plan for the rationale: a generic
-//! [`SttProvider<B>`] gives Rust callers monomorphized dispatch, while
+//! [`SttBackendHandle<B>`] gives Rust callers monomorphized dispatch, while
 //! [`DynSttProvider`] is the erased shape that the language bindings
 //! (Python, Node, WASM, `UniFFI`, C-ABI) can pass across the ABI.
 
@@ -14,13 +14,13 @@ use crate::traits::{SttBackend, TranscriptionResult};
 ///
 /// Prefer this shape in Rust hot paths where the concrete backend type is
 /// known at compile time. For ABI boundaries, use [`DynSttProvider`]
-/// (obtainable from [`SttProvider::into_dyn`]).
+/// (obtainable from [`SttBackendHandle::into_dyn`]).
 #[derive(Debug)]
-pub struct SttProvider<B: SttBackend> {
+pub struct SttBackendHandle<B: SttBackend> {
     backend: B,
 }
 
-impl<B: SttBackend> SttProvider<B> {
+impl<B: SttBackend> SttBackendHandle<B> {
     /// Wrap a concrete backend.
     pub fn new(backend: B) -> Self {
         Self { backend }
@@ -90,7 +90,7 @@ impl<B: SttBackend> SttProvider<B> {
     }
 }
 
-impl<B: SttBackend + 'static> SttProvider<B> {
+impl<B: SttBackend + 'static> SttBackendHandle<B> {
     /// Convert to an erased [`DynSttProvider`] suitable for binding /
     /// ABI boundaries that cannot carry generics.
     pub fn into_dyn(self) -> DynSttProvider {
@@ -100,10 +100,10 @@ impl<B: SttBackend + 'static> SttProvider<B> {
     }
 }
 
-/// Erased version of [`SttProvider`] for FFI / binding boundaries.
+/// Erased version of [`SttBackendHandle`] for FFI / binding boundaries.
 ///
 /// Holds a `Box<dyn SttBackend>` and forwards the same surface as the
-/// typed [`SttProvider`].
+/// typed [`SttBackendHandle`].
 pub struct DynSttProvider {
     backend: Box<dyn SttBackend>,
 }
@@ -221,7 +221,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn typed_provider_forwards_id_and_kind() {
-        let provider = SttProvider::new(StubBackend);
+        let provider = SttBackendHandle::new(StubBackend);
         assert_eq!(provider.id(), "stub:stt");
         assert_eq!(provider.provider_kind(), "stt");
         assert!(provider.is_loaded().await);
@@ -231,7 +231,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn typed_provider_transcribes() {
-        let provider = SttProvider::new(StubBackend);
+        let provider = SttBackendHandle::new(StubBackend);
         let result = provider
             .transcribe(Path::new("/dev/null"), None)
             .await
@@ -243,7 +243,7 @@ mod tests {
 
     #[tokio::test(flavor = "current_thread")]
     async fn into_dyn_preserves_behavior() {
-        let dyn_provider = SttProvider::new(StubBackend).into_dyn();
+        let dyn_provider = SttBackendHandle::new(StubBackend).into_dyn();
         assert_eq!(dyn_provider.id(), "stub:stt");
         assert_eq!(dyn_provider.provider_kind(), "stt");
         let result = dyn_provider

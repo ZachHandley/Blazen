@@ -2,7 +2,7 @@
 //!
 //! Codecs are PCM <-> discrete-token translators. Concrete backends
 //! (EnCodec, DAC, SNAC, ...) implement this single trait and are then
-//! consumable through [`crate::CodecProvider`] (typed) or
+//! consumable through [`crate::CodecBackendHandle`] (typed) or
 //! [`crate::DynCodecProvider`] (erased, for binding layers).
 
 use async_trait::async_trait;

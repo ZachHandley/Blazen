@@ -253,7 +253,7 @@ mod tests {
     use async_trait::async_trait;
     use blazen_audio::AudioBackend;
     use blazen_audio_stt::traits::{SttBackend, TranscriptionResult as EngineResult};
-    use blazen_audio_stt::{SttError, SttProvider};
+    use blazen_audio_stt::{SttBackendHandle, SttError};
 
     struct StubBackend;
 
@@ -283,7 +283,7 @@ mod tests {
     }
 
     fn provider() -> DynSttProvider {
-        SttProvider::new(StubBackend).into_dyn()
+        SttBackendHandle::new(StubBackend).into_dyn()
     }
 
     #[tokio::test]

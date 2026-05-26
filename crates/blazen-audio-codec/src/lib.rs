@@ -9,7 +9,7 @@
 //! [`blazen-audio-tts`](../blazen_audio_tts/index.html) plays for TTS and
 //! [`blazen-audio-music`](../blazen_audio_music/index.html) plays for music:
 //! a single capability-typed [`CodecBackend`] trait plus a
-//! monomorphizable [`CodecProvider<B>`] and an erased
+//! monomorphizable [`CodecBackendHandle<B>`] and an erased
 //! [`DynCodecProvider`] for binding layers.
 //!
 //! ## Backends
@@ -44,5 +44,5 @@ pub mod provider;
 pub mod traits;
 
 pub use error::CodecError;
-pub use provider::{CodecProvider, DynCodecProvider};
+pub use provider::{CodecBackendHandle, DynCodecProvider};
 pub use traits::CodecBackend;

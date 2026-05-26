@@ -9,7 +9,7 @@
 //!
 //! - [`SttBackend`]: capability trait extending [`blazen_audio::AudioBackend`]
 //!   that every STT engine implements.
-//! - [`SttProvider<B>`]: typed wrapper for Rust callers; monomorphizes
+//! - [`SttBackendHandle<B>`]: typed wrapper for Rust callers; monomorphizes
 //!   on the concrete backend.
 //! - [`DynSttProvider`]: erased wrapper (`Box<dyn SttBackend>`) for FFI
 //!   / language-binding boundaries that cannot carry generics. See
@@ -48,7 +48,7 @@ pub mod traits;
 
 pub use error::SttError;
 pub use options::SttOptions;
-pub use provider::{DynSttProvider, SttProvider};
+pub use provider::{DynSttProvider, SttBackendHandle};
 pub use traits::{StreamingTranscript, SttBackend, TranscriptionResult, TranscriptionSegment};
 
 #[cfg(feature = "candle")]

@@ -3,7 +3,7 @@
 //!
 //! See `PR_AUDIO_PLAN.md` Appendix B for the full dual-shape rationale.
 //! Short version: Rust callers benefit from monomorphization through
-//! [`CodecProvider<B>`]; bindings (Python / Node / UniFFI / cabi) can't
+//! [`CodecBackendHandle<B>`]; bindings (Python / Node / UniFFI / cabi) can't
 //! cross generics through their C ABI and need an erased
 //! [`DynCodecProvider`] (`Arc<dyn CodecBackend>`) instead.
 
@@ -16,11 +16,11 @@ use crate::traits::CodecBackend;
 /// and is monomorphized by the compiler. Use this from Rust callers in
 /// hot loops.
 #[derive(Clone, Debug)]
-pub struct CodecProvider<B: CodecBackend> {
+pub struct CodecBackendHandle<B: CodecBackend> {
     backend: Arc<B>,
 }
 
-impl<B: CodecBackend> CodecProvider<B> {
+impl<B: CodecBackend> CodecBackendHandle<B> {
     /// Wrap an existing backend.
     pub fn new(backend: B) -> Self {
         Self {
@@ -189,7 +189,7 @@ mod tests {
 
     #[tokio::test]
     async fn typed_provider_forwards_to_backend() {
-        let provider = CodecProvider::new(FakeCodec);
+        let provider = CodecBackendHandle::new(FakeCodec);
         let tokens = provider.encode_pcm(&[0.1, 0.2, 0.3], 24_000).await.unwrap();
         assert_eq!(tokens.len(), 3);
         let pcm = provider.decode_tokens(&tokens, 1).await.unwrap();
@@ -198,7 +198,7 @@ mod tests {
 
     #[tokio::test]
     async fn dyn_provider_forwards_to_backend() {
-        let dyn_provider = CodecProvider::new(FakeCodec).into_dyn();
+        let dyn_provider = CodecBackendHandle::new(FakeCodec).into_dyn();
         let tokens = dyn_provider
             .encode_pcm(&[0.5], 24_000)
             .await
@@ -208,7 +208,7 @@ mod tests {
 
     #[tokio::test]
     async fn dyn_provider_debug_includes_id() {
-        let dyn_provider = CodecProvider::new(FakeCodec).into_dyn();
+        let dyn_provider = CodecBackendHandle::new(FakeCodec).into_dyn();
         let dbg = format!("{dyn_provider:?}");
         assert!(dbg.contains("fake-codec"));
         assert!(dbg.contains("codec"));

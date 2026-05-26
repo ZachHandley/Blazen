@@ -116,16 +116,10 @@ pub mod usage_recording;
 
 pub use providers::base::LlmProviderDefaults;
 pub use providers::root::{BaseProvider, CapabilityKind, ProviderMetadata};
-// New capability sub-traits live at `providers::capabilities::*`. They
-// are NOT yet re-exported at the crate root because their names
-// collide with the existing generic-struct wrappers
-// `blazen_audio_tts::TtsProvider<B>` / `blazen_audio_stt::SttProvider<B>`
-// / `blazen_audio_music::MusicProvider<B>` /
-// `blazen_audio_codec::CodecProvider<B>` that this crate already
-// re-exports below (audio_stt L247, audio_tts L292, audio_music L317,
-// audio_codec L321). P4.1.c.1 renames the audio-side typed wrappers
-// to `<Capability>BackendHandle<B>` and then this `pub use` returns to
-// the crate root.
+pub use providers::capabilities::{
+    BackgroundRemovalProvider, CodecProvider, EmbeddingProvider, ImageGenProvider, LLMProvider,
+    MusicProvider, SttProvider, ThreeDProvider, TtsProvider, VcProvider, VideoProvider,
+};
 pub use providers::custom::{ApiProtocol, CustomProvider, CustomProviderHandle};
 #[cfg(any(
     all(target_arch = "wasm32", not(target_os = "wasi")),
@@ -250,7 +244,7 @@ pub use blazen_llm_mistralrs::{
 pub use blazen_embed_candle::{CandleEmbedError, CandleEmbedModel, CandleEmbedOptions};
 
 #[cfg(feature = "audio-stt")]
-pub use blazen_audio_stt::{DynSttProvider, SttError, SttOptions, SttProvider};
+pub use blazen_audio_stt::{DynSttProvider, SttBackendHandle, SttError, SttOptions};
 
 // Backwards-compat aliases for the pre-PR-AUDIO names. The bindings still
 // reference these — they will be migrated to the canonical
@@ -295,7 +289,7 @@ pub use blazen_llm_llamacpp::{
 };
 
 #[cfg(feature = "audio-tts")]
-pub use blazen_audio_tts::{DynTtsProvider, TtsError, TtsModel, TtsOptions, TtsProvider};
+pub use blazen_audio_tts::{DynTtsProvider, TtsBackendHandle, TtsError, TtsModel, TtsOptions};
 
 #[cfg(feature = "audio-tts-anytts")]
 pub use blazen_audio_tts::AnyTtsBackend;
@@ -320,11 +314,11 @@ pub use blazen_audio_music::backends::stable_audio::{
 };
 #[cfg(feature = "audio-music")]
 pub use blazen_audio_music::{
-    DynMusicProvider, MusicBackend, MusicChunk, MusicError, MusicProvider,
+    DynMusicProvider, MusicBackend, MusicBackendHandle, MusicChunk, MusicError,
 };
 
 #[cfg(feature = "audio-codec")]
-pub use blazen_audio_codec::{CodecError, CodecProvider, DynCodecProvider};
+pub use blazen_audio_codec::{CodecBackendHandle, CodecError, DynCodecProvider};
 
 #[cfg(feature = "audio-vc-rvc")]
 pub use blazen_audio_vc::RvcBackend;

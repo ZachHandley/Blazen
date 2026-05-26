@@ -1,6 +1,6 @@
 //! Typed and dynamically-erased TTS provider wrappers.
 //!
-//! [`TtsProvider<B>`] is the **monomorphized** wrapper: callers that
+//! [`TtsBackendHandle<B>`] is the **monomorphized** wrapper: callers that
 //! statically know which backend they want pay no virtual-call cost and
 //! get the backend's full inherent surface back via `inner()`.
 //!
@@ -20,15 +20,15 @@ use crate::{TtsBackend, TtsError, TtsOptions};
 
 /// Typed, monomorphized TTS provider holding a concrete backend `B`.
 ///
-/// Construct via [`TtsProvider::new`] when the backend type is known at
-/// compile time (e.g. `TtsProvider::<AnyTtsBackend>::new(...)`). For
+/// Construct via [`TtsBackendHandle::new`] when the backend type is known at
+/// compile time (e.g. `TtsBackendHandle::<AnyTtsBackend>::new(...)`). For
 /// type-erased storage use [`DynTtsProvider`] instead.
 #[derive(Debug, Clone)]
-pub struct TtsProvider<B: TtsBackend> {
+pub struct TtsBackendHandle<B: TtsBackend> {
     backend: Arc<B>,
 }
 
-impl<B: TtsBackend> TtsProvider<B> {
+impl<B: TtsBackend> TtsBackendHandle<B> {
     /// Wrap an already-constructed backend.
     pub fn new(backend: B) -> Self {
         Self {

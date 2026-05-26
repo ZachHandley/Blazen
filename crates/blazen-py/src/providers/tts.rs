@@ -1,7 +1,7 @@
 //! Python wrapper for the local TTS provider (`any-tts`).
 //!
 //! Exposes :class:`TtsProvider` (Kokoro-82M default) bound onto the
-//! `blazen_audio_tts::TtsProvider` engine. When the `engine` feature is
+//! `blazen_audio_tts::TtsBackendHandle` engine. When the `engine` feature is
 //! not compiled in, :meth:`text_to_speech` raises :class:`TtsError` with
 //! an ``"engine not available"`` message — same shape as the other local
 //! backends.

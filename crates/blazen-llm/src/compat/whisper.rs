@@ -12,7 +12,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use blazen_audio_stt::backends::whispercpp::{WhisperCppBackend, WhisperCppOptions};
-use blazen_audio_stt::{DynSttProvider, SttError, SttProvider};
+use blazen_audio_stt::{DynSttProvider, SttBackendHandle, SttError};
 
 use crate::compute::{
     ComputeProvider, ComputeRequest, ComputeResult, JobHandle, JobStatus, Transcription,
@@ -47,7 +47,7 @@ impl WhisperCppProvider {
     pub async fn from_options(options: WhisperCppOptions) -> Result<Self, SttError> {
         let backend = WhisperCppBackend::new(options)?;
         Ok(Self {
-            inner: Arc::new(SttProvider::new(backend).into_dyn()),
+            inner: Arc::new(SttBackendHandle::new(backend).into_dyn()),
         })
     }
 

@@ -1,6 +1,6 @@
 //! Generic and type-erased music-provider wrappers.
 //!
-//! [`MusicProvider`] is a thin generic newtype around a concrete
+//! [`MusicBackendHandle`] is a thin generic newtype around a concrete
 //! [`MusicBackend`] implementation. It exists so callers can keep static
 //! dispatch when they know the engine type at compile time.
 //!
@@ -21,11 +21,11 @@ use crate::traits::MusicBackend;
 /// need shared ownership should construct a [`DynMusicProvider`] (which
 /// wraps the backend in an `Arc`) instead.
 #[derive(Debug, Clone)]
-pub struct MusicProvider<B: MusicBackend> {
+pub struct MusicBackendHandle<B: MusicBackend> {
     inner: B,
 }
 
-impl<B: MusicBackend> MusicProvider<B> {
+impl<B: MusicBackend> MusicBackendHandle<B> {
     /// Wrap an existing backend.
     pub const fn new(backend: B) -> Self {
         Self { inner: backend }
@@ -69,7 +69,7 @@ impl<B: MusicBackend> MusicProvider<B> {
 }
 
 #[async_trait]
-impl<B: MusicBackend> AudioBackend for MusicProvider<B> {
+impl<B: MusicBackend> AudioBackend for MusicBackendHandle<B> {
     fn id(&self) -> &str {
         self.inner.id()
     }
@@ -92,7 +92,7 @@ impl<B: MusicBackend> AudioBackend for MusicProvider<B> {
 }
 
 #[async_trait]
-impl<B: MusicBackend> MusicBackend for MusicProvider<B> {
+impl<B: MusicBackend> MusicBackend for MusicBackendHandle<B> {
     async fn generate_music(
         &self,
         prompt: &str,

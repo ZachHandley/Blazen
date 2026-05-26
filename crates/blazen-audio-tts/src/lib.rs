@@ -19,7 +19,7 @@
 //!
 //! Two provider wrappers compose backends with the same surface:
 //!
-//! - [`TtsProvider<B>`] — monomorphized over a concrete backend, used
+//! - [`TtsBackendHandle<B>`] — monomorphized over a concrete backend, used
 //!   when the backend choice is fixed at compile time.
 //! - [`DynTtsProvider`] — type-erased `Arc<dyn TtsBackend>`, used by
 //!   the manager / pipeline layer.
@@ -48,7 +48,7 @@ mod traits;
 
 pub use error::TtsError;
 pub use options::{TtsModel, TtsOptions};
-pub use provider::{DynTtsProvider, TtsProvider};
+pub use provider::{DynTtsProvider, TtsBackendHandle};
 pub use traits::TtsBackend;
 
 // Re-exports of common backend types so callers don't have to dig

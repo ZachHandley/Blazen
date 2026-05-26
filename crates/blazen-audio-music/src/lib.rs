@@ -4,7 +4,7 @@
 //! capability surface.
 //!
 //! This crate provides the [`MusicBackend`] capability trait, the
-//! [`MusicProvider`] generic wrapper, and a [`DynMusicProvider`] type-erased
+//! [`MusicBackendHandle`] generic wrapper, and a [`DynMusicProvider`] type-erased
 //! handle suitable for dynamic dispatch. Concrete engines live in the
 //! [`backends`] module:
 //!
@@ -45,7 +45,7 @@ pub mod provider;
 pub mod traits;
 
 pub use error::MusicError;
-pub use provider::{DynMusicProvider, MusicProvider};
+pub use provider::{DynMusicProvider, MusicBackendHandle};
 pub use traits::{MusicBackend, MusicChunk};
 
 #[cfg(feature = "audiogen")]

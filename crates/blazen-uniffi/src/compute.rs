@@ -350,7 +350,7 @@ impl ImageGenBackend for FalImageGenAdapter {
 
 /// Adapter implementing [`TtsBackend`] over the local Piper provider.
 ///
-/// Adapter that bridges the local [`blazen_llm::TtsProvider`] (any-tts:
+/// Adapter that bridges the local [`blazen_llm::TtsBackendHandle`] (any-tts:
 /// Kokoro-82M, VibeVoice, Qwen3-TTS) onto the UniFFI [`TtsBackend`] trait.
 /// When the `engine` feature on `blazen-audio-tts` is not active the
 /// underlying provider surfaces `EngineNotAvailable` from synthesis.
