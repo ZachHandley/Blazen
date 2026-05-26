@@ -2532,6 +2532,11 @@ uint64_t uniffi_blazen_uniffi_fn_func_new_fal_tts_model(RustBuffer api_key, Rust
 uint64_t uniffi_blazen_uniffi_fn_func_new_local_tts_model(RustBuffer model, RustBuffer voice, RustBuffer language, RustBuffer sample_rate, RustCallStatus *out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_NEW_PIPER_TTS_MODEL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_NEW_PIPER_TTS_MODEL
+uint64_t uniffi_blazen_uniffi_fn_func_new_piper_tts_model(RustBuffer model_id, RustBuffer speaker_id, RustBuffer sample_rate, RustCallStatus *out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_NEW_WHISPER_STT_MODEL
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_NEW_WHISPER_STT_MODEL
 uint64_t uniffi_blazen_uniffi_fn_func_new_whisper_stt_model(RustBuffer model, RustBuffer device, RustBuffer language, RustCallStatus *out_status
@@ -3114,6 +3119,12 @@ uint16_t uniffi_blazen_uniffi_checksum_func_new_fal_tts_model(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_NEW_LOCAL_TTS_MODEL
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_NEW_LOCAL_TTS_MODEL
 uint16_t uniffi_blazen_uniffi_checksum_func_new_local_tts_model(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_NEW_PIPER_TTS_MODEL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_FUNC_NEW_PIPER_TTS_MODEL
+uint16_t uniffi_blazen_uniffi_checksum_func_new_piper_tts_model(void
     
 );
 #endif

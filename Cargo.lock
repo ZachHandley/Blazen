@@ -1611,6 +1611,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "blazen-3d",
+ "blazen-audio-tts",
  "blazen-controlplane",
  "blazen-core",
  "blazen-embed-fastembed",

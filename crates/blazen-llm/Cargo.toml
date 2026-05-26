@@ -76,7 +76,7 @@ diffusion-engine = ["diffusion", "blazen-image-diffusion/engine"]
 audio-tts          = ["dep:blazen-audio", "dep:blazen-audio-tts"]
 audio-tts-anytts   = ["audio-tts", "blazen-audio-tts/anytts"]
 audio-tts-openai   = ["audio-tts", "blazen-audio-tts/openai"]
-audio-tts-piper    = ["audio-tts"]
+audio-tts-piper    = ["audio-tts", "blazen-audio-tts/piper"]
 audio-tts-bark     = ["audio-tts", "blazen-audio-tts/bark"]
 audio-tts-f5       = ["audio-tts", "blazen-audio-tts/f5-tts"]
 

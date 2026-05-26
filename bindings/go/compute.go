@@ -520,11 +520,13 @@ func NewFalTts(apiKey, model string) (*TtsModel, error) {
 
 // PiperTtsOpts configures [NewPiperTts].
 //
-// ModelID selects a Piper voice model — either a Hugging Face repo id
-// or a local path (e.g. "en_US-amy-medium"); empty leaves the runtime
-// to pick a default. SpeakerID selects a speaker for multi-speaker
-// voice models; zero uses the default speaker. SampleRate overrides the
-// model's native sample rate in Hz; zero uses the model default.
+// ModelID is a Piper voice id (REQUIRED) like "en_US-amy-medium",
+// resolved against the rhasspy/piper-voices Hugging Face repo. Empty
+// strings produce a PiperInit error. SpeakerID selects a speaker for
+// multi-speaker voice models (e.g. en_US-libritts_r-medium); zero uses
+// the default speaker (0 or single-speaker). SampleRate is reserved —
+// the Piper voice file is authoritative for the output sample rate,
+// so this field is logged at trace level and otherwise ignored.
 type PiperTtsOpts struct {
 	ModelID    string
 	SpeakerID  uint32
@@ -537,7 +539,7 @@ type PiperTtsOpts struct {
 func NewPiperTts(opts PiperTtsOpts) (*TtsModel, error) {
 	ensureInit()
 	inner, err := uniffiblazen.NewPiperTtsModel(
-		optString(opts.ModelID),
+		opts.ModelID,
 		optUint32(opts.SpeakerID),
 		optUint32(opts.SampleRate),
 	)

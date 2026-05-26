@@ -1542,6 +1542,8 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_func_new_local_tts_model(): Short
 
+    external fun uniffi_blazen_uniffi_checksum_func_new_piper_tts_model(): Short
+
     external fun uniffi_blazen_uniffi_checksum_func_new_whisper_stt_model(): Short
 
     external fun uniffi_blazen_uniffi_checksum_func_new_audiogen_model(): Short
@@ -3583,6 +3585,13 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
+    external fun uniffi_blazen_uniffi_fn_func_new_piper_tts_model(
+        `modelId`: RustBuffer.ByValue,
+        `speakerId`: RustBuffer.ByValue,
+        `sampleRate`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
     external fun uniffi_blazen_uniffi_fn_func_new_whisper_stt_model(
         `model`: RustBuffer.ByValue,
         `device`: RustBuffer.ByValue,
@@ -4197,7 +4206,10 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_func_new_fal_tts_model() != 32558.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_local_tts_model() != 38979.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_local_tts_model() != 31651.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_new_piper_tts_model() != 62202.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_whisper_stt_model() != 40916.toShort()) {
@@ -29769,10 +29781,7 @@ fun `newFalTtsModel`(
     )
 
 /**
- * Build a local Piper text-to-speech model.
- *
- * `model_id` selects a Piper voice model (e.g. `"en_US-amy-medium"`).
- * Builds a local TTS model backed by `any-tts` (Kokoro-82M default).
+ * Build a local TTS model backed by `any-tts`.
  *
  * `model` is one of `"kokoro82m"`, `"vibevoice"`, or `"qwen3_tts"` (or
  * any of the snake_case aliases); pass null to default to Kokoro-82M.
@@ -29793,6 +29802,40 @@ fun `newLocalTtsModel`(
                 FfiConverterOptionalString.lower(`model`),
                 FfiConverterOptionalString.lower(`voice`),
                 FfiConverterOptionalString.lower(`language`),
+                FfiConverterOptionalUInt.lower(`sampleRate`),
+                _status,
+            )
+        },
+    )
+
+/**
+ * Build a local Piper text-to-speech model.
+ *
+ * `model_id` is a Piper voice id like `"en_US-amy-medium"` — this is
+ * resolved to the `rhasspy/piper-voices` repo path
+ * `en/en_US/amy/medium/en_US-amy-medium.onnx[.json]` and the two files
+ * are downloaded (or read from cache) before the backend is built.
+ *
+ * `speaker_id` is forwarded to the Piper ONNX session for
+ * multi-speaker voices (e.g. `en_US-libritts_r-medium` exposes 904
+ * speakers). `None` defaults to speaker 0 / the voice's single
+ * speaker.
+ *
+ * `sample_rate` is reserved; the Piper voice file is authoritative
+ * for the output sample rate. If provided, it is logged at trace
+ * level and otherwise ignored.
+ */
+@Throws(BlazenException::class)
+fun `newPiperTtsModel`(
+    `modelId`: kotlin.String,
+    `speakerId`: kotlin.UInt?,
+    `sampleRate`: kotlin.UInt?,
+): TtsModel =
+    FfiConverterTypeTtsModel.lift(
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_func_new_piper_tts_model(
+                FfiConverterString.lower(`modelId`),
+                FfiConverterOptionalUInt.lower(`speakerId`),
                 FfiConverterOptionalUInt.lower(`sampleRate`),
                 _status,
             )

@@ -33,6 +33,8 @@ use blazen_audio::{
     AudioBackend, CloneVoiceRequest, DesignVoiceRequest, GeneratedAudio, ListVoicesRequest,
     ListVoicesResponse, VoiceHandle,
 };
+#[cfg(feature = "piper")]
+use blazen_audio::{VoiceDto, VoiceKind};
 
 use crate::{TtsBackend, TtsError, TtsOptions};
 
@@ -61,6 +63,10 @@ pub struct PiperBackend {
     voice: Option<std::sync::Arc<blazen_audio_piper_vendored::Piper>>,
     model_path: Option<PathBuf>,
     config_path: Option<PathBuf>,
+    /// Default Piper speaker id for multi-speaker voices. Used at
+    /// `synthesize` time when [`TtsOptions::speaker_id`] is `None`.
+    /// `None` here means "use Piper's default" (speaker 0 / single-speaker).
+    default_speaker_id: Option<i64>,
 }
 
 #[cfg(feature = "piper")]
@@ -80,6 +86,7 @@ impl Clone for PiperBackend {
             voice: self.voice.as_ref().map(std::sync::Arc::clone),
             model_path: self.model_path.clone(),
             config_path: self.config_path.clone(),
+            default_speaker_id: self.default_speaker_id,
         }
     }
 }
@@ -106,6 +113,7 @@ impl PiperBackend {
             voice: None,
             model_path: None,
             config_path: None,
+            default_speaker_id: None,
         }
     }
 
@@ -114,11 +122,20 @@ impl PiperBackend {
     ///
     /// `config_path` defaults to `<model_path>.json` when `None`.
     ///
+    /// `default_speaker_id` is used when [`TtsOptions::speaker_id`] is
+    /// `None` at synthesis time — typical for multi-speaker voices like
+    /// `en_US-libritts_r-medium` (904 speakers). Pass `None` for
+    /// single-speaker voices.
+    ///
     /// # Errors
     ///
     /// - [`TtsError::ModelLoad`] if either file fails to open / parse,
     ///   or if the system `espeak-ng` binary is missing.
-    pub fn with_voice(model_path: PathBuf, config_path: Option<PathBuf>) -> Result<Self, TtsError> {
+    pub fn with_voice(
+        model_path: PathBuf,
+        config_path: Option<PathBuf>,
+        default_speaker_id: Option<i64>,
+    ) -> Result<Self, TtsError> {
         let cfg = config_path.unwrap_or_else(|| {
             let mut p = model_path.clone().into_os_string();
             p.push(".json");
@@ -135,6 +152,7 @@ impl PiperBackend {
             voice: Some(std::sync::Arc::new(voice)),
             model_path: Some(model_path),
             config_path: Some(cfg),
+            default_speaker_id,
         })
     }
 
@@ -173,7 +191,7 @@ impl TtsBackend for PiperBackend {
     async fn synthesize(
         &self,
         text: &str,
-        _options: &TtsOptions,
+        options: &TtsOptions,
     ) -> Result<GeneratedAudio, TtsError> {
         let voice = self.voice.as_ref().ok_or_else(|| {
             TtsError::ModelLoad(
@@ -185,10 +203,15 @@ impl TtsBackend for PiperBackend {
         let voice = std::sync::Arc::clone(voice);
         let text_owned = text.to_owned();
 
+        let sid = options
+            .speaker_id
+            .map(i64::from)
+            .or(self.default_speaker_id);
+
         // Synthesis is CPU-bound (tract + subprocess wait); hop to the
         // blocking pool so we don't stall the async runtime.
         let (samples, sample_rate) = tokio::task::spawn_blocking(move || {
-            voice.create(&text_owned, false, None, None, None, None)
+            voice.create(&text_owned, false, sid, None, None, None)
         })
         .await
         .map_err(|e| TtsError::Synthesis(format!("piper task panicked: {e}")))?
@@ -215,10 +238,28 @@ impl TtsBackend for PiperBackend {
         &self,
         _request: &ListVoicesRequest,
     ) -> Result<ListVoicesResponse, TtsError> {
-        // Piper is single-voice-per-model on disk; multi-speaker voices
-        // do expose a speaker_id_map but we don't currently surface it
-        // through `VoiceHandle` (which is OpenAI-shaped). Return empty.
-        Ok(ListVoicesResponse { voices: Vec::new() })
+        let Some(voice) = self.voice.as_ref() else {
+            // Unloaded backend: nothing to enumerate.
+            return Ok(ListVoicesResponse { voices: Vec::new() });
+        };
+        // Multi-speaker voices expose a `speaker_id_map` keyed by name;
+        // single-speaker voices return `None` here, which collapses to
+        // an empty Vec (the voice itself is identified by the .onnx
+        // file path baked into `with_voice`, not by a sid name).
+        let voices = voice
+            .voices()
+            .map(|m| {
+                m.keys()
+                    .map(|name| VoiceDto {
+                        id: name.clone(),
+                        name: name.clone(),
+                        language: None,
+                        kind: VoiceKind::Preset,
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
+        Ok(ListVoicesResponse { voices })
     }
 
     async fn clone_voice(&self, _request: CloneVoiceRequest) -> Result<VoiceHandle, TtsError> {
@@ -401,6 +442,7 @@ mod tests {
         let result = PiperBackend::with_voice(
             std::path::PathBuf::from("/nonexistent/voice.onnx"),
             Some(std::path::PathBuf::from("/nonexistent/voice.onnx.json")),
+            None,
         );
         match result {
             Err(TtsError::ModelLoad(_)) => {}
@@ -454,7 +496,7 @@ mod tests {
         // `with_voice` pre-flights espeak-ng. If the binary is missing,
         // skip the test cleanly rather than fail -- mirrors the snac
         // live test's "live deps absent = skip" philosophy.
-        let backend = match PiperBackend::with_voice(onnx, Some(cfg)) {
+        let backend = match PiperBackend::with_voice(onnx, Some(cfg), None) {
             Ok(b) => b,
             Err(TtsError::ModelLoad(msg)) if msg.contains("espeak-ng missing") => {
                 eprintln!(

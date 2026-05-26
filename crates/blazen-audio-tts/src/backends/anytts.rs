@@ -133,6 +133,7 @@ fn merged_options(base: &TtsOptions, override_opts: &TtsOptions) -> TtsOptions {
             .cache_dir
             .clone()
             .or_else(|| base.cache_dir.clone()),
+        speaker_id: override_opts.speaker_id.or(base.speaker_id),
     }
 }
 

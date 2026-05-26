@@ -379,6 +379,61 @@ impl TtsBackend for LocalTtsAdapter {
 }
 
 // ---------------------------------------------------------------------------
+// Piper local TTS adapter (feature-gated on `tts` + `audio-tts-piper`)
+// ---------------------------------------------------------------------------
+
+/// Adapter implementing the uniffi-side [`TtsBackend`] over the
+/// vendored Piper ONNX engine.
+///
+/// Unlike [`LocalTtsAdapter`] which goes through the
+/// [`blazen_llm::DynTtsProvider`] erasure layer, this adapter wraps the
+/// concrete [`blazen_audio_tts::backends::piper::PiperBackend`] directly.
+/// The Piper voice file (resolved via Hugging Face by
+/// [`new_piper_tts_model`]) is baked into the backend at construction
+/// time, so this struct only carries the loaded handle.
+#[cfg(all(feature = "tts", feature = "audio-tts-piper"))]
+struct PiperLocalAdapter {
+    inner: Arc<blazen_audio_tts::backends::piper::PiperBackend>,
+}
+
+#[cfg(all(feature = "tts", feature = "audio-tts-piper"))]
+#[async_trait]
+impl TtsBackend for PiperLocalAdapter {
+    async fn synthesize(
+        &self,
+        text: String,
+        voice: Option<String>,
+        language: Option<String>,
+    ) -> Result<TtsResult, blazen_llm::BlazenError> {
+        use base64::Engine as _;
+        // Construct the engine-layer options. `voice` is honored by the
+        // anytts backend but ignored by Piper itself — the voice is
+        // baked into the .onnx file. We pass it through for parity so
+        // a future engine swap doesn't silently drop the field.
+        let opts = blazen_llm::TtsOptions {
+            voice,
+            language,
+            ..blazen_llm::TtsOptions::default()
+        };
+        // Call the real `blazen_audio_tts::TtsBackend::synthesize` on the
+        // concrete `PiperBackend` (this is the engine trait method, not
+        // the uniffi-side `TtsBackend` we're implementing here).
+        let synth = blazen_audio_tts::TtsBackend::synthesize(self.inner.as_ref(), &text, &opts)
+            .await
+            .map_err(|e| blazen_llm::BlazenError::provider("piper", e.to_string()))?;
+        let audio_base64 = base64::engine::general_purpose::STANDARD.encode(&synth.bytes);
+        #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+        let duration_ms =
+            (f64::from(synth.duration_seconds.unwrap_or(0.0)) * 1000.0).round() as u64;
+        Ok(TtsResult {
+            audio_base64,
+            mime_type: "audio/wav".into(),
+            duration_ms,
+        })
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Whisper STT adapter (feature-gated)
 // ---------------------------------------------------------------------------
 
@@ -672,13 +727,10 @@ fn parse_media_type(mime: &str) -> CoreMediaType {
 }
 
 // ---------------------------------------------------------------------------
-// Piper TTS factory
+// AnyTts (Kokoro / VibeVoice / Qwen3-TTS) factory
 // ---------------------------------------------------------------------------
 
-/// Build a local Piper text-to-speech model.
-///
-/// `model_id` selects a Piper voice model (e.g. `"en_US-amy-medium"`).
-/// Builds a local TTS model backed by `any-tts` (Kokoro-82M default).
+/// Build a local TTS model backed by `any-tts`.
 ///
 /// `model` is one of `"kokoro82m"`, `"vibevoice"`, or `"qwen3_tts"` (or
 /// any of the snake_case aliases); pass null to default to Kokoro-82M.
@@ -738,6 +790,133 @@ pub fn new_local_tts_model(
         inner: Arc::new(blazen_llm::DynTtsProvider::erase(backend)),
     };
     Ok(TtsModel::from_arc(Arc::new(adapter)))
+}
+
+// ---------------------------------------------------------------------------
+// Piper TTS factory
+// ---------------------------------------------------------------------------
+
+/// Build a local Piper text-to-speech model.
+///
+/// `model_id` is a Piper voice id like `"en_US-amy-medium"` — this is
+/// resolved to the `rhasspy/piper-voices` repo path
+/// `en/en_US/amy/medium/en_US-amy-medium.onnx[.json]` and the two files
+/// are downloaded (or read from cache) before the backend is built.
+///
+/// `speaker_id` is forwarded to the Piper ONNX session for
+/// multi-speaker voices (e.g. `en_US-libritts_r-medium` exposes 904
+/// speakers). `None` defaults to speaker 0 / the voice's single
+/// speaker.
+///
+/// `sample_rate` is reserved; the Piper voice file is authoritative
+/// for the output sample rate. If provided, it is logged at trace
+/// level and otherwise ignored.
+#[cfg(all(feature = "tts", feature = "audio-tts-piper"))]
+#[uniffi::export]
+pub fn new_piper_tts_model(
+    model_id: String,
+    speaker_id: Option<u32>,
+    sample_rate: Option<u32>,
+) -> BlazenResult<Arc<TtsModel>> {
+    use blazen_audio_tts::backends::piper::PiperBackend;
+    use blazen_model_cache::ModelCache;
+
+    if sample_rate.is_some() {
+        tracing::trace!(
+            "new_piper_tts_model: sample_rate arg ignored — Piper voice file is authoritative"
+        );
+    }
+
+    // Parse "en_US-amy-medium" -> "en/en_US/amy/medium/en_US-amy-medium".
+    let voice_path = piper_voice_id_to_hf_path(&model_id).ok_or_else(|| BlazenError::Provider {
+        kind: "PiperInit".into(),
+        message: format!(
+            "invalid Piper voice id {model_id:?}: expected `<lang>_<region>-<speaker>-<quality>` (e.g. `en_US-amy-medium`)"
+        ),
+        provider: Some("piper".into()),
+        status: None,
+        endpoint: None,
+        request_id: None,
+        detail: None,
+        retry_after_ms: None,
+    })?;
+
+    let cache = ModelCache::new().map_err(|e| BlazenError::Provider {
+        kind: "PiperInit".into(),
+        message: format!("model cache init failed: {e}"),
+        provider: Some("piper".into()),
+        status: None,
+        endpoint: None,
+        request_id: None,
+        detail: None,
+        retry_after_ms: None,
+    })?;
+
+    let (onnx_path, config_path) = runtime()
+        .block_on(async {
+            let onnx = cache
+                .download("rhasspy/piper-voices", &format!("{voice_path}.onnx"), None)
+                .await?;
+            let cfg = cache
+                .download(
+                    "rhasspy/piper-voices",
+                    &format!("{voice_path}.onnx.json"),
+                    None,
+                )
+                .await?;
+            Ok::<_, blazen_model_cache::CacheError>((onnx, cfg))
+        })
+        .map_err(|e| BlazenError::Provider {
+            kind: "PiperInit".into(),
+            message: format!("piper voice fetch failed: {e}"),
+            provider: Some("piper".into()),
+            status: None,
+            endpoint: None,
+            request_id: None,
+            detail: None,
+            retry_after_ms: None,
+        })?;
+
+    let backend = PiperBackend::with_voice(
+        onnx_path,
+        Some(config_path),
+        speaker_id.map(i64::from),
+    )
+    .map_err(|e| BlazenError::Provider {
+        kind: "PiperInit".into(),
+        message: e.to_string(),
+        provider: Some("piper".into()),
+        status: None,
+        endpoint: None,
+        request_id: None,
+        detail: None,
+        retry_after_ms: None,
+    })?;
+
+    Ok(TtsModel::from_arc(Arc::new(PiperLocalAdapter {
+        inner: Arc::new(backend),
+    })))
+}
+
+/// Parse a Piper voice id like `"en_US-amy-medium"` into the
+/// corresponding repo-relative path stem inside the `rhasspy/piper-voices`
+/// Hugging Face repo, e.g. `"en/en_US/amy/medium/en_US-amy-medium"`.
+///
+/// Format: `<lang>_<region>-<speaker>-<quality>`. Returns `None` if the
+/// id doesn't split into exactly three `-`-delimited segments.
+#[cfg(all(feature = "tts", feature = "audio-tts-piper"))]
+fn piper_voice_id_to_hf_path(voice_id: &str) -> Option<String> {
+    let parts: Vec<&str> = voice_id.splitn(3, '-').collect();
+    if parts.len() != 3 {
+        return None;
+    }
+    let lang_region = parts[0]; // "en_US"
+    let lang = lang_region.split('_').next()?; // "en"
+    let speaker = parts[1]; // "amy"
+    let quality = parts[2]; // "medium"
+    Some(format!(
+        "{lang}/{lang_region}/{speaker}/{quality}/{voice_id}"
+    ))
 }
 
 // ---------------------------------------------------------------------------

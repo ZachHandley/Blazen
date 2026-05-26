@@ -453,9 +453,18 @@ func uniffiCheckChecksums() {
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_func_new_local_tts_model()
 		})
-		if checksum != 38979 {
+		if checksum != 31651 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_func_new_local_tts_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_func_new_piper_tts_model()
+		})
+		if checksum != 62202 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_func_new_piper_tts_model: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -24427,10 +24436,7 @@ func NewFalTtsModel(apiKey string, model *string) (*TtsModel, error) {
 	}
 }
 
-// Build a local Piper text-to-speech model.
-//
-// `model_id` selects a Piper voice model (e.g. `"en_US-amy-medium"`).
-// Builds a local TTS model backed by `any-tts` (Kokoro-82M default).
+// Build a local TTS model backed by `any-tts`.
 //
 // `model` is one of `"kokoro82m"`, `"vibevoice"`, or `"qwen3_tts"` (or
 // any of the snake_case aliases); pass null to default to Kokoro-82M.
@@ -24440,6 +24446,33 @@ func NewFalTtsModel(apiKey string, model *string) (*TtsModel, error) {
 func NewLocalTtsModel(model *string, voice *string, language *string, sampleRate *uint32) (*TtsModel, error) {
 	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
 		return C.uniffi_blazen_uniffi_fn_func_new_local_tts_model(FfiConverterOptionalStringINSTANCE.Lower(model), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language), FfiConverterOptionalUint32INSTANCE.Lower(sampleRate), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *TtsModel
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterTtsModelINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Build a local Piper text-to-speech model.
+//
+// `model_id` is a Piper voice id like `"en_US-amy-medium"` — this is
+// resolved to the `rhasspy/piper-voices` repo path
+// `en/en_US/amy/medium/en_US-amy-medium.onnx[.json]` and the two files
+// are downloaded (or read from cache) before the backend is built.
+//
+// `speaker_id` is forwarded to the Piper ONNX session for
+// multi-speaker voices (e.g. `en_US-libritts_r-medium` exposes 904
+// speakers). `None` defaults to speaker 0 / the voice's single
+// speaker.
+//
+// `sample_rate` is reserved; the Piper voice file is authoritative
+// for the output sample rate. If provided, it is logged at trace
+// level and otherwise ignored.
+func NewPiperTtsModel(modelId string, speakerId *uint32, sampleRate *uint32) (*TtsModel, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_func_new_piper_tts_model(FfiConverterStringINSTANCE.Lower(modelId), FfiConverterOptionalUint32INSTANCE.Lower(speakerId), FfiConverterOptionalUint32INSTANCE.Lower(sampleRate), _uniffiStatus)
 	})
 	if _uniffiErr != nil {
 		var _uniffiDefaultValue *TtsModel

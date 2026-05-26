@@ -51,6 +51,7 @@ tokenizers = { workspace = true, optional = true }
 base64.workspace = true
 tonic = { workspace = true, optional = true, features = ["tls-aws-lc"] }
 blazen-3d = { version = "0.0.0-dev", path = "../blazen-3d", default-features = false, optional = true }
+blazen-audio-tts = { workspace = true, optional = true }
 
 [build-dependencies]
 uniffi_build.workspace = true
@@ -125,6 +126,7 @@ audio-stt-whisper-streaming = ["blazen-llm/audio-stt-whisper-streaming"]
 audio-stt-faster-whisper = ["blazen-llm/audio-stt-faster-whisper"]
 audio-tts-bark = ["blazen-llm/audio-tts-bark"]
 audio-tts-f5 = ["blazen-llm/audio-tts-f5"]
+audio-tts-piper = ["blazen-llm/audio-tts-piper", "dep:blazen-audio-tts", "blazen-audio-tts/piper"]
 audio-vc = ["blazen-llm/audio-vc"]
 audio-vc-rvc = ["audio-vc", "blazen-llm/audio-vc-rvc", "dep:candle-core"]
 

@@ -22114,10 +22114,7 @@ public func newFalTtsModel(apiKey: String, model: String?)throws  -> TtsModel  {
 })
 }
 /**
- * Build a local Piper text-to-speech model.
- *
- * `model_id` selects a Piper voice model (e.g. `"en_US-amy-medium"`).
- * Builds a local TTS model backed by `any-tts` (Kokoro-82M default).
+ * Build a local TTS model backed by `any-tts`.
  *
  * `model` is one of `"kokoro82m"`, `"vibevoice"`, or `"qwen3_tts"` (or
  * any of the snake_case aliases); pass null to default to Kokoro-82M.
@@ -22131,6 +22128,32 @@ public func newLocalTtsModel(model: String?, voice: String?, language: String?, 
         FfiConverterOptionString.lower(model),
         FfiConverterOptionString.lower(voice),
         FfiConverterOptionString.lower(language),
+        FfiConverterOptionUInt32.lower(sampleRate),$0
+    )
+})
+}
+/**
+ * Build a local Piper text-to-speech model.
+ *
+ * `model_id` is a Piper voice id like `"en_US-amy-medium"` — this is
+ * resolved to the `rhasspy/piper-voices` repo path
+ * `en/en_US/amy/medium/en_US-amy-medium.onnx[.json]` and the two files
+ * are downloaded (or read from cache) before the backend is built.
+ *
+ * `speaker_id` is forwarded to the Piper ONNX session for
+ * multi-speaker voices (e.g. `en_US-libritts_r-medium` exposes 904
+ * speakers). `None` defaults to speaker 0 / the voice's single
+ * speaker.
+ *
+ * `sample_rate` is reserved; the Piper voice file is authoritative
+ * for the output sample rate. If provided, it is logged at trace
+ * level and otherwise ignored.
+ */
+public func newPiperTtsModel(modelId: String, speakerId: UInt32?, sampleRate: UInt32?)throws  -> TtsModel  {
+    return try  FfiConverterTypeTtsModel_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_func_new_piper_tts_model(
+        FfiConverterString.lower(modelId),
+        FfiConverterOptionUInt32.lower(speakerId),
         FfiConverterOptionUInt32.lower(sampleRate),$0
     )
 })
@@ -23174,7 +23197,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_func_new_fal_tts_model() != 32558) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_new_local_tts_model() != 38979) {
+    if (uniffi_blazen_uniffi_checksum_func_new_local_tts_model() != 31651) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_func_new_piper_tts_model() != 62202) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_func_new_whisper_stt_model() != 40916) {

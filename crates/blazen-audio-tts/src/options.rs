@@ -122,6 +122,12 @@ pub struct TtsOptions {
     /// When `None`, falls back to `blazen-model-cache`'s default cache
     /// directory (`$BLAZEN_CACHE_DIR` or `~/.cache/blazen/models`).
     pub cache_dir: Option<PathBuf>,
+
+    /// Multi-speaker voice override (Piper only today). When `None`, the
+    /// backend falls back to its own default (Piper uses speaker 0 / the
+    /// `default_speaker_id` baked into the backend at `with_voice` time).
+    #[serde(default)]
+    pub speaker_id: Option<u32>,
 }
 
 impl Default for TtsOptions {
@@ -135,6 +141,7 @@ impl Default for TtsOptions {
             speed: None,
             response_format: None,
             cache_dir: None,
+            speaker_id: None,
         }
     }
 }
@@ -179,6 +186,7 @@ mod tests {
             speed: Some(1.25),
             response_format: Some("wav".into()),
             cache_dir: Some(PathBuf::from("/var/cache/tts")),
+            speaker_id: Some(7),
         };
         let json = serde_json::to_string(&opts).expect("serialize");
         let parsed: TtsOptions = serde_json::from_str(&json).expect("deserialize");
@@ -193,6 +201,7 @@ mod tests {
             parsed.cache_dir.as_deref(),
             Some(std::path::Path::new("/var/cache/tts"))
         );
+        assert_eq!(parsed.speaker_id, Some(7));
     }
 
     #[test]
