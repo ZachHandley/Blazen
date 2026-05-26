@@ -67,11 +67,13 @@ impl TripoSrProvider {
         weights_path: Option<String>,
     ) -> BlazenResult<Arc<Self>> {
         let inner = runtime()
-            .block_on(blazen_llm::providers::concrete::three_d::TripoSrProvider::new(
-                hf_repo_id,
-                revision,
-                weights_path,
-            ))
+            .block_on(
+                blazen_llm::providers::concrete::three_d::TripoSrProvider::new(
+                    hf_repo_id,
+                    revision,
+                    weights_path,
+                ),
+            )
             .map_err(BlazenError::from)?;
         Ok(Arc::new(Self {
             inner: Arc::new(inner),
@@ -112,8 +114,11 @@ impl TripoSrProvider {
 
         // TripoSR returns exactly one GLB-encoded mesh in `models[0]`;
         // surface it as the uniffi `ThreeDGenerateResult` record.
-        let model = result.models.into_iter().next().ok_or_else(|| {
-            BlazenError::Provider {
+        let model = result
+            .models
+            .into_iter()
+            .next()
+            .ok_or_else(|| BlazenError::Provider {
                 kind: "TripoSrEmptyResult".into(),
                 message: "TripoSR returned no models".into(),
                 provider: Some("triposr".into()),
@@ -122,8 +127,7 @@ impl TripoSrProvider {
                 request_id: None,
                 detail: None,
                 retry_after_ms: None,
-            }
-        })?;
+            })?;
 
         let bytes = if let Some(b64) = model.media.base64 {
             base64::engine::general_purpose::STANDARD
@@ -166,89 +170,16 @@ impl TripoSrProvider {
 }
 
 // ---------------------------------------------------------------------------
-// Compat3dProvider — HTTP-proxy newtype (post-processing only)
+// Compat3dProvider intentionally NOT re-exposed here.
 // ---------------------------------------------------------------------------
-
-/// HTTP-proxy 3D provider.
-///
-/// Newtype around [`blazen_llm::Compat3dProvider`], which forwards
-/// multipart requests to a configurable upstream service implementing
-/// the **post-processing** stages of the 3D pipeline (texturize / rig
-/// / refine / animate). The upstream contract does *not* expose a
-/// generation endpoint, so [`Compat3dProvider::generate_from_image`]
-/// returns [`crate::errors::BlazenError::Unsupported`] — mirror of
-/// the canonical [`blazen_llm::providers::capabilities::ThreeDProvider`]
-/// impl on the upstream provider.
-///
-/// To drive the post-processing capabilities, hold the inner
-/// `blazen-3d` provider through the upstream
-/// [`blazen_llm::Compat3dProvider::backend`] accessor and call the
-/// `Texturizer3dBackend` / `Rigger3dBackend` / `Refiner3dBackend` /
-/// `Animator3dBackend` trait methods directly.
-#[cfg(feature = "threed-compat-proxy")]
-#[derive(uniffi::Object)]
-pub struct Compat3dProvider {
-    inner: Arc<blazen_llm::providers::concrete::three_d::Compat3dProvider>,
-}
-
-#[cfg(feature = "threed-compat-proxy")]
-#[uniffi::export(async_runtime = "tokio")]
-impl Compat3dProvider {
-    /// Construct a compat-proxy provider pointed at `base_url`
-    /// (e.g. `"https://my-3d-server.example.com"`). When `api_key` is
-    /// `Some`, every outbound request carries
-    /// `Authorization: Bearer <key>`.
-    #[uniffi::constructor]
-    pub fn new(base_url: String, api_key: Option<String>) -> Arc<Self> {
-        let inner = blazen_llm::providers::concrete::three_d::Compat3dProvider::new(
-            base_url, api_key,
-        );
-        Arc::new(Self {
-            inner: Arc::new(inner),
-        })
-    }
-
-    /// Always returns [`BlazenError::Unsupported`].
-    ///
-    /// The compat-proxy upstream only exposes the post-processing
-    /// stages of the 3D pipeline (texturize / rig / refine / animate)
-    /// — text-to-3D / image-to-3D generation is not part of the wire
-    /// contract. Use [`TripoSrProvider`] (or another generation
-    /// backend) to produce the base mesh, then forward the result
-    /// through this provider's post-processing handles.
-    pub async fn generate_from_image(
-        self: Arc<Self>,
-        image_bytes: Vec<u8>,
-        mesh_resolution: u32,
-    ) -> BlazenResult<ThreeDGenerateResult> {
-        // The parameters are intentionally unused — surface a clear
-        // Unsupported error rather than silently making an upstream
-        // call that would 404.
-        let _ = (image_bytes, mesh_resolution);
-        Err(BlazenError::Unsupported {
-            message: "Compat3dProvider is an HTTP-proxy for the texturize / rig / refine / \
-                      animate post-processing stages — text-to-3D / image-to-3D generation is \
-                      not part of the compat-proxy wire contract. Use TripoSrProvider (or \
-                      another generation backend) to produce the base mesh, then forward the \
-                      result through Compat3dProvider's post-processing handles."
-                .into(),
-        })
-    }
-}
-
-#[cfg(feature = "threed-compat-proxy")]
-#[uniffi::export]
-impl Compat3dProvider {
-    /// Synchronous variant of
-    /// [`generate_from_image`](Self::generate_from_image). Returns the
-    /// same [`BlazenError::Unsupported`] as the async path.
-    pub fn generate_from_image_blocking(
-        self: Arc<Self>,
-        image_bytes: Vec<u8>,
-        mesh_resolution: u32,
-    ) -> BlazenResult<ThreeDGenerateResult> {
-        let this = Arc::clone(&self);
-        runtime()
-            .block_on(async move { this.generate_from_image(image_bytes, mesh_resolution).await })
-    }
-}
+//
+// The existing `crate::threed::Compat3dProvider` already exposes the
+// HTTP-proxy surface for texturize / rig / refine / animate stages
+// (the actual public API of the compat-proxy). A second
+// `Compat3dProvider` that only implements `ThreeDProvider::generate_*`
+// (returning Unsupported for everything) would collide at the UniFFI
+// metadata layer (`UNIFFI_META_..._CONSTRUCTOR_COMPAT3DPROVIDER_NEW`)
+// because UniFFI requires globally unique symbol names per type+constructor.
+//
+// Once the `crate::threed` module is migrated to the concrete/ layout
+// in a follow-up sub-wave, the unified `Compat3dProvider` lives here.

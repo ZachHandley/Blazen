@@ -137,10 +137,7 @@ impl BaseProvider for RvcProvider {
 #[cfg(feature = "audio-vc-rvc")]
 #[async_trait]
 impl VcProvider for RvcProvider {
-    async fn convert_voice(
-        &self,
-        request: VoiceCloneRequest,
-    ) -> Result<AudioResult, BlazenError> {
+    async fn convert_voice(&self, request: VoiceCloneRequest) -> Result<AudioResult, BlazenError> {
         use base64::Engine as _;
 
         // The shared `VoiceCloneRequest` DTO carries the target voice id
@@ -150,10 +147,12 @@ impl VcProvider for RvcProvider {
         let source_path = request
             .reference_urls
             .first()
-            .ok_or_else(|| BlazenError::validation(
-                "RvcProvider.convert_voice requires at least one reference_urls entry \
+            .ok_or_else(|| {
+                BlazenError::validation(
+                    "RvcProvider.convert_voice requires at least one reference_urls entry \
                  (source utterance path)",
-            ))?
+                )
+            })?
             .clone();
         let path = std::path::PathBuf::from(&source_path);
 
@@ -204,18 +203,17 @@ impl VcProvider for RvcProvider {
         })
     }
 
-    async fn clone_voice(
-        &self,
-        request: VoiceCloneRequest,
-    ) -> Result<VoiceHandle, BlazenError> {
+    async fn clone_voice(&self, request: VoiceCloneRequest) -> Result<VoiceHandle, BlazenError> {
         let voice_id = request.name.clone();
         let reference = request
             .reference_urls
             .first()
-            .ok_or_else(|| BlazenError::validation(
-                "RvcProvider.clone_voice requires at least one reference_urls entry \
+            .ok_or_else(|| {
+                BlazenError::validation(
+                    "RvcProvider.clone_voice requires at least one reference_urls entry \
                  (reference utterance path)",
-            ))?
+                )
+            })?
             .clone();
         let path = std::path::PathBuf::from(&reference);
 
@@ -320,10 +318,7 @@ impl BaseProvider for FalVcProvider {
 
 #[async_trait]
 impl VcProvider for FalVcProvider {
-    async fn convert_voice(
-        &self,
-        request: VoiceCloneRequest,
-    ) -> Result<AudioResult, BlazenError> {
+    async fn convert_voice(&self, request: VoiceCloneRequest) -> Result<AudioResult, BlazenError> {
         // Pick the model: explicit per-call override via
         // `parameters.model`, else the default.
         let model = request
@@ -342,10 +337,12 @@ impl VcProvider for FalVcProvider {
             .and_then(|v| v.as_str())
             .map(str::to_owned)
             .or_else(|| request.reference_urls.first().cloned())
-            .ok_or_else(|| BlazenError::validation(
-                "FalVcProvider.convert_voice requires either parameters.source_audio_url \
+            .ok_or_else(|| {
+                BlazenError::validation(
+                    "FalVcProvider.convert_voice requires either parameters.source_audio_url \
                  or a reference_urls entry",
-            ))?;
+                )
+            })?;
 
         let mut input = serde_json::json!({
             "audio_url": source_audio,
@@ -374,11 +371,12 @@ impl VcProvider for FalVcProvider {
             input,
             webhook: None,
         };
-        let result = <crate::providers::fal::FalProvider as crate::compute::traits::ComputeProvider>::run(
-            self.inner.as_ref(),
-            compute_req,
-        )
-        .await?;
+        let result =
+            <crate::providers::fal::FalProvider as crate::compute::traits::ComputeProvider>::run(
+                self.inner.as_ref(),
+                compute_req,
+            )
+            .await?;
 
         // fal's audio endpoints share a common output shape — re-use
         // the public [`parse_fal_audio`] helper isn't exported, so
@@ -428,10 +426,7 @@ fn extract_fal_audio_url(output: &serde_json::Value) -> Option<String> {
         if let Some(s) = value.as_str() {
             return Some(s.to_owned());
         }
-        value
-            .get("url")
-            .and_then(|v| v.as_str())
-            .map(str::to_owned)
+        value.get("url").and_then(|v| v.as_str()).map(str::to_owned)
     }
 
     if let Some(audio) = output.get("audio")

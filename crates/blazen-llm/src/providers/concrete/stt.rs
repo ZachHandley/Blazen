@@ -69,10 +69,10 @@ impl WhisperCppProvider {
         device: Option<String>,
         language: Option<String>,
     ) -> Result<Self, BlazenError> {
+        use blazen_audio_stt::SttBackendHandle;
         use blazen_audio_stt::backends::whispercpp::{
             WhisperCppBackend, WhisperCppOptions, WhisperModel,
         };
-        use blazen_audio_stt::SttBackendHandle;
 
         let model_variant = match model.as_deref().map(str::to_ascii_lowercase).as_deref() {
             Some("tiny") => WhisperModel::Tiny,
@@ -156,10 +156,10 @@ impl FasterWhisperProvider {
         model_dir: Option<String>,
         revision: Option<String>,
     ) -> Self {
+        use blazen_audio_stt::SttBackendHandle;
         use blazen_audio_stt::backends::faster_whisper::{
             FasterWhisperBackend, FasterWhisperConfig,
         };
-        use blazen_audio_stt::SttBackendHandle;
         use std::path::PathBuf;
 
         let mut config = FasterWhisperConfig::default();
@@ -327,8 +327,8 @@ impl FalSttProvider {
     #[must_use]
     pub fn new(api_key: impl Into<String>) -> Self {
         let inner = Arc::new(crate::providers::fal::FalProvider::new(api_key));
-        let metadata = ProviderMetadata::new("fal", CapabilityKind::Stt)
-            .with_display_name("fal.ai Whisper");
+        let metadata =
+            ProviderMetadata::new("fal", CapabilityKind::Stt).with_display_name("fal.ai Whisper");
         Self { inner, metadata }
     }
 
@@ -344,8 +344,8 @@ impl FalSttProvider {
         let inner = Arc::new(crate::providers::fal::FalProvider::new_with_client(
             api_key, client,
         ));
-        let metadata = ProviderMetadata::new("fal", CapabilityKind::Stt)
-            .with_display_name("fal.ai Whisper");
+        let metadata =
+            ProviderMetadata::new("fal", CapabilityKind::Stt).with_display_name("fal.ai Whisper");
         Self { inner, metadata }
     }
 }

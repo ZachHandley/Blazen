@@ -55,11 +55,7 @@ fn build_transcription_request(
 fn map_transcription_result(
     result: blazen_llm::compute::results::TranscriptionResult,
 ) -> SttResult {
-    let duration_ms = result
-        .timing
-        .total_ms
-        .map(u64::from)
-        .unwrap_or_default();
+    let duration_ms = result.timing.total_ms.map(u64::from).unwrap_or_default();
     SttResult {
         transcript: result.text,
         language: result.language.unwrap_or_default(),
@@ -116,10 +112,9 @@ impl WhisperCppProvider {
         device: Option<String>,
         language: Option<String>,
     ) -> Result<Arc<Self>, BlazenError> {
-        let inner = blazen_llm::providers::concrete::stt::WhisperCppProvider::new(
-            model, device, language,
-        )
-        .map_err(|e| provider_err("WhisperCppInit", "whispercpp", e))?;
+        let inner =
+            blazen_llm::providers::concrete::stt::WhisperCppProvider::new(model, device, language)
+                .map_err(|e| provider_err("WhisperCppInit", "whispercpp", e))?;
         Ok(Arc::new(Self {
             inner: Arc::new(inner),
         }))

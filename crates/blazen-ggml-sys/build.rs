@@ -157,7 +157,6 @@ fn validate_features(target: &str) {
     }
 }
 
-
 // Tell rustc about the `Path` import even though we don't use it directly.
 const _: fn() = || {
     let _ = Path::new("");

@@ -115,7 +115,6 @@ pub mod types;
 pub mod usage_recording;
 
 pub use providers::base::LlmProviderDefaults;
-pub use providers::root::{BaseProvider, CapabilityKind, ProviderMetadata};
 pub use providers::capabilities::{
     BackgroundRemovalProvider, CodecProvider, EmbeddingProvider, ImageGenProvider, LLMProvider,
     MusicProvider, SttProvider, ThreeDProvider, TtsProvider, VcProvider, VideoProvider,
@@ -137,6 +136,7 @@ pub use providers::defaults::{
     ThreeDProviderDefaults, TranscriptionProviderDefaults, VideoProviderDefaults,
     VoiceCloningProviderDefaults,
 };
+pub use providers::root::{BaseProvider, CapabilityKind, ProviderMetadata};
 
 // Re-export primary types at crate root for ergonomic imports.
 pub use agent::{

@@ -222,9 +222,7 @@ impl RvcProvider {
     ///
     /// Returns `BlazenError::Provider { kind: "VcListVoices", ... }`
     /// when the underlying backend's listing call fails.
-    pub async fn list_target_voices(
-        self: Arc<Self>,
-    ) -> Result<Vec<TargetVoice>, BlazenError> {
+    pub async fn list_target_voices(self: Arc<Self>) -> Result<Vec<TargetVoice>, BlazenError> {
         use blazen_llm::providers::capabilities::VcProvider as _;
         let voices = self
             .inner
@@ -260,9 +258,7 @@ impl RvcProvider {
 
     /// Synchronous variant of
     /// [`list_target_voices`](Self::list_target_voices).
-    pub fn list_target_voices_blocking(
-        self: Arc<Self>,
-    ) -> Result<Vec<TargetVoice>, BlazenError> {
+    pub fn list_target_voices_blocking(self: Arc<Self>) -> Result<Vec<TargetVoice>, BlazenError> {
         let this = Arc::clone(&self);
         runtime().block_on(async move { this.list_target_voices().await })
     }

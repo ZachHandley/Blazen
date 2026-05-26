@@ -469,8 +469,7 @@ impl BarkProvider {
     pub fn new() -> Self {
         let backend = blazen_audio_tts::BarkBackend::new(blazen_audio_tts::BarkConfig::default());
         let inner = Arc::new(blazen_audio_tts::DynTtsProvider::erase(backend));
-        let metadata =
-            ProviderMetadata::new("bark", CapabilityKind::Tts).with_version("suno/bark");
+        let metadata = ProviderMetadata::new("bark", CapabilityKind::Tts).with_version("suno/bark");
         Self { inner, metadata }
     }
 }

@@ -325,9 +325,7 @@ impl StableAudioProvider {
         };
         let backend = crate::StableAudioBackend::load(config)
             .await
-            .map_err(|e| {
-                BlazenError::provider("stable-audio", format!("StableAudioInit: {e}"))
-            })?;
+            .map_err(|e| BlazenError::provider("stable-audio", format!("StableAudioInit: {e}")))?;
         let dyn_provider: blazen_audio_music::DynMusicProvider = Arc::new(backend);
         Ok(Self {
             inner: Arc::new(dyn_provider),

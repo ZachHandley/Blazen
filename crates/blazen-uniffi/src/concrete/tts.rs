@@ -208,12 +208,9 @@ impl KokoroProvider {
         language: Option<String>,
         sample_rate: Option<u32>,
     ) -> Result<Arc<Self>, BlazenError> {
-        let inner = blazen_llm::providers::concrete::tts::KokoroProvider::new(
-            voice,
-            language,
-            sample_rate,
-        )
-        .map_err(|e| init_error("Kokoro", e))?;
+        let inner =
+            blazen_llm::providers::concrete::tts::KokoroProvider::new(voice, language, sample_rate)
+                .map_err(|e| init_error("Kokoro", e))?;
         Ok(Arc::new(Self {
             inner: Arc::new(inner),
         }))

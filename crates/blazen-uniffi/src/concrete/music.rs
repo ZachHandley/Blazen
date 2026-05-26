@@ -138,14 +138,13 @@ impl MusicGenProvider {
         cache_dir: Option<String>,
         max_duration_seconds: Option<f32>,
     ) -> BlazenResult<Arc<Self>> {
-        let inner =
-            blazen_llm::providers::concrete::music::MusicGenProvider::new(
-                variant,
-                device,
-                cache_dir,
-                max_duration_seconds,
-            )
-            .map_err(|e| init_err("MusicGenInit", "musicgen", e.to_string()))?;
+        let inner = blazen_llm::providers::concrete::music::MusicGenProvider::new(
+            variant,
+            device,
+            cache_dir,
+            max_duration_seconds,
+        )
+        .map_err(|e| init_err("MusicGenInit", "musicgen", e.to_string()))?;
         Ok(Arc::new(Self {
             inner: Arc::new(inner),
         }))
@@ -215,15 +214,14 @@ impl AudioGenProvider {
         cache_dir: Option<String>,
         max_duration_seconds: Option<f32>,
     ) -> BlazenResult<Arc<Self>> {
-        let inner =
-            blazen_llm::providers::concrete::music::AudioGenProvider::new(
-                repo_id,
-                revision,
-                device,
-                cache_dir,
-                max_duration_seconds,
-            )
-            .map_err(|e| init_err("AudioGenInit", "audiogen", e.to_string()))?;
+        let inner = blazen_llm::providers::concrete::music::AudioGenProvider::new(
+            repo_id,
+            revision,
+            device,
+            cache_dir,
+            max_duration_seconds,
+        )
+        .map_err(|e| init_err("AudioGenInit", "audiogen", e.to_string()))?;
         Ok(Arc::new(Self {
             inner: Arc::new(inner),
         }))

@@ -66,10 +66,7 @@ pub trait LLMProvider: BaseProvider {
     async fn stream(
         &self,
         request: ModelRequest,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>,
-        BlazenError,
-    >;
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>;
 
     /// The model identifier the provider routes to by default. Mirrors
     /// [`crate::traits::Model::model_id`].
@@ -158,10 +155,7 @@ pub trait VcProvider: BaseProvider {
     /// [`convert_voice`](VcProvider::convert_voice). Defaults to
     /// `BlazenError::Unsupported` for providers that only convert
     /// to pre-registered voices.
-    async fn clone_voice(
-        &self,
-        _request: VoiceCloneRequest,
-    ) -> Result<VoiceHandle, BlazenError> {
+    async fn clone_voice(&self, _request: VoiceCloneRequest) -> Result<VoiceHandle, BlazenError> {
         Err(BlazenError::unsupported(
             "voice cloning not supported by this provider",
         ))
@@ -208,10 +202,7 @@ pub trait ImageGenProvider: BaseProvider {
 
     /// Upscale an existing image. Defaults to `BlazenError::Unsupported`
     /// for providers that only generate fresh images.
-    async fn upscale_image(
-        &self,
-        _request: UpscaleRequest,
-    ) -> Result<ImageResult, BlazenError> {
+    async fn upscale_image(&self, _request: UpscaleRequest) -> Result<ImageResult, BlazenError> {
         Err(BlazenError::unsupported(
             "image upscaling not supported by this provider",
         ))
@@ -250,11 +241,7 @@ pub trait EmbeddingProvider: BaseProvider {
 pub trait CodecProvider: BaseProvider {
     /// Encode mono PCM samples (`f32` in `[-1.0, 1.0]`) into discrete
     /// codebook tokens.
-    async fn encode_audio(
-        &self,
-        _pcm: &[f32],
-        _sample_rate: u32,
-    ) -> Result<Vec<u32>, BlazenError> {
+    async fn encode_audio(&self, _pcm: &[f32], _sample_rate: u32) -> Result<Vec<u32>, BlazenError> {
         Err(BlazenError::unsupported(
             "audio codec encode_audio not supported by this provider",
         ))
@@ -299,10 +286,7 @@ pub trait VideoProvider: BaseProvider {
 
     /// Generate a video from a source image and prompt. Defaults to
     /// `BlazenError::Unsupported` for text-only providers.
-    async fn image_to_video(
-        &self,
-        _request: VideoRequest,
-    ) -> Result<VideoResult, BlazenError> {
+    async fn image_to_video(&self, _request: VideoRequest) -> Result<VideoResult, BlazenError> {
         Err(BlazenError::unsupported(
             "image_to_video not supported by this provider",
         ))
@@ -338,10 +322,8 @@ impl<P: LLMProvider + ?Sized> LLMProvider for Arc<P> {
     async fn stream(
         &self,
         request: ModelRequest,
-    ) -> Result<
-        Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>,
-        BlazenError,
-    > {
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
+    {
         (**self).stream(request).await
     }
     fn model_id(&self) -> &str {
@@ -373,16 +355,10 @@ impl_arc_passthrough!(
 // simple macro shape; expand by hand.
 #[async_trait]
 impl<P: VcProvider + ?Sized> VcProvider for Arc<P> {
-    async fn convert_voice(
-        &self,
-        request: VoiceCloneRequest,
-    ) -> Result<AudioResult, BlazenError> {
+    async fn convert_voice(&self, request: VoiceCloneRequest) -> Result<AudioResult, BlazenError> {
         (**self).convert_voice(request).await
     }
-    async fn clone_voice(
-        &self,
-        request: VoiceCloneRequest,
-    ) -> Result<VoiceHandle, BlazenError> {
+    async fn clone_voice(&self, request: VoiceCloneRequest) -> Result<VoiceHandle, BlazenError> {
         (**self).clone_voice(request).await
     }
     async fn list_voices(&self) -> Result<Vec<VoiceHandle>, BlazenError> {
@@ -420,11 +396,7 @@ impl<P: EmbeddingProvider + ?Sized> EmbeddingProvider for Arc<P> {
 // Codec — takes slice refs; hand-expand.
 #[async_trait]
 impl<P: CodecProvider + ?Sized> CodecProvider for Arc<P> {
-    async fn encode_audio(
-        &self,
-        pcm: &[f32],
-        sample_rate: u32,
-    ) -> Result<Vec<u32>, BlazenError> {
+    async fn encode_audio(&self, pcm: &[f32], sample_rate: u32) -> Result<Vec<u32>, BlazenError> {
         (**self).encode_audio(pcm, sample_rate).await
     }
     async fn decode_audio(

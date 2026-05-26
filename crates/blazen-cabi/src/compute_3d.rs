@@ -458,8 +458,7 @@ mod tests {
 
         let mut len: usize = 0;
         // SAFETY: `result` is a live cabi handle; `len` is a writable stack slot.
-        let bytes_ptr =
-            unsafe { blazen_three_d_generate_result_model_bytes(result, &raw mut len) };
+        let bytes_ptr = unsafe { blazen_three_d_generate_result_model_bytes(result, &raw mut len) };
         assert!(!bytes_ptr.is_null());
         assert_eq!(len, 4);
         // SAFETY: ptr/len describe a live `Vec<u8>` borrowed from the result.
