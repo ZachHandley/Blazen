@@ -121,6 +121,15 @@ const ERROR_CLASS_HIERARCHY: &[(&str, Option<&str>)] = &[
     ("TtsModelLoadError", Some("TtsError")),
     ("TtsSynthesisError", Some("TtsError")),
     ("TtsEngineNotAvailableError", Some("TtsError")),
+    // Piper TTS sub-tree. Registered unconditionally — matches the
+    // Whisper / Music* / Vc* convention so `instanceof PiperError`
+    // type-checks regardless of which Rust features the build was
+    // compiled with.
+    ("PiperError", Some("ProviderError")),
+    ("PiperInvalidOptionsError", Some("PiperError")),
+    ("PiperModelLoadError", Some("PiperError")),
+    ("PiperSynthesisError", Some("PiperError")),
+    ("PiperEngineNotAvailableError", Some("PiperError")),
     ("DiffusionError", Some("ProviderError")),
     ("DiffusionInvalidOptionsError", Some("DiffusionError")),
     ("DiffusionModelLoadError", Some("DiffusionError")),
