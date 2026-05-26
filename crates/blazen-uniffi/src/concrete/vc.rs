@@ -264,6 +264,67 @@ impl RvcProvider {
     }
 }
 
+#[cfg(feature = "audio-vc-rvc")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for RvcProvider {
+    fn provider_id(&self) -> String {
+        "rvc".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Vc
+    }
+}
+
+#[cfg(feature = "audio-vc-rvc")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::VcProvider for RvcProvider {
+    fn provider_id(&self) -> String {
+        "rvc".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Vc
+    }
+
+    async fn convert_voice(
+        &self,
+        input_path: String,
+        target_voice_id: String,
+    ) -> Result<VcResult, BlazenError> {
+        use blazen_llm::providers::capabilities::VcProvider as _;
+        let request = build_convert_request(input_path, target_voice_id);
+        let result = self
+            .inner
+            .convert_voice(request)
+            .await
+            .map_err(|e| provider_err("VcConvert", "rvc", e))?;
+        Ok(audio_result_to_vc_result(result))
+    }
+
+    async fn clone_voice(
+        &self,
+        voice_id: String,
+        reference_path: String,
+    ) -> Result<(), BlazenError> {
+        use blazen_llm::providers::capabilities::VcProvider as _;
+        let request = build_clone_request(voice_id, reference_path);
+        self.inner
+            .clone_voice(request)
+            .await
+            .map_err(|e| provider_err("VcClone", "rvc", e))?;
+        Ok(())
+    }
+
+    async fn list_target_voices(&self) -> Result<Vec<TargetVoice>, BlazenError> {
+        use blazen_llm::providers::capabilities::VcProvider as _;
+        let voices = self
+            .inner
+            .list_voices()
+            .await
+            .map_err(|e| provider_err("VcListVoices", "rvc", e))?;
+        Ok(voice_handles_to_target_voices(voices))
+    }
+}
+
 // ===========================================================================
 // FalVcProvider — fal.ai cloud voice conversion
 // ===========================================================================
@@ -340,5 +401,54 @@ impl FalVcProvider {
     ) -> Result<VcResult, BlazenError> {
         let this = Arc::clone(&self);
         runtime().block_on(async move { this.convert_voice(input_path, target_voice_id).await })
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for FalVcProvider {
+    fn provider_id(&self) -> String {
+        "fal-vc".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Vc
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::concrete::bases::VcProvider for FalVcProvider {
+    fn provider_id(&self) -> String {
+        "fal-vc".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Vc
+    }
+
+    async fn convert_voice(
+        &self,
+        input_path: String,
+        target_voice_id: String,
+    ) -> Result<VcResult, BlazenError> {
+        use blazen_llm::providers::capabilities::VcProvider as _;
+        let request = build_convert_request(input_path, target_voice_id);
+        let result = self
+            .inner
+            .convert_voice(request)
+            .await
+            .map_err(|e| provider_err("VcConvert", "fal", e))?;
+        Ok(audio_result_to_vc_result(result))
+    }
+
+    async fn clone_voice(
+        &self,
+        _voice_id: String,
+        _reference_path: String,
+    ) -> Result<(), BlazenError> {
+        Err(BlazenError::Unsupported {
+            message: "fal-vc does not support voice cloning".to_string(),
+        })
+    }
+
+    async fn list_target_voices(&self) -> Result<Vec<TargetVoice>, BlazenError> {
+        Ok(Vec::new())
     }
 }
