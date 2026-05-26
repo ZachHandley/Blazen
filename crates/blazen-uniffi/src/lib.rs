@@ -59,7 +59,13 @@ pub mod workflow;
 
 pub use agent::{Agent, AgentResult, ToolHandler};
 pub use batch::{BatchItem, BatchResult, complete_batch, complete_batch_blocking};
+#[cfg(feature = "audio-stt-faster-whisper")]
+pub use compute::new_faster_whisper_stt_model;
+#[cfg(all(feature = "tts", feature = "audio-tts-spark"))]
+pub use compute::new_spark_tts_model;
 pub use compute::{ImageGenModel, ImageGenResult, SttModel, SttResult, TtsModel, TtsResult};
+#[cfg(feature = "triposr")]
+pub use compute::{ThreeDGenerateResult, ThreeDModel, new_triposr_3d_model};
 #[cfg(feature = "audio-music-audiogen")]
 pub use compute_music::new_audiogen_model;
 #[cfg(feature = "audio-music-musicgen")]

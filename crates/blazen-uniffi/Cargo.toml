@@ -53,6 +53,7 @@ tonic = { workspace = true, optional = true, features = ["tls-aws-lc"] }
 blazen-3d = { version = "0.0.0-dev", path = "../blazen-3d", default-features = false, optional = true }
 blazen-audio-tts = { workspace = true, optional = true }
 blazen-audio-stt = { workspace = true, optional = true }
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg"], optional = true }
 
 [build-dependencies]
 uniffi_build.workspace = true
@@ -151,6 +152,7 @@ triposr = [
     "threed",
     "blazen-llm/triposr",
     "blazen-3d/triposr",
+    "dep:image",
 ]
 
 # Telemetry exporters

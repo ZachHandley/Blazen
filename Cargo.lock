@@ -1633,6 +1633,7 @@ dependencies = [
  "candle-core",
  "chrono",
  "futures-util",
+ "image 0.25.10",
  "openssl-sys",
  "parking_lot",
  "serde",

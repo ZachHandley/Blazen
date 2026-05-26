@@ -162,6 +162,19 @@ trait ImageGenBackend: Send + Sync {
     ) -> Result<ImageGenResult, blazen_llm::BlazenError>;
 }
 
+/// Object-safe single-image-to-3D adapter that unifies native (candle /
+/// TripoSR) and (eventually) cloud 3D-generation backends behind a single
+/// dispatch trait.
+#[cfg(feature = "triposr")]
+#[async_trait]
+trait ThreeDBackend: Send + Sync {
+    async fn generate_from_image(
+        &self,
+        image_bytes: Vec<u8>,
+        mesh_resolution: u32,
+    ) -> Result<ThreeDGenerateResult, blazen_llm::BlazenError>;
+}
+
 // ---------------------------------------------------------------------------
 // Upstream → wire-format conversions
 // ---------------------------------------------------------------------------
@@ -696,6 +709,80 @@ impl ImageGenModel {
 }
 
 // ---------------------------------------------------------------------------
+// 3D model handle (native single-image-to-3D)
+// ---------------------------------------------------------------------------
+
+/// Result of a [`ThreeDModel::generate_from_image`] call.
+///
+/// Carries the rendered model as bytes (typically GLB / glTF-binary at
+/// `model/gltf-binary`) plus the IANA MIME type so foreign callers can
+/// dispatch on the format without sniffing the buffer.
+#[cfg(feature = "triposr")]
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct ThreeDGenerateResult {
+    /// Encoded 3D model bytes (GLB container with embedded vertices /
+    /// indices / vertex colors).
+    pub model_bytes: Vec<u8>,
+    /// IANA MIME type of `model_bytes`. Typically `"model/gltf-binary"`.
+    pub mime_type: String,
+}
+
+/// A native single-image-to-3D model handle.
+///
+/// Construct via [`new_triposr_3d_model`] (local, feature-gated). Once
+/// obtained, call [`generate_from_image`](Self::generate_from_image)
+/// (async) or [`generate_from_image_blocking`](Self::generate_from_image_blocking)
+/// (sync) to render a 3D mesh from a PNG / JPEG image.
+#[cfg(feature = "triposr")]
+#[derive(uniffi::Object)]
+pub struct ThreeDModel {
+    inner: Arc<dyn ThreeDBackend>,
+}
+
+#[cfg(feature = "triposr")]
+impl ThreeDModel {
+    fn from_arc(inner: Arc<dyn ThreeDBackend>) -> Arc<Self> {
+        Arc::new(Self { inner })
+    }
+}
+
+#[cfg(feature = "triposr")]
+#[uniffi::export(async_runtime = "tokio")]
+impl ThreeDModel {
+    /// Generate a 3D mesh from a single input image.
+    ///
+    /// `image_bytes` is encoded PNG or JPEG payload. `mesh_resolution`
+    /// controls the side length of the density grid sampled from the
+    /// triplane during marching cubes; `256` matches the upstream
+    /// `TripoSR` reference and is a reasonable default.
+    pub async fn generate_from_image(
+        self: Arc<Self>,
+        image_bytes: Vec<u8>,
+        mesh_resolution: u32,
+    ) -> BlazenResult<ThreeDGenerateResult> {
+        self.inner
+            .generate_from_image(image_bytes, mesh_resolution)
+            .await
+            .map_err(|e| provider_error("ThreeDGeneration", "triposr", e))
+    }
+}
+
+#[cfg(feature = "triposr")]
+#[uniffi::export]
+impl ThreeDModel {
+    /// Synchronous variant of [`generate_from_image`](Self::generate_from_image).
+    pub fn generate_from_image_blocking(
+        self: Arc<Self>,
+        image_bytes: Vec<u8>,
+        mesh_resolution: u32,
+    ) -> BlazenResult<ThreeDGenerateResult> {
+        let this = Arc::clone(&self);
+        runtime()
+            .block_on(async move { this.generate_from_image(image_bytes, mesh_resolution).await })
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Helper: convert a known MIME string to a MediaType for round-tripping
 // ---------------------------------------------------------------------------
 
@@ -1184,6 +1271,112 @@ pub fn new_diffusion_model(
         inner: Arc::new(provider),
     };
     Ok(ImageGenModel::from_arc(Arc::new(adapter)))
+}
+
+// ---------------------------------------------------------------------------
+// TripoSR 3D adapter + factory (feature-gated)
+// ---------------------------------------------------------------------------
+
+/// Adapter implementing the uniffi-side [`ThreeDBackend`] over the native
+/// TripoSR (candle) single-image-to-3D backend.
+///
+/// Decodes the input PNG / JPEG bytes via the `image` crate into the
+/// interleaved RGB `u8` buffer that
+/// [`blazen_3d::backends::triposr::TripoSrPipeline::image_to_glb`] expects,
+/// then forwards the call. The resulting GLB bytes are wrapped in a
+/// [`ThreeDGenerateResult`] with `mime_type = "model/gltf-binary"`.
+#[cfg(feature = "triposr")]
+struct TripoSrAdapter {
+    inner: Arc<blazen_3d::backends::triposr::TripoSrBackend>,
+}
+
+#[cfg(feature = "triposr")]
+#[async_trait]
+impl ThreeDBackend for TripoSrAdapter {
+    async fn generate_from_image(
+        &self,
+        image_bytes: Vec<u8>,
+        mesh_resolution: u32,
+    ) -> Result<ThreeDGenerateResult, blazen_llm::BlazenError> {
+        let img = image::load_from_memory(&image_bytes).map_err(|e| {
+            blazen_llm::BlazenError::provider("triposr", format!("image decode: {e}"))
+        })?;
+        let rgb = img.to_rgb8();
+        let (width, height) = (rgb.width(), rgb.height());
+        let raw = rgb.into_raw();
+        // image_to_glb is synchronous + CPU-bound; run on a blocking task
+        // so we don't block the tokio runtime on long mesh extractions.
+        let backend = Arc::clone(&self.inner);
+        let mesh_res = mesh_resolution as usize;
+        let glb = tokio::task::spawn_blocking(move || {
+            backend
+                .pipeline()
+                .image_to_glb(&raw, width, height, mesh_res)
+        })
+        .await
+        .map_err(|e| blazen_llm::BlazenError::provider("triposr", format!("join: {e}")))?
+        .map_err(|e| blazen_llm::BlazenError::provider("triposr", e.to_string()))?;
+        Ok(ThreeDGenerateResult {
+            model_bytes: glb,
+            mime_type: "model/gltf-binary".to_owned(),
+        })
+    }
+}
+
+/// Build a local TripoSR single-image-to-3D model.
+///
+/// `hf_repo_id` selects the Hugging Face repo to fetch weights from
+/// (default `"stabilityai/TripoSR"`). `revision` pins a specific branch
+/// / tag / commit on that repo (default `main`). `weights_path` provides
+/// a pre-resolved local directory containing the `image_encoder.safetensors`
+/// / `transformer.safetensors` / `nerf_field.safetensors` triple; when
+/// supplied, the HF download is skipped entirely.
+///
+/// Weights ship under MIT (matches the upstream TripoSR code license).
+#[cfg(feature = "triposr")]
+#[uniffi::export]
+pub fn new_triposr_3d_model(
+    hf_repo_id: Option<String>,
+    revision: Option<String>,
+    weights_path: Option<String>,
+) -> BlazenResult<Arc<ThreeDModel>> {
+    use blazen_3d::backends::triposr::TripoSrBackend;
+    use std::path::Path;
+
+    let device = candle_core::Device::Cpu;
+    let backend = if let Some(path) = weights_path.as_deref() {
+        TripoSrBackend::load_from_paths(Path::new(path), &device).map_err(|e| {
+            BlazenError::Provider {
+                kind: "TripoSrInit".into(),
+                message: e.to_string(),
+                provider: Some("triposr".into()),
+                status: None,
+                endpoint: None,
+                request_id: None,
+                detail: None,
+                retry_after_ms: None,
+            }
+        })?
+    } else {
+        let repo = hf_repo_id.unwrap_or_else(|| "stabilityai/TripoSR".to_owned());
+        runtime()
+            .block_on(async {
+                TripoSrBackend::load_from_hf(&repo, revision.as_deref(), &device).await
+            })
+            .map_err(|e| BlazenError::Provider {
+                kind: "TripoSrInit".into(),
+                message: e.to_string(),
+                provider: Some("triposr".into()),
+                status: None,
+                endpoint: None,
+                request_id: None,
+                detail: None,
+                retry_after_ms: None,
+            })?
+    };
+    Ok(ThreeDModel::from_arc(Arc::new(TripoSrAdapter {
+        inner: Arc::new(backend),
+    })))
 }
 
 // ---------------------------------------------------------------------------
