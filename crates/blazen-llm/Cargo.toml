@@ -89,7 +89,7 @@ audio-stt-whisper-streaming = ["audio-stt", "blazen-audio-stt/whisper-streaming"
 audio-stt-faster-whisper = ["audio-stt", "blazen-audio-stt/faster-whisper"]
 
 # Music / SFX bridge surface (DynMusicProvider impl of AudioGeneration).
-audio-music        = ["dep:blazen-audio", "dep:blazen-audio-music"]
+audio-music        = ["dep:blazen-audio", "dep:blazen-audio-music", "dep:candle-core"]
 audio-music-musicgen = ["audio-music", "blazen-audio-music/musicgen"]
 audio-music-audiogen = ["audio-music", "blazen-audio-music/audiogen"]
 audio-music-stable-audio = ["audio-music", "blazen-audio-music/stable-audio"]
