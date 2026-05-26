@@ -877,21 +877,17 @@ pub fn new_piper_tts_model(
             retry_after_ms: None,
         })?;
 
-    let backend = PiperBackend::with_voice(
-        onnx_path,
-        Some(config_path),
-        speaker_id.map(i64::from),
-    )
-    .map_err(|e| BlazenError::Provider {
-        kind: "PiperInit".into(),
-        message: e.to_string(),
-        provider: Some("piper".into()),
-        status: None,
-        endpoint: None,
-        request_id: None,
-        detail: None,
-        retry_after_ms: None,
-    })?;
+    let backend = PiperBackend::with_voice(onnx_path, Some(config_path), speaker_id.map(i64::from))
+        .map_err(|e| BlazenError::Provider {
+            kind: "PiperInit".into(),
+            message: e.to_string(),
+            provider: Some("piper".into()),
+            status: None,
+            endpoint: None,
+            request_id: None,
+            detail: None,
+            retry_after_ms: None,
+        })?;
 
     Ok(TtsModel::from_arc(Arc::new(PiperLocalAdapter {
         inner: Arc::new(backend),
