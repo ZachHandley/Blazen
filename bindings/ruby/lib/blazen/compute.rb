@@ -334,6 +334,38 @@ module Blazen
       TtsModel.new(out_model.read_pointer)
     end
 
+    # Build a local TripoSR single-image-to-3D model (when the native
+    # library is built with the +triposr+ feature).
+    #
+    # Weights ship under MIT.
+    #
+    # @param hf_repo_id [String, nil] Hugging Face repo (default
+    #   +"stabilityai/TripoSR"+)
+    # @param revision [String, nil] HF revision pin (branch / tag / commit)
+    # @param weights_path [String, nil] pre-resolved local directory
+    #   containing the +image_encoder.safetensors+ /
+    #   +transformer.safetensors+ / +nerf_field.safetensors+ triple; when
+    #   non-nil the HF download is skipped
+    # @return [Blazen::Compute::ThreeDModel]
+    # @raise [Blazen::UnsupportedError] when the +triposr+ feature is missing
+    def self.triposr_3d(hf_repo_id: nil, revision: nil, weights_path: nil)
+      unless Blazen::FFI.respond_to?(:blazen_three_d_model_new_triposr)
+        raise Blazen::UnsupportedError, "blazen was built without the 'triposr' feature"
+      end
+
+      out_model = ::FFI::MemoryPointer.new(:pointer)
+      out_err   = ::FFI::MemoryPointer.new(:pointer)
+      Blazen::FFI.with_cstring(hf_repo_id) do |rid|
+        Blazen::FFI.with_cstring(revision) do |rev|
+          Blazen::FFI.with_cstring(weights_path) do |wp|
+            Blazen::FFI.blazen_three_d_model_new_triposr(rid, rev, wp, out_model, out_err)
+          end
+        end
+      end
+      Blazen::FFI.check_error!(out_err)
+      ThreeDModel.new(out_model.read_pointer)
+    end
+
     # Build a local whisper.cpp speech-to-text model (when the native
     # library is built with the +whispercpp+ feature).
     #
@@ -992,6 +1024,109 @@ module Blazen
         return nil if s.nil? || s.empty?
 
         s
+      end
+    end
+
+    # Idiomatic Ruby wrapper around a +BlazenThreeDModel+ handle.
+    #
+    # Exposes single-image-to-3D generation as async + blocking variants;
+    # resolves to a {ThreeDGenerateResult} carrying the encoded model
+    # bytes (typically GLB / gltf-binary) and a MIME type string.
+    class ThreeDModel
+      # @return [::FFI::AutoPointer]
+      attr_reader :ptr
+
+      # @param raw_ptr [::FFI::Pointer]
+      def initialize(raw_ptr)
+        raise ArgumentError, "ThreeDModel: pointer must be non-null" if raw_ptr.nil? || raw_ptr.null?
+
+        @ptr = ::FFI::AutoPointer.new(raw_ptr, Blazen::FFI.method(:blazen_three_d_model_free))
+      end
+
+      # Asynchronously render a 3D mesh from a single input image.
+      # Composes with +Fiber.scheduler+.
+      #
+      # @param image_bytes [String] encoded PNG or JPEG payload
+      # @param mesh_resolution [Integer] density-grid side length (default
+      #   +256+ matches the upstream TripoSR reference)
+      # @return [Blazen::Compute::ThreeDGenerateResult]
+      def generate_from_image(image_bytes, mesh_resolution: 256)
+        bytes      = image_bytes.to_s.dup.force_encoding(Encoding::ASCII_8BIT)
+        buf        = ::FFI::MemoryPointer.new(:uint8, bytes.bytesize)
+        buf.write_bytes(bytes) unless bytes.empty?
+        out_result = ::FFI::MemoryPointer.new(:pointer)
+        out_err    = ::FFI::MemoryPointer.new(:pointer)
+        res        = Integer(mesh_resolution)
+
+        fut = Blazen::FFI.blazen_three_d_model_generate_from_image(@ptr, buf, bytes.bytesize, res)
+        if fut.nil? || fut.null?
+          raise Blazen::ValidationError,
+                "blazen_three_d_model_generate_from_image returned a null future"
+        end
+
+        Blazen::FFI.await_future(fut) do |f|
+          Blazen::FFI.blazen_future_take_three_d_generate_result(f, out_result, out_err)
+        end
+        Blazen::FFI.check_error!(out_err)
+        ThreeDGenerateResult.new(out_result.read_pointer)
+      end
+
+      # Blocking-thread variant of {#generate_from_image}.
+      #
+      # @param image_bytes [String]
+      # @param mesh_resolution [Integer]
+      # @return [Blazen::Compute::ThreeDGenerateResult]
+      def generate_from_image_blocking(image_bytes, mesh_resolution: 256)
+        bytes      = image_bytes.to_s.dup.force_encoding(Encoding::ASCII_8BIT)
+        buf        = ::FFI::MemoryPointer.new(:uint8, bytes.bytesize)
+        buf.write_bytes(bytes) unless bytes.empty?
+        out_result = ::FFI::MemoryPointer.new(:pointer)
+        out_err    = ::FFI::MemoryPointer.new(:pointer)
+        res        = Integer(mesh_resolution)
+
+        Blazen::FFI.blazen_three_d_model_generate_from_image_blocking(
+          @ptr, buf, bytes.bytesize, res, out_result, out_err,
+        )
+        Blazen::FFI.check_error!(out_err)
+        ThreeDGenerateResult.new(out_result.read_pointer)
+      end
+    end
+
+    # Idiomatic Ruby wrapper around a +BlazenThreeDGenerateResult+ handle.
+    #
+    # Produced by {ThreeDModel#generate_from_image} +
+    # {ThreeDModel#generate_from_image_blocking}. Carries the encoded
+    # model bytes (typically GLB / gltf-binary) and a MIME type string.
+    class ThreeDGenerateResult
+      # @param raw_ptr [::FFI::Pointer]
+      def initialize(raw_ptr)
+        if raw_ptr.nil? || raw_ptr.null?
+          raise ArgumentError, "ThreeDGenerateResult: pointer must be non-null"
+        end
+
+        @ptr = ::FFI::AutoPointer.new(
+          raw_ptr, Blazen::FFI.method(:blazen_three_d_generate_result_free),
+        )
+      end
+
+      # @return [::FFI::AutoPointer]
+      attr_reader :ptr
+
+      # @return [String] encoded 3D model bytes (binary string; typically
+      #   GLB / gltf-binary container)
+      def model_bytes
+        len_ptr = ::FFI::MemoryPointer.new(:size_t)
+        base    = Blazen::FFI.blazen_three_d_generate_result_model_bytes(@ptr, len_ptr)
+        len     = len_ptr.read(:size_t)
+        return String.new(encoding: Encoding::ASCII_8BIT) if base.nil? || base.null? || len.zero?
+
+        base.read_bytes(len).force_encoding(Encoding::ASCII_8BIT)
+      end
+
+      # @return [String, nil] IANA MIME type of the encoded model
+      #   (typically +"model/gltf-binary"+)
+      def mime_type
+        Blazen::FFI.consume_cstring(Blazen::FFI.blazen_three_d_generate_result_mime_type(@ptr))
       end
     end
 

@@ -472,6 +472,12 @@ module Blazen
       # Optional: only present when libblazen_cabi was built with `audio-stt-faster-whisper`.
     end
     begin
+      attach_function :blazen_three_d_model_new_triposr,
+                      [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
+    rescue ::FFI::NotFoundError
+      # Optional: only present when libblazen_cabi was built with `triposr`.
+    end
+    begin
       attach_function :blazen_image_gen_model_new_diffusion,
                       [:pointer, :pointer, :int32, :int32, :int32, :float,
                        :pointer, :pointer],
@@ -593,6 +599,33 @@ module Blazen
                     [:pointer], :pointer
     attach_function :blazen_music_result_free,
                     [:pointer], :void
+
+    # -------------------------------------------------------------------
+    # Compute — Native 3D (ThreeDModel + ThreeDGenerateResult)
+    # -------------------------------------------------------------------
+    #
+    # Lifecycle + generate entry points are feature-gated under `triposr`
+    # in the cabi build; rescue `::FFI::NotFoundError` so a minimal
+    # libblazen_cabi loads cleanly and downstream callers in compute.rb
+    # probe via `Blazen::FFI.respond_to?` before invoking each.
+    begin
+      attach_function :blazen_three_d_model_free, [:pointer], :void
+      attach_function :blazen_three_d_model_generate_from_image_blocking,
+                      [:pointer, :pointer, :size_t, :uint32, :pointer, :pointer], :int32,
+                      blocking: true
+      attach_function :blazen_three_d_model_generate_from_image,
+                      [:pointer, :pointer, :size_t, :uint32], :pointer
+      attach_function :blazen_future_take_three_d_generate_result,
+                      [:pointer, :pointer, :pointer], :int32
+      attach_function :blazen_three_d_generate_result_model_bytes,
+                      [:pointer, :pointer], :pointer
+      attach_function :blazen_three_d_generate_result_mime_type,
+                      [:pointer], :pointer
+      attach_function :blazen_three_d_generate_result_free,
+                      [:pointer], :void
+    rescue ::FFI::NotFoundError
+      # Optional: only present when libblazen_cabi was built with `triposr`.
+    end
 
     # -------------------------------------------------------------------
     # Compute — Voice Conversion (RVC) (VcModel + VcChunk + VcResult +
