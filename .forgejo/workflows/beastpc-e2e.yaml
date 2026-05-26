@@ -49,6 +49,11 @@ env:
   # Cache models under the runner's home so re-runs hit cached weights.
   # Mirrors the convention in live-models.yaml.
   BLAZEN_TESTS_CACHE: "/root/.cache/blazen-tests"
+  # candle-kernels' build.rs invokes `nvidia-smi` during build-script execution
+  # to auto-detect compute cap and fails on the runner's PATH layout. Hard-pin
+  # to 89 (Ada — matches the 4090 BeastPC GPU). Bump to "89;120" when the
+  # inbound 5070 Ti / 5090 Blackwell box is wired in.
+  CUDA_COMPUTE_CAP: "89"
 
 jobs:
   e2e:

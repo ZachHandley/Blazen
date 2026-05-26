@@ -27,6 +27,11 @@ env:
   CARGO_INCREMENTAL: "0"
   CARGO_BUILD_JOBS: "4"
   RUST_BACKTRACE: 1
+  # candle-kernels' build.rs auto-detects compute cap via `nvidia-smi`, which
+  # isn't reliably on PATH during build-script execution. Hard-pin to 89
+  # (Ada — covers the 4070 Ti minibeast + 4090 BeastPC). Bump to "89;120"
+  # when the inbound 5070 Ti / 5090 Blackwell rig joins CI.
+  CUDA_COMPUTE_CAP: "89"
 
 jobs:
   # ===========================================
