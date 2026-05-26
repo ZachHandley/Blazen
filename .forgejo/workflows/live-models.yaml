@@ -58,7 +58,7 @@ jobs:
           key: live-models-weights-v1
 
       - name: Install nextest
-        uses: taiki-e/install-action@v2
+        uses: https://github.com/taiki-e/install-action@v2
         with:
           tool: cargo-nextest
 

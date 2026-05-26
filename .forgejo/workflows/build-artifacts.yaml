@@ -583,7 +583,7 @@ jobs:
 
       - name: Install uv
         if: steps.verify.outputs.completed != 'true'
-        uses: astral-sh/setup-uv@v6
+        uses: https://github.com/astral-sh/setup-uv@v6
 
       - name: Setup Rust
         if: steps.verify.outputs.completed != 'true'

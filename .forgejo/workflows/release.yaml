@@ -229,7 +229,7 @@ jobs:
 
       - name: Install uv
         if: steps.check.outputs.completed != 'true'
-        uses: astral-sh/setup-uv@v6
+        uses: https://github.com/astral-sh/setup-uv@v6
 
       - name: Download release-dist artifact
         if: steps.check.outputs.completed != 'true'
@@ -870,7 +870,7 @@ jobs:
 
       - name: Set up Ruby
         if: steps.check.outputs.completed != 'true' && steps.gate.outputs.has_key == 'true'
-        uses: ruby/setup-ruby@v1
+        uses: https://github.com/ruby/setup-ruby@v1
         with:
           ruby-version: '3.2'
           bundler-cache: false
