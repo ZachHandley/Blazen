@@ -7945,7 +7945,7 @@ public protocol MusicStreamSink: AnyObject, Sendable {
      * Receive a fatal error from the stream. Called exactly once when the
      * stream fails midway (or fails to start at all).
      */
-    func onError(err: BlazenError) async throws 
+    func onError(cause: BlazenError) async throws 
     
 }
 /**
@@ -8059,13 +8059,13 @@ open func onDone()async throws   {
      * Receive a fatal error from the stream. Called exactly once when the
      * stream fails midway (or fails to start at all).
      */
-open func onError(err: BlazenError)async throws   {
+open func onError(cause: BlazenError)async throws   {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_blazen_uniffi_fn_method_musicstreamsink_on_error(
                     self.uniffiCloneHandle(),
-                    FfiConverterTypeBlazenError_lower(err)
+                    FfiConverterTypeBlazenError_lower(cause)
                 )
             },
             pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
@@ -8186,7 +8186,7 @@ fileprivate struct UniffiCallbackInterfaceMusicStreamSink {
         },
         onError: { (
             uniffiHandle: UInt64,
-            err: RustBuffer,
+            cause: RustBuffer,
             uniffiFutureCallback: @escaping UniffiForeignFutureCompleteVoid,
             uniffiCallbackData: UInt64,
             uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
@@ -8197,7 +8197,7 @@ fileprivate struct UniffiCallbackInterfaceMusicStreamSink {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
                 return try await uniffiObj.onError(
-                     err: try FfiConverterTypeBlazenError_lift(err)
+                     cause: try FfiConverterTypeBlazenError_lift(cause)
                 )
             }
 
@@ -11709,7 +11709,7 @@ public protocol VcStreamSink: AnyObject, Sendable {
      * Receive a fatal error from the stream. Called exactly once when
      * the stream fails midway (or fails to start at all).
      */
-    func onError(err: BlazenError) async throws 
+    func onError(cause: BlazenError) async throws 
     
 }
 /**
@@ -11825,13 +11825,13 @@ open func onDone()async throws   {
      * Receive a fatal error from the stream. Called exactly once when
      * the stream fails midway (or fails to start at all).
      */
-open func onError(err: BlazenError)async throws   {
+open func onError(cause: BlazenError)async throws   {
     return
         try  await uniffiRustCallAsync(
             rustFutureFunc: {
                 uniffi_blazen_uniffi_fn_method_vcstreamsink_on_error(
                     self.uniffiCloneHandle(),
-                    FfiConverterTypeBlazenError_lower(err)
+                    FfiConverterTypeBlazenError_lower(cause)
                 )
             },
             pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
@@ -11952,7 +11952,7 @@ fileprivate struct UniffiCallbackInterfaceVcStreamSink {
         },
         onError: { (
             uniffiHandle: UInt64,
-            err: RustBuffer,
+            cause: RustBuffer,
             uniffiFutureCallback: @escaping UniffiForeignFutureCompleteVoid,
             uniffiCallbackData: UInt64,
             uniffiOutDroppedCallback: UnsafeMutablePointer<UniffiForeignFutureDroppedCallbackStruct>
@@ -11963,7 +11963,7 @@ fileprivate struct UniffiCallbackInterfaceVcStreamSink {
                     throw UniffiInternalError.unexpectedStaleHandle
                 }
                 return try await uniffiObj.onError(
-                     err: try FfiConverterTypeBlazenError_lift(err)
+                     cause: try FfiConverterTypeBlazenError_lift(cause)
                 )
             }
 
@@ -23387,7 +23387,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_done() != 61428) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_error() != 39358) {
+    if (uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_error() != 44317) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_vcmodel_convert_voice() != 46177) {
@@ -23414,7 +23414,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_done() != 20371) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_error() != 37574) {
+    if (uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_error() != 5727) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle() != 640) {

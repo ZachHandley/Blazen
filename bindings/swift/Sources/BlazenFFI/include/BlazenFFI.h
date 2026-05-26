@@ -795,7 +795,7 @@ uint64_t uniffi_blazen_uniffi_fn_method_musicstreamsink_on_done(uint64_t ptr
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_MUSICSTREAMSINK_ON_ERROR
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_MUSICSTREAMSINK_ON_ERROR
-uint64_t uniffi_blazen_uniffi_fn_method_musicstreamsink_on_error(uint64_t ptr, RustBuffer err
+uint64_t uniffi_blazen_uniffi_fn_method_musicstreamsink_on_error(uint64_t ptr, RustBuffer cause
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_VCMODEL
@@ -865,7 +865,7 @@ uint64_t uniffi_blazen_uniffi_fn_method_vcstreamsink_on_done(uint64_t ptr
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VCSTREAMSINK_ON_ERROR
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VCSTREAMSINK_ON_ERROR
-uint64_t uniffi_blazen_uniffi_fn_method_vcstreamsink_on_error(uint64_t ptr, RustBuffer err
+uint64_t uniffi_blazen_uniffi_fn_method_vcstreamsink_on_error(uint64_t ptr, RustBuffer cause
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_CONTROLPLANEASSIGNMENTHANDLER

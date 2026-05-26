@@ -518,7 +518,7 @@ pub trait MusicStreamSink: Send + Sync {
 
     /// Receive a fatal error from the stream. Called exactly once when the
     /// stream fails midway (or fails to start at all).
-    async fn on_error(&self, err: BlazenError) -> BlazenResult<()>;
+    async fn on_error(&self, cause: BlazenError) -> BlazenResult<()>;
 }
 
 async fn drive_music_stream(

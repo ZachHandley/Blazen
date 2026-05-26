@@ -1092,7 +1092,7 @@ func uniffiCheckChecksums() {
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_error()
 		})
-		if checksum != 39358 {
+		if checksum != 44317 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_error: UniFFI API checksum mismatch")
 		}
@@ -1173,7 +1173,7 @@ func uniffiCheckChecksums() {
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_error()
 		})
-		if checksum != 37574 {
+		if checksum != 5727 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_error: UniFFI API checksum mismatch")
 		}
@@ -10896,7 +10896,7 @@ type MusicStreamSink interface {
 	OnDone() error
 	// Receive a fatal error from the stream. Called exactly once when the
 	// stream fails midway (or fails to start at all).
-	OnError(err *BlazenError) error
+	OnError(cause *BlazenError) error
 }
 
 // Sink for streaming music / SFX output, implemented in foreign code.
@@ -10981,7 +10981,7 @@ func (_self *MusicStreamSinkImpl) OnDone() error {
 
 // Receive a fatal error from the stream. Called exactly once when the
 // stream fails midway (or fails to start at all).
-func (_self *MusicStreamSinkImpl) OnError(err *BlazenError) error {
+func (_self *MusicStreamSinkImpl) OnError(cause *BlazenError) error {
 	_pointer := _self.ffiObject.incrementPointer("MusicStreamSink")
 	defer _self.ffiObject.decrementPointer()
 	_, err := uniffiRustCallAsync[*BlazenError](
@@ -10994,7 +10994,7 @@ func (_self *MusicStreamSinkImpl) OnError(err *BlazenError) error {
 		// liftFn
 		func(_ struct{}) struct{} { return struct{}{} },
 		C.uniffi_blazen_uniffi_fn_method_musicstreamsink_on_error(
-			_pointer, FfiConverterBlazenErrorINSTANCE.Lower(err)),
+			_pointer, FfiConverterBlazenErrorINSTANCE.Lower(cause)),
 		// pollFn
 		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
 			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
@@ -11205,7 +11205,7 @@ func blazen_uniffi_compute_music_cgo_dispatchCallbackInterfaceMusicStreamSinkMet
 }
 
 //export blazen_uniffi_compute_music_cgo_dispatchCallbackInterfaceMusicStreamSinkMethod2
-func blazen_uniffi_compute_music_cgo_dispatchCallbackInterfaceMusicStreamSinkMethod2(uniffiHandle C.uint64_t, err C.RustBuffer, uniffiFutureCallback C.UniffiForeignFutureCompleteVoid, uniffiCallbackData C.uint64_t, uniffiOutDroppedCallback *C.UniffiForeignFutureDroppedCallbackStruct) {
+func blazen_uniffi_compute_music_cgo_dispatchCallbackInterfaceMusicStreamSinkMethod2(uniffiHandle C.uint64_t, cause C.RustBuffer, uniffiFutureCallback C.UniffiForeignFutureCompleteVoid, uniffiCallbackData C.uint64_t, uniffiOutDroppedCallback *C.UniffiForeignFutureDroppedCallbackStruct) {
 	handle := uint64(uniffiHandle)
 	uniffiObj, ok := FfiConverterMusicStreamSinkINSTANCE.handleMap.tryGet(handle)
 	if !ok {
@@ -11240,7 +11240,7 @@ func blazen_uniffi_compute_music_cgo_dispatchCallbackInterfaceMusicStreamSinkMet
 		err :=
 			uniffiObj.OnError(
 				FfiConverterBlazenErrorINSTANCE.Lift(GoRustBuffer{
-					inner: err,
+					inner: cause,
 				}),
 			)
 
@@ -14437,7 +14437,7 @@ type VcStreamSink interface {
 	OnDone() error
 	// Receive a fatal error from the stream. Called exactly once when
 	// the stream fails midway (or fails to start at all).
-	OnError(err *BlazenError) error
+	OnError(cause *BlazenError) error
 }
 
 // Sink for streaming voice-conversion output, implemented in foreign
@@ -14524,7 +14524,7 @@ func (_self *VcStreamSinkImpl) OnDone() error {
 
 // Receive a fatal error from the stream. Called exactly once when
 // the stream fails midway (or fails to start at all).
-func (_self *VcStreamSinkImpl) OnError(err *BlazenError) error {
+func (_self *VcStreamSinkImpl) OnError(cause *BlazenError) error {
 	_pointer := _self.ffiObject.incrementPointer("VcStreamSink")
 	defer _self.ffiObject.decrementPointer()
 	_, err := uniffiRustCallAsync[*BlazenError](
@@ -14537,7 +14537,7 @@ func (_self *VcStreamSinkImpl) OnError(err *BlazenError) error {
 		// liftFn
 		func(_ struct{}) struct{} { return struct{}{} },
 		C.uniffi_blazen_uniffi_fn_method_vcstreamsink_on_error(
-			_pointer, FfiConverterBlazenErrorINSTANCE.Lower(err)),
+			_pointer, FfiConverterBlazenErrorINSTANCE.Lower(cause)),
 		// pollFn
 		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
 			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
@@ -14748,7 +14748,7 @@ func blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkMethod1(u
 }
 
 //export blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkMethod2
-func blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkMethod2(uniffiHandle C.uint64_t, err C.RustBuffer, uniffiFutureCallback C.UniffiForeignFutureCompleteVoid, uniffiCallbackData C.uint64_t, uniffiOutDroppedCallback *C.UniffiForeignFutureDroppedCallbackStruct) {
+func blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkMethod2(uniffiHandle C.uint64_t, cause C.RustBuffer, uniffiFutureCallback C.UniffiForeignFutureCompleteVoid, uniffiCallbackData C.uint64_t, uniffiOutDroppedCallback *C.UniffiForeignFutureDroppedCallbackStruct) {
 	handle := uint64(uniffiHandle)
 	uniffiObj, ok := FfiConverterVcStreamSinkINSTANCE.handleMap.tryGet(handle)
 	if !ok {
@@ -14783,7 +14783,7 @@ func blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkMethod2(u
 		err :=
 			uniffiObj.OnError(
 				FfiConverterBlazenErrorINSTANCE.Lift(GoRustBuffer{
-					inner: err,
+					inner: cause,
 				}),
 			)
 

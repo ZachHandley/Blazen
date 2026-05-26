@@ -759,7 +759,7 @@ internal interface UniffiCallbackInterfaceMusicStreamSinkMethod1 : com.sun.jna.C
 internal interface UniffiCallbackInterfaceMusicStreamSinkMethod2 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
-        `err`: RustBuffer.ByValue,
+        `cause`: RustBuffer.ByValue,
         `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
         `uniffiCallbackData`: Long,
         `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
@@ -788,7 +788,7 @@ internal interface UniffiCallbackInterfaceVcStreamSinkMethod1 : com.sun.jna.Call
 internal interface UniffiCallbackInterfaceVcStreamSinkMethod2 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
-        `err`: RustBuffer.ByValue,
+        `cause`: RustBuffer.ByValue,
         `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
         `uniffiCallbackData`: Long,
         `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
@@ -2257,7 +2257,7 @@ internal object UniffiLib {
 
     external fun uniffi_blazen_uniffi_fn_method_musicstreamsink_on_error(
         `ptr`: Long,
-        `err`: RustBuffer.ByValue,
+        `cause`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_blazen_uniffi_fn_clone_vcmodel(
@@ -2324,7 +2324,7 @@ internal object UniffiLib {
 
     external fun uniffi_blazen_uniffi_fn_method_vcstreamsink_on_error(
         `ptr`: Long,
-        `err`: RustBuffer.ByValue,
+        `cause`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_blazen_uniffi_fn_clone_controlplaneassignmenthandler(
@@ -4410,7 +4410,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_done() != 61428.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_error() != 39358.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_error() != 44317.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_vcmodel_convert_voice() != 46177.toShort()) {
@@ -4437,7 +4437,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_done() != 20371.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_error() != 37574.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_error() != 5727.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle() != 640.toShort()) {
@@ -15384,7 +15384,7 @@ public interface MusicStreamSink {
      * Receive a fatal error from the stream. Called exactly once when the
      * stream fails midway (or fails to start at all).
      */
-    suspend fun `onError`(`err`: BlazenException)
+    suspend fun `onError`(`cause`: BlazenException)
 
     companion object
 }
@@ -15551,12 +15551,12 @@ open class MusicStreamSinkImpl :
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `onError`(`err`: BlazenException) =
+    override suspend fun `onError`(`cause`: BlazenException) =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_blazen_uniffi_fn_method_musicstreamsink_on_error(
                     uniffiHandle,
-                    FfiConverterTypeBlazenError.lower(`err`),
+                    FfiConverterTypeBlazenError.lower(`cause`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
@@ -15655,7 +15655,7 @@ internal object uniffiCallbackInterfaceMusicStreamSink {
     internal object `onError` : UniffiCallbackInterfaceMusicStreamSinkMethod2 {
         override fun callback(
             `uniffiHandle`: Long,
-            `err`: RustBuffer.ByValue,
+            `cause`: RustBuffer.ByValue,
             `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
             `uniffiCallbackData`: Long,
             `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
@@ -15663,7 +15663,7 @@ internal object uniffiCallbackInterfaceMusicStreamSink {
             val uniffiObj = FfiConverterTypeMusicStreamSink.handleMap.get(uniffiHandle)
             val makeCall =
                 suspend {  uniffiObj.`onError`(
-                    FfiConverterTypeBlazenError.lift(`err`),
+                    FfiConverterTypeBlazenError.lift(`cause`),
                 )
                 }
             val uniffiHandleSuccess = { _: Unit ->
@@ -21150,7 +21150,7 @@ public interface VcStreamSink {
      * Receive a fatal error from the stream. Called exactly once when
      * the stream fails midway (or fails to start at all).
      */
-    suspend fun `onError`(`err`: BlazenException)
+    suspend fun `onError`(`cause`: BlazenException)
 
     companion object
 }
@@ -21319,12 +21319,12 @@ open class VcStreamSinkImpl :
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `onError`(`err`: BlazenException) =
+    override suspend fun `onError`(`cause`: BlazenException) =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
                 UniffiLib.uniffi_blazen_uniffi_fn_method_vcstreamsink_on_error(
                     uniffiHandle,
-                    FfiConverterTypeBlazenError.lower(`err`),
+                    FfiConverterTypeBlazenError.lower(`cause`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
@@ -21423,7 +21423,7 @@ internal object uniffiCallbackInterfaceVcStreamSink {
     internal object `onError` : UniffiCallbackInterfaceVcStreamSinkMethod2 {
         override fun callback(
             `uniffiHandle`: Long,
-            `err`: RustBuffer.ByValue,
+            `cause`: RustBuffer.ByValue,
             `uniffiFutureCallback`: UniffiForeignFutureCompleteVoid,
             `uniffiCallbackData`: Long,
             `uniffiOutDroppedCallback`: UniffiForeignFutureDroppedCallbackStruct,
@@ -21431,7 +21431,7 @@ internal object uniffiCallbackInterfaceVcStreamSink {
             val uniffiObj = FfiConverterTypeVcStreamSink.handleMap.get(uniffiHandle)
             val makeCall =
                 suspend {  uniffiObj.`onError`(
-                    FfiConverterTypeBlazenError.lift(`err`),
+                    FfiConverterTypeBlazenError.lift(`cause`),
                 )
                 }
             val uniffiHandleSuccess = { _: Unit ->
