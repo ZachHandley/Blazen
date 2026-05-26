@@ -49,6 +49,7 @@ members = [
     "crates/blazen-3d-core",
     "crates/blazen-video-core",
     "crates/blazen-ggml-sys",
+    "crates/blazen-whisper-sys",
 ]
 exclude = [
     "crates/blazen-wasm",
@@ -254,3 +255,13 @@ pedantic = "warn"
 # see the exact patches. These are upstream-PR-able and should be replaced
 # with the upstream version when napi-rs accepts them.
 napi = { path = "crates/napi-patched" }
+
+# Blazen fork of whisper-rs-sys 0.15.0 that adds a `system-ggml` feature.
+# When enabled (via the workspace's blazen-audio-stt feature graph), the
+# fork's build.rs sets `WHISPER_USE_SYSTEM_GGML=ON` + `CMAKE_PREFIX_PATH=
+# $DEP_GGML_PREFIX` so whisper.cpp's cmake calls `find_package(ggml
+# REQUIRED)` against the blazen-ggml-sys install instead of building its
+# own in-tree ggml. Kills one of the three ggml duplications that the
+# `-Wl,--allow-multiple-definition` band-aid in bindings/go/cgo_link.go
+# papers over.
+whisper-rs-sys = { path = "crates/blazen-whisper-sys" }
