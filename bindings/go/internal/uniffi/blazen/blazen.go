@@ -2566,6 +2566,42 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_animate()
+		})
+		if checksum != 11536 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_animate: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_refine()
+		})
+		if checksum != 4070 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_refine: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_rig()
+		})
+		if checksum != 32321 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_rig: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_texturize()
+		})
+		if checksum != 42136 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_texturize: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_stephandler_invoke()
 		})
 		if checksum != 11814 {
@@ -2787,6 +2823,15 @@ func uniffiCheckChecksums() {
 		if checksum != 44881 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model_with_defaults: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_compat3dprovider_new()
+		})
+		if checksum != 19300 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_compat3dprovider_new: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -3940,6 +3985,252 @@ func LowerToExternalCheckpointStore(value *CheckpointStore) uint64 {
 type FfiDestroyerCheckpointStore struct{}
 
 func (_ FfiDestroyerCheckpointStore) Destroy(value *CheckpointStore) {
+	value.Destroy()
+}
+
+// HTTP-proxy backend implementing all four 3D-pipeline capability
+// traits against a configurable upstream service.
+//
+// For every stage, this provider POSTs a `multipart/form-data` request
+// with the mesh GLB and a JSON request body to
+// `{base_url}/v1/3d/{texturize,rig,refine,animate}`, and decodes a
+// base64-wrapped JSON response into the corresponding result record.
+type Compat3dProviderInterface interface {
+	// Animate a rigged 3D mesh from a text prompt, motion-capture clip,
+	// or driving video.
+	Animate(riggedGlb []byte, request AnimateRequest) (AnimateResult, error)
+	// Refine a 3D mesh: decimate, fill holes, unwrap UVs, retopologize, smooth.
+	Refine(meshGlb []byte, request RefineRequest) (RefineResult, error)
+	// Auto-rig a 3D mesh, producing a GLB with skeletal armature and
+	// (optionally) skin weights embedded.
+	Rig(meshGlb []byte, request RigRequest) (RigResult, error)
+	// Apply or generate a texture/material for an existing 3D mesh.
+	Texturize(meshGlb []byte, request TexturizeRequest) (TexturizeResult, error)
+}
+
+// HTTP-proxy backend implementing all four 3D-pipeline capability
+// traits against a configurable upstream service.
+//
+// For every stage, this provider POSTs a `multipart/form-data` request
+// with the mesh GLB and a JSON request body to
+// `{base_url}/v1/3d/{texturize,rig,refine,animate}`, and decodes a
+// base64-wrapped JSON response into the corresponding result record.
+type Compat3dProvider struct {
+	ffiObject FfiObject
+}
+
+// Construct a new HTTP-proxy provider.
+//
+// `base_url` is the upstream root URL (e.g.
+// `"https://3d.example.com"`). `api_key` is an optional bearer
+// token attached as `Authorization: Bearer ...`. `timeout_secs`
+// is an optional per-request timeout in seconds (default 600).
+func NewCompat3dProvider(baseUrl string, apiKey *string, timeoutSecs *uint32) *Compat3dProvider {
+	return FfiConverterCompat3dProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_compat3dprovider_new(FfiConverterStringINSTANCE.Lower(baseUrl), FfiConverterOptionalStringINSTANCE.Lower(apiKey), FfiConverterOptionalUint32INSTANCE.Lower(timeoutSecs), _uniffiStatus)
+	}))
+}
+
+// Animate a rigged 3D mesh from a text prompt, motion-capture clip,
+// or driving video.
+func (_self *Compat3dProvider) Animate(riggedGlb []byte, request AnimateRequest) (AnimateResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*Compat3dProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*ThreeDError](
+		FfiConverterThreeDErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) AnimateResult {
+			return FfiConverterAnimateResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_compat3dprovider_animate(
+			_pointer, FfiConverterBytesINSTANCE.Lower(riggedGlb), FfiConverterAnimateRequestINSTANCE.Lower(request)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Refine a 3D mesh: decimate, fill holes, unwrap UVs, retopologize, smooth.
+func (_self *Compat3dProvider) Refine(meshGlb []byte, request RefineRequest) (RefineResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*Compat3dProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*ThreeDError](
+		FfiConverterThreeDErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) RefineResult {
+			return FfiConverterRefineResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_compat3dprovider_refine(
+			_pointer, FfiConverterBytesINSTANCE.Lower(meshGlb), FfiConverterRefineRequestINSTANCE.Lower(request)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Auto-rig a 3D mesh, producing a GLB with skeletal armature and
+// (optionally) skin weights embedded.
+func (_self *Compat3dProvider) Rig(meshGlb []byte, request RigRequest) (RigResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*Compat3dProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*ThreeDError](
+		FfiConverterThreeDErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) RigResult {
+			return FfiConverterRigResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_compat3dprovider_rig(
+			_pointer, FfiConverterBytesINSTANCE.Lower(meshGlb), FfiConverterRigRequestINSTANCE.Lower(request)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Apply or generate a texture/material for an existing 3D mesh.
+func (_self *Compat3dProvider) Texturize(meshGlb []byte, request TexturizeRequest) (TexturizeResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*Compat3dProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*ThreeDError](
+		FfiConverterThreeDErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) TexturizeResult {
+			return FfiConverterTexturizeResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_compat3dprovider_texturize(
+			_pointer, FfiConverterBytesINSTANCE.Lower(meshGlb), FfiConverterTexturizeRequestINSTANCE.Lower(request)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+func (object *Compat3dProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterCompat3dProvider struct{}
+
+var FfiConverterCompat3dProviderINSTANCE = FfiConverterCompat3dProvider{}
+
+func (c FfiConverterCompat3dProvider) Lift(handle C.uint64_t) *Compat3dProvider {
+	result := &Compat3dProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_compat3dprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_compat3dprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*Compat3dProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterCompat3dProvider) Read(reader io.Reader) *Compat3dProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterCompat3dProvider) Lower(value *Compat3dProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*Compat3dProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterCompat3dProvider) Write(writer io.Writer, value *Compat3dProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalCompat3dProvider(handle uint64) *Compat3dProvider {
+	return FfiConverterCompat3dProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalCompat3dProvider(value *Compat3dProvider) uint64 {
+	return uint64(FfiConverterCompat3dProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerCompat3dProvider struct{}
+
+func (_ FfiDestroyerCompat3dProvider) Destroy(value *Compat3dProvider) {
 	value.Destroy()
 }
 
@@ -15566,6 +15857,130 @@ func (_ FfiDestroyerAgentResult) Destroy(value AgentResult) {
 	value.Destroy()
 }
 
+// Request parameters for [`Compat3dProvider::animate`].
+type AnimateRequest struct {
+	// Text-guided motion prompt (e.g. `"walks forward and waves"`).
+	Prompt *string
+	// Optional MP4 bytes for video-driven motion transfer.
+	DrivingVideo *[]byte
+	// Optional BVH motion-capture clip bytes.
+	BvhMotion *[]byte
+	// Requested animation duration in seconds.
+	DurationSeconds *float32
+	// Requested animation framerate.
+	Fps *uint32
+	// `true` to mark the produced animation as a seamless loop.
+	LoopAnimation bool
+}
+
+func (r *AnimateRequest) Destroy() {
+	FfiDestroyerOptionalString{}.Destroy(r.Prompt)
+	FfiDestroyerOptionalBytes{}.Destroy(r.DrivingVideo)
+	FfiDestroyerOptionalBytes{}.Destroy(r.BvhMotion)
+	FfiDestroyerOptionalFloat32{}.Destroy(r.DurationSeconds)
+	FfiDestroyerOptionalUint32{}.Destroy(r.Fps)
+	FfiDestroyerBool{}.Destroy(r.LoopAnimation)
+}
+
+type FfiConverterAnimateRequest struct{}
+
+var FfiConverterAnimateRequestINSTANCE = FfiConverterAnimateRequest{}
+
+func (c FfiConverterAnimateRequest) Lift(rb RustBufferI) AnimateRequest {
+	return LiftFromRustBuffer[AnimateRequest](c, rb)
+}
+
+func (c FfiConverterAnimateRequest) Read(reader io.Reader) AnimateRequest {
+	return AnimateRequest{
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+		FfiConverterOptionalBytesINSTANCE.Read(reader),
+		FfiConverterOptionalBytesINSTANCE.Read(reader),
+		FfiConverterOptionalFloat32INSTANCE.Read(reader),
+		FfiConverterOptionalUint32INSTANCE.Read(reader),
+		FfiConverterBoolINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterAnimateRequest) Lower(value AnimateRequest) C.RustBuffer {
+	return LowerIntoRustBuffer[AnimateRequest](c, value)
+}
+
+func (c FfiConverterAnimateRequest) LowerExternal(value AnimateRequest) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[AnimateRequest](c, value))
+}
+
+func (c FfiConverterAnimateRequest) Write(writer io.Writer, value AnimateRequest) {
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.Prompt)
+	FfiConverterOptionalBytesINSTANCE.Write(writer, value.DrivingVideo)
+	FfiConverterOptionalBytesINSTANCE.Write(writer, value.BvhMotion)
+	FfiConverterOptionalFloat32INSTANCE.Write(writer, value.DurationSeconds)
+	FfiConverterOptionalUint32INSTANCE.Write(writer, value.Fps)
+	FfiConverterBoolINSTANCE.Write(writer, value.LoopAnimation)
+}
+
+type FfiDestroyerAnimateRequest struct{}
+
+func (_ FfiDestroyerAnimateRequest) Destroy(value AnimateRequest) {
+	value.Destroy()
+}
+
+// Result of a successful [`Compat3dProvider::animate`] call.
+type AnimateResult struct {
+	// GLB bytes with the animation track(s) embedded.
+	AnimatedGlb []byte
+	// MIME type of `animated_glb`; always `"model/gltf-binary"`.
+	MimeType string
+	// Actual produced duration in seconds (may differ from the request).
+	DurationSeconds float32
+	// Actual produced framerate in frames per second (may differ from the request).
+	Fps uint32
+}
+
+func (r *AnimateResult) Destroy() {
+	FfiDestroyerBytes{}.Destroy(r.AnimatedGlb)
+	FfiDestroyerString{}.Destroy(r.MimeType)
+	FfiDestroyerFloat32{}.Destroy(r.DurationSeconds)
+	FfiDestroyerUint32{}.Destroy(r.Fps)
+}
+
+type FfiConverterAnimateResult struct{}
+
+var FfiConverterAnimateResultINSTANCE = FfiConverterAnimateResult{}
+
+func (c FfiConverterAnimateResult) Lift(rb RustBufferI) AnimateResult {
+	return LiftFromRustBuffer[AnimateResult](c, rb)
+}
+
+func (c FfiConverterAnimateResult) Read(reader io.Reader) AnimateResult {
+	return AnimateResult{
+		FfiConverterBytesINSTANCE.Read(reader),
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterFloat32INSTANCE.Read(reader),
+		FfiConverterUint32INSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterAnimateResult) Lower(value AnimateResult) C.RustBuffer {
+	return LowerIntoRustBuffer[AnimateResult](c, value)
+}
+
+func (c FfiConverterAnimateResult) LowerExternal(value AnimateResult) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[AnimateResult](c, value))
+}
+
+func (c FfiConverterAnimateResult) Write(writer io.Writer, value AnimateResult) {
+	FfiConverterBytesINSTANCE.Write(writer, value.AnimatedGlb)
+	FfiConverterStringINSTANCE.Write(writer, value.MimeType)
+	FfiConverterFloat32INSTANCE.Write(writer, value.DurationSeconds)
+	FfiConverterUint32INSTANCE.Write(writer, value.Fps)
+}
+
+type FfiDestroyerAnimateResult struct{}
+
+func (_ FfiDestroyerAnimateResult) Destroy(value AnimateResult) {
+	value.Destroy()
+}
+
 type AudioMusicProviderDefaults struct {
 	Base *BaseProviderDefaults
 }
@@ -18396,6 +18811,65 @@ func (_ FfiDestroyerOrpoConfigRecord) Destroy(value OrpoConfigRecord) {
 	value.Destroy()
 }
 
+// Bundle of PBR (physically-based rendering) material maps produced by
+// a texturizer backend. `albedo_png` is always populated; the other
+// channels are optional and depend on what the backend produces.
+type PbrMaps struct {
+	// Base-color / diffuse texture as PNG bytes. Always present.
+	AlbedoPng []byte
+	// Tangent-space normal map as PNG bytes, if produced.
+	NormalPng *[]byte
+	// Linear roughness map as PNG bytes, if produced.
+	RoughnessPng *[]byte
+	// Linear metallic map as PNG bytes, if produced.
+	MetallicPng *[]byte
+}
+
+func (r *PbrMaps) Destroy() {
+	FfiDestroyerBytes{}.Destroy(r.AlbedoPng)
+	FfiDestroyerOptionalBytes{}.Destroy(r.NormalPng)
+	FfiDestroyerOptionalBytes{}.Destroy(r.RoughnessPng)
+	FfiDestroyerOptionalBytes{}.Destroy(r.MetallicPng)
+}
+
+type FfiConverterPbrMaps struct{}
+
+var FfiConverterPbrMapsINSTANCE = FfiConverterPbrMaps{}
+
+func (c FfiConverterPbrMaps) Lift(rb RustBufferI) PbrMaps {
+	return LiftFromRustBuffer[PbrMaps](c, rb)
+}
+
+func (c FfiConverterPbrMaps) Read(reader io.Reader) PbrMaps {
+	return PbrMaps{
+		FfiConverterBytesINSTANCE.Read(reader),
+		FfiConverterOptionalBytesINSTANCE.Read(reader),
+		FfiConverterOptionalBytesINSTANCE.Read(reader),
+		FfiConverterOptionalBytesINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterPbrMaps) Lower(value PbrMaps) C.RustBuffer {
+	return LowerIntoRustBuffer[PbrMaps](c, value)
+}
+
+func (c FfiConverterPbrMaps) LowerExternal(value PbrMaps) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[PbrMaps](c, value))
+}
+
+func (c FfiConverterPbrMaps) Write(writer io.Writer, value PbrMaps) {
+	FfiConverterBytesINSTANCE.Write(writer, value.AlbedoPng)
+	FfiConverterOptionalBytesINSTANCE.Write(writer, value.NormalPng)
+	FfiConverterOptionalBytesINSTANCE.Write(writer, value.RoughnessPng)
+	FfiConverterOptionalBytesINSTANCE.Write(writer, value.MetallicPng)
+}
+
+type FfiDestroyerPbrMaps struct{}
+
+func (_ FfiDestroyerPbrMaps) Destroy(value PbrMaps) {
+	value.Destroy()
+}
+
 // A serialized representation of a queued event captured in a checkpoint.
 //
 // Mirrors [`blazen_persist::SerializedEvent`]. The `data_json` field is
@@ -18554,6 +19028,173 @@ func (_ FfiDestroyerProviderDefaults) Destroy(value ProviderDefaults) {
 	value.Destroy()
 }
 
+// Request parameters for [`Compat3dProvider::refine`].
+type RefineRequest struct {
+	// Decimate the mesh towards this triangle count.
+	DecimateTargetTris *uint32
+	// `true` to fill holes via screened poisson reconstruction.
+	FillHoles bool
+	// `true` to compute a new UV unwrap.
+	UnwrapUvs bool
+	// `true` to retopologize the mesh.
+	Retopologize bool
+	// Laplacian / Taubin smoothing iteration count.
+	SmoothIterations *uint32
+}
+
+func (r *RefineRequest) Destroy() {
+	FfiDestroyerOptionalUint32{}.Destroy(r.DecimateTargetTris)
+	FfiDestroyerBool{}.Destroy(r.FillHoles)
+	FfiDestroyerBool{}.Destroy(r.UnwrapUvs)
+	FfiDestroyerBool{}.Destroy(r.Retopologize)
+	FfiDestroyerOptionalUint32{}.Destroy(r.SmoothIterations)
+}
+
+type FfiConverterRefineRequest struct{}
+
+var FfiConverterRefineRequestINSTANCE = FfiConverterRefineRequest{}
+
+func (c FfiConverterRefineRequest) Lift(rb RustBufferI) RefineRequest {
+	return LiftFromRustBuffer[RefineRequest](c, rb)
+}
+
+func (c FfiConverterRefineRequest) Read(reader io.Reader) RefineRequest {
+	return RefineRequest{
+		FfiConverterOptionalUint32INSTANCE.Read(reader),
+		FfiConverterBoolINSTANCE.Read(reader),
+		FfiConverterBoolINSTANCE.Read(reader),
+		FfiConverterBoolINSTANCE.Read(reader),
+		FfiConverterOptionalUint32INSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterRefineRequest) Lower(value RefineRequest) C.RustBuffer {
+	return LowerIntoRustBuffer[RefineRequest](c, value)
+}
+
+func (c FfiConverterRefineRequest) LowerExternal(value RefineRequest) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[RefineRequest](c, value))
+}
+
+func (c FfiConverterRefineRequest) Write(writer io.Writer, value RefineRequest) {
+	FfiConverterOptionalUint32INSTANCE.Write(writer, value.DecimateTargetTris)
+	FfiConverterBoolINSTANCE.Write(writer, value.FillHoles)
+	FfiConverterBoolINSTANCE.Write(writer, value.UnwrapUvs)
+	FfiConverterBoolINSTANCE.Write(writer, value.Retopologize)
+	FfiConverterOptionalUint32INSTANCE.Write(writer, value.SmoothIterations)
+}
+
+type FfiDestroyerRefineRequest struct{}
+
+func (_ FfiDestroyerRefineRequest) Destroy(value RefineRequest) {
+	value.Destroy()
+}
+
+// Result of a successful [`Compat3dProvider::refine`] call.
+type RefineResult struct {
+	// GLB bytes with the requested refinement passes applied.
+	RefinedGlb []byte
+	// MIME type of `refined_glb`; always `"model/gltf-binary"`.
+	MimeType string
+	// Before/after statistics for the refinement run.
+	Stats RefineStats
+}
+
+func (r *RefineResult) Destroy() {
+	FfiDestroyerBytes{}.Destroy(r.RefinedGlb)
+	FfiDestroyerString{}.Destroy(r.MimeType)
+	FfiDestroyerRefineStats{}.Destroy(r.Stats)
+}
+
+type FfiConverterRefineResult struct{}
+
+var FfiConverterRefineResultINSTANCE = FfiConverterRefineResult{}
+
+func (c FfiConverterRefineResult) Lift(rb RustBufferI) RefineResult {
+	return LiftFromRustBuffer[RefineResult](c, rb)
+}
+
+func (c FfiConverterRefineResult) Read(reader io.Reader) RefineResult {
+	return RefineResult{
+		FfiConverterBytesINSTANCE.Read(reader),
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterRefineStatsINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterRefineResult) Lower(value RefineResult) C.RustBuffer {
+	return LowerIntoRustBuffer[RefineResult](c, value)
+}
+
+func (c FfiConverterRefineResult) LowerExternal(value RefineResult) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[RefineResult](c, value))
+}
+
+func (c FfiConverterRefineResult) Write(writer io.Writer, value RefineResult) {
+	FfiConverterBytesINSTANCE.Write(writer, value.RefinedGlb)
+	FfiConverterStringINSTANCE.Write(writer, value.MimeType)
+	FfiConverterRefineStatsINSTANCE.Write(writer, value.Stats)
+}
+
+type FfiDestroyerRefineResult struct{}
+
+func (_ FfiDestroyerRefineResult) Destroy(value RefineResult) {
+	value.Destroy()
+}
+
+// Summary statistics emitted by a [`Compat3dProvider::refine`] call.
+type RefineStats struct {
+	// Triangle count of the input mesh.
+	InputTriCount uint32
+	// Triangle count of the output (refined) mesh.
+	OutputTriCount uint32
+	// When UV unwrapping ran, the number of UV charts the unwrap
+	// produced. `None` when UV unwrapping did not run for this call.
+	UvChartCount *uint32
+}
+
+func (r *RefineStats) Destroy() {
+	FfiDestroyerUint32{}.Destroy(r.InputTriCount)
+	FfiDestroyerUint32{}.Destroy(r.OutputTriCount)
+	FfiDestroyerOptionalUint32{}.Destroy(r.UvChartCount)
+}
+
+type FfiConverterRefineStats struct{}
+
+var FfiConverterRefineStatsINSTANCE = FfiConverterRefineStats{}
+
+func (c FfiConverterRefineStats) Lift(rb RustBufferI) RefineStats {
+	return LiftFromRustBuffer[RefineStats](c, rb)
+}
+
+func (c FfiConverterRefineStats) Read(reader io.Reader) RefineStats {
+	return RefineStats{
+		FfiConverterUint32INSTANCE.Read(reader),
+		FfiConverterUint32INSTANCE.Read(reader),
+		FfiConverterOptionalUint32INSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterRefineStats) Lower(value RefineStats) C.RustBuffer {
+	return LowerIntoRustBuffer[RefineStats](c, value)
+}
+
+func (c FfiConverterRefineStats) LowerExternal(value RefineStats) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[RefineStats](c, value))
+}
+
+func (c FfiConverterRefineStats) Write(writer io.Writer, value RefineStats) {
+	FfiConverterUint32INSTANCE.Write(writer, value.InputTriCount)
+	FfiConverterUint32INSTANCE.Write(writer, value.OutputTriCount)
+	FfiConverterOptionalUint32INSTANCE.Write(writer, value.UvChartCount)
+}
+
+type FfiDestroyerRefineStats struct{}
+
+func (_ FfiDestroyerRefineStats) Destroy(value RefineStats) {
+	value.Destroy()
+}
+
 // Timing metadata for a compute request.
 //
 // All three counters are optional; a `None` value means "the provider did
@@ -18603,6 +19244,110 @@ func (c FfiConverterRequestTiming) Write(writer io.Writer, value RequestTiming) 
 type FfiDestroyerRequestTiming struct{}
 
 func (_ FfiDestroyerRequestTiming) Destroy(value RequestTiming) {
+	value.Destroy()
+}
+
+// Request parameters for [`Compat3dProvider::rig`].
+type RigRequest struct {
+	// Target rig template (`"humanoid"`, `"quadruped"`, `"auto"`).
+	Template *string
+	// `true` to apply skin-weight painting after armature placement.
+	Skin bool
+	// Optional pose hint (`"t-pose"`, `"a-pose"`, or backend-specific JSON).
+	PoseHint *string
+}
+
+func (r *RigRequest) Destroy() {
+	FfiDestroyerOptionalString{}.Destroy(r.Template)
+	FfiDestroyerBool{}.Destroy(r.Skin)
+	FfiDestroyerOptionalString{}.Destroy(r.PoseHint)
+}
+
+type FfiConverterRigRequest struct{}
+
+var FfiConverterRigRequestINSTANCE = FfiConverterRigRequest{}
+
+func (c FfiConverterRigRequest) Lift(rb RustBufferI) RigRequest {
+	return LiftFromRustBuffer[RigRequest](c, rb)
+}
+
+func (c FfiConverterRigRequest) Read(reader io.Reader) RigRequest {
+	return RigRequest{
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+		FfiConverterBoolINSTANCE.Read(reader),
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterRigRequest) Lower(value RigRequest) C.RustBuffer {
+	return LowerIntoRustBuffer[RigRequest](c, value)
+}
+
+func (c FfiConverterRigRequest) LowerExternal(value RigRequest) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[RigRequest](c, value))
+}
+
+func (c FfiConverterRigRequest) Write(writer io.Writer, value RigRequest) {
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.Template)
+	FfiConverterBoolINSTANCE.Write(writer, value.Skin)
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.PoseHint)
+}
+
+type FfiDestroyerRigRequest struct{}
+
+func (_ FfiDestroyerRigRequest) Destroy(value RigRequest) {
+	value.Destroy()
+}
+
+// Result of a successful [`Compat3dProvider::rig`] call.
+type RigResult struct {
+	// GLB bytes with the new armature (and skin weights, if requested) embedded.
+	RiggedGlb []byte
+	// MIME type of `rigged_glb`; always `"model/gltf-binary"`.
+	MimeType string
+	// Names of bones in the produced armature, in depth-first traversal order.
+	BoneNames []string
+}
+
+func (r *RigResult) Destroy() {
+	FfiDestroyerBytes{}.Destroy(r.RiggedGlb)
+	FfiDestroyerString{}.Destroy(r.MimeType)
+	FfiDestroyerSequenceString{}.Destroy(r.BoneNames)
+}
+
+type FfiConverterRigResult struct{}
+
+var FfiConverterRigResultINSTANCE = FfiConverterRigResult{}
+
+func (c FfiConverterRigResult) Lift(rb RustBufferI) RigResult {
+	return LiftFromRustBuffer[RigResult](c, rb)
+}
+
+func (c FfiConverterRigResult) Read(reader io.Reader) RigResult {
+	return RigResult{
+		FfiConverterBytesINSTANCE.Read(reader),
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterSequenceStringINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterRigResult) Lower(value RigResult) C.RustBuffer {
+	return LowerIntoRustBuffer[RigResult](c, value)
+}
+
+func (c FfiConverterRigResult) LowerExternal(value RigResult) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[RigResult](c, value))
+}
+
+func (c FfiConverterRigResult) Write(writer io.Writer, value RigResult) {
+	FfiConverterBytesINSTANCE.Write(writer, value.RiggedGlb)
+	FfiConverterStringINSTANCE.Write(writer, value.MimeType)
+	FfiConverterSequenceStringINSTANCE.Write(writer, value.BoneNames)
+}
+
+type FfiDestroyerRigResult struct{}
+
+func (_ FfiDestroyerRigResult) Destroy(value RigResult) {
 	value.Destroy()
 }
 
@@ -18997,6 +19742,121 @@ func (c FfiConverterTargetVoice) Write(writer io.Writer, value TargetVoice) {
 type FfiDestroyerTargetVoice struct{}
 
 func (_ FfiDestroyerTargetVoice) Destroy(value TargetVoice) {
+	value.Destroy()
+}
+
+// Request parameters for [`Compat3dProvider::texturize`].
+type TexturizeRequest struct {
+	// Text-guided texture prompt (e.g. `"weathered bronze"`).
+	Prompt *string
+	// Image-guided reference (PNG or JPEG bytes) used as a style anchor.
+	ReferenceImage *[]byte
+	// Backend-specific style preset (`"stylized"`, `"realistic"`, ...).
+	Style *string
+	// Target square texture resolution in pixels.
+	Resolution *uint32
+	// `true` to request a full PBR material bundle.
+	Pbr bool
+}
+
+func (r *TexturizeRequest) Destroy() {
+	FfiDestroyerOptionalString{}.Destroy(r.Prompt)
+	FfiDestroyerOptionalBytes{}.Destroy(r.ReferenceImage)
+	FfiDestroyerOptionalString{}.Destroy(r.Style)
+	FfiDestroyerOptionalUint32{}.Destroy(r.Resolution)
+	FfiDestroyerBool{}.Destroy(r.Pbr)
+}
+
+type FfiConverterTexturizeRequest struct{}
+
+var FfiConverterTexturizeRequestINSTANCE = FfiConverterTexturizeRequest{}
+
+func (c FfiConverterTexturizeRequest) Lift(rb RustBufferI) TexturizeRequest {
+	return LiftFromRustBuffer[TexturizeRequest](c, rb)
+}
+
+func (c FfiConverterTexturizeRequest) Read(reader io.Reader) TexturizeRequest {
+	return TexturizeRequest{
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+		FfiConverterOptionalBytesINSTANCE.Read(reader),
+		FfiConverterOptionalStringINSTANCE.Read(reader),
+		FfiConverterOptionalUint32INSTANCE.Read(reader),
+		FfiConverterBoolINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterTexturizeRequest) Lower(value TexturizeRequest) C.RustBuffer {
+	return LowerIntoRustBuffer[TexturizeRequest](c, value)
+}
+
+func (c FfiConverterTexturizeRequest) LowerExternal(value TexturizeRequest) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[TexturizeRequest](c, value))
+}
+
+func (c FfiConverterTexturizeRequest) Write(writer io.Writer, value TexturizeRequest) {
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.Prompt)
+	FfiConverterOptionalBytesINSTANCE.Write(writer, value.ReferenceImage)
+	FfiConverterOptionalStringINSTANCE.Write(writer, value.Style)
+	FfiConverterOptionalUint32INSTANCE.Write(writer, value.Resolution)
+	FfiConverterBoolINSTANCE.Write(writer, value.Pbr)
+}
+
+type FfiDestroyerTexturizeRequest struct{}
+
+func (_ FfiDestroyerTexturizeRequest) Destroy(value TexturizeRequest) {
+	value.Destroy()
+}
+
+// Result of a successful [`Compat3dProvider::texturize`] call.
+type TexturizeResult struct {
+	// GLB bytes with the new texture (and PBR maps if any) embedded.
+	TexturedGlb []byte
+	// MIME type of `textured_glb`; always `"model/gltf-binary"`.
+	MimeType string
+	// Optional out-of-band PBR map bundle. Duplicates of the maps
+	// embedded in `textured_glb` when present.
+	PbrMaps *PbrMaps
+}
+
+func (r *TexturizeResult) Destroy() {
+	FfiDestroyerBytes{}.Destroy(r.TexturedGlb)
+	FfiDestroyerString{}.Destroy(r.MimeType)
+	FfiDestroyerOptionalPbrMaps{}.Destroy(r.PbrMaps)
+}
+
+type FfiConverterTexturizeResult struct{}
+
+var FfiConverterTexturizeResultINSTANCE = FfiConverterTexturizeResult{}
+
+func (c FfiConverterTexturizeResult) Lift(rb RustBufferI) TexturizeResult {
+	return LiftFromRustBuffer[TexturizeResult](c, rb)
+}
+
+func (c FfiConverterTexturizeResult) Read(reader io.Reader) TexturizeResult {
+	return TexturizeResult{
+		FfiConverterBytesINSTANCE.Read(reader),
+		FfiConverterStringINSTANCE.Read(reader),
+		FfiConverterOptionalPbrMapsINSTANCE.Read(reader),
+	}
+}
+
+func (c FfiConverterTexturizeResult) Lower(value TexturizeResult) C.RustBuffer {
+	return LowerIntoRustBuffer[TexturizeResult](c, value)
+}
+
+func (c FfiConverterTexturizeResult) LowerExternal(value TexturizeResult) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[TexturizeResult](c, value))
+}
+
+func (c FfiConverterTexturizeResult) Write(writer io.Writer, value TexturizeResult) {
+	FfiConverterBytesINSTANCE.Write(writer, value.TexturedGlb)
+	FfiConverterStringINSTANCE.Write(writer, value.MimeType)
+	FfiConverterOptionalPbrMapsINSTANCE.Write(writer, value.PbrMaps)
+}
+
+type FfiDestroyerTexturizeResult struct{}
+
+func (_ FfiDestroyerTexturizeResult) Destroy(value TexturizeResult) {
 	value.Destroy()
 }
 
@@ -22308,6 +23168,293 @@ func (_ FfiDestroyerStepOutput) Destroy(value StepOutput) {
 	value.Destroy()
 }
 
+// Canonical error returned by every [`Compat3dProvider`] method.
+//
+// Absorbs the four parallel error enums from [`blazen_3d`] —
+// [`Texturizer3dError`], [`Rigger3dError`], [`Refiner3dError`], and
+// [`Animator3dError`] — into one flat shape. Foreign callers switch
+// on the variant rather than on which stage produced the error
+// (the call site already determines that).
+type ThreeDError struct {
+	err error
+}
+
+// Convenience method to turn *ThreeDError into error
+// Avoiding treating nil pointer as non nil error interface
+func (err *ThreeDError) AsError() error {
+	if err == nil {
+		return nil
+	} else {
+		return err
+	}
+}
+
+func (err ThreeDError) Error() string {
+	return fmt.Sprintf("ThreeDError: %s", err.err.Error())
+}
+
+func (err ThreeDError) Unwrap() error {
+	return err.err
+}
+
+// Err* are used for checking error type with `errors.Is`
+var ErrThreeDErrorBackend = fmt.Errorf("ThreeDErrorBackend")
+var ErrThreeDErrorInvalidInput = fmt.Errorf("ThreeDErrorInvalidInput")
+var ErrThreeDErrorIo = fmt.Errorf("ThreeDErrorIo")
+var ErrThreeDErrorEngineNotAvailable = fmt.Errorf("ThreeDErrorEngineNotAvailable")
+var ErrThreeDErrorUnsupported = fmt.Errorf("ThreeDErrorUnsupported")
+
+// Variant structs
+// The active backend reported a runtime failure (HTTP error,
+// inference error, etc.).
+type ThreeDErrorBackend struct {
+	Message string
+}
+
+// The active backend reported a runtime failure (HTTP error,
+// inference error, etc.).
+func NewThreeDErrorBackend(
+	message string,
+) *ThreeDError {
+	return &ThreeDError{err: &ThreeDErrorBackend{
+		Message: message}}
+}
+
+func (e ThreeDErrorBackend) destroy() {
+	FfiDestroyerString{}.Destroy(e.Message)
+}
+
+func (err ThreeDErrorBackend) Error() string {
+	return fmt.Sprint("Backend",
+		": ",
+
+		"Message=",
+		err.Message,
+	)
+}
+
+func (self ThreeDErrorBackend) Is(target error) bool {
+	return target == ErrThreeDErrorBackend
+}
+
+// The caller-supplied input was malformed — invalid mesh bytes,
+// unsupported container format, malformed request fields, etc.
+type ThreeDErrorInvalidInput struct {
+	Message string
+}
+
+// The caller-supplied input was malformed — invalid mesh bytes,
+// unsupported container format, malformed request fields, etc.
+func NewThreeDErrorInvalidInput(
+	message string,
+) *ThreeDError {
+	return &ThreeDError{err: &ThreeDErrorInvalidInput{
+		Message: message}}
+}
+
+func (e ThreeDErrorInvalidInput) destroy() {
+	FfiDestroyerString{}.Destroy(e.Message)
+}
+
+func (err ThreeDErrorInvalidInput) Error() string {
+	return fmt.Sprint("InvalidInput",
+		": ",
+
+		"Message=",
+		err.Message,
+	)
+}
+
+func (self ThreeDErrorInvalidInput) Is(target error) bool {
+	return target == ErrThreeDErrorInvalidInput
+}
+
+// I/O failure while reading a mesh file, reference image, or
+// model file.
+type ThreeDErrorIo struct {
+	Message string
+}
+
+// I/O failure while reading a mesh file, reference image, or
+// model file.
+func NewThreeDErrorIo(
+	message string,
+) *ThreeDError {
+	return &ThreeDError{err: &ThreeDErrorIo{
+		Message: message}}
+}
+
+func (e ThreeDErrorIo) destroy() {
+	FfiDestroyerString{}.Destroy(e.Message)
+}
+
+func (err ThreeDErrorIo) Error() string {
+	return fmt.Sprint("Io",
+		": ",
+
+		"Message=",
+		err.Message,
+	)
+}
+
+func (self ThreeDErrorIo) Is(target error) bool {
+	return target == ErrThreeDErrorIo
+}
+
+// The selected backend is not available in this build (e.g. the
+// `compat-proxy` feature is disabled).
+type ThreeDErrorEngineNotAvailable struct {
+	Message string
+}
+
+// The selected backend is not available in this build (e.g. the
+// `compat-proxy` feature is disabled).
+func NewThreeDErrorEngineNotAvailable(
+	message string,
+) *ThreeDError {
+	return &ThreeDError{err: &ThreeDErrorEngineNotAvailable{
+		Message: message}}
+}
+
+func (e ThreeDErrorEngineNotAvailable) destroy() {
+	FfiDestroyerString{}.Destroy(e.Message)
+}
+
+func (err ThreeDErrorEngineNotAvailable) Error() string {
+	return fmt.Sprint("EngineNotAvailable",
+		": ",
+
+		"Message=",
+		err.Message,
+	)
+}
+
+func (self ThreeDErrorEngineNotAvailable) Is(target error) bool {
+	return target == ErrThreeDErrorEngineNotAvailable
+}
+
+// The capability requested is not supported by the active
+// backend (e.g. PBR maps from an albedo-only texturizer, video-
+// driven motion on a text-only animator).
+type ThreeDErrorUnsupported struct {
+	Message string
+}
+
+// The capability requested is not supported by the active
+// backend (e.g. PBR maps from an albedo-only texturizer, video-
+// driven motion on a text-only animator).
+func NewThreeDErrorUnsupported(
+	message string,
+) *ThreeDError {
+	return &ThreeDError{err: &ThreeDErrorUnsupported{
+		Message: message}}
+}
+
+func (e ThreeDErrorUnsupported) destroy() {
+	FfiDestroyerString{}.Destroy(e.Message)
+}
+
+func (err ThreeDErrorUnsupported) Error() string {
+	return fmt.Sprint("Unsupported",
+		": ",
+
+		"Message=",
+		err.Message,
+	)
+}
+
+func (self ThreeDErrorUnsupported) Is(target error) bool {
+	return target == ErrThreeDErrorUnsupported
+}
+
+type FfiConverterThreeDError struct{}
+
+var FfiConverterThreeDErrorINSTANCE = FfiConverterThreeDError{}
+
+func (c FfiConverterThreeDError) Lift(eb RustBufferI) *ThreeDError {
+	return LiftFromRustBuffer[*ThreeDError](c, eb)
+}
+
+func (c FfiConverterThreeDError) Lower(value *ThreeDError) C.RustBuffer {
+	return LowerIntoRustBuffer[*ThreeDError](c, value)
+}
+
+func (c FfiConverterThreeDError) LowerExternal(value *ThreeDError) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[*ThreeDError](c, value))
+}
+
+func (c FfiConverterThreeDError) Read(reader io.Reader) *ThreeDError {
+	errorID := readUint32(reader)
+
+	switch errorID {
+	case 1:
+		return &ThreeDError{&ThreeDErrorBackend{
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
+	case 2:
+		return &ThreeDError{&ThreeDErrorInvalidInput{
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
+	case 3:
+		return &ThreeDError{&ThreeDErrorIo{
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
+	case 4:
+		return &ThreeDError{&ThreeDErrorEngineNotAvailable{
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
+	case 5:
+		return &ThreeDError{&ThreeDErrorUnsupported{
+			Message: FfiConverterStringINSTANCE.Read(reader),
+		}}
+	default:
+		panic(fmt.Sprintf("Unknown error code %d in FfiConverterThreeDError.Read()", errorID))
+	}
+}
+
+func (c FfiConverterThreeDError) Write(writer io.Writer, value *ThreeDError) {
+	switch variantValue := value.err.(type) {
+	case *ThreeDErrorBackend:
+		writeInt32(writer, 1)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
+	case *ThreeDErrorInvalidInput:
+		writeInt32(writer, 2)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
+	case *ThreeDErrorIo:
+		writeInt32(writer, 3)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
+	case *ThreeDErrorEngineNotAvailable:
+		writeInt32(writer, 4)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
+	case *ThreeDErrorUnsupported:
+		writeInt32(writer, 5)
+		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
+	default:
+		_ = variantValue
+		panic(fmt.Sprintf("invalid error value `%v` in FfiConverterThreeDError.Write", value))
+	}
+}
+
+type FfiDestroyerThreeDError struct{}
+
+func (_ FfiDestroyerThreeDError) Destroy(value *ThreeDError) {
+	switch variantValue := value.err.(type) {
+	case ThreeDErrorBackend:
+		variantValue.destroy()
+	case ThreeDErrorInvalidInput:
+		variantValue.destroy()
+	case ThreeDErrorIo:
+		variantValue.destroy()
+	case ThreeDErrorEngineNotAvailable:
+		variantValue.destroy()
+	case ThreeDErrorUnsupported:
+		variantValue.destroy()
+	default:
+		_ = variantValue
+		panic(fmt.Sprintf("invalid error value `%v` in FfiDestroyerThreeDError.Destroy", value))
+	}
+}
+
 // One observable event emitted during a training run.
 type TrainingEventEnum interface {
 	Destroy()
@@ -22754,6 +23901,47 @@ func (_ FfiDestroyerOptionalString) Destroy(value *string) {
 	}
 }
 
+type FfiConverterOptionalBytes struct{}
+
+var FfiConverterOptionalBytesINSTANCE = FfiConverterOptionalBytes{}
+
+func (c FfiConverterOptionalBytes) Lift(rb RustBufferI) *[]byte {
+	return LiftFromRustBuffer[*[]byte](c, rb)
+}
+
+func (_ FfiConverterOptionalBytes) Read(reader io.Reader) *[]byte {
+	if readInt8(reader) == 0 {
+		return nil
+	}
+	temp := FfiConverterBytesINSTANCE.Read(reader)
+	return &temp
+}
+
+func (c FfiConverterOptionalBytes) Lower(value *[]byte) C.RustBuffer {
+	return LowerIntoRustBuffer[*[]byte](c, value)
+}
+
+func (c FfiConverterOptionalBytes) LowerExternal(value *[]byte) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[*[]byte](c, value))
+}
+
+func (_ FfiConverterOptionalBytes) Write(writer io.Writer, value *[]byte) {
+	if value == nil {
+		writeInt8(writer, 0)
+	} else {
+		writeInt8(writer, 1)
+		FfiConverterBytesINSTANCE.Write(writer, *value)
+	}
+}
+
+type FfiDestroyerOptionalBytes struct{}
+
+func (_ FfiDestroyerOptionalBytes) Destroy(value *[]byte) {
+	if value != nil {
+		FfiDestroyerBytes{}.Destroy(*value)
+	}
+}
+
 type FfiConverterOptionalForeignTrainingProgress struct{}
 
 var FfiConverterOptionalForeignTrainingProgressINSTANCE = FfiConverterOptionalForeignTrainingProgress{}
@@ -22833,6 +24021,47 @@ type FfiDestroyerOptionalBaseProviderDefaults struct{}
 func (_ FfiDestroyerOptionalBaseProviderDefaults) Destroy(value *BaseProviderDefaults) {
 	if value != nil {
 		FfiDestroyerBaseProviderDefaults{}.Destroy(*value)
+	}
+}
+
+type FfiConverterOptionalPbrMaps struct{}
+
+var FfiConverterOptionalPbrMapsINSTANCE = FfiConverterOptionalPbrMaps{}
+
+func (c FfiConverterOptionalPbrMaps) Lift(rb RustBufferI) *PbrMaps {
+	return LiftFromRustBuffer[*PbrMaps](c, rb)
+}
+
+func (_ FfiConverterOptionalPbrMaps) Read(reader io.Reader) *PbrMaps {
+	if readInt8(reader) == 0 {
+		return nil
+	}
+	temp := FfiConverterPbrMapsINSTANCE.Read(reader)
+	return &temp
+}
+
+func (c FfiConverterOptionalPbrMaps) Lower(value *PbrMaps) C.RustBuffer {
+	return LowerIntoRustBuffer[*PbrMaps](c, value)
+}
+
+func (c FfiConverterOptionalPbrMaps) LowerExternal(value *PbrMaps) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[*PbrMaps](c, value))
+}
+
+func (_ FfiConverterOptionalPbrMaps) Write(writer io.Writer, value *PbrMaps) {
+	if value == nil {
+		writeInt8(writer, 0)
+	} else {
+		writeInt8(writer, 1)
+		FfiConverterPbrMapsINSTANCE.Write(writer, *value)
+	}
+}
+
+type FfiDestroyerOptionalPbrMaps struct{}
+
+func (_ FfiDestroyerOptionalPbrMaps) Destroy(value *PbrMaps) {
+	if value != nil {
+		FfiDestroyerPbrMaps{}.Destroy(*value)
 	}
 }
 

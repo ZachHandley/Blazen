@@ -2010,6 +2010,14 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_method_completionstreamsink_on_error(): Short
 
+    external fun uniffi_blazen_uniffi_checksum_method_compat3dprovider_animate(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_compat3dprovider_refine(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_compat3dprovider_rig(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_compat3dprovider_texturize(): Short
+
     external fun uniffi_blazen_uniffi_checksum_method_stephandler_invoke(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_workflow_run(): Short
@@ -2059,6 +2067,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model(): Short
 
     external fun uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model_with_defaults(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_compat3dprovider_new(): Short
 
     external fun uniffi_blazen_uniffi_checksum_constructor_workflowbuilder_new(): Short
 
@@ -3481,6 +3491,47 @@ internal object UniffiLib {
     external fun uniffi_blazen_uniffi_fn_method_completionstreamsink_on_error(
         `ptr`: Long,
         `err`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_clone_compat3dprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_compat3dprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_compat3dprovider_new(
+        `baseUrl`: RustBuffer.ByValue,
+        `apiKey`: RustBuffer.ByValue,
+        `timeoutSecs`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_compat3dprovider_animate(
+        `ptr`: Long,
+        `riggedGlb`: RustBuffer.ByValue,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_compat3dprovider_refine(
+        `ptr`: Long,
+        `meshGlb`: RustBuffer.ByValue,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_compat3dprovider_rig(
+        `ptr`: Long,
+        `meshGlb`: RustBuffer.ByValue,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_compat3dprovider_texturize(
+        `ptr`: Long,
+        `meshGlb`: RustBuffer.ByValue,
+        `request`: RustBuffer.ByValue,
     ): Long
 
     external fun uniffi_blazen_uniffi_fn_clone_stephandler(
@@ -4965,6 +5016,18 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_completionstreamsink_on_error() != 6341.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
+    if (lib.uniffi_blazen_uniffi_checksum_method_compat3dprovider_animate() != 11536.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_compat3dprovider_refine() != 4070.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_compat3dprovider_rig() != 32321.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_compat3dprovider_texturize() != 42136.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
     if (lib.uniffi_blazen_uniffi_checksum_method_stephandler_invoke() != 11814.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -5038,6 +5101,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model_with_defaults() != 44881.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_compat3dprovider_new() != 19300.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_constructor_workflowbuilder_new() != 14241.toShort()) {
@@ -6934,6 +7000,408 @@ public object FfiConverterTypeCheckpointStore : FfiConverter<CheckpointStore, Lo
 
     override fun write(
         value: CheckpointStore,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * HTTP-proxy backend implementing all four 3D-pipeline capability
+ * traits against a configurable upstream service.
+ *
+ * For every stage, this provider POSTs a `multipart/form-data` request
+ * with the mesh GLB and a JSON request body to
+ * `{base_url}/v1/3d/{texturize,rig,refine,animate}`, and decodes a
+ * base64-wrapped JSON response into the corresponding result record.
+ */
+public interface Compat3dProviderInterface {
+    /**
+     * Animate a rigged 3D mesh from a text prompt, motion-capture clip,
+     * or driving video.
+     */
+    suspend fun `animate`(
+        `riggedGlb`: kotlin.ByteArray,
+        `request`: AnimateRequest,
+    ): AnimateResult
+
+    /**
+     * Refine a 3D mesh: decimate, fill holes, unwrap UVs, retopologize, smooth.
+     */
+    suspend fun `refine`(
+        `meshGlb`: kotlin.ByteArray,
+        `request`: RefineRequest,
+    ): RefineResult
+
+    /**
+     * Auto-rig a 3D mesh, producing a GLB with skeletal armature and
+     * (optionally) skin weights embedded.
+     */
+    suspend fun `rig`(
+        `meshGlb`: kotlin.ByteArray,
+        `request`: RigRequest,
+    ): RigResult
+
+    /**
+     * Apply or generate a texture/material for an existing 3D mesh.
+     */
+    suspend fun `texturize`(
+        `meshGlb`: kotlin.ByteArray,
+        `request`: TexturizeRequest,
+    ): TexturizeResult
+
+    companion object
+}
+
+/**
+ * HTTP-proxy backend implementing all four 3D-pipeline capability
+ * traits against a configurable upstream service.
+ *
+ * For every stage, this provider POSTs a `multipart/form-data` request
+ * with the mesh GLB and a JSON request body to
+ * `{base_url}/v1/3d/{texturize,rig,refine,animate}`, and decodes a
+ * base64-wrapped JSON response into the corresponding result record.
+ */
+open class Compat3dProvider :
+    Disposable,
+    AutoCloseable,
+    Compat3dProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new HTTP-proxy provider.
+     *
+     * `base_url` is the upstream root URL (e.g.
+     * `"https://3d.example.com"`). `api_key` is an optional bearer
+     * token attached as `Authorization: Bearer ...`. `timeout_secs`
+     * is an optional per-request timeout in seconds (default 600).
+     */
+    constructor(`baseUrl`: kotlin.String, `apiKey`: kotlin.String?, `timeoutSecs`: kotlin.UInt?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_compat3dprovider_new(
+                    FfiConverterString.lower(`baseUrl`),
+                    FfiConverterOptionalString.lower(`apiKey`),
+                    FfiConverterOptionalUInt.lower(`timeoutSecs`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_compat3dprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_compat3dprovider(handle, status)
+        }
+    }
+
+    /**
+     * Animate a rigged 3D mesh from a text prompt, motion-capture clip,
+     * or driving video.
+     */
+    @Throws(ThreeDException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `animate`(
+        `riggedGlb`: kotlin.ByteArray,
+        `request`: AnimateRequest,
+    ): AnimateResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_compat3dprovider_animate(
+                    uniffiHandle,
+                    FfiConverterByteArray.lower(`riggedGlb`),
+                    FfiConverterTypeAnimateRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeAnimateResult.lift(it) },
+            // Error FFI converter
+            ThreeDException.ErrorHandler,
+        )
+
+    /**
+     * Refine a 3D mesh: decimate, fill holes, unwrap UVs, retopologize, smooth.
+     */
+    @Throws(ThreeDException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `refine`(
+        `meshGlb`: kotlin.ByteArray,
+        `request`: RefineRequest,
+    ): RefineResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_compat3dprovider_refine(
+                    uniffiHandle,
+                    FfiConverterByteArray.lower(`meshGlb`),
+                    FfiConverterTypeRefineRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeRefineResult.lift(it) },
+            // Error FFI converter
+            ThreeDException.ErrorHandler,
+        )
+
+    /**
+     * Auto-rig a 3D mesh, producing a GLB with skeletal armature and
+     * (optionally) skin weights embedded.
+     */
+    @Throws(ThreeDException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `rig`(
+        `meshGlb`: kotlin.ByteArray,
+        `request`: RigRequest,
+    ): RigResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_compat3dprovider_rig(
+                    uniffiHandle,
+                    FfiConverterByteArray.lower(`meshGlb`),
+                    FfiConverterTypeRigRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeRigResult.lift(it) },
+            // Error FFI converter
+            ThreeDException.ErrorHandler,
+        )
+
+    /**
+     * Apply or generate a texture/material for an existing 3D mesh.
+     */
+    @Throws(ThreeDException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `texturize`(
+        `meshGlb`: kotlin.ByteArray,
+        `request`: TexturizeRequest,
+    ): TexturizeResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_compat3dprovider_texturize(
+                    uniffiHandle,
+                    FfiConverterByteArray.lower(`meshGlb`),
+                    FfiConverterTypeTexturizeRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeTexturizeResult.lift(it) },
+            // Error FFI converter
+            ThreeDException.ErrorHandler,
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCompat3dProvider : FfiConverter<Compat3dProvider, Long> {
+    override fun lower(value: Compat3dProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): Compat3dProvider = Compat3dProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): Compat3dProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: Compat3dProvider) = 8UL
+
+    override fun write(
+        value: Compat3dProvider,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -22780,6 +23248,130 @@ public object FfiConverterTypeAgentResult : FfiConverterRustBuffer<AgentResult> 
     }
 }
 
+/**
+ * Request parameters for [`Compat3dProvider::animate`].
+ */
+data class AnimateRequest(
+    /**
+     * Text-guided motion prompt (e.g. `"walks forward and waves"`).
+     */
+    var `prompt`: kotlin.String?,
+    /**
+     * Optional MP4 bytes for video-driven motion transfer.
+     */
+    var `drivingVideo`: kotlin.ByteArray?,
+    /**
+     * Optional BVH motion-capture clip bytes.
+     */
+    var `bvhMotion`: kotlin.ByteArray?,
+    /**
+     * Requested animation duration in seconds.
+     */
+    var `durationSeconds`: kotlin.Float?,
+    /**
+     * Requested animation framerate.
+     */
+    var `fps`: kotlin.UInt?,
+    /**
+     * `true` to mark the produced animation as a seamless loop.
+     */
+    var `loopAnimation`: kotlin.Boolean,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAnimateRequest : FfiConverterRustBuffer<AnimateRequest> {
+    override fun read(buf: ByteBuffer): AnimateRequest =
+        AnimateRequest(
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalByteArray.read(buf),
+            FfiConverterOptionalByteArray.read(buf),
+            FfiConverterOptionalFloat.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+
+    override fun allocationSize(value: AnimateRequest) =
+        (
+            FfiConverterOptionalString.allocationSize(value.`prompt`) +
+                FfiConverterOptionalByteArray.allocationSize(value.`drivingVideo`) +
+                FfiConverterOptionalByteArray.allocationSize(value.`bvhMotion`) +
+                FfiConverterOptionalFloat.allocationSize(value.`durationSeconds`) +
+                FfiConverterOptionalUInt.allocationSize(value.`fps`) +
+                FfiConverterBoolean.allocationSize(value.`loopAnimation`)
+        )
+
+    override fun write(
+        value: AnimateRequest,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalString.write(value.`prompt`, buf)
+        FfiConverterOptionalByteArray.write(value.`drivingVideo`, buf)
+        FfiConverterOptionalByteArray.write(value.`bvhMotion`, buf)
+        FfiConverterOptionalFloat.write(value.`durationSeconds`, buf)
+        FfiConverterOptionalUInt.write(value.`fps`, buf)
+        FfiConverterBoolean.write(value.`loopAnimation`, buf)
+    }
+}
+
+/**
+ * Result of a successful [`Compat3dProvider::animate`] call.
+ */
+data class AnimateResult(
+    /**
+     * GLB bytes with the animation track(s) embedded.
+     */
+    var `animatedGlb`: kotlin.ByteArray,
+    /**
+     * MIME type of `animated_glb`; always `"model/gltf-binary"`.
+     */
+    var `mimeType`: kotlin.String,
+    /**
+     * Actual produced duration in seconds (may differ from the request).
+     */
+    var `durationSeconds`: kotlin.Float,
+    /**
+     * Actual produced framerate in frames per second (may differ from the request).
+     */
+    var `fps`: kotlin.UInt,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAnimateResult : FfiConverterRustBuffer<AnimateResult> {
+    override fun read(buf: ByteBuffer): AnimateResult =
+        AnimateResult(
+            FfiConverterByteArray.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterFloat.read(buf),
+            FfiConverterUInt.read(buf),
+        )
+
+    override fun allocationSize(value: AnimateResult) =
+        (
+            FfiConverterByteArray.allocationSize(value.`animatedGlb`) +
+                FfiConverterString.allocationSize(value.`mimeType`) +
+                FfiConverterFloat.allocationSize(value.`durationSeconds`) +
+                FfiConverterUInt.allocationSize(value.`fps`)
+        )
+
+    override fun write(
+        value: AnimateResult,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterByteArray.write(value.`animatedGlb`, buf)
+        FfiConverterString.write(value.`mimeType`, buf)
+        FfiConverterFloat.write(value.`durationSeconds`, buf)
+        FfiConverterUInt.write(value.`fps`, buf)
+    }
+}
+
 data class AudioMusicProviderDefaults(
     var `base`: BaseProviderDefaults? = null,
 ) {
@@ -25217,6 +25809,63 @@ public object FfiConverterTypeOrpoConfigRecord : FfiConverterRustBuffer<OrpoConf
 }
 
 /**
+ * Bundle of PBR (physically-based rendering) material maps produced by
+ * a texturizer backend. `albedo_png` is always populated; the other
+ * channels are optional and depend on what the backend produces.
+ */
+data class PbrMaps(
+    /**
+     * Base-color / diffuse texture as PNG bytes. Always present.
+     */
+    var `albedoPng`: kotlin.ByteArray,
+    /**
+     * Tangent-space normal map as PNG bytes, if produced.
+     */
+    var `normalPng`: kotlin.ByteArray?,
+    /**
+     * Linear roughness map as PNG bytes, if produced.
+     */
+    var `roughnessPng`: kotlin.ByteArray?,
+    /**
+     * Linear metallic map as PNG bytes, if produced.
+     */
+    var `metallicPng`: kotlin.ByteArray?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePbrMaps : FfiConverterRustBuffer<PbrMaps> {
+    override fun read(buf: ByteBuffer): PbrMaps =
+        PbrMaps(
+            FfiConverterByteArray.read(buf),
+            FfiConverterOptionalByteArray.read(buf),
+            FfiConverterOptionalByteArray.read(buf),
+            FfiConverterOptionalByteArray.read(buf),
+        )
+
+    override fun allocationSize(value: PbrMaps) =
+        (
+            FfiConverterByteArray.allocationSize(value.`albedoPng`) +
+                FfiConverterOptionalByteArray.allocationSize(value.`normalPng`) +
+                FfiConverterOptionalByteArray.allocationSize(value.`roughnessPng`) +
+                FfiConverterOptionalByteArray.allocationSize(value.`metallicPng`)
+        )
+
+    override fun write(
+        value: PbrMaps,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterByteArray.write(value.`albedoPng`, buf)
+        FfiConverterOptionalByteArray.write(value.`normalPng`, buf)
+        FfiConverterOptionalByteArray.write(value.`roughnessPng`, buf)
+        FfiConverterOptionalByteArray.write(value.`metallicPng`, buf)
+    }
+}
+
+/**
  * A serialized representation of a queued event captured in a checkpoint.
  *
  * Mirrors [`blazen_persist::SerializedEvent`]. The `data_json` field is
@@ -25357,6 +26006,165 @@ public object FfiConverterTypeProviderDefaults : FfiConverterRustBuffer<Provider
 }
 
 /**
+ * Request parameters for [`Compat3dProvider::refine`].
+ */
+data class RefineRequest(
+    /**
+     * Decimate the mesh towards this triangle count.
+     */
+    var `decimateTargetTris`: kotlin.UInt?,
+    /**
+     * `true` to fill holes via screened poisson reconstruction.
+     */
+    var `fillHoles`: kotlin.Boolean,
+    /**
+     * `true` to compute a new UV unwrap.
+     */
+    var `unwrapUvs`: kotlin.Boolean,
+    /**
+     * `true` to retopologize the mesh.
+     */
+    var `retopologize`: kotlin.Boolean,
+    /**
+     * Laplacian / Taubin smoothing iteration count.
+     */
+    var `smoothIterations`: kotlin.UInt?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRefineRequest : FfiConverterRustBuffer<RefineRequest> {
+    override fun read(buf: ByteBuffer): RefineRequest =
+        RefineRequest(
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+        )
+
+    override fun allocationSize(value: RefineRequest) =
+        (
+            FfiConverterOptionalUInt.allocationSize(value.`decimateTargetTris`) +
+                FfiConverterBoolean.allocationSize(value.`fillHoles`) +
+                FfiConverterBoolean.allocationSize(value.`unwrapUvs`) +
+                FfiConverterBoolean.allocationSize(value.`retopologize`) +
+                FfiConverterOptionalUInt.allocationSize(value.`smoothIterations`)
+        )
+
+    override fun write(
+        value: RefineRequest,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalUInt.write(value.`decimateTargetTris`, buf)
+        FfiConverterBoolean.write(value.`fillHoles`, buf)
+        FfiConverterBoolean.write(value.`unwrapUvs`, buf)
+        FfiConverterBoolean.write(value.`retopologize`, buf)
+        FfiConverterOptionalUInt.write(value.`smoothIterations`, buf)
+    }
+}
+
+/**
+ * Result of a successful [`Compat3dProvider::refine`] call.
+ */
+data class RefineResult(
+    /**
+     * GLB bytes with the requested refinement passes applied.
+     */
+    var `refinedGlb`: kotlin.ByteArray,
+    /**
+     * MIME type of `refined_glb`; always `"model/gltf-binary"`.
+     */
+    var `mimeType`: kotlin.String,
+    /**
+     * Before/after statistics for the refinement run.
+     */
+    var `stats`: RefineStats,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRefineResult : FfiConverterRustBuffer<RefineResult> {
+    override fun read(buf: ByteBuffer): RefineResult =
+        RefineResult(
+            FfiConverterByteArray.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterTypeRefineStats.read(buf),
+        )
+
+    override fun allocationSize(value: RefineResult) =
+        (
+            FfiConverterByteArray.allocationSize(value.`refinedGlb`) +
+                FfiConverterString.allocationSize(value.`mimeType`) +
+                FfiConverterTypeRefineStats.allocationSize(value.`stats`)
+        )
+
+    override fun write(
+        value: RefineResult,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterByteArray.write(value.`refinedGlb`, buf)
+        FfiConverterString.write(value.`mimeType`, buf)
+        FfiConverterTypeRefineStats.write(value.`stats`, buf)
+    }
+}
+
+/**
+ * Summary statistics emitted by a [`Compat3dProvider::refine`] call.
+ */
+data class RefineStats(
+    /**
+     * Triangle count of the input mesh.
+     */
+    var `inputTriCount`: kotlin.UInt,
+    /**
+     * Triangle count of the output (refined) mesh.
+     */
+    var `outputTriCount`: kotlin.UInt,
+    /**
+     * When UV unwrapping ran, the number of UV charts the unwrap
+     * produced. `None` when UV unwrapping did not run for this call.
+     */
+    var `uvChartCount`: kotlin.UInt?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRefineStats : FfiConverterRustBuffer<RefineStats> {
+    override fun read(buf: ByteBuffer): RefineStats =
+        RefineStats(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+        )
+
+    override fun allocationSize(value: RefineStats) =
+        (
+            FfiConverterUInt.allocationSize(value.`inputTriCount`) +
+                FfiConverterUInt.allocationSize(value.`outputTriCount`) +
+                FfiConverterOptionalUInt.allocationSize(value.`uvChartCount`)
+        )
+
+    override fun write(
+        value: RefineStats,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterUInt.write(value.`inputTriCount`, buf)
+        FfiConverterUInt.write(value.`outputTriCount`, buf)
+        FfiConverterOptionalUInt.write(value.`uvChartCount`, buf)
+    }
+}
+
+/**
  * Timing metadata for a compute request.
  *
  * All three counters are optional; a `None` value means "the provider did
@@ -25395,6 +26203,102 @@ public object FfiConverterTypeRequestTiming : FfiConverterRustBuffer<RequestTimi
         FfiConverterOptionalULong.write(value.`queueMs`, buf)
         FfiConverterOptionalULong.write(value.`executionMs`, buf)
         FfiConverterOptionalULong.write(value.`totalMs`, buf)
+    }
+}
+
+/**
+ * Request parameters for [`Compat3dProvider::rig`].
+ */
+data class RigRequest(
+    /**
+     * Target rig template (`"humanoid"`, `"quadruped"`, `"auto"`).
+     */
+    var `template`: kotlin.String?,
+    /**
+     * `true` to apply skin-weight painting after armature placement.
+     */
+    var `skin`: kotlin.Boolean,
+    /**
+     * Optional pose hint (`"t-pose"`, `"a-pose"`, or backend-specific JSON).
+     */
+    var `poseHint`: kotlin.String?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRigRequest : FfiConverterRustBuffer<RigRequest> {
+    override fun read(buf: ByteBuffer): RigRequest =
+        RigRequest(
+            FfiConverterOptionalString.read(buf),
+            FfiConverterBoolean.read(buf),
+            FfiConverterOptionalString.read(buf),
+        )
+
+    override fun allocationSize(value: RigRequest) =
+        (
+            FfiConverterOptionalString.allocationSize(value.`template`) +
+                FfiConverterBoolean.allocationSize(value.`skin`) +
+                FfiConverterOptionalString.allocationSize(value.`poseHint`)
+        )
+
+    override fun write(
+        value: RigRequest,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalString.write(value.`template`, buf)
+        FfiConverterBoolean.write(value.`skin`, buf)
+        FfiConverterOptionalString.write(value.`poseHint`, buf)
+    }
+}
+
+/**
+ * Result of a successful [`Compat3dProvider::rig`] call.
+ */
+data class RigResult(
+    /**
+     * GLB bytes with the new armature (and skin weights, if requested) embedded.
+     */
+    var `riggedGlb`: kotlin.ByteArray,
+    /**
+     * MIME type of `rigged_glb`; always `"model/gltf-binary"`.
+     */
+    var `mimeType`: kotlin.String,
+    /**
+     * Names of bones in the produced armature, in depth-first traversal order.
+     */
+    var `boneNames`: List<kotlin.String>,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeRigResult : FfiConverterRustBuffer<RigResult> {
+    override fun read(buf: ByteBuffer): RigResult =
+        RigResult(
+            FfiConverterByteArray.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterSequenceString.read(buf),
+        )
+
+    override fun allocationSize(value: RigResult) =
+        (
+            FfiConverterByteArray.allocationSize(value.`riggedGlb`) +
+                FfiConverterString.allocationSize(value.`mimeType`) +
+                FfiConverterSequenceString.allocationSize(value.`boneNames`)
+        )
+
+    override fun write(
+        value: RigResult,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterByteArray.write(value.`riggedGlb`, buf)
+        FfiConverterString.write(value.`mimeType`, buf)
+        FfiConverterSequenceString.write(value.`boneNames`, buf)
     }
 }
 
@@ -25733,6 +26637,117 @@ public object FfiConverterTypeTargetVoice : FfiConverterRustBuffer<TargetVoice> 
         FfiConverterString.write(value.`id`, buf)
         FfiConverterOptionalString.write(value.`label`, buf)
         FfiConverterUInt.write(value.`sampleRateHz`, buf)
+    }
+}
+
+/**
+ * Request parameters for [`Compat3dProvider::texturize`].
+ */
+data class TexturizeRequest(
+    /**
+     * Text-guided texture prompt (e.g. `"weathered bronze"`).
+     */
+    var `prompt`: kotlin.String?,
+    /**
+     * Image-guided reference (PNG or JPEG bytes) used as a style anchor.
+     */
+    var `referenceImage`: kotlin.ByteArray?,
+    /**
+     * Backend-specific style preset (`"stylized"`, `"realistic"`, ...).
+     */
+    var `style`: kotlin.String?,
+    /**
+     * Target square texture resolution in pixels.
+     */
+    var `resolution`: kotlin.UInt?,
+    /**
+     * `true` to request a full PBR material bundle.
+     */
+    var `pbr`: kotlin.Boolean,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTexturizeRequest : FfiConverterRustBuffer<TexturizeRequest> {
+    override fun read(buf: ByteBuffer): TexturizeRequest =
+        TexturizeRequest(
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalByteArray.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterOptionalUInt.read(buf),
+            FfiConverterBoolean.read(buf),
+        )
+
+    override fun allocationSize(value: TexturizeRequest) =
+        (
+            FfiConverterOptionalString.allocationSize(value.`prompt`) +
+                FfiConverterOptionalByteArray.allocationSize(value.`referenceImage`) +
+                FfiConverterOptionalString.allocationSize(value.`style`) +
+                FfiConverterOptionalUInt.allocationSize(value.`resolution`) +
+                FfiConverterBoolean.allocationSize(value.`pbr`)
+        )
+
+    override fun write(
+        value: TexturizeRequest,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterOptionalString.write(value.`prompt`, buf)
+        FfiConverterOptionalByteArray.write(value.`referenceImage`, buf)
+        FfiConverterOptionalString.write(value.`style`, buf)
+        FfiConverterOptionalUInt.write(value.`resolution`, buf)
+        FfiConverterBoolean.write(value.`pbr`, buf)
+    }
+}
+
+/**
+ * Result of a successful [`Compat3dProvider::texturize`] call.
+ */
+data class TexturizeResult(
+    /**
+     * GLB bytes with the new texture (and PBR maps if any) embedded.
+     */
+    var `texturedGlb`: kotlin.ByteArray,
+    /**
+     * MIME type of `textured_glb`; always `"model/gltf-binary"`.
+     */
+    var `mimeType`: kotlin.String,
+    /**
+     * Optional out-of-band PBR map bundle. Duplicates of the maps
+     * embedded in `textured_glb` when present.
+     */
+    var `pbrMaps`: PbrMaps?,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTexturizeResult : FfiConverterRustBuffer<TexturizeResult> {
+    override fun read(buf: ByteBuffer): TexturizeResult =
+        TexturizeResult(
+            FfiConverterByteArray.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterOptionalTypePbrMaps.read(buf),
+        )
+
+    override fun allocationSize(value: TexturizeResult) =
+        (
+            FfiConverterByteArray.allocationSize(value.`texturedGlb`) +
+                FfiConverterString.allocationSize(value.`mimeType`) +
+                FfiConverterOptionalTypePbrMaps.allocationSize(value.`pbrMaps`)
+        )
+
+    override fun write(
+        value: TexturizeResult,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterByteArray.write(value.`texturedGlb`, buf)
+        FfiConverterString.write(value.`mimeType`, buf)
+        FfiConverterOptionalTypePbrMaps.write(value.`pbrMaps`, buf)
     }
 }
 
@@ -28503,6 +29518,189 @@ public object FfiConverterTypeStepOutput : FfiConverterRustBuffer<StepOutput> {
 }
 
 /**
+ * Canonical error returned by every [`Compat3dProvider`] method.
+ *
+ * Absorbs the four parallel error enums from [`blazen_3d`] —
+ * [`Texturizer3dError`], [`Rigger3dError`], [`Refiner3dError`], and
+ * [`Animator3dError`] — into one flat shape. Foreign callers switch
+ * on the variant rather than on which stage produced the error
+ * (the call site already determines that).
+ */
+sealed class ThreeDException : kotlin.Exception() {
+    /**
+     * The active backend reported a runtime failure (HTTP error,
+     * inference error, etc.).
+     */
+    class Backend(
+        val `message`: kotlin.String,
+    ) : ThreeDException() {
+        override val message
+            get() = "message=${ `message` }"
+    }
+
+    /**
+     * The caller-supplied input was malformed — invalid mesh bytes,
+     * unsupported container format, malformed request fields, etc.
+     */
+    class InvalidInput(
+        val `message`: kotlin.String,
+    ) : ThreeDException() {
+        override val message
+            get() = "message=${ `message` }"
+    }
+
+    /**
+     * I/O failure while reading a mesh file, reference image, or
+     * model file.
+     */
+    class Io(
+        val `message`: kotlin.String,
+    ) : ThreeDException() {
+        override val message
+            get() = "message=${ `message` }"
+    }
+
+    /**
+     * The selected backend is not available in this build (e.g. the
+     * `compat-proxy` feature is disabled).
+     */
+    class EngineNotAvailable(
+        val `message`: kotlin.String,
+    ) : ThreeDException() {
+        override val message
+            get() = "message=${ `message` }"
+    }
+
+    /**
+     * The capability requested is not supported by the active
+     * backend (e.g. PBR maps from an albedo-only texturizer, video-
+     * driven motion on a text-only animator).
+     */
+    class Unsupported(
+        val `message`: kotlin.String,
+    ) : ThreeDException() {
+        override val message
+            get() = "message=${ `message` }"
+    }
+
+    companion object ErrorHandler : UniffiRustCallStatusErrorHandler<ThreeDException> {
+        override fun lift(error_buf: RustBuffer.ByValue): ThreeDException = FfiConverterTypeThreeDError.lift(error_buf)
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeThreeDError : FfiConverterRustBuffer<ThreeDException> {
+    override fun read(buf: ByteBuffer): ThreeDException =
+        when (buf.getInt()) {
+            1 -> {
+                ThreeDException.Backend(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            2 -> {
+                ThreeDException.InvalidInput(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            3 -> {
+                ThreeDException.Io(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            4 -> {
+                ThreeDException.EngineNotAvailable(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            5 -> {
+                ThreeDException.Unsupported(
+                    FfiConverterString.read(buf),
+                )
+            }
+
+            else -> {
+                throw RuntimeException("invalid error enum value, something is very wrong!!")
+            }
+        }
+
+    override fun allocationSize(value: ThreeDException): ULong =
+        when (value) {
+            is ThreeDException.Backend -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL +
+                    FfiConverterString.allocationSize(value.`message`)
+            )
+
+            is ThreeDException.InvalidInput -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL +
+                    FfiConverterString.allocationSize(value.`message`)
+            )
+
+            is ThreeDException.Io -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL +
+                    FfiConverterString.allocationSize(value.`message`)
+            )
+
+            is ThreeDException.EngineNotAvailable -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL +
+                    FfiConverterString.allocationSize(value.`message`)
+            )
+
+            is ThreeDException.Unsupported -> (
+                // Add the size for the Int that specifies the variant plus the size needed for all fields
+                4UL +
+                    FfiConverterString.allocationSize(value.`message`)
+            )
+        }
+
+    override fun write(
+        value: ThreeDException,
+        buf: ByteBuffer,
+    ) {
+        when (value) {
+            is ThreeDException.Backend -> {
+                buf.putInt(1)
+                FfiConverterString.write(value.`message`, buf)
+                Unit
+            }
+
+            is ThreeDException.InvalidInput -> {
+                buf.putInt(2)
+                FfiConverterString.write(value.`message`, buf)
+                Unit
+            }
+
+            is ThreeDException.Io -> {
+                buf.putInt(3)
+                FfiConverterString.write(value.`message`, buf)
+                Unit
+            }
+
+            is ThreeDException.EngineNotAvailable -> {
+                buf.putInt(4)
+                FfiConverterString.write(value.`message`, buf)
+                Unit
+            }
+
+            is ThreeDException.Unsupported -> {
+                buf.putInt(5)
+                FfiConverterString.write(value.`message`, buf)
+                Unit
+            }
+        }.let { /* this makes the `when` an expression, which ensures it is exhaustive */ }
+    }
+}
+
+/**
  * One observable event emitted during a training run.
  */
 sealed class TrainingEventEnum {
@@ -28942,6 +30140,38 @@ public object FfiConverterOptionalString : FfiConverterRustBuffer<kotlin.String?
 /**
  * @suppress
  */
+public object FfiConverterOptionalByteArray : FfiConverterRustBuffer<kotlin.ByteArray?> {
+    override fun read(buf: ByteBuffer): kotlin.ByteArray? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterByteArray.read(buf)
+    }
+
+    override fun allocationSize(value: kotlin.ByteArray?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterByteArray.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: kotlin.ByteArray?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterByteArray.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
 public object FfiConverterOptionalTypeForeignTrainingProgress : FfiConverterRustBuffer<ForeignTrainingProgress?> {
     override fun read(buf: ByteBuffer): ForeignTrainingProgress? {
         if (buf.get().toInt() == 0) {
@@ -28999,6 +30229,38 @@ public object FfiConverterOptionalTypeBaseProviderDefaults : FfiConverterRustBuf
         } else {
             buf.put(1)
             FfiConverterTypeBaseProviderDefaults.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypePbrMaps : FfiConverterRustBuffer<PbrMaps?> {
+    override fun read(buf: ByteBuffer): PbrMaps? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypePbrMaps.read(buf)
+    }
+
+    override fun allocationSize(value: PbrMaps?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypePbrMaps.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: PbrMaps?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypePbrMaps.write(value, buf)
         }
     }
 }

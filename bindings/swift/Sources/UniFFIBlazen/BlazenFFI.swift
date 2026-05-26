@@ -1503,6 +1503,252 @@ public func FfiConverterTypeCheckpointStore_lower(_ value: CheckpointStore) -> U
 
 
 /**
+ * HTTP-proxy backend implementing all four 3D-pipeline capability
+ * traits against a configurable upstream service.
+ *
+ * For every stage, this provider POSTs a `multipart/form-data` request
+ * with the mesh GLB and a JSON request body to
+ * `{base_url}/v1/3d/{texturize,rig,refine,animate}`, and decodes a
+ * base64-wrapped JSON response into the corresponding result record.
+ */
+public protocol Compat3dProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Animate a rigged 3D mesh from a text prompt, motion-capture clip,
+     * or driving video.
+     */
+    func animate(riggedGlb: Data, request: AnimateRequest) async throws  -> AnimateResult
+    
+    /**
+     * Refine a 3D mesh: decimate, fill holes, unwrap UVs, retopologize, smooth.
+     */
+    func refine(meshGlb: Data, request: RefineRequest) async throws  -> RefineResult
+    
+    /**
+     * Auto-rig a 3D mesh, producing a GLB with skeletal armature and
+     * (optionally) skin weights embedded.
+     */
+    func rig(meshGlb: Data, request: RigRequest) async throws  -> RigResult
+    
+    /**
+     * Apply or generate a texture/material for an existing 3D mesh.
+     */
+    func texturize(meshGlb: Data, request: TexturizeRequest) async throws  -> TexturizeResult
+    
+}
+/**
+ * HTTP-proxy backend implementing all four 3D-pipeline capability
+ * traits against a configurable upstream service.
+ *
+ * For every stage, this provider POSTs a `multipart/form-data` request
+ * with the mesh GLB and a JSON request body to
+ * `{base_url}/v1/3d/{texturize,rig,refine,animate}`, and decodes a
+ * base64-wrapped JSON response into the corresponding result record.
+ */
+open class Compat3dProvider: Compat3dProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_compat3dprovider(self.handle, $0) }
+    }
+    /**
+     * Construct a new HTTP-proxy provider.
+     *
+     * `base_url` is the upstream root URL (e.g.
+     * `"https://3d.example.com"`). `api_key` is an optional bearer
+     * token attached as `Authorization: Bearer ...`. `timeout_secs`
+     * is an optional per-request timeout in seconds (default 600).
+     */
+public convenience init(baseUrl: String, apiKey: String?, timeoutSecs: UInt32?) {
+    let handle =
+        try! rustCall() {
+    uniffi_blazen_uniffi_fn_constructor_compat3dprovider_new(
+        FfiConverterString.lower(baseUrl),
+        FfiConverterOptionString.lower(apiKey),
+        FfiConverterOptionUInt32.lower(timeoutSecs),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_compat3dprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Animate a rigged 3D mesh from a text prompt, motion-capture clip,
+     * or driving video.
+     */
+open func animate(riggedGlb: Data, request: AnimateRequest)async throws  -> AnimateResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_compat3dprovider_animate(
+                    self.uniffiCloneHandle(),
+                    FfiConverterData.lower(riggedGlb),FfiConverterTypeAnimateRequest_lower(request)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeAnimateResult_lift,
+            errorHandler: FfiConverterTypeThreeDError_lift
+        )
+}
+    
+    /**
+     * Refine a 3D mesh: decimate, fill holes, unwrap UVs, retopologize, smooth.
+     */
+open func refine(meshGlb: Data, request: RefineRequest)async throws  -> RefineResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_compat3dprovider_refine(
+                    self.uniffiCloneHandle(),
+                    FfiConverterData.lower(meshGlb),FfiConverterTypeRefineRequest_lower(request)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeRefineResult_lift,
+            errorHandler: FfiConverterTypeThreeDError_lift
+        )
+}
+    
+    /**
+     * Auto-rig a 3D mesh, producing a GLB with skeletal armature and
+     * (optionally) skin weights embedded.
+     */
+open func rig(meshGlb: Data, request: RigRequest)async throws  -> RigResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_compat3dprovider_rig(
+                    self.uniffiCloneHandle(),
+                    FfiConverterData.lower(meshGlb),FfiConverterTypeRigRequest_lower(request)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeRigResult_lift,
+            errorHandler: FfiConverterTypeThreeDError_lift
+        )
+}
+    
+    /**
+     * Apply or generate a texture/material for an existing 3D mesh.
+     */
+open func texturize(meshGlb: Data, request: TexturizeRequest)async throws  -> TexturizeResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_compat3dprovider_texturize(
+                    self.uniffiCloneHandle(),
+                    FfiConverterData.lower(meshGlb),FfiConverterTypeTexturizeRequest_lower(request)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTexturizeResult_lift,
+            errorHandler: FfiConverterTypeThreeDError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCompat3dProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = Compat3dProvider
+
+    public static func lift(_ handle: UInt64) throws -> Compat3dProvider {
+        return Compat3dProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: Compat3dProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Compat3dProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: Compat3dProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCompat3dProvider_lift(_ handle: UInt64) throws -> Compat3dProvider {
+    return try FfiConverterTypeCompat3dProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCompat3dProvider_lower(_ value: Compat3dProvider) -> UInt64 {
+    return FfiConverterTypeCompat3dProvider.lower(value)
+}
+
+
+
+
+
+
+/**
  * Sink for streaming chat completion output, implemented in foreign code.
  *
  * The streaming engine calls [`on_chunk`](Self::on_chunk) for each chunk as
@@ -12930,6 +13176,204 @@ public func FfiConverterTypeAgentResult_lower(_ value: AgentResult) -> RustBuffe
 }
 
 
+/**
+ * Request parameters for [`Compat3dProvider::animate`].
+ */
+public struct AnimateRequest: Equatable, Hashable {
+    /**
+     * Text-guided motion prompt (e.g. `"walks forward and waves"`).
+     */
+    public var prompt: String?
+    /**
+     * Optional MP4 bytes for video-driven motion transfer.
+     */
+    public var drivingVideo: Data?
+    /**
+     * Optional BVH motion-capture clip bytes.
+     */
+    public var bvhMotion: Data?
+    /**
+     * Requested animation duration in seconds.
+     */
+    public var durationSeconds: Float?
+    /**
+     * Requested animation framerate.
+     */
+    public var fps: UInt32?
+    /**
+     * `true` to mark the produced animation as a seamless loop.
+     */
+    public var loopAnimation: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Text-guided motion prompt (e.g. `"walks forward and waves"`).
+         */prompt: String?, 
+        /**
+         * Optional MP4 bytes for video-driven motion transfer.
+         */drivingVideo: Data?, 
+        /**
+         * Optional BVH motion-capture clip bytes.
+         */bvhMotion: Data?, 
+        /**
+         * Requested animation duration in seconds.
+         */durationSeconds: Float?, 
+        /**
+         * Requested animation framerate.
+         */fps: UInt32?, 
+        /**
+         * `true` to mark the produced animation as a seamless loop.
+         */loopAnimation: Bool) {
+        self.prompt = prompt
+        self.drivingVideo = drivingVideo
+        self.bvhMotion = bvhMotion
+        self.durationSeconds = durationSeconds
+        self.fps = fps
+        self.loopAnimation = loopAnimation
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension AnimateRequest: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAnimateRequest: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AnimateRequest {
+        return
+            try AnimateRequest(
+                prompt: FfiConverterOptionString.read(from: &buf), 
+                drivingVideo: FfiConverterOptionData.read(from: &buf), 
+                bvhMotion: FfiConverterOptionData.read(from: &buf), 
+                durationSeconds: FfiConverterOptionFloat.read(from: &buf), 
+                fps: FfiConverterOptionUInt32.read(from: &buf), 
+                loopAnimation: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AnimateRequest, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.prompt, into: &buf)
+        FfiConverterOptionData.write(value.drivingVideo, into: &buf)
+        FfiConverterOptionData.write(value.bvhMotion, into: &buf)
+        FfiConverterOptionFloat.write(value.durationSeconds, into: &buf)
+        FfiConverterOptionUInt32.write(value.fps, into: &buf)
+        FfiConverterBool.write(value.loopAnimation, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAnimateRequest_lift(_ buf: RustBuffer) throws -> AnimateRequest {
+    return try FfiConverterTypeAnimateRequest.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAnimateRequest_lower(_ value: AnimateRequest) -> RustBuffer {
+    return FfiConverterTypeAnimateRequest.lower(value)
+}
+
+
+/**
+ * Result of a successful [`Compat3dProvider::animate`] call.
+ */
+public struct AnimateResult: Equatable, Hashable {
+    /**
+     * GLB bytes with the animation track(s) embedded.
+     */
+    public var animatedGlb: Data
+    /**
+     * MIME type of `animated_glb`; always `"model/gltf-binary"`.
+     */
+    public var mimeType: String
+    /**
+     * Actual produced duration in seconds (may differ from the request).
+     */
+    public var durationSeconds: Float
+    /**
+     * Actual produced framerate in frames per second (may differ from the request).
+     */
+    public var fps: UInt32
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * GLB bytes with the animation track(s) embedded.
+         */animatedGlb: Data, 
+        /**
+         * MIME type of `animated_glb`; always `"model/gltf-binary"`.
+         */mimeType: String, 
+        /**
+         * Actual produced duration in seconds (may differ from the request).
+         */durationSeconds: Float, 
+        /**
+         * Actual produced framerate in frames per second (may differ from the request).
+         */fps: UInt32) {
+        self.animatedGlb = animatedGlb
+        self.mimeType = mimeType
+        self.durationSeconds = durationSeconds
+        self.fps = fps
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension AnimateResult: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAnimateResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AnimateResult {
+        return
+            try AnimateResult(
+                animatedGlb: FfiConverterData.read(from: &buf), 
+                mimeType: FfiConverterString.read(from: &buf), 
+                durationSeconds: FfiConverterFloat.read(from: &buf), 
+                fps: FfiConverterUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: AnimateResult, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.animatedGlb, into: &buf)
+        FfiConverterString.write(value.mimeType, into: &buf)
+        FfiConverterFloat.write(value.durationSeconds, into: &buf)
+        FfiConverterUInt32.write(value.fps, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAnimateResult_lift(_ buf: RustBuffer) throws -> AnimateResult {
+    return try FfiConverterTypeAnimateResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAnimateResult_lower(_ value: AnimateResult) -> RustBuffer {
+    return FfiConverterTypeAnimateResult.lower(value)
+}
+
+
 public struct AudioMusicProviderDefaults: Equatable, Hashable {
     public var base: BaseProviderDefaults?
 
@@ -16627,6 +17071,97 @@ public func FfiConverterTypeOrpoConfigRecord_lower(_ value: OrpoConfigRecord) ->
 
 
 /**
+ * Bundle of PBR (physically-based rendering) material maps produced by
+ * a texturizer backend. `albedo_png` is always populated; the other
+ * channels are optional and depend on what the backend produces.
+ */
+public struct PbrMaps: Equatable, Hashable {
+    /**
+     * Base-color / diffuse texture as PNG bytes. Always present.
+     */
+    public var albedoPng: Data
+    /**
+     * Tangent-space normal map as PNG bytes, if produced.
+     */
+    public var normalPng: Data?
+    /**
+     * Linear roughness map as PNG bytes, if produced.
+     */
+    public var roughnessPng: Data?
+    /**
+     * Linear metallic map as PNG bytes, if produced.
+     */
+    public var metallicPng: Data?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Base-color / diffuse texture as PNG bytes. Always present.
+         */albedoPng: Data, 
+        /**
+         * Tangent-space normal map as PNG bytes, if produced.
+         */normalPng: Data?, 
+        /**
+         * Linear roughness map as PNG bytes, if produced.
+         */roughnessPng: Data?, 
+        /**
+         * Linear metallic map as PNG bytes, if produced.
+         */metallicPng: Data?) {
+        self.albedoPng = albedoPng
+        self.normalPng = normalPng
+        self.roughnessPng = roughnessPng
+        self.metallicPng = metallicPng
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension PbrMaps: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePbrMaps: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PbrMaps {
+        return
+            try PbrMaps(
+                albedoPng: FfiConverterData.read(from: &buf), 
+                normalPng: FfiConverterOptionData.read(from: &buf), 
+                roughnessPng: FfiConverterOptionData.read(from: &buf), 
+                metallicPng: FfiConverterOptionData.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PbrMaps, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.albedoPng, into: &buf)
+        FfiConverterOptionData.write(value.normalPng, into: &buf)
+        FfiConverterOptionData.write(value.roughnessPng, into: &buf)
+        FfiConverterOptionData.write(value.metallicPng, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePbrMaps_lift(_ buf: RustBuffer) throws -> PbrMaps {
+    return try FfiConverterTypePbrMaps.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePbrMaps_lower(_ value: PbrMaps) -> RustBuffer {
+    return FfiConverterTypePbrMaps.lower(value)
+}
+
+
+/**
  * A serialized representation of a queued event captured in a checkpoint.
  *
  * Mirrors [`blazen_persist::SerializedEvent`]. The `data_json` field is
@@ -16854,6 +17389,265 @@ public func FfiConverterTypeProviderDefaults_lower(_ value: ProviderDefaults) ->
 
 
 /**
+ * Request parameters for [`Compat3dProvider::refine`].
+ */
+public struct RefineRequest: Equatable, Hashable {
+    /**
+     * Decimate the mesh towards this triangle count.
+     */
+    public var decimateTargetTris: UInt32?
+    /**
+     * `true` to fill holes via screened poisson reconstruction.
+     */
+    public var fillHoles: Bool
+    /**
+     * `true` to compute a new UV unwrap.
+     */
+    public var unwrapUvs: Bool
+    /**
+     * `true` to retopologize the mesh.
+     */
+    public var retopologize: Bool
+    /**
+     * Laplacian / Taubin smoothing iteration count.
+     */
+    public var smoothIterations: UInt32?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Decimate the mesh towards this triangle count.
+         */decimateTargetTris: UInt32?, 
+        /**
+         * `true` to fill holes via screened poisson reconstruction.
+         */fillHoles: Bool, 
+        /**
+         * `true` to compute a new UV unwrap.
+         */unwrapUvs: Bool, 
+        /**
+         * `true` to retopologize the mesh.
+         */retopologize: Bool, 
+        /**
+         * Laplacian / Taubin smoothing iteration count.
+         */smoothIterations: UInt32?) {
+        self.decimateTargetTris = decimateTargetTris
+        self.fillHoles = fillHoles
+        self.unwrapUvs = unwrapUvs
+        self.retopologize = retopologize
+        self.smoothIterations = smoothIterations
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension RefineRequest: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRefineRequest: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RefineRequest {
+        return
+            try RefineRequest(
+                decimateTargetTris: FfiConverterOptionUInt32.read(from: &buf), 
+                fillHoles: FfiConverterBool.read(from: &buf), 
+                unwrapUvs: FfiConverterBool.read(from: &buf), 
+                retopologize: FfiConverterBool.read(from: &buf), 
+                smoothIterations: FfiConverterOptionUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RefineRequest, into buf: inout [UInt8]) {
+        FfiConverterOptionUInt32.write(value.decimateTargetTris, into: &buf)
+        FfiConverterBool.write(value.fillHoles, into: &buf)
+        FfiConverterBool.write(value.unwrapUvs, into: &buf)
+        FfiConverterBool.write(value.retopologize, into: &buf)
+        FfiConverterOptionUInt32.write(value.smoothIterations, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRefineRequest_lift(_ buf: RustBuffer) throws -> RefineRequest {
+    return try FfiConverterTypeRefineRequest.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRefineRequest_lower(_ value: RefineRequest) -> RustBuffer {
+    return FfiConverterTypeRefineRequest.lower(value)
+}
+
+
+/**
+ * Result of a successful [`Compat3dProvider::refine`] call.
+ */
+public struct RefineResult: Equatable, Hashable {
+    /**
+     * GLB bytes with the requested refinement passes applied.
+     */
+    public var refinedGlb: Data
+    /**
+     * MIME type of `refined_glb`; always `"model/gltf-binary"`.
+     */
+    public var mimeType: String
+    /**
+     * Before/after statistics for the refinement run.
+     */
+    public var stats: RefineStats
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * GLB bytes with the requested refinement passes applied.
+         */refinedGlb: Data, 
+        /**
+         * MIME type of `refined_glb`; always `"model/gltf-binary"`.
+         */mimeType: String, 
+        /**
+         * Before/after statistics for the refinement run.
+         */stats: RefineStats) {
+        self.refinedGlb = refinedGlb
+        self.mimeType = mimeType
+        self.stats = stats
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension RefineResult: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRefineResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RefineResult {
+        return
+            try RefineResult(
+                refinedGlb: FfiConverterData.read(from: &buf), 
+                mimeType: FfiConverterString.read(from: &buf), 
+                stats: FfiConverterTypeRefineStats.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RefineResult, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.refinedGlb, into: &buf)
+        FfiConverterString.write(value.mimeType, into: &buf)
+        FfiConverterTypeRefineStats.write(value.stats, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRefineResult_lift(_ buf: RustBuffer) throws -> RefineResult {
+    return try FfiConverterTypeRefineResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRefineResult_lower(_ value: RefineResult) -> RustBuffer {
+    return FfiConverterTypeRefineResult.lower(value)
+}
+
+
+/**
+ * Summary statistics emitted by a [`Compat3dProvider::refine`] call.
+ */
+public struct RefineStats: Equatable, Hashable {
+    /**
+     * Triangle count of the input mesh.
+     */
+    public var inputTriCount: UInt32
+    /**
+     * Triangle count of the output (refined) mesh.
+     */
+    public var outputTriCount: UInt32
+    /**
+     * When UV unwrapping ran, the number of UV charts the unwrap
+     * produced. `None` when UV unwrapping did not run for this call.
+     */
+    public var uvChartCount: UInt32?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Triangle count of the input mesh.
+         */inputTriCount: UInt32, 
+        /**
+         * Triangle count of the output (refined) mesh.
+         */outputTriCount: UInt32, 
+        /**
+         * When UV unwrapping ran, the number of UV charts the unwrap
+         * produced. `None` when UV unwrapping did not run for this call.
+         */uvChartCount: UInt32?) {
+        self.inputTriCount = inputTriCount
+        self.outputTriCount = outputTriCount
+        self.uvChartCount = uvChartCount
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension RefineStats: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRefineStats: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RefineStats {
+        return
+            try RefineStats(
+                inputTriCount: FfiConverterUInt32.read(from: &buf), 
+                outputTriCount: FfiConverterUInt32.read(from: &buf), 
+                uvChartCount: FfiConverterOptionUInt32.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RefineStats, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.inputTriCount, into: &buf)
+        FfiConverterUInt32.write(value.outputTriCount, into: &buf)
+        FfiConverterOptionUInt32.write(value.uvChartCount, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRefineStats_lift(_ buf: RustBuffer) throws -> RefineStats {
+    return try FfiConverterTypeRefineStats.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRefineStats_lower(_ value: RefineStats) -> RustBuffer {
+    return FfiConverterTypeRefineStats.lower(value)
+}
+
+
+/**
  * Timing metadata for a compute request.
  *
  * All three counters are optional; a `None` value means "the provider did
@@ -16914,6 +17708,164 @@ public func FfiConverterTypeRequestTiming_lift(_ buf: RustBuffer) throws -> Requ
 #endif
 public func FfiConverterTypeRequestTiming_lower(_ value: RequestTiming) -> RustBuffer {
     return FfiConverterTypeRequestTiming.lower(value)
+}
+
+
+/**
+ * Request parameters for [`Compat3dProvider::rig`].
+ */
+public struct RigRequest: Equatable, Hashable {
+    /**
+     * Target rig template (`"humanoid"`, `"quadruped"`, `"auto"`).
+     */
+    public var template: String?
+    /**
+     * `true` to apply skin-weight painting after armature placement.
+     */
+    public var skin: Bool
+    /**
+     * Optional pose hint (`"t-pose"`, `"a-pose"`, or backend-specific JSON).
+     */
+    public var poseHint: String?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Target rig template (`"humanoid"`, `"quadruped"`, `"auto"`).
+         */template: String?, 
+        /**
+         * `true` to apply skin-weight painting after armature placement.
+         */skin: Bool, 
+        /**
+         * Optional pose hint (`"t-pose"`, `"a-pose"`, or backend-specific JSON).
+         */poseHint: String?) {
+        self.template = template
+        self.skin = skin
+        self.poseHint = poseHint
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension RigRequest: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRigRequest: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RigRequest {
+        return
+            try RigRequest(
+                template: FfiConverterOptionString.read(from: &buf), 
+                skin: FfiConverterBool.read(from: &buf), 
+                poseHint: FfiConverterOptionString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RigRequest, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.template, into: &buf)
+        FfiConverterBool.write(value.skin, into: &buf)
+        FfiConverterOptionString.write(value.poseHint, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRigRequest_lift(_ buf: RustBuffer) throws -> RigRequest {
+    return try FfiConverterTypeRigRequest.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRigRequest_lower(_ value: RigRequest) -> RustBuffer {
+    return FfiConverterTypeRigRequest.lower(value)
+}
+
+
+/**
+ * Result of a successful [`Compat3dProvider::rig`] call.
+ */
+public struct RigResult: Equatable, Hashable {
+    /**
+     * GLB bytes with the new armature (and skin weights, if requested) embedded.
+     */
+    public var riggedGlb: Data
+    /**
+     * MIME type of `rigged_glb`; always `"model/gltf-binary"`.
+     */
+    public var mimeType: String
+    /**
+     * Names of bones in the produced armature, in depth-first traversal order.
+     */
+    public var boneNames: [String]
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * GLB bytes with the new armature (and skin weights, if requested) embedded.
+         */riggedGlb: Data, 
+        /**
+         * MIME type of `rigged_glb`; always `"model/gltf-binary"`.
+         */mimeType: String, 
+        /**
+         * Names of bones in the produced armature, in depth-first traversal order.
+         */boneNames: [String]) {
+        self.riggedGlb = riggedGlb
+        self.mimeType = mimeType
+        self.boneNames = boneNames
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension RigResult: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRigResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RigResult {
+        return
+            try RigResult(
+                riggedGlb: FfiConverterData.read(from: &buf), 
+                mimeType: FfiConverterString.read(from: &buf), 
+                boneNames: FfiConverterSequenceString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: RigResult, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.riggedGlb, into: &buf)
+        FfiConverterString.write(value.mimeType, into: &buf)
+        FfiConverterSequenceString.write(value.boneNames, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRigResult_lift(_ buf: RustBuffer) throws -> RigResult {
+    return try FfiConverterTypeRigResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRigResult_lower(_ value: RigResult) -> RustBuffer {
+    return FfiConverterTypeRigResult.lower(value)
 }
 
 
@@ -17434,6 +18386,186 @@ public func FfiConverterTypeTargetVoice_lift(_ buf: RustBuffer) throws -> Target
 #endif
 public func FfiConverterTypeTargetVoice_lower(_ value: TargetVoice) -> RustBuffer {
     return FfiConverterTypeTargetVoice.lower(value)
+}
+
+
+/**
+ * Request parameters for [`Compat3dProvider::texturize`].
+ */
+public struct TexturizeRequest: Equatable, Hashable {
+    /**
+     * Text-guided texture prompt (e.g. `"weathered bronze"`).
+     */
+    public var prompt: String?
+    /**
+     * Image-guided reference (PNG or JPEG bytes) used as a style anchor.
+     */
+    public var referenceImage: Data?
+    /**
+     * Backend-specific style preset (`"stylized"`, `"realistic"`, ...).
+     */
+    public var style: String?
+    /**
+     * Target square texture resolution in pixels.
+     */
+    public var resolution: UInt32?
+    /**
+     * `true` to request a full PBR material bundle.
+     */
+    public var pbr: Bool
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Text-guided texture prompt (e.g. `"weathered bronze"`).
+         */prompt: String?, 
+        /**
+         * Image-guided reference (PNG or JPEG bytes) used as a style anchor.
+         */referenceImage: Data?, 
+        /**
+         * Backend-specific style preset (`"stylized"`, `"realistic"`, ...).
+         */style: String?, 
+        /**
+         * Target square texture resolution in pixels.
+         */resolution: UInt32?, 
+        /**
+         * `true` to request a full PBR material bundle.
+         */pbr: Bool) {
+        self.prompt = prompt
+        self.referenceImage = referenceImage
+        self.style = style
+        self.resolution = resolution
+        self.pbr = pbr
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension TexturizeRequest: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTexturizeRequest: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TexturizeRequest {
+        return
+            try TexturizeRequest(
+                prompt: FfiConverterOptionString.read(from: &buf), 
+                referenceImage: FfiConverterOptionData.read(from: &buf), 
+                style: FfiConverterOptionString.read(from: &buf), 
+                resolution: FfiConverterOptionUInt32.read(from: &buf), 
+                pbr: FfiConverterBool.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TexturizeRequest, into buf: inout [UInt8]) {
+        FfiConverterOptionString.write(value.prompt, into: &buf)
+        FfiConverterOptionData.write(value.referenceImage, into: &buf)
+        FfiConverterOptionString.write(value.style, into: &buf)
+        FfiConverterOptionUInt32.write(value.resolution, into: &buf)
+        FfiConverterBool.write(value.pbr, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTexturizeRequest_lift(_ buf: RustBuffer) throws -> TexturizeRequest {
+    return try FfiConverterTypeTexturizeRequest.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTexturizeRequest_lower(_ value: TexturizeRequest) -> RustBuffer {
+    return FfiConverterTypeTexturizeRequest.lower(value)
+}
+
+
+/**
+ * Result of a successful [`Compat3dProvider::texturize`] call.
+ */
+public struct TexturizeResult: Equatable, Hashable {
+    /**
+     * GLB bytes with the new texture (and PBR maps if any) embedded.
+     */
+    public var texturedGlb: Data
+    /**
+     * MIME type of `textured_glb`; always `"model/gltf-binary"`.
+     */
+    public var mimeType: String
+    /**
+     * Optional out-of-band PBR map bundle. Duplicates of the maps
+     * embedded in `textured_glb` when present.
+     */
+    public var pbrMaps: PbrMaps?
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * GLB bytes with the new texture (and PBR maps if any) embedded.
+         */texturedGlb: Data, 
+        /**
+         * MIME type of `textured_glb`; always `"model/gltf-binary"`.
+         */mimeType: String, 
+        /**
+         * Optional out-of-band PBR map bundle. Duplicates of the maps
+         * embedded in `textured_glb` when present.
+         */pbrMaps: PbrMaps?) {
+        self.texturedGlb = texturedGlb
+        self.mimeType = mimeType
+        self.pbrMaps = pbrMaps
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension TexturizeResult: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTexturizeResult: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TexturizeResult {
+        return
+            try TexturizeResult(
+                texturedGlb: FfiConverterData.read(from: &buf), 
+                mimeType: FfiConverterString.read(from: &buf), 
+                pbrMaps: FfiConverterOptionTypePbrMaps.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: TexturizeResult, into buf: inout [UInt8]) {
+        FfiConverterData.write(value.texturedGlb, into: &buf)
+        FfiConverterString.write(value.mimeType, into: &buf)
+        FfiConverterOptionTypePbrMaps.write(value.pbrMaps, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTexturizeResult_lift(_ buf: RustBuffer) throws -> TexturizeResult {
+    return try FfiConverterTypeTexturizeResult.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTexturizeResult_lower(_ value: TexturizeResult) -> RustBuffer {
+    return FfiConverterTypeTexturizeResult.lower(value)
 }
 
 
@@ -20881,6 +22013,150 @@ public func FfiConverterTypeStepOutput_lower(_ value: StepOutput) -> RustBuffer 
 }
 
 
+
+/**
+ * Canonical error returned by every [`Compat3dProvider`] method.
+ *
+ * Absorbs the four parallel error enums from [`blazen_3d`] —
+ * [`Texturizer3dError`], [`Rigger3dError`], [`Refiner3dError`], and
+ * [`Animator3dError`] — into one flat shape. Foreign callers switch
+ * on the variant rather than on which stage produced the error
+ * (the call site already determines that).
+ */
+public enum ThreeDError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
+
+    
+    
+    /**
+     * The active backend reported a runtime failure (HTTP error,
+     * inference error, etc.).
+     */
+    case Backend(message: String
+    )
+    /**
+     * The caller-supplied input was malformed — invalid mesh bytes,
+     * unsupported container format, malformed request fields, etc.
+     */
+    case InvalidInput(message: String
+    )
+    /**
+     * I/O failure while reading a mesh file, reference image, or
+     * model file.
+     */
+    case Io(message: String
+    )
+    /**
+     * The selected backend is not available in this build (e.g. the
+     * `compat-proxy` feature is disabled).
+     */
+    case EngineNotAvailable(message: String
+    )
+    /**
+     * The capability requested is not supported by the active
+     * backend (e.g. PBR maps from an albedo-only texturizer, video-
+     * driven motion on a text-only animator).
+     */
+    case Unsupported(message: String
+    )
+
+    
+
+    
+
+    
+    public var errorDescription: String? {
+        String(reflecting: self)
+    }
+    
+}
+
+#if compiler(>=6)
+extension ThreeDError: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeThreeDError: FfiConverterRustBuffer {
+    typealias SwiftType = ThreeDError
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ThreeDError {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+
+        
+
+        
+        case 1: return .Backend(
+            message: try FfiConverterString.read(from: &buf)
+            )
+        case 2: return .InvalidInput(
+            message: try FfiConverterString.read(from: &buf)
+            )
+        case 3: return .Io(
+            message: try FfiConverterString.read(from: &buf)
+            )
+        case 4: return .EngineNotAvailable(
+            message: try FfiConverterString.read(from: &buf)
+            )
+        case 5: return .Unsupported(
+            message: try FfiConverterString.read(from: &buf)
+            )
+
+         default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: ThreeDError, into buf: inout [UInt8]) {
+        switch value {
+
+        
+
+        
+        
+        case let .Backend(message):
+            writeInt(&buf, Int32(1))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .InvalidInput(message):
+            writeInt(&buf, Int32(2))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .Io(message):
+            writeInt(&buf, Int32(3))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .EngineNotAvailable(message):
+            writeInt(&buf, Int32(4))
+            FfiConverterString.write(message, into: &buf)
+            
+        
+        case let .Unsupported(message):
+            writeInt(&buf, Int32(5))
+            FfiConverterString.write(message, into: &buf)
+            
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeThreeDError_lift(_ buf: RustBuffer) throws -> ThreeDError {
+    return try FfiConverterTypeThreeDError.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeThreeDError_lower(_ value: ThreeDError) -> RustBuffer {
+    return FfiConverterTypeThreeDError.lower(value)
+}
+
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
@@ -21175,6 +22451,30 @@ fileprivate struct FfiConverterOptionString: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionData: FfiConverterRustBuffer {
+    typealias SwiftType = Data?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterData.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterData.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeForeignTrainingProgress: FfiConverterRustBuffer {
     typealias SwiftType = ForeignTrainingProgress?
 
@@ -21215,6 +22515,30 @@ fileprivate struct FfiConverterOptionTypeBaseProviderDefaults: FfiConverterRustB
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeBaseProviderDefaults.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypePbrMaps: FfiConverterRustBuffer {
+    typealias SwiftType = PbrMaps?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypePbrMaps.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypePbrMaps.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -24220,6 +25544,18 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_completionstreamsink_on_error() != 6341) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_animate() != 11536) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_refine() != 4070) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_rig() != 32321) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_texturize() != 42136) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_stephandler_invoke() != 11814) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -24293,6 +25629,9 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model_with_defaults() != 44881) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_compat3dprovider_new() != 19300) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_constructor_workflowbuilder_new() != 14241) {

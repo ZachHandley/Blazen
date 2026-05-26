@@ -69,12 +69,25 @@ fi
 # --library, bindgen falls back to UDL (which only declares `version()` here)
 # and silently emits a near-empty surface. Always pass --library.
 #
+# Canonical feature set the bindings ship: every feature-gated factory the
+# bindings expose must be enabled here, otherwise its `#[uniffi::export]`
+# metadata isn't in the rlib and the generated bindings silently lose the
+# factory. Keep this list in sync with `crates/blazen-uniffi/Cargo.toml`'s
+# `[features]` block. NC-licensed feature flags (e.g. `audio-tts-spark`) are
+# included because the binding surface is just the factory + opaque type;
+# the runtime warn_nc_once still fires on first synthesis.
+REGEN_FEATURES="audio-tts-piper,audio-tts-spark,audio-tts-bark,audio-tts-f5,audio-stt-faster-whisper,audio-stt-whisper-streaming,triposr,threed-compat-proxy"
+
+# Always rebuild with the canonical feature set so the rlib metadata
+# matches what the bindings ship. Cargo will skip if up-to-date, so this
+# is essentially free on incremental builds.
+echo "Building blazen-uniffi (release, features=$REGEN_FEATURES) so bindgens can read scaffolding metadata..."
+cargo build -p blazen-uniffi --release --features "$REGEN_FEATURES"
+
 # We prefer the per-build rlib in target/release/deps/ (matches upstream
 # uniffi-rs examples), but fall back to the top-level rlib or the staticlib,
 # all of which are equivalent for metadata purposes.
 DEPS_DIR="target/release/deps"
-# Glob expansion under set -u/-e/pipefail: use a shell array so a missing
-# pattern doesn't trigger pipeline failures.
 LIB_PATH=""
 shopt -s nullglob
 deps_rlibs=("$DEPS_DIR"/libblazen_uniffi-*.rlib)
@@ -85,21 +98,6 @@ elif [[ -f "target/release/libblazen_uniffi.rlib" ]]; then
     LIB_PATH="target/release/libblazen_uniffi.rlib"
 elif [[ -f "target/release/libblazen_uniffi.a" ]]; then
     LIB_PATH="target/release/libblazen_uniffi.a"
-fi
-
-if [[ -z "$LIB_PATH" || ! -f "$LIB_PATH" ]]; then
-    echo "Building blazen-uniffi (release) so bindgens can read scaffolding metadata..."
-    cargo build -p blazen-uniffi --release
-    shopt -s nullglob
-    deps_rlibs=("$DEPS_DIR"/libblazen_uniffi-*.rlib)
-    shopt -u nullglob
-    if (( ${#deps_rlibs[@]} > 0 )); then
-        LIB_PATH="${deps_rlibs[0]}"
-    elif [[ -f "target/release/libblazen_uniffi.rlib" ]]; then
-        LIB_PATH="target/release/libblazen_uniffi.rlib"
-    else
-        LIB_PATH="target/release/libblazen_uniffi.a"
-    fi
 fi
 
 echo "Using artefact for metadata: $LIB_PATH"
@@ -220,9 +218,9 @@ new_b = (
 )
 count_a = src.count(old_a)
 count_b = src.count(old_b)
-if count_a != 36:
+if count_a != 37:
     sys.exit(
-        f"ERROR: expected 36 'TODO: this is bad' blocks in blazen.go, found {count_a}. "
+        f"ERROR: expected 37 'TODO: this is bad' blocks in blazen.go, found {count_a}. "
         "Upstream uniffi-bindgen-go codegen likely changed — re-audit and update "
         "the patch in scripts/regen-bindings.sh."
     )
