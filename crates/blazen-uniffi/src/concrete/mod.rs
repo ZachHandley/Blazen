@@ -57,4 +57,7 @@ pub mod vc;
 #[cfg(feature = "threed")]
 pub mod three_d;
 
-// LLM concrete providers land in a follow-up sub-wave (P4.2.llm).
+// LLM concretes are unconditional — the LLM capability is always
+// present (no feature gate), mirroring the unconditional
+// [`bases::LlmProvider`] trait declaration.
+pub mod llm;
