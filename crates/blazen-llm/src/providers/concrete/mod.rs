@@ -37,7 +37,7 @@ pub mod music;
 #[cfg(feature = "audio-vc")]
 pub mod vc;
 
-#[cfg(feature = "triposr")]
+#[cfg(any(feature = "triposr", feature = "threed-compat-proxy"))]
 pub mod three_d;
 
 // Image generation — `DiffusionProvider` is gated on the `diffusion`

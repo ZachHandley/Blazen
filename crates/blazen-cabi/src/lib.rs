@@ -60,10 +60,8 @@ pub mod string;
 pub mod stt;
 pub mod telemetry;
 pub mod telemetry_records;
-#[cfg(feature = "triposr")]
+#[cfg(any(feature = "triposr", feature = "threed-compat-proxy"))]
 pub mod three_d;
-#[cfg(feature = "threed-compat-proxy")]
-pub mod threed;
 pub mod tool_handler;
 pub mod training_records;
 pub mod tts;
