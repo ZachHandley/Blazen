@@ -14210,6 +14210,450 @@ BlazenFuture *blazen_complete_streaming(const BlazenModel *model,
                                         BlazenCompletionStreamSinkVTable sink);
 
 /**
+ * Synchronously drive a streaming chat completion through the
+ * `OpenAiProvider` concrete provider. Mirrors
+ * [`blazen_complete_streaming_blocking`] semantics (null checks,
+ * `request`/`sink` consume discipline) but dispatches to
+ * [`blazen_uniffi::concrete::llm::openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * `provider` must be null OR a live `BlazenOpenAiProvider`. `request` must be
+ * null OR a live `BlazenModelRequest`; ownership transfers to this function.
+ * `sink` satisfies the [`BlazenCompletionStreamSinkVTable`] contract; its
+ * `user_data` is consumed. `out_err` must be null OR a writable slot for a
+ * single `*mut BlazenError` write.
+ */
+
+int32_t blazen_openai_provider_complete_streaming_blocking(const BlazenOpenAiProvider *provider,
+                                                           BlazenModelRequest *request,
+                                                           BlazenCompletionStreamSinkVTable sink,
+                                                           BlazenError **out_err);
+
+/**
+ * Asynchronously drive a streaming chat completion through the
+ * `OpenAiProvider` concrete provider, returning an opaque future handle.
+ * Mirrors [`blazen_complete_streaming`] semantics.
+ *
+ * # Safety
+ *
+ * `provider` must be null OR a live `BlazenOpenAiProvider`. `request` must be
+ * null OR a live `BlazenModelRequest`; ownership transfers to this function
+ * regardless of whether the call returns null. `sink` satisfies the
+ * [`BlazenCompletionStreamSinkVTable`] contract; its `user_data` is consumed.
+ */
+
+BlazenFuture *blazen_openai_provider_complete_streaming(const BlazenOpenAiProvider *provider,
+                                                        BlazenModelRequest *request,
+                                                        BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `AnthropicProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenAnthropicProvider`).
+ */
+
+int32_t blazen_anthropic_provider_complete_streaming_blocking(const BlazenAnthropicProvider *provider,
+                                                              BlazenModelRequest *request,
+                                                              BlazenCompletionStreamSinkVTable sink,
+                                                              BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `AnthropicProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenAnthropicProvider`).
+ */
+
+BlazenFuture *blazen_anthropic_provider_complete_streaming(const BlazenAnthropicProvider *provider,
+                                                           BlazenModelRequest *request,
+                                                           BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `GeminiProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenGeminiProvider`).
+ */
+
+int32_t blazen_gemini_provider_complete_streaming_blocking(const BlazenGeminiProvider *provider,
+                                                           BlazenModelRequest *request,
+                                                           BlazenCompletionStreamSinkVTable sink,
+                                                           BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `GeminiProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenGeminiProvider`).
+ */
+
+BlazenFuture *blazen_gemini_provider_complete_streaming(const BlazenGeminiProvider *provider,
+                                                        BlazenModelRequest *request,
+                                                        BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `AzureOpenAiProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenAzureOpenAiProvider`).
+ */
+
+int32_t blazen_azure_openai_provider_complete_streaming_blocking(const BlazenAzureOpenAiProvider *provider,
+                                                                 BlazenModelRequest *request,
+                                                                 BlazenCompletionStreamSinkVTable sink,
+                                                                 BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `AzureOpenAiProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenAzureOpenAiProvider`).
+ */
+
+BlazenFuture *blazen_azure_openai_provider_complete_streaming(const BlazenAzureOpenAiProvider *provider,
+                                                              BlazenModelRequest *request,
+                                                              BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `BedrockProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenBedrockProvider`).
+ */
+
+int32_t blazen_bedrock_provider_complete_streaming_blocking(const BlazenBedrockProvider *provider,
+                                                            BlazenModelRequest *request,
+                                                            BlazenCompletionStreamSinkVTable sink,
+                                                            BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `BedrockProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenBedrockProvider`).
+ */
+
+BlazenFuture *blazen_bedrock_provider_complete_streaming(const BlazenBedrockProvider *provider,
+                                                         BlazenModelRequest *request,
+                                                         BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `MistralProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenMistralProvider`).
+ */
+
+int32_t blazen_mistral_provider_complete_streaming_blocking(const BlazenMistralProvider *provider,
+                                                            BlazenModelRequest *request,
+                                                            BlazenCompletionStreamSinkVTable sink,
+                                                            BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `MistralProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenMistralProvider`).
+ */
+
+BlazenFuture *blazen_mistral_provider_complete_streaming(const BlazenMistralProvider *provider,
+                                                         BlazenModelRequest *request,
+                                                         BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `FireworksProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenFireworksProvider`).
+ */
+
+int32_t blazen_fireworks_provider_complete_streaming_blocking(const BlazenFireworksProvider *provider,
+                                                              BlazenModelRequest *request,
+                                                              BlazenCompletionStreamSinkVTable sink,
+                                                              BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `FireworksProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenFireworksProvider`).
+ */
+
+BlazenFuture *blazen_fireworks_provider_complete_streaming(const BlazenFireworksProvider *provider,
+                                                           BlazenModelRequest *request,
+                                                           BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `DeepSeekProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenDeepSeekProvider`).
+ */
+
+int32_t blazen_deepseek_provider_complete_streaming_blocking(const BlazenDeepSeekProvider *provider,
+                                                             BlazenModelRequest *request,
+                                                             BlazenCompletionStreamSinkVTable sink,
+                                                             BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `DeepSeekProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenDeepSeekProvider`).
+ */
+
+BlazenFuture *blazen_deepseek_provider_complete_streaming(const BlazenDeepSeekProvider *provider,
+                                                          BlazenModelRequest *request,
+                                                          BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `PerplexityProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenPerplexityProvider`).
+ */
+
+int32_t blazen_perplexity_provider_complete_streaming_blocking(const BlazenPerplexityProvider *provider,
+                                                               BlazenModelRequest *request,
+                                                               BlazenCompletionStreamSinkVTable sink,
+                                                               BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `PerplexityProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenPerplexityProvider`).
+ */
+
+BlazenFuture *blazen_perplexity_provider_complete_streaming(const BlazenPerplexityProvider *provider,
+                                                            BlazenModelRequest *request,
+                                                            BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `TogetherProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenTogetherProvider`).
+ */
+
+int32_t blazen_together_provider_complete_streaming_blocking(const BlazenTogetherProvider *provider,
+                                                             BlazenModelRequest *request,
+                                                             BlazenCompletionStreamSinkVTable sink,
+                                                             BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `TogetherProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenTogetherProvider`).
+ */
+
+BlazenFuture *blazen_together_provider_complete_streaming(const BlazenTogetherProvider *provider,
+                                                          BlazenModelRequest *request,
+                                                          BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `GroqProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenGroqProvider`).
+ */
+
+int32_t blazen_groq_provider_complete_streaming_blocking(const BlazenGroqProvider *provider,
+                                                         BlazenModelRequest *request,
+                                                         BlazenCompletionStreamSinkVTable sink,
+                                                         BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `GroqProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenGroqProvider`).
+ */
+
+BlazenFuture *blazen_groq_provider_complete_streaming(const BlazenGroqProvider *provider,
+                                                      BlazenModelRequest *request,
+                                                      BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `OpenRouterProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenOpenRouterProvider`).
+ */
+
+int32_t blazen_openrouter_provider_complete_streaming_blocking(const BlazenOpenRouterProvider *provider,
+                                                               BlazenModelRequest *request,
+                                                               BlazenCompletionStreamSinkVTable sink,
+                                                               BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `OpenRouterProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenOpenRouterProvider`).
+ */
+
+BlazenFuture *blazen_openrouter_provider_complete_streaming(const BlazenOpenRouterProvider *provider,
+                                                            BlazenModelRequest *request,
+                                                            BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `CohereProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenCohereProvider`).
+ */
+
+int32_t blazen_cohere_provider_complete_streaming_blocking(const BlazenCohereProvider *provider,
+                                                           BlazenModelRequest *request,
+                                                           BlazenCompletionStreamSinkVTable sink,
+                                                           BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `CohereProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenCohereProvider`).
+ */
+
+BlazenFuture *blazen_cohere_provider_complete_streaming(const BlazenCohereProvider *provider,
+                                                        BlazenModelRequest *request,
+                                                        BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `XaiProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenXaiProvider`).
+ */
+
+int32_t blazen_xai_provider_complete_streaming_blocking(const BlazenXaiProvider *provider,
+                                                        BlazenModelRequest *request,
+                                                        BlazenCompletionStreamSinkVTable sink,
+                                                        BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `XaiProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenXaiProvider`).
+ */
+
+BlazenFuture *blazen_xai_provider_complete_streaming(const BlazenXaiProvider *provider,
+                                                     BlazenModelRequest *request,
+                                                     BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `FalLlmProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenFalLlmProvider`).
+ */
+
+int32_t blazen_fal_llm_provider_complete_streaming_blocking(const BlazenFalLlmProvider *provider,
+                                                            BlazenModelRequest *request,
+                                                            BlazenCompletionStreamSinkVTable sink,
+                                                            BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `FalLlmProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenFalLlmProvider`).
+ */
+
+BlazenFuture *blazen_fal_llm_provider_complete_streaming(const BlazenFalLlmProvider *provider,
+                                                         BlazenModelRequest *request,
+                                                         BlazenCompletionStreamSinkVTable sink);
+
+/**
  * Synchronously drive a music streaming generation, dispatching each
  * chunk to the supplied sink. Blocks the calling thread on the upstream
  * tokio runtime.
@@ -14393,6 +14837,217 @@ BlazenFuture *blazen_vc_model_stream_convert_pcm_to_sink(const BlazenVcModel *mo
                                                          uintptr_t input_pcm_len,
                                                          const char *target_voice_id,
                                                          BlazenVcStreamSinkVTable sink);
+
+/**
+ * Synchronously drive a music streaming generation through the
+ * `MusicGenProvider` concrete provider. Mirrors
+ * [`blazen_music_model_stream_generate_music_blocking`] semantics but
+ * dispatches to
+ * [`blazen_uniffi::concrete::music::musicgen_provider_stream_music_to_sink_blocking`].
+ *
+ * # Safety
+ *
+ * `provider` must be null OR a live `BlazenMusicGenProvider`. `prompt` must
+ * be null OR a valid NUL-terminated UTF-8 buffer. `sink` satisfies the
+ * [`BlazenMusicStreamSinkVTable`] contract; its `user_data` is consumed.
+ * `out_err` must be null OR a writable slot for a single `*mut BlazenError`
+ * write.
+ */
+
+int32_t blazen_musicgen_provider_stream_music_blocking(const BlazenMusicGenProvider *provider,
+                                                       const char *prompt,
+                                                       float duration_seconds,
+                                                       BlazenMusicStreamSinkVTable sink,
+                                                       BlazenError **out_err);
+
+/**
+ * Asynchronously drive a music streaming generation through the
+ * `MusicGenProvider` concrete provider. Mirrors
+ * [`blazen_music_model_stream_generate_music`] semantics.
+ *
+ * # Safety
+ *
+ * `provider` must be null OR a live `BlazenMusicGenProvider`. `prompt` must
+ * be null OR a valid NUL-terminated UTF-8 buffer. `sink` satisfies the
+ * [`BlazenMusicStreamSinkVTable`] contract; its `user_data` is consumed.
+ */
+
+BlazenFuture *blazen_musicgen_provider_stream_music(const BlazenMusicGenProvider *provider,
+                                                    const char *prompt,
+                                                    float duration_seconds,
+                                                    BlazenMusicStreamSinkVTable sink);
+
+/**
+ * Synchronous music streaming for `AudioGenProvider`. `AudioGen` is
+ * sfx-primary;
+ * its `stream_generate_music` delivers `Unsupported` through the sink's
+ * `on_error`. Prefer [`blazen_audiogen_provider_stream_sfx_blocking`]. See
+ * [`blazen_musicgen_provider_stream_music_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_stream_music_blocking`]
+ * (`provider` is a `BlazenAudioGenProvider`).
+ */
+
+int32_t blazen_audiogen_provider_stream_music_blocking(const BlazenAudioGenProvider *provider,
+                                                       const char *prompt,
+                                                       float duration_seconds,
+                                                       BlazenMusicStreamSinkVTable sink,
+                                                       BlazenError **out_err);
+
+/**
+ * Async music streaming for `AudioGenProvider`. See
+ * [`blazen_musicgen_provider_stream_music`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_stream_music`]
+ * (`provider` is a `BlazenAudioGenProvider`).
+ */
+
+BlazenFuture *blazen_audiogen_provider_stream_music(const BlazenAudioGenProvider *provider,
+                                                    const char *prompt,
+                                                    float duration_seconds,
+                                                    BlazenMusicStreamSinkVTable sink);
+
+/**
+ * Synchronous SFX streaming for `AudioGenProvider`. See
+ * [`blazen_musicgen_provider_stream_music_blocking`] (chunks flow through the
+ * same [`BlazenMusicStreamSinkVTable`]).
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_stream_music_blocking`]
+ * (`provider` is a `BlazenAudioGenProvider`).
+ */
+
+int32_t blazen_audiogen_provider_stream_sfx_blocking(const BlazenAudioGenProvider *provider,
+                                                     const char *prompt,
+                                                     float duration_seconds,
+                                                     BlazenMusicStreamSinkVTable sink,
+                                                     BlazenError **out_err);
+
+/**
+ * Async SFX streaming for `AudioGenProvider`. See
+ * [`blazen_musicgen_provider_stream_music`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_stream_music`]
+ * (`provider` is a `BlazenAudioGenProvider`).
+ */
+
+BlazenFuture *blazen_audiogen_provider_stream_sfx(const BlazenAudioGenProvider *provider,
+                                                  const char *prompt,
+                                                  float duration_seconds,
+                                                  BlazenMusicStreamSinkVTable sink);
+
+/**
+ * Synchronous music streaming for `StableAudioProvider`. See
+ * [`blazen_musicgen_provider_stream_music_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_stream_music_blocking`]
+ * (`provider` is a `BlazenStableAudioProvider`).
+ */
+
+int32_t blazen_stable_audio_provider_stream_music_blocking(const BlazenStableAudioProvider *provider,
+                                                           const char *prompt,
+                                                           float duration_seconds,
+                                                           BlazenMusicStreamSinkVTable sink,
+                                                           BlazenError **out_err);
+
+/**
+ * Async music streaming for `StableAudioProvider`. See
+ * [`blazen_musicgen_provider_stream_music`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_stream_music`]
+ * (`provider` is a `BlazenStableAudioProvider`).
+ */
+
+BlazenFuture *blazen_stable_audio_provider_stream_music(const BlazenStableAudioProvider *provider,
+                                                        const char *prompt,
+                                                        float duration_seconds,
+                                                        BlazenMusicStreamSinkVTable sink);
+
+/**
+ * Synchronous SFX streaming for `StableAudioProvider`. See
+ * [`blazen_musicgen_provider_stream_music_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_stream_music_blocking`]
+ * (`provider` is a `BlazenStableAudioProvider`).
+ */
+
+int32_t blazen_stable_audio_provider_stream_sfx_blocking(const BlazenStableAudioProvider *provider,
+                                                         const char *prompt,
+                                                         float duration_seconds,
+                                                         BlazenMusicStreamSinkVTable sink,
+                                                         BlazenError **out_err);
+
+/**
+ * Async SFX streaming for `StableAudioProvider`. See
+ * [`blazen_musicgen_provider_stream_music`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_stream_music`]
+ * (`provider` is a `BlazenStableAudioProvider`).
+ */
+
+BlazenFuture *blazen_stable_audio_provider_stream_sfx(const BlazenStableAudioProvider *provider,
+                                                      const char *prompt,
+                                                      float duration_seconds,
+                                                      BlazenMusicStreamSinkVTable sink);
+
+/**
+ * Synchronously drive a voice-conversion streaming call through the
+ * `RvcProvider` concrete provider. Mirrors
+ * [`blazen_vc_model_stream_convert_pcm_to_sink_blocking`] semantics but
+ * dispatches to
+ * [`blazen_uniffi::concrete::vc::rvc_provider_stream_convert_pcm_to_sink_blocking`].
+ *
+ * # Safety
+ *
+ * `provider` must be null OR a live `BlazenRvcProvider`. `input_pcm` must be
+ * null OR point to a readable `f32` buffer of at least `input_pcm_len`
+ * elements. `target_voice_id` must be null OR a valid NUL-terminated UTF-8
+ * buffer. `sink` satisfies the [`BlazenVcStreamSinkVTable`] contract; its
+ * `user_data` is consumed. `out_err` must be null OR a writable slot for a
+ * single `*mut BlazenError` write.
+ */
+
+int32_t blazen_rvc_provider_stream_convert_pcm_blocking(const BlazenRvcProvider *provider,
+                                                        const float *input_pcm,
+                                                        uintptr_t input_pcm_len,
+                                                        const char *target_voice_id,
+                                                        BlazenVcStreamSinkVTable sink,
+                                                        BlazenError **out_err);
+
+/**
+ * Asynchronously drive a voice-conversion streaming call through the
+ * `RvcProvider` concrete provider. Mirrors
+ * [`blazen_vc_model_stream_convert_pcm_to_sink`] semantics.
+ *
+ * # Safety
+ *
+ * `provider` must be null OR a live `BlazenRvcProvider`. `input_pcm` must be
+ * null OR point to a readable `f32` buffer of at least `input_pcm_len`
+ * elements. `target_voice_id` must be null OR a valid NUL-terminated UTF-8
+ * buffer. `sink` satisfies the [`BlazenVcStreamSinkVTable`] contract; its
+ * `user_data` is consumed.
+ */
+
+BlazenFuture *blazen_rvc_provider_stream_convert_pcm(const BlazenRvcProvider *provider,
+                                                     const float *input_pcm,
+                                                     uintptr_t input_pcm_len,
+                                                     const char *target_voice_id,
+                                                     BlazenVcStreamSinkVTable sink);
 
 /**
  * Constructs a new `StreamChunk` with the given `content_delta` and
@@ -15459,6 +16114,30 @@ BlazenFuture *blazen_compat3d_animate(const BlazenCompat3dProvider *provider,
                                       const uint8_t *bvh_motion_ptr,
                                       uintptr_t bvh_motion_len,
                                       const char *request_json);
+
+/**
+ * Surfaces the `Unsupported` generation error for the compat-proxy
+ * backend. The HTTP-proxy wire contract only covers texturize / rig /
+ * refine / animate — base generation must come from a separate backend
+ * such as [`BlazenTripoSrProvider`]. Always returns `-1` and writes a
+ * `BlazenError::Unsupported` into `out_err`.
+ *
+ * `image_bytes` / `mesh_resolution` are accepted (and ignored) so the
+ * signature mirrors the per-engine generation surface across engines.
+ *
+ * # Safety
+ *
+ * `provider` must be null OR a live `BlazenCompat3dProvider` pointer.
+ * `image_bytes` must be null OR point to a buffer of at least
+ * `image_bytes_len` bytes. `out_err` must be null OR a valid
+ * single-writer destination for a `*mut BlazenError`.
+ */
+
+int32_t blazen_compat3d_provider_generate_from_image(const BlazenCompat3dProvider *provider,
+                                                     const uint8_t *_image_bytes,
+                                                     uintptr_t _image_bytes_len,
+                                                     uint32_t _mesh_resolution,
+                                                     BlazenError **out_err);
 
 /**
  * Pops a [`BlazenCompat3dResult`] out of any 3D future produced by the
