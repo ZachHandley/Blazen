@@ -1106,6 +1106,8 @@ dependencies = [
  "blazen-audio-vc",
  "blazen-embed",
  "blazen-embed-candle",
+ "blazen-embed-fastembed",
+ "blazen-embed-tract",
  "blazen-events",
  "blazen-image-diffusion",
  "blazen-llm-candle",

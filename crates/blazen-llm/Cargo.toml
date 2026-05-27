@@ -132,6 +132,18 @@ threed-compat-proxy = ["threed", "blazen-3d/compat-proxy"]
 # bridge lives at `src/backends/triposr.rs` and is gated on this
 # feature.
 triposr = ["threed", "blazen-3d/triposr", "dep:image", "dep:reqwest", "dep:candle-core"]
+# Direct-typed fastembed (ORT) backend for the concrete `FastembedProvider`
+# class in `providers/concrete/embed.rs`. Pulls in the
+# `blazen-embed-fastembed` crate directly (rather than going through the
+# `blazen-embed` facade) so the provider can name the concrete
+# `FastEmbedModel` inner type. Only links on ORT-supported targets — see
+# the `blazen-embed/Cargo.toml` target-cfg matrix.
+embed-fastembed = ["dep:blazen-embed-fastembed"]
+# Direct-typed tract (pure-Rust ONNX) backend for the concrete
+# `TractEmbedProvider` class in `providers/concrete/embed.rs`. Pulls in
+# `blazen-embed-tract` directly so the provider can name the concrete
+# `TractEmbedModel` inner type. Pure-Rust, builds on every target.
+embed-tract = ["dep:blazen-embed-tract"]
 
 [dependencies]
 blazen-events.workspace = true
@@ -176,6 +188,8 @@ blazen-audio-vc = { workspace = true, optional = true }
 blazen-3d = { version = "0.0.0-dev", path = "../blazen-3d", optional = true }
 image = { version = "0.25.10", default-features = false, features = ["jpeg", "png"], optional = true }
 candle-core = { workspace = true, optional = true }
+blazen-embed-fastembed = { workspace = true, optional = true }
+blazen-embed-tract = { workspace = true, optional = true }
 
 # Timer/runtime features only on native targets (mio doesn't support any wasm32 target)
 [target.'cfg(not(any(target_os = "wasi", target_arch = "wasm32")))'.dependencies]
