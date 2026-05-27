@@ -1182,13 +1182,15 @@ checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
 name = "elid"
-version = "0.4.24"
+version = "0.4.51"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b507d3f2675a8ffb9e95962fa5dce53b11555023b41f7be0c8a8ce3da40ce548"
+checksum = "d2dc8c61c76f62de744d2db6ab81c45138c15fef4c2b39d5d9b19b3c17fecc62"
 dependencies = [
  "blake3",
  "cbindgen",
  "data-encoding",
+ "getrandom 0.2.17",
+ "getrandom 0.3.4",
  "half",
  "once_cell",
  "rand 0.8.5",

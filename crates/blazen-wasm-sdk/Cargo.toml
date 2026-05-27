@@ -18,7 +18,7 @@ blazen-events = { version = "0.0.0-dev", path = "../blazen-events", features = [
 blazen-llm = { version = "0.0.0-dev", path = "../blazen-llm", default-features = false, features = ["tsify"] }
 blazen-memory = { version = "0.0.0-dev", path = "../blazen-memory", default-features = false }
 blazen-memory-valkey = { version = "0.0.0-dev", path = "../blazen-memory-valkey", default-features = false, features = ["upstash"] }
-elid = { version = "0.4.3", default-features = false, features = ["embeddings"] }
+elid = { version = "0.4.51", default-features = false, features = ["embeddings"] }
 blazen-prompts = { version = "0.0.0-dev", path = "../blazen-prompts", default-features = false }
 blazen-pipeline = { version = "0.0.0-dev", path = "../blazen-pipeline", default-features = false }
 blazen-manager = { version = "0.0.0-dev", path = "../blazen-manager", default-features = false }

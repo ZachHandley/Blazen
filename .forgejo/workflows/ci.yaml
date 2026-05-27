@@ -110,12 +110,14 @@ jobs:
 
   lint:
     name: Lint
-    # Pinned to minibeast (self-hosted, /opt/cuda installed) because
+    # Runs on any CUDA-equipped self-hosted runner via the shared `nvidia`
+    # label (both minibeast — 4070 Ti — and beastpc — 4090 — advertise it),
+    # so the job isn't bottlenecked on a single box. CUDA is required because
     # `cargo clippy --workspace --all-features` fans the `cuda` feature out
-    # across the workspace, which compiles cudarc — cudarc's build.rs
-    # panics if nvcc isn't on PATH. minibeast is pre-provisioned; the
-    # setup-cuda-toolkit step below adds /opt/cuda/bin to PATH for the job.
-    runs-on: minibeast
+    # across the workspace, which compiles cudarc — cudarc's build.rs panics
+    # if nvcc isn't on PATH. The setup-cuda-toolkit step below adds
+    # /opt/cuda/bin to PATH for the job.
+    runs-on: nvidia
     needs: [detect, version]
     if: needs.detect.outputs.web_only != 'true'
     steps:
@@ -174,10 +176,10 @@ jobs:
 
   test:
     name: Test
-    # Pinned to minibeast for the same reason as lint — `--all-features`
-    # compiles cudarc, which requires nvcc on PATH. minibeast has it at
-    # /opt/cuda/bin/nvcc; setup-cuda-toolkit exports it into the job env.
-    runs-on: minibeast
+    # Same `nvidia` shared-label GPU pool as lint (minibeast + beastpc) —
+    # `--all-features` compiles cudarc, which requires nvcc on PATH; the
+    # setup-cuda-toolkit step exports /opt/cuda/bin into the job env.
+    runs-on: nvidia
     needs: [detect, version, lint]
     if: needs.detect.outputs.web_only != 'true'
     steps:

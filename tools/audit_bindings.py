@@ -71,8 +71,6 @@ WRAPPED_CRATES: tuple[str, ...] = (
     "blazen-llm-mistralrs",
     "blazen-llm-llamacpp",
     "blazen-llm-candle",
-    "blazen-audio-whispercpp",
-    "blazen-audio-piper",
     "blazen-image-diffusion",
 )
 
@@ -342,6 +340,63 @@ WHITELIST: frozenset[str] = frozenset(
         "ollama",
         "lm_studio",
         "openai_compat",
+        # --- Audio / adapter / training surface deferred to the per-engine
+        # provider binding work on feat/provider-refactor. Exported via
+        # blazen-llm / blazen-llm-candle / blazen-manager re-exports but not yet
+        # bound in py/node. Mix of: native candle engines + trainers, trait
+        # objects + generic providers (not FFI-able), errors bound as
+        # exceptions, and config/enum/const value types that currently flow
+        # through higher-level handles. Parity TODO, not permanent -- these come
+        # off the list as the provider refactor binds them per engine. ---
+        "AUDIOGEN_FRAME_RATE",
+        "AUDIOGEN_MAX_DURATION_HARD_LIMIT",
+        "AUDIOGEN_SAMPLE_RATE",
+        "AdapterHandle",
+        "AdapterMountStrategy",
+        "AdapterOptions",
+        "AdapterTransport",
+        "AnyTtsBackend",
+        "AudioGenBackend",
+        "AudioGenConfig",
+        "AudioMusicFormat",
+        "CodecError",
+        "CodecProvider",
+        "DynCodecProvider",
+        "DynMusicProvider",
+        "DynSttProvider",
+        "DynTtsProvider",
+        "MUSICGEN_MAX_DURATION_HARD_LIMIT",
+        "MountedAdapter",
+        "MusicBackend",
+        "MusicError",
+        "MusicGeneratedAudio",
+        "MusicgenBackend",
+        "MusicgenConfig",
+        "MusicgenVariant",
+        "RvcBackend",
+        "StableAudioBackend",
+        "StableAudioConfig",
+        "StableAudioVariant",
+        "SttError",
+        "SttOptions",
+        "SttProvider",
+        "TtsError",
+        "TtsModel",
+        "VcError",
+        "VoiceConversionBackend",
+        "MountedAdapterRecord",
+        "SafetensorsEngine",
+        "BlazenTrainError",
+        "GrpoConfig",
+        "GrpoDataset",
+        "GrpoTrainer",
+        "PpoConfig",
+        "PpoDataset",
+        "PpoTrainer",
+        "PreferenceDataset",
+        "RatedDataset",
+        "TrainingDataset",
+        "TrainingProgress",
     }
 )
 
@@ -545,6 +600,30 @@ WASM_SKIP: frozenset[str] = frozenset(
         "PromptRegistry",
         "PromptFile",
         "TemplateRole",
+        # --- Training (blazen-train via blazen-manager) + per-engine audio
+        # extras: bound in py + node but native candle / GPU only, so they
+        # cannot compile to wasm32. Skipped in the WASM diff only (they stay
+        # "present" for py/node). Deferred wasm binding is tracked with the rest
+        # of the provider-refactor work. ---
+        "AdapterStatus",
+        "TtsOptions",
+        "TtsProvider",
+        "DistributedConfig",
+        "DpoConfig",
+        "FullFineTuneConfig",
+        "FullFineTuneResult",
+        "KtoConfig",
+        "LoraConfig",
+        "MixedPrecision",
+        "OptimConfig",
+        "OrpoConfig",
+        "SchedulerConfig",
+        "SchedulerKind",
+        "SimpoConfig",
+        "TrainConfig",
+        "TrainCoreConfig",
+        "TrainedAdapter",
+        "TrainingEvent",
     }
 )
 
@@ -552,6 +631,63 @@ WASM_SKIP: frozenset[str] = frozenset(
 # an item was filtered. Anything in WHITELIST that is missing from this map
 # falls back to "whitelisted (no reason recorded)".
 WHITELIST_REASONS: dict[str, str] = {
+    # Audio / adapter / training surface deferred to the per-engine provider
+    # binding work on feat/provider-refactor (re-exported by blazen-llm /
+    # blazen-llm-candle / blazen-manager, not yet bound in py/node/wasm).
+    **{
+        n: "deferred to per-engine provider binding (feat/provider-refactor)"
+        for n in (
+            "AUDIOGEN_FRAME_RATE",
+            "AUDIOGEN_MAX_DURATION_HARD_LIMIT",
+            "AUDIOGEN_SAMPLE_RATE",
+            "AdapterHandle",
+            "AdapterMountStrategy",
+            "AdapterOptions",
+            "AdapterTransport",
+            "AnyTtsBackend",
+            "AudioGenBackend",
+            "AudioGenConfig",
+            "AudioMusicFormat",
+            "CodecError",
+            "CodecProvider",
+            "DynCodecProvider",
+            "DynMusicProvider",
+            "DynSttProvider",
+            "DynTtsProvider",
+            "MUSICGEN_MAX_DURATION_HARD_LIMIT",
+            "MountedAdapter",
+            "MusicBackend",
+            "MusicError",
+            "MusicGeneratedAudio",
+            "MusicgenBackend",
+            "MusicgenConfig",
+            "MusicgenVariant",
+            "RvcBackend",
+            "StableAudioBackend",
+            "StableAudioConfig",
+            "StableAudioVariant",
+            "SttError",
+            "SttOptions",
+            "SttProvider",
+            "TtsError",
+            "TtsModel",
+            "VcError",
+            "VoiceConversionBackend",
+            "MountedAdapterRecord",
+            "SafetensorsEngine",
+            "BlazenTrainError",
+            "GrpoConfig",
+            "GrpoDataset",
+            "GrpoTrainer",
+            "PpoConfig",
+            "PpoDataset",
+            "PpoTrainer",
+            "PreferenceDataset",
+            "RatedDataset",
+            "TrainingDataset",
+            "TrainingProgress",
+        )
+    },
     # Errors
     **{
         n: "error type bound as exception (PyO3 create_exception! / napi Error)"
