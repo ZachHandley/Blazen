@@ -292,6 +292,12 @@ typedef struct BlazenAgent BlazenAgent;
 typedef struct BlazenAgentResult BlazenAgentResult;
 
 /**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::tts::BarkProvider>`.
+ */
+typedef struct BlazenBarkProvider BlazenBarkProvider;
+
+/**
  * Opaque wrapper around [`blazen_uniffi::batch::BatchItem`].
  */
 typedef struct BlazenBatchItem BlazenBatchItem;
@@ -402,6 +408,18 @@ typedef struct BlazenError BlazenError;
 typedef struct BlazenEvent BlazenEvent;
 
 /**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::tts::F5Provider>`.
+ */
+typedef struct BlazenF5Provider BlazenF5Provider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::tts::FalTtsProvider>`.
+ */
+typedef struct BlazenFalTtsProvider BlazenFalTtsProvider;
+
+/**
  * Opaque async-result handle. cbindgen renders the C side as a
  * forward-declared `typedef struct BlazenFuture BlazenFuture;` — FFI hosts
  * never inspect the layout directly.
@@ -434,6 +452,12 @@ typedef struct BlazenImageGenResult BlazenImageGenResult;
  * call clones the handle's Arc when it builds the trainer-side adapter).
  */
 typedef struct BlazenJsonlDataset BlazenJsonlDataset;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::tts::KokoroProvider>`.
+ */
+typedef struct BlazenKokoroProvider BlazenKokoroProvider;
 
 /**
  * Opaque wrapper around [`blazen_uniffi::llm::Media`].
@@ -571,6 +595,14 @@ typedef struct BlazenPipeline BlazenPipeline;
 typedef struct BlazenPipelineBuilder BlazenPipelineBuilder;
 
 /**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::tts::PiperProvider>`.
+ *
+ * Free with [`blazen_piper_provider_free`].
+ */
+typedef struct BlazenPiperProvider BlazenPiperProvider;
+
+/**
  * Opaque snapshot of one configured pool: its label, total budget, current
  * usage, and the number of currently-loaded models. Produced by
  * [`crate::manager::blazen_model_manager_pools`] (which packages the
@@ -592,6 +624,12 @@ typedef struct BlazenPoolStatusList BlazenPoolStatusList;
  * invocations without re-tokenizing.
  */
 typedef struct BlazenPreferenceJsonlDataset BlazenPreferenceJsonlDataset;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::tts::Qwen3TtsProvider>`.
+ */
+typedef struct BlazenQwen3TtsProvider BlazenQwen3TtsProvider;
 
 /**
  * Opaque handle wrapping `Arc<blazen_train::dataset::RatedJsonlDataset>`.
@@ -619,6 +657,12 @@ typedef struct BlazenRunEvent BlazenRunEvent;
  * FFI. The crate-private `into_ptr` mints fresh handles.
  */
 typedef struct BlazenRunStateSnapshot BlazenRunStateSnapshot;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::tts::SparkTtsProvider>`.
+ */
+typedef struct BlazenSparkTtsProvider BlazenSparkTtsProvider;
 
 /**
  * Opaque handle wrapping a `blazen_uniffi::workflow::StepOutput` enum.
@@ -778,6 +822,12 @@ typedef struct BlazenVcModel BlazenVcModel;
  * inline bytes today).
  */
 typedef struct BlazenVcResult BlazenVcResult;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::tts::VibeVoiceProvider>`.
+ */
+typedef struct BlazenVibeVoiceProvider BlazenVibeVoiceProvider;
 
 /**
  * Opaque handle wrapping a [`blazen_core::distributed::WorkerInfo`].
@@ -13290,6 +13340,464 @@ BlazenRatedJsonlDataset *blazen_rated_jsonl_dataset_from_path(const char *path,
  * behavior.
  */
  void blazen_rated_jsonl_dataset_free(BlazenRatedJsonlDataset *dataset);
+
+/**
+ * Construct a `BlazenPiperProvider` from a Piper voice id + already-resolved
+ * local file paths.
+ *
+ * `voice_id` and `onnx_path` are required (non-null UTF-8). `config_path`
+ * may be null to derive the sidecar path automatically (`.onnx.json`).
+ * `default_speaker_id` uses `-1` as the `None` sentinel (any other negative
+ * value also collapses to `None`).
+ *
+ * On success returns `0` and writes a fresh `BlazenPiperProvider*` into
+ * `*out_model`. On failure returns `-1` and writes a fresh `BlazenError*`
+ * into `*out_err`. Both out-parameters may be null to discard that side of
+ * the result.
+ *
+ * # Safety
+ *
+ * - `voice_id`, `onnx_path` must be valid NUL-terminated UTF-8 buffers
+ *   (non-null).
+ * - `config_path` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot of
+ *   the matching pointer type.
+ */
+
+int32_t blazen_piper_provider_new(const char *voice_id,
+                                  const char *onnx_path,
+                                  const char *config_path,
+                                  int64_t default_speaker_id,
+                                  BlazenPiperProvider **out_model,
+                                  BlazenError **out_err);
+
+/**
+ * Asynchronously synthesize speech for `text`. Returns a `*mut BlazenFuture`
+ * the caller polls / waits on; the typed result is popped with
+ * [`crate::compute::blazen_future_take_tts_result`].
+ *
+ * Returns null if `model` is null or `text` is null / non-UTF-8.
+ *
+ * # Safety
+ *
+ * - `model` must be a valid pointer to a `BlazenPiperProvider` produced by
+ *   this surface.
+ * - `text` must be a valid NUL-terminated UTF-8 buffer.
+ * - `voice` / `language` must be null OR valid NUL-terminated UTF-8 buffers.
+ */
+
+BlazenFuture *blazen_piper_provider_synthesize(const BlazenPiperProvider *model,
+                                               const char *text,
+                                               const char *voice,
+                                               const char *language);
+
+/**
+ * Synchronous variant of [`blazen_piper_provider_synthesize`]. Returns `0`
+ * on success (typed result in `*out_result`), `-1` on failure (error in
+ * `*out_err`), `-2` on invalid input (null model / non-UTF-8 `text`).
+ *
+ * # Safety
+ *
+ * Same string contracts as [`blazen_piper_provider_synthesize`]. `out_result`
+ * / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_piper_provider_synthesize_blocking(const BlazenPiperProvider *model,
+                                                  const char *text,
+                                                  const char *voice,
+                                                  const char *language,
+                                                  BlazenTtsResult **out_result,
+                                                  BlazenError **out_err);
+
+/**
+ * Frees a `BlazenPiperProvider` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_piper_provider_new`]. Double-free is undefined behavior.
+ */
+ void blazen_piper_provider_free(BlazenPiperProvider *model);
+
+/**
+ * Construct a `BlazenKokoroProvider` with optional defaults.
+ *
+ * All inputs are optional — pass null for `voice` / `language` and any
+ * negative value for `sample_rate` to defer to the engine's defaults.
+ *
+ * # Safety
+ *
+ * `voice` / `language` must be null OR valid NUL-terminated UTF-8 buffers.
+ * `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_kokoro_provider_new(const char *voice,
+                                   const char *language,
+                                   int32_t sample_rate,
+                                   BlazenKokoroProvider **out_model,
+                                   BlazenError **out_err);
+
+/**
+ * Asynchronously synthesize speech. See
+ * [`blazen_piper_provider_synthesize`] for the future / `take_tts_result`
+ * pipeline.
+ *
+ * # Safety
+ *
+ * Same string contracts as [`blazen_piper_provider_synthesize`].
+ */
+
+BlazenFuture *blazen_kokoro_provider_synthesize(const BlazenKokoroProvider *model,
+                                                const char *text,
+                                                const char *voice,
+                                                const char *language);
+
+/**
+ * Synchronous variant of [`blazen_kokoro_provider_synthesize`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_synthesize_blocking`].
+ */
+
+int32_t blazen_kokoro_provider_synthesize_blocking(const BlazenKokoroProvider *model,
+                                                   const char *text,
+                                                   const char *voice,
+                                                   const char *language,
+                                                   BlazenTtsResult **out_result,
+                                                   BlazenError **out_err);
+
+/**
+ * Frees a `BlazenKokoroProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_free`].
+ */
+ void blazen_kokoro_provider_free(BlazenKokoroProvider *model);
+
+/**
+ * Construct a `BlazenVibeVoiceProvider`. See
+ * [`blazen_kokoro_provider_new`] for argument conventions.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_kokoro_provider_new`].
+ */
+
+int32_t blazen_vibevoice_provider_new(const char *voice,
+                                      const char *language,
+                                      int32_t sample_rate,
+                                      BlazenVibeVoiceProvider **out_model,
+                                      BlazenError **out_err);
+
+/**
+ * Asynchronously synthesize speech. See
+ * [`blazen_piper_provider_synthesize`] for the future pipeline.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_synthesize`].
+ */
+
+BlazenFuture *blazen_vibevoice_provider_synthesize(const BlazenVibeVoiceProvider *model,
+                                                   const char *text,
+                                                   const char *voice,
+                                                   const char *language);
+
+/**
+ * Synchronous variant of [`blazen_vibevoice_provider_synthesize`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_synthesize_blocking`].
+ */
+
+int32_t blazen_vibevoice_provider_synthesize_blocking(const BlazenVibeVoiceProvider *model,
+                                                      const char *text,
+                                                      const char *voice,
+                                                      const char *language,
+                                                      BlazenTtsResult **out_result,
+                                                      BlazenError **out_err);
+
+/**
+ * Frees a `BlazenVibeVoiceProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_free`].
+ */
+ void blazen_vibevoice_provider_free(BlazenVibeVoiceProvider *model);
+
+/**
+ * Construct a `BlazenQwen3TtsProvider`. See
+ * [`blazen_kokoro_provider_new`] for argument conventions.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_kokoro_provider_new`].
+ */
+
+int32_t blazen_qwen3_tts_provider_new(const char *voice,
+                                      const char *language,
+                                      int32_t sample_rate,
+                                      BlazenQwen3TtsProvider **out_model,
+                                      BlazenError **out_err);
+
+/**
+ * Asynchronously synthesize speech.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_synthesize`].
+ */
+
+BlazenFuture *blazen_qwen3_tts_provider_synthesize(const BlazenQwen3TtsProvider *model,
+                                                   const char *text,
+                                                   const char *voice,
+                                                   const char *language);
+
+/**
+ * Synchronous variant of [`blazen_qwen3_tts_provider_synthesize`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_synthesize_blocking`].
+ */
+
+int32_t blazen_qwen3_tts_provider_synthesize_blocking(const BlazenQwen3TtsProvider *model,
+                                                      const char *text,
+                                                      const char *voice,
+                                                      const char *language,
+                                                      BlazenTtsResult **out_result,
+                                                      BlazenError **out_err);
+
+/**
+ * Frees a `BlazenQwen3TtsProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_free`].
+ */
+ void blazen_qwen3_tts_provider_free(BlazenQwen3TtsProvider *model);
+
+/**
+ * Construct a `BlazenSparkTtsProvider`. All three inputs are optional —
+ * pass null to defer to the upstream defaults.
+ *
+ * Unlike most engines this constructor is infallible (the underlying Rust
+ * constructor returns `Arc<Self>` directly), so it returns the handle by
+ * pointer rather than an out-param. Returns `null` only when one of the
+ * optional input strings is non-null but contains non-UTF-8 bytes.
+ *
+ * # Safety
+ *
+ * `model_id` / `model_dir` / `revision` must be null OR valid NUL-terminated
+ * UTF-8 buffers.
+ */
+
+BlazenSparkTtsProvider *blazen_spark_tts_provider_new(const char *model_id,
+                                                      const char *model_dir,
+                                                      const char *revision);
+
+/**
+ * Asynchronously synthesize speech.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_synthesize`].
+ */
+
+BlazenFuture *blazen_spark_tts_provider_synthesize(const BlazenSparkTtsProvider *model,
+                                                   const char *text,
+                                                   const char *voice,
+                                                   const char *language);
+
+/**
+ * Synchronous variant of [`blazen_spark_tts_provider_synthesize`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_synthesize_blocking`].
+ */
+
+int32_t blazen_spark_tts_provider_synthesize_blocking(const BlazenSparkTtsProvider *model,
+                                                      const char *text,
+                                                      const char *voice,
+                                                      const char *language,
+                                                      BlazenTtsResult **out_result,
+                                                      BlazenError **out_err);
+
+/**
+ * Frees a `BlazenSparkTtsProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_free`].
+ */
+ void blazen_spark_tts_provider_free(BlazenSparkTtsProvider *model);
+
+/**
+ * Construct a `BlazenBarkProvider` with default configuration. Infallible.
+ *
+ * # Safety
+ *
+ * Always safe to call; returns a non-null heap-allocated handle.
+ */
+ BlazenBarkProvider *blazen_bark_provider_new(void);
+
+/**
+ * Asynchronously synthesize speech.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_synthesize`].
+ */
+
+BlazenFuture *blazen_bark_provider_synthesize(const BlazenBarkProvider *model,
+                                              const char *text,
+                                              const char *voice,
+                                              const char *language);
+
+/**
+ * Synchronous variant of [`blazen_bark_provider_synthesize`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_synthesize_blocking`].
+ */
+
+int32_t blazen_bark_provider_synthesize_blocking(const BlazenBarkProvider *model,
+                                                 const char *text,
+                                                 const char *voice,
+                                                 const char *language,
+                                                 BlazenTtsResult **out_result,
+                                                 BlazenError **out_err);
+
+/**
+ * Frees a `BlazenBarkProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_free`].
+ */
+ void blazen_bark_provider_free(BlazenBarkProvider *model);
+
+/**
+ * Construct a `BlazenF5Provider` with default configuration. Infallible.
+ *
+ * # Safety
+ *
+ * Always safe to call; returns a non-null heap-allocated handle.
+ */
+ BlazenF5Provider *blazen_f5_provider_new(void);
+
+/**
+ * Asynchronously synthesize speech.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_synthesize`].
+ */
+
+BlazenFuture *blazen_f5_provider_synthesize(const BlazenF5Provider *model,
+                                            const char *text,
+                                            const char *voice,
+                                            const char *language);
+
+/**
+ * Synchronous variant of [`blazen_f5_provider_synthesize`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_synthesize_blocking`].
+ */
+
+int32_t blazen_f5_provider_synthesize_blocking(const BlazenF5Provider *model,
+                                               const char *text,
+                                               const char *voice,
+                                               const char *language,
+                                               BlazenTtsResult **out_result,
+                                               BlazenError **out_err);
+
+/**
+ * Frees a `BlazenF5Provider`. No-op on null.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_free`].
+ */
+ void blazen_f5_provider_free(BlazenF5Provider *model);
+
+/**
+ * Construct a `BlazenFalTtsProvider` from a fal.ai API key.
+ *
+ * An empty `api_key` falls back to the `FAL_KEY` environment variable.
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null;
+ *   empty string is allowed).
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_fal_tts_provider_new(const char *api_key,
+                                    BlazenFalTtsProvider **out_model,
+                                    BlazenError **out_err);
+
+/**
+ * Construct a `BlazenFalTtsProvider` with an explicit default fal TTS
+ * endpoint (e.g. `"fal-ai/dia-tts"`). Pass `default_model` as null to leave
+ * the upstream default in place.
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `default_model` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_fal_tts_provider_new_with_model(const char *api_key,
+                                               const char *default_model,
+                                               BlazenFalTtsProvider **out_model,
+                                               BlazenError **out_err);
+
+/**
+ * Asynchronously synthesize speech.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_synthesize`].
+ */
+
+BlazenFuture *blazen_fal_tts_provider_synthesize(const BlazenFalTtsProvider *model,
+                                                 const char *text,
+                                                 const char *voice,
+                                                 const char *language);
+
+/**
+ * Synchronous variant of [`blazen_fal_tts_provider_synthesize`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_synthesize_blocking`].
+ */
+
+int32_t blazen_fal_tts_provider_synthesize_blocking(const BlazenFalTtsProvider *model,
+                                                    const char *text,
+                                                    const char *voice,
+                                                    const char *language,
+                                                    BlazenTtsResult **out_result,
+                                                    BlazenError **out_err);
+
+/**
+ * Frees a `BlazenFalTtsProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_piper_provider_free`].
+ */
+ void blazen_fal_tts_provider_free(BlazenFalTtsProvider *model);
 
 /**
  * Construct a new builder with the given UTF-8 `name`. Returns null on a

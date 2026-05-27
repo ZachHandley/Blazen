@@ -58,6 +58,7 @@ pub mod telemetry_records;
 pub mod threed;
 pub mod tool_handler;
 pub mod training_records;
+pub mod tts;
 pub mod workflow;
 pub mod workflow_records;
 
