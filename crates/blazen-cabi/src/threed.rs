@@ -1,6 +1,6 @@
 //! C-ABI surface for the [`blazen_3d`] HTTP-proxy backend.
 //!
-//! Exposes [`blazen_uniffi::threed::Compat3dProvider`] (a `UniFFI` object
+//! Exposes [`blazen_uniffi::concrete::three_d::Compat3dProvider`] (a `UniFFI` object
 //! wrapping `blazen_3d::backends::compat::Compat3dProvider`) to FFI
 //! hosts (the Ruby gem today, future Dart/Crystal/etc.). The surface is
 //! deliberately small and consistent across the four 3D-pipeline stages:
@@ -20,7 +20,7 @@
 //!
 //! Request "knobs" cross the boundary as a NUL-terminated UTF-8 JSON
 //! string mirroring the relevant
-//! [`blazen_uniffi::threed`] record fields. Binary payloads (mesh GLB,
+//! [`blazen_uniffi::concrete::three_d`] record fields. Binary payloads (mesh GLB,
 //! reference image, driving video, BVH motion) cross as
 //! `(*const u8, usize)` borrowed slices. The Rust side copies bytes
 //! and parses the JSON before spawning the underlying async task, so
@@ -38,11 +38,11 @@
 use std::ffi::c_char;
 use std::sync::Arc;
 
-use blazen_uniffi::errors::BlazenError as InnerError;
-use blazen_uniffi::threed::{
+use blazen_uniffi::concrete::three_d::{
     AnimateRequest, AnimateResult, Compat3dProvider as InnerProvider, RefineRequest, RefineResult,
-    RigRequest, RigResult, TexturizeRequest, TexturizeResult, ThreeDError,
+    RigRequest, RigResult, TexturizeRequest, TexturizeResult,
 };
+use blazen_uniffi::errors::BlazenError as InnerError;
 use serde::Deserialize;
 
 use crate::error::BlazenError;
@@ -54,7 +54,7 @@ use crate::string::{alloc_cstring, cstr_to_opt_string, cstr_to_str};
 // JSON request shapes
 // ---------------------------------------------------------------------------
 //
-// Mirror `blazen_uniffi::threed::{Texturize,Rig,Refine,Animate}Request`
+// Mirror `blazen_uniffi::concrete::three_d::{Texturize,Rig,Refine,Animate}Request`
 // minus the binary fields, which the cabi accepts out-of-band as
 // `(ptr, len)` byte slices. The JSON shapes are deliberately permissive
 // (all fields default to `None` / sensible falsy values) so callers can
@@ -141,7 +141,7 @@ unsafe fn bytes_to_vec(ptr: *const u8, len: usize) -> Vec<u8> {
 // Compat3dProvider opaque handle
 // ---------------------------------------------------------------------------
 
-/// Opaque handle wrapping [`blazen_uniffi::threed::Compat3dProvider`].
+/// Opaque handle wrapping [`blazen_uniffi::concrete::three_d::Compat3dProvider`].
 ///
 /// Produced by [`blazen_compat3d_provider_new`]; freed by
 /// [`blazen_compat3d_provider_free`]. The handle is `Send + Sync` — the
@@ -627,21 +627,11 @@ unsafe fn write_internal_error(out_err: *mut *mut BlazenError, msg: &str) -> i32
     }
 }
 
-/// Convert `ThreeDError` into the canonical `InnerError` variant.
-/// `Backend` / `Unsupported` map onto `InnerError::Unsupported` /
-/// `InnerError::Internal` respectively; the cabi-wide error taxonomy
-/// doesn't carry a dedicated "3D pipeline" variant.
-fn threed_err_to_inner(err: ThreeDError) -> InnerError {
-    match err {
-        ThreeDError::Backend { message } | ThreeDError::Io { message } => {
-            InnerError::Internal { message }
-        }
-        ThreeDError::InvalidInput { message } | ThreeDError::Unsupported { message } => {
-            InnerError::Validation { message }
-        }
-        ThreeDError::EngineNotAvailable { message } => InnerError::Unsupported { message },
-    }
-}
+// Note: the unified `Compat3dProvider` in `blazen_uniffi::concrete::three_d`
+// now returns `BlazenError` (the central uniffi error type) directly
+// from every method, so the legacy `ThreeDError` → `InnerError`
+// translation that lived here (`threed_err_to_inner`) was retired
+// alongside the `crate::threed` module deletion in P4.2.x.3.three_d.
 
 // ---------------------------------------------------------------------------
 // Texturize
@@ -715,7 +705,7 @@ pub unsafe extern "C" fn blazen_compat3d_texturize_blocking(
             0
         }
         // SAFETY: out-err contract.
-        Err(e) => unsafe { write_error(out_err, threed_err_to_inner(e)) },
+        Err(e) => unsafe { write_error(out_err, e) },
     }
 }
 
@@ -771,7 +761,6 @@ pub unsafe extern "C" fn blazen_compat3d_texturize(
             .texturize(mesh, request)
             .await
             .map(ResultInner::Texturize)
-            .map_err(threed_err_to_inner)
     })
 }
 
@@ -825,7 +814,7 @@ pub unsafe extern "C" fn blazen_compat3d_rig_blocking(
             0
         }
         // SAFETY: out-err contract.
-        Err(e) => unsafe { write_error(out_err, threed_err_to_inner(e)) },
+        Err(e) => unsafe { write_error(out_err, e) },
     }
 }
 
@@ -858,13 +847,7 @@ pub unsafe extern "C" fn blazen_compat3d_rig(
         pose_hint: req_json.pose_hint,
     };
     let inner = Arc::clone(&provider.0);
-    BlazenFuture::spawn(async move {
-        inner
-            .rig(mesh, request)
-            .await
-            .map(ResultInner::Rig)
-            .map_err(threed_err_to_inner)
-    })
+    BlazenFuture::spawn(async move { inner.rig(mesh, request).await.map(ResultInner::Rig) })
 }
 
 // ---------------------------------------------------------------------------
@@ -917,7 +900,7 @@ pub unsafe extern "C" fn blazen_compat3d_refine_blocking(
             0
         }
         // SAFETY: out-err contract.
-        Err(e) => unsafe { write_error(out_err, threed_err_to_inner(e)) },
+        Err(e) => unsafe { write_error(out_err, e) },
     }
 }
 
@@ -952,13 +935,7 @@ pub unsafe extern "C" fn blazen_compat3d_refine(
         smooth_iterations: req_json.smooth_iterations,
     };
     let inner = Arc::clone(&provider.0);
-    BlazenFuture::spawn(async move {
-        inner
-            .refine(mesh, request)
-            .await
-            .map(ResultInner::Refine)
-            .map_err(threed_err_to_inner)
-    })
+    BlazenFuture::spawn(async move { inner.refine(mesh, request).await.map(ResultInner::Refine) })
 }
 
 // ---------------------------------------------------------------------------
@@ -1029,7 +1006,7 @@ pub unsafe extern "C" fn blazen_compat3d_animate_blocking(
             0
         }
         // SAFETY: out-err contract.
-        Err(e) => unsafe { write_error(out_err, threed_err_to_inner(e)) },
+        Err(e) => unsafe { write_error(out_err, e) },
     }
 }
 
@@ -1084,7 +1061,6 @@ pub unsafe extern "C" fn blazen_compat3d_animate(
             .animate(rigged, request)
             .await
             .map(ResultInner::Animate)
-            .map_err(threed_err_to_inner)
     })
 }
 

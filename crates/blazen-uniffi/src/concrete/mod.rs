@@ -49,7 +49,12 @@ pub mod music;
 #[cfg(feature = "audio-vc")]
 pub mod vc;
 
-#[cfg(feature = "triposr")]
+// 3D module covers both the `TripoSrProvider` (gated on `triposr`) and
+// the HTTP-proxy `Compat3dProvider` (gated on `threed-compat-proxy`).
+// Activate the module under the umbrella `threed` feature so either
+// concrete can land independently. Individual structs inside still
+// carry their per-engine `#[cfg(feature = ...)]` gates.
+#[cfg(feature = "threed")]
 pub mod three_d;
 
 // LLM concrete providers land in a follow-up sub-wave (P4.2.llm).

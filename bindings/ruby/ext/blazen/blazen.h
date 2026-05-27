@@ -316,7 +316,7 @@ typedef struct BlazenChatMessage BlazenChatMessage;
 typedef struct BlazenCheckpointStore BlazenCheckpointStore;
 
 /**
- * Opaque handle wrapping [`blazen_uniffi::threed::Compat3dProvider`].
+ * Opaque handle wrapping [`blazen_uniffi::concrete::three_d::Compat3dProvider`].
  *
  * Produced by [`blazen_compat3d_provider_new`]; freed by
  * [`blazen_compat3d_provider_free`]. The handle is `Send + Sync` — the

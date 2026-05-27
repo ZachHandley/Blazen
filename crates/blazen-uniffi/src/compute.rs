@@ -717,7 +717,7 @@ impl ImageGenModel {
 /// Carries the rendered model as bytes (typically GLB / glTF-binary at
 /// `model/gltf-binary`) plus the IANA MIME type so foreign callers can
 /// dispatch on the format without sniffing the buffer.
-#[cfg(feature = "triposr")]
+#[cfg(feature = "threed")]
 #[derive(Debug, Clone, uniffi::Record)]
 pub struct ThreeDGenerateResult {
     /// Encoded 3D model bytes (GLB container with embedded vertices /

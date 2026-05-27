@@ -56,8 +56,6 @@ pub mod providers;
 pub mod runtime;
 pub mod streaming;
 pub mod telemetry;
-#[cfg(feature = "threed-compat-proxy")]
-pub mod threed;
 pub mod workflow;
 
 pub use agent::{Agent, AgentResult, ToolHandler};
@@ -142,10 +140,15 @@ pub use telemetry::init_otlp;
 #[cfg(feature = "prometheus")]
 pub use telemetry::init_prometheus;
 pub use telemetry::{WorkflowHistoryEntry, parse_workflow_history, shutdown_telemetry};
+// 3D DTOs + per-engine concretes are re-exported from the canonical
+// `concrete::three_d` home (the legacy `threed` module was retired in
+// P4.2.x.3.three_d in favor of the unified per-engine layout).
 #[cfg(feature = "threed-compat-proxy")]
-pub use threed::{
-    AnimateRequest, AnimateResult, Compat3dProvider, PbrMaps, RefineRequest, RefineResult,
-    RefineStats, RigRequest, RigResult, TexturizeRequest, TexturizeResult, ThreeDError,
+pub use concrete::three_d::Compat3dProvider;
+#[cfg(feature = "threed")]
+pub use concrete::three_d::{
+    AnimateRequest, AnimateResult, PbrMaps, RefineRequest, RefineResult, RefineStats, RigRequest,
+    RigResult, TexturizeRequest, TexturizeResult,
 };
 pub use workflow::{Event, StepHandler, StepOutput, Workflow, WorkflowBuilder, WorkflowResult};
 

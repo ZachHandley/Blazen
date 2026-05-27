@@ -52,7 +52,7 @@ use crate::errors::BlazenError;
 use crate::compute::ImageGenResult;
 #[cfg(feature = "whispercpp")]
 use crate::compute::SttResult;
-#[cfg(feature = "triposr")]
+#[cfg(feature = "threed")]
 use crate::compute::ThreeDGenerateResult;
 #[cfg(feature = "tts")]
 use crate::compute::TtsResult;
@@ -60,6 +60,16 @@ use crate::compute::TtsResult;
 use crate::compute_music::MusicResult;
 #[cfg(feature = "audio-vc")]
 use crate::compute_vc::{TargetVoice, VcResult};
+
+// 3D post-processing DTOs live alongside the per-engine concretes
+// (`concrete::three_d`). They're available whenever the `threed`
+// umbrella feature is on (which both `triposr` and
+// `threed-compat-proxy` imply).
+#[cfg(feature = "threed")]
+use crate::concrete::three_d::{
+    AnimateRequest, AnimateResult, RefineRequest, RefineResult, RigRequest, RigResult,
+    TexturizeRequest, TexturizeResult,
+};
 
 use crate::llm::{ModelRequest, ModelResponse};
 
@@ -260,13 +270,22 @@ pub trait VcProvider: Send + Sync {
 // ThreeDProvider
 // ---------------------------------------------------------------------------
 
-/// Image-to-3D mesh generation capability trait.
+/// Image-to-3D mesh generation **and** post-processing capability trait.
 ///
-/// Note: `texturize` / `rig` / `refine` / `animate` are deferred to
-/// P4.2.x.3.three_d — they require `#[derive(uniffi::Record)]` wrappers
-/// for the associated request/result types that today live in
-/// [`crate::threed`].
-#[cfg(feature = "triposr")]
+/// Implemented by every concrete 3D engine
+/// (`TripoSrProvider`, `Compat3dProvider`) so foreign code can dispatch
+/// the full 3D pipeline — generation plus the texturize / rig / refine
+/// / animate post-processing stages — through a single `ThreeDProvider`
+/// interface regardless of the backing engine.
+///
+/// Engines that only cover one half of the pipeline surface
+/// `BlazenError::Unsupported` from the other half (e.g. `TripoSrProvider`
+/// is generation-only and returns `Unsupported` from `texturize`; the
+/// HTTP-proxy `Compat3dProvider` is post-proc-only and returns
+/// `Unsupported` from `generate_from_image`). UniFFI 0.31 forbids
+/// default method bodies on exported traits, so the `Unsupported`
+/// paths live in the per-engine `impl` blocks rather than the trait body.
+#[cfg(feature = "threed")]
 #[uniffi::export]
 #[async_trait]
 pub trait ThreeDProvider: Send + Sync {
@@ -277,11 +296,44 @@ pub trait ThreeDProvider: Send + Sync {
     fn capability(&self) -> CapabilityKind;
 
     /// Generate a 3D mesh from a single image.
+    ///
+    /// Post-proc-only engines (e.g. the HTTP-proxy
+    /// [`crate::concrete::three_d::Compat3dProvider`]) surface
+    /// [`BlazenError::Unsupported`] from this method.
     async fn generate_from_image(
         &self,
         image_bytes: Vec<u8>,
         mesh_resolution: u32,
     ) -> Result<ThreeDGenerateResult, BlazenError>;
+
+    /// Apply or generate a texture / material for an existing mesh.
+    ///
+    /// Generation-only engines (e.g.
+    /// [`crate::concrete::three_d::TripoSrProvider`]) surface
+    /// [`BlazenError::Unsupported`] from this method.
+    async fn texturize(
+        &self,
+        mesh_glb: Vec<u8>,
+        request: TexturizeRequest,
+    ) -> Result<TexturizeResult, BlazenError>;
+
+    /// Auto-rig a mesh, producing a GLB with skeletal armature
+    /// (and optional skin weights) embedded.
+    async fn rig(&self, mesh_glb: Vec<u8>, request: RigRequest) -> Result<RigResult, BlazenError>;
+
+    /// Refine a mesh: decimate, fill holes, unwrap UVs, retopologize, smooth.
+    async fn refine(
+        &self,
+        mesh_glb: Vec<u8>,
+        request: RefineRequest,
+    ) -> Result<RefineResult, BlazenError>;
+
+    /// Animate a rigged mesh from a text prompt, mocap clip, or driving video.
+    async fn animate(
+        &self,
+        rigged_glb: Vec<u8>,
+        request: AnimateRequest,
+    ) -> Result<AnimateResult, BlazenError>;
 }
 
 // ---------------------------------------------------------------------------
