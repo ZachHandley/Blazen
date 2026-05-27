@@ -110,7 +110,12 @@ jobs:
 
   lint:
     name: Lint
-    runs-on: ubuntu-latest
+    # Pinned to minibeast (self-hosted, /opt/cuda installed) because
+    # `cargo clippy --workspace --all-features` fans the `cuda` feature out
+    # across the workspace, which compiles cudarc — cudarc's build.rs
+    # panics if nvcc isn't on PATH. minibeast is pre-provisioned; the
+    # setup-cuda-toolkit step below adds /opt/cuda/bin to PATH for the job.
+    runs-on: minibeast
     needs: [detect, version]
     if: needs.detect.outputs.web_only != 'true'
     steps:
@@ -169,7 +174,10 @@ jobs:
 
   test:
     name: Test
-    runs-on: ubuntu-latest
+    # Pinned to minibeast for the same reason as lint — `--all-features`
+    # compiles cudarc, which requires nvcc on PATH. minibeast has it at
+    # /opt/cuda/bin/nvcc; setup-cuda-toolkit exports it into the job env.
+    runs-on: minibeast
     needs: [detect, version, lint]
     if: needs.detect.outputs.web_only != 'true'
     steps:
@@ -263,12 +271,6 @@ jobs:
           sccache-key-prefix: sccache/blazen-python
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
-      - name: Setup CUDA Toolkit
-        if: steps.check.outputs.completed != 'true'
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
-        with:
-          required: 'true'
-
       - name: Setup Python + uv
         if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
@@ -345,12 +347,6 @@ jobs:
           sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-node
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
-
-      - name: Setup CUDA Toolkit
-        if: steps.check.outputs.completed != 'true'
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
-        with:
-          required: 'true'
 
       - name: Setup Node
         if: steps.check.outputs.completed != 'true'
@@ -432,12 +428,6 @@ jobs:
           sccache-key-prefix: sccache/blazen-go
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
-      - name: Setup CUDA Toolkit
-        if: steps.check.outputs.completed != 'true'
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
-        with:
-          required: 'true'
-
       - name: Build blazen-uniffi (release)
         if: steps.check.outputs.completed != 'true'
         run: cargo build -p blazen-uniffi --release
@@ -513,12 +503,6 @@ jobs:
           sccache-key-prefix: sccache/blazen-swift
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
-      - name: Setup CUDA Toolkit
-        if: steps.check.outputs.completed != 'true'
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
-        with:
-          required: 'true'
-
       - name: Setup Swift
         if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-swift@main
@@ -586,12 +570,6 @@ jobs:
           sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-kotlin
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
-
-      - name: Setup CUDA Toolkit
-        if: steps.check.outputs.completed != 'true'
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
-        with:
-          required: 'true'
 
       - name: Build blazen-uniffi (release)
         if: steps.check.outputs.completed != 'true'
@@ -667,12 +645,6 @@ jobs:
           sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-ruby
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
-
-      - name: Setup CUDA Toolkit
-        if: steps.check.outputs.completed != 'true'
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
-        with:
-          required: 'true'
 
       - name: Build blazen-cabi (release)
         if: steps.check.outputs.completed != 'true'
@@ -758,12 +730,6 @@ jobs:
           sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-audit
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
-
-      - name: Setup CUDA Toolkit
-        if: steps.check.outputs.completed != 'true'
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
-        with:
-          required: 'true'
 
       - name: Setup Node
         if: steps.check.outputs.completed != 'true'
@@ -1002,12 +968,6 @@ jobs:
           sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-smoke-compute
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
-
-      - name: Setup CUDA Toolkit
-        if: steps.check.outputs.completed != 'true'
-        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
-        with:
-          required: 'true'
 
       - name: Setup Python + uv
         if: steps.check.outputs.completed != 'true'
