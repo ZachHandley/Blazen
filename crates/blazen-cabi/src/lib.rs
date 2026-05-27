@@ -29,6 +29,7 @@ pub mod controlplane;
 pub mod controlplane_records;
 pub mod error;
 pub mod future;
+pub mod image;
 pub mod init;
 pub mod llm;
 pub mod llm_records;
@@ -36,6 +37,7 @@ pub mod manager;
 pub mod manager_records;
 #[cfg(feature = "distributed")]
 pub mod model_client;
+pub mod music;
 pub mod peer;
 pub mod persist;
 pub mod persist_factories;
@@ -52,13 +54,18 @@ pub mod step_handler;
 pub mod stream_sink;
 pub mod streaming_records;
 pub mod string;
+#[cfg(feature = "whispercpp")]
+pub mod stt;
 pub mod telemetry;
 pub mod telemetry_records;
+#[cfg(feature = "triposr")]
+pub mod three_d;
 #[cfg(feature = "threed-compat-proxy")]
 pub mod threed;
 pub mod tool_handler;
 pub mod training_records;
 pub mod tts;
+pub mod vc;
 pub mod workflow;
 pub mod workflow_records;
 

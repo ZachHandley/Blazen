@@ -293,6 +293,12 @@ typedef struct BlazenAgentResult BlazenAgentResult;
 
 /**
  * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::music::AudioGenProvider>`.
+ */
+typedef struct BlazenAudioGenProvider BlazenAudioGenProvider;
+
+/**
+ * Opaque handle wrapping
  * `Arc<blazen_uniffi::concrete::tts::BarkProvider>`.
  */
 typedef struct BlazenBarkProvider BlazenBarkProvider;
@@ -376,6 +382,14 @@ typedef struct BlazenControlPlaneSubscription BlazenControlPlaneSubscription;
 typedef struct BlazenControlPlaneWorker BlazenControlPlaneWorker;
 
 /**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::image::DiffusionProvider>`.
+ *
+ * Free with [`blazen_diffusion_provider_free`].
+ */
+typedef struct BlazenDiffusionProvider BlazenDiffusionProvider;
+
+/**
  * Opaque wrapper around [`blazen_uniffi::llm::EmbeddingModel`]. Construct
  * via the per-provider factories in Phase R4.
  */
@@ -415,9 +429,51 @@ typedef struct BlazenF5Provider BlazenF5Provider;
 
 /**
  * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::image::FalImageGenProvider>`.
+ *
+ * Free with [`blazen_fal_image_gen_provider_free`].
+ */
+typedef struct BlazenFalImageGenProvider BlazenFalImageGenProvider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::music::FalMusicProvider>`.
+ *
+ * Note: the upstream `MusicProvider` trait is itself gated behind
+ * `audio-music-musicgen` (the trait's `#[uniffi::export]` only emits when
+ * the music feature group is on). When that feature is off the
+ * `generate_*` cabi entry points compile away too — host bindings should
+ * gate calls behind the same feature. The handle constructor +
+ * destructor remain available unconditionally for symmetry with the
+ * always-on `crate::compute_music::blazen_music_model_new_fal` factory.
+ */
+typedef struct BlazenFalMusicProvider BlazenFalMusicProvider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::stt::FalSttProvider>`.
+ */
+typedef struct BlazenFalSttProvider BlazenFalSttProvider;
+
+/**
+ * Opaque handle wrapping
  * `Arc<blazen_uniffi::concrete::tts::FalTtsProvider>`.
  */
 typedef struct BlazenFalTtsProvider BlazenFalTtsProvider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::vc::FalVcProvider>`.
+ *
+ * Free with [`blazen_fal_vc_provider_free`].
+ */
+typedef struct BlazenFalVcProvider BlazenFalVcProvider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::stt::FasterWhisperProvider>`.
+ */
+typedef struct BlazenFasterWhisperProvider BlazenFasterWhisperProvider;
 
 /**
  * Opaque async-result handle. cbindgen renders the C side as a
@@ -527,6 +583,14 @@ typedef struct BlazenModelStatusList BlazenModelStatusList;
  * (None when unreported).
  */
 typedef struct BlazenMusicChunk BlazenMusicChunk;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::music::MusicGenProvider>`.
+ *
+ * Free with [`blazen_musicgen_provider_free`].
+ */
+typedef struct BlazenMusicGenProvider BlazenMusicGenProvider;
 
 /**
  * Opaque handle wrapping an `Arc<blazen_uniffi::compute_music::MusicModel>`.
@@ -660,9 +724,23 @@ typedef struct BlazenRunStateSnapshot BlazenRunStateSnapshot;
 
 /**
  * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::vc::RvcProvider>`.
+ *
+ * Free with [`blazen_rvc_provider_free`].
+ */
+typedef struct BlazenRvcProvider BlazenRvcProvider;
+
+/**
+ * Opaque handle wrapping
  * `Arc<blazen_uniffi::concrete::tts::SparkTtsProvider>`.
  */
 typedef struct BlazenSparkTtsProvider BlazenSparkTtsProvider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::music::StableAudioProvider>`.
+ */
+typedef struct BlazenStableAudioProvider BlazenStableAudioProvider;
 
 /**
  * Opaque handle wrapping a `blazen_uniffi::workflow::StepOutput` enum.
@@ -769,6 +847,14 @@ typedef struct BlazenTool BlazenTool;
 typedef struct BlazenToolCall BlazenToolCall;
 
 /**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::three_d::TripoSrProvider>`.
+ *
+ * Free with [`blazen_triposr_provider_free`].
+ */
+typedef struct BlazenTripoSrProvider BlazenTripoSrProvider;
+
+/**
  * Opaque handle wrapping an `Arc<blazen_uniffi::compute::TtsModel>`.
  *
  * Produced by the per-backend TTS factory functions (Phase R4). Free with
@@ -828,6 +914,25 @@ typedef struct BlazenVcResult BlazenVcResult;
  * `Arc<blazen_uniffi::concrete::tts::VibeVoiceProvider>`.
  */
 typedef struct BlazenVibeVoiceProvider BlazenVibeVoiceProvider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::stt::WhisperCppProvider>`.
+ *
+ * Free with [`blazen_whispercpp_provider_free`].
+ */
+typedef struct BlazenWhisperCppProvider BlazenWhisperCppProvider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::stt::WhisperStreamingProvider>`.
+ *
+ * Note: the underlying backend's blocking `transcribe` entry point
+ * returns `Unsupported` — only the streaming surface is functional in
+ * the upstream backend. The async / blocking transcribe methods below
+ * are exposed for API parity but will surface that error to the caller.
+ */
+typedef struct BlazenWhisperStreamingProvider BlazenWhisperStreamingProvider;
 
 /**
  * Opaque handle wrapping a [`blazen_core::distributed::WorkerInfo`].
@@ -6772,6 +6877,154 @@ int32_t blazen_future_take_full_finetune_result(BlazenFuture *fut,
  void blazen_future_free(BlazenFuture *fut);
 
 /**
+ * Construct a `BlazenDiffusionProvider` from an optional JSON-encoded
+ * [`blazen_llm::DiffusionOptions`] payload.
+ *
+ * Pass null `options_json` to use the upstream defaults (512x512, `EulerA`
+ * scheduler, 20 inference steps). Invalid JSON or option-validation
+ * failures surface as a fresh `BlazenError*` in `*out_err`.
+ *
+ * On success returns `0` and writes a fresh `BlazenDiffusionProvider*` into
+ * `*out_model`. On failure returns `-1` and writes a fresh `BlazenError*`
+ * into `*out_err`. Both out-parameters may be null to discard that side of
+ * the result.
+ *
+ * # Safety
+ *
+ * - `options_json` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot of
+ *   the matching pointer type.
+ */
+
+int32_t blazen_diffusion_provider_new(const char *options_json,
+                                      BlazenDiffusionProvider **out_model,
+                                      BlazenError **out_err);
+
+/**
+ * Asynchronously generate an image from `prompt`. Returns a `*mut BlazenFuture`
+ * the caller polls / waits on; the typed result is popped with
+ * [`crate::compute::blazen_future_take_image_gen_result`].
+ *
+ * `width` and `height` use `0` as the `None` sentinel -- pass `0` for either
+ * to defer to the provider's default size. When either is `0` the request
+ * omits the size override entirely (the inner builder only applies the
+ * override when both are present).
+ *
+ * Returns null if `model` is null or `prompt` is null / non-UTF-8.
+ *
+ * # Safety
+ *
+ * - `model` must be a valid pointer to a `BlazenDiffusionProvider` produced
+ *   by this surface.
+ * - `prompt` must be a valid NUL-terminated UTF-8 buffer.
+ */
+
+BlazenFuture *blazen_diffusion_provider_generate_image(const BlazenDiffusionProvider *model,
+                                                       const char *prompt,
+                                                       uint32_t width,
+                                                       uint32_t height);
+
+/**
+ * Synchronous variant of [`blazen_diffusion_provider_generate_image`]. Returns
+ * `0` on success (typed result in `*out_result`), `-1` on failure (error in
+ * `*out_err`), `-2` on invalid input (null model / non-UTF-8 `prompt`).
+ *
+ * # Safety
+ *
+ * Same string contracts as [`blazen_diffusion_provider_generate_image`].
+ * `out_result` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_diffusion_provider_generate_image_blocking(const BlazenDiffusionProvider *model,
+                                                          const char *prompt,
+                                                          uint32_t width,
+                                                          uint32_t height,
+                                                          BlazenImageGenResult **out_result,
+                                                          BlazenError **out_err);
+
+/**
+ * Frees a `BlazenDiffusionProvider` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_diffusion_provider_new`]. Double-free is undefined behavior.
+ */
+ void blazen_diffusion_provider_free(BlazenDiffusionProvider *model);
+
+/**
+ * Construct a `BlazenFalImageGenProvider` from a fal.ai API key.
+ *
+ * `default_model` is an optional default image model id
+ * (e.g. `"fal-ai/flux/schnell"`). `base_url` overrides the default fal
+ * queue URL (`https://queue.fal.run`) -- used for proxies / staging
+ * environments.
+ *
+ * This constructor is infallible on the Rust side (the uniffi wrapper
+ * returns `Arc<Self>` directly), so it returns `0` and writes the handle
+ * into `*out_model`. The `out_err` parameter exists only for argument-shape
+ * errors (null required pointers, non-UTF-8 strings).
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `default_model` / `base_url` must be null OR valid NUL-terminated UTF-8
+ *   buffers.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot of
+ *   the matching pointer type.
+ */
+
+int32_t blazen_fal_image_gen_provider_new(const char *api_key,
+                                          const char *default_model,
+                                          const char *base_url,
+                                          BlazenFalImageGenProvider **out_model,
+                                          BlazenError **out_err);
+
+/**
+ * Asynchronously generate an image from `prompt`. See
+ * [`blazen_diffusion_provider_generate_image`] for the future /
+ * `take_image_gen_result` pipeline and the `0`-as-`None` sentinel
+ * convention on `width` / `height`.
+ *
+ * # Safety
+ *
+ * - `model` must be a valid pointer to a `BlazenFalImageGenProvider`
+ *   produced by this surface.
+ * - `prompt` must be a valid NUL-terminated UTF-8 buffer.
+ */
+
+BlazenFuture *blazen_fal_image_gen_provider_generate_image(const BlazenFalImageGenProvider *model,
+                                                           const char *prompt,
+                                                           uint32_t width,
+                                                           uint32_t height);
+
+/**
+ * Synchronous variant of [`blazen_fal_image_gen_provider_generate_image`].
+ * Returns `0` on success, `-1` on failure (error in `*out_err`).
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_diffusion_provider_generate_image_blocking`].
+ */
+
+int32_t blazen_fal_image_gen_provider_generate_image_blocking(const BlazenFalImageGenProvider *model,
+                                                              const char *prompt,
+                                                              uint32_t width,
+                                                              uint32_t height,
+                                                              BlazenImageGenResult **out_result,
+                                                              BlazenError **out_err);
+
+/**
+ * Frees a `BlazenFalImageGenProvider` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_fal_image_gen_provider_new`]. Double-free is undefined behavior.
+ */
+ void blazen_fal_image_gen_provider_free(BlazenFalImageGenProvider *model);
+
+/**
  * Initialises the blazen-cabi runtime: builds the cabi tokio runtime if it
  * hasn't been built yet, and delegates to `blazen_uniffi::init` to warm the
  * UniFFI-managed runtime + install a default tracing subscriber when none
@@ -9088,6 +9341,387 @@ int32_t blazen_modelclient_fetch_blob_blocking(BlazenModelClient *handle,
  * model-client surface. Calling this twice is a double-free.
  */
  void blazen_modelclient_free(BlazenModelClient *handle);
+
+/**
+ * Construct a `BlazenMusicGenProvider`.
+ *
+ * `variant` selects the `MusicGen` checkpoint by name (case-insensitive:
+ * `"small"`, `"medium"`, `"large"`); pass null to default to `"small"`.
+ * `device` follows `blazen_llm::Device::parse` (`"cpu"`, `"cuda"`,
+ * `"cuda:N"`, `"metal"`, `"metal:N"`); null defers to the backend's
+ * auto-detection. `cache_dir` overrides the Hugging Face Hub cache
+ * directory. `max_duration_seconds` follows the NaN-as-`None` encoding;
+ * `None` defaults to 30 s upstream.
+ *
+ * On success returns `0` and writes a fresh `BlazenMusicGenProvider*` into
+ * `*out_model`. On failure returns `-1` and writes a fresh `BlazenError*`
+ * into `*out_err`. Both out-parameters may be null to discard that side of
+ * the result.
+ *
+ * # Safety
+ *
+ * - `variant` / `device` / `cache_dir` must each be null OR a valid
+ *   NUL-terminated UTF-8 buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot of
+ *   the matching pointer type.
+ */
+
+int32_t blazen_musicgen_provider_new(const char *variant,
+                                     const char *device,
+                                     const char *cache_dir,
+                                     float max_duration_seconds,
+                                     BlazenMusicGenProvider **out_model,
+                                     BlazenError **out_err);
+
+/**
+ * Asynchronously generate `duration_seconds` of music conditioned on
+ * `prompt`. Returns a `*mut BlazenFuture` the caller polls / waits on; the
+ * typed result is popped with
+ * [`crate::compute_music::blazen_future_take_music_result`].
+ *
+ * Returns null if `model` is null or `prompt` is null / non-UTF-8.
+ *
+ * # Safety
+ *
+ * - `model` must be a valid pointer to a `BlazenMusicGenProvider` produced
+ *   by this surface.
+ * - `prompt` must be a valid NUL-terminated UTF-8 buffer.
+ */
+
+BlazenFuture *blazen_musicgen_provider_generate_music(const BlazenMusicGenProvider *model,
+                                                      const char *prompt,
+                                                      float duration_seconds);
+
+/**
+ * Synchronous variant of [`blazen_musicgen_provider_generate_music`].
+ * Returns `0` on success (typed result in `*out_result`), `-1` on failure
+ * (error in `*out_err`), `-2` on invalid input (null model / non-UTF-8
+ * `prompt`).
+ *
+ * # Safety
+ *
+ * Same string contracts as
+ * [`blazen_musicgen_provider_generate_music`]. `out_result` / `out_err` must
+ * each be null OR point to a writable slot.
+ */
+
+int32_t blazen_musicgen_provider_generate_music_blocking(const BlazenMusicGenProvider *model,
+                                                         const char *prompt,
+                                                         float duration_seconds,
+                                                         BlazenMusicResult **out_result,
+                                                         BlazenError **out_err);
+
+/**
+ * Asynchronously generate `duration_seconds` of sound-effect audio
+ * conditioned on `prompt`. For `MusicGenProvider` the upstream impl
+ * returns `BlazenError::Unsupported` (`MusicGen` is music-only) — the
+ * future resolves to that error and the foreign caller pops it through the
+ * standard `blazen_future_take_music_result` accessor.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_generate_music`].
+ */
+
+BlazenFuture *blazen_musicgen_provider_generate_sfx(const BlazenMusicGenProvider *model,
+                                                    const char *prompt,
+                                                    float duration_seconds);
+
+/**
+ * Synchronous variant of [`blazen_musicgen_provider_generate_sfx`]. The
+ * `MusicGen` backend returns `BlazenError::Unsupported`.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_generate_music_blocking`].
+ */
+
+int32_t blazen_musicgen_provider_generate_sfx_blocking(const BlazenMusicGenProvider *model,
+                                                       const char *prompt,
+                                                       float duration_seconds,
+                                                       BlazenMusicResult **out_result,
+                                                       BlazenError **out_err);
+
+/**
+ * Frees a `BlazenMusicGenProvider` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_musicgen_provider_new`]. Double-free is undefined behavior.
+ */
+ void blazen_musicgen_provider_free(BlazenMusicGenProvider *model);
+
+/**
+ * Construct a `BlazenAudioGenProvider`.
+ *
+ * `repo_id` overrides the default Hugging Face repo
+ * (`facebook/audiogen-medium`); pass null to use the default. `revision`
+ * pins a specific commit / tag. `device` / `cache_dir` /
+ * `max_duration_seconds` follow the `MusicGen` factory's conventions.
+ *
+ * # Safety
+ *
+ * - `repo_id` / `revision` / `device` / `cache_dir` must each be null OR a
+ *   valid NUL-terminated UTF-8 buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot of
+ *   the matching pointer type.
+ */
+
+int32_t blazen_audiogen_provider_new(const char *repo_id,
+                                     const char *revision,
+                                     const char *device,
+                                     const char *cache_dir,
+                                     float max_duration_seconds,
+                                     BlazenAudioGenProvider **out_model,
+                                     BlazenError **out_err);
+
+/**
+ * Asynchronously generate `duration_seconds` of music conditioned on
+ * `prompt`. For `AudioGenProvider` the upstream impl returns
+ * `BlazenError::Unsupported` (`AudioGen` is sfx-only).
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_generate_music`].
+ */
+
+BlazenFuture *blazen_audiogen_provider_generate_music(const BlazenAudioGenProvider *model,
+                                                      const char *prompt,
+                                                      float duration_seconds);
+
+/**
+ * Synchronous variant of [`blazen_audiogen_provider_generate_music`]. The
+ * `AudioGen` backend returns `BlazenError::Unsupported`.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_generate_music_blocking`].
+ */
+
+int32_t blazen_audiogen_provider_generate_music_blocking(const BlazenAudioGenProvider *model,
+                                                         const char *prompt,
+                                                         float duration_seconds,
+                                                         BlazenMusicResult **out_result,
+                                                         BlazenError **out_err);
+
+/**
+ * Asynchronously generate `duration_seconds` of sound-effect audio
+ * conditioned on `prompt`.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_generate_music`].
+ */
+
+BlazenFuture *blazen_audiogen_provider_generate_sfx(const BlazenAudioGenProvider *model,
+                                                    const char *prompt,
+                                                    float duration_seconds);
+
+/**
+ * Synchronous variant of [`blazen_audiogen_provider_generate_sfx`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_generate_music_blocking`].
+ */
+
+int32_t blazen_audiogen_provider_generate_sfx_blocking(const BlazenAudioGenProvider *model,
+                                                       const char *prompt,
+                                                       float duration_seconds,
+                                                       BlazenMusicResult **out_result,
+                                                       BlazenError **out_err);
+
+/**
+ * Frees a `BlazenAudioGenProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_audiogen_provider_new`]. Double-free is undefined behavior.
+ */
+ void blazen_audiogen_provider_free(BlazenAudioGenProvider *model);
+
+/**
+ * Construct a `BlazenStableAudioProvider`.
+ *
+ * Unlike the other music engines this constructor is async upstream
+ * (Stable Audio loads weights at construction time); the cabi factory
+ * drives the shared cabi Tokio runtime via [`runtime().block_on`].
+ *
+ * `variant` selects the Stable Audio Open checkpoint by name
+ * (case-insensitive: `"small"`, `"open-1.0"` / `"open1.0"`); pass null to
+ * default to `"small"`. `tokenizer_path` is REQUIRED — it must point at
+ * the T5 `SentencePiece` `tokenizer.json` shipped with the Stable Audio
+ * Open repo (Stable Audio's tokenizer is not auto-downloaded by the
+ * backend today). `device` follows the same device-string format as the
+ * `MusicGen` factory; null defaults to CPU. `max_duration_seconds` is
+ * accepted for API symmetry but Stable Audio enforces its own
+ * variant-dependent ceiling internally.
+ *
+ * Returns `0` on success, `-1` on backend init failure, or `-2` on
+ * invalid argument shape (null `tokenizer_path`).
+ *
+ * # Safety
+ *
+ * - `tokenizer_path` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `variant` / `device` must each be null OR a valid NUL-terminated UTF-8
+ *   buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot of
+ *   the matching pointer type.
+ */
+
+int32_t blazen_stable_audio_provider_new(const char *variant,
+                                         const char *tokenizer_path,
+                                         const char *device,
+                                         float max_duration_seconds,
+                                         BlazenStableAudioProvider **out_model,
+                                         BlazenError **out_err);
+
+/**
+ * Asynchronously generate `duration_seconds` of music conditioned on
+ * `prompt`.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_generate_music`].
+ */
+
+BlazenFuture *blazen_stable_audio_provider_generate_music(const BlazenStableAudioProvider *model,
+                                                          const char *prompt,
+                                                          float duration_seconds);
+
+/**
+ * Synchronous variant of [`blazen_stable_audio_provider_generate_music`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_generate_music_blocking`].
+ */
+
+int32_t blazen_stable_audio_provider_generate_music_blocking(const BlazenStableAudioProvider *model,
+                                                             const char *prompt,
+                                                             float duration_seconds,
+                                                             BlazenMusicResult **out_result,
+                                                             BlazenError **out_err);
+
+/**
+ * Asynchronously generate `duration_seconds` of sound-effect audio
+ * conditioned on `prompt`.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_generate_music`].
+ */
+
+BlazenFuture *blazen_stable_audio_provider_generate_sfx(const BlazenStableAudioProvider *model,
+                                                        const char *prompt,
+                                                        float duration_seconds);
+
+/**
+ * Synchronous variant of [`blazen_stable_audio_provider_generate_sfx`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_generate_music_blocking`].
+ */
+
+int32_t blazen_stable_audio_provider_generate_sfx_blocking(const BlazenStableAudioProvider *model,
+                                                           const char *prompt,
+                                                           float duration_seconds,
+                                                           BlazenMusicResult **out_result,
+                                                           BlazenError **out_err);
+
+/**
+ * Frees a `BlazenStableAudioProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_stable_audio_provider_new`]. Double-free is undefined behavior.
+ */
+ void blazen_stable_audio_provider_free(BlazenStableAudioProvider *model);
+
+/**
+ * Construct a `BlazenFalMusicProvider` from a fal.ai API key.
+ *
+ * An empty `api_key` falls back to the `FAL_KEY` environment variable.
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null; empty
+ *   string is allowed).
+ * - `out_model` / `out_err` must each be null OR point to a writable slot of
+ *   the matching pointer type.
+ */
+
+int32_t blazen_fal_music_provider_new(const char *api_key,
+                                      BlazenFalMusicProvider **out_model,
+                                      BlazenError **out_err);
+
+/**
+ * Asynchronously generate `duration_seconds` of music conditioned on
+ * `prompt`.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_generate_music`].
+ */
+
+BlazenFuture *blazen_fal_music_provider_generate_music(const BlazenFalMusicProvider *model,
+                                                       const char *prompt,
+                                                       float duration_seconds);
+
+/**
+ * Synchronous variant of [`blazen_fal_music_provider_generate_music`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_generate_music_blocking`].
+ */
+
+int32_t blazen_fal_music_provider_generate_music_blocking(const BlazenFalMusicProvider *model,
+                                                          const char *prompt,
+                                                          float duration_seconds,
+                                                          BlazenMusicResult **out_result,
+                                                          BlazenError **out_err);
+
+/**
+ * Asynchronously generate `duration_seconds` of sound-effect audio
+ * conditioned on `prompt`.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_generate_music`].
+ */
+
+BlazenFuture *blazen_fal_music_provider_generate_sfx(const BlazenFalMusicProvider *model,
+                                                     const char *prompt,
+                                                     float duration_seconds);
+
+/**
+ * Synchronous variant of [`blazen_fal_music_provider_generate_sfx`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_musicgen_provider_generate_music_blocking`].
+ */
+
+int32_t blazen_fal_music_provider_generate_sfx_blocking(const BlazenFalMusicProvider *model,
+                                                        const char *prompt,
+                                                        float duration_seconds,
+                                                        BlazenMusicResult **out_result,
+                                                        BlazenError **out_err);
+
+/**
+ * Frees a `BlazenFalMusicProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_fal_music_provider_new`]. Double-free is undefined behavior.
+ */
+ void blazen_fal_music_provider_free(BlazenFalMusicProvider *model);
 
 /**
  * Construct a new peer server with the given UTF-8 `node_id`. Returns null
@@ -12547,6 +13181,272 @@ BlazenFuture *blazen_vc_model_stream_convert_pcm_to_sink(const BlazenVcModel *mo
  void blazen_string_free(char *ptr);
 
 /**
+ * Construct a `BlazenWhisperCppProvider`.
+ *
+ * All three inputs are optional — pass null to defer to the engine's
+ * defaults. `model` selects the whisper.cpp variant (e.g. `"tiny"`,
+ * `"base"`, `"small"`, `"medium"`, `"large-v3"`). `device` picks the
+ * runtime device (`"cpu"`, `"cuda"`, ...). `language` is an optional
+ * ISO-639-1 default-language hint.
+ *
+ * On success returns `0` and writes a fresh `BlazenWhisperCppProvider*`
+ * into `*out_model`. On failure returns `-1` and writes a fresh
+ * `BlazenError*` into `*out_err`. Both out-parameters may be null to
+ * discard that side of the result.
+ *
+ * # Safety
+ *
+ * - `model` / `device` / `language` must each be null OR a valid
+ *   NUL-terminated UTF-8 buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot
+ *   of the matching pointer type.
+ */
+
+int32_t blazen_whispercpp_provider_new(const char *model,
+                                       const char *device,
+                                       const char *language,
+                                       BlazenWhisperCppProvider **out_model,
+                                       BlazenError **out_err);
+
+/**
+ * Asynchronously transcribe audio at `audio_source`. Returns a
+ * `*mut BlazenFuture` the caller polls / waits on; the typed result is
+ * popped with [`crate::compute::blazen_future_take_stt_result`].
+ *
+ * `audio_source` is a local file path (16-bit PCM mono WAV at 16 kHz) or
+ * an `http(s)://` / `data:` URL. `language` is an optional per-call
+ * ISO-639-1 override; when null the constructor's `language` hint (if
+ * any) is used.
+ *
+ * Returns null if `model` is null or `audio_source` is null / non-UTF-8.
+ *
+ * # Safety
+ *
+ * - `model` must be a valid pointer to a `BlazenWhisperCppProvider`
+ *   produced by this surface.
+ * - `audio_source` must be a valid NUL-terminated UTF-8 buffer.
+ * - `language` must be null OR a valid NUL-terminated UTF-8 buffer.
+ */
+
+BlazenFuture *blazen_whispercpp_provider_transcribe(const BlazenWhisperCppProvider *model,
+                                                    const char *audio_source,
+                                                    const char *language);
+
+/**
+ * Synchronous variant of [`blazen_whispercpp_provider_transcribe`].
+ * Returns `0` on success (typed result in `*out_result`), `-1` on failure
+ * (error in `*out_err`), `-2` on invalid input (null model / non-UTF-8
+ * `audio_source`).
+ *
+ * # Safety
+ *
+ * Same string contracts as [`blazen_whispercpp_provider_transcribe`].
+ * `out_result` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_whispercpp_provider_transcribe_blocking(const BlazenWhisperCppProvider *model,
+                                                       const char *audio_source,
+                                                       const char *language,
+                                                       BlazenSttResult **out_result,
+                                                       BlazenError **out_err);
+
+/**
+ * Frees a `BlazenWhisperCppProvider` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_whispercpp_provider_new`]. Double-free is undefined behavior.
+ */
+ void blazen_whispercpp_provider_free(BlazenWhisperCppProvider *model);
+
+/**
+ * Construct a `BlazenFasterWhisperProvider`. All three inputs are
+ * optional — pass null to defer to the engine's defaults.
+ *
+ * `model_id` selects a Hugging Face bundle id (default
+ * `"Systran/faster-whisper-tiny"`). `model_dir` provides a pre-resolved
+ * local `CTranslate2` bundle directory; when supplied the HF download is
+ * skipped. `revision` pins a specific branch / tag / commit on the HF
+ * repo (default `"main"`).
+ *
+ * Unlike most engines this constructor is infallible (the underlying Rust
+ * constructor returns `Arc<Self>` directly), so it returns the handle by
+ * pointer rather than an out-param. Returns null only when one of the
+ * input strings is non-null but contains non-UTF-8 bytes.
+ *
+ * # Safety
+ *
+ * `model_id` / `model_dir` / `revision` must each be null OR a valid
+ * NUL-terminated UTF-8 buffer.
+ */
+
+BlazenFasterWhisperProvider *blazen_faster_whisper_provider_new(const char *model_id,
+                                                                const char *model_dir,
+                                                                const char *revision);
+
+/**
+ * Asynchronously transcribe audio. See
+ * [`blazen_whispercpp_provider_transcribe`] for the future pipeline and
+ * `audio_source` / `language` semantics.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_whispercpp_provider_transcribe`].
+ */
+
+BlazenFuture *blazen_faster_whisper_provider_transcribe(const BlazenFasterWhisperProvider *model,
+                                                        const char *audio_source,
+                                                        const char *language);
+
+/**
+ * Synchronous variant of
+ * [`blazen_faster_whisper_provider_transcribe`].
+ *
+ * # Safety
+ *
+ * Same contracts as
+ * [`blazen_whispercpp_provider_transcribe_blocking`].
+ */
+
+int32_t blazen_faster_whisper_provider_transcribe_blocking(const BlazenFasterWhisperProvider *model,
+                                                           const char *audio_source,
+                                                           const char *language,
+                                                           BlazenSttResult **out_result,
+                                                           BlazenError **out_err);
+
+/**
+ * Frees a `BlazenFasterWhisperProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_whispercpp_provider_free`].
+ */
+ void blazen_faster_whisper_provider_free(BlazenFasterWhisperProvider *model);
+
+/**
+ * Construct a `BlazenWhisperStreamingProvider`. All four inputs are
+ * optional — pass null for `model_id` / `vad_model_path` and `NaN` (or
+ * any non-finite value) for `chunk_seconds` / `chunk_overlap_seconds` to
+ * defer to the engine's defaults (`"openai/whisper-base"`, on-demand HF
+ * download, `30.0`s windows with `5.0`s overlap).
+ *
+ * Infallible — returns the handle directly. Returns null only when one
+ * of the input strings is non-null but contains non-UTF-8 bytes.
+ *
+ * # Safety
+ *
+ * `model_id` / `vad_model_path` must each be null OR a valid
+ * NUL-terminated UTF-8 buffer.
+ */
+
+BlazenWhisperStreamingProvider *blazen_whisper_streaming_provider_new(const char *model_id,
+                                                                      const char *vad_model_path,
+                                                                      float chunk_seconds,
+                                                                      float chunk_overlap_seconds);
+
+/**
+ * Asynchronously transcribe audio. See
+ * [`blazen_whispercpp_provider_transcribe`] for the future pipeline and
+ * `audio_source` / `language` semantics.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_whispercpp_provider_transcribe`].
+ */
+
+BlazenFuture *blazen_whisper_streaming_provider_transcribe(const BlazenWhisperStreamingProvider *model,
+                                                           const char *audio_source,
+                                                           const char *language);
+
+/**
+ * Synchronous variant of
+ * [`blazen_whisper_streaming_provider_transcribe`].
+ *
+ * # Safety
+ *
+ * Same contracts as
+ * [`blazen_whispercpp_provider_transcribe_blocking`].
+ */
+
+int32_t blazen_whisper_streaming_provider_transcribe_blocking(const BlazenWhisperStreamingProvider *model,
+                                                              const char *audio_source,
+                                                              const char *language,
+                                                              BlazenSttResult **out_result,
+                                                              BlazenError **out_err);
+
+/**
+ * Frees a `BlazenWhisperStreamingProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_whispercpp_provider_free`].
+ */
+ void blazen_whisper_streaming_provider_free(BlazenWhisperStreamingProvider *model);
+
+/**
+ * Construct a `BlazenFalSttProvider` from a fal.ai API key.
+ *
+ * An empty `api_key` falls back to the `FAL_KEY` environment variable
+ * at call time. Construction is infallible — returns `0` and writes the
+ * handle into `*out_model` unconditionally (the `out_err` slot is left
+ * alone). The error tail is preserved for parity with the other STT
+ * constructors and future expansion.
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null;
+ *   empty string is allowed).
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_fal_stt_provider_new(const char *api_key,
+                                    BlazenFalSttProvider **out_model,
+                                    BlazenError **out_err);
+
+/**
+ * Asynchronously transcribe audio. See
+ * [`blazen_whispercpp_provider_transcribe`] for the future pipeline and
+ * `audio_source` / `language` semantics.
+ *
+ * `audio_source` should be an `http(s)://` URL or a `data:` URI reachable
+ * by fal.ai's workers (local paths are not supported by the hosted
+ * backend).
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_whispercpp_provider_transcribe`].
+ */
+
+BlazenFuture *blazen_fal_stt_provider_transcribe(const BlazenFalSttProvider *model,
+                                                 const char *audio_source,
+                                                 const char *language);
+
+/**
+ * Synchronous variant of [`blazen_fal_stt_provider_transcribe`].
+ *
+ * # Safety
+ *
+ * Same contracts as
+ * [`blazen_whispercpp_provider_transcribe_blocking`].
+ */
+
+int32_t blazen_fal_stt_provider_transcribe_blocking(const BlazenFalSttProvider *model,
+                                                    const char *audio_source,
+                                                    const char *language,
+                                                    BlazenSttResult **out_result,
+                                                    BlazenError **out_err);
+
+/**
+ * Frees a `BlazenFalSttProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_whispercpp_provider_free`].
+ */
+ void blazen_fal_stt_provider_free(BlazenFalSttProvider *model);
+
+/**
  * Initialize the Langfuse LLM-observability exporter.
  *
  * Spawns a background tokio task that periodically flushes buffered LLM
@@ -12809,6 +13709,93 @@ int32_t blazen_parse_workflow_history(const char *history_json,
  * same non-null pointer is a double-free.
  */
  void blazen_workflow_history_entry_free(BlazenWorkflowHistoryEntry *entry);
+
+/**
+ * Construct a `BlazenTripoSrProvider`. All three inputs are optional —
+ * pass null to defer to the upstream defaults (`HuggingFace` download
+ * from `"stabilityai/TripoSR"` at `main`).
+ *
+ * Construction may block on a `HuggingFace` download (the inner
+ * constructor is async and is driven through the shared cabi runtime).
+ *
+ * On success returns `0` and writes a fresh `BlazenTripoSrProvider*`
+ * into `*out_model`. On failure returns `-1` and writes a fresh
+ * `BlazenError*` into `*out_err`. Both out-parameters may be null to
+ * discard that side of the result.
+ *
+ * # Safety
+ *
+ * - `hf_repo_id` / `revision` / `weights_path` must each be null OR a
+ *   valid NUL-terminated UTF-8 buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable
+ *   slot of the matching pointer type.
+ */
+
+int32_t blazen_triposr_provider_new(const char *hf_repo_id,
+                                    const char *revision,
+                                    const char *weights_path,
+                                    BlazenTripoSrProvider **out_model,
+                                    BlazenError **out_err);
+
+/**
+ * Asynchronously generate a 3D mesh from a single input image. Returns
+ * a `*mut BlazenFuture` the caller polls / waits on; the typed result
+ * is popped with
+ * [`crate::compute_3d::blazen_future_take_three_d_generate_result`].
+ *
+ * `image_bytes` is encoded PNG or JPEG payload. `mesh_resolution`
+ * controls the side length of the density grid sampled from the
+ * triplane during marching cubes; `256` matches the upstream
+ * `TripoSR` reference and is a reasonable default.
+ *
+ * Returns null if `model` is null OR `image_bytes` is null with a
+ * non-zero `image_bytes_len`.
+ *
+ * # Safety
+ *
+ * - `model` must be a valid pointer to a `BlazenTripoSrProvider`
+ *   produced by [`blazen_triposr_provider_new`].
+ * - `image_bytes` must be null OR point to a buffer of at least
+ *   `image_bytes_len` bytes (null with `image_bytes_len == 0` is
+ *   accepted and yields an empty payload).
+ */
+
+BlazenFuture *blazen_triposr_provider_generate_from_image(const BlazenTripoSrProvider *model,
+                                                          const uint8_t *image_bytes,
+                                                          uintptr_t image_bytes_len,
+                                                          uint32_t mesh_resolution);
+
+/**
+ * Synchronous variant of
+ * [`blazen_triposr_provider_generate_from_image`].
+ *
+ * Returns `0` on success (typed result in `*out_result`), `-1` on
+ * failure (error in `*out_err`), `-2` on invalid input (null model /
+ * null `image_bytes` with non-zero len).
+ *
+ * # Safety
+ *
+ * Same buffer contracts as
+ * [`blazen_triposr_provider_generate_from_image`]. `out_result` /
+ * `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_triposr_provider_generate_from_image_blocking(const BlazenTripoSrProvider *model,
+                                                             const uint8_t *image_bytes,
+                                                             uintptr_t image_bytes_len,
+                                                             uint32_t mesh_resolution,
+                                                             BlazenThreeDGenerateResult **out_result,
+                                                             BlazenError **out_err);
+
+/**
+ * Frees a `BlazenTripoSrProvider` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_triposr_provider_new`]. Double-free is undefined behavior.
+ */
+ void blazen_triposr_provider_free(BlazenTripoSrProvider *model);
 
 /**
  * Construct an HTTP-proxy 3D provider pointed at `base_url`.
@@ -13798,6 +14785,246 @@ int32_t blazen_fal_tts_provider_synthesize_blocking(const BlazenFalTtsProvider *
  * Same contracts as [`blazen_piper_provider_free`].
  */
  void blazen_fal_tts_provider_free(BlazenFalTtsProvider *model);
+
+/**
+ * Construct a `BlazenRvcProvider` with the default CPU backend.
+ *
+ * Target voices are loaded lazily from `$BLAZEN_RVC_VOICE_DIR/<voice_id>/`
+ * on the first `convert_voice` call. This constructor is infallible.
+ *
+ * # Safety
+ *
+ * Always safe to call; returns a non-null heap-allocated handle.
+ */
+ BlazenRvcProvider *blazen_rvc_provider_new(void);
+
+/**
+ * Asynchronously convert the source utterance at `input_path` into the
+ * registered target voice `target_voice_id`. Returns a `*mut BlazenFuture`
+ * the caller polls / waits on; the typed result is popped with
+ * [`crate::compute_vc::blazen_future_take_vc_result`].
+ *
+ * Returns null if `model` is null or either string is null / non-UTF-8.
+ *
+ * # Safety
+ *
+ * - `model` must be a valid pointer to a `BlazenRvcProvider` produced by
+ *   this surface.
+ * - `input_path` / `target_voice_id` must each be valid NUL-terminated
+ *   UTF-8 buffers (non-null).
+ */
+
+BlazenFuture *blazen_rvc_provider_convert_voice(const BlazenRvcProvider *model,
+                                                const char *input_path,
+                                                const char *target_voice_id);
+
+/**
+ * Synchronous variant of [`blazen_rvc_provider_convert_voice`]. Returns
+ * `0` on success (typed result in `*out_result`), `-1` on failure (error
+ * in `*out_err`), `-2` on invalid input (null model / non-UTF-8 string).
+ *
+ * # Safety
+ *
+ * Same string contracts as [`blazen_rvc_provider_convert_voice`].
+ * `out_result` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_rvc_provider_convert_voice_blocking(const BlazenRvcProvider *model,
+                                                   const char *input_path,
+                                                   const char *target_voice_id,
+                                                   BlazenVcResult **out_result,
+                                                   BlazenError **out_err);
+
+/**
+ * Asynchronously register a new target voice from the reference utterance
+ * at `reference_path` under the backend-scoped identifier `voice_id`.
+ * Returns a `*mut BlazenFuture` whose unit result is popped with
+ * [`crate::persist::blazen_future_take_unit`].
+ *
+ * Returns null if `model` is null or either string is null / non-UTF-8.
+ *
+ * # Safety
+ *
+ * Same string contracts as [`blazen_rvc_provider_convert_voice`].
+ */
+
+BlazenFuture *blazen_rvc_provider_clone_voice(const BlazenRvcProvider *model,
+                                              const char *voice_id,
+                                              const char *reference_path);
+
+/**
+ * Synchronous variant of [`blazen_rvc_provider_clone_voice`]. Returns
+ * `0` on success, `-1` on failure (error in `*out_err`), `-2` on invalid
+ * input (null model / non-UTF-8 string).
+ *
+ * # Safety
+ *
+ * Same string contracts as [`blazen_rvc_provider_convert_voice_blocking`].
+ */
+
+int32_t blazen_rvc_provider_clone_voice_blocking(const BlazenRvcProvider *model,
+                                                 const char *voice_id,
+                                                 const char *reference_path,
+                                                 BlazenError **out_err);
+
+/**
+ * Asynchronously list the target voices currently known to the backend.
+ * Returns a `*mut BlazenFuture` whose `Vec<TargetVoice>` result is popped
+ * with [`crate::compute_vc::blazen_future_take_target_voice_list`].
+ *
+ * Returns null if `model` is null.
+ *
+ * # Safety
+ *
+ * `model` must be a valid pointer to a `BlazenRvcProvider` produced by
+ * this surface.
+ */
+ BlazenFuture *blazen_rvc_provider_list_target_voices(const BlazenRvcProvider *model);
+
+/**
+ * Synchronous variant of [`blazen_rvc_provider_list_target_voices`].
+ * Returns `0` on success (list handle in `*out_list`), `-1` on failure
+ * (error in `*out_err`), `-2` on invalid input (null model).
+ *
+ * # Safety
+ *
+ * `model` must be a valid pointer to a `BlazenRvcProvider`. `out_list` /
+ * `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_rvc_provider_list_target_voices_blocking(const BlazenRvcProvider *model,
+                                                        BlazenTargetVoiceList **out_list,
+                                                        BlazenError **out_err);
+
+/**
+ * Frees a `BlazenRvcProvider` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_rvc_provider_new`]. Double-free is undefined behavior.
+ */
+ void blazen_rvc_provider_free(BlazenRvcProvider *model);
+
+/**
+ * Construct a `BlazenFalVcProvider` from a fal.ai API key.
+ *
+ * `api_key` may be empty when the fal client resolves it from the
+ * `FAL_KEY` environment variable.
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null;
+ *   empty string is allowed).
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_fal_vc_provider_new(const char *api_key,
+                                   BlazenFalVcProvider **out_model,
+                                   BlazenError **out_err);
+
+/**
+ * Asynchronously convert the source utterance at `input_path` (an
+ * `http(s)://` / `data:` URL reachable by fal's workers) into the target
+ * voice `target_voice_id`. Returns a `*mut BlazenFuture` whose typed
+ * result is popped with
+ * [`crate::compute_vc::blazen_future_take_vc_result`].
+ *
+ * Unlike the native [`BlazenRvcProvider`], fal requires a URL — local
+ * file paths won't work since fal's workers can't reach the caller's
+ * disk. Pass a presigned / public URL or a `data:` URI.
+ *
+ * Returns null if `model` is null or either string is null / non-UTF-8.
+ *
+ * # Safety
+ *
+ * Same string contracts as [`blazen_rvc_provider_convert_voice`].
+ */
+
+BlazenFuture *blazen_fal_vc_provider_convert_voice(const BlazenFalVcProvider *model,
+                                                   const char *input_path,
+                                                   const char *target_voice_id);
+
+/**
+ * Synchronous variant of [`blazen_fal_vc_provider_convert_voice`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_rvc_provider_convert_voice_blocking`].
+ */
+
+int32_t blazen_fal_vc_provider_convert_voice_blocking(const BlazenFalVcProvider *model,
+                                                      const char *input_path,
+                                                      const char *target_voice_id,
+                                                      BlazenVcResult **out_result,
+                                                      BlazenError **out_err);
+
+/**
+ * Asynchronously attempt to clone a voice through fal. Today the
+ * upstream surface always surfaces `BlazenError::Unsupported` — the
+ * future will resolve to an error, but the entry point is exposed for
+ * binding-side parity with [`blazen_rvc_provider_clone_voice`]. Pop the
+ * unit result with [`crate::persist::blazen_future_take_unit`].
+ *
+ * Returns null if `model` is null or either string is null / non-UTF-8.
+ *
+ * # Safety
+ *
+ * Same string contracts as [`blazen_rvc_provider_clone_voice`].
+ */
+
+BlazenFuture *blazen_fal_vc_provider_clone_voice(const BlazenFalVcProvider *model,
+                                                 const char *voice_id,
+                                                 const char *reference_path);
+
+/**
+ * Synchronous variant of [`blazen_fal_vc_provider_clone_voice`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_rvc_provider_clone_voice_blocking`].
+ */
+
+int32_t blazen_fal_vc_provider_clone_voice_blocking(const BlazenFalVcProvider *model,
+                                                    const char *voice_id,
+                                                    const char *reference_path,
+                                                    BlazenError **out_err);
+
+/**
+ * Asynchronously list target voices. Fal returns an empty list today;
+ * the entry point exists for binding-side parity with
+ * [`blazen_rvc_provider_list_target_voices`]. Pop with
+ * [`crate::compute_vc::blazen_future_take_target_voice_list`].
+ *
+ * Returns null if `model` is null.
+ *
+ * # Safety
+ *
+ * `model` must be a valid pointer to a `BlazenFalVcProvider`.
+ */
+ BlazenFuture *blazen_fal_vc_provider_list_target_voices(const BlazenFalVcProvider *model);
+
+/**
+ * Synchronous variant of [`blazen_fal_vc_provider_list_target_voices`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_rvc_provider_list_target_voices_blocking`].
+ */
+
+int32_t blazen_fal_vc_provider_list_target_voices_blocking(const BlazenFalVcProvider *model,
+                                                           BlazenTargetVoiceList **out_list,
+                                                           BlazenError **out_err);
+
+/**
+ * Frees a `BlazenFalVcProvider` handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_fal_vc_provider_new`]. Double-free is undefined behavior.
+ */
+ void blazen_fal_vc_provider_free(BlazenFalVcProvider *model);
 
 /**
  * Construct a new builder with the given UTF-8 `name`. Returns null on a
