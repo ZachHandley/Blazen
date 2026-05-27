@@ -404,6 +404,86 @@ impl FalVcProvider {
     }
 }
 
+// ===========================================================================
+// Per-engine streaming free functions
+// ===========================================================================
+//
+// Only [`RvcProvider`] supports streaming voice conversion today —
+// `FalVcProvider` has no streaming surface (the upstream
+// `VcProvider::stream_convert_pcm` falls through to its `Unsupported`
+// default for fal).
+//
+// `rvc_provider_stream_convert_pcm_to_sink` mirrors the central
+// [`crate::compute_vc::stream_convert_pcm_to_sink`] but routes through the
+// per-engine `RvcProvider` handle. The upstream `VcProvider::stream_convert_pcm`
+// yields raw `Vec<f32>` PCM frames (NOT a chunk record), so each frame is
+// re-wrapped into the FFI [`VcChunk`] (`is_final = false`,
+// `latency_seconds = None`) before delegating to the shared
+// [`crate::compute_vc::drive_vc_stream`] helper. End-of-stream is signalled
+// by the sink's `on_done` callback, matching the RVC backend contract
+// documented on [`crate::compute_vc::VcChunk`].
+//
+// Hand-written (not a declarative macro) so the `#[uniffi::export]`
+// proc-macro sees the tokens and registers the functions.
+
+/// Stream voice conversion from [`RvcProvider`] into `sink`.
+///
+/// `input_pcm` is the full source utterance as 32-bit float PCM at the
+/// backend's expected source sample rate (typically 16 kHz mono for RVC).
+/// Each converted PCM frame is delivered as a [`VcChunk`]; the sink's
+/// `on_done` callback fires once on successful completion.
+#[cfg(feature = "audio-vc-rvc")]
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn rvc_provider_stream_convert_pcm_to_sink(
+    provider: Arc<RvcProvider>,
+    input_pcm: Vec<f32>,
+    target_voice_id: String,
+    sink: Arc<dyn crate::compute_vc::VcStreamSink>,
+) -> Result<(), BlazenError> {
+    use blazen_llm::providers::capabilities::VcProvider as _;
+    use futures_util::StreamExt as _;
+    let stream = match provider
+        .inner
+        .stream_convert_pcm(input_pcm, target_voice_id)
+        .await
+    {
+        Ok(s) => s,
+        Err(err) => {
+            let _ = sink.on_error(BlazenError::from(err)).await;
+            return Ok(());
+        }
+    };
+    // Re-wrap each raw PCM frame into the FFI chunk record. The RVC backend
+    // does not emit a terminal `is_final` frame — `on_done` is the canonical
+    // end-of-stream signal.
+    let stream = Box::pin(stream.map(|item| {
+        item.map(|samples| crate::compute_vc::VcChunk {
+            samples,
+            is_final: false,
+            latency_seconds: None,
+        })
+        .map_err(BlazenError::from)
+    }));
+    crate::compute_vc::drive_vc_stream(stream, sink).await
+}
+
+/// Synchronous variant of [`rvc_provider_stream_convert_pcm_to_sink`].
+#[cfg(feature = "audio-vc-rvc")]
+#[uniffi::export]
+pub fn rvc_provider_stream_convert_pcm_to_sink_blocking(
+    provider: Arc<RvcProvider>,
+    input_pcm: Vec<f32>,
+    target_voice_id: String,
+    sink: Arc<dyn crate::compute_vc::VcStreamSink>,
+) -> Result<(), BlazenError> {
+    runtime().block_on(rvc_provider_stream_convert_pcm_to_sink(
+        provider,
+        input_pcm,
+        target_voice_id,
+        sink,
+    ))
+}
+
 #[async_trait::async_trait]
 impl crate::concrete::bases::BaseProvider for FalVcProvider {
     fn provider_id(&self) -> String {

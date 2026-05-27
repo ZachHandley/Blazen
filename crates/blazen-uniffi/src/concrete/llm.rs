@@ -1292,12 +1292,400 @@ impl crate::concrete::bases::LlmProvider for FalLlmProvider {
 // at their proxy — that covers the bearer-auth case.
 
 // ---------------------------------------------------------------------------
-// Deferred: streaming surface
+// Per-engine streaming free functions
 // ---------------------------------------------------------------------------
 //
-// The polymorphic [`crate::concrete::bases::LlmProvider`] trait only
-// declares `complete` (non-streaming). Streaming completion continues
-// to flow through the existing [`crate::provider_custom::CustomProvider`]
-// foreign-callback surface; engine-specific streaming (when it lands as
-// inherent methods on the concretes here) will be exposed in a later
-// sub-task without changing this trait shape.
+// Each engine gets a `<engine>_complete_streaming` (+ `_blocking`) free
+// function mirroring the central
+// [`crate::streaming::complete_streaming`]. The polymorphic
+// [`crate::concrete::bases::LlmProvider`] trait still only declares
+// `complete` (non-streaming) — UniFFI cannot export generic functions and
+// cannot dispatch `dyn` over an async-streaming trait method ergonomically
+// across all four foreign languages, so streaming is exposed as a thin
+// per-engine free function over the shared
+// [`crate::streaming::drive_completion_stream`] helper instead. Each
+// function converts the wire-format [`ModelRequest`], starts the engine's
+// `stream()` (surfacing a failed *start* both to the caller and the sink),
+// then delegates the drive loop to the shared helper.
+//
+// These are hand-written (not a declarative macro) on purpose: the
+// `#[uniffi::export]` proc-macro reads pre-expansion tokens, so
+// macro-generated exports never register in the UniFFI metadata.
+
+use crate::streaming::{CompletionStreamSink, clone_error, drive_completion_stream};
+
+/// Macro body shared by every per-engine async streaming wrapper. Not a
+/// `macro_rules!` over the `#[uniffi::export]` items (those must be
+/// hand-written so the proc-macro sees them) — this is an ordinary helper
+/// invoked from inside each hand-written export.
+async fn drive_provider_stream<P>(
+    inner: &P,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError>
+where
+    P: blazen_llm::providers::capabilities::LLMProvider + ?Sized,
+{
+    let core_request: blazen_llm::types::ModelRequest = match request.try_into() {
+        Ok(r) => r,
+        Err(err) => {
+            let _ = sink.on_error(clone_error(&err)).await;
+            return Err(err);
+        }
+    };
+    let stream = match inner.stream(core_request).await {
+        Ok(s) => s,
+        Err(err) => {
+            // Surface a failed start both to the caller (return Err) and to
+            // the sink, matching the central `complete_streaming` contract.
+            let wire_err = BlazenError::from(err);
+            let _ = sink.on_error(clone_error(&wire_err)).await;
+            return Err(wire_err);
+        }
+    };
+    drive_completion_stream(stream, sink).await
+}
+
+// OpenAiProvider -----------------------------------------------------------
+
+/// Stream a chat / completion from [`OpenAiProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn openai_provider_complete_streaming(
+    provider: Arc<OpenAiProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`openai_provider_complete_streaming`].
+#[uniffi::export]
+pub fn openai_provider_complete_streaming_blocking(
+    provider: Arc<OpenAiProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(openai_provider_complete_streaming(provider, request, sink))
+}
+
+// AnthropicProvider --------------------------------------------------------
+
+/// Stream a chat / completion from [`AnthropicProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn anthropic_provider_complete_streaming(
+    provider: Arc<AnthropicProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`anthropic_provider_complete_streaming`].
+#[uniffi::export]
+pub fn anthropic_provider_complete_streaming_blocking(
+    provider: Arc<AnthropicProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(anthropic_provider_complete_streaming(
+        provider, request, sink,
+    ))
+}
+
+// GeminiProvider -----------------------------------------------------------
+
+/// Stream a chat / completion from [`GeminiProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn gemini_provider_complete_streaming(
+    provider: Arc<GeminiProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`gemini_provider_complete_streaming`].
+#[uniffi::export]
+pub fn gemini_provider_complete_streaming_blocking(
+    provider: Arc<GeminiProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(gemini_provider_complete_streaming(provider, request, sink))
+}
+
+// AzureOpenAiProvider ------------------------------------------------------
+
+/// Stream a chat / completion from [`AzureOpenAiProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn azure_openai_provider_complete_streaming(
+    provider: Arc<AzureOpenAiProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`azure_openai_provider_complete_streaming`].
+#[uniffi::export]
+pub fn azure_openai_provider_complete_streaming_blocking(
+    provider: Arc<AzureOpenAiProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(azure_openai_provider_complete_streaming(
+        provider, request, sink,
+    ))
+}
+
+// BedrockProvider ----------------------------------------------------------
+
+/// Stream a chat / completion from [`BedrockProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn bedrock_provider_complete_streaming(
+    provider: Arc<BedrockProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`bedrock_provider_complete_streaming`].
+#[uniffi::export]
+pub fn bedrock_provider_complete_streaming_blocking(
+    provider: Arc<BedrockProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(bedrock_provider_complete_streaming(provider, request, sink))
+}
+
+// MistralProvider ----------------------------------------------------------
+
+/// Stream a chat / completion from [`MistralProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn mistral_provider_complete_streaming(
+    provider: Arc<MistralProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`mistral_provider_complete_streaming`].
+#[uniffi::export]
+pub fn mistral_provider_complete_streaming_blocking(
+    provider: Arc<MistralProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(mistral_provider_complete_streaming(provider, request, sink))
+}
+
+// FireworksProvider --------------------------------------------------------
+
+/// Stream a chat / completion from [`FireworksProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn fireworks_provider_complete_streaming(
+    provider: Arc<FireworksProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`fireworks_provider_complete_streaming`].
+#[uniffi::export]
+pub fn fireworks_provider_complete_streaming_blocking(
+    provider: Arc<FireworksProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(fireworks_provider_complete_streaming(
+        provider, request, sink,
+    ))
+}
+
+// DeepSeekProvider ---------------------------------------------------------
+
+/// Stream a chat / completion from [`DeepSeekProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn deepseek_provider_complete_streaming(
+    provider: Arc<DeepSeekProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`deepseek_provider_complete_streaming`].
+#[uniffi::export]
+pub fn deepseek_provider_complete_streaming_blocking(
+    provider: Arc<DeepSeekProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(deepseek_provider_complete_streaming(
+        provider, request, sink,
+    ))
+}
+
+// PerplexityProvider -------------------------------------------------------
+
+/// Stream a chat / completion from [`PerplexityProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn perplexity_provider_complete_streaming(
+    provider: Arc<PerplexityProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`perplexity_provider_complete_streaming`].
+#[uniffi::export]
+pub fn perplexity_provider_complete_streaming_blocking(
+    provider: Arc<PerplexityProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(perplexity_provider_complete_streaming(
+        provider, request, sink,
+    ))
+}
+
+// TogetherProvider ---------------------------------------------------------
+
+/// Stream a chat / completion from [`TogetherProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn together_provider_complete_streaming(
+    provider: Arc<TogetherProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`together_provider_complete_streaming`].
+#[uniffi::export]
+pub fn together_provider_complete_streaming_blocking(
+    provider: Arc<TogetherProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(together_provider_complete_streaming(
+        provider, request, sink,
+    ))
+}
+
+// GroqProvider -------------------------------------------------------------
+
+/// Stream a chat / completion from [`GroqProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn groq_provider_complete_streaming(
+    provider: Arc<GroqProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`groq_provider_complete_streaming`].
+#[uniffi::export]
+pub fn groq_provider_complete_streaming_blocking(
+    provider: Arc<GroqProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(groq_provider_complete_streaming(provider, request, sink))
+}
+
+// OpenRouterProvider -------------------------------------------------------
+
+/// Stream a chat / completion from [`OpenRouterProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn openrouter_provider_complete_streaming(
+    provider: Arc<OpenRouterProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`openrouter_provider_complete_streaming`].
+#[uniffi::export]
+pub fn openrouter_provider_complete_streaming_blocking(
+    provider: Arc<OpenRouterProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(openrouter_provider_complete_streaming(
+        provider, request, sink,
+    ))
+}
+
+// CohereProvider -----------------------------------------------------------
+
+/// Stream a chat / completion from [`CohereProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn cohere_provider_complete_streaming(
+    provider: Arc<CohereProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`cohere_provider_complete_streaming`].
+#[uniffi::export]
+pub fn cohere_provider_complete_streaming_blocking(
+    provider: Arc<CohereProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(cohere_provider_complete_streaming(provider, request, sink))
+}
+
+// XaiProvider --------------------------------------------------------------
+
+/// Stream a chat / completion from [`XaiProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn xai_provider_complete_streaming(
+    provider: Arc<XaiProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`xai_provider_complete_streaming`].
+#[uniffi::export]
+pub fn xai_provider_complete_streaming_blocking(
+    provider: Arc<XaiProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(xai_provider_complete_streaming(provider, request, sink))
+}
+
+// FalLlmProvider -----------------------------------------------------------
+
+/// Stream a chat / completion from [`FalLlmProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn fal_llm_provider_complete_streaming(
+    provider: Arc<FalLlmProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`fal_llm_provider_complete_streaming`].
+#[uniffi::export]
+pub fn fal_llm_provider_complete_streaming_blocking(
+    provider: Arc<FalLlmProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(fal_llm_provider_complete_streaming(provider, request, sink))
+}

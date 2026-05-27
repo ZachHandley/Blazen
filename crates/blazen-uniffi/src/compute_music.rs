@@ -521,7 +521,7 @@ pub trait MusicStreamSink: Send + Sync {
     async fn on_error(&self, cause: BlazenError) -> BlazenResult<()>;
 }
 
-async fn drive_music_stream(
+pub(crate) async fn drive_music_stream(
     mut stream: Pin<Box<dyn Stream<Item = Result<MusicChunk, BlazenError>> + Send>>,
     sink: Arc<dyn MusicStreamSink>,
 ) -> BlazenResult<()> {

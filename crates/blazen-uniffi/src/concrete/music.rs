@@ -487,6 +487,261 @@ impl FalMusicProvider {
 }
 
 // ===========================================================================
+// Per-engine streaming free functions
+// ===========================================================================
+//
+// Each engine that overrides the upstream `MusicProvider` streaming methods
+// gets a `<engine>_stream_<kind>_to_sink` (+ `_blocking`) free function
+// mirroring the central
+// [`crate::compute_music::stream_generate_music_to_sink`]. The body starts
+// the engine's `stream_generate_music` / `stream_generate_sfx` and delegates
+// the drive loop to the shared
+// [`crate::compute_music::drive_music_stream`] helper, re-using the
+// [`MusicStreamSink`] foreign-callback trait.
+//
+// Matrix (matches the engine's overridden upstream methods):
+//   MusicGen     -> music
+//   AudioGen     -> music (Unsupported upstream, delivered via on_error), sfx
+//   StableAudio  -> music, sfx
+//
+// Hand-written (not a declarative macro) so the `#[uniffi::export]`
+// proc-macro sees the tokens and registers each function.
+
+#[cfg(any(
+    feature = "audio-music-musicgen",
+    feature = "audio-music-audiogen",
+    feature = "audio-music-stable-audio"
+))]
+use crate::compute_music::{MusicChunk, MusicStreamSink, drive_music_stream};
+#[cfg(any(
+    feature = "audio-music-musicgen",
+    feature = "audio-music-audiogen",
+    feature = "audio-music-stable-audio"
+))]
+use futures_util::StreamExt as _;
+
+// MusicGenProvider ---------------------------------------------------------
+
+/// Stream music generation from [`MusicGenProvider`] into `sink`.
+#[cfg(feature = "audio-music-musicgen")]
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn musicgen_provider_stream_music_to_sink(
+    provider: Arc<MusicGenProvider>,
+    prompt: String,
+    duration_seconds: f32,
+    sink: Arc<dyn MusicStreamSink>,
+) -> BlazenResult<()> {
+    use blazen_llm::MusicProvider as _;
+    let stream = match provider
+        .inner
+        .stream_generate_music(prompt, duration_seconds)
+        .await
+    {
+        Ok(s) => s,
+        Err(err) => {
+            let _ = sink.on_error(BlazenError::from(err)).await;
+            return Ok(());
+        }
+    };
+    let stream = Box::pin(stream.map(|item| item.map(MusicChunk::from).map_err(BlazenError::from)));
+    drive_music_stream(stream, sink).await
+}
+
+/// Synchronous variant of [`musicgen_provider_stream_music_to_sink`].
+#[cfg(feature = "audio-music-musicgen")]
+#[uniffi::export]
+pub fn musicgen_provider_stream_music_to_sink_blocking(
+    provider: Arc<MusicGenProvider>,
+    prompt: String,
+    duration_seconds: f32,
+    sink: Arc<dyn MusicStreamSink>,
+) -> BlazenResult<()> {
+    runtime().block_on(musicgen_provider_stream_music_to_sink(
+        provider,
+        prompt,
+        duration_seconds,
+        sink,
+    ))
+}
+
+// AudioGenProvider ---------------------------------------------------------
+
+/// Stream music generation from [`AudioGenProvider`] into `sink`.
+///
+/// AudioGen is sfx-primary — its upstream `stream_generate_music` returns
+/// `BlazenError::Unsupported`, which this function delivers through the
+/// sink's `on_error` callback. Prefer
+/// [`audiogen_provider_stream_sfx_to_sink`].
+#[cfg(feature = "audio-music-audiogen")]
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn audiogen_provider_stream_music_to_sink(
+    provider: Arc<AudioGenProvider>,
+    prompt: String,
+    duration_seconds: f32,
+    sink: Arc<dyn MusicStreamSink>,
+) -> BlazenResult<()> {
+    use blazen_llm::MusicProvider as _;
+    let stream = match provider
+        .inner
+        .stream_generate_music(prompt, duration_seconds)
+        .await
+    {
+        Ok(s) => s,
+        Err(err) => {
+            let _ = sink.on_error(BlazenError::from(err)).await;
+            return Ok(());
+        }
+    };
+    let stream = Box::pin(stream.map(|item| item.map(MusicChunk::from).map_err(BlazenError::from)));
+    drive_music_stream(stream, sink).await
+}
+
+/// Synchronous variant of [`audiogen_provider_stream_music_to_sink`].
+#[cfg(feature = "audio-music-audiogen")]
+#[uniffi::export]
+pub fn audiogen_provider_stream_music_to_sink_blocking(
+    provider: Arc<AudioGenProvider>,
+    prompt: String,
+    duration_seconds: f32,
+    sink: Arc<dyn MusicStreamSink>,
+) -> BlazenResult<()> {
+    runtime().block_on(audiogen_provider_stream_music_to_sink(
+        provider,
+        prompt,
+        duration_seconds,
+        sink,
+    ))
+}
+
+/// Stream SFX generation from [`AudioGenProvider`] into `sink`.
+#[cfg(feature = "audio-music-audiogen")]
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn audiogen_provider_stream_sfx_to_sink(
+    provider: Arc<AudioGenProvider>,
+    prompt: String,
+    duration_seconds: f32,
+    sink: Arc<dyn MusicStreamSink>,
+) -> BlazenResult<()> {
+    use blazen_llm::MusicProvider as _;
+    let stream = match provider
+        .inner
+        .stream_generate_sfx(prompt, duration_seconds)
+        .await
+    {
+        Ok(s) => s,
+        Err(err) => {
+            let _ = sink.on_error(BlazenError::from(err)).await;
+            return Ok(());
+        }
+    };
+    let stream = Box::pin(stream.map(|item| item.map(MusicChunk::from).map_err(BlazenError::from)));
+    drive_music_stream(stream, sink).await
+}
+
+/// Synchronous variant of [`audiogen_provider_stream_sfx_to_sink`].
+#[cfg(feature = "audio-music-audiogen")]
+#[uniffi::export]
+pub fn audiogen_provider_stream_sfx_to_sink_blocking(
+    provider: Arc<AudioGenProvider>,
+    prompt: String,
+    duration_seconds: f32,
+    sink: Arc<dyn MusicStreamSink>,
+) -> BlazenResult<()> {
+    runtime().block_on(audiogen_provider_stream_sfx_to_sink(
+        provider,
+        prompt,
+        duration_seconds,
+        sink,
+    ))
+}
+
+// StableAudioProvider ------------------------------------------------------
+
+/// Stream music generation from [`StableAudioProvider`] into `sink`.
+#[cfg(feature = "audio-music-stable-audio")]
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn stable_audio_provider_stream_music_to_sink(
+    provider: Arc<StableAudioProvider>,
+    prompt: String,
+    duration_seconds: f32,
+    sink: Arc<dyn MusicStreamSink>,
+) -> BlazenResult<()> {
+    use blazen_llm::MusicProvider as _;
+    let stream = match provider
+        .inner
+        .stream_generate_music(prompt, duration_seconds)
+        .await
+    {
+        Ok(s) => s,
+        Err(err) => {
+            let _ = sink.on_error(BlazenError::from(err)).await;
+            return Ok(());
+        }
+    };
+    let stream = Box::pin(stream.map(|item| item.map(MusicChunk::from).map_err(BlazenError::from)));
+    drive_music_stream(stream, sink).await
+}
+
+/// Synchronous variant of [`stable_audio_provider_stream_music_to_sink`].
+#[cfg(feature = "audio-music-stable-audio")]
+#[uniffi::export]
+pub fn stable_audio_provider_stream_music_to_sink_blocking(
+    provider: Arc<StableAudioProvider>,
+    prompt: String,
+    duration_seconds: f32,
+    sink: Arc<dyn MusicStreamSink>,
+) -> BlazenResult<()> {
+    runtime().block_on(stable_audio_provider_stream_music_to_sink(
+        provider,
+        prompt,
+        duration_seconds,
+        sink,
+    ))
+}
+
+/// Stream SFX generation from [`StableAudioProvider`] into `sink`.
+#[cfg(feature = "audio-music-stable-audio")]
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn stable_audio_provider_stream_sfx_to_sink(
+    provider: Arc<StableAudioProvider>,
+    prompt: String,
+    duration_seconds: f32,
+    sink: Arc<dyn MusicStreamSink>,
+) -> BlazenResult<()> {
+    use blazen_llm::MusicProvider as _;
+    let stream = match provider
+        .inner
+        .stream_generate_sfx(prompt, duration_seconds)
+        .await
+    {
+        Ok(s) => s,
+        Err(err) => {
+            let _ = sink.on_error(BlazenError::from(err)).await;
+            return Ok(());
+        }
+    };
+    let stream = Box::pin(stream.map(|item| item.map(MusicChunk::from).map_err(BlazenError::from)));
+    drive_music_stream(stream, sink).await
+}
+
+/// Synchronous variant of [`stable_audio_provider_stream_sfx_to_sink`].
+#[cfg(feature = "audio-music-stable-audio")]
+#[uniffi::export]
+pub fn stable_audio_provider_stream_sfx_to_sink_blocking(
+    provider: Arc<StableAudioProvider>,
+    prompt: String,
+    duration_seconds: f32,
+    sink: Arc<dyn MusicStreamSink>,
+) -> BlazenResult<()> {
+    runtime().block_on(stable_audio_provider_stream_sfx_to_sink(
+        provider,
+        prompt,
+        duration_seconds,
+        sink,
+    ))
+}
+
+// ===========================================================================
 // Polymorphic capability-base trait impls (P4.2.x.3.music)
 // ===========================================================================
 //

@@ -49,9 +49,10 @@
 //! complete_streaming(model, request, Arc::new(PrintSink)).await?;
 //! ```
 
+use std::pin::Pin;
 use std::sync::Arc;
 
-use futures_util::StreamExt;
+use futures_util::{Stream, StreamExt};
 
 use blazen_llm::ModelRequest as CoreModelRequest;
 
@@ -171,6 +172,29 @@ pub async fn complete_streaming(
         }
     };
 
+    drive_completion_stream(stream, sink).await
+}
+
+/// Drive an already-started chat-completion stream into a [`CompletionStreamSink`].
+///
+/// Shared by the central [`complete_streaming`] and the per-engine
+/// `<engine>_complete_streaming` free functions in
+/// [`crate::concrete::llm`]. The upstream `stream()` call (which can itself
+/// fail to *start* a stream) is the caller's responsibility — by the time
+/// this helper runs, the stream is live and every subsequent error is
+/// delivered through the sink (`on_error`), never propagated back.
+///
+/// On success it calls `sink.on_done(finish_reason, usage)` exactly once
+/// and returns `Ok(())`. On a provider-side or sink-side failure it calls
+/// `sink.on_error(...)` exactly once and returns `Ok(())` — keeping the
+/// foreign-language surface symmetric (the sink owns both happy-path and
+/// error-path observation).
+pub(crate) async fn drive_completion_stream(
+    stream: Pin<
+        Box<dyn Stream<Item = Result<blazen_llm::StreamChunk, blazen_llm::BlazenError>> + Send>,
+    >,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> BlazenResult<()> {
     let mut stream = std::pin::pin!(stream);
     let mut last_finish_reason = String::new();
     let mut pending: Option<StreamChunk> = None;

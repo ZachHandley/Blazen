@@ -389,7 +389,7 @@ pub trait VcStreamSink: Send + Sync {
     async fn on_error(&self, cause: BlazenError) -> BlazenResult<()>;
 }
 
-async fn drive_vc_stream(
+pub(crate) async fn drive_vc_stream(
     mut stream: Pin<Box<dyn Stream<Item = Result<VcChunk, BlazenError>> + Send>>,
     sink: Arc<dyn VcStreamSink>,
 ) -> BlazenResult<()> {
