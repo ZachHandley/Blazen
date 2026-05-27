@@ -2420,3 +2420,1081 @@ pub unsafe extern "C" fn blazen_xai_provider_free(model: *mut BlazenXaiProvider)
     // SAFETY: caller upholds the `Box::into_raw` provenance contract.
     drop(unsafe { Box::from_raw(model) });
 }
+
+// ===========================================================================
+// OpenAiCompatProvider — generic OpenAI Chat Completions-compatible server
+// ===========================================================================
+
+/// Opaque handle wrapping
+/// `Arc<blazen_uniffi::concrete::llm::OpenAiCompatProvider>`.
+pub struct BlazenOpenAiCompatProvider(
+    pub(crate) Arc<blazen_uniffi::concrete::llm::OpenAiCompatProvider>,
+);
+
+impl BlazenOpenAiCompatProvider {
+    pub(crate) fn into_ptr(self) -> *mut BlazenOpenAiCompatProvider {
+        Box::into_raw(Box::new(self))
+    }
+}
+
+/// Construct a generic `OpenAI` Chat Completions-compatible provider. All four
+/// string arguments are required: `provider_name` is the logical id reported
+/// by the provider, `base_url` is the server root (e.g.
+/// `http://localhost:8000/v1`), `api_key` is the bearer token, and `model` is
+/// the default chat model.
+///
+/// # Safety
+///
+/// - `provider_name`, `base_url`, `api_key`, `model` must each be valid
+///   NUL-terminated UTF-8 buffers (non-null).
+/// - `out_model` / `out_err` must each be null OR point to a writable slot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_openai_compat_provider_new(
+    provider_name: *const c_char,
+    base_url: *const c_char,
+    api_key: *const c_char,
+    model: *const c_char,
+    out_model: *mut *mut BlazenOpenAiCompatProvider,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(provider_name) = (unsafe { cstr_to_str(provider_name) }) else {
+        write_internal_error(
+            out_err,
+            "blazen_openai_compat_provider_new: provider_name must not be null",
+        );
+        return -1;
+    };
+    let provider_name = provider_name.to_owned();
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(base_url) = (unsafe { cstr_to_str(base_url) }) else {
+        write_internal_error(
+            out_err,
+            "blazen_openai_compat_provider_new: base_url must not be null",
+        );
+        return -1;
+    };
+    let base_url = base_url.to_owned();
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(api_key) = (unsafe { cstr_to_str(api_key) }) else {
+        write_internal_error(
+            out_err,
+            "blazen_openai_compat_provider_new: api_key must not be null",
+        );
+        return -1;
+    };
+    let api_key = api_key.to_owned();
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(model) = (unsafe { cstr_to_str(model) }) else {
+        write_internal_error(
+            out_err,
+            "blazen_openai_compat_provider_new: model must not be null",
+        );
+        return -1;
+    };
+    let model = model.to_owned();
+
+    let arc = blazen_uniffi::concrete::llm::OpenAiCompatProvider::new(
+        provider_name,
+        base_url,
+        api_key,
+        model,
+    );
+    if !out_model.is_null() {
+        // SAFETY: caller has guaranteed `out_model` is writable.
+        unsafe {
+            *out_model = BlazenOpenAiCompatProvider(arc).into_ptr();
+        }
+    }
+    0
+}
+
+/// Async completion. See [`blazen_openai_provider_complete`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_openai_compat_provider_complete(
+    model: *const BlazenOpenAiCompatProvider,
+    request: *mut BlazenModelRequest,
+) -> *mut BlazenFuture {
+    if model.is_null() {
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; drop to avoid a leak.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        return std::ptr::null_mut();
+    }
+    if request.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `model` is a live handle.
+    let m = unsafe { &*model };
+    let inner = Arc::clone(&m.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+
+    BlazenFuture::spawn::<InnerModelResponse, _>(async move { inner.complete(inner_request).await })
+}
+
+/// Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_blocking`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_openai_compat_provider_complete_blocking(
+    model: *const BlazenOpenAiCompatProvider,
+    request: *mut BlazenModelRequest,
+    out_response: *mut *mut BlazenModelResponse,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if model.is_null() {
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; drop to avoid a leak.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        write_internal_error(
+            out_err,
+            "blazen_openai_compat_provider_complete_blocking: null model",
+        );
+        return -1;
+    }
+    if request.is_null() {
+        write_internal_error(
+            out_err,
+            "blazen_openai_compat_provider_complete_blocking: null request",
+        );
+        return -1;
+    }
+    // SAFETY: caller has guaranteed `model` is a live handle.
+    let m = unsafe { &*model };
+    let inner = Arc::clone(&m.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+
+    let result = runtime().block_on(async move { inner.complete(inner_request).await });
+    match result {
+        Ok(resp) => {
+            if !out_response.is_null() {
+                // SAFETY: `out_response` is non-null per the branch above.
+                unsafe {
+                    *out_response = BlazenModelResponse::from(resp).into_ptr();
+                }
+            }
+            0
+        }
+        Err(e) => {
+            write_error(out_err, e);
+            -1
+        }
+    }
+}
+
+/// Frees a `BlazenOpenAiCompatProvider`. No-op on null.
+///
+/// # Safety
+///
+/// `model` must be null OR a pointer previously produced by
+/// [`blazen_openai_compat_provider_new`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_openai_compat_provider_free(
+    model: *mut BlazenOpenAiCompatProvider,
+) {
+    if model.is_null() {
+        return;
+    }
+    // SAFETY: caller upholds the `Box::into_raw` provenance contract.
+    drop(unsafe { Box::from_raw(model) });
+}
+
+// ===========================================================================
+// OllamaProvider — local Ollama server (OpenAI-compatible protocol)
+// ===========================================================================
+
+/// Opaque handle wrapping
+/// `Arc<blazen_uniffi::concrete::llm::OllamaProvider>`.
+pub struct BlazenOllamaProvider(pub(crate) Arc<blazen_uniffi::concrete::llm::OllamaProvider>);
+
+impl BlazenOllamaProvider {
+    pub(crate) fn into_ptr(self) -> *mut BlazenOllamaProvider {
+        Box::into_raw(Box::new(self))
+    }
+}
+
+/// Construct an Ollama provider targeting `http://{host}:{port}/v1`. `host`
+/// and `model` are required; `port` is taken by value.
+///
+/// # Safety
+///
+/// - `host`, `model` must each be valid NUL-terminated UTF-8 buffers
+///   (non-null).
+/// - `out_model` / `out_err` must each be null OR point to a writable slot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_ollama_provider_new(
+    host: *const c_char,
+    port: u16,
+    model: *const c_char,
+    out_model: *mut *mut BlazenOllamaProvider,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(host) = (unsafe { cstr_to_str(host) }) else {
+        write_internal_error(out_err, "blazen_ollama_provider_new: host must not be null");
+        return -1;
+    };
+    let host = host.to_owned();
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(model) = (unsafe { cstr_to_str(model) }) else {
+        write_internal_error(
+            out_err,
+            "blazen_ollama_provider_new: model must not be null",
+        );
+        return -1;
+    };
+    let model = model.to_owned();
+
+    let arc = blazen_uniffi::concrete::llm::OllamaProvider::new(host, port, model);
+    if !out_model.is_null() {
+        // SAFETY: caller has guaranteed `out_model` is writable.
+        unsafe {
+            *out_model = BlazenOllamaProvider(arc).into_ptr();
+        }
+    }
+    0
+}
+
+/// Async completion. See [`blazen_openai_provider_complete`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_ollama_provider_complete(
+    model: *const BlazenOllamaProvider,
+    request: *mut BlazenModelRequest,
+) -> *mut BlazenFuture {
+    if model.is_null() {
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; drop to avoid a leak.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        return std::ptr::null_mut();
+    }
+    if request.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `model` is a live handle.
+    let m = unsafe { &*model };
+    let inner = Arc::clone(&m.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+
+    BlazenFuture::spawn::<InnerModelResponse, _>(async move { inner.complete(inner_request).await })
+}
+
+/// Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_blocking`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_ollama_provider_complete_blocking(
+    model: *const BlazenOllamaProvider,
+    request: *mut BlazenModelRequest,
+    out_response: *mut *mut BlazenModelResponse,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if model.is_null() {
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; drop to avoid a leak.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        write_internal_error(
+            out_err,
+            "blazen_ollama_provider_complete_blocking: null model",
+        );
+        return -1;
+    }
+    if request.is_null() {
+        write_internal_error(
+            out_err,
+            "blazen_ollama_provider_complete_blocking: null request",
+        );
+        return -1;
+    }
+    // SAFETY: caller has guaranteed `model` is a live handle.
+    let m = unsafe { &*model };
+    let inner = Arc::clone(&m.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+
+    let result = runtime().block_on(async move { inner.complete(inner_request).await });
+    match result {
+        Ok(resp) => {
+            if !out_response.is_null() {
+                // SAFETY: `out_response` is non-null per the branch above.
+                unsafe {
+                    *out_response = BlazenModelResponse::from(resp).into_ptr();
+                }
+            }
+            0
+        }
+        Err(e) => {
+            write_error(out_err, e);
+            -1
+        }
+    }
+}
+
+/// Frees a `BlazenOllamaProvider`. No-op on null.
+///
+/// # Safety
+///
+/// `model` must be null OR a pointer previously produced by
+/// [`blazen_ollama_provider_new`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_ollama_provider_free(model: *mut BlazenOllamaProvider) {
+    if model.is_null() {
+        return;
+    }
+    // SAFETY: caller upholds the `Box::into_raw` provenance contract.
+    drop(unsafe { Box::from_raw(model) });
+}
+
+// ===========================================================================
+// LmStudioProvider — local LM Studio server (OpenAI-compatible protocol)
+// ===========================================================================
+
+/// Opaque handle wrapping
+/// `Arc<blazen_uniffi::concrete::llm::LmStudioProvider>`.
+pub struct BlazenLmStudioProvider(pub(crate) Arc<blazen_uniffi::concrete::llm::LmStudioProvider>);
+
+impl BlazenLmStudioProvider {
+    pub(crate) fn into_ptr(self) -> *mut BlazenLmStudioProvider {
+        Box::into_raw(Box::new(self))
+    }
+}
+
+/// Construct an LM Studio provider targeting `http://{host}:{port}/v1`. `host`
+/// and `model` are required; `port` is taken by value.
+///
+/// # Safety
+///
+/// - `host`, `model` must each be valid NUL-terminated UTF-8 buffers
+///   (non-null).
+/// - `out_model` / `out_err` must each be null OR point to a writable slot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_lm_studio_provider_new(
+    host: *const c_char,
+    port: u16,
+    model: *const c_char,
+    out_model: *mut *mut BlazenLmStudioProvider,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(host) = (unsafe { cstr_to_str(host) }) else {
+        write_internal_error(
+            out_err,
+            "blazen_lm_studio_provider_new: host must not be null",
+        );
+        return -1;
+    };
+    let host = host.to_owned();
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(model) = (unsafe { cstr_to_str(model) }) else {
+        write_internal_error(
+            out_err,
+            "blazen_lm_studio_provider_new: model must not be null",
+        );
+        return -1;
+    };
+    let model = model.to_owned();
+
+    let arc = blazen_uniffi::concrete::llm::LmStudioProvider::new(host, port, model);
+    if !out_model.is_null() {
+        // SAFETY: caller has guaranteed `out_model` is writable.
+        unsafe {
+            *out_model = BlazenLmStudioProvider(arc).into_ptr();
+        }
+    }
+    0
+}
+
+/// Async completion. See [`blazen_openai_provider_complete`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_lm_studio_provider_complete(
+    model: *const BlazenLmStudioProvider,
+    request: *mut BlazenModelRequest,
+) -> *mut BlazenFuture {
+    if model.is_null() {
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; drop to avoid a leak.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        return std::ptr::null_mut();
+    }
+    if request.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `model` is a live handle.
+    let m = unsafe { &*model };
+    let inner = Arc::clone(&m.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+
+    BlazenFuture::spawn::<InnerModelResponse, _>(async move { inner.complete(inner_request).await })
+}
+
+/// Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_blocking`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_lm_studio_provider_complete_blocking(
+    model: *const BlazenLmStudioProvider,
+    request: *mut BlazenModelRequest,
+    out_response: *mut *mut BlazenModelResponse,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if model.is_null() {
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; drop to avoid a leak.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        write_internal_error(
+            out_err,
+            "blazen_lm_studio_provider_complete_blocking: null model",
+        );
+        return -1;
+    }
+    if request.is_null() {
+        write_internal_error(
+            out_err,
+            "blazen_lm_studio_provider_complete_blocking: null request",
+        );
+        return -1;
+    }
+    // SAFETY: caller has guaranteed `model` is a live handle.
+    let m = unsafe { &*model };
+    let inner = Arc::clone(&m.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+
+    let result = runtime().block_on(async move { inner.complete(inner_request).await });
+    match result {
+        Ok(resp) => {
+            if !out_response.is_null() {
+                // SAFETY: `out_response` is non-null per the branch above.
+                unsafe {
+                    *out_response = BlazenModelResponse::from(resp).into_ptr();
+                }
+            }
+            0
+        }
+        Err(e) => {
+            write_error(out_err, e);
+            -1
+        }
+    }
+}
+
+/// Frees a `BlazenLmStudioProvider`. No-op on null.
+///
+/// # Safety
+///
+/// `model` must be null OR a pointer previously produced by
+/// [`blazen_lm_studio_provider_new`].
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_lm_studio_provider_free(model: *mut BlazenLmStudioProvider) {
+    if model.is_null() {
+        return;
+    }
+    // SAFETY: caller upholds the `Box::into_raw` provenance contract.
+    drop(unsafe { Box::from_raw(model) });
+}
+
+// ===========================================================================
+// MistralRsProvider — local mistral.rs chat-completion backend
+// ===========================================================================
+
+/// Opaque handle wrapping
+/// `Arc<blazen_uniffi::concrete::llm::MistralRsProvider>`.
+#[cfg(feature = "mistralrs")]
+pub struct BlazenMistralRsProvider(pub(crate) Arc<blazen_uniffi::concrete::llm::MistralRsProvider>);
+
+#[cfg(feature = "mistralrs")]
+impl BlazenMistralRsProvider {
+    pub(crate) fn into_ptr(self) -> *mut BlazenMistralRsProvider {
+        Box::into_raw(Box::new(self))
+    }
+}
+
+/// Construct a local mistral.rs provider. `model_id` is required (a
+/// `HuggingFace` repo id or local GGUF path); `device` / `quantization` are
+/// optional (null treated as `None`); `context_length` is a nullable pointer
+/// to a `u32` (null treated as `None`); `vision` enables multimodal models.
+///
+/// The upstream constructor is fallible (model load can fail) — on failure
+/// returns `-1` and writes a fresh `BlazenError*` into `*out_err`.
+///
+/// # Safety
+///
+/// - `model_id` must be a valid NUL-terminated UTF-8 buffer (non-null).
+/// - `device` / `quantization` must each be null OR valid NUL-terminated
+///   UTF-8 buffers.
+/// - `context_length` must be null OR point to a readable `u32`.
+/// - `out_model` / `out_err` must each be null OR point to a writable slot.
+#[cfg(feature = "mistralrs")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_mistralrs_provider_new(
+    model_id: *const c_char,
+    device: *const c_char,
+    quantization: *const c_char,
+    context_length: *const u32,
+    vision: bool,
+    out_model: *mut *mut BlazenMistralRsProvider,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(model_id) = (unsafe { cstr_to_str(model_id) }) else {
+        write_internal_error(
+            out_err,
+            "blazen_mistralrs_provider_new: model_id must not be null",
+        );
+        return -1;
+    };
+    let model_id = model_id.to_owned();
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let device = unsafe { cstr_to_opt_string(device) };
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let quantization = unsafe { cstr_to_opt_string(quantization) };
+    let context_length = if context_length.is_null() {
+        None
+    } else {
+        // SAFETY: caller has guaranteed `context_length` points to a readable `u32`.
+        Some(unsafe { *context_length })
+    };
+
+    match blazen_uniffi::concrete::llm::MistralRsProvider::new(
+        model_id,
+        device,
+        quantization,
+        context_length,
+        vision,
+    ) {
+        Ok(arc) => {
+            if !out_model.is_null() {
+                // SAFETY: caller has guaranteed `out_model` is writable.
+                unsafe {
+                    *out_model = BlazenMistralRsProvider(arc).into_ptr();
+                }
+            }
+            0
+        }
+        Err(e) => {
+            write_error(out_err, e);
+            -1
+        }
+    }
+}
+
+/// Async completion. See [`blazen_openai_provider_complete`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete`].
+#[cfg(feature = "mistralrs")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_mistralrs_provider_complete(
+    model: *const BlazenMistralRsProvider,
+    request: *mut BlazenModelRequest,
+) -> *mut BlazenFuture {
+    if model.is_null() {
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; drop to avoid a leak.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        return std::ptr::null_mut();
+    }
+    if request.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `model` is a live handle.
+    let m = unsafe { &*model };
+    let inner = Arc::clone(&m.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+
+    BlazenFuture::spawn::<InnerModelResponse, _>(async move { inner.complete(inner_request).await })
+}
+
+/// Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_blocking`].
+#[cfg(feature = "mistralrs")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_mistralrs_provider_complete_blocking(
+    model: *const BlazenMistralRsProvider,
+    request: *mut BlazenModelRequest,
+    out_response: *mut *mut BlazenModelResponse,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if model.is_null() {
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; drop to avoid a leak.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        write_internal_error(
+            out_err,
+            "blazen_mistralrs_provider_complete_blocking: null model",
+        );
+        return -1;
+    }
+    if request.is_null() {
+        write_internal_error(
+            out_err,
+            "blazen_mistralrs_provider_complete_blocking: null request",
+        );
+        return -1;
+    }
+    // SAFETY: caller has guaranteed `model` is a live handle.
+    let m = unsafe { &*model };
+    let inner = Arc::clone(&m.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+
+    let result = runtime().block_on(async move { inner.complete(inner_request).await });
+    match result {
+        Ok(resp) => {
+            if !out_response.is_null() {
+                // SAFETY: `out_response` is non-null per the branch above.
+                unsafe {
+                    *out_response = BlazenModelResponse::from(resp).into_ptr();
+                }
+            }
+            0
+        }
+        Err(e) => {
+            write_error(out_err, e);
+            -1
+        }
+    }
+}
+
+/// Frees a `BlazenMistralRsProvider`. No-op on null.
+///
+/// # Safety
+///
+/// `model` must be null OR a pointer previously produced by
+/// [`blazen_mistralrs_provider_new`].
+#[cfg(feature = "mistralrs")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_mistralrs_provider_free(model: *mut BlazenMistralRsProvider) {
+    if model.is_null() {
+        return;
+    }
+    // SAFETY: caller upholds the `Box::into_raw` provenance contract.
+    drop(unsafe { Box::from_raw(model) });
+}
+
+// ===========================================================================
+// LlamaCppProvider — local llama.cpp chat-completion backend
+// ===========================================================================
+
+/// Opaque handle wrapping
+/// `Arc<blazen_uniffi::concrete::llm::LlamaCppProvider>`.
+#[cfg(feature = "llamacpp")]
+pub struct BlazenLlamaCppProvider(pub(crate) Arc<blazen_uniffi::concrete::llm::LlamaCppProvider>);
+
+#[cfg(feature = "llamacpp")]
+impl BlazenLlamaCppProvider {
+    pub(crate) fn into_ptr(self) -> *mut BlazenLlamaCppProvider {
+        Box::into_raw(Box::new(self))
+    }
+}
+
+/// Construct a local llama.cpp provider. `model_path` is required (a local
+/// GGUF file path or a `HuggingFace` repo id); `device` / `quantization` are
+/// optional (null treated as `None`); `context_length` and `n_gpu_layers` are
+/// nullable pointers to `u32` (null treated as `None`).
+///
+/// The upstream constructor is fallible (model load can fail) — on failure
+/// returns `-1` and writes a fresh `BlazenError*` into `*out_err`.
+///
+/// # Safety
+///
+/// - `model_path` must be a valid NUL-terminated UTF-8 buffer (non-null).
+/// - `device` / `quantization` must each be null OR valid NUL-terminated
+///   UTF-8 buffers.
+/// - `context_length` / `n_gpu_layers` must each be null OR point to a
+///   readable `u32`.
+/// - `out_model` / `out_err` must each be null OR point to a writable slot.
+#[cfg(feature = "llamacpp")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_llamacpp_provider_new(
+    model_path: *const c_char,
+    device: *const c_char,
+    quantization: *const c_char,
+    context_length: *const u32,
+    n_gpu_layers: *const u32,
+    out_model: *mut *mut BlazenLlamaCppProvider,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(model_path) = (unsafe { cstr_to_str(model_path) }) else {
+        write_internal_error(
+            out_err,
+            "blazen_llamacpp_provider_new: model_path must not be null",
+        );
+        return -1;
+    };
+    let model_path = model_path.to_owned();
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let device = unsafe { cstr_to_opt_string(device) };
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let quantization = unsafe { cstr_to_opt_string(quantization) };
+    let context_length = if context_length.is_null() {
+        None
+    } else {
+        // SAFETY: caller has guaranteed `context_length` points to a readable `u32`.
+        Some(unsafe { *context_length })
+    };
+    let n_gpu_layers = if n_gpu_layers.is_null() {
+        None
+    } else {
+        // SAFETY: caller has guaranteed `n_gpu_layers` points to a readable `u32`.
+        Some(unsafe { *n_gpu_layers })
+    };
+
+    match blazen_uniffi::concrete::llm::LlamaCppProvider::new(
+        model_path,
+        device,
+        quantization,
+        context_length,
+        n_gpu_layers,
+    ) {
+        Ok(arc) => {
+            if !out_model.is_null() {
+                // SAFETY: caller has guaranteed `out_model` is writable.
+                unsafe {
+                    *out_model = BlazenLlamaCppProvider(arc).into_ptr();
+                }
+            }
+            0
+        }
+        Err(e) => {
+            write_error(out_err, e);
+            -1
+        }
+    }
+}
+
+/// Async completion. See [`blazen_openai_provider_complete`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete`].
+#[cfg(feature = "llamacpp")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_llamacpp_provider_complete(
+    model: *const BlazenLlamaCppProvider,
+    request: *mut BlazenModelRequest,
+) -> *mut BlazenFuture {
+    if model.is_null() {
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; drop to avoid a leak.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        return std::ptr::null_mut();
+    }
+    if request.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `model` is a live handle.
+    let m = unsafe { &*model };
+    let inner = Arc::clone(&m.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+
+    BlazenFuture::spawn::<InnerModelResponse, _>(async move { inner.complete(inner_request).await })
+}
+
+/// Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_blocking`].
+#[cfg(feature = "llamacpp")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_llamacpp_provider_complete_blocking(
+    model: *const BlazenLlamaCppProvider,
+    request: *mut BlazenModelRequest,
+    out_response: *mut *mut BlazenModelResponse,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if model.is_null() {
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; drop to avoid a leak.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        write_internal_error(
+            out_err,
+            "blazen_llamacpp_provider_complete_blocking: null model",
+        );
+        return -1;
+    }
+    if request.is_null() {
+        write_internal_error(
+            out_err,
+            "blazen_llamacpp_provider_complete_blocking: null request",
+        );
+        return -1;
+    }
+    // SAFETY: caller has guaranteed `model` is a live handle.
+    let m = unsafe { &*model };
+    let inner = Arc::clone(&m.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+
+    let result = runtime().block_on(async move { inner.complete(inner_request).await });
+    match result {
+        Ok(resp) => {
+            if !out_response.is_null() {
+                // SAFETY: `out_response` is non-null per the branch above.
+                unsafe {
+                    *out_response = BlazenModelResponse::from(resp).into_ptr();
+                }
+            }
+            0
+        }
+        Err(e) => {
+            write_error(out_err, e);
+            -1
+        }
+    }
+}
+
+/// Frees a `BlazenLlamaCppProvider`. No-op on null.
+///
+/// # Safety
+///
+/// `model` must be null OR a pointer previously produced by
+/// [`blazen_llamacpp_provider_new`].
+#[cfg(feature = "llamacpp")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_llamacpp_provider_free(model: *mut BlazenLlamaCppProvider) {
+    if model.is_null() {
+        return;
+    }
+    // SAFETY: caller upholds the `Box::into_raw` provenance contract.
+    drop(unsafe { Box::from_raw(model) });
+}
+
+// ===========================================================================
+// CandleLlmProvider — local candle chat-completion backend
+// ===========================================================================
+
+/// Opaque handle wrapping
+/// `Arc<blazen_uniffi::concrete::llm::CandleLlmProvider>`.
+#[cfg(feature = "candle-llm")]
+pub struct BlazenCandleLlmProvider(pub(crate) Arc<blazen_uniffi::concrete::llm::CandleLlmProvider>);
+
+#[cfg(feature = "candle-llm")]
+impl BlazenCandleLlmProvider {
+    pub(crate) fn into_ptr(self) -> *mut BlazenCandleLlmProvider {
+        Box::into_raw(Box::new(self))
+    }
+}
+
+/// Construct a local candle provider. `model_id` is required (a `HuggingFace`
+/// repo id); `device` / `quantization` / `revision` are optional (null treated
+/// as `None`); `context_length` is a nullable pointer to a `u32` (null treated
+/// as `None`).
+///
+/// The upstream constructor is fallible (model load can fail) — on failure
+/// returns `-1` and writes a fresh `BlazenError*` into `*out_err`.
+///
+/// # Safety
+///
+/// - `model_id` must be a valid NUL-terminated UTF-8 buffer (non-null).
+/// - `device` / `quantization` / `revision` must each be null OR valid
+///   NUL-terminated UTF-8 buffers.
+/// - `context_length` must be null OR point to a readable `u32`.
+/// - `out_model` / `out_err` must each be null OR point to a writable slot.
+#[cfg(feature = "candle-llm")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_candle_provider_new(
+    model_id: *const c_char,
+    device: *const c_char,
+    quantization: *const c_char,
+    revision: *const c_char,
+    context_length: *const u32,
+    out_model: *mut *mut BlazenCandleLlmProvider,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let Some(model_id) = (unsafe { cstr_to_str(model_id) }) else {
+        write_internal_error(
+            out_err,
+            "blazen_candle_provider_new: model_id must not be null",
+        );
+        return -1;
+    };
+    let model_id = model_id.to_owned();
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let device = unsafe { cstr_to_opt_string(device) };
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let quantization = unsafe { cstr_to_opt_string(quantization) };
+    // SAFETY: caller upholds the NUL-termination + UTF-8 contract.
+    let revision = unsafe { cstr_to_opt_string(revision) };
+    let context_length = if context_length.is_null() {
+        None
+    } else {
+        // SAFETY: caller has guaranteed `context_length` points to a readable `u32`.
+        Some(unsafe { *context_length })
+    };
+
+    match blazen_uniffi::concrete::llm::CandleLlmProvider::new(
+        model_id,
+        device,
+        quantization,
+        revision,
+        context_length,
+    ) {
+        Ok(arc) => {
+            if !out_model.is_null() {
+                // SAFETY: caller has guaranteed `out_model` is writable.
+                unsafe {
+                    *out_model = BlazenCandleLlmProvider(arc).into_ptr();
+                }
+            }
+            0
+        }
+        Err(e) => {
+            write_error(out_err, e);
+            -1
+        }
+    }
+}
+
+/// Async completion. See [`blazen_openai_provider_complete`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete`].
+#[cfg(feature = "candle-llm")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_candle_provider_complete(
+    model: *const BlazenCandleLlmProvider,
+    request: *mut BlazenModelRequest,
+) -> *mut BlazenFuture {
+    if model.is_null() {
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; drop to avoid a leak.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        return std::ptr::null_mut();
+    }
+    if request.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `model` is a live handle.
+    let m = unsafe { &*model };
+    let inner = Arc::clone(&m.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+
+    BlazenFuture::spawn::<InnerModelResponse, _>(async move { inner.complete(inner_request).await })
+}
+
+/// Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_blocking`].
+#[cfg(feature = "candle-llm")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_candle_provider_complete_blocking(
+    model: *const BlazenCandleLlmProvider,
+    request: *mut BlazenModelRequest,
+    out_response: *mut *mut BlazenModelResponse,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if model.is_null() {
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; drop to avoid a leak.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        write_internal_error(
+            out_err,
+            "blazen_candle_provider_complete_blocking: null model",
+        );
+        return -1;
+    }
+    if request.is_null() {
+        write_internal_error(
+            out_err,
+            "blazen_candle_provider_complete_blocking: null request",
+        );
+        return -1;
+    }
+    // SAFETY: caller has guaranteed `model` is a live handle.
+    let m = unsafe { &*model };
+    let inner = Arc::clone(&m.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+
+    let result = runtime().block_on(async move { inner.complete(inner_request).await });
+    match result {
+        Ok(resp) => {
+            if !out_response.is_null() {
+                // SAFETY: `out_response` is non-null per the branch above.
+                unsafe {
+                    *out_response = BlazenModelResponse::from(resp).into_ptr();
+                }
+            }
+            0
+        }
+        Err(e) => {
+            write_error(out_err, e);
+            -1
+        }
+    }
+}
+
+/// Frees a `BlazenCandleLlmProvider`. No-op on null.
+///
+/// # Safety
+///
+/// `model` must be null OR a pointer previously produced by
+/// [`blazen_candle_provider_new`].
+#[cfg(feature = "candle-llm")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_candle_provider_free(model: *mut BlazenCandleLlmProvider) {
+    if model.is_null() {
+        return;
+    }
+    // SAFETY: caller upholds the `Box::into_raw` provenance contract.
+    drop(unsafe { Box::from_raw(model) });
+}

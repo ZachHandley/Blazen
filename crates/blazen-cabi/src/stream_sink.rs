@@ -70,10 +70,17 @@ use crate::compute_vc::BlazenVcModel;
 use crate::error::BlazenError;
 use crate::future::BlazenFuture;
 use crate::llm::BlazenModel;
+#[cfg(feature = "candle-llm")]
+use crate::llm_providers::BlazenCandleLlmProvider;
+#[cfg(feature = "llamacpp")]
+use crate::llm_providers::BlazenLlamaCppProvider;
+#[cfg(feature = "mistralrs")]
+use crate::llm_providers::BlazenMistralRsProvider;
 use crate::llm_providers::{
     BlazenAnthropicProvider, BlazenAzureOpenAiProvider, BlazenBedrockProvider,
     BlazenCohereProvider, BlazenDeepSeekProvider, BlazenFalLlmProvider, BlazenFireworksProvider,
-    BlazenGeminiProvider, BlazenGroqProvider, BlazenMistralProvider, BlazenOpenAiProvider,
+    BlazenGeminiProvider, BlazenGroqProvider, BlazenLmStudioProvider, BlazenMistralProvider,
+    BlazenOllamaProvider, BlazenOpenAiCompatProvider, BlazenOpenAiProvider,
     BlazenOpenRouterProvider, BlazenPerplexityProvider, BlazenTogetherProvider, BlazenXaiProvider,
 };
 use crate::llm_records::{BlazenModelRequest, BlazenTokenUsage};
@@ -2075,6 +2082,612 @@ pub unsafe extern "C" fn blazen_fal_llm_provider_complete_streaming(
     let sink_arc: Arc<dyn CompletionStreamSink> = Arc::new(CStreamSink { vtable: sink });
     BlazenFuture::spawn::<(), _>(async move {
         blazen_uniffi::concrete::llm::fal_llm_provider_complete_streaming(
+            provider_arc,
+            inner_request,
+            sink_arc,
+        )
+        .await
+    })
+}
+
+// OpenAiCompatProvider -----------------------------------------------------
+
+/// Synchronous per-engine streaming for `OpenAiCompatProvider`. See
+/// [`blazen_openai_provider_complete_streaming_blocking`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+/// (`provider` is a `BlazenOpenAiCompatProvider`).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_openai_compat_provider_complete_streaming_blocking(
+    provider: *const BlazenOpenAiCompatProvider,
+    request: *mut BlazenModelRequest,
+    sink: BlazenCompletionStreamSinkVTable,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if provider.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; reclaim and drop.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        // SAFETY: `out_err` upholds the function-level contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_openai_compat_provider_complete_streaming: null provider",
+            )
+        };
+    }
+    if request.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        // SAFETY: `out_err` upholds the function-level contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_openai_compat_provider_complete_streaming: null request",
+            )
+        };
+    }
+    // SAFETY: caller has guaranteed `provider` is a live handle.
+    let provider_handle = unsafe { &*provider };
+    let provider_arc = Arc::clone(&provider_handle.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+    let sink_arc: Arc<dyn CompletionStreamSink> = Arc::new(CStreamSink { vtable: sink });
+    match blazen_uniffi::concrete::llm::openai_compat_provider_complete_streaming_blocking(
+        provider_arc,
+        inner_request,
+        sink_arc,
+    ) {
+        Ok(()) => 0,
+        // SAFETY: `out_err` upholds the function-level contract.
+        Err(e) => unsafe { write_error(out_err, e) },
+    }
+}
+
+/// Async per-engine streaming for `OpenAiCompatProvider`. See
+/// [`blazen_openai_provider_complete_streaming`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_streaming`]
+/// (`provider` is a `BlazenOpenAiCompatProvider`).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_openai_compat_provider_complete_streaming(
+    provider: *const BlazenOpenAiCompatProvider,
+    request: *mut BlazenModelRequest,
+    sink: BlazenCompletionStreamSinkVTable,
+) -> *mut BlazenFuture {
+    if provider.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; reclaim and drop.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        return std::ptr::null_mut();
+    }
+    if request.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `provider` is a live handle.
+    let provider_handle = unsafe { &*provider };
+    let provider_arc = Arc::clone(&provider_handle.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+    let sink_arc: Arc<dyn CompletionStreamSink> = Arc::new(CStreamSink { vtable: sink });
+    BlazenFuture::spawn::<(), _>(async move {
+        blazen_uniffi::concrete::llm::openai_compat_provider_complete_streaming(
+            provider_arc,
+            inner_request,
+            sink_arc,
+        )
+        .await
+    })
+}
+
+// OllamaProvider -----------------------------------------------------------
+
+/// Synchronous per-engine streaming for `OllamaProvider`. See
+/// [`blazen_openai_provider_complete_streaming_blocking`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+/// (`provider` is a `BlazenOllamaProvider`).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_ollama_provider_complete_streaming_blocking(
+    provider: *const BlazenOllamaProvider,
+    request: *mut BlazenModelRequest,
+    sink: BlazenCompletionStreamSinkVTable,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if provider.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; reclaim and drop.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        // SAFETY: `out_err` upholds the function-level contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_ollama_provider_complete_streaming: null provider",
+            )
+        };
+    }
+    if request.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        // SAFETY: `out_err` upholds the function-level contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_ollama_provider_complete_streaming: null request",
+            )
+        };
+    }
+    // SAFETY: caller has guaranteed `provider` is a live handle.
+    let provider_handle = unsafe { &*provider };
+    let provider_arc = Arc::clone(&provider_handle.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+    let sink_arc: Arc<dyn CompletionStreamSink> = Arc::new(CStreamSink { vtable: sink });
+    match blazen_uniffi::concrete::llm::ollama_provider_complete_streaming_blocking(
+        provider_arc,
+        inner_request,
+        sink_arc,
+    ) {
+        Ok(()) => 0,
+        // SAFETY: `out_err` upholds the function-level contract.
+        Err(e) => unsafe { write_error(out_err, e) },
+    }
+}
+
+/// Async per-engine streaming for `OllamaProvider`. See
+/// [`blazen_openai_provider_complete_streaming`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_streaming`]
+/// (`provider` is a `BlazenOllamaProvider`).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_ollama_provider_complete_streaming(
+    provider: *const BlazenOllamaProvider,
+    request: *mut BlazenModelRequest,
+    sink: BlazenCompletionStreamSinkVTable,
+) -> *mut BlazenFuture {
+    if provider.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; reclaim and drop.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        return std::ptr::null_mut();
+    }
+    if request.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `provider` is a live handle.
+    let provider_handle = unsafe { &*provider };
+    let provider_arc = Arc::clone(&provider_handle.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+    let sink_arc: Arc<dyn CompletionStreamSink> = Arc::new(CStreamSink { vtable: sink });
+    BlazenFuture::spawn::<(), _>(async move {
+        blazen_uniffi::concrete::llm::ollama_provider_complete_streaming(
+            provider_arc,
+            inner_request,
+            sink_arc,
+        )
+        .await
+    })
+}
+
+// LmStudioProvider ---------------------------------------------------------
+
+/// Synchronous per-engine streaming for `LmStudioProvider`. See
+/// [`blazen_openai_provider_complete_streaming_blocking`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+/// (`provider` is a `BlazenLmStudioProvider`).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_lm_studio_provider_complete_streaming_blocking(
+    provider: *const BlazenLmStudioProvider,
+    request: *mut BlazenModelRequest,
+    sink: BlazenCompletionStreamSinkVTable,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if provider.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; reclaim and drop.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        // SAFETY: `out_err` upholds the function-level contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_lm_studio_provider_complete_streaming: null provider",
+            )
+        };
+    }
+    if request.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        // SAFETY: `out_err` upholds the function-level contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_lm_studio_provider_complete_streaming: null request",
+            )
+        };
+    }
+    // SAFETY: caller has guaranteed `provider` is a live handle.
+    let provider_handle = unsafe { &*provider };
+    let provider_arc = Arc::clone(&provider_handle.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+    let sink_arc: Arc<dyn CompletionStreamSink> = Arc::new(CStreamSink { vtable: sink });
+    match blazen_uniffi::concrete::llm::lm_studio_provider_complete_streaming_blocking(
+        provider_arc,
+        inner_request,
+        sink_arc,
+    ) {
+        Ok(()) => 0,
+        // SAFETY: `out_err` upholds the function-level contract.
+        Err(e) => unsafe { write_error(out_err, e) },
+    }
+}
+
+/// Async per-engine streaming for `LmStudioProvider`. See
+/// [`blazen_openai_provider_complete_streaming`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_streaming`]
+/// (`provider` is a `BlazenLmStudioProvider`).
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_lm_studio_provider_complete_streaming(
+    provider: *const BlazenLmStudioProvider,
+    request: *mut BlazenModelRequest,
+    sink: BlazenCompletionStreamSinkVTable,
+) -> *mut BlazenFuture {
+    if provider.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; reclaim and drop.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        return std::ptr::null_mut();
+    }
+    if request.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `provider` is a live handle.
+    let provider_handle = unsafe { &*provider };
+    let provider_arc = Arc::clone(&provider_handle.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+    let sink_arc: Arc<dyn CompletionStreamSink> = Arc::new(CStreamSink { vtable: sink });
+    BlazenFuture::spawn::<(), _>(async move {
+        blazen_uniffi::concrete::llm::lm_studio_provider_complete_streaming(
+            provider_arc,
+            inner_request,
+            sink_arc,
+        )
+        .await
+    })
+}
+
+// MistralRsProvider --------------------------------------------------------
+
+/// Synchronous per-engine streaming for `MistralRsProvider`. See
+/// [`blazen_openai_provider_complete_streaming_blocking`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+/// (`provider` is a `BlazenMistralRsProvider`).
+#[cfg(feature = "mistralrs")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_mistralrs_provider_complete_streaming_blocking(
+    provider: *const BlazenMistralRsProvider,
+    request: *mut BlazenModelRequest,
+    sink: BlazenCompletionStreamSinkVTable,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if provider.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; reclaim and drop.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        // SAFETY: `out_err` upholds the function-level contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_mistralrs_provider_complete_streaming: null provider",
+            )
+        };
+    }
+    if request.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        // SAFETY: `out_err` upholds the function-level contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_mistralrs_provider_complete_streaming: null request",
+            )
+        };
+    }
+    // SAFETY: caller has guaranteed `provider` is a live handle.
+    let provider_handle = unsafe { &*provider };
+    let provider_arc = Arc::clone(&provider_handle.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+    let sink_arc: Arc<dyn CompletionStreamSink> = Arc::new(CStreamSink { vtable: sink });
+    match blazen_uniffi::concrete::llm::mistralrs_provider_complete_streaming_blocking(
+        provider_arc,
+        inner_request,
+        sink_arc,
+    ) {
+        Ok(()) => 0,
+        // SAFETY: `out_err` upholds the function-level contract.
+        Err(e) => unsafe { write_error(out_err, e) },
+    }
+}
+
+/// Async per-engine streaming for `MistralRsProvider`. See
+/// [`blazen_openai_provider_complete_streaming`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_streaming`]
+/// (`provider` is a `BlazenMistralRsProvider`).
+#[cfg(feature = "mistralrs")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_mistralrs_provider_complete_streaming(
+    provider: *const BlazenMistralRsProvider,
+    request: *mut BlazenModelRequest,
+    sink: BlazenCompletionStreamSinkVTable,
+) -> *mut BlazenFuture {
+    if provider.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; reclaim and drop.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        return std::ptr::null_mut();
+    }
+    if request.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `provider` is a live handle.
+    let provider_handle = unsafe { &*provider };
+    let provider_arc = Arc::clone(&provider_handle.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+    let sink_arc: Arc<dyn CompletionStreamSink> = Arc::new(CStreamSink { vtable: sink });
+    BlazenFuture::spawn::<(), _>(async move {
+        blazen_uniffi::concrete::llm::mistralrs_provider_complete_streaming(
+            provider_arc,
+            inner_request,
+            sink_arc,
+        )
+        .await
+    })
+}
+
+// LlamaCppProvider ---------------------------------------------------------
+
+/// Synchronous per-engine streaming for `LlamaCppProvider`. See
+/// [`blazen_openai_provider_complete_streaming_blocking`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+/// (`provider` is a `BlazenLlamaCppProvider`).
+#[cfg(feature = "llamacpp")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_llamacpp_provider_complete_streaming_blocking(
+    provider: *const BlazenLlamaCppProvider,
+    request: *mut BlazenModelRequest,
+    sink: BlazenCompletionStreamSinkVTable,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if provider.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; reclaim and drop.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        // SAFETY: `out_err` upholds the function-level contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_llamacpp_provider_complete_streaming: null provider",
+            )
+        };
+    }
+    if request.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        // SAFETY: `out_err` upholds the function-level contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_llamacpp_provider_complete_streaming: null request",
+            )
+        };
+    }
+    // SAFETY: caller has guaranteed `provider` is a live handle.
+    let provider_handle = unsafe { &*provider };
+    let provider_arc = Arc::clone(&provider_handle.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+    let sink_arc: Arc<dyn CompletionStreamSink> = Arc::new(CStreamSink { vtable: sink });
+    match blazen_uniffi::concrete::llm::llamacpp_provider_complete_streaming_blocking(
+        provider_arc,
+        inner_request,
+        sink_arc,
+    ) {
+        Ok(()) => 0,
+        // SAFETY: `out_err` upholds the function-level contract.
+        Err(e) => unsafe { write_error(out_err, e) },
+    }
+}
+
+/// Async per-engine streaming for `LlamaCppProvider`. See
+/// [`blazen_openai_provider_complete_streaming`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_streaming`]
+/// (`provider` is a `BlazenLlamaCppProvider`).
+#[cfg(feature = "llamacpp")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_llamacpp_provider_complete_streaming(
+    provider: *const BlazenLlamaCppProvider,
+    request: *mut BlazenModelRequest,
+    sink: BlazenCompletionStreamSinkVTable,
+) -> *mut BlazenFuture {
+    if provider.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; reclaim and drop.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        return std::ptr::null_mut();
+    }
+    if request.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `provider` is a live handle.
+    let provider_handle = unsafe { &*provider };
+    let provider_arc = Arc::clone(&provider_handle.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+    let sink_arc: Arc<dyn CompletionStreamSink> = Arc::new(CStreamSink { vtable: sink });
+    BlazenFuture::spawn::<(), _>(async move {
+        blazen_uniffi::concrete::llm::llamacpp_provider_complete_streaming(
+            provider_arc,
+            inner_request,
+            sink_arc,
+        )
+        .await
+    })
+}
+
+// CandleLlmProvider --------------------------------------------------------
+
+/// Synchronous per-engine streaming for `CandleLlmProvider`. See
+/// [`blazen_openai_provider_complete_streaming_blocking`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+/// (`provider` is a `BlazenCandleLlmProvider`).
+#[cfg(feature = "candle-llm")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_candle_provider_complete_streaming_blocking(
+    provider: *const BlazenCandleLlmProvider,
+    request: *mut BlazenModelRequest,
+    sink: BlazenCompletionStreamSinkVTable,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if provider.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; reclaim and drop.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        // SAFETY: `out_err` upholds the function-level contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_candle_provider_complete_streaming: null provider",
+            )
+        };
+    }
+    if request.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        // SAFETY: `out_err` upholds the function-level contract.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_candle_provider_complete_streaming: null request",
+            )
+        };
+    }
+    // SAFETY: caller has guaranteed `provider` is a live handle.
+    let provider_handle = unsafe { &*provider };
+    let provider_arc = Arc::clone(&provider_handle.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+    let sink_arc: Arc<dyn CompletionStreamSink> = Arc::new(CStreamSink { vtable: sink });
+    match blazen_uniffi::concrete::llm::candle_provider_complete_streaming_blocking(
+        provider_arc,
+        inner_request,
+        sink_arc,
+    ) {
+        Ok(()) => 0,
+        // SAFETY: `out_err` upholds the function-level contract.
+        Err(e) => unsafe { write_error(out_err, e) },
+    }
+}
+
+/// Async per-engine streaming for `CandleLlmProvider`. See
+/// [`blazen_openai_provider_complete_streaming`].
+///
+/// # Safety
+///
+/// Same contracts as [`blazen_openai_provider_complete_streaming`]
+/// (`provider` is a `BlazenCandleLlmProvider`).
+#[cfg(feature = "candle-llm")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_candle_provider_complete_streaming(
+    provider: *const BlazenCandleLlmProvider,
+    request: *mut BlazenModelRequest,
+    sink: BlazenCompletionStreamSinkVTable,
+) -> *mut BlazenFuture {
+    if provider.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; reclaim and drop.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        return std::ptr::null_mut();
+    }
+    if request.is_null() {
+        (sink.drop_user_data)(sink.user_data);
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `provider` is a live handle.
+    let provider_handle = unsafe { &*provider };
+    let provider_arc = Arc::clone(&provider_handle.0);
+    // SAFETY: caller has transferred ownership of `request`.
+    let request_box = unsafe { Box::from_raw(request) };
+    let inner_request = request_box.0;
+    let sink_arc: Arc<dyn CompletionStreamSink> = Arc::new(CStreamSink { vtable: sink });
+    BlazenFuture::spawn::<(), _>(async move {
+        blazen_uniffi::concrete::llm::candle_provider_complete_streaming(
             provider_arc,
             inner_request,
             sink_arc,

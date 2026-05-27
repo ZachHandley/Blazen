@@ -344,6 +344,12 @@ typedef struct BlazenBedrockProvider BlazenBedrockProvider;
 typedef struct BlazenCandleEmbedProvider BlazenCandleEmbedProvider;
 
 /**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::CandleLlmProvider>`.
+ */
+typedef struct BlazenCandleLlmProvider BlazenCandleLlmProvider;
+
+/**
  * Opaque wrapper around [`blazen_uniffi::llm::ChatMessage`].
  */
 typedef struct BlazenChatMessage BlazenChatMessage;
@@ -604,6 +610,18 @@ typedef struct BlazenJsonlDataset BlazenJsonlDataset;
 typedef struct BlazenKokoroProvider BlazenKokoroProvider;
 
 /**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::LlamaCppProvider>`.
+ */
+typedef struct BlazenLlamaCppProvider BlazenLlamaCppProvider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::LmStudioProvider>`.
+ */
+typedef struct BlazenLmStudioProvider BlazenLmStudioProvider;
+
+/**
  * Opaque wrapper around [`blazen_uniffi::llm::Media`].
  */
 typedef struct BlazenMedia BlazenMedia;
@@ -613,6 +631,12 @@ typedef struct BlazenMedia BlazenMedia;
  * `Arc<blazen_uniffi::concrete::llm::MistralProvider>`.
  */
 typedef struct BlazenMistralProvider BlazenMistralProvider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::MistralRsProvider>`.
+ */
+typedef struct BlazenMistralRsProvider BlazenMistralRsProvider;
 
 /**
  * Opaque wrapper around [`blazen_uniffi::llm::Model`]. Construct
@@ -707,6 +731,18 @@ typedef struct BlazenMusicModel BlazenMusicModel;
  * optional URL.
  */
 typedef struct BlazenMusicResult BlazenMusicResult;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::OllamaProvider>`.
+ */
+typedef struct BlazenOllamaProvider BlazenOllamaProvider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::OpenAiCompatProvider>`.
+ */
+typedef struct BlazenOpenAiCompatProvider BlazenOpenAiCompatProvider;
 
 /**
  * Opaque handle wrapping
@@ -8570,6 +8606,344 @@ int32_t blazen_xai_provider_complete_blocking(const BlazenXaiProvider *model,
  void blazen_xai_provider_free(BlazenXaiProvider *model);
 
 /**
+ * Construct a generic `OpenAI` Chat Completions-compatible provider. All four
+ * string arguments are required: `provider_name` is the logical id reported
+ * by the provider, `base_url` is the server root (e.g.
+ * `http://localhost:8000/v1`), `api_key` is the bearer token, and `model` is
+ * the default chat model.
+ *
+ * # Safety
+ *
+ * - `provider_name`, `base_url`, `api_key`, `model` must each be valid
+ *   NUL-terminated UTF-8 buffers (non-null).
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_openai_compat_provider_new(const char *provider_name,
+                                          const char *base_url,
+                                          const char *api_key,
+                                          const char *model,
+                                          BlazenOpenAiCompatProvider **out_model,
+                                          BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_openai_compat_provider_complete(const BlazenOpenAiCompatProvider *model,
+                                                     BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_openai_compat_provider_complete_blocking(const BlazenOpenAiCompatProvider *model,
+                                                        BlazenModelRequest *request,
+                                                        BlazenModelResponse **out_response,
+                                                        BlazenError **out_err);
+
+/**
+ * Frees a `BlazenOpenAiCompatProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_openai_compat_provider_new`].
+ */
+ void blazen_openai_compat_provider_free(BlazenOpenAiCompatProvider *model);
+
+/**
+ * Construct an Ollama provider targeting `http://{host}:{port}/v1`. `host`
+ * and `model` are required; `port` is taken by value.
+ *
+ * # Safety
+ *
+ * - `host`, `model` must each be valid NUL-terminated UTF-8 buffers
+ *   (non-null).
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_ollama_provider_new(const char *host,
+                                   uint16_t port,
+                                   const char *model,
+                                   BlazenOllamaProvider **out_model,
+                                   BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_ollama_provider_complete(const BlazenOllamaProvider *model,
+                                              BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_ollama_provider_complete_blocking(const BlazenOllamaProvider *model,
+                                                 BlazenModelRequest *request,
+                                                 BlazenModelResponse **out_response,
+                                                 BlazenError **out_err);
+
+/**
+ * Frees a `BlazenOllamaProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_ollama_provider_new`].
+ */
+ void blazen_ollama_provider_free(BlazenOllamaProvider *model);
+
+/**
+ * Construct an LM Studio provider targeting `http://{host}:{port}/v1`. `host`
+ * and `model` are required; `port` is taken by value.
+ *
+ * # Safety
+ *
+ * - `host`, `model` must each be valid NUL-terminated UTF-8 buffers
+ *   (non-null).
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_lm_studio_provider_new(const char *host,
+                                      uint16_t port,
+                                      const char *model,
+                                      BlazenLmStudioProvider **out_model,
+                                      BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_lm_studio_provider_complete(const BlazenLmStudioProvider *model,
+                                                 BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_lm_studio_provider_complete_blocking(const BlazenLmStudioProvider *model,
+                                                    BlazenModelRequest *request,
+                                                    BlazenModelResponse **out_response,
+                                                    BlazenError **out_err);
+
+/**
+ * Frees a `BlazenLmStudioProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_lm_studio_provider_new`].
+ */
+ void blazen_lm_studio_provider_free(BlazenLmStudioProvider *model);
+
+/**
+ * Construct a local mistral.rs provider. `model_id` is required (a
+ * `HuggingFace` repo id or local GGUF path); `device` / `quantization` are
+ * optional (null treated as `None`); `context_length` is a nullable pointer
+ * to a `u32` (null treated as `None`); `vision` enables multimodal models.
+ *
+ * The upstream constructor is fallible (model load can fail) — on failure
+ * returns `-1` and writes a fresh `BlazenError*` into `*out_err`.
+ *
+ * # Safety
+ *
+ * - `model_id` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `device` / `quantization` must each be null OR valid NUL-terminated
+ *   UTF-8 buffers.
+ * - `context_length` must be null OR point to a readable `u32`.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_mistralrs_provider_new(const char *model_id,
+                                      const char *device,
+                                      const char *quantization,
+                                      const uint32_t *context_length,
+                                      bool vision,
+                                      BlazenMistralRsProvider **out_model,
+                                      BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_mistralrs_provider_complete(const BlazenMistralRsProvider *model,
+                                                 BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_mistralrs_provider_complete_blocking(const BlazenMistralRsProvider *model,
+                                                    BlazenModelRequest *request,
+                                                    BlazenModelResponse **out_response,
+                                                    BlazenError **out_err);
+
+/**
+ * Frees a `BlazenMistralRsProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_mistralrs_provider_new`].
+ */
+ void blazen_mistralrs_provider_free(BlazenMistralRsProvider *model);
+
+/**
+ * Construct a local llama.cpp provider. `model_path` is required (a local
+ * GGUF file path or a `HuggingFace` repo id); `device` / `quantization` are
+ * optional (null treated as `None`); `context_length` and `n_gpu_layers` are
+ * nullable pointers to `u32` (null treated as `None`).
+ *
+ * The upstream constructor is fallible (model load can fail) — on failure
+ * returns `-1` and writes a fresh `BlazenError*` into `*out_err`.
+ *
+ * # Safety
+ *
+ * - `model_path` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `device` / `quantization` must each be null OR valid NUL-terminated
+ *   UTF-8 buffers.
+ * - `context_length` / `n_gpu_layers` must each be null OR point to a
+ *   readable `u32`.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_llamacpp_provider_new(const char *model_path,
+                                     const char *device,
+                                     const char *quantization,
+                                     const uint32_t *context_length,
+                                     const uint32_t *n_gpu_layers,
+                                     BlazenLlamaCppProvider **out_model,
+                                     BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_llamacpp_provider_complete(const BlazenLlamaCppProvider *model,
+                                                BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_llamacpp_provider_complete_blocking(const BlazenLlamaCppProvider *model,
+                                                   BlazenModelRequest *request,
+                                                   BlazenModelResponse **out_response,
+                                                   BlazenError **out_err);
+
+/**
+ * Frees a `BlazenLlamaCppProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_llamacpp_provider_new`].
+ */
+ void blazen_llamacpp_provider_free(BlazenLlamaCppProvider *model);
+
+/**
+ * Construct a local candle provider. `model_id` is required (a `HuggingFace`
+ * repo id); `device` / `quantization` / `revision` are optional (null treated
+ * as `None`); `context_length` is a nullable pointer to a `u32` (null treated
+ * as `None`).
+ *
+ * The upstream constructor is fallible (model load can fail) — on failure
+ * returns `-1` and writes a fresh `BlazenError*` into `*out_err`.
+ *
+ * # Safety
+ *
+ * - `model_id` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `device` / `quantization` / `revision` must each be null OR valid
+ *   NUL-terminated UTF-8 buffers.
+ * - `context_length` must be null OR point to a readable `u32`.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_candle_provider_new(const char *model_id,
+                                   const char *device,
+                                   const char *quantization,
+                                   const char *revision,
+                                   const uint32_t *context_length,
+                                   BlazenCandleLlmProvider **out_model,
+                                   BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_candle_provider_complete(const BlazenCandleLlmProvider *model,
+                                              BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_candle_provider_complete_blocking(const BlazenCandleLlmProvider *model,
+                                                 BlazenModelRequest *request,
+                                                 BlazenModelResponse **out_response,
+                                                 BlazenError **out_err);
+
+/**
+ * Frees a `BlazenCandleLlmProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_candle_provider_new`].
+ */
+ void blazen_candle_provider_free(BlazenCandleLlmProvider *model);
+
+/**
  * Constructs a new `Media` handle from the three required string fields.
  *
  * Returns null if any pointer is null or contains non-UTF-8 bytes. Caller
@@ -14652,6 +15026,180 @@ int32_t blazen_fal_llm_provider_complete_streaming_blocking(const BlazenFalLlmPr
 BlazenFuture *blazen_fal_llm_provider_complete_streaming(const BlazenFalLlmProvider *provider,
                                                          BlazenModelRequest *request,
                                                          BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `OpenAiCompatProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenOpenAiCompatProvider`).
+ */
+
+int32_t blazen_openai_compat_provider_complete_streaming_blocking(const BlazenOpenAiCompatProvider *provider,
+                                                                  BlazenModelRequest *request,
+                                                                  BlazenCompletionStreamSinkVTable sink,
+                                                                  BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `OpenAiCompatProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenOpenAiCompatProvider`).
+ */
+
+BlazenFuture *blazen_openai_compat_provider_complete_streaming(const BlazenOpenAiCompatProvider *provider,
+                                                               BlazenModelRequest *request,
+                                                               BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `OllamaProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenOllamaProvider`).
+ */
+
+int32_t blazen_ollama_provider_complete_streaming_blocking(const BlazenOllamaProvider *provider,
+                                                           BlazenModelRequest *request,
+                                                           BlazenCompletionStreamSinkVTable sink,
+                                                           BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `OllamaProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenOllamaProvider`).
+ */
+
+BlazenFuture *blazen_ollama_provider_complete_streaming(const BlazenOllamaProvider *provider,
+                                                        BlazenModelRequest *request,
+                                                        BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `LmStudioProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenLmStudioProvider`).
+ */
+
+int32_t blazen_lm_studio_provider_complete_streaming_blocking(const BlazenLmStudioProvider *provider,
+                                                              BlazenModelRequest *request,
+                                                              BlazenCompletionStreamSinkVTable sink,
+                                                              BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `LmStudioProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenLmStudioProvider`).
+ */
+
+BlazenFuture *blazen_lm_studio_provider_complete_streaming(const BlazenLmStudioProvider *provider,
+                                                           BlazenModelRequest *request,
+                                                           BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `MistralRsProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenMistralRsProvider`).
+ */
+
+int32_t blazen_mistralrs_provider_complete_streaming_blocking(const BlazenMistralRsProvider *provider,
+                                                              BlazenModelRequest *request,
+                                                              BlazenCompletionStreamSinkVTable sink,
+                                                              BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `MistralRsProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenMistralRsProvider`).
+ */
+
+BlazenFuture *blazen_mistralrs_provider_complete_streaming(const BlazenMistralRsProvider *provider,
+                                                           BlazenModelRequest *request,
+                                                           BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `LlamaCppProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenLlamaCppProvider`).
+ */
+
+int32_t blazen_llamacpp_provider_complete_streaming_blocking(const BlazenLlamaCppProvider *provider,
+                                                             BlazenModelRequest *request,
+                                                             BlazenCompletionStreamSinkVTable sink,
+                                                             BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `LlamaCppProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenLlamaCppProvider`).
+ */
+
+BlazenFuture *blazen_llamacpp_provider_complete_streaming(const BlazenLlamaCppProvider *provider,
+                                                          BlazenModelRequest *request,
+                                                          BlazenCompletionStreamSinkVTable sink);
+
+/**
+ * Synchronous per-engine streaming for `CandleLlmProvider`. See
+ * [`blazen_openai_provider_complete_streaming_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming_blocking`]
+ * (`provider` is a `BlazenCandleLlmProvider`).
+ */
+
+int32_t blazen_candle_provider_complete_streaming_blocking(const BlazenCandleLlmProvider *provider,
+                                                           BlazenModelRequest *request,
+                                                           BlazenCompletionStreamSinkVTable sink,
+                                                           BlazenError **out_err);
+
+/**
+ * Async per-engine streaming for `CandleLlmProvider`. See
+ * [`blazen_openai_provider_complete_streaming`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_streaming`]
+ * (`provider` is a `BlazenCandleLlmProvider`).
+ */
+
+BlazenFuture *blazen_candle_provider_complete_streaming(const BlazenCandleLlmProvider *provider,
+                                                        BlazenModelRequest *request,
+                                                        BlazenCompletionStreamSinkVTable sink);
 
 /**
  * Synchronously drive a music streaming generation, dispatching each
