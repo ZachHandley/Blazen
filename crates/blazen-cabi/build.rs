@@ -44,6 +44,14 @@ fn main() {
         }
     }
 
+    // The fastembed embedding backend statically links ONNX Runtime, which
+    // calls GNU OpenMP runtime symbols (GOMP_*). The final cdylib must carry a
+    // DT_NEEDED entry for libgomp so those symbols resolve at dlopen time —
+    // without this the Ruby FFI load fails with `undefined symbol: GOMP_barrier`.
+    if env::var_os("CARGO_FEATURE_FASTEMBED").is_some() {
+        println!("cargo:rustc-link-lib=dylib=gomp");
+    }
+
     println!("cargo:rerun-if-changed=src");
     println!("cargo:rerun-if-changed=cbindgen.toml");
     println!("cargo:rerun-if-changed=build.rs");
