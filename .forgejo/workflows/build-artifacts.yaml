@@ -1188,6 +1188,13 @@ jobs:
         if: steps.verify.outputs.completed != 'true'
         run: which wasm-pack || cargo install wasm-pack
 
+      - name: Setup binaryen (current wasm-opt)
+        if: steps.verify.outputs.completed != 'true'
+        # Prepend a current binaryen so wasm-pack's wasm-opt step can parse the
+        # reference-types wasm current rustc emits (a stale distro wasm-opt
+        # fails with "invalid code after misc prefix"). Defaults to latest.
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-binaryen@main
+
       - name: Stamp version
         if: steps.verify.outputs.completed != 'true'
         run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}

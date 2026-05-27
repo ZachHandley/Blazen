@@ -787,6 +787,14 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         run: cargo install wasm-pack --locked
 
+      - name: Setup binaryen (current wasm-opt)
+        if: steps.check.outputs.completed != 'true'
+        # Current rustc/wasm-bindgen emit reference-types wasm (table.fill,
+        # 0xFC 0x11) that a stale distro wasm-opt can't parse, failing the
+        # wasm-pack build at the wasm-opt step. Prepend a current binaryen
+        # to PATH (defaults to latest).
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-binaryen@main
+
       - name: Regenerate Python pyi stub + drift check
         if: steps.check.outputs.completed != 'true'
         run: |
@@ -920,6 +928,13 @@ jobs:
       - name: Install wasm-pack
         if: steps.check.outputs.completed != 'true'
         run: cargo install wasm-pack --locked
+
+      - name: Setup binaryen (current wasm-opt)
+        if: steps.check.outputs.completed != 'true'
+        # Stale distro wasm-opt can't parse reference-types wasm (table.fill,
+        # 0xFC 0x11) emitted by current rustc; prepend a current binaryen to
+        # PATH so the wasm-pack build's wasm-opt step succeeds. Defaults to latest.
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-binaryen@main
 
       - name: wasm-pack build (blazen-wasm-sdk)
         if: steps.check.outputs.completed != 'true'
