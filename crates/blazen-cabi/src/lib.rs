@@ -27,11 +27,13 @@ pub mod compute_vc;
 pub mod controlplane;
 #[cfg(feature = "distributed")]
 pub mod controlplane_records;
+pub mod embed;
 pub mod error;
 pub mod future;
 pub mod image;
 pub mod init;
 pub mod llm;
+pub mod llm_providers;
 pub mod llm_records;
 pub mod manager;
 pub mod manager_records;

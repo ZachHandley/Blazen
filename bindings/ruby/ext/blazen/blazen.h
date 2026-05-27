@@ -293,9 +293,21 @@ typedef struct BlazenAgentResult BlazenAgentResult;
 
 /**
  * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::AnthropicProvider>`.
+ */
+typedef struct BlazenAnthropicProvider BlazenAnthropicProvider;
+
+/**
+ * Opaque handle wrapping
  * `Arc<blazen_uniffi::concrete::music::AudioGenProvider>`.
  */
 typedef struct BlazenAudioGenProvider BlazenAudioGenProvider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::AzureOpenAiProvider>`.
+ */
+typedef struct BlazenAzureOpenAiProvider BlazenAzureOpenAiProvider;
 
 /**
  * Opaque handle wrapping
@@ -314,6 +326,24 @@ typedef struct BlazenBatchItem BlazenBatchItem;
 typedef struct BlazenBatchResult BlazenBatchResult;
 
 /**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::BedrockProvider>`.
+ */
+typedef struct BlazenBedrockProvider BlazenBedrockProvider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::embed::CandleEmbedProvider>`.
+ *
+ * Note: the underlying `CandleEmbedProvider::new` constructor is async
+ * (HF download + weights load), so this factory drives it through the
+ * shared cabi tokio runtime via `block_on` -- matching the pattern in
+ * `crate::three_d` for `TripoSrProvider`. Callers should not invoke
+ * this factory from inside another tokio runtime on the same thread.
+ */
+typedef struct BlazenCandleEmbedProvider BlazenCandleEmbedProvider;
+
+/**
  * Opaque wrapper around [`blazen_uniffi::llm::ChatMessage`].
  */
 typedef struct BlazenChatMessage BlazenChatMessage;
@@ -326,6 +356,12 @@ typedef struct BlazenChatMessage BlazenChatMessage;
  * [`blazen_checkpoint_store_free`].
  */
 typedef struct BlazenCheckpointStore BlazenCheckpointStore;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::CohereProvider>`.
+ */
+typedef struct BlazenCohereProvider BlazenCohereProvider;
 
 /**
  * Opaque handle wrapping [`blazen_uniffi::concrete::three_d::Compat3dProvider`].
@@ -383,6 +419,12 @@ typedef struct BlazenControlPlaneWorker BlazenControlPlaneWorker;
 
 /**
  * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::DeepSeekProvider>`.
+ */
+typedef struct BlazenDeepSeekProvider BlazenDeepSeekProvider;
+
+/**
+ * Opaque handle wrapping
  * `Arc<blazen_uniffi::concrete::image::DiffusionProvider>`.
  *
  * Free with [`blazen_diffusion_provider_free`].
@@ -400,6 +442,14 @@ typedef struct BlazenEmbeddingModel BlazenEmbeddingModel;
  * by `embed` / `embed_blocking` in Phase R3; no public constructor.
  */
 typedef struct BlazenEmbeddingResponse BlazenEmbeddingResponse;
+
+/**
+ * Opaque wrapper around the flat `Vec<Vec<f32>>` produced by per-engine
+ * embedding providers in this module. Distinct from
+ * [`crate::llm_records::BlazenEmbeddingResponse`] (which carries the
+ * richer model-aware `EmbeddingResponse` from `blazen_uniffi::llm`).
+ */
+typedef struct BlazenEmbeddingVectors BlazenEmbeddingVectors;
 
 /**
  * Opaque error handle owned by the caller. Produced by any fallible cabi
@@ -429,11 +479,23 @@ typedef struct BlazenF5Provider BlazenF5Provider;
 
 /**
  * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::embed::FalEmbeddingProvider>`.
+ */
+typedef struct BlazenFalEmbeddingProvider BlazenFalEmbeddingProvider;
+
+/**
+ * Opaque handle wrapping
  * `Arc<blazen_uniffi::concrete::image::FalImageGenProvider>`.
  *
  * Free with [`blazen_fal_image_gen_provider_free`].
  */
 typedef struct BlazenFalImageGenProvider BlazenFalImageGenProvider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::FalLlmProvider>`.
+ */
+typedef struct BlazenFalLlmProvider BlazenFalLlmProvider;
 
 /**
  * Opaque handle wrapping
@@ -471,9 +533,23 @@ typedef struct BlazenFalVcProvider BlazenFalVcProvider;
 
 /**
  * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::embed::FastembedProvider>`.
+ *
+ * Free with [`blazen_fastembed_provider_free`].
+ */
+typedef struct BlazenFastembedProvider BlazenFastembedProvider;
+
+/**
+ * Opaque handle wrapping
  * `Arc<blazen_uniffi::concrete::stt::FasterWhisperProvider>`.
  */
 typedef struct BlazenFasterWhisperProvider BlazenFasterWhisperProvider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::FireworksProvider>`.
+ */
+typedef struct BlazenFireworksProvider BlazenFireworksProvider;
 
 /**
  * Opaque async-result handle. cbindgen renders the C side as a
@@ -483,6 +559,18 @@ typedef struct BlazenFasterWhisperProvider BlazenFasterWhisperProvider;
  * Deliberately not `#[repr(C)]`.
  */
 typedef struct BlazenFuture BlazenFuture;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::GeminiProvider>`.
+ */
+typedef struct BlazenGeminiProvider BlazenGeminiProvider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::GroqProvider>`.
+ */
+typedef struct BlazenGroqProvider BlazenGroqProvider;
 
 /**
  * Opaque handle wrapping an `Arc<blazen_uniffi::compute::ImageGenModel>`.
@@ -519,6 +607,12 @@ typedef struct BlazenKokoroProvider BlazenKokoroProvider;
  * Opaque wrapper around [`blazen_uniffi::llm::Media`].
  */
 typedef struct BlazenMedia BlazenMedia;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::MistralProvider>`.
+ */
+typedef struct BlazenMistralProvider BlazenMistralProvider;
 
 /**
  * Opaque wrapper around [`blazen_uniffi::llm::Model`]. Construct
@@ -615,6 +709,26 @@ typedef struct BlazenMusicModel BlazenMusicModel;
 typedef struct BlazenMusicResult BlazenMusicResult;
 
 /**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::embed::OpenAiEmbeddingProvider>`.
+ */
+typedef struct BlazenOpenAiEmbeddingProvider BlazenOpenAiEmbeddingProvider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::OpenAiProvider>`.
+ *
+ * Free with [`blazen_openai_provider_free`].
+ */
+typedef struct BlazenOpenAiProvider BlazenOpenAiProvider;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::OpenRouterProvider>`.
+ */
+typedef struct BlazenOpenRouterProvider BlazenOpenRouterProvider;
+
+/**
  * Opaque wrapper around `blazen_uniffi::peer::PeerClient`.
  *
  * The inner `Arc` matches the `self: Arc<Self>` shape of the underlying
@@ -629,6 +743,12 @@ typedef struct BlazenPeerClient BlazenPeerClient;
  * async `serve` method.
  */
 typedef struct BlazenPeerServer BlazenPeerServer;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::PerplexityProvider>`.
+ */
+typedef struct BlazenPerplexityProvider BlazenPerplexityProvider;
 
 /**
  * Opaque handle wrapping a `blazen_uniffi::persist::PersistedEvent`.
@@ -832,6 +952,12 @@ typedef struct BlazenThreeDGenerateResult BlazenThreeDGenerateResult;
 typedef struct BlazenThreeDModel BlazenThreeDModel;
 
 /**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::TogetherProvider>`.
+ */
+typedef struct BlazenTogetherProvider BlazenTogetherProvider;
+
+/**
  * Opaque wrapper around [`blazen_uniffi::llm::TokenUsage`].
  */
 typedef struct BlazenTokenUsage BlazenTokenUsage;
@@ -845,6 +971,12 @@ typedef struct BlazenTool BlazenTool;
  * Opaque wrapper around [`blazen_uniffi::llm::ToolCall`].
  */
 typedef struct BlazenToolCall BlazenToolCall;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::embed::TractEmbedProvider>`.
+ */
+typedef struct BlazenTractEmbedProvider BlazenTractEmbedProvider;
 
 /**
  * Opaque handle wrapping
@@ -997,6 +1129,12 @@ typedef struct BlazenWorkflowHistoryEntry BlazenWorkflowHistoryEntry;
  * `blazen_workflow_run` wrappers).
  */
 typedef struct BlazenWorkflowResult BlazenWorkflowResult;
+
+/**
+ * Opaque handle wrapping
+ * `Arc<blazen_uniffi::concrete::llm::XaiProvider>`.
+ */
+typedef struct BlazenXaiProvider BlazenXaiProvider;
 
 typedef struct Vec_InnerVoiceHandle Vec_InnerVoiceHandle;
 
@@ -6467,6 +6605,418 @@ int32_t blazen_run_state_snapshot_last_event_at_ms(const BlazenRunStateSnapshot 
  void blazen_run_event_free(BlazenRunEvent *event);
 
 /**
+ * Pops the [`BlazenEmbeddingVectors`] out of a future produced by any
+ * `blazen_<engine>_provider_embed` in this module.
+ *
+ * Returns `0` on success (writes the handle into `*out` when non-null)
+ * or `-1` on failure (writes a fresh `BlazenError*` into `*err` when
+ * non-null).
+ *
+ * # Safety
+ *
+ * `fut` must be null OR a pointer previously produced by a per-engine
+ * `_embed` function (and not yet freed). `out` and `err` must each be
+ * null OR point to a writable slot of the matching pointer type.
+ */
+
+int32_t blazen_future_take_embedding_vectors(BlazenFuture *fut,
+                                             BlazenEmbeddingVectors **out,
+                                             BlazenError **err);
+
+/**
+ * Returns the number of embedding vectors. Returns `0` on a null handle.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenEmbeddingVectors`.
+ */
+ uintptr_t blazen_embedding_vectors_count(const BlazenEmbeddingVectors *handle);
+
+/**
+ * Returns the dimensionality of the `vec_idx`-th embedding vector.
+ * Returns `0` on a null handle or an out-of-range index.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenEmbeddingVectors`.
+ */
+ uintptr_t blazen_embedding_vectors_dim(const BlazenEmbeddingVectors *handle, uintptr_t vec_idx);
+
+/**
+ * Returns the `dim_idx`-th coordinate of the `vec_idx`-th embedding
+ * vector. Returns `0.0` on a null handle or an out-of-range index.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenEmbeddingVectors`.
+ */
+
+float blazen_embedding_vectors_get(const BlazenEmbeddingVectors *handle,
+                                   uintptr_t vec_idx,
+                                   uintptr_t dim_idx);
+
+/**
+ * Bulk-copy the `vec_idx`-th embedding vector into the caller-supplied
+ * `f32` buffer. Returns the number of coordinates written (capped at
+ * `out_len`). Returns `0` on a null handle, out-of-range index, or null
+ * `out_buf`. Designed for hot paths in embedding-heavy workloads (RAG,
+ * semantic search).
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenEmbeddingVectors`. `out_buf`
+ * must be null OR point to a writable buffer of at least `out_len`
+ * `f32` elements.
+ */
+
+uintptr_t blazen_embedding_vectors_to_buffer(const BlazenEmbeddingVectors *handle,
+                                             uintptr_t vec_idx,
+                                             float *out_buf,
+                                             uintptr_t out_len);
+
+/**
+ * Frees a `BlazenEmbeddingVectors` handle. No-op on null.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer previously produced by
+ * [`blazen_future_take_embedding_vectors`] (or the blocking variant of
+ * any per-engine `_embed_blocking`). Double-free is undefined behavior.
+ */
+ void blazen_embedding_vectors_free(BlazenEmbeddingVectors *handle);
+
+/**
+ * Construct a `BlazenFastembedProvider`. Both inputs are optional --
+ * pass null for `model_id` to default to fastembed's `BGESmallENV15`,
+ * and null for `cache_dir` to defer to the model-cache default.
+ *
+ * On success returns `0` and writes a fresh `BlazenFastembedProvider*`
+ * into `*out_model`. On failure returns `-1` and writes a fresh
+ * `BlazenError*` into `*out_err`. Both out-parameters may be null to
+ * discard that side of the result.
+ *
+ * # Safety
+ *
+ * - `model_id` / `cache_dir` must be null OR valid NUL-terminated UTF-8
+ *   buffers.
+ * - `out_model` / `out_err` must each be null OR point to a writable
+ *   slot of the matching pointer type.
+ */
+
+int32_t blazen_fastembed_provider_new(const char *model_id,
+                                      const char *cache_dir,
+                                      BlazenFastembedProvider **out_model,
+                                      BlazenError **out_err);
+
+/**
+ * Asynchronously compute embedding vectors for `texts`. Returns a
+ * `*mut BlazenFuture` the caller polls / waits on; the typed result is
+ * popped with [`blazen_future_take_embedding_vectors`].
+ *
+ * Returns null if `model` is null, `texts` is null with `texts_len > 0`,
+ * or any text is non-UTF-8.
+ *
+ * # Safety
+ *
+ * - `model` must be a valid pointer to a `BlazenFastembedProvider`.
+ * - When `texts_len > 0`, `texts` must point to `texts_len` valid
+ *   `*const c_char` entries, each a NUL-terminated UTF-8 buffer.
+ */
+
+BlazenFuture *blazen_fastembed_provider_embed(const BlazenFastembedProvider *model,
+                                              const char *const *texts,
+                                              uintptr_t texts_len);
+
+/**
+ * Synchronous variant of [`blazen_fastembed_provider_embed`]. Returns
+ * `0` on success (handle written into `*out_result`), `-1` on failure
+ * (error written into `*out_err`), `-2` on invalid input (null model
+ * pointer or non-UTF-8 text element).
+ *
+ * # Safety
+ *
+ * Same string + array contracts as [`blazen_fastembed_provider_embed`].
+ * `out_result` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_fastembed_provider_embed_blocking(const BlazenFastembedProvider *model,
+                                                 const char *const *texts,
+                                                 uintptr_t texts_len,
+                                                 BlazenEmbeddingVectors **out_result,
+                                                 BlazenError **out_err);
+
+/**
+ * Returns the dimensionality of vectors produced by this provider.
+ * Returns `0` on a null handle.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenFastembedProvider`.
+ */
+ uint32_t blazen_fastembed_provider_dimensions(const BlazenFastembedProvider *model);
+
+/**
+ * Frees a `BlazenFastembedProvider` handle. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_fastembed_provider_new`]. Double-free is undefined behavior.
+ */
+ void blazen_fastembed_provider_free(BlazenFastembedProvider *model);
+
+/**
+ * Construct a `BlazenTractEmbedProvider`. See
+ * [`blazen_fastembed_provider_new`] for argument conventions.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_fastembed_provider_new`].
+ */
+
+int32_t blazen_tract_embed_provider_new(const char *model_id,
+                                        const char *cache_dir,
+                                        BlazenTractEmbedProvider **out_model,
+                                        BlazenError **out_err);
+
+/**
+ * Asynchronously compute embedding vectors.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_fastembed_provider_embed`].
+ */
+
+BlazenFuture *blazen_tract_embed_provider_embed(const BlazenTractEmbedProvider *model,
+                                                const char *const *texts,
+                                                uintptr_t texts_len);
+
+/**
+ * Synchronous variant of [`blazen_tract_embed_provider_embed`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_fastembed_provider_embed_blocking`].
+ */
+
+int32_t blazen_tract_embed_provider_embed_blocking(const BlazenTractEmbedProvider *model,
+                                                   const char *const *texts,
+                                                   uintptr_t texts_len,
+                                                   BlazenEmbeddingVectors **out_result,
+                                                   BlazenError **out_err);
+
+/**
+ * Returns the dimensionality of vectors produced by this provider.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenTractEmbedProvider`.
+ */
+ uint32_t blazen_tract_embed_provider_dimensions(const BlazenTractEmbedProvider *model);
+
+/**
+ * Frees a `BlazenTractEmbedProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_fastembed_provider_free`].
+ */
+ void blazen_tract_embed_provider_free(BlazenTractEmbedProvider *model);
+
+/**
+ * Construct a `BlazenCandleEmbedProvider`. Both inputs are optional --
+ * pass null for `model_id` to default to
+ * `sentence-transformers/all-MiniLM-L6-v2`, and null for `cache_dir` to
+ * defer to the model-cache default.
+ *
+ * The underlying constructor is async; this factory blocks on the
+ * shared cabi tokio runtime to resolve it.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_fastembed_provider_new`].
+ */
+
+int32_t blazen_candle_embed_provider_new(const char *model_id,
+                                         const char *cache_dir,
+                                         BlazenCandleEmbedProvider **out_model,
+                                         BlazenError **out_err);
+
+/**
+ * Asynchronously compute embedding vectors.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_fastembed_provider_embed`].
+ */
+
+BlazenFuture *blazen_candle_embed_provider_embed(const BlazenCandleEmbedProvider *model,
+                                                 const char *const *texts,
+                                                 uintptr_t texts_len);
+
+/**
+ * Synchronous variant of [`blazen_candle_embed_provider_embed`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_fastembed_provider_embed_blocking`].
+ */
+
+int32_t blazen_candle_embed_provider_embed_blocking(const BlazenCandleEmbedProvider *model,
+                                                    const char *const *texts,
+                                                    uintptr_t texts_len,
+                                                    BlazenEmbeddingVectors **out_result,
+                                                    BlazenError **out_err);
+
+/**
+ * Returns the dimensionality of vectors produced by this provider.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenCandleEmbedProvider`.
+ */
+ uint32_t blazen_candle_embed_provider_dimensions(const BlazenCandleEmbedProvider *model);
+
+/**
+ * Frees a `BlazenCandleEmbedProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_fastembed_provider_free`].
+ */
+ void blazen_candle_embed_provider_free(BlazenCandleEmbedProvider *model);
+
+/**
+ * Construct a `BlazenOpenAiEmbeddingProvider` from an `OpenAI` API key.
+ *
+ * `model` overrides the default `text-embedding-3-small` model id when
+ * non-null. An empty `api_key` falls back to `OPENAI_API_KEY` from the
+ * environment at request time.
+ *
+ * This constructor is infallible (the underlying Rust constructor
+ * returns `Arc<Self>` directly), so it returns the handle by pointer
+ * rather than an out-param. Returns null only if `api_key` is null or
+ * non-UTF-8.
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null;
+ *   empty string is allowed).
+ * - `model` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_err` may be null to discard the error.
+ */
+
+int32_t blazen_openai_embedding_provider_new(const char *api_key,
+                                             const char *model,
+                                             BlazenOpenAiEmbeddingProvider **out_model,
+                                             BlazenError **out_err);
+
+/**
+ * Asynchronously compute embedding vectors.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_fastembed_provider_embed`].
+ */
+
+BlazenFuture *blazen_openai_embedding_provider_embed(const BlazenOpenAiEmbeddingProvider *model,
+                                                     const char *const *texts,
+                                                     uintptr_t texts_len);
+
+/**
+ * Synchronous variant of [`blazen_openai_embedding_provider_embed`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_fastembed_provider_embed_blocking`].
+ */
+
+int32_t blazen_openai_embedding_provider_embed_blocking(const BlazenOpenAiEmbeddingProvider *model,
+                                                        const char *const *texts,
+                                                        uintptr_t texts_len,
+                                                        BlazenEmbeddingVectors **out_result,
+                                                        BlazenError **out_err);
+
+/**
+ * Returns the dimensionality of vectors produced by this provider.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenOpenAiEmbeddingProvider`.
+ */
+ uint32_t blazen_openai_embedding_provider_dimensions(const BlazenOpenAiEmbeddingProvider *model);
+
+/**
+ * Frees a `BlazenOpenAiEmbeddingProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_fastembed_provider_free`].
+ */
+ void blazen_openai_embedding_provider_free(BlazenOpenAiEmbeddingProvider *model);
+
+/**
+ * Construct a `BlazenFalEmbeddingProvider` from a fal.ai API key.
+ *
+ * `model` overrides the default `openai/text-embedding-3-small` model
+ * id when non-null. An empty `api_key` falls back to `FAL_KEY` from
+ * the environment at request time.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_embedding_provider_new`].
+ */
+
+int32_t blazen_fal_embedding_provider_new(const char *api_key,
+                                          const char *model,
+                                          BlazenFalEmbeddingProvider **out_model,
+                                          BlazenError **out_err);
+
+/**
+ * Asynchronously compute embedding vectors.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_fastembed_provider_embed`].
+ */
+
+BlazenFuture *blazen_fal_embedding_provider_embed(const BlazenFalEmbeddingProvider *model,
+                                                  const char *const *texts,
+                                                  uintptr_t texts_len);
+
+/**
+ * Synchronous variant of [`blazen_fal_embedding_provider_embed`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_fastembed_provider_embed_blocking`].
+ */
+
+int32_t blazen_fal_embedding_provider_embed_blocking(const BlazenFalEmbeddingProvider *model,
+                                                     const char *const *texts,
+                                                     uintptr_t texts_len,
+                                                     BlazenEmbeddingVectors **out_result,
+                                                     BlazenError **out_err);
+
+/**
+ * Returns the dimensionality of vectors produced by this provider.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenFalEmbeddingProvider`.
+ */
+ uint32_t blazen_fal_embedding_provider_dimensions(const BlazenFalEmbeddingProvider *model);
+
+/**
+ * Frees a `BlazenFalEmbeddingProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_fastembed_provider_free`].
+ */
+ void blazen_fal_embedding_provider_free(BlazenFalEmbeddingProvider *model);
+
+/**
  * Returns the variant tag for `err` — one of the `BLAZEN_ERROR_KIND_*`
  * constants. Returns `0` if `err` is null (which is otherwise an invalid
  * state — successful calls never produce an error handle).
@@ -7241,6 +7791,783 @@ int32_t blazen_future_take_model_response(BlazenFuture *fut,
 int32_t blazen_future_take_embedding_response(BlazenFuture *fut,
                                               BlazenEmbeddingResponse **out,
                                               BlazenError **err);
+
+/**
+ * Construct an `OpenAI` provider. `model` / `base_url` may be null to defer
+ * to the upstream default chat model / `https://api.openai.com/v1` endpoint.
+ *
+ * On success returns `0` and writes a fresh handle into `*out_model`. On
+ * failure returns `-1` and writes a fresh `BlazenError*` into `*out_err`.
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `model` / `base_url` must be null OR valid NUL-terminated UTF-8 buffers.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot of
+ *   the matching pointer type.
+ */
+
+int32_t blazen_openai_provider_new(const char *api_key,
+                                   const char *model,
+                                   const char *base_url,
+                                   BlazenOpenAiProvider **out_model,
+                                   BlazenError **out_err);
+
+/**
+ * Spawns a chat completion onto the cabi tokio runtime and returns an opaque
+ * future handle. Pop the typed result with
+ * [`crate::llm::blazen_future_take_model_response`]; free the future with
+ * `blazen_future_free`.
+ *
+ * Returns null if either `model` or `request` is null (in which case the
+ * `request`, if non-null, is still consumed and freed to avoid a leak).
+ *
+ * **The `request` pointer is consumed.** See
+ * [`crate::llm::blazen_model_complete`] for the same contract on the central
+ * `BlazenModel` surface.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenOpenAiProvider`. `request` must be
+ * null OR a live `BlazenModelRequest`; ownership transfers to this function
+ * regardless of whether the call returns null.
+ */
+
+BlazenFuture *blazen_openai_provider_complete(const BlazenOpenAiProvider *model,
+                                              BlazenModelRequest *request);
+
+/**
+ * Synchronously runs a chat completion on the cabi tokio runtime.
+ *
+ * On success returns `0` and writes a fresh `BlazenModelResponse*` into
+ * `*out_response`. On failure returns `-1` and writes a fresh `BlazenError*`
+ * into `*out_err`.
+ *
+ * **The `request` pointer is consumed.** See
+ * [`crate::llm::blazen_model_complete_blocking`].
+ *
+ * # Safety
+ *
+ * `model` must be null OR a live `BlazenOpenAiProvider`. `request` must be
+ * null OR a live `BlazenModelRequest`; ownership transfers to this function.
+ * `out_response` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_openai_provider_complete_blocking(const BlazenOpenAiProvider *model,
+                                                 BlazenModelRequest *request,
+                                                 BlazenModelResponse **out_response,
+                                                 BlazenError **out_err);
+
+/**
+ * Frees a `BlazenOpenAiProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_openai_provider_new`]. Double-free is undefined behavior.
+ */
+ void blazen_openai_provider_free(BlazenOpenAiProvider *model);
+
+/**
+ * Construct an Anthropic provider. `model` / `base_url` may be null.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_new`].
+ */
+
+int32_t blazen_anthropic_provider_new(const char *api_key,
+                                      const char *model,
+                                      const char *base_url,
+                                      BlazenAnthropicProvider **out_model,
+                                      BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_anthropic_provider_complete(const BlazenAnthropicProvider *model,
+                                                 BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_anthropic_provider_complete_blocking(const BlazenAnthropicProvider *model,
+                                                    BlazenModelRequest *request,
+                                                    BlazenModelResponse **out_response,
+                                                    BlazenError **out_err);
+
+/**
+ * Frees a `BlazenAnthropicProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_anthropic_provider_new`].
+ */
+ void blazen_anthropic_provider_free(BlazenAnthropicProvider *model);
+
+/**
+ * Construct a Gemini provider. `model` / `base_url` may be null.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_new`].
+ */
+
+int32_t blazen_gemini_provider_new(const char *api_key,
+                                   const char *model,
+                                   const char *base_url,
+                                   BlazenGeminiProvider **out_model,
+                                   BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_gemini_provider_complete(const BlazenGeminiProvider *model,
+                                              BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_gemini_provider_complete_blocking(const BlazenGeminiProvider *model,
+                                                 BlazenModelRequest *request,
+                                                 BlazenModelResponse **out_response,
+                                                 BlazenError **out_err);
+
+/**
+ * Frees a `BlazenGeminiProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_gemini_provider_new`].
+ */
+ void blazen_gemini_provider_free(BlazenGeminiProvider *model);
+
+/**
+ * Construct an Azure `OpenAI` provider. `resource_name` forms the URL host
+ * (`<resource>.openai.azure.com`); `deployment_name` is the Azure deployment
+ * id and doubles as the model selector. There is no separate model argument
+ * — Azure routes by deployment.
+ *
+ * # Safety
+ *
+ * - `api_key`, `resource_name`, `deployment_name` must each be valid
+ *   NUL-terminated UTF-8 buffers (non-null).
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_azure_openai_provider_new(const char *api_key,
+                                         const char *resource_name,
+                                         const char *deployment_name,
+                                         BlazenAzureOpenAiProvider **out_model,
+                                         BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_azure_openai_provider_complete(const BlazenAzureOpenAiProvider *model,
+                                                    BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_azure_openai_provider_complete_blocking(const BlazenAzureOpenAiProvider *model,
+                                                       BlazenModelRequest *request,
+                                                       BlazenModelResponse **out_response,
+                                                       BlazenError **out_err);
+
+/**
+ * Frees a `BlazenAzureOpenAiProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_azure_openai_provider_new`].
+ */
+ void blazen_azure_openai_provider_free(BlazenAzureOpenAiProvider *model);
+
+/**
+ * Construct a Bedrock provider. `region` is required (e.g. `"us-east-1"`);
+ * `model` may be null.
+ *
+ * # Safety
+ *
+ * - `api_key` and `region` must each be valid NUL-terminated UTF-8 buffers
+ *   (non-null).
+ * - `model` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_bedrock_provider_new(const char *api_key,
+                                    const char *region,
+                                    const char *model,
+                                    BlazenBedrockProvider **out_model,
+                                    BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_bedrock_provider_complete(const BlazenBedrockProvider *model,
+                                               BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_bedrock_provider_complete_blocking(const BlazenBedrockProvider *model,
+                                                  BlazenModelRequest *request,
+                                                  BlazenModelResponse **out_response,
+                                                  BlazenError **out_err);
+
+/**
+ * Frees a `BlazenBedrockProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_bedrock_provider_new`].
+ */
+ void blazen_bedrock_provider_free(BlazenBedrockProvider *model);
+
+/**
+ * Construct a fal.ai LLM provider. `model` is the underlying LLM model id
+ * sent in the request body (e.g. `"anthropic/claude-sonnet-4.5"`,
+ * `"openai/gpt-4o"`). `base_url` overrides the default queue URL.
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_new`].
+ */
+
+int32_t blazen_fal_llm_provider_new(const char *api_key,
+                                    const char *model,
+                                    const char *base_url,
+                                    BlazenFalLlmProvider **out_model,
+                                    BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_fal_llm_provider_complete(const BlazenFalLlmProvider *model,
+                                               BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_fal_llm_provider_complete_blocking(const BlazenFalLlmProvider *model,
+                                                  BlazenModelRequest *request,
+                                                  BlazenModelResponse **out_response,
+                                                  BlazenError **out_err);
+
+/**
+ * Frees a `BlazenFalLlmProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_fal_llm_provider_new`].
+ */
+ void blazen_fal_llm_provider_free(BlazenFalLlmProvider *model);
+
+/**
+ * Construct a Mistral AI provider. `model` may be null to defer to the
+ * upstream default.
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `model` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_mistral_provider_new(const char *api_key,
+                                    const char *model,
+                                    BlazenMistralProvider **out_model,
+                                    BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_mistral_provider_complete(const BlazenMistralProvider *model,
+                                               BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_mistral_provider_complete_blocking(const BlazenMistralProvider *model,
+                                                  BlazenModelRequest *request,
+                                                  BlazenModelResponse **out_response,
+                                                  BlazenError **out_err);
+
+/**
+ * Frees a `BlazenMistralProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_mistral_provider_new`].
+ */
+ void blazen_mistral_provider_free(BlazenMistralProvider *model);
+
+/**
+ * Construct a Fireworks AI provider. `model` may be null to defer to the
+ * upstream default.
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `model` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_fireworks_provider_new(const char *api_key,
+                                      const char *model,
+                                      BlazenFireworksProvider **out_model,
+                                      BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_fireworks_provider_complete(const BlazenFireworksProvider *model,
+                                                 BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_fireworks_provider_complete_blocking(const BlazenFireworksProvider *model,
+                                                    BlazenModelRequest *request,
+                                                    BlazenModelResponse **out_response,
+                                                    BlazenError **out_err);
+
+/**
+ * Frees a `BlazenFireworksProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_fireworks_provider_new`].
+ */
+ void blazen_fireworks_provider_free(BlazenFireworksProvider *model);
+
+/**
+ * Construct a `DeepSeek` provider. `model` may be null to defer to the
+ * upstream default.
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `model` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_deepseek_provider_new(const char *api_key,
+                                     const char *model,
+                                     BlazenDeepSeekProvider **out_model,
+                                     BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_deepseek_provider_complete(const BlazenDeepSeekProvider *model,
+                                                BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_deepseek_provider_complete_blocking(const BlazenDeepSeekProvider *model,
+                                                   BlazenModelRequest *request,
+                                                   BlazenModelResponse **out_response,
+                                                   BlazenError **out_err);
+
+/**
+ * Frees a `BlazenDeepSeekProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_deepseek_provider_new`].
+ */
+ void blazen_deepseek_provider_free(BlazenDeepSeekProvider *model);
+
+/**
+ * Construct a Perplexity provider. `model` may be null to defer to the
+ * upstream default.
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `model` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_perplexity_provider_new(const char *api_key,
+                                       const char *model,
+                                       BlazenPerplexityProvider **out_model,
+                                       BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_perplexity_provider_complete(const BlazenPerplexityProvider *model,
+                                                  BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_perplexity_provider_complete_blocking(const BlazenPerplexityProvider *model,
+                                                     BlazenModelRequest *request,
+                                                     BlazenModelResponse **out_response,
+                                                     BlazenError **out_err);
+
+/**
+ * Frees a `BlazenPerplexityProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_perplexity_provider_new`].
+ */
+ void blazen_perplexity_provider_free(BlazenPerplexityProvider *model);
+
+/**
+ * Construct a Together AI provider. `model` may be null to defer to the
+ * upstream default.
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `model` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_together_provider_new(const char *api_key,
+                                     const char *model,
+                                     BlazenTogetherProvider **out_model,
+                                     BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_together_provider_complete(const BlazenTogetherProvider *model,
+                                                BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_together_provider_complete_blocking(const BlazenTogetherProvider *model,
+                                                   BlazenModelRequest *request,
+                                                   BlazenModelResponse **out_response,
+                                                   BlazenError **out_err);
+
+/**
+ * Frees a `BlazenTogetherProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_together_provider_new`].
+ */
+ void blazen_together_provider_free(BlazenTogetherProvider *model);
+
+/**
+ * Construct a Groq provider. `model` may be null to defer to the
+ * upstream default.
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `model` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_groq_provider_new(const char *api_key,
+                                 const char *model,
+                                 BlazenGroqProvider **out_model,
+                                 BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_groq_provider_complete(const BlazenGroqProvider *model,
+                                            BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_groq_provider_complete_blocking(const BlazenGroqProvider *model,
+                                               BlazenModelRequest *request,
+                                               BlazenModelResponse **out_response,
+                                               BlazenError **out_err);
+
+/**
+ * Frees a `BlazenGroqProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_groq_provider_new`].
+ */
+ void blazen_groq_provider_free(BlazenGroqProvider *model);
+
+/**
+ * Construct a `OpenRouter` provider. `model` may be null to defer to the
+ * upstream default.
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `model` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_openrouter_provider_new(const char *api_key,
+                                       const char *model,
+                                       BlazenOpenRouterProvider **out_model,
+                                       BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_openrouter_provider_complete(const BlazenOpenRouterProvider *model,
+                                                  BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_openrouter_provider_complete_blocking(const BlazenOpenRouterProvider *model,
+                                                     BlazenModelRequest *request,
+                                                     BlazenModelResponse **out_response,
+                                                     BlazenError **out_err);
+
+/**
+ * Frees a `BlazenOpenRouterProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_openrouter_provider_new`].
+ */
+ void blazen_openrouter_provider_free(BlazenOpenRouterProvider *model);
+
+/**
+ * Construct a Cohere provider. `model` may be null to defer to the
+ * upstream default.
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `model` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_cohere_provider_new(const char *api_key,
+                                   const char *model,
+                                   BlazenCohereProvider **out_model,
+                                   BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_cohere_provider_complete(const BlazenCohereProvider *model,
+                                              BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_cohere_provider_complete_blocking(const BlazenCohereProvider *model,
+                                                 BlazenModelRequest *request,
+                                                 BlazenModelResponse **out_response,
+                                                 BlazenError **out_err);
+
+/**
+ * Frees a `BlazenCohereProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_cohere_provider_new`].
+ */
+ void blazen_cohere_provider_free(BlazenCohereProvider *model);
+
+/**
+ * Construct a xAI (Grok) provider. `model` may be null to defer to the
+ * upstream default.
+ *
+ * # Safety
+ *
+ * - `api_key` must be a valid NUL-terminated UTF-8 buffer (non-null).
+ * - `model` must be null OR a valid NUL-terminated UTF-8 buffer.
+ * - `out_model` / `out_err` must each be null OR point to a writable slot.
+ */
+
+int32_t blazen_xai_provider_new(const char *api_key,
+                                const char *model,
+                                BlazenXaiProvider **out_model,
+                                BlazenError **out_err);
+
+/**
+ * Async completion. See [`blazen_openai_provider_complete`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete`].
+ */
+
+BlazenFuture *blazen_xai_provider_complete(const BlazenXaiProvider *model,
+                                           BlazenModelRequest *request);
+
+/**
+ * Synchronous completion. See [`blazen_openai_provider_complete_blocking`].
+ *
+ * # Safety
+ *
+ * Same contracts as [`blazen_openai_provider_complete_blocking`].
+ */
+
+int32_t blazen_xai_provider_complete_blocking(const BlazenXaiProvider *model,
+                                              BlazenModelRequest *request,
+                                              BlazenModelResponse **out_response,
+                                              BlazenError **out_err);
+
+/**
+ * Frees a `BlazenXaiProvider`. No-op on null.
+ *
+ * # Safety
+ *
+ * `model` must be null OR a pointer previously produced by
+ * [`blazen_xai_provider_new`].
+ */
+ void blazen_xai_provider_free(BlazenXaiProvider *model);
 
 /**
  * Constructs a new `Media` handle from the three required string fields.
