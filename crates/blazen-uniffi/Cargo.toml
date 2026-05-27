@@ -73,10 +73,10 @@ diffusion = ["blazen-llm/diffusion"]
 whispercpp = ["blazen-llm/whispercpp"]
 tts = ["blazen-llm/tts"]
 tiktoken = ["blazen-llm/tiktoken"]
-tract = ["dep:blazen-embed-tract"]
+tract = ["blazen-llm/embed-tract", "dep:blazen-embed-tract"]
 # ORT-backed embedding backend (faster than tract on x86_64/aarch64 where ORT
 # ships prebuilts; target-gated optional dep so musl builds skip it).
-fastembed = ["blazen-llm/embed", "dep:blazen-embed-fastembed"]
+fastembed = ["blazen-llm/embed", "blazen-llm/embed-fastembed", "dep:blazen-embed-fastembed"]
 
 # Hugging Face metadata-backed loader powering `UniffiModelManager::load_from_hf`.
 # Forwards to `blazen-manager/hf-loader`.

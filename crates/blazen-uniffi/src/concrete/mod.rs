@@ -57,7 +57,22 @@ pub mod vc;
 #[cfg(feature = "threed")]
 pub mod three_d;
 
+// Image-gen concretes (DiffusionProvider local + FalImageGenProvider
+// cloud). Gated on `diffusion` to match the polymorphic
+// [`bases::ImageGenProvider`] trait declaration — without that feature
+// the capability trait isn't in scope, so the concretes have nothing
+// to implement.
+#[cfg(feature = "diffusion")]
+pub mod image;
+
 // LLM concretes are unconditional — the LLM capability is always
 // present (no feature gate), mirroring the unconditional
 // [`bases::LlmProvider`] trait declaration.
 pub mod llm;
+
+// Embedding concretes — cloud engines (`OpenAiEmbeddingProvider`,
+// `FalEmbeddingProvider`) are unconditional (HTTP, always available);
+// local engines (`FastembedProvider`, `TractEmbedProvider`,
+// `CandleEmbedProvider`) are individually feature-gated inside the
+// module to match their concretes' gates.
+pub mod embed;
