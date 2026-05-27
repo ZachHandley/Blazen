@@ -11,8 +11,22 @@ index = "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital
 # behaviour. Production deployments that only need one engine should disable
 # the other feature; the workaround is here purely so `cargo build` with
 # `--all-features` (or default `local-all`) keeps producing usable binaries.
+#
+# ggml-cpu.c (vendored by both whisper-rs-sys and llama-cpp-sys-2) emits GNU
+# OpenMP runtime calls (GOMP_parallel / GOMP_barrier) for its threaded graph
+# compute. With the local rust-lld linker those symbols are not auto-resolved
+# the way GNU ld pulls them in via gcc's default lib path, so an explicit
+# libgomp link is required for `--all-features` test/binary links to succeed
+# locally. The `--no-as-needed` push/pop guard forces the DT_NEEDED entry even
+# though the referencing objects sit later in the link line.
 [target.x86_64-unknown-linux-gnu]
-rustflags = ["-C", "link-arg=-Wl,--allow-multiple-definition"]
+rustflags = [
+    "-C", "link-arg=-Wl,--allow-multiple-definition",
+    "-C", "link-arg=-Wl,--push-state,--no-as-needed,-lgomp,--pop-state",
+]
 
 [target.aarch64-unknown-linux-gnu]
-rustflags = ["-C", "link-arg=-Wl,--allow-multiple-definition"]
+rustflags = [
+    "-C", "link-arg=-Wl,--allow-multiple-definition",
+    "-C", "link-arg=-Wl,--push-state,--no-as-needed,-lgomp,--pop-state",
+]
