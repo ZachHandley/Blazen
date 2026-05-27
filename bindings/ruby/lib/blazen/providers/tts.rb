@@ -15,8 +15,8 @@
 # Each class wraps a per-engine cabi opaque
 # (+BlazenPiperProvider *+, +BlazenKokoroProvider *+, …) and forwards
 # +synthesize+ / +synthesize_blocking+ through the matching cabi entry
-# point. The future-await + result-pop logic mirrors the pattern used by
-# +Blazen::Compute::TtsModel+ (see +blazen/compute.rb+).
+# point. Each capability method returns a +Blazen::Compute::TtsResult+
+# (see +blazen/providers/compute_results.rb+).
 
 module Blazen
   # @api private

@@ -3,9 +3,11 @@
 require "spec_helper"
 require "fileutils"
 
-# Spec for the +Blazen::Compute+ voice-conversion (RVC) surface
-# (VcModel + VcChunk + VcResult + TargetVoice, plus
-# +Blazen::Streaming.stream_convert+).
+# Spec for the voice-conversion (RVC) surface: the per-engine
+# +Blazen::RvcProvider+ class for construction + non-streaming
+# conversion, plus the streaming-handle class +Blazen::Compute::VcModel+
+# (+ VcChunk + VcResult + TargetVoice) that drives
+# +Blazen::Streaming.stream_convert+.
 #
 # Hermetic specs (construction / null-pointer rejection / streaming
 # routing) run unconditionally. Live specs that exercise the real RVC
@@ -14,7 +16,7 @@ require "fileutils"
 # RVC + HuBERT + rmvpe weights) and CI doesn't carry those models by
 # default.
 
-RSpec.describe Blazen::Compute, "voice-conversion (RVC) surface" do
+RSpec.describe "voice-conversion (RVC) surface" do
   before(:all) { Blazen.init }
 
   let(:scratch_dir) do
@@ -23,34 +25,27 @@ RSpec.describe Blazen::Compute, "voice-conversion (RVC) surface" do
     dir
   end
 
-  describe ".rvc" do
-    if Blazen::FFI.respond_to?(:blazen_vc_model_new_rvc)
-      it "constructs a VcModel handle when the feature is present" do
-        # The factory does not eagerly load weights — only conversion /
-        # listing would. A successful construction is the assertion.
-        model = described_class.rvc(
-          voice_dir: File.join(scratch_dir, "voices-noexist"),
-          device: "cpu",
-        )
-        expect(model).to be_a(Blazen::Compute::VcModel)
-        expect(model.ptr).not_to be_null
+  describe Blazen::RvcProvider do
+    if Blazen::FFI.respond_to?(:blazen_rvc_provider_new)
+      it "constructs an RvcProvider handle when the feature is present" do
+        # The constructor does not eagerly load weights — only conversion /
+        # listing would. A successful construction is the assertion. Voice
+        # weights are loaded lazily from +$BLAZEN_RVC_VOICE_DIR/<id>/+.
+        model = described_class.new
+        expect(model).to be_a(Blazen::RvcProvider)
+        expect(model.handle).not_to be_null
       end
 
       it "lets GC reclaim the model via FFI::AutoPointer" do
         # Two rounds of allocation + GC should not crash; the
-        # AutoPointer release path calls +blazen_vc_model_free+.
-        10.times do
-          described_class.rvc(
-            voice_dir: File.join(scratch_dir, "voices-noexist"),
-            device: "cpu",
-          )
-        end
+        # AutoPointer release path calls +blazen_rvc_provider_free+.
+        10.times { described_class.new }
         GC.start
         expect(true).to be(true)
       end
     else
       it "raises UnsupportedError when the audio-vc-rvc feature is missing" do
-        expect { described_class.rvc }
+        expect { described_class.new }
           .to raise_error(Blazen::UnsupportedError, /audio-vc-rvc/)
       end
     end
@@ -97,7 +92,7 @@ RSpec.describe Blazen::Compute, "voice-conversion (RVC) surface" do
       it "returns [] or raises a Blazen::Error (both acceptable)" do
         empty_dir = File.join(scratch_dir, "voices-empty")
         FileUtils.mkdir_p(empty_dir)
-        model = described_class.rvc(voice_dir: empty_dir, device: "cpu")
+        model = Blazen::Compute::VcModel.rvc(voice_dir: empty_dir, device: "cpu")
         begin
           voices = model.list_target_voices_blocking
           expect(voices).to be_an(Array)
@@ -124,7 +119,7 @@ RSpec.describe Blazen::Compute, "voice-conversion (RVC) surface" do
      !ENV["BLAZEN_RVC_INPUT_WAV"].to_s.empty?
     describe "live RVC conversion" do
       let(:model) do
-        Blazen::Compute.rvc(
+        Blazen::Compute::VcModel.rvc(
           voice_dir: ENV.fetch("BLAZEN_RVC_VOICE_DIR"),
           device:    ENV["BLAZEN_RVC_DEVICE"], # nil falls back to CPU
         )

@@ -11,7 +11,7 @@
 # * {Blazen::Llm} — convenience builders for {Blazen::ChatMessage} etc.
 # * {Blazen::WorkflowHelpers} / {Blazen.workflow} — workflow construction
 # * {Blazen::PipelineHelpers} / {Blazen.pipeline} — pipeline construction
-# * {Blazen::Batch}, {Blazen::Streaming}, {Blazen::Compute}, {Blazen::Persist},
+# * {Blazen::Batch}, {Blazen::Streaming}, {Blazen::Persist},
 #   {Blazen::Telemetry}, {Blazen::Peer}, {Blazen::Agents}
 # * {Blazen::Error} and its subclasses — idiomatic Ruby exception hierarchy
 #
@@ -43,6 +43,7 @@ require_relative "blazen/version"
 require_relative "blazen/errors"
 require_relative "blazen/llm"
 require_relative "blazen/providers"
+require_relative "blazen/providers/compute_results"
 require_relative "blazen/providers/custom_base"
 require_relative "blazen/providers/results"
 require_relative "blazen/workflow"
@@ -50,7 +51,6 @@ require_relative "blazen/pipeline"
 require_relative "blazen/batch"
 require_relative "blazen/streaming"
 require_relative "blazen/agent"
-require_relative "blazen/compute"
 require_relative "blazen/persist"
 require_relative "blazen/telemetry"
 require_relative "blazen/peer"

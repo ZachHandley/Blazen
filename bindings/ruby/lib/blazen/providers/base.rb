@@ -7,9 +7,11 @@
 # +stt.rb+, +music.rb+, +vc.rb+, +three_d.rb+, +image.rb+, +embed.rb+,
 # and +llm.rb+.
 #
-# These live ALONGSIDE the existing +Blazen::Compute+ factories
-# (+Blazen::Compute.fal_tts+, +Blazen::Compute.musicgen+, …) which
-# remain the primary surface until a separate migration deletes them.
+# These are the sole construction surface for the compute family of
+# engines. The legacy +Blazen::Compute.*+ keyword-arg factories have
+# been removed; only the typed-result wrappers and the
+# streaming-capable +Blazen::Compute::MusicModel+ / +VcModel+ handles
+# remain under that namespace (see +blazen/providers/compute_results.rb+).
 #
 # Each concrete subclass:
 #

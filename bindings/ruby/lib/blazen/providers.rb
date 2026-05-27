@@ -624,121 +624,71 @@ module Blazen
 
     # ------------------- Compute: TTS / STT / image-gen -------------------
     #
-    # The Ruby wrappers for these model handles
-    # (+Blazen::Compute::TtsModel+ / +SttModel+ / +ImageGenModel+) are
-    # defined in +lib/blazen/compute.rb+. We resolve them lazily at call
-    # time so the +require+ order between +providers.rb+ and +compute.rb+
-    # doesn't matter.
+    # These keyword-arg factories now delegate to the concrete per-engine
+    # provider classes ({Blazen::FalTtsProvider}, {Blazen::PiperProvider},
+    # {Blazen::FalSttProvider}, {Blazen::WhisperCppProvider},
+    # {Blazen::FalImageGenProvider}, {Blazen::DiffusionProvider}) — the
+    # legacy +Blazen::Compute::TtsModel+ / +SttModel+ / +ImageGenModel+
+    # wrapper classes they previously returned have been removed.
 
-    # Fal.ai TTS model.
+    # Fal.ai TTS provider.
     #
     # @param api_key [String]
     # @param model [String, nil]
-    # @return [Blazen::Compute::TtsModel]
+    # @return [Blazen::FalTtsProvider]
     def fal_tts(api_key:, model: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.blazen_tts_model_new_fal(k, m, out_model, out_err)
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Compute::TtsModel)
+      Blazen::FalTtsProvider.new(api_key: api_key, model: model)
     end
 
-    # Fal.ai STT model.
+    # Fal.ai STT provider.
     #
     # @param api_key [String]
-    # @param model [String, nil]
-    # @return [Blazen::Compute::SttModel]
+    # @return [Blazen::FalSttProvider]
     def fal_stt(api_key:, model: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.blazen_stt_model_new_fal(k, m, out_model, out_err)
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Compute::SttModel)
+      _ = model # the per-engine fal STT provider has no model override
+      Blazen::FalSttProvider.new(api_key: api_key)
     end
 
-    # Fal.ai image-generation model.
+    # Fal.ai image-generation provider.
     #
     # @param api_key [String]
     # @param model [String, nil]
-    # @return [Blazen::Compute::ImageGenModel]
+    # @return [Blazen::FalImageGenProvider]
     def fal_image_gen(api_key:, model: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.blazen_image_gen_model_new_fal(k, m, out_model, out_err)
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Compute::ImageGenModel)
+      Blazen::FalImageGenProvider.new(api_key: api_key, default_model: model)
     end
 
-    # Local Piper TTS model.
+    # Local Piper TTS provider.
     #
-    # @param model_id [String, nil] Piper voice id (e.g. +"en_US-amy-medium"+)
-    # @param speaker_id [Integer, nil]
-    # @param sample_rate [Integer, nil]
-    # @return [Blazen::Compute::TtsModel]
-    def piper(model_id: nil, speaker_id: nil, sample_rate: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      spk = speaker_id.nil? ? -1 : speaker_id.to_i
-      sr  = sample_rate.nil? ? -1 : sample_rate.to_i
-      Blazen::FFI.with_cstring(model_id) do |mid|
-        Blazen::FFI.blazen_tts_model_new_piper(mid, spk, sr, out_model, out_err)
-      end
-      _wrap_model(out_model, out_err, Blazen::Compute::TtsModel)
+    # @param voice_id [String] arbitrary identifier used for caching
+    # @param onnx_path [String] path to the +.onnx+ Piper weights
+    # @param config_path [String, nil] path to the +.json+ Piper config
+    # @param default_speaker_id [Integer] multi-speaker default (-1 = first)
+    # @return [Blazen::PiperProvider]
+    def piper(voice_id:, onnx_path:, config_path: nil, default_speaker_id: -1)
+      Blazen::PiperProvider.new(
+        voice_id: voice_id, onnx_path: onnx_path,
+        config_path: config_path, default_speaker_id: default_speaker_id,
+      )
     end
 
-    # Local Whisper STT model.
+    # Local whisper.cpp STT provider.
     #
     # @param model [String, nil]
     # @param device [String, nil]
     # @param language [String, nil]
-    # @return [Blazen::Compute::SttModel]
+    # @return [Blazen::WhisperCppProvider]
     def whisper(model: nil, device: nil, language: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(model) do |m|
-        Blazen::FFI.with_cstring(device) do |d|
-          Blazen::FFI.with_cstring(language) do |l|
-            Blazen::FFI.blazen_stt_model_new_whisper(m, d, l, out_model, out_err)
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Compute::SttModel)
+      Blazen::WhisperCppProvider.new(model: model, device: device, language: language)
     end
 
-    # Local diffusion-rs image-generation model.
+    # Local diffusion-rs image-generation provider.
     #
-    # @param model_id [String, nil]
-    # @param device [String, nil]
-    # @param width [Integer, nil]
-    # @param height [Integer, nil]
-    # @param num_inference_steps [Integer, nil]
-    # @param guidance_scale [Float, nil]
-    # @return [Blazen::Compute::ImageGenModel]
-    def diffusion(model_id: nil, device: nil, width: nil, height: nil,
-                  num_inference_steps: nil, guidance_scale: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      w  = width.nil? ? -1 : width.to_i
-      h  = height.nil? ? -1 : height.to_i
-      st = num_inference_steps.nil? ? -1 : num_inference_steps.to_i
-      gs = guidance_scale.nil? ? -1.0 : guidance_scale.to_f
-      Blazen::FFI.with_cstring(model_id) do |mid|
-        Blazen::FFI.with_cstring(device) do |d|
-          Blazen::FFI.blazen_image_gen_model_new_diffusion(
-            mid, d, w, h, st, gs, out_model, out_err
-          )
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Compute::ImageGenModel)
+    # @param options_json [String, nil] backend-specific options as a JSON
+    #   string (model id, scheduler, num steps, etc.)
+    # @return [Blazen::DiffusionProvider]
+    def diffusion(options_json: nil)
+      Blazen::DiffusionProvider.new(options_json: options_json)
     end
   end
 end
