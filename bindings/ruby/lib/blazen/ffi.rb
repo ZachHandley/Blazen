@@ -2070,6 +2070,398 @@ module Blazen
     end
 
     # -------------------------------------------------------------------
+    # Part U — Per-engine provider classes (additive)
+    # -------------------------------------------------------------------
+    #
+    # Every entry point below is feature-gated in the cabi build; we
+    # rescue +::FFI::NotFoundError+ around each block so a minimal
+    # libblazen_cabi loads cleanly and downstream callers in
+    # +lib/blazen/providers/*.rb+ probe via +Blazen::FFI.respond_to?+
+    # before invoking each constructor.
+
+    # -- EmbeddingVectors accessors (shared by every per-engine embed
+    # provider). +blazen_future_take_embedding_vectors+ is the future
+    # popper used by the async +embed+ calls.
+    begin
+      attach_function :blazen_future_take_embedding_vectors,
+                      %i[pointer pointer pointer], :int32
+      attach_function :blazen_embedding_vectors_count,    [:pointer], :size_t
+      attach_function :blazen_embedding_vectors_dim,      %i[pointer size_t], :size_t
+      attach_function :blazen_embedding_vectors_get,      %i[pointer size_t size_t], :float
+      attach_function :blazen_embedding_vectors_to_buffer,
+                      %i[pointer size_t pointer size_t], :size_t
+      attach_function :blazen_embedding_vectors_free,     [:pointer], :void
+    rescue ::FFI::NotFoundError
+      # cabi pre-Part-U won't ship these — wrappers raise UnsupportedError.
+    end
+
+    # -- TTS providers (8 engines)
+    %i[
+      blazen_piper_provider_new
+      blazen_piper_provider_synthesize
+      blazen_piper_provider_synthesize_blocking
+      blazen_piper_provider_free
+      blazen_kokoro_provider_new
+      blazen_kokoro_provider_synthesize
+      blazen_kokoro_provider_synthesize_blocking
+      blazen_kokoro_provider_free
+      blazen_vibevoice_provider_new
+      blazen_vibevoice_provider_synthesize
+      blazen_vibevoice_provider_synthesize_blocking
+      blazen_vibevoice_provider_free
+      blazen_qwen3_tts_provider_new
+      blazen_qwen3_tts_provider_synthesize
+      blazen_qwen3_tts_provider_synthesize_blocking
+      blazen_qwen3_tts_provider_free
+      blazen_spark_tts_provider_new
+      blazen_spark_tts_provider_synthesize
+      blazen_spark_tts_provider_synthesize_blocking
+      blazen_spark_tts_provider_free
+      blazen_bark_provider_new
+      blazen_bark_provider_synthesize
+      blazen_bark_provider_synthesize_blocking
+      blazen_bark_provider_free
+      blazen_f5_provider_new
+      blazen_f5_provider_synthesize
+      blazen_f5_provider_synthesize_blocking
+      blazen_f5_provider_free
+      blazen_fal_tts_provider_new
+      blazen_fal_tts_provider_new_with_model
+      blazen_fal_tts_provider_synthesize
+      blazen_fal_tts_provider_synthesize_blocking
+      blazen_fal_tts_provider_free
+    ].each do |sym|
+      begin
+        case sym
+        when :blazen_piper_provider_new
+          attach_function sym, %i[pointer pointer pointer int64 pointer pointer], :int32
+        when :blazen_kokoro_provider_new,
+             :blazen_vibevoice_provider_new,
+             :blazen_qwen3_tts_provider_new
+          attach_function sym, %i[pointer pointer int32 pointer pointer], :int32
+        when :blazen_spark_tts_provider_new
+          attach_function sym, %i[pointer pointer pointer], :pointer
+        when :blazen_bark_provider_new, :blazen_f5_provider_new
+          attach_function sym, [], :pointer
+        when :blazen_fal_tts_provider_new
+          attach_function sym, %i[pointer pointer pointer], :int32
+        when :blazen_fal_tts_provider_new_with_model
+          attach_function sym, %i[pointer pointer pointer pointer], :int32
+        when /_synthesize$/
+          attach_function sym, %i[pointer pointer pointer pointer], :pointer
+        when /_synthesize_blocking$/
+          attach_function sym, %i[pointer pointer pointer pointer pointer pointer],
+                          :int32, blocking: true
+        when /_free$/
+          attach_function sym, [:pointer], :void
+        end
+      rescue ::FFI::NotFoundError
+        # Feature-gated; wrapper class raises UnsupportedError at construction.
+      end
+    end
+
+    # -- STT providers (4 engines)
+    %i[
+      blazen_whispercpp_provider_new
+      blazen_whispercpp_provider_transcribe
+      blazen_whispercpp_provider_transcribe_blocking
+      blazen_whispercpp_provider_free
+      blazen_faster_whisper_provider_new
+      blazen_faster_whisper_provider_transcribe
+      blazen_faster_whisper_provider_transcribe_blocking
+      blazen_faster_whisper_provider_free
+      blazen_whisper_streaming_provider_new
+      blazen_whisper_streaming_provider_transcribe
+      blazen_whisper_streaming_provider_transcribe_blocking
+      blazen_whisper_streaming_provider_free
+      blazen_fal_stt_provider_new
+      blazen_fal_stt_provider_transcribe
+      blazen_fal_stt_provider_transcribe_blocking
+      blazen_fal_stt_provider_free
+    ].each do |sym|
+      begin
+        case sym
+        when :blazen_whispercpp_provider_new
+          attach_function sym, %i[pointer pointer pointer pointer pointer], :int32
+        when :blazen_faster_whisper_provider_new
+          attach_function sym, %i[pointer pointer pointer], :pointer
+        when :blazen_whisper_streaming_provider_new
+          attach_function sym, %i[pointer pointer float float], :pointer
+        when :blazen_fal_stt_provider_new
+          attach_function sym, %i[pointer pointer pointer], :int32
+        when /_transcribe$/
+          attach_function sym, %i[pointer pointer pointer], :pointer
+        when /_transcribe_blocking$/
+          attach_function sym, %i[pointer pointer pointer pointer pointer], :int32,
+                          blocking: true
+        when /_free$/
+          attach_function sym, [:pointer], :void
+        end
+      rescue ::FFI::NotFoundError
+        # Feature-gated.
+      end
+    end
+
+    # -- Music providers (4 engines)
+    %i[
+      blazen_musicgen_provider_new
+      blazen_musicgen_provider_generate_music
+      blazen_musicgen_provider_generate_music_blocking
+      blazen_musicgen_provider_generate_sfx
+      blazen_musicgen_provider_generate_sfx_blocking
+      blazen_musicgen_provider_free
+      blazen_audiogen_provider_new
+      blazen_audiogen_provider_generate_music
+      blazen_audiogen_provider_generate_music_blocking
+      blazen_audiogen_provider_generate_sfx
+      blazen_audiogen_provider_generate_sfx_blocking
+      blazen_audiogen_provider_free
+      blazen_stable_audio_provider_new
+      blazen_stable_audio_provider_generate_music
+      blazen_stable_audio_provider_generate_music_blocking
+      blazen_stable_audio_provider_generate_sfx
+      blazen_stable_audio_provider_generate_sfx_blocking
+      blazen_stable_audio_provider_free
+      blazen_fal_music_provider_new
+      blazen_fal_music_provider_generate_music
+      blazen_fal_music_provider_generate_music_blocking
+      blazen_fal_music_provider_generate_sfx
+      blazen_fal_music_provider_generate_sfx_blocking
+      blazen_fal_music_provider_free
+    ].each do |sym|
+      begin
+        case sym
+        when :blazen_musicgen_provider_new
+          attach_function sym, %i[pointer pointer pointer float pointer pointer], :int32
+        when :blazen_audiogen_provider_new
+          attach_function sym, %i[pointer pointer pointer pointer float pointer pointer],
+                          :int32
+        when :blazen_stable_audio_provider_new
+          attach_function sym, %i[pointer pointer pointer float pointer pointer], :int32
+        when :blazen_fal_music_provider_new
+          attach_function sym, %i[pointer pointer pointer], :int32
+        when /_generate_(music|sfx)$/
+          attach_function sym, %i[pointer pointer float], :pointer
+        when /_generate_(music|sfx)_blocking$/
+          attach_function sym, %i[pointer pointer float pointer pointer], :int32,
+                          blocking: true
+        when /_free$/
+          attach_function sym, [:pointer], :void
+        end
+      rescue ::FFI::NotFoundError
+        # Feature-gated.
+      end
+    end
+
+    # -- VC providers (2 engines)
+    %i[
+      blazen_rvc_provider_new
+      blazen_rvc_provider_convert_voice
+      blazen_rvc_provider_convert_voice_blocking
+      blazen_rvc_provider_clone_voice
+      blazen_rvc_provider_clone_voice_blocking
+      blazen_rvc_provider_list_target_voices
+      blazen_rvc_provider_list_target_voices_blocking
+      blazen_rvc_provider_free
+      blazen_fal_vc_provider_new
+      blazen_fal_vc_provider_convert_voice
+      blazen_fal_vc_provider_convert_voice_blocking
+      blazen_fal_vc_provider_clone_voice
+      blazen_fal_vc_provider_clone_voice_blocking
+      blazen_fal_vc_provider_list_target_voices
+      blazen_fal_vc_provider_list_target_voices_blocking
+      blazen_fal_vc_provider_free
+    ].each do |sym|
+      begin
+        case sym
+        when :blazen_rvc_provider_new
+          attach_function sym, [], :pointer
+        when :blazen_fal_vc_provider_new
+          attach_function sym, %i[pointer pointer pointer], :int32
+        when /_convert_voice$/, /_clone_voice$/
+          attach_function sym, %i[pointer pointer pointer], :pointer
+        when /_convert_voice_blocking$/
+          attach_function sym, %i[pointer pointer pointer pointer pointer], :int32,
+                          blocking: true
+        when /_clone_voice_blocking$/
+          attach_function sym, %i[pointer pointer pointer pointer], :int32, blocking: true
+        when /_list_target_voices$/
+          attach_function sym, [:pointer], :pointer
+        when /_list_target_voices_blocking$/
+          attach_function sym, %i[pointer pointer pointer], :int32, blocking: true
+        when /_free$/
+          attach_function sym, [:pointer], :void
+        end
+      rescue ::FFI::NotFoundError
+        # Feature-gated.
+      end
+    end
+
+    # -- 3D providers (1 engine)
+    %i[
+      blazen_triposr_provider_new
+      blazen_triposr_provider_generate_from_image
+      blazen_triposr_provider_generate_from_image_blocking
+      blazen_triposr_provider_free
+    ].each do |sym|
+      begin
+        case sym
+        when :blazen_triposr_provider_new
+          attach_function sym, %i[pointer pointer pointer pointer pointer], :int32
+        when :blazen_triposr_provider_generate_from_image
+          attach_function sym, %i[pointer pointer size_t uint32], :pointer
+        when :blazen_triposr_provider_generate_from_image_blocking
+          attach_function sym,
+                          %i[pointer pointer size_t uint32 pointer pointer],
+                          :int32, blocking: true
+        when :blazen_triposr_provider_free
+          attach_function sym, [:pointer], :void
+        end
+      rescue ::FFI::NotFoundError
+        # Feature-gated under +triposr+.
+      end
+    end
+
+    # -- Image-gen providers (2 engines)
+    %i[
+      blazen_diffusion_provider_new
+      blazen_diffusion_provider_generate_image
+      blazen_diffusion_provider_generate_image_blocking
+      blazen_diffusion_provider_free
+      blazen_fal_image_gen_provider_new
+      blazen_fal_image_gen_provider_generate_image
+      blazen_fal_image_gen_provider_generate_image_blocking
+      blazen_fal_image_gen_provider_free
+    ].each do |sym|
+      begin
+        case sym
+        when :blazen_diffusion_provider_new
+          attach_function sym, %i[pointer pointer pointer], :int32
+        when :blazen_fal_image_gen_provider_new
+          attach_function sym, %i[pointer pointer pointer pointer pointer], :int32
+        when /_generate_image$/
+          attach_function sym, %i[pointer pointer uint32 uint32], :pointer
+        when /_generate_image_blocking$/
+          attach_function sym, %i[pointer pointer uint32 uint32 pointer pointer], :int32,
+                          blocking: true
+        when /_free$/
+          attach_function sym, [:pointer], :void
+        end
+      rescue ::FFI::NotFoundError
+        # Feature-gated.
+      end
+    end
+
+    # -- Embedding providers (5 engines)
+    %i[
+      blazen_fastembed_provider_new
+      blazen_fastembed_provider_embed
+      blazen_fastembed_provider_embed_blocking
+      blazen_fastembed_provider_dimensions
+      blazen_fastembed_provider_free
+      blazen_tract_embed_provider_new
+      blazen_tract_embed_provider_embed
+      blazen_tract_embed_provider_embed_blocking
+      blazen_tract_embed_provider_dimensions
+      blazen_tract_embed_provider_free
+      blazen_candle_embed_provider_new
+      blazen_candle_embed_provider_embed
+      blazen_candle_embed_provider_embed_blocking
+      blazen_candle_embed_provider_dimensions
+      blazen_candle_embed_provider_free
+      blazen_openai_embedding_provider_new
+      blazen_openai_embedding_provider_embed
+      blazen_openai_embedding_provider_embed_blocking
+      blazen_openai_embedding_provider_dimensions
+      blazen_openai_embedding_provider_free
+      blazen_fal_embedding_provider_new
+      blazen_fal_embedding_provider_embed
+      blazen_fal_embedding_provider_embed_blocking
+      blazen_fal_embedding_provider_dimensions
+      blazen_fal_embedding_provider_free
+    ].each do |sym|
+      begin
+        case sym
+        when /_provider_new$/
+          attach_function sym, %i[pointer pointer pointer pointer], :int32
+        when /_embed$/
+          attach_function sym, %i[pointer pointer size_t], :pointer
+        when /_embed_blocking$/
+          attach_function sym, %i[pointer pointer size_t pointer pointer], :int32,
+                          blocking: true
+        when /_dimensions$/
+          attach_function sym, [:pointer], :uint32
+        when /_free$/
+          attach_function sym, [:pointer], :void
+        end
+      rescue ::FFI::NotFoundError
+        # Feature-gated.
+      end
+    end
+
+    # -- LLM providers (15 engines)
+    #
+    # Shape varies slightly:
+    #   * +openai/anthropic/gemini/fal_llm+: (api_key, model, base_url)
+    #   * +azure_openai+: (api_key, resource_name, deployment_name)
+    #   * +bedrock+: (api_key, region, model)
+    #   * the rest: (api_key, model)
+    #
+    # Every provider exposes +<provider>_complete+ (async) +
+    # +<provider>_complete_blocking+ + +<provider>_free+.
+    {
+      blazen_openai_provider_new:       %i[pointer pointer pointer pointer pointer],
+      blazen_anthropic_provider_new:    %i[pointer pointer pointer pointer pointer],
+      blazen_gemini_provider_new:       %i[pointer pointer pointer pointer pointer],
+      blazen_azure_openai_provider_new: %i[pointer pointer pointer pointer pointer],
+      blazen_bedrock_provider_new:      %i[pointer pointer pointer pointer pointer],
+      blazen_fal_llm_provider_new:      %i[pointer pointer pointer pointer pointer],
+      blazen_mistral_provider_new:      %i[pointer pointer pointer pointer],
+      blazen_fireworks_provider_new:    %i[pointer pointer pointer pointer],
+      blazen_deepseek_provider_new:     %i[pointer pointer pointer pointer],
+      blazen_perplexity_provider_new:   %i[pointer pointer pointer pointer],
+      blazen_together_provider_new:     %i[pointer pointer pointer pointer],
+      blazen_groq_provider_new:         %i[pointer pointer pointer pointer],
+      blazen_openrouter_provider_new:   %i[pointer pointer pointer pointer],
+      blazen_cohere_provider_new:       %i[pointer pointer pointer pointer],
+      blazen_xai_provider_new:          %i[pointer pointer pointer pointer],
+    }.each do |sym, signature|
+      begin
+        attach_function sym, signature, :int32
+      rescue ::FFI::NotFoundError
+        # Feature-gated.
+      end
+    end
+
+    %i[
+      openai anthropic gemini azure_openai bedrock fal_llm mistral fireworks
+      deepseek perplexity together groq openrouter cohere xai
+    ].each do |engine|
+      complete_sym          = :"blazen_#{engine}_provider_complete"
+      complete_blocking_sym = :"blazen_#{engine}_provider_complete_blocking"
+      free_sym              = :"blazen_#{engine}_provider_free"
+
+      begin
+        attach_function complete_sym, %i[pointer pointer], :pointer
+      rescue ::FFI::NotFoundError
+        # Feature-gated.
+      end
+
+      begin
+        attach_function complete_blocking_sym,
+                        %i[pointer pointer pointer pointer], :int32, blocking: true
+      rescue ::FFI::NotFoundError
+        # Feature-gated.
+      end
+
+      begin
+        attach_function free_sym, [:pointer], :void
+      rescue ::FFI::NotFoundError
+        # Feature-gated.
+      end
+    end
+
+    # -------------------------------------------------------------------
     # Ruby-side helpers
     # -------------------------------------------------------------------
 

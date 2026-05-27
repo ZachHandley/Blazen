@@ -742,3 +742,28 @@ module Blazen
     end
   end
 end
+
+# -----------------------------------------------------------------------
+# Part U — Per-engine provider classes
+# -----------------------------------------------------------------------
+#
+# The +Blazen::Providers+ module above is the legacy factory surface that
+# returns wrapped +Blazen::Llm::Model+ / +Blazen::Llm::EmbeddingModel+ /
+# +Blazen::Compute::*+ handles. Part U adds *concrete per-engine
+# provider classes* alongside it ({Blazen::PiperProvider},
+# {Blazen::OpenAiProvider}, {Blazen::RvcProvider}, …) that wrap the new
+# per-engine cabi opaques directly.
+#
+# Both surfaces coexist until a separate migration deletes the legacy
+# factories. The per-engine classes live in
+# +lib/blazen/providers/{base,tts,stt,music,vc,three_d,image,embed,llm}.rb+.
+
+require_relative "providers/base"
+require_relative "providers/tts"
+require_relative "providers/stt"
+require_relative "providers/music"
+require_relative "providers/vc"
+require_relative "providers/three_d"
+require_relative "providers/image"
+require_relative "providers/embed"
+require_relative "providers/llm"

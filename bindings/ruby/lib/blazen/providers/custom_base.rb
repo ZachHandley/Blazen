@@ -556,13 +556,17 @@ module Blazen
   # response_format, plus an optional shared {ProviderDefaults}
   # handle). In V1, instances are not constructible from Ruby directly;
   # they are returned from {Blazen::CustomProvider} factories (Phase B).
-  class BaseProvider
+  #
+  # Renamed from +BaseProvider+ to +CustomBaseProvider+ in Part U so the
+  # +Blazen::BaseProvider+ name can serve as the abstract polymorphic root
+  # for the per-engine provider class hierarchy (see +providers/base.rb+).
+  class CustomBaseProvider
     # @param ptr [::FFI::Pointer] a live +BlazenBaseProvider *+ — typically
     #   returned by the cabi
     def initialize(ptr)
       if ptr.nil? || ptr.null?
         raise ArgumentError,
-              "BaseProvider cannot be constructed directly in V1 — pass a " \
+              "CustomBaseProvider cannot be constructed directly in V1 — pass a " \
               "live BlazenBaseProvider * (e.g. from a CustomProvider factory)"
       end
 
@@ -1519,14 +1523,14 @@ module Blazen
     # mutators. The returned {BaseProvider} owns its own pointer; this
     # handle remains usable.
     #
-    # @return [BaseProvider]
+    # @return [CustomBaseProvider]
     def as_base_provider
       bp_ptr = Blazen::FFI.blazen_custom_provider_as_base_provider(@ptr)
       if bp_ptr.nil? || bp_ptr.null?
         raise Blazen::InternalError, "blazen_custom_provider_as_base_provider returned null"
       end
 
-      BaseProvider.new(bp_ptr)
+      CustomBaseProvider.new(bp_ptr)
     end
 
     # @return [::FFI::Pointer]
