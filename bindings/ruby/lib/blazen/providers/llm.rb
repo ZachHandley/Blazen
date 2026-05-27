@@ -2,7 +2,7 @@
 
 # Concrete per-engine chat-completion provider classes (Part U).
 #
-# Engines (15):
+# Cloud engines (15):
 #   * {Blazen::OpenAiProvider}      — OpenAI / OpenAI-compatible
 #   * {Blazen::AnthropicProvider}   — Anthropic Claude
 #   * {Blazen::GeminiProvider}      — Google Gemini
@@ -18,6 +18,14 @@
 #   * {Blazen::OpenRouterProvider}  — OpenRouter
 #   * {Blazen::CohereProvider}      — Cohere
 #   * {Blazen::XaiProvider}         — xAI (Grok)
+#
+# Local / OpenAI-compatible engines (6):
+#   * {Blazen::OpenAiCompatProvider} — generic OpenAI-protocol endpoint
+#   * {Blazen::OllamaProvider}       — Ollama local server
+#   * {Blazen::LmStudioProvider}     — LM Studio local server
+#   * {Blazen::MistralRsProvider}    — mistral.rs native engine
+#   * {Blazen::LlamaCppProvider}     — llama.cpp native engine
+#   * {Blazen::CandleLlmProvider}    — Candle native engine
 
 module Blazen
   # @api private
@@ -365,6 +373,356 @@ module Blazen
 
     def stream_async(request, **opts, &block)
       llm_stream(request, :blazen_bedrock_provider_complete_streaming,
+                 blocking: false, **opts, &block)
+    end
+  end
+
+  # @api private
+  # Allocates a heap +uint32+ holding +val+ and returns the MemoryPointer, or
+  # +nil+ when +val+ is +nil+ (the cabi treats a NULL +const uint32_t *+ as
+  # "use the engine default"). The caller MUST keep the returned pointer
+  # referenced in a local across the native call so it is not GC'd mid-flight.
+  def self._opt_u32_ptr(val)
+    return nil if val.nil?
+
+    ::FFI::MemoryPointer.new(:uint32).tap { |p| p.write_uint32(Integer(val)) }
+  end
+
+  # ----------------------------------------------------------------------
+  # Local / OpenAI-compatible engines (varied constructor shapes)
+  # ----------------------------------------------------------------------
+
+  # Generic OpenAI-compatible HTTP endpoint:
+  # +provider_name+ + +base_url+ + +api_key+ + +model+ (all required).
+  class OpenAiCompatProvider < LlmProvider
+    include LlmProviderImpl
+
+    PROVIDER_ID = "openai-compat"
+
+    # @param provider_name [String] label surfaced in errors / telemetry
+    # @param base_url [String] OpenAI-protocol base URL
+    # @param api_key [String]
+    # @param model [String]
+    def initialize(provider_name:, base_url:, api_key:, model:)
+      unless Blazen::FFI.respond_to?(:blazen_openai_compat_provider_new)
+        raise Blazen::UnsupportedError,
+              "blazen cabi missing openai_compat_provider_new symbol"
+      end
+
+      out_model = ::FFI::MemoryPointer.new(:pointer)
+      out_err   = ::FFI::MemoryPointer.new(:pointer)
+      Blazen::FFI.with_cstring(provider_name.to_s) do |pn|
+        Blazen::FFI.with_cstring(base_url.to_s) do |bu|
+          Blazen::FFI.with_cstring(api_key.to_s) do |ak|
+            Blazen::FFI.with_cstring(model.to_s) do |m|
+              Blazen::FFI.blazen_openai_compat_provider_new(pn, bu, ak, m, out_model, out_err)
+            end
+          end
+        end
+      end
+      Blazen::FFI.check_error!(out_err)
+      super(out_model.read_pointer,
+            Blazen::FFI.method(:blazen_openai_compat_provider_free))
+    end
+
+    def provider_id
+      PROVIDER_ID
+    end
+
+    def complete(request)
+      llm_complete(request, :blazen_openai_compat_provider_complete)
+    end
+
+    def complete_blocking(request)
+      llm_complete_blocking(request, :blazen_openai_compat_provider_complete_blocking)
+    end
+
+    def stream(request, **opts, &block)
+      llm_stream(request, :blazen_openai_compat_provider_complete_streaming_blocking,
+                 blocking: true, **opts, &block)
+    end
+
+    def stream_async(request, **opts, &block)
+      llm_stream(request, :blazen_openai_compat_provider_complete_streaming,
+                 blocking: false, **opts, &block)
+    end
+  end
+
+  # Ollama local server: +host+ + +port+ (uint16) + +model+.
+  class OllamaProvider < LlmProvider
+    include LlmProviderImpl
+
+    PROVIDER_ID = "ollama"
+
+    # @param host [String] e.g. +"127.0.0.1"+
+    # @param port [Integer] TCP port (uint16)
+    # @param model [String]
+    def initialize(host:, port:, model:)
+      unless Blazen::FFI.respond_to?(:blazen_ollama_provider_new)
+        raise Blazen::UnsupportedError,
+              "blazen cabi missing ollama_provider_new symbol"
+      end
+
+      out_model = ::FFI::MemoryPointer.new(:pointer)
+      out_err   = ::FFI::MemoryPointer.new(:pointer)
+      Blazen::FFI.with_cstring(host.to_s) do |h|
+        Blazen::FFI.with_cstring(model.to_s) do |m|
+          Blazen::FFI.blazen_ollama_provider_new(h, Integer(port), m, out_model, out_err)
+        end
+      end
+      Blazen::FFI.check_error!(out_err)
+      super(out_model.read_pointer,
+            Blazen::FFI.method(:blazen_ollama_provider_free))
+    end
+
+    def provider_id
+      PROVIDER_ID
+    end
+
+    def complete(request)
+      llm_complete(request, :blazen_ollama_provider_complete)
+    end
+
+    def complete_blocking(request)
+      llm_complete_blocking(request, :blazen_ollama_provider_complete_blocking)
+    end
+
+    def stream(request, **opts, &block)
+      llm_stream(request, :blazen_ollama_provider_complete_streaming_blocking,
+                 blocking: true, **opts, &block)
+    end
+
+    def stream_async(request, **opts, &block)
+      llm_stream(request, :blazen_ollama_provider_complete_streaming,
+                 blocking: false, **opts, &block)
+    end
+  end
+
+  # LM Studio local server: +host+ + +port+ (uint16) + +model+.
+  class LmStudioProvider < LlmProvider
+    include LlmProviderImpl
+
+    PROVIDER_ID = "lm-studio"
+
+    # @param host [String] e.g. +"127.0.0.1"+
+    # @param port [Integer] TCP port (uint16)
+    # @param model [String]
+    def initialize(host:, port:, model:)
+      unless Blazen::FFI.respond_to?(:blazen_lm_studio_provider_new)
+        raise Blazen::UnsupportedError,
+              "blazen cabi missing lm_studio_provider_new symbol"
+      end
+
+      out_model = ::FFI::MemoryPointer.new(:pointer)
+      out_err   = ::FFI::MemoryPointer.new(:pointer)
+      Blazen::FFI.with_cstring(host.to_s) do |h|
+        Blazen::FFI.with_cstring(model.to_s) do |m|
+          Blazen::FFI.blazen_lm_studio_provider_new(h, Integer(port), m, out_model, out_err)
+        end
+      end
+      Blazen::FFI.check_error!(out_err)
+      super(out_model.read_pointer,
+            Blazen::FFI.method(:blazen_lm_studio_provider_free))
+    end
+
+    def provider_id
+      PROVIDER_ID
+    end
+
+    def complete(request)
+      llm_complete(request, :blazen_lm_studio_provider_complete)
+    end
+
+    def complete_blocking(request)
+      llm_complete_blocking(request, :blazen_lm_studio_provider_complete_blocking)
+    end
+
+    def stream(request, **opts, &block)
+      llm_stream(request, :blazen_lm_studio_provider_complete_streaming_blocking,
+                 blocking: true, **opts, &block)
+    end
+
+    def stream_async(request, **opts, &block)
+      llm_stream(request, :blazen_lm_studio_provider_complete_streaming,
+                 blocking: false, **opts, &block)
+    end
+  end
+
+  # mistral.rs native engine: +model_id+ + optional +device+ / +quantization+ /
+  # +context_length+ (nullable uint32) + +vision+ flag.
+  class MistralRsProvider < LlmProvider
+    include LlmProviderImpl
+
+    PROVIDER_ID = "mistralrs"
+
+    # @param model_id [String]
+    # @param device [String, nil]
+    # @param quantization [String, nil]
+    # @param context_length [Integer, nil]
+    # @param vision [Boolean]
+    def initialize(model_id:, device: nil, quantization: nil, context_length: nil, vision: false)
+      unless Blazen::FFI.respond_to?(:blazen_mistralrs_provider_new)
+        raise Blazen::UnsupportedError,
+              "blazen cabi missing mistralrs_provider_new symbol"
+      end
+
+      out_model = ::FFI::MemoryPointer.new(:pointer)
+      out_err   = ::FFI::MemoryPointer.new(:pointer)
+      cl_ptr    = Blazen._opt_u32_ptr(context_length)
+      Blazen::FFI.with_cstring(model_id.to_s) do |mid|
+        Blazen::FFI.with_cstring(device) do |dev|
+          Blazen::FFI.with_cstring(quantization) do |q|
+            Blazen::FFI.blazen_mistralrs_provider_new(
+              mid, dev, q, cl_ptr, vision ? true : false, out_model, out_err
+            )
+          end
+        end
+      end
+      Blazen::FFI.check_error!(out_err)
+      super(out_model.read_pointer,
+            Blazen::FFI.method(:blazen_mistralrs_provider_free))
+    end
+
+    def provider_id
+      PROVIDER_ID
+    end
+
+    def complete(request)
+      llm_complete(request, :blazen_mistralrs_provider_complete)
+    end
+
+    def complete_blocking(request)
+      llm_complete_blocking(request, :blazen_mistralrs_provider_complete_blocking)
+    end
+
+    def stream(request, **opts, &block)
+      llm_stream(request, :blazen_mistralrs_provider_complete_streaming_blocking,
+                 blocking: true, **opts, &block)
+    end
+
+    def stream_async(request, **opts, &block)
+      llm_stream(request, :blazen_mistralrs_provider_complete_streaming,
+                 blocking: false, **opts, &block)
+    end
+  end
+
+  # llama.cpp native engine: +model_path+ + optional +device+ / +quantization+ /
+  # +context_length+ (nullable uint32) / +n_gpu_layers+ (nullable uint32).
+  class LlamaCppProvider < LlmProvider
+    include LlmProviderImpl
+
+    PROVIDER_ID = "llamacpp"
+
+    # @param model_path [String] path to the GGUF model file
+    # @param device [String, nil]
+    # @param quantization [String, nil]
+    # @param context_length [Integer, nil]
+    # @param n_gpu_layers [Integer, nil]
+    def initialize(model_path:, device: nil, quantization: nil, context_length: nil,
+                   n_gpu_layers: nil)
+      unless Blazen::FFI.respond_to?(:blazen_llamacpp_provider_new)
+        raise Blazen::UnsupportedError,
+              "blazen cabi missing llamacpp_provider_new symbol"
+      end
+
+      out_model = ::FFI::MemoryPointer.new(:pointer)
+      out_err   = ::FFI::MemoryPointer.new(:pointer)
+      cl_ptr    = Blazen._opt_u32_ptr(context_length)
+      ngl_ptr   = Blazen._opt_u32_ptr(n_gpu_layers)
+      Blazen::FFI.with_cstring(model_path.to_s) do |mp|
+        Blazen::FFI.with_cstring(device) do |dev|
+          Blazen::FFI.with_cstring(quantization) do |q|
+            Blazen::FFI.blazen_llamacpp_provider_new(
+              mp, dev, q, cl_ptr, ngl_ptr, out_model, out_err
+            )
+          end
+        end
+      end
+      Blazen::FFI.check_error!(out_err)
+      super(out_model.read_pointer,
+            Blazen::FFI.method(:blazen_llamacpp_provider_free))
+    end
+
+    def provider_id
+      PROVIDER_ID
+    end
+
+    def complete(request)
+      llm_complete(request, :blazen_llamacpp_provider_complete)
+    end
+
+    def complete_blocking(request)
+      llm_complete_blocking(request, :blazen_llamacpp_provider_complete_blocking)
+    end
+
+    def stream(request, **opts, &block)
+      llm_stream(request, :blazen_llamacpp_provider_complete_streaming_blocking,
+                 blocking: true, **opts, &block)
+    end
+
+    def stream_async(request, **opts, &block)
+      llm_stream(request, :blazen_llamacpp_provider_complete_streaming,
+                 blocking: false, **opts, &block)
+    end
+  end
+
+  # Candle native engine: +model_id+ + optional +device+ / +quantization+ /
+  # +revision+ + +context_length+ (nullable uint32).
+  class CandleLlmProvider < LlmProvider
+    include LlmProviderImpl
+
+    PROVIDER_ID = "candle"
+
+    # @param model_id [String]
+    # @param device [String, nil]
+    # @param quantization [String, nil]
+    # @param revision [String, nil] HF repo revision / branch / tag
+    # @param context_length [Integer, nil]
+    def initialize(model_id:, device: nil, quantization: nil, revision: nil,
+                   context_length: nil)
+      unless Blazen::FFI.respond_to?(:blazen_candle_provider_new)
+        raise Blazen::UnsupportedError,
+              "blazen cabi missing candle_provider_new symbol"
+      end
+
+      out_model = ::FFI::MemoryPointer.new(:pointer)
+      out_err   = ::FFI::MemoryPointer.new(:pointer)
+      cl_ptr    = Blazen._opt_u32_ptr(context_length)
+      Blazen::FFI.with_cstring(model_id.to_s) do |mid|
+        Blazen::FFI.with_cstring(device) do |dev|
+          Blazen::FFI.with_cstring(quantization) do |q|
+            Blazen::FFI.with_cstring(revision) do |rev|
+              Blazen::FFI.blazen_candle_provider_new(
+                mid, dev, q, rev, cl_ptr, out_model, out_err
+              )
+            end
+          end
+        end
+      end
+      Blazen::FFI.check_error!(out_err)
+      super(out_model.read_pointer,
+            Blazen::FFI.method(:blazen_candle_provider_free))
+    end
+
+    def provider_id
+      PROVIDER_ID
+    end
+
+    def complete(request)
+      llm_complete(request, :blazen_candle_provider_complete)
+    end
+
+    def complete_blocking(request)
+      llm_complete_blocking(request, :blazen_candle_provider_complete_blocking)
+    end
+
+    def stream(request, **opts, &block)
+      llm_stream(request, :blazen_candle_provider_complete_streaming_blocking,
+                 blocking: true, **opts, &block)
+    end
+
+    def stream_async(request, **opts, &block)
+      llm_stream(request, :blazen_candle_provider_complete_streaming,
                  blocking: false, **opts, &block)
     end
   end

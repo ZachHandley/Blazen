@@ -2468,6 +2468,7 @@ module Blazen
     %i[
       openai anthropic gemini azure_openai bedrock fal_llm mistral fireworks
       deepseek perplexity together groq openrouter cohere xai
+      openai_compat ollama lm_studio mistralrs llamacpp candle
     ].each do |engine|
       complete_sym          = :"blazen_#{engine}_provider_complete"
       complete_blocking_sym = :"blazen_#{engine}_provider_complete_blocking"
@@ -2513,6 +2514,60 @@ module Blazen
       rescue ::FFI::NotFoundError
         # Feature-gated.
       end
+    end
+
+    # -- Local / OpenAI-compatible LLM provider constructors (varied shapes)
+    #
+    # These six engines share the standard
+    # +<engine>_provider_complete[_blocking]+ / +_complete_streaming[_blocking]+
+    # / +_free+ surface attached by the loop above, but their +_new+ factories
+    # take engine-specific arguments (host/port, quantization, context length,
+    # vision flag, …) so they are attached explicitly here. All are feature-gated
+    # in the cabi build, so each is wrapped in a +::FFI::NotFoundError+ rescue.
+    begin
+      attach_function :blazen_openai_compat_provider_new,
+                      %i[pointer pointer pointer pointer pointer pointer], :int32
+    rescue ::FFI::NotFoundError
+      # Feature-gated.
+    end
+
+    begin
+      attach_function :blazen_ollama_provider_new,
+                      [:pointer, :uint16, :pointer, :pointer, :pointer], :int32
+    rescue ::FFI::NotFoundError
+      # Feature-gated.
+    end
+
+    begin
+      attach_function :blazen_lm_studio_provider_new,
+                      [:pointer, :uint16, :pointer, :pointer, :pointer], :int32
+    rescue ::FFI::NotFoundError
+      # Feature-gated.
+    end
+
+    begin
+      attach_function :blazen_mistralrs_provider_new,
+                      [:pointer, :pointer, :pointer, :pointer, :bool,
+                       :pointer, :pointer],
+                      :int32
+    rescue ::FFI::NotFoundError
+      # Feature-gated.
+    end
+
+    begin
+      attach_function :blazen_llamacpp_provider_new,
+                      %i[pointer pointer pointer pointer pointer pointer pointer],
+                      :int32
+    rescue ::FFI::NotFoundError
+      # Feature-gated.
+    end
+
+    begin
+      attach_function :blazen_candle_provider_new,
+                      %i[pointer pointer pointer pointer pointer pointer pointer],
+                      :int32
+    rescue ::FFI::NotFoundError
+      # Feature-gated.
     end
 
     # -------------------------------------------------------------------

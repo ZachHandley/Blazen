@@ -495,6 +495,8 @@ RSpec.describe "Blazen per-engine provider classes" do
       Blazen::DeepSeekProvider, Blazen::PerplexityProvider, Blazen::TogetherProvider,
       Blazen::GroqProvider, Blazen::OpenRouterProvider, Blazen::CohereProvider,
       Blazen::XaiProvider, Blazen::AzureOpenAiProvider, Blazen::BedrockProvider,
+      Blazen::OpenAiCompatProvider, Blazen::OllamaProvider, Blazen::LmStudioProvider,
+      Blazen::MistralRsProvider, Blazen::LlamaCppProvider, Blazen::CandleLlmProvider,
     ]
     llm_classes.each do |klass|
       it "#{klass.name.split('::').last} defines #stream / #stream_async" do
