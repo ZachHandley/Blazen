@@ -1234,6 +1234,834 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_baseprovider_provider_id()
+		})
+		if checksum != 23609 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_baseprovider_provider_id: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_baseprovider_capability()
+		})
+		if checksum != 59543 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_baseprovider_capability: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_embeddingprovider_provider_id()
+		})
+		if checksum != 58512 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_embeddingprovider_provider_id: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_embeddingprovider_capability()
+		})
+		if checksum != 43276 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_embeddingprovider_capability: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_embeddingprovider_embed()
+		})
+		if checksum != 54728 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_embeddingprovider_embed: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_embeddingprovider_dimensions()
+		})
+		if checksum != 35676 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_embeddingprovider_dimensions: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_imagegenprovider_provider_id()
+		})
+		if checksum != 34787 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_imagegenprovider_provider_id: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_imagegenprovider_capability()
+		})
+		if checksum != 15186 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_imagegenprovider_capability: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_imagegenprovider_generate_image()
+		})
+		if checksum != 50871 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_imagegenprovider_generate_image: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_llmprovider_provider_id()
+		})
+		if checksum != 42418 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_llmprovider_provider_id: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_llmprovider_capability()
+		})
+		if checksum != 42312 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_llmprovider_capability: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_llmprovider_complete()
+		})
+		if checksum != 36549 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_llmprovider_complete: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_musicprovider_provider_id()
+		})
+		if checksum != 16828 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_musicprovider_provider_id: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_musicprovider_capability()
+		})
+		if checksum != 52104 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_musicprovider_capability: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_musicprovider_generate_music()
+		})
+		if checksum != 2984 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_musicprovider_generate_music: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_musicprovider_generate_sfx()
+		})
+		if checksum != 43095 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_musicprovider_generate_sfx: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_sttprovider_provider_id()
+		})
+		if checksum != 60228 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_sttprovider_provider_id: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_sttprovider_capability()
+		})
+		if checksum != 480 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_sttprovider_capability: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_sttprovider_transcribe()
+		})
+		if checksum != 23696 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_sttprovider_transcribe: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_threedprovider_provider_id()
+		})
+		if checksum != 64296 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_threedprovider_provider_id: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_threedprovider_capability()
+		})
+		if checksum != 7290 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_threedprovider_capability: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_threedprovider_generate_from_image()
+		})
+		if checksum != 63488 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_threedprovider_generate_from_image: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_threedprovider_texturize()
+		})
+		if checksum != 54578 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_threedprovider_texturize: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_threedprovider_rig()
+		})
+		if checksum != 56149 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_threedprovider_rig: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_threedprovider_refine()
+		})
+		if checksum != 319 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_threedprovider_refine: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_threedprovider_animate()
+		})
+		if checksum != 14496 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_threedprovider_animate: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_ttsprovider_provider_id()
+		})
+		if checksum != 1368 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_ttsprovider_provider_id: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_ttsprovider_capability()
+		})
+		if checksum != 11459 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_ttsprovider_capability: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_ttsprovider_synthesize()
+		})
+		if checksum != 24115 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_ttsprovider_synthesize: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_vcprovider_provider_id()
+		})
+		if checksum != 18153 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_vcprovider_provider_id: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_vcprovider_capability()
+		})
+		if checksum != 50994 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_vcprovider_capability: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_vcprovider_convert_voice()
+		})
+		if checksum != 570 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_vcprovider_convert_voice: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_vcprovider_clone_voice()
+		})
+		if checksum != 64054 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_vcprovider_clone_voice: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_vcprovider_list_target_voices()
+		})
+		if checksum != 20906 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_vcprovider_list_target_voices: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_music()
+		})
+		if checksum != 18485 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_music: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_music_blocking()
+		})
+		if checksum != 16150 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_music_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_sfx()
+		})
+		if checksum != 37019 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_sfx: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_sfx_blocking()
+		})
+		if checksum != 47783 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_sfx_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_falmusicprovider_generate_music()
+		})
+		if checksum != 33661 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_falmusicprovider_generate_music: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_falmusicprovider_generate_music_blocking()
+		})
+		if checksum != 32415 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_falmusicprovider_generate_music_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_falmusicprovider_generate_sfx()
+		})
+		if checksum != 48301 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_falmusicprovider_generate_sfx: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_falmusicprovider_generate_sfx_blocking()
+		})
+		if checksum != 7478 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_falmusicprovider_generate_sfx_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_musicgenprovider_generate_music()
+		})
+		if checksum != 50613 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_musicgenprovider_generate_music: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_musicgenprovider_generate_music_blocking()
+		})
+		if checksum != 55856 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_musicgenprovider_generate_music_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_stableaudioprovider_generate_music()
+		})
+		if checksum != 2372 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_stableaudioprovider_generate_music: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_stableaudioprovider_generate_music_blocking()
+		})
+		if checksum != 44293 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_stableaudioprovider_generate_music_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_stableaudioprovider_generate_sfx()
+		})
+		if checksum != 2544 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_stableaudioprovider_generate_sfx: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_stableaudioprovider_generate_sfx_blocking()
+		})
+		if checksum != 32006 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_stableaudioprovider_generate_sfx_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_falsttprovider_transcribe()
+		})
+		if checksum != 64868 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_falsttprovider_transcribe: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_falsttprovider_transcribe_blocking()
+		})
+		if checksum != 20278 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_falsttprovider_transcribe_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_fasterwhisperprovider_transcribe()
+		})
+		if checksum != 30013 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_fasterwhisperprovider_transcribe: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_fasterwhisperprovider_transcribe_blocking()
+		})
+		if checksum != 337 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_fasterwhisperprovider_transcribe_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_whispercppprovider_transcribe()
+		})
+		if checksum != 59129 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_whispercppprovider_transcribe: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_whispercppprovider_transcribe_blocking()
+		})
+		if checksum != 57057 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_whispercppprovider_transcribe_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_whisperstreamingprovider_transcribe()
+		})
+		if checksum != 18640 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_whisperstreamingprovider_transcribe: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_whisperstreamingprovider_transcribe_blocking()
+		})
+		if checksum != 6154 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_whisperstreamingprovider_transcribe_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_animate()
+		})
+		if checksum != 1112 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_animate: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_animate_blocking()
+		})
+		if checksum != 47171 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_animate_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_generate_from_image()
+		})
+		if checksum != 33214 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_generate_from_image: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_generate_from_image_blocking()
+		})
+		if checksum != 59769 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_generate_from_image_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_refine()
+		})
+		if checksum != 4999 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_refine: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_refine_blocking()
+		})
+		if checksum != 11614 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_refine_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_rig()
+		})
+		if checksum != 65273 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_rig: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_rig_blocking()
+		})
+		if checksum != 56317 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_rig_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_texturize()
+		})
+		if checksum != 20429 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_texturize: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_texturize_blocking()
+		})
+		if checksum != 29809 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_texturize_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_triposrprovider_generate_from_image()
+		})
+		if checksum != 33276 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_triposrprovider_generate_from_image: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_triposrprovider_generate_from_image_blocking()
+		})
+		if checksum != 18100 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_triposrprovider_generate_from_image_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_barkprovider_synthesize()
+		})
+		if checksum != 60362 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_barkprovider_synthesize: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_barkprovider_synthesize_blocking()
+		})
+		if checksum != 27551 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_barkprovider_synthesize_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_f5provider_synthesize()
+		})
+		if checksum != 64185 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_f5provider_synthesize: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_f5provider_synthesize_blocking()
+		})
+		if checksum != 26380 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_f5provider_synthesize_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_falttsprovider_synthesize()
+		})
+		if checksum != 10212 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_falttsprovider_synthesize: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_falttsprovider_synthesize_blocking()
+		})
+		if checksum != 30985 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_falttsprovider_synthesize_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_kokoroprovider_synthesize()
+		})
+		if checksum != 15368 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_kokoroprovider_synthesize: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_kokoroprovider_synthesize_blocking()
+		})
+		if checksum != 18567 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_kokoroprovider_synthesize_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_piperprovider_synthesize()
+		})
+		if checksum != 24756 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_piperprovider_synthesize: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_piperprovider_synthesize_blocking()
+		})
+		if checksum != 7310 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_piperprovider_synthesize_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_qwen3ttsprovider_synthesize()
+		})
+		if checksum != 47593 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_qwen3ttsprovider_synthesize: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_qwen3ttsprovider_synthesize_blocking()
+		})
+		if checksum != 7753 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_qwen3ttsprovider_synthesize_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_sparkttsprovider_synthesize()
+		})
+		if checksum != 18781 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_sparkttsprovider_synthesize: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_sparkttsprovider_synthesize_blocking()
+		})
+		if checksum != 58765 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_sparkttsprovider_synthesize_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_vibevoiceprovider_synthesize()
+		})
+		if checksum != 29894 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_vibevoiceprovider_synthesize: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_vibevoiceprovider_synthesize_blocking()
+		})
+		if checksum != 23229 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_vibevoiceprovider_synthesize_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_falvcprovider_convert_voice()
+		})
+		if checksum != 53753 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_falvcprovider_convert_voice: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_falvcprovider_convert_voice_blocking()
+		})
+		if checksum != 25115 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_falvcprovider_convert_voice_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_rvcprovider_clone_voice()
+		})
+		if checksum != 38614 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_rvcprovider_clone_voice: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_rvcprovider_clone_voice_blocking()
+		})
+		if checksum != 9430 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_rvcprovider_clone_voice_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_rvcprovider_convert_voice()
+		})
+		if checksum != 23657 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_rvcprovider_convert_voice: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_rvcprovider_convert_voice_blocking()
+		})
+		if checksum != 51076 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_rvcprovider_convert_voice_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_rvcprovider_list_target_voices()
+		})
+		if checksum != 29004 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_rvcprovider_list_target_voices: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_rvcprovider_list_target_voices_blocking()
+		})
+		if checksum != 56818 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_rvcprovider_list_target_voices_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle()
 		})
 		if checksum != 640 {
@@ -2125,74 +2953,74 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
-			return C.uniffi_blazen_uniffi_checksum_method_baseprovider_as_model()
+			return C.uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_as_model()
 		})
-		if checksum != 58666 {
+		if checksum != 7766 {
 			// If this happens try cleaning and rebuilding your project
-			panic("blazen: uniffi_blazen_uniffi_checksum_method_baseprovider_as_model: UniFFI API checksum mismatch")
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_as_model: UniFFI API checksum mismatch")
 		}
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
-			return C.uniffi_blazen_uniffi_checksum_method_baseprovider_defaults()
+			return C.uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_defaults()
 		})
-		if checksum != 21474 {
+		if checksum != 64482 {
 			// If this happens try cleaning and rebuilding your project
-			panic("blazen: uniffi_blazen_uniffi_checksum_method_baseprovider_defaults: UniFFI API checksum mismatch")
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_defaults: UniFFI API checksum mismatch")
 		}
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
-			return C.uniffi_blazen_uniffi_checksum_method_baseprovider_extract()
+			return C.uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_extract()
 		})
-		if checksum != 47282 {
+		if checksum != 58506 {
 			// If this happens try cleaning and rebuilding your project
-			panic("blazen: uniffi_blazen_uniffi_checksum_method_baseprovider_extract: UniFFI API checksum mismatch")
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_extract: UniFFI API checksum mismatch")
 		}
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
-			return C.uniffi_blazen_uniffi_checksum_method_baseprovider_model_id()
+			return C.uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_model_id()
 		})
-		if checksum != 18282 {
+		if checksum != 6884 {
 			// If this happens try cleaning and rebuilding your project
-			panic("blazen: uniffi_blazen_uniffi_checksum_method_baseprovider_model_id: UniFFI API checksum mismatch")
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_model_id: UniFFI API checksum mismatch")
 		}
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
-			return C.uniffi_blazen_uniffi_checksum_method_baseprovider_with_defaults()
+			return C.uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_with_defaults()
 		})
-		if checksum != 47332 {
+		if checksum != 35202 {
 			// If this happens try cleaning and rebuilding your project
-			panic("blazen: uniffi_blazen_uniffi_checksum_method_baseprovider_with_defaults: UniFFI API checksum mismatch")
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_with_defaults: UniFFI API checksum mismatch")
 		}
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
-			return C.uniffi_blazen_uniffi_checksum_method_baseprovider_with_response_format_json()
+			return C.uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_with_response_format_json()
 		})
-		if checksum != 25582 {
+		if checksum != 57277 {
 			// If this happens try cleaning and rebuilding your project
-			panic("blazen: uniffi_blazen_uniffi_checksum_method_baseprovider_with_response_format_json: UniFFI API checksum mismatch")
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_with_response_format_json: UniFFI API checksum mismatch")
 		}
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
-			return C.uniffi_blazen_uniffi_checksum_method_baseprovider_with_system_prompt()
+			return C.uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_with_system_prompt()
 		})
-		if checksum != 27915 {
+		if checksum != 47198 {
 			// If this happens try cleaning and rebuilding your project
-			panic("blazen: uniffi_blazen_uniffi_checksum_method_baseprovider_with_system_prompt: UniFFI API checksum mismatch")
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_with_system_prompt: UniFFI API checksum mismatch")
 		}
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
-			return C.uniffi_blazen_uniffi_checksum_method_baseprovider_with_tools_json()
+			return C.uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_with_tools_json()
 		})
-		if checksum != 43254 {
+		if checksum != 35513 {
 			// If this happens try cleaning and rebuilding your project
-			panic("blazen: uniffi_blazen_uniffi_checksum_method_baseprovider_with_tools_json: UniFFI API checksum mismatch")
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_with_tools_json: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -2352,7 +3180,7 @@ func uniffiCheckChecksums() {
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_customproviderhandle_as_base()
 		})
-		if checksum != 43943 {
+		if checksum != 13608 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_customproviderhandle_as_base: UniFFI API checksum mismatch")
 		}
@@ -2566,42 +3394,6 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
-			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_animate()
-		})
-		if checksum != 11536 {
-			// If this happens try cleaning and rebuilding your project
-			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_animate: UniFFI API checksum mismatch")
-		}
-	}
-	{
-		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
-			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_refine()
-		})
-		if checksum != 4070 {
-			// If this happens try cleaning and rebuilding your project
-			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_refine: UniFFI API checksum mismatch")
-		}
-	}
-	{
-		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
-			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_rig()
-		})
-		if checksum != 32321 {
-			// If this happens try cleaning and rebuilding your project
-			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_rig: UniFFI API checksum mismatch")
-		}
-	}
-	{
-		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
-			return C.uniffi_blazen_uniffi_checksum_method_compat3dprovider_texturize()
-		})
-		if checksum != 42136 {
-			// If this happens try cleaning and rebuilding your project
-			panic("blazen: uniffi_blazen_uniffi_checksum_method_compat3dprovider_texturize: UniFFI API checksum mismatch")
-		}
-	}
-	{
-		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_stephandler_invoke()
 		})
 		if checksum != 11814 {
@@ -2679,6 +3471,195 @@ func uniffiCheckChecksums() {
 		if checksum != 59656 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_agent_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_audiogenprovider_new()
+		})
+		if checksum != 3331 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_audiogenprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_falmusicprovider_new()
+		})
+		if checksum != 35233 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_falmusicprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_musicgenprovider_new()
+		})
+		if checksum != 41669 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_musicgenprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_stableaudioprovider_new()
+		})
+		if checksum != 49025 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_stableaudioprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_falsttprovider_new()
+		})
+		if checksum != 52921 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_falsttprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_fasterwhisperprovider_new()
+		})
+		if checksum != 56213 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_fasterwhisperprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_whispercppprovider_new()
+		})
+		if checksum != 851 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_whispercppprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_whisperstreamingprovider_new()
+		})
+		if checksum != 27361 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_whisperstreamingprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_compat3dprovider_new()
+		})
+		if checksum != 29686 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_compat3dprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_triposrprovider_new()
+		})
+		if checksum != 32176 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_triposrprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_barkprovider_new()
+		})
+		if checksum != 7298 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_barkprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_f5provider_new()
+		})
+		if checksum != 7083 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_f5provider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_falttsprovider_new()
+		})
+		if checksum != 33047 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_falttsprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_falttsprovider_with_model()
+		})
+		if checksum != 25912 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_falttsprovider_with_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_kokoroprovider_new()
+		})
+		if checksum != 9867 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_kokoroprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_piperprovider_new()
+		})
+		if checksum != 4950 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_piperprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_qwen3ttsprovider_new()
+		})
+		if checksum != 53812 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_qwen3ttsprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_sparkttsprovider_new()
+		})
+		if checksum != 6850 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_sparkttsprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_vibevoiceprovider_new()
+		})
+		if checksum != 18188 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_vibevoiceprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_falvcprovider_new()
+		})
+		if checksum != 3575 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_falvcprovider_new: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_constructor_rvcprovider_new()
+		})
+		if checksum != 51672 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_rvcprovider_new: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -2809,29 +3790,20 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
-			return C.uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model()
+			return C.uniffi_blazen_uniffi_checksum_constructor_llmproviderdefaults_from_model()
 		})
-		if checksum != 28877 {
+		if checksum != 19304 {
 			// If this happens try cleaning and rebuilding your project
-			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model: UniFFI API checksum mismatch")
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_llmproviderdefaults_from_model: UniFFI API checksum mismatch")
 		}
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
-			return C.uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model_with_defaults()
+			return C.uniffi_blazen_uniffi_checksum_constructor_llmproviderdefaults_from_model_with_defaults()
 		})
-		if checksum != 44881 {
+		if checksum != 59859 {
 			// If this happens try cleaning and rebuilding your project
-			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model_with_defaults: UniFFI API checksum mismatch")
-		}
-	}
-	{
-		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
-			return C.uniffi_blazen_uniffi_checksum_constructor_compat3dprovider_new()
-		})
-		if checksum != 19300 {
-			// If this happens try cleaning and rebuilding your project
-			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_compat3dprovider_new: UniFFI API checksum mismatch")
+			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_llmproviderdefaults_from_model_with_defaults: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -2916,6 +3888,30 @@ func (FfiConverterUint64) Read(reader io.Reader) uint64 {
 type FfiDestroyerUint64 struct{}
 
 func (FfiDestroyerUint64) Destroy(_ uint64) {}
+
+type FfiConverterInt64 struct{}
+
+var FfiConverterInt64INSTANCE = FfiConverterInt64{}
+
+func (FfiConverterInt64) Lower(value int64) C.int64_t {
+	return C.int64_t(value)
+}
+
+func (FfiConverterInt64) Write(writer io.Writer, value int64) {
+	writeInt64(writer, value)
+}
+
+func (FfiConverterInt64) Lift(value C.int64_t) int64 {
+	return int64(value)
+}
+
+func (FfiConverterInt64) Read(reader io.Reader) int64 {
+	return readInt64(reader)
+}
+
+type FfiDestroyerInt64 struct{}
+
+func (FfiDestroyerInt64) Destroy(_ int64) {}
 
 type FfiConverterFloat32 struct{}
 
@@ -3332,135 +4328,54 @@ func (_ FfiDestroyerAgent) Destroy(value *Agent) {
 	value.Destroy()
 }
 
-// A [`crate::llm::Model`] wrapped with applied
-// [`ProviderDefaults`].
+// Concrete provider class for Meta's `AudioGen` text-to-sfx model.
 //
-// Construct via [`BaseProvider::from_model`] (wraps an existing
-// model with no defaults) or [`BaseProvider::with_defaults`]
-// (wraps with explicit defaults). Mutate via the `with_*` builder methods.
-//
-// Phase B's `CustomProvider` factories will return `Arc<BaseProvider>`
-// directly; for Phase A this class is reachable by lifting any existing
-// `Model` factory result.
-type BaseProviderInterface interface {
-	// Unwrap to a plain [`Model`] handle that applies the
-	// configured defaults on every call.
-	//
-	// Use this when you want to pass the wrapped provider to an API that
-	// takes a generic `Model` (the agent runner, workflow
-	// steps, etc.).
-	AsModel() *Model
-	// Inspect the currently-configured defaults (data only — hooks are
-	// not surfaced in Phase A).
-	Defaults() ProviderDefaults
-	// Extract structured output from the model by constraining its
-	// response to a JSON Schema.
-	//
-	// Mirrors the upstream
-	// [`blazen_llm::traits::StructuredOutput::extract`] blanket impl: the
-	// `schema_json` is injected as the request's `response_format` and
-	// the completion is dispatched as usual. Returns the model's raw
-	// content (which the foreign caller deserializes into its own typed
-	// shape — UniFFI cannot return a generic typed value across the FFI).
-	//
-	// `schema_json` must be a valid JSON Schema string; an empty string or
-	// malformed JSON falls back to `null` (the request is sent without a
-	// `response_format`).
-	Extract(schemaJson string, messages []ChatMessage) (string, error)
-	// The model id of the wrapped inner `Model`.
-	ModelId() string
-	// Replace the entire [`ProviderDefaults`] on this provider,
-	// returning a new `Arc<BaseProvider>` (clone-with-mutation).
-	WithDefaults(defaults ProviderDefaults) *BaseProvider
-	// Set the default `response_format` (JSON-encoded `serde_json::Value`).
-	//
-	// Malformed JSON or an empty string is treated as JSON null.
-	WithResponseFormatJson(fmtJson string) *BaseProvider
-	// Set the default system prompt.
-	WithSystemPrompt(prompt string) *BaseProvider
-	// Set the default tools (JSON-encoded `Vec<ToolDefinition>`).
-	//
-	// Malformed JSON is treated as an empty tool list — matching the
-	// upstream `#[derive(Default)]` semantics. Foreign callers should
-	// validate the JSON before sending it across the FFI.
-	WithToolsJson(toolsJson string) *BaseProvider
+// Wraps [`blazen_llm::providers::concrete::music::AudioGenProvider`].
+// Both `generate_music` and `generate_sfx` are exposed (the underlying
+// backend routes both through the same dispatch trait).
+type AudioGenProviderInterface interface {
+	// Generate `duration_seconds` of music conditioned on `prompt`.
+	GenerateMusic(prompt string, durationSeconds float32) (MusicResult, error)
+	// Synchronous variant of [`generate_music`](Self::generate_music).
+	GenerateMusicBlocking(prompt string, durationSeconds float32) (MusicResult, error)
+	// Generate `duration_seconds` of sound-effect audio conditioned on
+	// `prompt`.
+	GenerateSfx(prompt string, durationSeconds float32) (MusicResult, error)
+	// Synchronous variant of [`generate_sfx`](Self::generate_sfx).
+	GenerateSfxBlocking(prompt string, durationSeconds float32) (MusicResult, error)
 }
 
-// A [`crate::llm::Model`] wrapped with applied
-// [`ProviderDefaults`].
+// Concrete provider class for Meta's `AudioGen` text-to-sfx model.
 //
-// Construct via [`BaseProvider::from_model`] (wraps an existing
-// model with no defaults) or [`BaseProvider::with_defaults`]
-// (wraps with explicit defaults). Mutate via the `with_*` builder methods.
-//
-// Phase B's `CustomProvider` factories will return `Arc<BaseProvider>`
-// directly; for Phase A this class is reachable by lifting any existing
-// `Model` factory result.
-type BaseProvider struct {
+// Wraps [`blazen_llm::providers::concrete::music::AudioGenProvider`].
+// Both `generate_music` and `generate_sfx` are exposed (the underlying
+// backend routes both through the same dispatch trait).
+type AudioGenProvider struct {
 	ffiObject FfiObject
 }
 
-// Wrap an existing [`Model`] with empty defaults.
+// Build a new `AudioGen`-backed provider.
 //
-// Equivalent to using the wrapped model directly, but lets callers
-// attach defaults later via the `with_*` methods.
-func BaseProviderFromModel(model *Model) *BaseProvider {
-	return FfiConverterBaseProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
-		return C.uniffi_blazen_uniffi_fn_constructor_baseprovider_from_model(FfiConverterModelINSTANCE.Lower(model), _uniffiStatus)
-	}))
+// `repo_id` overrides the default Hugging Face repo (defaults to
+// `facebook/audiogen-medium`). `revision` pins a specific commit /
+// tag. `device` follows the same format as
+// [`MusicGenProvider::new`]. `cache_dir` overrides the cache.
+// `max_duration_seconds` overrides the default 30 s safety cap.
+func NewAudioGenProvider(repoId *string, revision *string, device *string, cacheDir *string, maxDurationSeconds *float32) (*AudioGenProvider, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_audiogenprovider_new(FfiConverterOptionalStringINSTANCE.Lower(repoId), FfiConverterOptionalStringINSTANCE.Lower(revision), FfiConverterOptionalStringINSTANCE.Lower(device), FfiConverterOptionalStringINSTANCE.Lower(cacheDir), FfiConverterOptionalFloat32INSTANCE.Lower(maxDurationSeconds), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *AudioGenProvider
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterAudioGenProviderINSTANCE.Lift(_uniffiRV), nil
+	}
 }
 
-// Wrap a [`Model`] with explicit
-// [`ProviderDefaults`].
-func BaseProviderFromModelWithDefaults(model *Model, defaults ProviderDefaults) *BaseProvider {
-	return FfiConverterBaseProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
-		return C.uniffi_blazen_uniffi_fn_constructor_baseprovider_from_model_with_defaults(FfiConverterModelINSTANCE.Lower(model), FfiConverterProviderDefaultsINSTANCE.Lower(defaults), _uniffiStatus)
-	}))
-}
-
-// Unwrap to a plain [`Model`] handle that applies the
-// configured defaults on every call.
-//
-// Use this when you want to pass the wrapped provider to an API that
-// takes a generic `Model` (the agent runner, workflow
-// steps, etc.).
-func (_self *BaseProvider) AsModel() *Model {
-	_pointer := _self.ffiObject.incrementPointer("*BaseProvider")
-	defer _self.ffiObject.decrementPointer()
-	return FfiConverterModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
-		return C.uniffi_blazen_uniffi_fn_method_baseprovider_as_model(
-			_pointer, _uniffiStatus)
-	}))
-}
-
-// Inspect the currently-configured defaults (data only — hooks are
-// not surfaced in Phase A).
-func (_self *BaseProvider) Defaults() ProviderDefaults {
-	_pointer := _self.ffiObject.incrementPointer("*BaseProvider")
-	defer _self.ffiObject.decrementPointer()
-	return FfiConverterProviderDefaultsINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
-		return GoRustBuffer{
-			inner: C.uniffi_blazen_uniffi_fn_method_baseprovider_defaults(
-				_pointer, _uniffiStatus),
-		}
-	}))
-}
-
-// Extract structured output from the model by constraining its
-// response to a JSON Schema.
-//
-// Mirrors the upstream
-// [`blazen_llm::traits::StructuredOutput::extract`] blanket impl: the
-// `schema_json` is injected as the request's `response_format` and
-// the completion is dispatched as usual. Returns the model's raw
-// content (which the foreign caller deserializes into its own typed
-// shape — UniFFI cannot return a generic typed value across the FFI).
-//
-// `schema_json` must be a valid JSON Schema string; an empty string or
-// malformed JSON falls back to `null` (the request is sent without a
-// `response_format`).
-func (_self *BaseProvider) Extract(schemaJson string, messages []ChatMessage) (string, error) {
-	_pointer := _self.ffiObject.incrementPointer("*BaseProvider")
+// Generate `duration_seconds` of music conditioned on `prompt`.
+func (_self *AudioGenProvider) GenerateMusic(prompt string, durationSeconds float32) (MusicResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*AudioGenProvider")
 	defer _self.ffiObject.decrementPointer()
 	res, err := uniffiRustCallAsync[*BlazenError](
 		FfiConverterBlazenErrorINSTANCE,
@@ -3472,11 +4387,11 @@ func (_self *BaseProvider) Extract(schemaJson string, messages []ChatMessage) (s
 			}
 		},
 		// liftFn
-		func(ffi RustBufferI) string {
-			return FfiConverterStringINSTANCE.Lift(ffi)
+		func(ffi RustBufferI) MusicResult {
+			return FfiConverterMusicResultINSTANCE.Lift(ffi)
 		},
-		C.uniffi_blazen_uniffi_fn_method_baseprovider_extract(
-			_pointer, FfiConverterStringINSTANCE.Lower(schemaJson), FfiConverterSequenceChatMessageINSTANCE.Lower(messages)),
+		C.uniffi_blazen_uniffi_fn_method_audiogenprovider_generate_music(
+			_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterFloat32INSTANCE.Lower(durationSeconds)),
 		// pollFn
 		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
 			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
@@ -3494,62 +4409,315 @@ func (_self *BaseProvider) Extract(schemaJson string, messages []ChatMessage) (s
 	return res, err
 }
 
-// The model id of the wrapped inner `Model`.
-func (_self *BaseProvider) ModelId() string {
+// Synchronous variant of [`generate_music`](Self::generate_music).
+func (_self *AudioGenProvider) GenerateMusicBlocking(prompt string, durationSeconds float32) (MusicResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*AudioGenProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_audiogenprovider_generate_music_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterFloat32INSTANCE.Lower(durationSeconds), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue MusicResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterMusicResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Generate `duration_seconds` of sound-effect audio conditioned on
+// `prompt`.
+func (_self *AudioGenProvider) GenerateSfx(prompt string, durationSeconds float32) (MusicResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*AudioGenProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) MusicResult {
+			return FfiConverterMusicResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_audiogenprovider_generate_sfx(
+			_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterFloat32INSTANCE.Lower(durationSeconds)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`generate_sfx`](Self::generate_sfx).
+func (_self *AudioGenProvider) GenerateSfxBlocking(prompt string, durationSeconds float32) (MusicResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*AudioGenProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_audiogenprovider_generate_sfx_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterFloat32INSTANCE.Lower(durationSeconds), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue MusicResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterMusicResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *AudioGenProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterAudioGenProvider struct{}
+
+var FfiConverterAudioGenProviderINSTANCE = FfiConverterAudioGenProvider{}
+
+func (c FfiConverterAudioGenProvider) Lift(handle C.uint64_t) *AudioGenProvider {
+	result := &AudioGenProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_audiogenprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_audiogenprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*AudioGenProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterAudioGenProvider) Read(reader io.Reader) *AudioGenProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterAudioGenProvider) Lower(value *AudioGenProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*AudioGenProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterAudioGenProvider) Write(writer io.Writer, value *AudioGenProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalAudioGenProvider(handle uint64) *AudioGenProvider {
+	return FfiConverterAudioGenProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalAudioGenProvider(value *AudioGenProvider) uint64 {
+	return uint64(FfiConverterAudioGenProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerAudioGenProvider struct{}
+
+func (_ FfiDestroyerAudioGenProvider) Destroy(value *AudioGenProvider) {
+	value.Destroy()
+}
+
+// Concrete TTS provider backed by the local Bark engine.
+//
+// Wraps [`blazen_llm::providers::concrete::tts::BarkProvider`].
+type BarkProviderInterface interface {
+	// Synthesize `text` into an audio payload.
+	Synthesize(text string, voice *string, language *string) (TtsResult, error)
+	// Synchronous variant of [`synthesize`](Self::synthesize).
+	SynthesizeBlocking(text string, voice *string, language *string) (TtsResult, error)
+}
+
+// Concrete TTS provider backed by the local Bark engine.
+//
+// Wraps [`blazen_llm::providers::concrete::tts::BarkProvider`].
+type BarkProvider struct {
+	ffiObject FfiObject
+}
+
+// Construct a Bark provider with default configuration.
+func NewBarkProvider() *BarkProvider {
+	return FfiConverterBarkProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_barkprovider_new(_uniffiStatus)
+	}))
+}
+
+// Synthesize `text` into an audio payload.
+func (_self *BarkProvider) Synthesize(text string, voice *string, language *string) (TtsResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*BarkProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) TtsResult {
+			return FfiConverterTtsResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_barkprovider_synthesize(
+			_pointer, FfiConverterStringINSTANCE.Lower(text), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`synthesize`](Self::synthesize).
+func (_self *BarkProvider) SynthesizeBlocking(text string, voice *string, language *string) (TtsResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*BarkProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_barkprovider_synthesize_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(text), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue TtsResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterTtsResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *BarkProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterBarkProvider struct{}
+
+var FfiConverterBarkProviderINSTANCE = FfiConverterBarkProvider{}
+
+func (c FfiConverterBarkProvider) Lift(handle C.uint64_t) *BarkProvider {
+	result := &BarkProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_barkprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_barkprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*BarkProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterBarkProvider) Read(reader io.Reader) *BarkProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterBarkProvider) Lower(value *BarkProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*BarkProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterBarkProvider) Write(writer io.Writer, value *BarkProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalBarkProvider(handle uint64) *BarkProvider {
+	return FfiConverterBarkProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalBarkProvider(value *BarkProvider) uint64 {
+	return uint64(FfiConverterBarkProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerBarkProvider struct{}
+
+func (_ FfiDestroyerBarkProvider) Destroy(value *BarkProvider) {
+	value.Destroy()
+}
+
+// Shared root of the polymorphic provider hierarchy.
+//
+// Every concrete `<Engine>Provider` implements [`BaseProvider`] in
+// addition to its capability trait so Rust-side code can collect
+// providers into capability-erased `Arc<dyn BaseProvider>` containers
+// for telemetry, routing, and registry lookups.
+type BaseProviderInterface interface {
+	// Stable engine identifier (e.g. `"piper"`, `"kokoro"`, `"musicgen"`).
+	ProviderId() string
+	// Capability bucket this provider serves.
+	Capability() CapabilityKind
+}
+
+// Shared root of the polymorphic provider hierarchy.
+//
+// Every concrete `<Engine>Provider` implements [`BaseProvider`] in
+// addition to its capability trait so Rust-side code can collect
+// providers into capability-erased `Arc<dyn BaseProvider>` containers
+// for telemetry, routing, and registry lookups.
+type BaseProvider struct {
+	ffiObject FfiObject
+}
+
+// Stable engine identifier (e.g. `"piper"`, `"kokoro"`, `"musicgen"`).
+func (_self *BaseProvider) ProviderId() string {
 	_pointer := _self.ffiObject.incrementPointer("*BaseProvider")
 	defer _self.ffiObject.decrementPointer()
 	return FfiConverterStringINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
 		return GoRustBuffer{
-			inner: C.uniffi_blazen_uniffi_fn_method_baseprovider_model_id(
+			inner: C.uniffi_blazen_uniffi_fn_method_baseprovider_provider_id(
 				_pointer, _uniffiStatus),
 		}
 	}))
 }
 
-// Replace the entire [`ProviderDefaults`] on this provider,
-// returning a new `Arc<BaseProvider>` (clone-with-mutation).
-func (_self *BaseProvider) WithDefaults(defaults ProviderDefaults) *BaseProvider {
+// Capability bucket this provider serves.
+func (_self *BaseProvider) Capability() CapabilityKind {
 	_pointer := _self.ffiObject.incrementPointer("*BaseProvider")
 	defer _self.ffiObject.decrementPointer()
-	return FfiConverterBaseProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
-		return C.uniffi_blazen_uniffi_fn_method_baseprovider_with_defaults(
-			_pointer, FfiConverterProviderDefaultsINSTANCE.Lower(defaults), _uniffiStatus)
-	}))
-}
-
-// Set the default `response_format` (JSON-encoded `serde_json::Value`).
-//
-// Malformed JSON or an empty string is treated as JSON null.
-func (_self *BaseProvider) WithResponseFormatJson(fmtJson string) *BaseProvider {
-	_pointer := _self.ffiObject.incrementPointer("*BaseProvider")
-	defer _self.ffiObject.decrementPointer()
-	return FfiConverterBaseProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
-		return C.uniffi_blazen_uniffi_fn_method_baseprovider_with_response_format_json(
-			_pointer, FfiConverterStringINSTANCE.Lower(fmtJson), _uniffiStatus)
-	}))
-}
-
-// Set the default system prompt.
-func (_self *BaseProvider) WithSystemPrompt(prompt string) *BaseProvider {
-	_pointer := _self.ffiObject.incrementPointer("*BaseProvider")
-	defer _self.ffiObject.decrementPointer()
-	return FfiConverterBaseProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
-		return C.uniffi_blazen_uniffi_fn_method_baseprovider_with_system_prompt(
-			_pointer, FfiConverterStringINSTANCE.Lower(prompt), _uniffiStatus)
-	}))
-}
-
-// Set the default tools (JSON-encoded `Vec<ToolDefinition>`).
-//
-// Malformed JSON is treated as an empty tool list — matching the
-// upstream `#[derive(Default)]` semantics. Foreign callers should
-// validate the JSON before sending it across the FFI.
-func (_self *BaseProvider) WithToolsJson(toolsJson string) *BaseProvider {
-	_pointer := _self.ffiObject.incrementPointer("*BaseProvider")
-	defer _self.ffiObject.decrementPointer()
-	return FfiConverterBaseProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
-		return C.uniffi_blazen_uniffi_fn_method_baseprovider_with_tools_json(
-			_pointer, FfiConverterStringINSTANCE.Lower(toolsJson), _uniffiStatus)
+	return FfiConverterCapabilityKindINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_baseprovider_capability(
+				_pointer, _uniffiStatus),
+		}
 	}))
 }
 func (object *BaseProvider) Destroy() {
@@ -3988,32 +5156,70 @@ func (_ FfiDestroyerCheckpointStore) Destroy(value *CheckpointStore) {
 	value.Destroy()
 }
 
-// HTTP-proxy backend implementing all four 3D-pipeline capability
-// traits against a configurable upstream service.
+// HTTP-proxy 3D provider implementing the texturize / rig / refine /
+// animate post-processing stages of the 3D pipeline against a
+// configurable upstream service.
 //
-// For every stage, this provider POSTs a `multipart/form-data` request
-// with the mesh GLB and a JSON request body to
-// `{base_url}/v1/3d/{texturize,rig,refine,animate}`, and decodes a
+// Wraps [`blazen_llm::providers::concrete::three_d::Compat3dProvider`]
+// which itself wraps
+// [`blazen_3d::backends::compat::Compat3dProvider`]. The upstream
+// contract does NOT include a generation endpoint, so
+// [`generate_from_image`](Self::generate_from_image) returns
+// [`BlazenError::Unsupported`] — use [`TripoSrProvider`] (or another
+// generation backend) to produce the base mesh, then forward the
+// result through this provider's post-proc methods.
+//
+// For every stage, this provider POSTs a `multipart/form-data`
+// request with the mesh GLB and a JSON request body to
+// `{base_url}/v1/3d/{texturize,rig,refine,animate}` and decodes a
 // base64-wrapped JSON response into the corresponding result record.
 type Compat3dProviderInterface interface {
-	// Animate a rigged 3D mesh from a text prompt, motion-capture clip,
-	// or driving video.
+	// Animate a rigged 3D mesh from a text prompt, motion-capture
+	// clip, or driving video.
 	Animate(riggedGlb []byte, request AnimateRequest) (AnimateResult, error)
+	// Synchronous variant of [`animate`](Self::animate).
+	AnimateBlocking(riggedGlb []byte, request AnimateRequest) (AnimateResult, error)
+	// Generation isn't part of the compat-proxy wire contract.
+	//
+	// Mirrors the inner `ThreeDProvider::generate_3d` `Unsupported`
+	// path so the per-engine class surface stays uniform across
+	// [`TripoSrProvider`] and [`Compat3dProvider`].
+	GenerateFromImage(imageBytes []byte, meshResolution uint32) (ThreeDGenerateResult, error)
+	// Synchronous variant of
+	// [`generate_from_image`](Self::generate_from_image) — surfaces
+	// the same `Unsupported` error as the async path.
+	GenerateFromImageBlocking(imageBytes []byte, meshResolution uint32) (ThreeDGenerateResult, error)
 	// Refine a 3D mesh: decimate, fill holes, unwrap UVs, retopologize, smooth.
 	Refine(meshGlb []byte, request RefineRequest) (RefineResult, error)
+	// Synchronous variant of [`refine`](Self::refine).
+	RefineBlocking(meshGlb []byte, request RefineRequest) (RefineResult, error)
 	// Auto-rig a 3D mesh, producing a GLB with skeletal armature and
 	// (optionally) skin weights embedded.
 	Rig(meshGlb []byte, request RigRequest) (RigResult, error)
+	// Synchronous variant of [`rig`](Self::rig).
+	RigBlocking(meshGlb []byte, request RigRequest) (RigResult, error)
 	// Apply or generate a texture/material for an existing 3D mesh.
 	Texturize(meshGlb []byte, request TexturizeRequest) (TexturizeResult, error)
+	// Synchronous variant of [`texturize`](Self::texturize).
+	TexturizeBlocking(meshGlb []byte, request TexturizeRequest) (TexturizeResult, error)
 }
 
-// HTTP-proxy backend implementing all four 3D-pipeline capability
-// traits against a configurable upstream service.
+// HTTP-proxy 3D provider implementing the texturize / rig / refine /
+// animate post-processing stages of the 3D pipeline against a
+// configurable upstream service.
 //
-// For every stage, this provider POSTs a `multipart/form-data` request
-// with the mesh GLB and a JSON request body to
-// `{base_url}/v1/3d/{texturize,rig,refine,animate}`, and decodes a
+// Wraps [`blazen_llm::providers::concrete::three_d::Compat3dProvider`]
+// which itself wraps
+// [`blazen_3d::backends::compat::Compat3dProvider`]. The upstream
+// contract does NOT include a generation endpoint, so
+// [`generate_from_image`](Self::generate_from_image) returns
+// [`BlazenError::Unsupported`] — use [`TripoSrProvider`] (or another
+// generation backend) to produce the base mesh, then forward the
+// result through this provider's post-proc methods.
+//
+// For every stage, this provider POSTs a `multipart/form-data`
+// request with the mesh GLB and a JSON request body to
+// `{base_url}/v1/3d/{texturize,rig,refine,animate}` and decodes a
 // base64-wrapped JSON response into the corresponding result record.
 type Compat3dProvider struct {
 	ffiObject FfiObject
@@ -4025,19 +5231,24 @@ type Compat3dProvider struct {
 // `"https://3d.example.com"`). `api_key` is an optional bearer
 // token attached as `Authorization: Bearer ...`. `timeout_secs`
 // is an optional per-request timeout in seconds (default 600).
+//
+// `timeout_secs` is plumbed through `from_inner` because the
+// blazen-llm `Compat3dProvider::new` constructor only accepts
+// `(base_url, api_key)` — the per-request timeout is a builder
+// on the inner `blazen_3d` provider.
 func NewCompat3dProvider(baseUrl string, apiKey *string, timeoutSecs *uint32) *Compat3dProvider {
 	return FfiConverterCompat3dProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
 		return C.uniffi_blazen_uniffi_fn_constructor_compat3dprovider_new(FfiConverterStringINSTANCE.Lower(baseUrl), FfiConverterOptionalStringINSTANCE.Lower(apiKey), FfiConverterOptionalUint32INSTANCE.Lower(timeoutSecs), _uniffiStatus)
 	}))
 }
 
-// Animate a rigged 3D mesh from a text prompt, motion-capture clip,
-// or driving video.
+// Animate a rigged 3D mesh from a text prompt, motion-capture
+// clip, or driving video.
 func (_self *Compat3dProvider) Animate(riggedGlb []byte, request AnimateRequest) (AnimateResult, error) {
 	_pointer := _self.ffiObject.incrementPointer("*Compat3dProvider")
 	defer _self.ffiObject.decrementPointer()
-	res, err := uniffiRustCallAsync[*ThreeDError](
-		FfiConverterThreeDErrorINSTANCE,
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
 		// completeFn
 		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
 			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
@@ -4068,12 +5279,90 @@ func (_self *Compat3dProvider) Animate(riggedGlb []byte, request AnimateRequest)
 	return res, err
 }
 
+// Synchronous variant of [`animate`](Self::animate).
+func (_self *Compat3dProvider) AnimateBlocking(riggedGlb []byte, request AnimateRequest) (AnimateResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*Compat3dProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_compat3dprovider_animate_blocking(
+				_pointer, FfiConverterBytesINSTANCE.Lower(riggedGlb), FfiConverterAnimateRequestINSTANCE.Lower(request), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue AnimateResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterAnimateResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Generation isn't part of the compat-proxy wire contract.
+//
+// Mirrors the inner `ThreeDProvider::generate_3d` `Unsupported`
+// path so the per-engine class surface stays uniform across
+// [`TripoSrProvider`] and [`Compat3dProvider`].
+func (_self *Compat3dProvider) GenerateFromImage(imageBytes []byte, meshResolution uint32) (ThreeDGenerateResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*Compat3dProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) ThreeDGenerateResult {
+			return FfiConverterThreeDGenerateResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_compat3dprovider_generate_from_image(
+			_pointer, FfiConverterBytesINSTANCE.Lower(imageBytes), FfiConverterUint32INSTANCE.Lower(meshResolution)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of
+// [`generate_from_image`](Self::generate_from_image) — surfaces
+// the same `Unsupported` error as the async path.
+func (_self *Compat3dProvider) GenerateFromImageBlocking(imageBytes []byte, meshResolution uint32) (ThreeDGenerateResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*Compat3dProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_compat3dprovider_generate_from_image_blocking(
+				_pointer, FfiConverterBytesINSTANCE.Lower(imageBytes), FfiConverterUint32INSTANCE.Lower(meshResolution), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue ThreeDGenerateResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterThreeDGenerateResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
 // Refine a 3D mesh: decimate, fill holes, unwrap UVs, retopologize, smooth.
 func (_self *Compat3dProvider) Refine(meshGlb []byte, request RefineRequest) (RefineResult, error) {
 	_pointer := _self.ffiObject.incrementPointer("*Compat3dProvider")
 	defer _self.ffiObject.decrementPointer()
-	res, err := uniffiRustCallAsync[*ThreeDError](
-		FfiConverterThreeDErrorINSTANCE,
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
 		// completeFn
 		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
 			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
@@ -4104,13 +5393,31 @@ func (_self *Compat3dProvider) Refine(meshGlb []byte, request RefineRequest) (Re
 	return res, err
 }
 
+// Synchronous variant of [`refine`](Self::refine).
+func (_self *Compat3dProvider) RefineBlocking(meshGlb []byte, request RefineRequest) (RefineResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*Compat3dProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_compat3dprovider_refine_blocking(
+				_pointer, FfiConverterBytesINSTANCE.Lower(meshGlb), FfiConverterRefineRequestINSTANCE.Lower(request), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue RefineResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterRefineResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
 // Auto-rig a 3D mesh, producing a GLB with skeletal armature and
 // (optionally) skin weights embedded.
 func (_self *Compat3dProvider) Rig(meshGlb []byte, request RigRequest) (RigResult, error) {
 	_pointer := _self.ffiObject.incrementPointer("*Compat3dProvider")
 	defer _self.ffiObject.decrementPointer()
-	res, err := uniffiRustCallAsync[*ThreeDError](
-		FfiConverterThreeDErrorINSTANCE,
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
 		// completeFn
 		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
 			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
@@ -4141,12 +5448,30 @@ func (_self *Compat3dProvider) Rig(meshGlb []byte, request RigRequest) (RigResul
 	return res, err
 }
 
+// Synchronous variant of [`rig`](Self::rig).
+func (_self *Compat3dProvider) RigBlocking(meshGlb []byte, request RigRequest) (RigResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*Compat3dProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_compat3dprovider_rig_blocking(
+				_pointer, FfiConverterBytesINSTANCE.Lower(meshGlb), FfiConverterRigRequestINSTANCE.Lower(request), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue RigResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterRigResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
 // Apply or generate a texture/material for an existing 3D mesh.
 func (_self *Compat3dProvider) Texturize(meshGlb []byte, request TexturizeRequest) (TexturizeResult, error) {
 	_pointer := _self.ffiObject.incrementPointer("*Compat3dProvider")
 	defer _self.ffiObject.decrementPointer()
-	res, err := uniffiRustCallAsync[*ThreeDError](
-		FfiConverterThreeDErrorINSTANCE,
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
 		// completeFn
 		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
 			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
@@ -4175,6 +5500,24 @@ func (_self *Compat3dProvider) Texturize(meshGlb []byte, request TexturizeReques
 	}
 
 	return res, err
+}
+
+// Synchronous variant of [`texturize`](Self::texturize).
+func (_self *Compat3dProvider) TexturizeBlocking(meshGlb []byte, request TexturizeRequest) (TexturizeResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*Compat3dProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_compat3dprovider_texturize_blocking(
+				_pointer, FfiConverterBytesINSTANCE.Lower(meshGlb), FfiConverterTexturizeRequestINSTANCE.Lower(request), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue TexturizeResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterTexturizeResultINSTANCE.Lift(_uniffiRV), nil
+	}
 }
 func (object *Compat3dProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -7713,16 +9056,16 @@ func (c FfiConverterCustomProvider) register() {
 // which applies any per-instance defaults attached via the builders before
 // forwarding to the underlying [`CustomProvider`].
 //
-// The paired [`BaseProvider`] handle returned by [`as_base`](Self::as_base)
+// The paired [`LlmProviderDefaults`] handle returned by [`as_base`](Self::as_base)
 // exposes builder-style completion-defaults customisation
 // (`with_system_prompt`, `with_tools_json`, ...).
 type CustomProviderHandleInterface interface {
-	// Return the paired [`BaseProvider`] handle for builder-style chaining.
+	// Return the paired [`LlmProviderDefaults`] handle for builder-style chaining.
 	//
 	// Use for `.with_system_prompt(...)`, `.with_tools_json(...)`,
 	// `.with_response_format_json(...)`, or to hand the provider to an API
 	// expecting an opaque `Model`-shaped handle.
-	AsBase() *BaseProvider
+	AsBase() *LlmProviderDefaults
 	// Clone a voice from reference audio.
 	CloneVoice(request VoiceCloneRequest) (VoiceHandle, error)
 	// Perform a non-streaming chat completion. Applies any configured
@@ -7793,22 +9136,22 @@ type CustomProviderHandleInterface interface {
 // which applies any per-instance defaults attached via the builders before
 // forwarding to the underlying [`CustomProvider`].
 //
-// The paired [`BaseProvider`] handle returned by [`as_base`](Self::as_base)
+// The paired [`LlmProviderDefaults`] handle returned by [`as_base`](Self::as_base)
 // exposes builder-style completion-defaults customisation
 // (`with_system_prompt`, `with_tools_json`, ...).
 type CustomProviderHandle struct {
 	ffiObject FfiObject
 }
 
-// Return the paired [`BaseProvider`] handle for builder-style chaining.
+// Return the paired [`LlmProviderDefaults`] handle for builder-style chaining.
 //
 // Use for `.with_system_prompt(...)`, `.with_tools_json(...)`,
 // `.with_response_format_json(...)`, or to hand the provider to an API
 // expecting an opaque `Model`-shaped handle.
-func (_self *CustomProviderHandle) AsBase() *BaseProvider {
+func (_self *CustomProviderHandle) AsBase() *LlmProviderDefaults {
 	_pointer := _self.ffiObject.incrementPointer("*CustomProviderHandle")
 	defer _self.ffiObject.decrementPointer()
-	return FfiConverterBaseProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+	return FfiConverterLlmProviderDefaultsINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
 		return C.uniffi_blazen_uniffi_fn_method_customproviderhandle_as_base(
 			_pointer, _uniffiStatus)
 	}))
@@ -8653,6 +9996,1165 @@ func LowerToExternalEmbeddingModel(value *EmbeddingModel) uint64 {
 type FfiDestroyerEmbeddingModel struct{}
 
 func (_ FfiDestroyerEmbeddingModel) Destroy(value *EmbeddingModel) {
+	value.Destroy()
+}
+
+// Vector-embedding capability trait.
+//
+// `dimensions` is a synchronous metadata accessor — `#[async_trait]`
+// (used here for `embed`) tolerates sync methods alongside async
+// methods in the same trait body, matching the pattern used by
+// [`crate::provider_custom::CustomProvider`].
+type EmbeddingProviderInterface interface {
+	// Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+	ProviderId() string
+	// Capability bucket (always [`CapabilityKind::Embedding`] for this trait).
+	Capability() CapabilityKind
+	// Compute embedding vectors for each input string.
+	Embed(texts []string) ([][]float32, error)
+	// Return the dimensionality of vectors produced by [`embed`](Self::embed).
+	Dimensions() uint32
+}
+
+// Vector-embedding capability trait.
+//
+// `dimensions` is a synchronous metadata accessor — `#[async_trait]`
+// (used here for `embed`) tolerates sync methods alongside async
+// methods in the same trait body, matching the pattern used by
+// [`crate::provider_custom::CustomProvider`].
+type EmbeddingProvider struct {
+	ffiObject FfiObject
+}
+
+// Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+func (_self *EmbeddingProvider) ProviderId() string {
+	_pointer := _self.ffiObject.incrementPointer("*EmbeddingProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterStringINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_embeddingprovider_provider_id(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Capability bucket (always [`CapabilityKind::Embedding`] for this trait).
+func (_self *EmbeddingProvider) Capability() CapabilityKind {
+	_pointer := _self.ffiObject.incrementPointer("*EmbeddingProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterCapabilityKindINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_embeddingprovider_capability(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Compute embedding vectors for each input string.
+func (_self *EmbeddingProvider) Embed(texts []string) ([][]float32, error) {
+	_pointer := _self.ffiObject.incrementPointer("*EmbeddingProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) [][]float32 {
+			return FfiConverterSequenceSequenceFloat32INSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_embeddingprovider_embed(
+			_pointer, FfiConverterSequenceStringINSTANCE.Lower(texts)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Return the dimensionality of vectors produced by [`embed`](Self::embed).
+func (_self *EmbeddingProvider) Dimensions() uint32 {
+	_pointer := _self.ffiObject.incrementPointer("*EmbeddingProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUint32INSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint32_t {
+		return C.uniffi_blazen_uniffi_fn_method_embeddingprovider_dimensions(
+			_pointer, _uniffiStatus)
+	}))
+}
+func (object *EmbeddingProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterEmbeddingProvider struct{}
+
+var FfiConverterEmbeddingProviderINSTANCE = FfiConverterEmbeddingProvider{}
+
+func (c FfiConverterEmbeddingProvider) Lift(handle C.uint64_t) *EmbeddingProvider {
+	result := &EmbeddingProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_embeddingprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_embeddingprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*EmbeddingProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterEmbeddingProvider) Read(reader io.Reader) *EmbeddingProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterEmbeddingProvider) Lower(value *EmbeddingProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*EmbeddingProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterEmbeddingProvider) Write(writer io.Writer, value *EmbeddingProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalEmbeddingProvider(handle uint64) *EmbeddingProvider {
+	return FfiConverterEmbeddingProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalEmbeddingProvider(value *EmbeddingProvider) uint64 {
+	return uint64(FfiConverterEmbeddingProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerEmbeddingProvider struct{}
+
+func (_ FfiDestroyerEmbeddingProvider) Destroy(value *EmbeddingProvider) {
+	value.Destroy()
+}
+
+// Concrete TTS provider backed by the local F5-TTS engine.
+//
+// Wraps [`blazen_llm::providers::concrete::tts::F5Provider`].
+type F5ProviderInterface interface {
+	// Synthesize `text` into an audio payload.
+	Synthesize(text string, voice *string, language *string) (TtsResult, error)
+	// Synchronous variant of [`synthesize`](Self::synthesize).
+	SynthesizeBlocking(text string, voice *string, language *string) (TtsResult, error)
+}
+
+// Concrete TTS provider backed by the local F5-TTS engine.
+//
+// Wraps [`blazen_llm::providers::concrete::tts::F5Provider`].
+type F5Provider struct {
+	ffiObject FfiObject
+}
+
+// Construct an F5-TTS provider with default configuration.
+func NewF5Provider() *F5Provider {
+	return FfiConverterF5ProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_f5provider_new(_uniffiStatus)
+	}))
+}
+
+// Synthesize `text` into an audio payload.
+func (_self *F5Provider) Synthesize(text string, voice *string, language *string) (TtsResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*F5Provider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) TtsResult {
+			return FfiConverterTtsResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_f5provider_synthesize(
+			_pointer, FfiConverterStringINSTANCE.Lower(text), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`synthesize`](Self::synthesize).
+func (_self *F5Provider) SynthesizeBlocking(text string, voice *string, language *string) (TtsResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*F5Provider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_f5provider_synthesize_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(text), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue TtsResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterTtsResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *F5Provider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterF5Provider struct{}
+
+var FfiConverterF5ProviderINSTANCE = FfiConverterF5Provider{}
+
+func (c FfiConverterF5Provider) Lift(handle C.uint64_t) *F5Provider {
+	result := &F5Provider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_f5provider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_f5provider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*F5Provider).Destroy)
+	return result
+}
+
+func (c FfiConverterF5Provider) Read(reader io.Reader) *F5Provider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterF5Provider) Lower(value *F5Provider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*F5Provider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterF5Provider) Write(writer io.Writer, value *F5Provider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalF5Provider(handle uint64) *F5Provider {
+	return FfiConverterF5ProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalF5Provider(value *F5Provider) uint64 {
+	return uint64(FfiConverterF5ProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerF5Provider struct{}
+
+func (_ FfiDestroyerF5Provider) Destroy(value *F5Provider) {
+	value.Destroy()
+}
+
+// Concrete provider class for fal.ai's music + sfx endpoints.
+//
+// Wraps [`blazen_llm::providers::concrete::music::FalMusicProvider`].
+// Both `generate_music` and `generate_sfx` are routed through it
+// (fal's per-endpoint dispatch handles the underlying model selection).
+//
+// This type is part of the music concrete module, which is itself feature
+// -gated behind `audio-music-musicgen` — when MusicGen is disabled the
+// whole `concrete::music` module disappears, so fal.ai music callers fall
+// back to the central [`crate::compute_music::new_fal_music_model`]
+// factory which has no feature gate.
+type FalMusicProviderInterface interface {
+	// Generate `duration_seconds` of music conditioned on `prompt`.
+	GenerateMusic(prompt string, durationSeconds float32) (MusicResult, error)
+	// Synchronous variant of [`generate_music`](Self::generate_music).
+	GenerateMusicBlocking(prompt string, durationSeconds float32) (MusicResult, error)
+	// Generate `duration_seconds` of sound-effect audio conditioned on
+	// `prompt`.
+	GenerateSfx(prompt string, durationSeconds float32) (MusicResult, error)
+	// Synchronous variant of [`generate_sfx`](Self::generate_sfx).
+	GenerateSfxBlocking(prompt string, durationSeconds float32) (MusicResult, error)
+}
+
+// Concrete provider class for fal.ai's music + sfx endpoints.
+//
+// Wraps [`blazen_llm::providers::concrete::music::FalMusicProvider`].
+// Both `generate_music` and `generate_sfx` are routed through it
+// (fal's per-endpoint dispatch handles the underlying model selection).
+//
+// This type is part of the music concrete module, which is itself feature
+// -gated behind `audio-music-musicgen` — when MusicGen is disabled the
+// whole `concrete::music` module disappears, so fal.ai music callers fall
+// back to the central [`crate::compute_music::new_fal_music_model`]
+// factory which has no feature gate.
+type FalMusicProvider struct {
+	ffiObject FfiObject
+}
+
+// Build a new fal.ai-backed music provider.
+//
+// `api_key` may be empty when the provider resolves it from the
+// `FAL_KEY` environment variable.
+func NewFalMusicProvider(apiKey string) *FalMusicProvider {
+	return FfiConverterFalMusicProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_falmusicprovider_new(FfiConverterStringINSTANCE.Lower(apiKey), _uniffiStatus)
+	}))
+}
+
+// Generate `duration_seconds` of music conditioned on `prompt`.
+func (_self *FalMusicProvider) GenerateMusic(prompt string, durationSeconds float32) (MusicResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*FalMusicProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) MusicResult {
+			return FfiConverterMusicResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_falmusicprovider_generate_music(
+			_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterFloat32INSTANCE.Lower(durationSeconds)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`generate_music`](Self::generate_music).
+func (_self *FalMusicProvider) GenerateMusicBlocking(prompt string, durationSeconds float32) (MusicResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*FalMusicProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_falmusicprovider_generate_music_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterFloat32INSTANCE.Lower(durationSeconds), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue MusicResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterMusicResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Generate `duration_seconds` of sound-effect audio conditioned on
+// `prompt`.
+func (_self *FalMusicProvider) GenerateSfx(prompt string, durationSeconds float32) (MusicResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*FalMusicProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) MusicResult {
+			return FfiConverterMusicResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_falmusicprovider_generate_sfx(
+			_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterFloat32INSTANCE.Lower(durationSeconds)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`generate_sfx`](Self::generate_sfx).
+func (_self *FalMusicProvider) GenerateSfxBlocking(prompt string, durationSeconds float32) (MusicResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*FalMusicProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_falmusicprovider_generate_sfx_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterFloat32INSTANCE.Lower(durationSeconds), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue MusicResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterMusicResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *FalMusicProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterFalMusicProvider struct{}
+
+var FfiConverterFalMusicProviderINSTANCE = FfiConverterFalMusicProvider{}
+
+func (c FfiConverterFalMusicProvider) Lift(handle C.uint64_t) *FalMusicProvider {
+	result := &FalMusicProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_falmusicprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_falmusicprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*FalMusicProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterFalMusicProvider) Read(reader io.Reader) *FalMusicProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterFalMusicProvider) Lower(value *FalMusicProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*FalMusicProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterFalMusicProvider) Write(writer io.Writer, value *FalMusicProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalFalMusicProvider(handle uint64) *FalMusicProvider {
+	return FfiConverterFalMusicProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalFalMusicProvider(value *FalMusicProvider) uint64 {
+	return uint64(FfiConverterFalMusicProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerFalMusicProvider struct{}
+
+func (_ FfiDestroyerFalMusicProvider) Destroy(value *FalMusicProvider) {
+	value.Destroy()
+}
+
+// Hosted fal.ai speech-to-text provider.
+//
+// Thin wrapper around `blazen_llm::providers::concrete::stt::FalSttProvider`
+// that surfaces only the [`SttProvider`] capability. Construction is
+// cheap; the underlying fal client handles endpoint selection,
+// queueing, and result polling per call.
+type FalSttProviderInterface interface {
+	// Transcribe audio at `audio_source` and return the transcript.
+	//
+	// `audio_source` should be an `http(s)://` URL or a `data:` URI
+	// reachable by fal.ai's workers. `language` is an optional
+	// ISO-639-1 hint; when omitted fal performs language detection.
+	//
+	// # Errors
+	//
+	// Returns `BlazenError::Provider { kind: "SttTranscribe", ... }`
+	// on HTTP / fal queue / decoding errors.
+	Transcribe(audioSource string, language *string) (SttResult, error)
+	// Synchronous variant of [`transcribe`](Self::transcribe).
+	TranscribeBlocking(audioSource string, language *string) (SttResult, error)
+}
+
+// Hosted fal.ai speech-to-text provider.
+//
+// Thin wrapper around `blazen_llm::providers::concrete::stt::FalSttProvider`
+// that surfaces only the [`SttProvider`] capability. Construction is
+// cheap; the underlying fal client handles endpoint selection,
+// queueing, and result polling per call.
+type FalSttProvider struct {
+	ffiObject FfiObject
+}
+
+// Build a `FalSttProvider` with the given fal.ai API key.
+func NewFalSttProvider(apiKey string) *FalSttProvider {
+	return FfiConverterFalSttProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_falsttprovider_new(FfiConverterStringINSTANCE.Lower(apiKey), _uniffiStatus)
+	}))
+}
+
+// Transcribe audio at `audio_source` and return the transcript.
+//
+// `audio_source` should be an `http(s)://` URL or a `data:` URI
+// reachable by fal.ai's workers. `language` is an optional
+// ISO-639-1 hint; when omitted fal performs language detection.
+//
+// # Errors
+//
+// Returns `BlazenError::Provider { kind: "SttTranscribe", ... }`
+// on HTTP / fal queue / decoding errors.
+func (_self *FalSttProvider) Transcribe(audioSource string, language *string) (SttResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*FalSttProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) SttResult {
+			return FfiConverterSttResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_falsttprovider_transcribe(
+			_pointer, FfiConverterStringINSTANCE.Lower(audioSource), FfiConverterOptionalStringINSTANCE.Lower(language)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`transcribe`](Self::transcribe).
+func (_self *FalSttProvider) TranscribeBlocking(audioSource string, language *string) (SttResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*FalSttProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_falsttprovider_transcribe_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(audioSource), FfiConverterOptionalStringINSTANCE.Lower(language), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue SttResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterSttResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *FalSttProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterFalSttProvider struct{}
+
+var FfiConverterFalSttProviderINSTANCE = FfiConverterFalSttProvider{}
+
+func (c FfiConverterFalSttProvider) Lift(handle C.uint64_t) *FalSttProvider {
+	result := &FalSttProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_falsttprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_falsttprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*FalSttProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterFalSttProvider) Read(reader io.Reader) *FalSttProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterFalSttProvider) Lower(value *FalSttProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*FalSttProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterFalSttProvider) Write(writer io.Writer, value *FalSttProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalFalSttProvider(handle uint64) *FalSttProvider {
+	return FfiConverterFalSttProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalFalSttProvider(value *FalSttProvider) uint64 {
+	return uint64(FfiConverterFalSttProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerFalSttProvider struct{}
+
+func (_ FfiDestroyerFalSttProvider) Destroy(value *FalSttProvider) {
+	value.Destroy()
+}
+
+// Concrete TTS provider backed by fal.ai's hosted TTS endpoints.
+//
+// Wraps [`blazen_llm::providers::concrete::tts::FalTtsProvider`].
+type FalTtsProviderInterface interface {
+	// Synthesize `text` into an audio payload.
+	Synthesize(text string, voice *string, language *string) (TtsResult, error)
+	// Synchronous variant of [`synthesize`](Self::synthesize).
+	SynthesizeBlocking(text string, voice *string, language *string) (TtsResult, error)
+}
+
+// Concrete TTS provider backed by fal.ai's hosted TTS endpoints.
+//
+// Wraps [`blazen_llm::providers::concrete::tts::FalTtsProvider`].
+type FalTtsProvider struct {
+	ffiObject FfiObject
+}
+
+// Construct from a fal.ai API key. An empty `api_key` falls back to
+// the `FAL_KEY` environment variable.
+func NewFalTtsProvider(apiKey string) (*FalTtsProvider, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_falttsprovider_new(FfiConverterStringINSTANCE.Lower(apiKey), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *FalTtsProvider
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterFalTtsProviderINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Construct with an explicit default fal TTS endpoint
+// (e.g. `"fal-ai/dia-tts"`).
+func FalTtsProviderWithModel(apiKey string, defaultModel *string) (*FalTtsProvider, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_falttsprovider_with_model(FfiConverterStringINSTANCE.Lower(apiKey), FfiConverterOptionalStringINSTANCE.Lower(defaultModel), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *FalTtsProvider
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterFalTtsProviderINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Synthesize `text` into an audio payload.
+func (_self *FalTtsProvider) Synthesize(text string, voice *string, language *string) (TtsResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*FalTtsProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) TtsResult {
+			return FfiConverterTtsResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_falttsprovider_synthesize(
+			_pointer, FfiConverterStringINSTANCE.Lower(text), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`synthesize`](Self::synthesize).
+func (_self *FalTtsProvider) SynthesizeBlocking(text string, voice *string, language *string) (TtsResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*FalTtsProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_falttsprovider_synthesize_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(text), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue TtsResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterTtsResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *FalTtsProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterFalTtsProvider struct{}
+
+var FfiConverterFalTtsProviderINSTANCE = FfiConverterFalTtsProvider{}
+
+func (c FfiConverterFalTtsProvider) Lift(handle C.uint64_t) *FalTtsProvider {
+	result := &FalTtsProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_falttsprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_falttsprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*FalTtsProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterFalTtsProvider) Read(reader io.Reader) *FalTtsProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterFalTtsProvider) Lower(value *FalTtsProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*FalTtsProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterFalTtsProvider) Write(writer io.Writer, value *FalTtsProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalFalTtsProvider(handle uint64) *FalTtsProvider {
+	return FfiConverterFalTtsProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalFalTtsProvider(value *FalTtsProvider) uint64 {
+	return uint64(FfiConverterFalTtsProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerFalTtsProvider struct{}
+
+func (_ FfiDestroyerFalTtsProvider) Destroy(value *FalTtsProvider) {
+	value.Destroy()
+}
+
+// fal.ai-backed voice-conversion provider.
+//
+// Wraps [`blazen_llm::providers::concrete::vc::FalVcProvider`] which
+// routes requests through fal.ai's compute queue against the model id
+// supplied at construction time or per call (the upstream provider reads
+// `request.parameters.model` when present, else falls back to its built-in
+// default fal VC endpoint).
+//
+// Voice cloning and listing are not part of fal's stable cloud VC surface
+// today, so this FFI class only exposes `convert_voice` — the upstream
+// trait's default `Unsupported` impls for `clone_voice` / `list_voices`
+// would surface a sentinel error to foreign callers, which is worse UX
+// than the method just not existing.
+type FalVcProviderInterface interface {
+	// Convert the source utterance at `input_path` (an `http(s)://` /
+	// `data:` URL reachable by fal's workers) into the target voice
+	// `target_voice_id`.
+	//
+	// Unlike the native [`RvcProvider`], fal requires a URL — local file
+	// paths won't work since fal's workers can't reach the caller's
+	// disk. Pass a presigned / public URL or a `data:` URI.
+	//
+	// # Errors
+	//
+	// Returns `BlazenError::Provider { kind: "VcConvert", ... }` on HTTP
+	// / fal queue / endpoint-shape errors.
+	ConvertVoice(inputPath string, targetVoiceId string) (VcResult, error)
+	// Synchronous variant of [`convert_voice`](Self::convert_voice).
+	ConvertVoiceBlocking(inputPath string, targetVoiceId string) (VcResult, error)
+}
+
+// fal.ai-backed voice-conversion provider.
+//
+// Wraps [`blazen_llm::providers::concrete::vc::FalVcProvider`] which
+// routes requests through fal.ai's compute queue against the model id
+// supplied at construction time or per call (the upstream provider reads
+// `request.parameters.model` when present, else falls back to its built-in
+// default fal VC endpoint).
+//
+// Voice cloning and listing are not part of fal's stable cloud VC surface
+// today, so this FFI class only exposes `convert_voice` — the upstream
+// trait's default `Unsupported` impls for `clone_voice` / `list_voices`
+// would surface a sentinel error to foreign callers, which is worse UX
+// than the method just not existing.
+type FalVcProvider struct {
+	ffiObject FfiObject
+}
+
+// Build a fal.ai-backed VC provider with the given API key.
+//
+// `api_key` may be empty when the fal client resolves it from the
+// `FAL_KEY` environment variable.
+func NewFalVcProvider(apiKey string) *FalVcProvider {
+	return FfiConverterFalVcProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_falvcprovider_new(FfiConverterStringINSTANCE.Lower(apiKey), _uniffiStatus)
+	}))
+}
+
+// Convert the source utterance at `input_path` (an `http(s)://` /
+// `data:` URL reachable by fal's workers) into the target voice
+// `target_voice_id`.
+//
+// Unlike the native [`RvcProvider`], fal requires a URL — local file
+// paths won't work since fal's workers can't reach the caller's
+// disk. Pass a presigned / public URL or a `data:` URI.
+//
+// # Errors
+//
+// Returns `BlazenError::Provider { kind: "VcConvert", ... }` on HTTP
+// / fal queue / endpoint-shape errors.
+func (_self *FalVcProvider) ConvertVoice(inputPath string, targetVoiceId string) (VcResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*FalVcProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) VcResult {
+			return FfiConverterVcResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_falvcprovider_convert_voice(
+			_pointer, FfiConverterStringINSTANCE.Lower(inputPath), FfiConverterStringINSTANCE.Lower(targetVoiceId)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`convert_voice`](Self::convert_voice).
+func (_self *FalVcProvider) ConvertVoiceBlocking(inputPath string, targetVoiceId string) (VcResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*FalVcProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_falvcprovider_convert_voice_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(inputPath), FfiConverterStringINSTANCE.Lower(targetVoiceId), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue VcResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterVcResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *FalVcProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterFalVcProvider struct{}
+
+var FfiConverterFalVcProviderINSTANCE = FfiConverterFalVcProvider{}
+
+func (c FfiConverterFalVcProvider) Lift(handle C.uint64_t) *FalVcProvider {
+	result := &FalVcProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_falvcprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_falvcprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*FalVcProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterFalVcProvider) Read(reader io.Reader) *FalVcProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterFalVcProvider) Lower(value *FalVcProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*FalVcProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterFalVcProvider) Write(writer io.Writer, value *FalVcProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalFalVcProvider(handle uint64) *FalVcProvider {
+	return FfiConverterFalVcProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalFalVcProvider(value *FalVcProvider) uint64 {
+	return uint64(FfiConverterFalVcProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerFalVcProvider struct{}
+
+func (_ FfiDestroyerFalVcProvider) Destroy(value *FalVcProvider) {
+	value.Destroy()
+}
+
+// Local faster-whisper (`CTranslate2`) speech-to-text provider.
+//
+// Construct with [`FasterWhisperProvider::new`] (sync — cheap). The
+// ct2rs decoder is materialised lazily on the first transcribe call
+// (Hugging Face download + `CTranslate2` model load).
+type FasterWhisperProviderInterface interface {
+	// Transcribe audio at `audio_source` and return the transcript.
+	//
+	// See [`WhisperCppProvider::transcribe`] for the `audio_source` /
+	// `language` semantics.
+	//
+	// # Errors
+	//
+	// Returns `BlazenError::Provider { kind: "SttTranscribe", ... }`
+	// when the backend fails to load or transcribe.
+	Transcribe(audioSource string, language *string) (SttResult, error)
+	// Synchronous variant of [`transcribe`](Self::transcribe).
+	TranscribeBlocking(audioSource string, language *string) (SttResult, error)
+}
+
+// Local faster-whisper (`CTranslate2`) speech-to-text provider.
+//
+// Construct with [`FasterWhisperProvider::new`] (sync — cheap). The
+// ct2rs decoder is materialised lazily on the first transcribe call
+// (Hugging Face download + `CTranslate2` model load).
+type FasterWhisperProvider struct {
+	ffiObject FfiObject
+}
+
+// Build a `FasterWhisperProvider`.
+//
+// `model_id` selects a Hugging Face bundle id (default
+// `"Systran/faster-whisper-tiny"`). `model_dir` provides a pre-
+// resolved local `CTranslate2` bundle directory; when supplied the
+// HF download is skipped. `revision` pins a specific branch / tag /
+// commit on the HF repo (default `"main"`).
+func NewFasterWhisperProvider(modelId *string, modelDir *string, revision *string) *FasterWhisperProvider {
+	return FfiConverterFasterWhisperProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_fasterwhisperprovider_new(FfiConverterOptionalStringINSTANCE.Lower(modelId), FfiConverterOptionalStringINSTANCE.Lower(modelDir), FfiConverterOptionalStringINSTANCE.Lower(revision), _uniffiStatus)
+	}))
+}
+
+// Transcribe audio at `audio_source` and return the transcript.
+//
+// See [`WhisperCppProvider::transcribe`] for the `audio_source` /
+// `language` semantics.
+//
+// # Errors
+//
+// Returns `BlazenError::Provider { kind: "SttTranscribe", ... }`
+// when the backend fails to load or transcribe.
+func (_self *FasterWhisperProvider) Transcribe(audioSource string, language *string) (SttResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*FasterWhisperProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) SttResult {
+			return FfiConverterSttResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_fasterwhisperprovider_transcribe(
+			_pointer, FfiConverterStringINSTANCE.Lower(audioSource), FfiConverterOptionalStringINSTANCE.Lower(language)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`transcribe`](Self::transcribe).
+func (_self *FasterWhisperProvider) TranscribeBlocking(audioSource string, language *string) (SttResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*FasterWhisperProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_fasterwhisperprovider_transcribe_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(audioSource), FfiConverterOptionalStringINSTANCE.Lower(language), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue SttResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterSttResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *FasterWhisperProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterFasterWhisperProvider struct{}
+
+var FfiConverterFasterWhisperProviderINSTANCE = FfiConverterFasterWhisperProvider{}
+
+func (c FfiConverterFasterWhisperProvider) Lift(handle C.uint64_t) *FasterWhisperProvider {
+	result := &FasterWhisperProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_fasterwhisperprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_fasterwhisperprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*FasterWhisperProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterFasterWhisperProvider) Read(reader io.Reader) *FasterWhisperProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterFasterWhisperProvider) Lower(value *FasterWhisperProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*FasterWhisperProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterFasterWhisperProvider) Write(writer io.Writer, value *FasterWhisperProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalFasterWhisperProvider(handle uint64) *FasterWhisperProvider {
+	return FfiConverterFasterWhisperProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalFasterWhisperProvider(value *FasterWhisperProvider) uint64 {
+	return uint64(FfiConverterFasterWhisperProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerFasterWhisperProvider struct{}
+
+func (_ FfiDestroyerFasterWhisperProvider) Destroy(value *FasterWhisperProvider) {
 	value.Destroy()
 }
 
@@ -9711,6 +12213,697 @@ func LowerToExternalImageGenModel(value *ImageGenModel) uint64 {
 type FfiDestroyerImageGenModel struct{}
 
 func (_ FfiDestroyerImageGenModel) Destroy(value *ImageGenModel) {
+	value.Destroy()
+}
+
+// 2D image-generation capability trait.
+type ImageGenProviderInterface interface {
+	// Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+	ProviderId() string
+	// Capability bucket (always [`CapabilityKind::ImageGen`] for this trait).
+	Capability() CapabilityKind
+	// Generate one or more images from a text prompt.
+	GenerateImage(prompt string, width *uint32, height *uint32) (ImageGenResult, error)
+}
+
+// 2D image-generation capability trait.
+type ImageGenProvider struct {
+	ffiObject FfiObject
+}
+
+// Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+func (_self *ImageGenProvider) ProviderId() string {
+	_pointer := _self.ffiObject.incrementPointer("*ImageGenProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterStringINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_imagegenprovider_provider_id(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Capability bucket (always [`CapabilityKind::ImageGen`] for this trait).
+func (_self *ImageGenProvider) Capability() CapabilityKind {
+	_pointer := _self.ffiObject.incrementPointer("*ImageGenProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterCapabilityKindINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_imagegenprovider_capability(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Generate one or more images from a text prompt.
+func (_self *ImageGenProvider) GenerateImage(prompt string, width *uint32, height *uint32) (ImageGenResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ImageGenProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) ImageGenResult {
+			return FfiConverterImageGenResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_imagegenprovider_generate_image(
+			_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterOptionalUint32INSTANCE.Lower(width), FfiConverterOptionalUint32INSTANCE.Lower(height)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+func (object *ImageGenProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterImageGenProvider struct{}
+
+var FfiConverterImageGenProviderINSTANCE = FfiConverterImageGenProvider{}
+
+func (c FfiConverterImageGenProvider) Lift(handle C.uint64_t) *ImageGenProvider {
+	result := &ImageGenProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_imagegenprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_imagegenprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*ImageGenProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterImageGenProvider) Read(reader io.Reader) *ImageGenProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterImageGenProvider) Lower(value *ImageGenProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*ImageGenProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterImageGenProvider) Write(writer io.Writer, value *ImageGenProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalImageGenProvider(handle uint64) *ImageGenProvider {
+	return FfiConverterImageGenProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalImageGenProvider(value *ImageGenProvider) uint64 {
+	return uint64(FfiConverterImageGenProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerImageGenProvider struct{}
+
+func (_ FfiDestroyerImageGenProvider) Destroy(value *ImageGenProvider) {
+	value.Destroy()
+}
+
+// Concrete TTS provider backed by the local Kokoro-82M engine.
+//
+// Wraps [`blazen_llm::providers::concrete::tts::KokoroProvider`].
+type KokoroProviderInterface interface {
+	// Synthesize `text` into an audio payload.
+	Synthesize(text string, voice *string, language *string) (TtsResult, error)
+	// Synchronous variant of [`synthesize`](Self::synthesize).
+	SynthesizeBlocking(text string, voice *string, language *string) (TtsResult, error)
+}
+
+// Concrete TTS provider backed by the local Kokoro-82M engine.
+//
+// Wraps [`blazen_llm::providers::concrete::tts::KokoroProvider`].
+type KokoroProvider struct {
+	ffiObject FfiObject
+}
+
+// Construct with optional voice / language / sample-rate overrides.
+func NewKokoroProvider(voice *string, language *string, sampleRate *uint32) (*KokoroProvider, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_kokoroprovider_new(FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language), FfiConverterOptionalUint32INSTANCE.Lower(sampleRate), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *KokoroProvider
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterKokoroProviderINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Synthesize `text` into an audio payload.
+func (_self *KokoroProvider) Synthesize(text string, voice *string, language *string) (TtsResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*KokoroProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) TtsResult {
+			return FfiConverterTtsResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_kokoroprovider_synthesize(
+			_pointer, FfiConverterStringINSTANCE.Lower(text), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`synthesize`](Self::synthesize).
+func (_self *KokoroProvider) SynthesizeBlocking(text string, voice *string, language *string) (TtsResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*KokoroProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_kokoroprovider_synthesize_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(text), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue TtsResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterTtsResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *KokoroProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterKokoroProvider struct{}
+
+var FfiConverterKokoroProviderINSTANCE = FfiConverterKokoroProvider{}
+
+func (c FfiConverterKokoroProvider) Lift(handle C.uint64_t) *KokoroProvider {
+	result := &KokoroProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_kokoroprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_kokoroprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*KokoroProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterKokoroProvider) Read(reader io.Reader) *KokoroProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterKokoroProvider) Lower(value *KokoroProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*KokoroProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterKokoroProvider) Write(writer io.Writer, value *KokoroProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalKokoroProvider(handle uint64) *KokoroProvider {
+	return FfiConverterKokoroProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalKokoroProvider(value *KokoroProvider) uint64 {
+	return uint64(FfiConverterKokoroProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerKokoroProvider struct{}
+
+func (_ FfiDestroyerKokoroProvider) Destroy(value *KokoroProvider) {
+	value.Destroy()
+}
+
+// Large-language-model capability trait — non-streaming completion.
+//
+// Streaming completion uses the existing
+// [`crate::provider_custom::CustomProvider::stream`] surface
+// (foreign-implementable callback shape) and is not duplicated here.
+type LlmProviderInterface interface {
+	// Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+	ProviderId() string
+	// Capability bucket (always [`CapabilityKind::Llm`] for this trait).
+	Capability() CapabilityKind
+	// Perform a non-streaming chat / completion request.
+	Complete(request ModelRequest) (ModelResponse, error)
+}
+
+// Large-language-model capability trait — non-streaming completion.
+//
+// Streaming completion uses the existing
+// [`crate::provider_custom::CustomProvider::stream`] surface
+// (foreign-implementable callback shape) and is not duplicated here.
+type LlmProvider struct {
+	ffiObject FfiObject
+}
+
+// Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+func (_self *LlmProvider) ProviderId() string {
+	_pointer := _self.ffiObject.incrementPointer("*LlmProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterStringINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_llmprovider_provider_id(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Capability bucket (always [`CapabilityKind::Llm`] for this trait).
+func (_self *LlmProvider) Capability() CapabilityKind {
+	_pointer := _self.ffiObject.incrementPointer("*LlmProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterCapabilityKindINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_llmprovider_capability(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Perform a non-streaming chat / completion request.
+func (_self *LlmProvider) Complete(request ModelRequest) (ModelResponse, error) {
+	_pointer := _self.ffiObject.incrementPointer("*LlmProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) ModelResponse {
+			return FfiConverterModelResponseINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_llmprovider_complete(
+			_pointer, FfiConverterModelRequestINSTANCE.Lower(request)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+func (object *LlmProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterLlmProvider struct{}
+
+var FfiConverterLlmProviderINSTANCE = FfiConverterLlmProvider{}
+
+func (c FfiConverterLlmProvider) Lift(handle C.uint64_t) *LlmProvider {
+	result := &LlmProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_llmprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_llmprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*LlmProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterLlmProvider) Read(reader io.Reader) *LlmProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterLlmProvider) Lower(value *LlmProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*LlmProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterLlmProvider) Write(writer io.Writer, value *LlmProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalLlmProvider(handle uint64) *LlmProvider {
+	return FfiConverterLlmProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalLlmProvider(value *LlmProvider) uint64 {
+	return uint64(FfiConverterLlmProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerLlmProvider struct{}
+
+func (_ FfiDestroyerLlmProvider) Destroy(value *LlmProvider) {
+	value.Destroy()
+}
+
+// A [`crate::llm::Model`] wrapped with applied
+// [`ProviderDefaults`].
+//
+// Construct via [`LlmProviderDefaults::from_model`] (wraps an existing
+// model with no defaults) or [`LlmProviderDefaults::with_defaults`]
+// (wraps with explicit defaults). Mutate via the `with_*` builder methods.
+//
+// Phase B's `CustomProvider` factories will return `Arc<LlmProviderDefaults>`
+// directly; for Phase A this class is reachable by lifting any existing
+// `Model` factory result.
+type LlmProviderDefaultsInterface interface {
+	// Unwrap to a plain [`Model`] handle that applies the
+	// configured defaults on every call.
+	//
+	// Use this when you want to pass the wrapped provider to an API that
+	// takes a generic `Model` (the agent runner, workflow
+	// steps, etc.).
+	AsModel() *Model
+	// Inspect the currently-configured defaults (data only — hooks are
+	// not surfaced in Phase A).
+	Defaults() ProviderDefaults
+	// Extract structured output from the model by constraining its
+	// response to a JSON Schema.
+	//
+	// Mirrors the upstream
+	// [`blazen_llm::traits::StructuredOutput::extract`] blanket impl: the
+	// `schema_json` is injected as the request's `response_format` and
+	// the completion is dispatched as usual. Returns the model's raw
+	// content (which the foreign caller deserializes into its own typed
+	// shape — UniFFI cannot return a generic typed value across the FFI).
+	//
+	// `schema_json` must be a valid JSON Schema string; an empty string or
+	// malformed JSON falls back to `null` (the request is sent without a
+	// `response_format`).
+	Extract(schemaJson string, messages []ChatMessage) (string, error)
+	// The model id of the wrapped inner `Model`.
+	ModelId() string
+	// Replace the entire [`ProviderDefaults`] on this provider,
+	// returning a new `Arc<LlmProviderDefaults>` (clone-with-mutation).
+	WithDefaults(defaults ProviderDefaults) *LlmProviderDefaults
+	// Set the default `response_format` (JSON-encoded `serde_json::Value`).
+	//
+	// Malformed JSON or an empty string is treated as JSON null.
+	WithResponseFormatJson(fmtJson string) *LlmProviderDefaults
+	// Set the default system prompt.
+	WithSystemPrompt(prompt string) *LlmProviderDefaults
+	// Set the default tools (JSON-encoded `Vec<ToolDefinition>`).
+	//
+	// Malformed JSON is treated as an empty tool list — matching the
+	// upstream `#[derive(Default)]` semantics. Foreign callers should
+	// validate the JSON before sending it across the FFI.
+	WithToolsJson(toolsJson string) *LlmProviderDefaults
+}
+
+// A [`crate::llm::Model`] wrapped with applied
+// [`ProviderDefaults`].
+//
+// Construct via [`LlmProviderDefaults::from_model`] (wraps an existing
+// model with no defaults) or [`LlmProviderDefaults::with_defaults`]
+// (wraps with explicit defaults). Mutate via the `with_*` builder methods.
+//
+// Phase B's `CustomProvider` factories will return `Arc<LlmProviderDefaults>`
+// directly; for Phase A this class is reachable by lifting any existing
+// `Model` factory result.
+type LlmProviderDefaults struct {
+	ffiObject FfiObject
+}
+
+// Wrap an existing [`Model`] with empty defaults.
+//
+// Equivalent to using the wrapped model directly, but lets callers
+// attach defaults later via the `with_*` methods.
+func LlmProviderDefaultsFromModel(model *Model) *LlmProviderDefaults {
+	return FfiConverterLlmProviderDefaultsINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_llmproviderdefaults_from_model(FfiConverterModelINSTANCE.Lower(model), _uniffiStatus)
+	}))
+}
+
+// Wrap a [`Model`] with explicit
+// [`ProviderDefaults`].
+func LlmProviderDefaultsFromModelWithDefaults(model *Model, defaults ProviderDefaults) *LlmProviderDefaults {
+	return FfiConverterLlmProviderDefaultsINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_llmproviderdefaults_from_model_with_defaults(FfiConverterModelINSTANCE.Lower(model), FfiConverterProviderDefaultsINSTANCE.Lower(defaults), _uniffiStatus)
+	}))
+}
+
+// Unwrap to a plain [`Model`] handle that applies the
+// configured defaults on every call.
+//
+// Use this when you want to pass the wrapped provider to an API that
+// takes a generic `Model` (the agent runner, workflow
+// steps, etc.).
+func (_self *LlmProviderDefaults) AsModel() *Model {
+	_pointer := _self.ffiObject.incrementPointer("*LlmProviderDefaults")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_llmproviderdefaults_as_model(
+			_pointer, _uniffiStatus)
+	}))
+}
+
+// Inspect the currently-configured defaults (data only — hooks are
+// not surfaced in Phase A).
+func (_self *LlmProviderDefaults) Defaults() ProviderDefaults {
+	_pointer := _self.ffiObject.incrementPointer("*LlmProviderDefaults")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterProviderDefaultsINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_llmproviderdefaults_defaults(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Extract structured output from the model by constraining its
+// response to a JSON Schema.
+//
+// Mirrors the upstream
+// [`blazen_llm::traits::StructuredOutput::extract`] blanket impl: the
+// `schema_json` is injected as the request's `response_format` and
+// the completion is dispatched as usual. Returns the model's raw
+// content (which the foreign caller deserializes into its own typed
+// shape — UniFFI cannot return a generic typed value across the FFI).
+//
+// `schema_json` must be a valid JSON Schema string; an empty string or
+// malformed JSON falls back to `null` (the request is sent without a
+// `response_format`).
+func (_self *LlmProviderDefaults) Extract(schemaJson string, messages []ChatMessage) (string, error) {
+	_pointer := _self.ffiObject.incrementPointer("*LlmProviderDefaults")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) string {
+			return FfiConverterStringINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_llmproviderdefaults_extract(
+			_pointer, FfiConverterStringINSTANCE.Lower(schemaJson), FfiConverterSequenceChatMessageINSTANCE.Lower(messages)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// The model id of the wrapped inner `Model`.
+func (_self *LlmProviderDefaults) ModelId() string {
+	_pointer := _self.ffiObject.incrementPointer("*LlmProviderDefaults")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterStringINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_llmproviderdefaults_model_id(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Replace the entire [`ProviderDefaults`] on this provider,
+// returning a new `Arc<LlmProviderDefaults>` (clone-with-mutation).
+func (_self *LlmProviderDefaults) WithDefaults(defaults ProviderDefaults) *LlmProviderDefaults {
+	_pointer := _self.ffiObject.incrementPointer("*LlmProviderDefaults")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterLlmProviderDefaultsINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_llmproviderdefaults_with_defaults(
+			_pointer, FfiConverterProviderDefaultsINSTANCE.Lower(defaults), _uniffiStatus)
+	}))
+}
+
+// Set the default `response_format` (JSON-encoded `serde_json::Value`).
+//
+// Malformed JSON or an empty string is treated as JSON null.
+func (_self *LlmProviderDefaults) WithResponseFormatJson(fmtJson string) *LlmProviderDefaults {
+	_pointer := _self.ffiObject.incrementPointer("*LlmProviderDefaults")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterLlmProviderDefaultsINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_llmproviderdefaults_with_response_format_json(
+			_pointer, FfiConverterStringINSTANCE.Lower(fmtJson), _uniffiStatus)
+	}))
+}
+
+// Set the default system prompt.
+func (_self *LlmProviderDefaults) WithSystemPrompt(prompt string) *LlmProviderDefaults {
+	_pointer := _self.ffiObject.incrementPointer("*LlmProviderDefaults")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterLlmProviderDefaultsINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_llmproviderdefaults_with_system_prompt(
+			_pointer, FfiConverterStringINSTANCE.Lower(prompt), _uniffiStatus)
+	}))
+}
+
+// Set the default tools (JSON-encoded `Vec<ToolDefinition>`).
+//
+// Malformed JSON is treated as an empty tool list — matching the
+// upstream `#[derive(Default)]` semantics. Foreign callers should
+// validate the JSON before sending it across the FFI.
+func (_self *LlmProviderDefaults) WithToolsJson(toolsJson string) *LlmProviderDefaults {
+	_pointer := _self.ffiObject.incrementPointer("*LlmProviderDefaults")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterLlmProviderDefaultsINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_llmproviderdefaults_with_tools_json(
+			_pointer, FfiConverterStringINSTANCE.Lower(toolsJson), _uniffiStatus)
+	}))
+}
+func (object *LlmProviderDefaults) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterLlmProviderDefaults struct{}
+
+var FfiConverterLlmProviderDefaultsINSTANCE = FfiConverterLlmProviderDefaults{}
+
+func (c FfiConverterLlmProviderDefaults) Lift(handle C.uint64_t) *LlmProviderDefaults {
+	result := &LlmProviderDefaults{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_llmproviderdefaults(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_llmproviderdefaults(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*LlmProviderDefaults).Destroy)
+	return result
+}
+
+func (c FfiConverterLlmProviderDefaults) Read(reader io.Reader) *LlmProviderDefaults {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterLlmProviderDefaults) Lower(value *LlmProviderDefaults) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*LlmProviderDefaults")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterLlmProviderDefaults) Write(writer io.Writer, value *LlmProviderDefaults) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalLlmProviderDefaults(handle uint64) *LlmProviderDefaults {
+	return FfiConverterLlmProviderDefaultsINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalLlmProviderDefaults(value *LlmProviderDefaults) uint64 {
+	return uint64(FfiConverterLlmProviderDefaultsINSTANCE.Lower(value))
+}
+
+type FfiDestroyerLlmProviderDefaults struct{}
+
+func (_ FfiDestroyerLlmProviderDefaults) Destroy(value *LlmProviderDefaults) {
 	value.Destroy()
 }
 
@@ -11024,6 +14217,161 @@ func (_ FfiDestroyerModelClient) Destroy(value *ModelClient) {
 	value.Destroy()
 }
 
+// Concrete provider class for Meta's `MusicGen` text-to-music model.
+//
+// Wraps [`blazen_llm::providers::concrete::music::MusicGenProvider`].
+// Only `generate_music` is exposed — `MusicGen` is music-only and the
+// upstream trait's `generate_sfx` would surface `Unsupported`, so we omit
+// it from the FFI surface entirely.
+type MusicGenProviderInterface interface {
+	// Generate `duration_seconds` of music conditioned on `prompt`.
+	GenerateMusic(prompt string, durationSeconds float32) (MusicResult, error)
+	// Synchronous variant of [`generate_music`](Self::generate_music).
+	GenerateMusicBlocking(prompt string, durationSeconds float32) (MusicResult, error)
+}
+
+// Concrete provider class for Meta's `MusicGen` text-to-music model.
+//
+// Wraps [`blazen_llm::providers::concrete::music::MusicGenProvider`].
+// Only `generate_music` is exposed — `MusicGen` is music-only and the
+// upstream trait's `generate_sfx` would surface `Unsupported`, so we omit
+// it from the FFI surface entirely.
+type MusicGenProvider struct {
+	ffiObject FfiObject
+}
+
+// Build a new `MusicGen`-backed provider.
+//
+// `variant` selects the checkpoint (`"small"` / `"medium"` /
+// `"large"`, case-insensitive); unrecognised values default to
+// `Small`. `device` accepts `"cpu"`, `"cuda"`, `"cuda:N"`,
+// `"metal"`, or `"metal:N"`; `None` lets the backend auto-detect.
+// `cache_dir` overrides the Hugging Face Hub cache.
+// `max_duration_seconds` overrides the default 30 s per-call safety
+// cap.
+func NewMusicGenProvider(variant *string, device *string, cacheDir *string, maxDurationSeconds *float32) (*MusicGenProvider, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_musicgenprovider_new(FfiConverterOptionalStringINSTANCE.Lower(variant), FfiConverterOptionalStringINSTANCE.Lower(device), FfiConverterOptionalStringINSTANCE.Lower(cacheDir), FfiConverterOptionalFloat32INSTANCE.Lower(maxDurationSeconds), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *MusicGenProvider
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterMusicGenProviderINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Generate `duration_seconds` of music conditioned on `prompt`.
+func (_self *MusicGenProvider) GenerateMusic(prompt string, durationSeconds float32) (MusicResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*MusicGenProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) MusicResult {
+			return FfiConverterMusicResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_musicgenprovider_generate_music(
+			_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterFloat32INSTANCE.Lower(durationSeconds)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`generate_music`](Self::generate_music).
+func (_self *MusicGenProvider) GenerateMusicBlocking(prompt string, durationSeconds float32) (MusicResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*MusicGenProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_musicgenprovider_generate_music_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterFloat32INSTANCE.Lower(durationSeconds), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue MusicResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterMusicResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *MusicGenProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterMusicGenProvider struct{}
+
+var FfiConverterMusicGenProviderINSTANCE = FfiConverterMusicGenProvider{}
+
+func (c FfiConverterMusicGenProvider) Lift(handle C.uint64_t) *MusicGenProvider {
+	result := &MusicGenProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_musicgenprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_musicgenprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*MusicGenProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterMusicGenProvider) Read(reader io.Reader) *MusicGenProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterMusicGenProvider) Lower(value *MusicGenProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*MusicGenProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterMusicGenProvider) Write(writer io.Writer, value *MusicGenProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalMusicGenProvider(handle uint64) *MusicGenProvider {
+	return FfiConverterMusicGenProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalMusicGenProvider(value *MusicGenProvider) uint64 {
+	return uint64(FfiConverterMusicGenProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerMusicGenProvider struct{}
+
+func (_ FfiDestroyerMusicGenProvider) Destroy(value *MusicGenProvider) {
+	value.Destroy()
+}
+
 // A music / sound-effect generation model.
 //
 // Construct via one of the per-backend factory functions
@@ -11219,6 +14567,200 @@ func LowerToExternalMusicModel(value *MusicModel) uint64 {
 type FfiDestroyerMusicModel struct{}
 
 func (_ FfiDestroyerMusicModel) Destroy(value *MusicModel) {
+	value.Destroy()
+}
+
+// Text-to-music / text-to-sfx capability trait.
+//
+// Engines that only support music generation get the default
+// [`generate_sfx`](MusicProvider::generate_sfx) impl which surfaces
+// `Unsupported`. SFX-only engines override `generate_sfx` and inherit
+// the default `generate_music` (which also surfaces `Unsupported`).
+type MusicProviderInterface interface {
+	// Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+	ProviderId() string
+	// Capability bucket (always [`CapabilityKind::Music`] for this trait).
+	Capability() CapabilityKind
+	// Generate a music clip of approximately `duration_seconds`.
+	//
+	// Engines that do not support music generation surface
+	// `BlazenError::Unsupported` from the per-engine `impl` block
+	// (default trait bodies are not permitted by `#[uniffi::export]`).
+	GenerateMusic(prompt string, durationSeconds float32) (MusicResult, error)
+	// Generate a sound-effect clip of approximately `duration_seconds`.
+	//
+	// Engines that do not support SFX generation surface
+	// `BlazenError::Unsupported` from the per-engine `impl` block.
+	GenerateSfx(prompt string, durationSeconds float32) (MusicResult, error)
+}
+
+// Text-to-music / text-to-sfx capability trait.
+//
+// Engines that only support music generation get the default
+// [`generate_sfx`](MusicProvider::generate_sfx) impl which surfaces
+// `Unsupported`. SFX-only engines override `generate_sfx` and inherit
+// the default `generate_music` (which also surfaces `Unsupported`).
+type MusicProvider struct {
+	ffiObject FfiObject
+}
+
+// Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+func (_self *MusicProvider) ProviderId() string {
+	_pointer := _self.ffiObject.incrementPointer("*MusicProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterStringINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_musicprovider_provider_id(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Capability bucket (always [`CapabilityKind::Music`] for this trait).
+func (_self *MusicProvider) Capability() CapabilityKind {
+	_pointer := _self.ffiObject.incrementPointer("*MusicProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterCapabilityKindINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_musicprovider_capability(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Generate a music clip of approximately `duration_seconds`.
+//
+// Engines that do not support music generation surface
+// `BlazenError::Unsupported` from the per-engine `impl` block
+// (default trait bodies are not permitted by `#[uniffi::export]`).
+func (_self *MusicProvider) GenerateMusic(prompt string, durationSeconds float32) (MusicResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*MusicProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) MusicResult {
+			return FfiConverterMusicResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_musicprovider_generate_music(
+			_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterFloat32INSTANCE.Lower(durationSeconds)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Generate a sound-effect clip of approximately `duration_seconds`.
+//
+// Engines that do not support SFX generation surface
+// `BlazenError::Unsupported` from the per-engine `impl` block.
+func (_self *MusicProvider) GenerateSfx(prompt string, durationSeconds float32) (MusicResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*MusicProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) MusicResult {
+			return FfiConverterMusicResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_musicprovider_generate_sfx(
+			_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterFloat32INSTANCE.Lower(durationSeconds)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+func (object *MusicProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterMusicProvider struct{}
+
+var FfiConverterMusicProviderINSTANCE = FfiConverterMusicProvider{}
+
+func (c FfiConverterMusicProvider) Lift(handle C.uint64_t) *MusicProvider {
+	result := &MusicProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_musicprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_musicprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*MusicProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterMusicProvider) Read(reader io.Reader) *MusicProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterMusicProvider) Lower(value *MusicProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*MusicProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterMusicProvider) Write(writer io.Writer, value *MusicProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalMusicProvider(handle uint64) *MusicProvider {
+	return FfiConverterMusicProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalMusicProvider(value *MusicProvider) uint64 {
+	return uint64(FfiConverterMusicProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerMusicProvider struct{}
+
+func (_ FfiDestroyerMusicProvider) Destroy(value *MusicProvider) {
 	value.Destroy()
 }
 
@@ -12455,6 +15997,982 @@ func (_ FfiDestroyerPipelineBuilder) Destroy(value *PipelineBuilder) {
 	value.Destroy()
 }
 
+// Concrete TTS provider backed by the local Piper ONNX engine.
+//
+// Wraps [`blazen_llm::providers::concrete::tts::PiperProvider`].
+type PiperProviderInterface interface {
+	// Synthesize `text` into an audio payload.
+	Synthesize(text string, voice *string, language *string) (TtsResult, error)
+	// Synchronous variant of [`synthesize`](Self::synthesize) — blocks on
+	// the shared Tokio runtime.
+	SynthesizeBlocking(text string, voice *string, language *string) (TtsResult, error)
+}
+
+// Concrete TTS provider backed by the local Piper ONNX engine.
+//
+// Wraps [`blazen_llm::providers::concrete::tts::PiperProvider`].
+type PiperProvider struct {
+	ffiObject FfiObject
+}
+
+// Construct from a Piper voice id + already-resolved local file paths.
+//
+// `onnx_path` points at the `<voice>.onnx` weights; `config_path` is
+// the sidecar `<voice>.onnx.json` (pass `None` to derive automatically
+// by appending `.json` to the onnx path). `default_speaker_id` is
+// used at synthesis time when [`blazen_llm::compute::requests::SpeechRequest::voice`]
+// is `None` — typical for multi-speaker voices.
+func NewPiperProvider(voiceId string, onnxPath string, configPath *string, defaultSpeakerId *int64) (*PiperProvider, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_piperprovider_new(FfiConverterStringINSTANCE.Lower(voiceId), FfiConverterStringINSTANCE.Lower(onnxPath), FfiConverterOptionalStringINSTANCE.Lower(configPath), FfiConverterOptionalInt64INSTANCE.Lower(defaultSpeakerId), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *PiperProvider
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterPiperProviderINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Synthesize `text` into an audio payload.
+func (_self *PiperProvider) Synthesize(text string, voice *string, language *string) (TtsResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*PiperProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) TtsResult {
+			return FfiConverterTtsResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_piperprovider_synthesize(
+			_pointer, FfiConverterStringINSTANCE.Lower(text), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`synthesize`](Self::synthesize) — blocks on
+// the shared Tokio runtime.
+func (_self *PiperProvider) SynthesizeBlocking(text string, voice *string, language *string) (TtsResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*PiperProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_piperprovider_synthesize_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(text), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue TtsResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterTtsResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *PiperProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterPiperProvider struct{}
+
+var FfiConverterPiperProviderINSTANCE = FfiConverterPiperProvider{}
+
+func (c FfiConverterPiperProvider) Lift(handle C.uint64_t) *PiperProvider {
+	result := &PiperProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_piperprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_piperprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*PiperProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterPiperProvider) Read(reader io.Reader) *PiperProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterPiperProvider) Lower(value *PiperProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*PiperProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterPiperProvider) Write(writer io.Writer, value *PiperProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalPiperProvider(handle uint64) *PiperProvider {
+	return FfiConverterPiperProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalPiperProvider(value *PiperProvider) uint64 {
+	return uint64(FfiConverterPiperProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerPiperProvider struct{}
+
+func (_ FfiDestroyerPiperProvider) Destroy(value *PiperProvider) {
+	value.Destroy()
+}
+
+// Concrete TTS provider backed by the local Qwen3-TTS engine.
+//
+// Wraps [`blazen_llm::providers::concrete::tts::Qwen3TtsProvider`].
+type Qwen3TtsProviderInterface interface {
+	// Synthesize `text` into an audio payload.
+	Synthesize(text string, voice *string, language *string) (TtsResult, error)
+	// Synchronous variant of [`synthesize`](Self::synthesize).
+	SynthesizeBlocking(text string, voice *string, language *string) (TtsResult, error)
+}
+
+// Concrete TTS provider backed by the local Qwen3-TTS engine.
+//
+// Wraps [`blazen_llm::providers::concrete::tts::Qwen3TtsProvider`].
+type Qwen3TtsProvider struct {
+	ffiObject FfiObject
+}
+
+// Construct with optional voice / language / sample-rate overrides.
+func NewQwen3TtsProvider(voice *string, language *string, sampleRate *uint32) (*Qwen3TtsProvider, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_qwen3ttsprovider_new(FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language), FfiConverterOptionalUint32INSTANCE.Lower(sampleRate), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *Qwen3TtsProvider
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterQwen3TtsProviderINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Synthesize `text` into an audio payload.
+func (_self *Qwen3TtsProvider) Synthesize(text string, voice *string, language *string) (TtsResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*Qwen3TtsProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) TtsResult {
+			return FfiConverterTtsResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_qwen3ttsprovider_synthesize(
+			_pointer, FfiConverterStringINSTANCE.Lower(text), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`synthesize`](Self::synthesize).
+func (_self *Qwen3TtsProvider) SynthesizeBlocking(text string, voice *string, language *string) (TtsResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*Qwen3TtsProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_qwen3ttsprovider_synthesize_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(text), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue TtsResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterTtsResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *Qwen3TtsProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterQwen3TtsProvider struct{}
+
+var FfiConverterQwen3TtsProviderINSTANCE = FfiConverterQwen3TtsProvider{}
+
+func (c FfiConverterQwen3TtsProvider) Lift(handle C.uint64_t) *Qwen3TtsProvider {
+	result := &Qwen3TtsProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_qwen3ttsprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_qwen3ttsprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*Qwen3TtsProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterQwen3TtsProvider) Read(reader io.Reader) *Qwen3TtsProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterQwen3TtsProvider) Lower(value *Qwen3TtsProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*Qwen3TtsProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterQwen3TtsProvider) Write(writer io.Writer, value *Qwen3TtsProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalQwen3TtsProvider(handle uint64) *Qwen3TtsProvider {
+	return FfiConverterQwen3TtsProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalQwen3TtsProvider(value *Qwen3TtsProvider) uint64 {
+	return uint64(FfiConverterQwen3TtsProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerQwen3TtsProvider struct{}
+
+func (_ FfiDestroyerQwen3TtsProvider) Destroy(value *Qwen3TtsProvider) {
+	value.Destroy()
+}
+
+// Native Retrieval-based Voice Conversion (RVC) provider.
+//
+// Wraps [`blazen_llm::providers::concrete::vc::RvcProvider`] which itself
+// wraps `blazen_llm::RvcBackend`. Loads target-voice weights lazily from
+// the directory pointed to by the `BLAZEN_RVC_VOICE_DIR` environment
+// variable on the first `convert_voice` call. Defaults the inference
+// device to CPU; foreign callers needing CUDA / Metal should use the
+// central [`crate::compute_vc::new_rvc_model`] factory which exposes a
+// `device` parameter.
+type RvcProviderInterface interface {
+	// Register a new target voice from the reference utterance at
+	// `reference_path` under the backend-scoped identifier `voice_id`.
+	//
+	// After this returns, subsequent `convert_voice` calls can pass
+	// `voice_id` as their `target_voice_id`.
+	//
+	// # Errors
+	//
+	// Returns `BlazenError::Provider { kind: "VcClone", ... }` when
+	// the reference path is unreadable or registration fails.
+	CloneVoice(voiceId string, referencePath string) error
+	// Synchronous variant of [`clone_voice`](Self::clone_voice).
+	CloneVoiceBlocking(voiceId string, referencePath string) error
+	// Convert the source utterance at `input_path` into the registered
+	// target voice `target_voice_id`.
+	//
+	// `input_path` is a local filesystem path to the source audio
+	// (16-bit PCM mono WAV at the backend's expected source rate,
+	// typically 16 kHz). `target_voice_id` selects which voice profile
+	// under `$BLAZEN_RVC_VOICE_DIR` to render into.
+	//
+	// # Errors
+	//
+	// Returns `BlazenError::Provider { kind: "VcConvert", ... }` when
+	// the source path is unreadable, the voice profile is missing, or
+	// the conversion pipeline fails.
+	ConvertVoice(inputPath string, targetVoiceId string) (VcResult, error)
+	// Synchronous variant of [`convert_voice`](Self::convert_voice).
+	ConvertVoiceBlocking(inputPath string, targetVoiceId string) (VcResult, error)
+	// List the target voices currently known to the backend.
+	//
+	// # Errors
+	//
+	// Returns `BlazenError::Provider { kind: "VcListVoices", ... }`
+	// when the underlying backend's listing call fails.
+	ListTargetVoices() ([]TargetVoice, error)
+	// Synchronous variant of
+	// [`list_target_voices`](Self::list_target_voices).
+	ListTargetVoicesBlocking() ([]TargetVoice, error)
+}
+
+// Native Retrieval-based Voice Conversion (RVC) provider.
+//
+// Wraps [`blazen_llm::providers::concrete::vc::RvcProvider`] which itself
+// wraps `blazen_llm::RvcBackend`. Loads target-voice weights lazily from
+// the directory pointed to by the `BLAZEN_RVC_VOICE_DIR` environment
+// variable on the first `convert_voice` call. Defaults the inference
+// device to CPU; foreign callers needing CUDA / Metal should use the
+// central [`crate::compute_vc::new_rvc_model`] factory which exposes a
+// `device` parameter.
+type RvcProvider struct {
+	ffiObject FfiObject
+}
+
+// Build a new RVC-backed provider with the default CPU backend.
+//
+// Target voices are loaded lazily from `$BLAZEN_RVC_VOICE_DIR/<voice_id>/`
+// on the first `convert_voice` call.
+func NewRvcProvider() *RvcProvider {
+	return FfiConverterRvcProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_rvcprovider_new(_uniffiStatus)
+	}))
+}
+
+// Register a new target voice from the reference utterance at
+// `reference_path` under the backend-scoped identifier `voice_id`.
+//
+// After this returns, subsequent `convert_voice` calls can pass
+// `voice_id` as their `target_voice_id`.
+//
+// # Errors
+//
+// Returns `BlazenError::Provider { kind: "VcClone", ... }` when
+// the reference path is unreadable or registration fails.
+func (_self *RvcProvider) CloneVoice(voiceId string, referencePath string) error {
+	_pointer := _self.ffiObject.incrementPointer("*RvcProvider")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_rvcprovider_clone_voice(
+			_pointer, FfiConverterStringINSTANCE.Lower(voiceId), FfiConverterStringINSTANCE.Lower(referencePath)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+// Synchronous variant of [`clone_voice`](Self::clone_voice).
+func (_self *RvcProvider) CloneVoiceBlocking(voiceId string, referencePath string) error {
+	_pointer := _self.ffiObject.incrementPointer("*RvcProvider")
+	defer _self.ffiObject.decrementPointer()
+	_, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) bool {
+		C.uniffi_blazen_uniffi_fn_method_rvcprovider_clone_voice_blocking(
+			_pointer, FfiConverterStringINSTANCE.Lower(voiceId), FfiConverterStringINSTANCE.Lower(referencePath), _uniffiStatus)
+		return false
+	})
+	return _uniffiErr.AsError()
+}
+
+// Convert the source utterance at `input_path` into the registered
+// target voice `target_voice_id`.
+//
+// `input_path` is a local filesystem path to the source audio
+// (16-bit PCM mono WAV at the backend's expected source rate,
+// typically 16 kHz). `target_voice_id` selects which voice profile
+// under `$BLAZEN_RVC_VOICE_DIR` to render into.
+//
+// # Errors
+//
+// Returns `BlazenError::Provider { kind: "VcConvert", ... }` when
+// the source path is unreadable, the voice profile is missing, or
+// the conversion pipeline fails.
+func (_self *RvcProvider) ConvertVoice(inputPath string, targetVoiceId string) (VcResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*RvcProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) VcResult {
+			return FfiConverterVcResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_rvcprovider_convert_voice(
+			_pointer, FfiConverterStringINSTANCE.Lower(inputPath), FfiConverterStringINSTANCE.Lower(targetVoiceId)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`convert_voice`](Self::convert_voice).
+func (_self *RvcProvider) ConvertVoiceBlocking(inputPath string, targetVoiceId string) (VcResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*RvcProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_rvcprovider_convert_voice_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(inputPath), FfiConverterStringINSTANCE.Lower(targetVoiceId), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue VcResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterVcResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// List the target voices currently known to the backend.
+//
+// # Errors
+//
+// Returns `BlazenError::Provider { kind: "VcListVoices", ... }`
+// when the underlying backend's listing call fails.
+func (_self *RvcProvider) ListTargetVoices() ([]TargetVoice, error) {
+	_pointer := _self.ffiObject.incrementPointer("*RvcProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) []TargetVoice {
+			return FfiConverterSequenceTargetVoiceINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_rvcprovider_list_target_voices(
+			_pointer),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of
+// [`list_target_voices`](Self::list_target_voices).
+func (_self *RvcProvider) ListTargetVoicesBlocking() ([]TargetVoice, error) {
+	_pointer := _self.ffiObject.incrementPointer("*RvcProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_rvcprovider_list_target_voices_blocking(
+				_pointer, _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue []TargetVoice
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterSequenceTargetVoiceINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *RvcProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterRvcProvider struct{}
+
+var FfiConverterRvcProviderINSTANCE = FfiConverterRvcProvider{}
+
+func (c FfiConverterRvcProvider) Lift(handle C.uint64_t) *RvcProvider {
+	result := &RvcProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_rvcprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_rvcprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*RvcProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterRvcProvider) Read(reader io.Reader) *RvcProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterRvcProvider) Lower(value *RvcProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*RvcProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterRvcProvider) Write(writer io.Writer, value *RvcProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalRvcProvider(handle uint64) *RvcProvider {
+	return FfiConverterRvcProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalRvcProvider(value *RvcProvider) uint64 {
+	return uint64(FfiConverterRvcProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerRvcProvider struct{}
+
+func (_ FfiDestroyerRvcProvider) Destroy(value *RvcProvider) {
+	value.Destroy()
+}
+
+// Concrete TTS provider backed by the local Spark-TTS engine.
+//
+// Wraps [`blazen_llm::providers::concrete::tts::SparkTtsProvider`].
+// **CC-BY-NC-SA-4.0** — non-commercial use only.
+type SparkTtsProviderInterface interface {
+	// Synthesize `text` into an audio payload.
+	Synthesize(text string, voice *string, language *string) (TtsResult, error)
+	// Synchronous variant of [`synthesize`](Self::synthesize).
+	SynthesizeBlocking(text string, voice *string, language *string) (TtsResult, error)
+}
+
+// Concrete TTS provider backed by the local Spark-TTS engine.
+//
+// Wraps [`blazen_llm::providers::concrete::tts::SparkTtsProvider`].
+// **CC-BY-NC-SA-4.0** — non-commercial use only.
+type SparkTtsProvider struct {
+	ffiObject FfiObject
+}
+
+// Construct with optional model id / bundle dir / revision overrides.
+func NewSparkTtsProvider(modelId *string, modelDir *string, revision *string) *SparkTtsProvider {
+	return FfiConverterSparkTtsProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_sparkttsprovider_new(FfiConverterOptionalStringINSTANCE.Lower(modelId), FfiConverterOptionalStringINSTANCE.Lower(modelDir), FfiConverterOptionalStringINSTANCE.Lower(revision), _uniffiStatus)
+	}))
+}
+
+// Synthesize `text` into an audio payload.
+func (_self *SparkTtsProvider) Synthesize(text string, voice *string, language *string) (TtsResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*SparkTtsProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) TtsResult {
+			return FfiConverterTtsResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_sparkttsprovider_synthesize(
+			_pointer, FfiConverterStringINSTANCE.Lower(text), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`synthesize`](Self::synthesize).
+func (_self *SparkTtsProvider) SynthesizeBlocking(text string, voice *string, language *string) (TtsResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*SparkTtsProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_sparkttsprovider_synthesize_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(text), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue TtsResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterTtsResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *SparkTtsProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterSparkTtsProvider struct{}
+
+var FfiConverterSparkTtsProviderINSTANCE = FfiConverterSparkTtsProvider{}
+
+func (c FfiConverterSparkTtsProvider) Lift(handle C.uint64_t) *SparkTtsProvider {
+	result := &SparkTtsProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_sparkttsprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_sparkttsprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*SparkTtsProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterSparkTtsProvider) Read(reader io.Reader) *SparkTtsProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterSparkTtsProvider) Lower(value *SparkTtsProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*SparkTtsProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterSparkTtsProvider) Write(writer io.Writer, value *SparkTtsProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalSparkTtsProvider(handle uint64) *SparkTtsProvider {
+	return FfiConverterSparkTtsProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalSparkTtsProvider(value *SparkTtsProvider) uint64 {
+	return uint64(FfiConverterSparkTtsProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerSparkTtsProvider struct{}
+
+func (_ FfiDestroyerSparkTtsProvider) Destroy(value *SparkTtsProvider) {
+	value.Destroy()
+}
+
+// Concrete provider class for Stability AI's Stable Audio Open
+// text-to-audio model.
+//
+// Wraps [`blazen_llm::providers::concrete::music::StableAudioProvider`].
+// Stable Audio Open generates both music AND sfx, so both methods are
+// wired through. The constructor is async because Stable Audio loads its
+// weights at construction time — the sync `new_blocking` shim drives the
+// shared Tokio runtime for non-async callers.
+type StableAudioProviderInterface interface {
+	// Generate `duration_seconds` of music conditioned on `prompt`.
+	GenerateMusic(prompt string, durationSeconds float32) (MusicResult, error)
+	// Synchronous variant of [`generate_music`](Self::generate_music).
+	GenerateMusicBlocking(prompt string, durationSeconds float32) (MusicResult, error)
+	// Generate `duration_seconds` of sound-effect audio conditioned on
+	// `prompt`.
+	GenerateSfx(prompt string, durationSeconds float32) (MusicResult, error)
+	// Synchronous variant of [`generate_sfx`](Self::generate_sfx).
+	GenerateSfxBlocking(prompt string, durationSeconds float32) (MusicResult, error)
+}
+
+// Concrete provider class for Stability AI's Stable Audio Open
+// text-to-audio model.
+//
+// Wraps [`blazen_llm::providers::concrete::music::StableAudioProvider`].
+// Stable Audio Open generates both music AND sfx, so both methods are
+// wired through. The constructor is async because Stable Audio loads its
+// weights at construction time — the sync `new_blocking` shim drives the
+// shared Tokio runtime for non-async callers.
+type StableAudioProvider struct {
+	ffiObject FfiObject
+}
+
+// Build a new Stable Audio Open-backed provider.
+//
+// `variant` selects the checkpoint (`"small"`, `"open-1.0"` /
+// `"open1.0"` / `"open"` / `"1.0"`); unrecognised values default
+// to `Small`. `tokenizer_path` must point at the T5 `SentencePiece`
+// `tokenizer.json` shipped with the Stable Audio Open repo —
+// required because Stable Audio's tokenizer is not auto-downloaded.
+// `device` follows the same format as the other providers; `None`
+// defaults to CPU. `max_duration_seconds` is accepted for API
+// symmetry but Stable Audio enforces its own variant-dependent
+// ceiling internally.
+func NewStableAudioProvider(variant *string, tokenizerPath string, device *string, maxDurationSeconds *float32) (*StableAudioProvider, error) {
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+			res := C.ffi_blazen_uniffi_rust_future_complete_u64(handle, status)
+			return res
+		},
+		// liftFn
+		func(ffi C.uint64_t) *StableAudioProvider {
+			return FfiConverterStableAudioProviderINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_constructor_stableaudioprovider_new(FfiConverterOptionalStringINSTANCE.Lower(variant), FfiConverterStringINSTANCE.Lower(tokenizerPath), FfiConverterOptionalStringINSTANCE.Lower(device), FfiConverterOptionalFloat32INSTANCE.Lower(maxDurationSeconds)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_u64(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_u64(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Generate `duration_seconds` of music conditioned on `prompt`.
+func (_self *StableAudioProvider) GenerateMusic(prompt string, durationSeconds float32) (MusicResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*StableAudioProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) MusicResult {
+			return FfiConverterMusicResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_stableaudioprovider_generate_music(
+			_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterFloat32INSTANCE.Lower(durationSeconds)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`generate_music`](Self::generate_music).
+func (_self *StableAudioProvider) GenerateMusicBlocking(prompt string, durationSeconds float32) (MusicResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*StableAudioProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_stableaudioprovider_generate_music_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterFloat32INSTANCE.Lower(durationSeconds), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue MusicResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterMusicResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Generate `duration_seconds` of sound-effect audio conditioned on
+// `prompt`.
+func (_self *StableAudioProvider) GenerateSfx(prompt string, durationSeconds float32) (MusicResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*StableAudioProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) MusicResult {
+			return FfiConverterMusicResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_stableaudioprovider_generate_sfx(
+			_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterFloat32INSTANCE.Lower(durationSeconds)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`generate_sfx`](Self::generate_sfx).
+func (_self *StableAudioProvider) GenerateSfxBlocking(prompt string, durationSeconds float32) (MusicResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*StableAudioProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_stableaudioprovider_generate_sfx_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterFloat32INSTANCE.Lower(durationSeconds), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue MusicResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterMusicResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *StableAudioProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterStableAudioProvider struct{}
+
+var FfiConverterStableAudioProviderINSTANCE = FfiConverterStableAudioProvider{}
+
+func (c FfiConverterStableAudioProvider) Lift(handle C.uint64_t) *StableAudioProvider {
+	result := &StableAudioProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_stableaudioprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_stableaudioprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*StableAudioProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterStableAudioProvider) Read(reader io.Reader) *StableAudioProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterStableAudioProvider) Lower(value *StableAudioProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*StableAudioProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterStableAudioProvider) Write(writer io.Writer, value *StableAudioProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalStableAudioProvider(handle uint64) *StableAudioProvider {
+	return FfiConverterStableAudioProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalStableAudioProvider(value *StableAudioProvider) uint64 {
+	return uint64(FfiConverterStableAudioProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerStableAudioProvider struct{}
+
+func (_ FfiDestroyerStableAudioProvider) Destroy(value *StableAudioProvider) {
+	value.Destroy()
+}
+
 // Step handler implemented in foreign code (Go / Swift / Kotlin / Ruby).
 //
 // The Rust workflow engine calls `invoke` whenever an event matching the
@@ -12836,6 +17354,140 @@ func (_ FfiDestroyerSttModel) Destroy(value *SttModel) {
 	value.Destroy()
 }
 
+// Speech-to-text capability trait.
+type SttProviderInterface interface {
+	// Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+	ProviderId() string
+	// Capability bucket (always [`CapabilityKind::Stt`] for this trait).
+	Capability() CapabilityKind
+	// Transcribe the audio at `audio_source` (local path or URL) into
+	// text. `language` is an optional ISO-639 hint for the recognizer.
+	Transcribe(audioSource string, language *string) (SttResult, error)
+}
+
+// Speech-to-text capability trait.
+type SttProvider struct {
+	ffiObject FfiObject
+}
+
+// Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+func (_self *SttProvider) ProviderId() string {
+	_pointer := _self.ffiObject.incrementPointer("*SttProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterStringINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_sttprovider_provider_id(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Capability bucket (always [`CapabilityKind::Stt`] for this trait).
+func (_self *SttProvider) Capability() CapabilityKind {
+	_pointer := _self.ffiObject.incrementPointer("*SttProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterCapabilityKindINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_sttprovider_capability(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Transcribe the audio at `audio_source` (local path or URL) into
+// text. `language` is an optional ISO-639 hint for the recognizer.
+func (_self *SttProvider) Transcribe(audioSource string, language *string) (SttResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*SttProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) SttResult {
+			return FfiConverterSttResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_sttprovider_transcribe(
+			_pointer, FfiConverterStringINSTANCE.Lower(audioSource), FfiConverterOptionalStringINSTANCE.Lower(language)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+func (object *SttProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterSttProvider struct{}
+
+var FfiConverterSttProviderINSTANCE = FfiConverterSttProvider{}
+
+func (c FfiConverterSttProvider) Lift(handle C.uint64_t) *SttProvider {
+	result := &SttProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_sttprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_sttprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*SttProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterSttProvider) Read(reader io.Reader) *SttProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterSttProvider) Lower(value *SttProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*SttProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterSttProvider) Write(writer io.Writer, value *SttProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalSttProvider(handle uint64) *SttProvider {
+	return FfiConverterSttProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalSttProvider(value *SttProvider) uint64 {
+	return uint64(FfiConverterSttProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerSttProvider struct{}
+
+func (_ FfiDestroyerSttProvider) Destroy(value *SttProvider) {
+	value.Destroy()
+}
+
 // A native single-image-to-3D model handle.
 //
 // Construct via [`new_triposr_3d_model`] (local, feature-gated). Once
@@ -12977,6 +17629,336 @@ func LowerToExternalThreeDModel(value *ThreeDModel) uint64 {
 type FfiDestroyerThreeDModel struct{}
 
 func (_ FfiDestroyerThreeDModel) Destroy(value *ThreeDModel) {
+	value.Destroy()
+}
+
+// Image-to-3D mesh generation **and** post-processing capability trait.
+//
+// Implemented by every concrete 3D engine
+// (`TripoSrProvider`, `Compat3dProvider`) so foreign code can dispatch
+// the full 3D pipeline — generation plus the texturize / rig / refine
+// / animate post-processing stages — through a single `ThreeDProvider`
+// interface regardless of the backing engine.
+//
+// Engines that only cover one half of the pipeline surface
+// `BlazenError::Unsupported` from the other half (e.g. `TripoSrProvider`
+// is generation-only and returns `Unsupported` from `texturize`; the
+// HTTP-proxy `Compat3dProvider` is post-proc-only and returns
+// `Unsupported` from `generate_from_image`). UniFFI 0.31 forbids
+// default method bodies on exported traits, so the `Unsupported`
+// paths live in the per-engine `impl` blocks rather than the trait body.
+type ThreeDProviderInterface interface {
+	// Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+	ProviderId() string
+	// Capability bucket (always [`CapabilityKind::ThreeD`] for this trait).
+	Capability() CapabilityKind
+	// Generate a 3D mesh from a single image.
+	//
+	// Post-proc-only engines (e.g. the HTTP-proxy
+	// [`crate::concrete::three_d::Compat3dProvider`]) surface
+	// [`BlazenError::Unsupported`] from this method.
+	GenerateFromImage(imageBytes []byte, meshResolution uint32) (ThreeDGenerateResult, error)
+	// Apply or generate a texture / material for an existing mesh.
+	//
+	// Generation-only engines (e.g.
+	// [`crate::concrete::three_d::TripoSrProvider`]) surface
+	// [`BlazenError::Unsupported`] from this method.
+	Texturize(meshGlb []byte, request TexturizeRequest) (TexturizeResult, error)
+	// Auto-rig a mesh, producing a GLB with skeletal armature
+	// (and optional skin weights) embedded.
+	Rig(meshGlb []byte, request RigRequest) (RigResult, error)
+	// Refine a mesh: decimate, fill holes, unwrap UVs, retopologize, smooth.
+	Refine(meshGlb []byte, request RefineRequest) (RefineResult, error)
+	// Animate a rigged mesh from a text prompt, mocap clip, or driving video.
+	Animate(riggedGlb []byte, request AnimateRequest) (AnimateResult, error)
+}
+
+// Image-to-3D mesh generation **and** post-processing capability trait.
+//
+// Implemented by every concrete 3D engine
+// (`TripoSrProvider`, `Compat3dProvider`) so foreign code can dispatch
+// the full 3D pipeline — generation plus the texturize / rig / refine
+// / animate post-processing stages — through a single `ThreeDProvider`
+// interface regardless of the backing engine.
+//
+// Engines that only cover one half of the pipeline surface
+// `BlazenError::Unsupported` from the other half (e.g. `TripoSrProvider`
+// is generation-only and returns `Unsupported` from `texturize`; the
+// HTTP-proxy `Compat3dProvider` is post-proc-only and returns
+// `Unsupported` from `generate_from_image`). UniFFI 0.31 forbids
+// default method bodies on exported traits, so the `Unsupported`
+// paths live in the per-engine `impl` blocks rather than the trait body.
+type ThreeDProvider struct {
+	ffiObject FfiObject
+}
+
+// Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+func (_self *ThreeDProvider) ProviderId() string {
+	_pointer := _self.ffiObject.incrementPointer("*ThreeDProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterStringINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_threedprovider_provider_id(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Capability bucket (always [`CapabilityKind::ThreeD`] for this trait).
+func (_self *ThreeDProvider) Capability() CapabilityKind {
+	_pointer := _self.ffiObject.incrementPointer("*ThreeDProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterCapabilityKindINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_threedprovider_capability(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Generate a 3D mesh from a single image.
+//
+// Post-proc-only engines (e.g. the HTTP-proxy
+// [`crate::concrete::three_d::Compat3dProvider`]) surface
+// [`BlazenError::Unsupported`] from this method.
+func (_self *ThreeDProvider) GenerateFromImage(imageBytes []byte, meshResolution uint32) (ThreeDGenerateResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ThreeDProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) ThreeDGenerateResult {
+			return FfiConverterThreeDGenerateResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_threedprovider_generate_from_image(
+			_pointer, FfiConverterBytesINSTANCE.Lower(imageBytes), FfiConverterUint32INSTANCE.Lower(meshResolution)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Apply or generate a texture / material for an existing mesh.
+//
+// Generation-only engines (e.g.
+// [`crate::concrete::three_d::TripoSrProvider`]) surface
+// [`BlazenError::Unsupported`] from this method.
+func (_self *ThreeDProvider) Texturize(meshGlb []byte, request TexturizeRequest) (TexturizeResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ThreeDProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) TexturizeResult {
+			return FfiConverterTexturizeResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_threedprovider_texturize(
+			_pointer, FfiConverterBytesINSTANCE.Lower(meshGlb), FfiConverterTexturizeRequestINSTANCE.Lower(request)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Auto-rig a mesh, producing a GLB with skeletal armature
+// (and optional skin weights) embedded.
+func (_self *ThreeDProvider) Rig(meshGlb []byte, request RigRequest) (RigResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ThreeDProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) RigResult {
+			return FfiConverterRigResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_threedprovider_rig(
+			_pointer, FfiConverterBytesINSTANCE.Lower(meshGlb), FfiConverterRigRequestINSTANCE.Lower(request)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Refine a mesh: decimate, fill holes, unwrap UVs, retopologize, smooth.
+func (_self *ThreeDProvider) Refine(meshGlb []byte, request RefineRequest) (RefineResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ThreeDProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) RefineResult {
+			return FfiConverterRefineResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_threedprovider_refine(
+			_pointer, FfiConverterBytesINSTANCE.Lower(meshGlb), FfiConverterRefineRequestINSTANCE.Lower(request)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Animate a rigged mesh from a text prompt, mocap clip, or driving video.
+func (_self *ThreeDProvider) Animate(riggedGlb []byte, request AnimateRequest) (AnimateResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*ThreeDProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) AnimateResult {
+			return FfiConverterAnimateResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_threedprovider_animate(
+			_pointer, FfiConverterBytesINSTANCE.Lower(riggedGlb), FfiConverterAnimateRequestINSTANCE.Lower(request)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+func (object *ThreeDProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterThreeDProvider struct{}
+
+var FfiConverterThreeDProviderINSTANCE = FfiConverterThreeDProvider{}
+
+func (c FfiConverterThreeDProvider) Lift(handle C.uint64_t) *ThreeDProvider {
+	result := &ThreeDProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_threedprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_threedprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*ThreeDProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterThreeDProvider) Read(reader io.Reader) *ThreeDProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterThreeDProvider) Lower(value *ThreeDProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*ThreeDProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterThreeDProvider) Write(writer io.Writer, value *ThreeDProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalThreeDProvider(handle uint64) *ThreeDProvider {
+	return FfiConverterThreeDProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalThreeDProvider(value *ThreeDProvider) uint64 {
+	return uint64(FfiConverterThreeDProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerThreeDProvider struct{}
+
+func (_ FfiDestroyerThreeDProvider) Destroy(value *ThreeDProvider) {
 	value.Destroy()
 }
 
@@ -13272,6 +18254,194 @@ func (c FfiConverterToolHandler) register() {
 	C.uniffi_blazen_uniffi_fn_init_callback_vtable_toolhandler(&UniffiVTableCallbackInterfaceToolHandlerINSTANCE)
 }
 
+// `TripoSR` single-image-to-3D provider.
+//
+// Wraps [`blazen_llm::providers::concrete::three_d::TripoSrProvider`]
+// (the candle-runtime `TripoSrBackend` newtype + `ProviderMetadata`
+// stamp). Construction loads the weights — either from `weights_path`
+// (local directory) or by downloading from a Hugging Face repo
+// (defaulting to `"stabilityai/TripoSR"`).
+//
+// Generation-only: the texturize / rig / refine / animate post-proc
+// methods on the polymorphic [`crate::concrete::bases::ThreeDProvider`]
+// trait surface [`crate::errors::BlazenError::Unsupported`] — pipe the
+// generated GLB through [`Compat3dProvider`] (or another post-proc
+// backend) to apply textures / armature / refinement / motion.
+type TripoSrProviderInterface interface {
+	// Generate a 3D mesh from a single input image.
+	//
+	// `image_bytes` is encoded PNG or JPEG payload, encoded as a
+	// `data:` URI for the upstream `ThreeDGeneration` impl (which
+	// expects an `image_url`). `mesh_resolution` controls the side
+	// length of the density grid sampled from the triplane during
+	// marching cubes; `256` matches the upstream TripoSR reference.
+	GenerateFromImage(imageBytes []byte, meshResolution uint32) (ThreeDGenerateResult, error)
+	// Synchronous variant of
+	// [`generate_from_image`](Self::generate_from_image).
+	GenerateFromImageBlocking(imageBytes []byte, meshResolution uint32) (ThreeDGenerateResult, error)
+}
+
+// `TripoSR` single-image-to-3D provider.
+//
+// Wraps [`blazen_llm::providers::concrete::three_d::TripoSrProvider`]
+// (the candle-runtime `TripoSrBackend` newtype + `ProviderMetadata`
+// stamp). Construction loads the weights — either from `weights_path`
+// (local directory) or by downloading from a Hugging Face repo
+// (defaulting to `"stabilityai/TripoSR"`).
+//
+// Generation-only: the texturize / rig / refine / animate post-proc
+// methods on the polymorphic [`crate::concrete::bases::ThreeDProvider`]
+// trait surface [`crate::errors::BlazenError::Unsupported`] — pipe the
+// generated GLB through [`Compat3dProvider`] (or another post-proc
+// backend) to apply textures / armature / refinement / motion.
+type TripoSrProvider struct {
+	ffiObject FfiObject
+}
+
+// Construct a `TripoSR` provider.
+//
+// - `hf_repo_id`: HuggingFace repo to fetch weights from.
+// Defaults to `"stabilityai/TripoSR"` when `None`.
+// - `revision`: optional branch / tag / commit pin on
+// `hf_repo_id`.
+// - `weights_path`: pre-resolved local weights directory. When
+// supplied, the HF download is skipped entirely.
+//
+// The underlying `TripoSrProvider::new` is async (it may download
+// weights from Hugging Face). UniFFI constructors are sync, so
+// we drive it through the shared tokio [`runtime`] — matching
+// the `new_triposr_3d_model` factory pattern in
+// [`crate::compute`].
+func NewTripoSrProvider(hfRepoId *string, revision *string, weightsPath *string) (*TripoSrProvider, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_triposrprovider_new(FfiConverterOptionalStringINSTANCE.Lower(hfRepoId), FfiConverterOptionalStringINSTANCE.Lower(revision), FfiConverterOptionalStringINSTANCE.Lower(weightsPath), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *TripoSrProvider
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterTripoSrProviderINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Generate a 3D mesh from a single input image.
+//
+// `image_bytes` is encoded PNG or JPEG payload, encoded as a
+// `data:` URI for the upstream `ThreeDGeneration` impl (which
+// expects an `image_url`). `mesh_resolution` controls the side
+// length of the density grid sampled from the triplane during
+// marching cubes; `256` matches the upstream TripoSR reference.
+func (_self *TripoSrProvider) GenerateFromImage(imageBytes []byte, meshResolution uint32) (ThreeDGenerateResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*TripoSrProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) ThreeDGenerateResult {
+			return FfiConverterThreeDGenerateResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_triposrprovider_generate_from_image(
+			_pointer, FfiConverterBytesINSTANCE.Lower(imageBytes), FfiConverterUint32INSTANCE.Lower(meshResolution)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of
+// [`generate_from_image`](Self::generate_from_image).
+func (_self *TripoSrProvider) GenerateFromImageBlocking(imageBytes []byte, meshResolution uint32) (ThreeDGenerateResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*TripoSrProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_triposrprovider_generate_from_image_blocking(
+				_pointer, FfiConverterBytesINSTANCE.Lower(imageBytes), FfiConverterUint32INSTANCE.Lower(meshResolution), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue ThreeDGenerateResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterThreeDGenerateResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *TripoSrProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterTripoSrProvider struct{}
+
+var FfiConverterTripoSrProviderINSTANCE = FfiConverterTripoSrProvider{}
+
+func (c FfiConverterTripoSrProvider) Lift(handle C.uint64_t) *TripoSrProvider {
+	result := &TripoSrProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_triposrprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_triposrprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*TripoSrProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterTripoSrProvider) Read(reader io.Reader) *TripoSrProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterTripoSrProvider) Lower(value *TripoSrProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*TripoSrProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterTripoSrProvider) Write(writer io.Writer, value *TripoSrProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalTripoSrProvider(handle uint64) *TripoSrProvider {
+	return FfiConverterTripoSrProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalTripoSrProvider(value *TripoSrProvider) uint64 {
+	return uint64(FfiConverterTripoSrProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerTripoSrProvider struct{}
+
+func (_ FfiDestroyerTripoSrProvider) Destroy(value *TripoSrProvider) {
+	value.Destroy()
+}
+
 // A text-to-speech model.
 //
 // Construct via [`new_piper_tts_model`] (local, feature-gated) or
@@ -13415,6 +18585,152 @@ func LowerToExternalTtsModel(value *TtsModel) uint64 {
 type FfiDestroyerTtsModel struct{}
 
 func (_ FfiDestroyerTtsModel) Destroy(value *TtsModel) {
+	value.Destroy()
+}
+
+// Text-to-speech capability trait.
+//
+// Implemented by every concrete TTS engine
+// (`PiperProvider`, `KokoroProvider`, `VibeVoiceProvider`,
+// `Qwen3TtsProvider`, `SparkTtsProvider`, `BarkProvider`, `F5Provider`,
+// `FalTtsProvider`) so foreign code can dispatch synthesis through a
+// single `TtsProvider` interface regardless of the backing engine.
+type TtsProviderInterface interface {
+	// Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+	ProviderId() string
+	// Capability bucket (always [`CapabilityKind::Tts`] for this trait;
+	// duplicated for binding-surface uniformity).
+	Capability() CapabilityKind
+	// Synthesize `text` into an audio payload.
+	Synthesize(text string, voice *string, language *string) (TtsResult, error)
+}
+
+// Text-to-speech capability trait.
+//
+// Implemented by every concrete TTS engine
+// (`PiperProvider`, `KokoroProvider`, `VibeVoiceProvider`,
+// `Qwen3TtsProvider`, `SparkTtsProvider`, `BarkProvider`, `F5Provider`,
+// `FalTtsProvider`) so foreign code can dispatch synthesis through a
+// single `TtsProvider` interface regardless of the backing engine.
+type TtsProvider struct {
+	ffiObject FfiObject
+}
+
+// Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+func (_self *TtsProvider) ProviderId() string {
+	_pointer := _self.ffiObject.incrementPointer("*TtsProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterStringINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_ttsprovider_provider_id(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Capability bucket (always [`CapabilityKind::Tts`] for this trait;
+// duplicated for binding-surface uniformity).
+func (_self *TtsProvider) Capability() CapabilityKind {
+	_pointer := _self.ffiObject.incrementPointer("*TtsProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterCapabilityKindINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_ttsprovider_capability(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Synthesize `text` into an audio payload.
+func (_self *TtsProvider) Synthesize(text string, voice *string, language *string) (TtsResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*TtsProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) TtsResult {
+			return FfiConverterTtsResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_ttsprovider_synthesize(
+			_pointer, FfiConverterStringINSTANCE.Lower(text), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+func (object *TtsProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterTtsProvider struct{}
+
+var FfiConverterTtsProviderINSTANCE = FfiConverterTtsProvider{}
+
+func (c FfiConverterTtsProvider) Lift(handle C.uint64_t) *TtsProvider {
+	result := &TtsProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_ttsprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_ttsprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*TtsProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterTtsProvider) Read(reader io.Reader) *TtsProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterTtsProvider) Lower(value *TtsProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*TtsProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterTtsProvider) Write(writer io.Writer, value *TtsProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalTtsProvider(handle uint64) *TtsProvider {
+	return FfiConverterTtsProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalTtsProvider(value *TtsProvider) uint64 {
+	return uint64(FfiConverterTtsProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerTtsProvider struct{}
+
+func (_ FfiDestroyerTtsProvider) Destroy(value *TtsProvider) {
 	value.Destroy()
 }
 
@@ -14905,6 +20221,226 @@ func (_ FfiDestroyerVcModel) Destroy(value *VcModel) {
 	value.Destroy()
 }
 
+// Voice-conversion capability trait.
+type VcProviderInterface interface {
+	// Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+	ProviderId() string
+	// Capability bucket (always [`CapabilityKind::Vc`] for this trait).
+	Capability() CapabilityKind
+	// Convert `input_path` (a source utterance) into the voice
+	// identified by `target_voice_id`.
+	ConvertVoice(inputPath string, targetVoiceId string) (VcResult, error)
+	// Register a new target voice from a reference audio file.
+	//
+	// Engines that do not support cloning surface
+	// `BlazenError::Unsupported` from the per-engine `impl` block
+	// (default trait bodies are not permitted by `#[uniffi::export]`).
+	CloneVoice(voiceId string, referencePath string) error
+	// List the target voices known to this backend.
+	//
+	// Engines without an enumerable voice library return an empty
+	// `Vec` from the per-engine `impl` block.
+	ListTargetVoices() ([]TargetVoice, error)
+}
+
+// Voice-conversion capability trait.
+type VcProvider struct {
+	ffiObject FfiObject
+}
+
+// Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+func (_self *VcProvider) ProviderId() string {
+	_pointer := _self.ffiObject.incrementPointer("*VcProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterStringINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_vcprovider_provider_id(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Capability bucket (always [`CapabilityKind::Vc`] for this trait).
+func (_self *VcProvider) Capability() CapabilityKind {
+	_pointer := _self.ffiObject.incrementPointer("*VcProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterCapabilityKindINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_vcprovider_capability(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Convert `input_path` (a source utterance) into the voice
+// identified by `target_voice_id`.
+func (_self *VcProvider) ConvertVoice(inputPath string, targetVoiceId string) (VcResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*VcProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) VcResult {
+			return FfiConverterVcResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_vcprovider_convert_voice(
+			_pointer, FfiConverterStringINSTANCE.Lower(inputPath), FfiConverterStringINSTANCE.Lower(targetVoiceId)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Register a new target voice from a reference audio file.
+//
+// Engines that do not support cloning surface
+// `BlazenError::Unsupported` from the per-engine `impl` block
+// (default trait bodies are not permitted by `#[uniffi::export]`).
+func (_self *VcProvider) CloneVoice(voiceId string, referencePath string) error {
+	_pointer := _self.ffiObject.incrementPointer("*VcProvider")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_vcprovider_clone_voice(
+			_pointer, FfiConverterStringINSTANCE.Lower(voiceId), FfiConverterStringINSTANCE.Lower(referencePath)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+// List the target voices known to this backend.
+//
+// Engines without an enumerable voice library return an empty
+// `Vec` from the per-engine `impl` block.
+func (_self *VcProvider) ListTargetVoices() ([]TargetVoice, error) {
+	_pointer := _self.ffiObject.incrementPointer("*VcProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) []TargetVoice {
+			return FfiConverterSequenceTargetVoiceINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_vcprovider_list_target_voices(
+			_pointer),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+func (object *VcProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterVcProvider struct{}
+
+var FfiConverterVcProviderINSTANCE = FfiConverterVcProvider{}
+
+func (c FfiConverterVcProvider) Lift(handle C.uint64_t) *VcProvider {
+	result := &VcProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_vcprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_vcprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*VcProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterVcProvider) Read(reader io.Reader) *VcProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterVcProvider) Lower(value *VcProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*VcProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterVcProvider) Write(writer io.Writer, value *VcProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalVcProvider(handle uint64) *VcProvider {
+	return FfiConverterVcProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalVcProvider(value *VcProvider) uint64 {
+	return uint64(FfiConverterVcProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerVcProvider struct{}
+
+func (_ FfiDestroyerVcProvider) Destroy(value *VcProvider) {
+	value.Destroy()
+}
+
 // Sink for streaming voice-conversion output, implemented in foreign
 // code.
 //
@@ -15318,6 +20854,494 @@ func blazen_uniffi_compute_vc_cgo_dispatchCallbackInterfaceVcStreamSinkClone(han
 
 func (c FfiConverterVcStreamSink) register() {
 	C.uniffi_blazen_uniffi_fn_init_callback_vtable_vcstreamsink(&UniffiVTableCallbackInterfaceVcStreamSinkINSTANCE)
+}
+
+// Concrete TTS provider backed by the local VibeVoice engine.
+//
+// Wraps [`blazen_llm::providers::concrete::tts::VibeVoiceProvider`].
+type VibeVoiceProviderInterface interface {
+	// Synthesize `text` into an audio payload.
+	Synthesize(text string, voice *string, language *string) (TtsResult, error)
+	// Synchronous variant of [`synthesize`](Self::synthesize).
+	SynthesizeBlocking(text string, voice *string, language *string) (TtsResult, error)
+}
+
+// Concrete TTS provider backed by the local VibeVoice engine.
+//
+// Wraps [`blazen_llm::providers::concrete::tts::VibeVoiceProvider`].
+type VibeVoiceProvider struct {
+	ffiObject FfiObject
+}
+
+// Construct with optional voice / language / sample-rate overrides.
+func NewVibeVoiceProvider(voice *string, language *string, sampleRate *uint32) (*VibeVoiceProvider, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_vibevoiceprovider_new(FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language), FfiConverterOptionalUint32INSTANCE.Lower(sampleRate), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *VibeVoiceProvider
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterVibeVoiceProviderINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Synthesize `text` into an audio payload.
+func (_self *VibeVoiceProvider) Synthesize(text string, voice *string, language *string) (TtsResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*VibeVoiceProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) TtsResult {
+			return FfiConverterTtsResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_vibevoiceprovider_synthesize(
+			_pointer, FfiConverterStringINSTANCE.Lower(text), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`synthesize`](Self::synthesize).
+func (_self *VibeVoiceProvider) SynthesizeBlocking(text string, voice *string, language *string) (TtsResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*VibeVoiceProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_vibevoiceprovider_synthesize_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(text), FfiConverterOptionalStringINSTANCE.Lower(voice), FfiConverterOptionalStringINSTANCE.Lower(language), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue TtsResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterTtsResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *VibeVoiceProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterVibeVoiceProvider struct{}
+
+var FfiConverterVibeVoiceProviderINSTANCE = FfiConverterVibeVoiceProvider{}
+
+func (c FfiConverterVibeVoiceProvider) Lift(handle C.uint64_t) *VibeVoiceProvider {
+	result := &VibeVoiceProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_vibevoiceprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_vibevoiceprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*VibeVoiceProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterVibeVoiceProvider) Read(reader io.Reader) *VibeVoiceProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterVibeVoiceProvider) Lower(value *VibeVoiceProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*VibeVoiceProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterVibeVoiceProvider) Write(writer io.Writer, value *VibeVoiceProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalVibeVoiceProvider(handle uint64) *VibeVoiceProvider {
+	return FfiConverterVibeVoiceProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalVibeVoiceProvider(value *VibeVoiceProvider) uint64 {
+	return uint64(FfiConverterVibeVoiceProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerVibeVoiceProvider struct{}
+
+func (_ FfiDestroyerVibeVoiceProvider) Destroy(value *VibeVoiceProvider) {
+	value.Destroy()
+}
+
+// Local whisper.cpp speech-to-text provider.
+//
+// Construct with [`WhisperCppProvider::new`] (sync — option validation
+// only; weight loading is lazy on the first transcribe call). Use
+// [`transcribe`](Self::transcribe) (async) or
+// [`transcribe_blocking`](Self::transcribe_blocking) (sync) afterwards.
+type WhisperCppProviderInterface interface {
+	// Transcribe audio at `audio_source` and return the transcript.
+	//
+	// `audio_source` is a local file path (16-bit PCM mono WAV at
+	// 16 kHz) or an `http(s)://` / `data:` URL. `language` is an
+	// optional per-call ISO-639-1 override; when omitted the
+	// constructor's `language` hint (if any) is used.
+	//
+	// # Errors
+	//
+	// Returns `BlazenError::Provider { kind: "SttTranscribe", ... }`
+	// when the backend fails to decode or transcribe.
+	Transcribe(audioSource string, language *string) (SttResult, error)
+	// Synchronous variant of [`transcribe`](Self::transcribe).
+	TranscribeBlocking(audioSource string, language *string) (SttResult, error)
+}
+
+// Local whisper.cpp speech-to-text provider.
+//
+// Construct with [`WhisperCppProvider::new`] (sync — option validation
+// only; weight loading is lazy on the first transcribe call). Use
+// [`transcribe`](Self::transcribe) (async) or
+// [`transcribe_blocking`](Self::transcribe_blocking) (sync) afterwards.
+type WhisperCppProvider struct {
+	ffiObject FfiObject
+}
+
+// Build a `WhisperCppProvider`.
+//
+// `model` selects the whisper.cpp variant (`"tiny"`, `"base"`,
+// `"small"` (default), `"medium"`, `"large-v3"`). `device` picks
+// the runtime device (`"cpu"`, `"cuda"`, etc.). `language` is an
+// optional ISO-639-1 default-language hint (overridden per call).
+//
+// # Errors
+//
+// Returns `BlazenError::Provider { kind: "WhisperCppInit", ... }`
+// when option validation fails.
+func NewWhisperCppProvider(model *string, device *string, language *string) (*WhisperCppProvider, error) {
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_whispercppprovider_new(FfiConverterOptionalStringINSTANCE.Lower(model), FfiConverterOptionalStringINSTANCE.Lower(device), FfiConverterOptionalStringINSTANCE.Lower(language), _uniffiStatus)
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue *WhisperCppProvider
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterWhisperCppProviderINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// Transcribe audio at `audio_source` and return the transcript.
+//
+// `audio_source` is a local file path (16-bit PCM mono WAV at
+// 16 kHz) or an `http(s)://` / `data:` URL. `language` is an
+// optional per-call ISO-639-1 override; when omitted the
+// constructor's `language` hint (if any) is used.
+//
+// # Errors
+//
+// Returns `BlazenError::Provider { kind: "SttTranscribe", ... }`
+// when the backend fails to decode or transcribe.
+func (_self *WhisperCppProvider) Transcribe(audioSource string, language *string) (SttResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*WhisperCppProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) SttResult {
+			return FfiConverterSttResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_whispercppprovider_transcribe(
+			_pointer, FfiConverterStringINSTANCE.Lower(audioSource), FfiConverterOptionalStringINSTANCE.Lower(language)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`transcribe`](Self::transcribe).
+func (_self *WhisperCppProvider) TranscribeBlocking(audioSource string, language *string) (SttResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*WhisperCppProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_whispercppprovider_transcribe_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(audioSource), FfiConverterOptionalStringINSTANCE.Lower(language), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue SttResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterSttResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *WhisperCppProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterWhisperCppProvider struct{}
+
+var FfiConverterWhisperCppProviderINSTANCE = FfiConverterWhisperCppProvider{}
+
+func (c FfiConverterWhisperCppProvider) Lift(handle C.uint64_t) *WhisperCppProvider {
+	result := &WhisperCppProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_whispercppprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_whispercppprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*WhisperCppProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterWhisperCppProvider) Read(reader io.Reader) *WhisperCppProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterWhisperCppProvider) Lower(value *WhisperCppProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*WhisperCppProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterWhisperCppProvider) Write(writer io.Writer, value *WhisperCppProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalWhisperCppProvider(handle uint64) *WhisperCppProvider {
+	return FfiConverterWhisperCppProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalWhisperCppProvider(value *WhisperCppProvider) uint64 {
+	return uint64(FfiConverterWhisperCppProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerWhisperCppProvider struct{}
+
+func (_ FfiDestroyerWhisperCppProvider) Destroy(value *WhisperCppProvider) {
+	value.Destroy()
+}
+
+// Streaming speech-to-text provider (chunked candle Whisper fronted by
+// Silero VAD).
+//
+// Note: the underlying backend's blocking `transcribe` entry point
+// returns `Unsupported` — only the streaming surface is functional in
+// the upstream backend. The async / blocking methods below are exposed
+// for API parity but will surface that error to the caller. Wire the
+// streaming entrypoint directly via the backend if you need it.
+type WhisperStreamingProviderInterface interface {
+	// Transcribe audio at `audio_source` and return the transcript.
+	//
+	// See [`WhisperCppProvider::transcribe`] for `audio_source` /
+	// `language` semantics.
+	//
+	// # Errors
+	//
+	// Returns `BlazenError::Provider { kind: "SttTranscribe", ... }`
+	// — typically `Unsupported` since the streaming backend's blocking
+	// path is intentionally not wired.
+	Transcribe(audioSource string, language *string) (SttResult, error)
+	// Synchronous variant of [`transcribe`](Self::transcribe).
+	TranscribeBlocking(audioSource string, language *string) (SttResult, error)
+}
+
+// Streaming speech-to-text provider (chunked candle Whisper fronted by
+// Silero VAD).
+//
+// Note: the underlying backend's blocking `transcribe` entry point
+// returns `Unsupported` — only the streaming surface is functional in
+// the upstream backend. The async / blocking methods below are exposed
+// for API parity but will surface that error to the caller. Wire the
+// streaming entrypoint directly via the backend if you need it.
+type WhisperStreamingProvider struct {
+	ffiObject FfiObject
+}
+
+// Build a `WhisperStreamingProvider`.
+//
+// `model_id` selects the underlying candle Whisper HF model
+// (default `"openai/whisper-base"`). `vad_model_path` overrides
+// the Silero VAD ONNX location (default: download from HF on
+// first use). `chunk_seconds` / `chunk_overlap_seconds` tune the
+// sliding-window geometry; pass `None` for the defaults (`30.0` /
+// `5.0`).
+func NewWhisperStreamingProvider(modelId *string, vadModelPath *string, chunkSeconds *float32, chunkOverlapSeconds *float32) *WhisperStreamingProvider {
+	return FfiConverterWhisperStreamingProviderINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_constructor_whisperstreamingprovider_new(FfiConverterOptionalStringINSTANCE.Lower(modelId), FfiConverterOptionalStringINSTANCE.Lower(vadModelPath), FfiConverterOptionalFloat32INSTANCE.Lower(chunkSeconds), FfiConverterOptionalFloat32INSTANCE.Lower(chunkOverlapSeconds), _uniffiStatus)
+	}))
+}
+
+// Transcribe audio at `audio_source` and return the transcript.
+//
+// See [`WhisperCppProvider::transcribe`] for `audio_source` /
+// `language` semantics.
+//
+// # Errors
+//
+// Returns `BlazenError::Provider { kind: "SttTranscribe", ... }`
+// — typically `Unsupported` since the streaming backend's blocking
+// path is intentionally not wired.
+func (_self *WhisperStreamingProvider) Transcribe(audioSource string, language *string) (SttResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*WhisperStreamingProvider")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) SttResult {
+			return FfiConverterSttResultINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_whisperstreamingprovider_transcribe(
+			_pointer, FfiConverterStringINSTANCE.Lower(audioSource), FfiConverterOptionalStringINSTANCE.Lower(language)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`transcribe`](Self::transcribe).
+func (_self *WhisperStreamingProvider) TranscribeBlocking(audioSource string, language *string) (SttResult, error) {
+	_pointer := _self.ffiObject.incrementPointer("*WhisperStreamingProvider")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_whisperstreamingprovider_transcribe_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(audioSource), FfiConverterOptionalStringINSTANCE.Lower(language), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue SttResult
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterSttResultINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+func (object *WhisperStreamingProvider) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterWhisperStreamingProvider struct{}
+
+var FfiConverterWhisperStreamingProviderINSTANCE = FfiConverterWhisperStreamingProvider{}
+
+func (c FfiConverterWhisperStreamingProvider) Lift(handle C.uint64_t) *WhisperStreamingProvider {
+	result := &WhisperStreamingProvider{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_whisperstreamingprovider(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_whisperstreamingprovider(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*WhisperStreamingProvider).Destroy)
+	return result
+}
+
+func (c FfiConverterWhisperStreamingProvider) Read(reader io.Reader) *WhisperStreamingProvider {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterWhisperStreamingProvider) Lower(value *WhisperStreamingProvider) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*WhisperStreamingProvider")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterWhisperStreamingProvider) Write(writer io.Writer, value *WhisperStreamingProvider) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalWhisperStreamingProvider(handle uint64) *WhisperStreamingProvider {
+	return FfiConverterWhisperStreamingProviderINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalWhisperStreamingProvider(value *WhisperStreamingProvider) uint64 {
+	return uint64(FfiConverterWhisperStreamingProviderINSTANCE.Lower(value))
+}
+
+type FfiDestroyerWhisperStreamingProvider struct{}
+
+func (_ FfiDestroyerWhisperStreamingProvider) Destroy(value *WhisperStreamingProvider) {
+	value.Destroy()
 }
 
 // A built workflow ready to run.
@@ -22798,6 +28822,68 @@ func (_ FfiDestroyerBlazenError) Destroy(value *BlazenError) {
 	}
 }
 
+// Coarse categorization of what a provider does.
+//
+// Mirrors [`blazen_llm::providers::root::CapabilityKind`] but is
+// re-declared here so it can carry `#[derive(uniffi::Enum)]` for the
+// FFI surface (the upstream enum uses `serde` derives that are not
+// `uniffi::Enum`-compatible).
+type CapabilityKind uint
+
+const (
+	// Large language model — chat / completion / streaming.
+	CapabilityKindLlm CapabilityKind = 1
+	// Text-to-speech audio synthesis.
+	CapabilityKindTts CapabilityKind = 2
+	// Speech-to-text transcription.
+	CapabilityKindStt CapabilityKind = 3
+	// Text-to-music / text-to-sfx audio generation.
+	CapabilityKindMusic CapabilityKind = 4
+	// Voice conversion (source utterance + target voice → re-voiced audio).
+	CapabilityKindVc CapabilityKind = 5
+	// 3D mesh generation (image-to-3D, text-to-3D).
+	CapabilityKindThreeD CapabilityKind = 6
+	// 2D image generation (text-to-image, image-to-image, upscale).
+	CapabilityKindImageGen CapabilityKind = 7
+	// Vector embedding generation.
+	CapabilityKindEmbedding CapabilityKind = 8
+	// Neural audio codec (PCM ↔ discrete codebook tokens).
+	CapabilityKindCodec CapabilityKind = 9
+	// Background removal on existing images.
+	CapabilityKindBackgroundRemoval CapabilityKind = 10
+	// Video generation (text-to-video, image-to-video).
+	CapabilityKindVideo CapabilityKind = 11
+)
+
+type FfiConverterCapabilityKind struct{}
+
+var FfiConverterCapabilityKindINSTANCE = FfiConverterCapabilityKind{}
+
+func (c FfiConverterCapabilityKind) Lift(rb RustBufferI) CapabilityKind {
+	return LiftFromRustBuffer[CapabilityKind](c, rb)
+}
+
+func (c FfiConverterCapabilityKind) Lower(value CapabilityKind) C.RustBuffer {
+	return LowerIntoRustBuffer[CapabilityKind](c, value)
+}
+
+func (c FfiConverterCapabilityKind) LowerExternal(value CapabilityKind) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[CapabilityKind](c, value))
+}
+func (FfiConverterCapabilityKind) Read(reader io.Reader) CapabilityKind {
+	id := readInt32(reader)
+	return CapabilityKind(id)
+}
+
+func (FfiConverterCapabilityKind) Write(writer io.Writer, value CapabilityKind) {
+	writeInt32(writer, int32(value))
+}
+
+type FfiDestroyerCapabilityKind struct{}
+
+func (_ FfiDestroyerCapabilityKind) Destroy(value CapabilityKind) {
+}
+
 // How a worker declares its admission policy to the control plane.
 //
 // Carries the union of fields for the three flavours; consumers should
@@ -23168,293 +29254,6 @@ func (_ FfiDestroyerStepOutput) Destroy(value StepOutput) {
 	value.Destroy()
 }
 
-// Canonical error returned by every [`Compat3dProvider`] method.
-//
-// Absorbs the four parallel error enums from [`blazen_3d`] —
-// [`Texturizer3dError`], [`Rigger3dError`], [`Refiner3dError`], and
-// [`Animator3dError`] — into one flat shape. Foreign callers switch
-// on the variant rather than on which stage produced the error
-// (the call site already determines that).
-type ThreeDError struct {
-	err error
-}
-
-// Convenience method to turn *ThreeDError into error
-// Avoiding treating nil pointer as non nil error interface
-func (err *ThreeDError) AsError() error {
-	if err == nil {
-		return nil
-	} else {
-		return err
-	}
-}
-
-func (err ThreeDError) Error() string {
-	return fmt.Sprintf("ThreeDError: %s", err.err.Error())
-}
-
-func (err ThreeDError) Unwrap() error {
-	return err.err
-}
-
-// Err* are used for checking error type with `errors.Is`
-var ErrThreeDErrorBackend = fmt.Errorf("ThreeDErrorBackend")
-var ErrThreeDErrorInvalidInput = fmt.Errorf("ThreeDErrorInvalidInput")
-var ErrThreeDErrorIo = fmt.Errorf("ThreeDErrorIo")
-var ErrThreeDErrorEngineNotAvailable = fmt.Errorf("ThreeDErrorEngineNotAvailable")
-var ErrThreeDErrorUnsupported = fmt.Errorf("ThreeDErrorUnsupported")
-
-// Variant structs
-// The active backend reported a runtime failure (HTTP error,
-// inference error, etc.).
-type ThreeDErrorBackend struct {
-	Message string
-}
-
-// The active backend reported a runtime failure (HTTP error,
-// inference error, etc.).
-func NewThreeDErrorBackend(
-	message string,
-) *ThreeDError {
-	return &ThreeDError{err: &ThreeDErrorBackend{
-		Message: message}}
-}
-
-func (e ThreeDErrorBackend) destroy() {
-	FfiDestroyerString{}.Destroy(e.Message)
-}
-
-func (err ThreeDErrorBackend) Error() string {
-	return fmt.Sprint("Backend",
-		": ",
-
-		"Message=",
-		err.Message,
-	)
-}
-
-func (self ThreeDErrorBackend) Is(target error) bool {
-	return target == ErrThreeDErrorBackend
-}
-
-// The caller-supplied input was malformed — invalid mesh bytes,
-// unsupported container format, malformed request fields, etc.
-type ThreeDErrorInvalidInput struct {
-	Message string
-}
-
-// The caller-supplied input was malformed — invalid mesh bytes,
-// unsupported container format, malformed request fields, etc.
-func NewThreeDErrorInvalidInput(
-	message string,
-) *ThreeDError {
-	return &ThreeDError{err: &ThreeDErrorInvalidInput{
-		Message: message}}
-}
-
-func (e ThreeDErrorInvalidInput) destroy() {
-	FfiDestroyerString{}.Destroy(e.Message)
-}
-
-func (err ThreeDErrorInvalidInput) Error() string {
-	return fmt.Sprint("InvalidInput",
-		": ",
-
-		"Message=",
-		err.Message,
-	)
-}
-
-func (self ThreeDErrorInvalidInput) Is(target error) bool {
-	return target == ErrThreeDErrorInvalidInput
-}
-
-// I/O failure while reading a mesh file, reference image, or
-// model file.
-type ThreeDErrorIo struct {
-	Message string
-}
-
-// I/O failure while reading a mesh file, reference image, or
-// model file.
-func NewThreeDErrorIo(
-	message string,
-) *ThreeDError {
-	return &ThreeDError{err: &ThreeDErrorIo{
-		Message: message}}
-}
-
-func (e ThreeDErrorIo) destroy() {
-	FfiDestroyerString{}.Destroy(e.Message)
-}
-
-func (err ThreeDErrorIo) Error() string {
-	return fmt.Sprint("Io",
-		": ",
-
-		"Message=",
-		err.Message,
-	)
-}
-
-func (self ThreeDErrorIo) Is(target error) bool {
-	return target == ErrThreeDErrorIo
-}
-
-// The selected backend is not available in this build (e.g. the
-// `compat-proxy` feature is disabled).
-type ThreeDErrorEngineNotAvailable struct {
-	Message string
-}
-
-// The selected backend is not available in this build (e.g. the
-// `compat-proxy` feature is disabled).
-func NewThreeDErrorEngineNotAvailable(
-	message string,
-) *ThreeDError {
-	return &ThreeDError{err: &ThreeDErrorEngineNotAvailable{
-		Message: message}}
-}
-
-func (e ThreeDErrorEngineNotAvailable) destroy() {
-	FfiDestroyerString{}.Destroy(e.Message)
-}
-
-func (err ThreeDErrorEngineNotAvailable) Error() string {
-	return fmt.Sprint("EngineNotAvailable",
-		": ",
-
-		"Message=",
-		err.Message,
-	)
-}
-
-func (self ThreeDErrorEngineNotAvailable) Is(target error) bool {
-	return target == ErrThreeDErrorEngineNotAvailable
-}
-
-// The capability requested is not supported by the active
-// backend (e.g. PBR maps from an albedo-only texturizer, video-
-// driven motion on a text-only animator).
-type ThreeDErrorUnsupported struct {
-	Message string
-}
-
-// The capability requested is not supported by the active
-// backend (e.g. PBR maps from an albedo-only texturizer, video-
-// driven motion on a text-only animator).
-func NewThreeDErrorUnsupported(
-	message string,
-) *ThreeDError {
-	return &ThreeDError{err: &ThreeDErrorUnsupported{
-		Message: message}}
-}
-
-func (e ThreeDErrorUnsupported) destroy() {
-	FfiDestroyerString{}.Destroy(e.Message)
-}
-
-func (err ThreeDErrorUnsupported) Error() string {
-	return fmt.Sprint("Unsupported",
-		": ",
-
-		"Message=",
-		err.Message,
-	)
-}
-
-func (self ThreeDErrorUnsupported) Is(target error) bool {
-	return target == ErrThreeDErrorUnsupported
-}
-
-type FfiConverterThreeDError struct{}
-
-var FfiConverterThreeDErrorINSTANCE = FfiConverterThreeDError{}
-
-func (c FfiConverterThreeDError) Lift(eb RustBufferI) *ThreeDError {
-	return LiftFromRustBuffer[*ThreeDError](c, eb)
-}
-
-func (c FfiConverterThreeDError) Lower(value *ThreeDError) C.RustBuffer {
-	return LowerIntoRustBuffer[*ThreeDError](c, value)
-}
-
-func (c FfiConverterThreeDError) LowerExternal(value *ThreeDError) ExternalCRustBuffer {
-	return RustBufferFromC(LowerIntoRustBuffer[*ThreeDError](c, value))
-}
-
-func (c FfiConverterThreeDError) Read(reader io.Reader) *ThreeDError {
-	errorID := readUint32(reader)
-
-	switch errorID {
-	case 1:
-		return &ThreeDError{&ThreeDErrorBackend{
-			Message: FfiConverterStringINSTANCE.Read(reader),
-		}}
-	case 2:
-		return &ThreeDError{&ThreeDErrorInvalidInput{
-			Message: FfiConverterStringINSTANCE.Read(reader),
-		}}
-	case 3:
-		return &ThreeDError{&ThreeDErrorIo{
-			Message: FfiConverterStringINSTANCE.Read(reader),
-		}}
-	case 4:
-		return &ThreeDError{&ThreeDErrorEngineNotAvailable{
-			Message: FfiConverterStringINSTANCE.Read(reader),
-		}}
-	case 5:
-		return &ThreeDError{&ThreeDErrorUnsupported{
-			Message: FfiConverterStringINSTANCE.Read(reader),
-		}}
-	default:
-		panic(fmt.Sprintf("Unknown error code %d in FfiConverterThreeDError.Read()", errorID))
-	}
-}
-
-func (c FfiConverterThreeDError) Write(writer io.Writer, value *ThreeDError) {
-	switch variantValue := value.err.(type) {
-	case *ThreeDErrorBackend:
-		writeInt32(writer, 1)
-		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
-	case *ThreeDErrorInvalidInput:
-		writeInt32(writer, 2)
-		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
-	case *ThreeDErrorIo:
-		writeInt32(writer, 3)
-		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
-	case *ThreeDErrorEngineNotAvailable:
-		writeInt32(writer, 4)
-		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
-	case *ThreeDErrorUnsupported:
-		writeInt32(writer, 5)
-		FfiConverterStringINSTANCE.Write(writer, variantValue.Message)
-	default:
-		_ = variantValue
-		panic(fmt.Sprintf("invalid error value `%v` in FfiConverterThreeDError.Write", value))
-	}
-}
-
-type FfiDestroyerThreeDError struct{}
-
-func (_ FfiDestroyerThreeDError) Destroy(value *ThreeDError) {
-	switch variantValue := value.err.(type) {
-	case ThreeDErrorBackend:
-		variantValue.destroy()
-	case ThreeDErrorInvalidInput:
-		variantValue.destroy()
-	case ThreeDErrorIo:
-		variantValue.destroy()
-	case ThreeDErrorEngineNotAvailable:
-		variantValue.destroy()
-	case ThreeDErrorUnsupported:
-		variantValue.destroy()
-	default:
-		_ = variantValue
-		panic(fmt.Sprintf("invalid error value `%v` in FfiDestroyerThreeDError.Destroy", value))
-	}
-}
-
 // One observable event emitted during a training run.
 type TrainingEventEnum interface {
 	Destroy()
@@ -23734,6 +29533,47 @@ type FfiDestroyerOptionalUint64 struct{}
 func (_ FfiDestroyerOptionalUint64) Destroy(value *uint64) {
 	if value != nil {
 		FfiDestroyerUint64{}.Destroy(*value)
+	}
+}
+
+type FfiConverterOptionalInt64 struct{}
+
+var FfiConverterOptionalInt64INSTANCE = FfiConverterOptionalInt64{}
+
+func (c FfiConverterOptionalInt64) Lift(rb RustBufferI) *int64 {
+	return LiftFromRustBuffer[*int64](c, rb)
+}
+
+func (_ FfiConverterOptionalInt64) Read(reader io.Reader) *int64 {
+	if readInt8(reader) == 0 {
+		return nil
+	}
+	temp := FfiConverterInt64INSTANCE.Read(reader)
+	return &temp
+}
+
+func (c FfiConverterOptionalInt64) Lower(value *int64) C.RustBuffer {
+	return LowerIntoRustBuffer[*int64](c, value)
+}
+
+func (c FfiConverterOptionalInt64) LowerExternal(value *int64) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[*int64](c, value))
+}
+
+func (_ FfiConverterOptionalInt64) Write(writer io.Writer, value *int64) {
+	if value == nil {
+		writeInt8(writer, 0)
+	} else {
+		writeInt8(writer, 1)
+		FfiConverterInt64INSTANCE.Write(writer, *value)
+	}
+}
+
+type FfiDestroyerOptionalInt64 struct{}
+
+func (_ FfiDestroyerOptionalInt64) Destroy(value *int64) {
+	if value != nil {
+		FfiDestroyerInt64{}.Destroy(*value)
 	}
 }
 
@@ -25542,6 +31382,53 @@ type FfiDestroyerSequenceBatchItem struct{}
 func (FfiDestroyerSequenceBatchItem) Destroy(sequence []BatchItem) {
 	for _, value := range sequence {
 		FfiDestroyerBatchItem{}.Destroy(value)
+	}
+}
+
+type FfiConverterSequenceSequenceFloat32 struct{}
+
+var FfiConverterSequenceSequenceFloat32INSTANCE = FfiConverterSequenceSequenceFloat32{}
+
+func (c FfiConverterSequenceSequenceFloat32) Lift(rb RustBufferI) [][]float32 {
+	return LiftFromRustBuffer[[][]float32](c, rb)
+}
+
+func (c FfiConverterSequenceSequenceFloat32) Read(reader io.Reader) [][]float32 {
+	length := readInt32(reader)
+	if length == 0 {
+		return nil
+	}
+	result := make([][]float32, 0, length)
+	for i := int32(0); i < length; i++ {
+		result = append(result, FfiConverterSequenceFloat32INSTANCE.Read(reader))
+	}
+	return result
+}
+
+func (c FfiConverterSequenceSequenceFloat32) Lower(value [][]float32) C.RustBuffer {
+	return LowerIntoRustBuffer[[][]float32](c, value)
+}
+
+func (c FfiConverterSequenceSequenceFloat32) LowerExternal(value [][]float32) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[[][]float32](c, value))
+}
+
+func (c FfiConverterSequenceSequenceFloat32) Write(writer io.Writer, value [][]float32) {
+	if len(value) > math.MaxInt32 {
+		panic("[][]float32 is too large to fit into Int32")
+	}
+
+	writeInt32(writer, int32(len(value)))
+	for _, item := range value {
+		FfiConverterSequenceFloat32INSTANCE.Write(writer, item)
+	}
+}
+
+type FfiDestroyerSequenceSequenceFloat32 struct{}
+
+func (FfiDestroyerSequenceSequenceFloat32) Destroy(sequence [][]float32) {
+	for _, value := range sequence {
+		FfiDestroyerSequenceFloat32{}.Destroy(value)
 	}
 }
 

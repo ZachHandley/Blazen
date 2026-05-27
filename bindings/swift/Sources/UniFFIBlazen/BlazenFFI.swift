@@ -473,6 +473,22 @@ fileprivate struct FfiConverterUInt64: FfiConverterPrimitive {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterInt64: FfiConverterPrimitive {
+    typealias FfiType = Int64
+    typealias SwiftType = Int64
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Int64 {
+        return try lift(readInt(&buf))
+    }
+
+    public static func write(_ value: Int64, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterFloat: FfiConverterPrimitive {
     typealias FfiType = Float
     typealias SwiftType = Float
@@ -795,96 +811,432 @@ public func FfiConverterTypeAgent_lower(_ value: Agent) -> UInt64 {
 
 
 /**
- * A [`crate::llm::Model`] wrapped with applied
- * [`ProviderDefaults`].
+ * Concrete provider class for Meta's `AudioGen` text-to-sfx model.
  *
- * Construct via [`BaseProvider::from_model`] (wraps an existing
- * model with no defaults) or [`BaseProvider::with_defaults`]
- * (wraps with explicit defaults). Mutate via the `with_*` builder methods.
+ * Wraps [`blazen_llm::providers::concrete::music::AudioGenProvider`].
+ * Both `generate_music` and `generate_sfx` are exposed (the underlying
+ * backend routes both through the same dispatch trait).
+ */
+public protocol AudioGenProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Generate `duration_seconds` of music conditioned on `prompt`.
+     */
+    func generateMusic(prompt: String, durationSeconds: Float) async throws  -> MusicResult
+    
+    /**
+     * Synchronous variant of [`generate_music`](Self::generate_music).
+     */
+    func generateMusicBlocking(prompt: String, durationSeconds: Float) throws  -> MusicResult
+    
+    /**
+     * Generate `duration_seconds` of sound-effect audio conditioned on
+     * `prompt`.
+     */
+    func generateSfx(prompt: String, durationSeconds: Float) async throws  -> MusicResult
+    
+    /**
+     * Synchronous variant of [`generate_sfx`](Self::generate_sfx).
+     */
+    func generateSfxBlocking(prompt: String, durationSeconds: Float) throws  -> MusicResult
+    
+}
+/**
+ * Concrete provider class for Meta's `AudioGen` text-to-sfx model.
  *
- * Phase B's `CustomProvider` factories will return `Arc<BaseProvider>`
- * directly; for Phase A this class is reachable by lifting any existing
- * `Model` factory result.
+ * Wraps [`blazen_llm::providers::concrete::music::AudioGenProvider`].
+ * Both `generate_music` and `generate_sfx` are exposed (the underlying
+ * backend routes both through the same dispatch trait).
+ */
+open class AudioGenProvider: AudioGenProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_audiogenprovider(self.handle, $0) }
+    }
+    /**
+     * Build a new `AudioGen`-backed provider.
+     *
+     * `repo_id` overrides the default Hugging Face repo (defaults to
+     * `facebook/audiogen-medium`). `revision` pins a specific commit /
+     * tag. `device` follows the same format as
+     * [`MusicGenProvider::new`]. `cache_dir` overrides the cache.
+     * `max_duration_seconds` overrides the default 30 s safety cap.
+     */
+public convenience init(repoId: String?, revision: String?, device: String?, cacheDir: String?, maxDurationSeconds: Float?)throws  {
+    let handle =
+        try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_constructor_audiogenprovider_new(
+        FfiConverterOptionString.lower(repoId),
+        FfiConverterOptionString.lower(revision),
+        FfiConverterOptionString.lower(device),
+        FfiConverterOptionString.lower(cacheDir),
+        FfiConverterOptionFloat.lower(maxDurationSeconds),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_audiogenprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Generate `duration_seconds` of music conditioned on `prompt`.
+     */
+open func generateMusic(prompt: String, durationSeconds: Float)async throws  -> MusicResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_audiogenprovider_generate_music(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(prompt),FfiConverterFloat.lower(durationSeconds)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeMusicResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`generate_music`](Self::generate_music).
+     */
+open func generateMusicBlocking(prompt: String, durationSeconds: Float)throws  -> MusicResult  {
+    return try  FfiConverterTypeMusicResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_audiogenprovider_generate_music_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(prompt),
+        FfiConverterFloat.lower(durationSeconds),$0
+    )
+})
+}
+    
+    /**
+     * Generate `duration_seconds` of sound-effect audio conditioned on
+     * `prompt`.
+     */
+open func generateSfx(prompt: String, durationSeconds: Float)async throws  -> MusicResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_audiogenprovider_generate_sfx(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(prompt),FfiConverterFloat.lower(durationSeconds)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeMusicResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`generate_sfx`](Self::generate_sfx).
+     */
+open func generateSfxBlocking(prompt: String, durationSeconds: Float)throws  -> MusicResult  {
+    return try  FfiConverterTypeMusicResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_audiogenprovider_generate_sfx_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(prompt),
+        FfiConverterFloat.lower(durationSeconds),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeAudioGenProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = AudioGenProvider
+
+    public static func lift(_ handle: UInt64) throws -> AudioGenProvider {
+        return AudioGenProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: AudioGenProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> AudioGenProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: AudioGenProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAudioGenProvider_lift(_ handle: UInt64) throws -> AudioGenProvider {
+    return try FfiConverterTypeAudioGenProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeAudioGenProvider_lower(_ value: AudioGenProvider) -> UInt64 {
+    return FfiConverterTypeAudioGenProvider.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Concrete TTS provider backed by the local Bark engine.
+ *
+ * Wraps [`blazen_llm::providers::concrete::tts::BarkProvider`].
+ */
+public protocol BarkProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+    func synthesize(text: String, voice: String?, language: String?) async throws  -> TtsResult
+    
+    /**
+     * Synchronous variant of [`synthesize`](Self::synthesize).
+     */
+    func synthesizeBlocking(text: String, voice: String?, language: String?) throws  -> TtsResult
+    
+}
+/**
+ * Concrete TTS provider backed by the local Bark engine.
+ *
+ * Wraps [`blazen_llm::providers::concrete::tts::BarkProvider`].
+ */
+open class BarkProvider: BarkProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_barkprovider(self.handle, $0) }
+    }
+    /**
+     * Construct a Bark provider with default configuration.
+     */
+public convenience init() {
+    let handle =
+        try! rustCall() {
+    uniffi_blazen_uniffi_fn_constructor_barkprovider_new($0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_barkprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+open func synthesize(text: String, voice: String?, language: String?)async throws  -> TtsResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_barkprovider_synthesize(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(text),FfiConverterOptionString.lower(voice),FfiConverterOptionString.lower(language)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTtsResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`synthesize`](Self::synthesize).
+     */
+open func synthesizeBlocking(text: String, voice: String?, language: String?)throws  -> TtsResult  {
+    return try  FfiConverterTypeTtsResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_barkprovider_synthesize_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(text),
+        FfiConverterOptionString.lower(voice),
+        FfiConverterOptionString.lower(language),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeBarkProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = BarkProvider
+
+    public static func lift(_ handle: UInt64) throws -> BarkProvider {
+        return BarkProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: BarkProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> BarkProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: BarkProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBarkProvider_lift(_ handle: UInt64) throws -> BarkProvider {
+    return try FfiConverterTypeBarkProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeBarkProvider_lower(_ value: BarkProvider) -> UInt64 {
+    return FfiConverterTypeBarkProvider.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Shared root of the polymorphic provider hierarchy.
+ *
+ * Every concrete `<Engine>Provider` implements [`BaseProvider`] in
+ * addition to its capability trait so Rust-side code can collect
+ * providers into capability-erased `Arc<dyn BaseProvider>` containers
+ * for telemetry, routing, and registry lookups.
  */
 public protocol BaseProviderProtocol: AnyObject, Sendable {
     
     /**
-     * Unwrap to a plain [`Model`] handle that applies the
-     * configured defaults on every call.
-     *
-     * Use this when you want to pass the wrapped provider to an API that
-     * takes a generic `Model` (the agent runner, workflow
-     * steps, etc.).
+     * Stable engine identifier (e.g. `"piper"`, `"kokoro"`, `"musicgen"`).
      */
-    func asModel()  -> Model
+    func providerId()  -> String
     
     /**
-     * Inspect the currently-configured defaults (data only — hooks are
-     * not surfaced in Phase A).
+     * Capability bucket this provider serves.
      */
-    func defaults()  -> ProviderDefaults
-    
-    /**
-     * Extract structured output from the model by constraining its
-     * response to a JSON Schema.
-     *
-     * Mirrors the upstream
-     * [`blazen_llm::traits::StructuredOutput::extract`] blanket impl: the
-     * `schema_json` is injected as the request's `response_format` and
-     * the completion is dispatched as usual. Returns the model's raw
-     * content (which the foreign caller deserializes into its own typed
-     * shape — UniFFI cannot return a generic typed value across the FFI).
-     *
-     * `schema_json` must be a valid JSON Schema string; an empty string or
-     * malformed JSON falls back to `null` (the request is sent without a
-     * `response_format`).
-     */
-    func extract(schemaJson: String, messages: [ChatMessage]) async throws  -> String
-    
-    /**
-     * The model id of the wrapped inner `Model`.
-     */
-    func modelId()  -> String
-    
-    /**
-     * Replace the entire [`ProviderDefaults`] on this provider,
-     * returning a new `Arc<BaseProvider>` (clone-with-mutation).
-     */
-    func withDefaults(defaults: ProviderDefaults)  -> BaseProvider
-    
-    /**
-     * Set the default `response_format` (JSON-encoded `serde_json::Value`).
-     *
-     * Malformed JSON or an empty string is treated as JSON null.
-     */
-    func withResponseFormatJson(fmtJson: String)  -> BaseProvider
-    
-    /**
-     * Set the default system prompt.
-     */
-    func withSystemPrompt(prompt: String)  -> BaseProvider
-    
-    /**
-     * Set the default tools (JSON-encoded `Vec<ToolDefinition>`).
-     *
-     * Malformed JSON is treated as an empty tool list — matching the
-     * upstream `#[derive(Default)]` semantics. Foreign callers should
-     * validate the JSON before sending it across the FFI.
-     */
-    func withToolsJson(toolsJson: String)  -> BaseProvider
+    func capability()  -> CapabilityKind
     
 }
 /**
- * A [`crate::llm::Model`] wrapped with applied
- * [`ProviderDefaults`].
+ * Shared root of the polymorphic provider hierarchy.
  *
- * Construct via [`BaseProvider::from_model`] (wraps an existing
- * model with no defaults) or [`BaseProvider::with_defaults`]
- * (wraps with explicit defaults). Mutate via the `with_*` builder methods.
- *
- * Phase B's `CustomProvider` factories will return `Arc<BaseProvider>`
- * directly; for Phase A this class is reachable by lifting any existing
- * `Model` factory result.
+ * Every concrete `<Engine>Provider` implements [`BaseProvider`] in
+ * addition to its capability trait so Rust-side code can collect
+ * providers into capability-erased `Arc<dyn BaseProvider>` containers
+ * for telemetry, routing, and registry lookups.
  */
 open class BaseProvider: BaseProviderProtocol, @unchecked Sendable {
     fileprivate let handle: UInt64
@@ -937,157 +1289,26 @@ open class BaseProvider: BaseProviderProtocol, @unchecked Sendable {
     }
 
     
-    /**
-     * Wrap an existing [`Model`] with empty defaults.
-     *
-     * Equivalent to using the wrapped model directly, but lets callers
-     * attach defaults later via the `with_*` methods.
-     */
-public static func fromModel(model: Model) -> BaseProvider  {
-    return try!  FfiConverterTypeBaseProvider_lift(try! rustCall() {
-    uniffi_blazen_uniffi_fn_constructor_baseprovider_from_model(
-        FfiConverterTypeModel_lower(model),$0
-    )
-})
-}
-    
-    /**
-     * Wrap a [`Model`] with explicit
-     * [`ProviderDefaults`].
-     */
-public static func fromModelWithDefaults(model: Model, defaults: ProviderDefaults) -> BaseProvider  {
-    return try!  FfiConverterTypeBaseProvider_lift(try! rustCall() {
-    uniffi_blazen_uniffi_fn_constructor_baseprovider_from_model_with_defaults(
-        FfiConverterTypeModel_lower(model),
-        FfiConverterTypeProviderDefaults_lower(defaults),$0
-    )
-})
-}
-    
 
     
     /**
-     * Unwrap to a plain [`Model`] handle that applies the
-     * configured defaults on every call.
-     *
-     * Use this when you want to pass the wrapped provider to an API that
-     * takes a generic `Model` (the agent runner, workflow
-     * steps, etc.).
+     * Stable engine identifier (e.g. `"piper"`, `"kokoro"`, `"musicgen"`).
      */
-open func asModel() -> Model  {
-    return try!  FfiConverterTypeModel_lift(try! rustCall() {
-    uniffi_blazen_uniffi_fn_method_baseprovider_as_model(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-    /**
-     * Inspect the currently-configured defaults (data only — hooks are
-     * not surfaced in Phase A).
-     */
-open func defaults() -> ProviderDefaults  {
-    return try!  FfiConverterTypeProviderDefaults_lift(try! rustCall() {
-    uniffi_blazen_uniffi_fn_method_baseprovider_defaults(
-            self.uniffiCloneHandle(),$0
-    )
-})
-}
-    
-    /**
-     * Extract structured output from the model by constraining its
-     * response to a JSON Schema.
-     *
-     * Mirrors the upstream
-     * [`blazen_llm::traits::StructuredOutput::extract`] blanket impl: the
-     * `schema_json` is injected as the request's `response_format` and
-     * the completion is dispatched as usual. Returns the model's raw
-     * content (which the foreign caller deserializes into its own typed
-     * shape — UniFFI cannot return a generic typed value across the FFI).
-     *
-     * `schema_json` must be a valid JSON Schema string; an empty string or
-     * malformed JSON falls back to `null` (the request is sent without a
-     * `response_format`).
-     */
-open func extract(schemaJson: String, messages: [ChatMessage])async throws  -> String  {
-    return
-        try  await uniffiRustCallAsync(
-            rustFutureFunc: {
-                uniffi_blazen_uniffi_fn_method_baseprovider_extract(
-                    self.uniffiCloneHandle(),
-                    FfiConverterString.lower(schemaJson),FfiConverterSequenceTypeChatMessage.lower(messages)
-                )
-            },
-            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
-            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
-            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
-            liftFunc: FfiConverterString.lift,
-            errorHandler: FfiConverterTypeBlazenError_lift
-        )
-}
-    
-    /**
-     * The model id of the wrapped inner `Model`.
-     */
-open func modelId() -> String  {
+open func providerId() -> String  {
     return try!  FfiConverterString.lift(try! rustCall() {
-    uniffi_blazen_uniffi_fn_method_baseprovider_model_id(
+    uniffi_blazen_uniffi_fn_method_baseprovider_provider_id(
             self.uniffiCloneHandle(),$0
     )
 })
 }
     
     /**
-     * Replace the entire [`ProviderDefaults`] on this provider,
-     * returning a new `Arc<BaseProvider>` (clone-with-mutation).
+     * Capability bucket this provider serves.
      */
-open func withDefaults(defaults: ProviderDefaults) -> BaseProvider  {
-    return try!  FfiConverterTypeBaseProvider_lift(try! rustCall() {
-    uniffi_blazen_uniffi_fn_method_baseprovider_with_defaults(
-            self.uniffiCloneHandle(),
-        FfiConverterTypeProviderDefaults_lower(defaults),$0
-    )
-})
-}
-    
-    /**
-     * Set the default `response_format` (JSON-encoded `serde_json::Value`).
-     *
-     * Malformed JSON or an empty string is treated as JSON null.
-     */
-open func withResponseFormatJson(fmtJson: String) -> BaseProvider  {
-    return try!  FfiConverterTypeBaseProvider_lift(try! rustCall() {
-    uniffi_blazen_uniffi_fn_method_baseprovider_with_response_format_json(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(fmtJson),$0
-    )
-})
-}
-    
-    /**
-     * Set the default system prompt.
-     */
-open func withSystemPrompt(prompt: String) -> BaseProvider  {
-    return try!  FfiConverterTypeBaseProvider_lift(try! rustCall() {
-    uniffi_blazen_uniffi_fn_method_baseprovider_with_system_prompt(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(prompt),$0
-    )
-})
-}
-    
-    /**
-     * Set the default tools (JSON-encoded `Vec<ToolDefinition>`).
-     *
-     * Malformed JSON is treated as an empty tool list — matching the
-     * upstream `#[derive(Default)]` semantics. Foreign callers should
-     * validate the JSON before sending it across the FFI.
-     */
-open func withToolsJson(toolsJson: String) -> BaseProvider  {
-    return try!  FfiConverterTypeBaseProvider_lift(try! rustCall() {
-    uniffi_blazen_uniffi_fn_method_baseprovider_with_tools_json(
-            self.uniffiCloneHandle(),
-        FfiConverterString.lower(toolsJson),$0
+open func capability() -> CapabilityKind  {
+    return try!  FfiConverterTypeCapabilityKind_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_baseprovider_capability(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -1503,26 +1724,62 @@ public func FfiConverterTypeCheckpointStore_lower(_ value: CheckpointStore) -> U
 
 
 /**
- * HTTP-proxy backend implementing all four 3D-pipeline capability
- * traits against a configurable upstream service.
+ * HTTP-proxy 3D provider implementing the texturize / rig / refine /
+ * animate post-processing stages of the 3D pipeline against a
+ * configurable upstream service.
  *
- * For every stage, this provider POSTs a `multipart/form-data` request
- * with the mesh GLB and a JSON request body to
- * `{base_url}/v1/3d/{texturize,rig,refine,animate}`, and decodes a
+ * Wraps [`blazen_llm::providers::concrete::three_d::Compat3dProvider`]
+ * which itself wraps
+ * [`blazen_3d::backends::compat::Compat3dProvider`]. The upstream
+ * contract does NOT include a generation endpoint, so
+ * [`generate_from_image`](Self::generate_from_image) returns
+ * [`BlazenError::Unsupported`] — use [`TripoSrProvider`] (or another
+ * generation backend) to produce the base mesh, then forward the
+ * result through this provider's post-proc methods.
+ *
+ * For every stage, this provider POSTs a `multipart/form-data`
+ * request with the mesh GLB and a JSON request body to
+ * `{base_url}/v1/3d/{texturize,rig,refine,animate}` and decodes a
  * base64-wrapped JSON response into the corresponding result record.
  */
 public protocol Compat3dProviderProtocol: AnyObject, Sendable {
     
     /**
-     * Animate a rigged 3D mesh from a text prompt, motion-capture clip,
-     * or driving video.
+     * Animate a rigged 3D mesh from a text prompt, motion-capture
+     * clip, or driving video.
      */
     func animate(riggedGlb: Data, request: AnimateRequest) async throws  -> AnimateResult
+    
+    /**
+     * Synchronous variant of [`animate`](Self::animate).
+     */
+    func animateBlocking(riggedGlb: Data, request: AnimateRequest) throws  -> AnimateResult
+    
+    /**
+     * Generation isn't part of the compat-proxy wire contract.
+     *
+     * Mirrors the inner `ThreeDProvider::generate_3d` `Unsupported`
+     * path so the per-engine class surface stays uniform across
+     * [`TripoSrProvider`] and [`Compat3dProvider`].
+     */
+    func generateFromImage(imageBytes: Data, meshResolution: UInt32) async throws  -> ThreeDGenerateResult
+    
+    /**
+     * Synchronous variant of
+     * [`generate_from_image`](Self::generate_from_image) — surfaces
+     * the same `Unsupported` error as the async path.
+     */
+    func generateFromImageBlocking(imageBytes: Data, meshResolution: UInt32) throws  -> ThreeDGenerateResult
     
     /**
      * Refine a 3D mesh: decimate, fill holes, unwrap UVs, retopologize, smooth.
      */
     func refine(meshGlb: Data, request: RefineRequest) async throws  -> RefineResult
+    
+    /**
+     * Synchronous variant of [`refine`](Self::refine).
+     */
+    func refineBlocking(meshGlb: Data, request: RefineRequest) throws  -> RefineResult
     
     /**
      * Auto-rig a 3D mesh, producing a GLB with skeletal armature and
@@ -1531,18 +1788,38 @@ public protocol Compat3dProviderProtocol: AnyObject, Sendable {
     func rig(meshGlb: Data, request: RigRequest) async throws  -> RigResult
     
     /**
+     * Synchronous variant of [`rig`](Self::rig).
+     */
+    func rigBlocking(meshGlb: Data, request: RigRequest) throws  -> RigResult
+    
+    /**
      * Apply or generate a texture/material for an existing 3D mesh.
      */
     func texturize(meshGlb: Data, request: TexturizeRequest) async throws  -> TexturizeResult
     
+    /**
+     * Synchronous variant of [`texturize`](Self::texturize).
+     */
+    func texturizeBlocking(meshGlb: Data, request: TexturizeRequest) throws  -> TexturizeResult
+    
 }
 /**
- * HTTP-proxy backend implementing all four 3D-pipeline capability
- * traits against a configurable upstream service.
+ * HTTP-proxy 3D provider implementing the texturize / rig / refine /
+ * animate post-processing stages of the 3D pipeline against a
+ * configurable upstream service.
  *
- * For every stage, this provider POSTs a `multipart/form-data` request
- * with the mesh GLB and a JSON request body to
- * `{base_url}/v1/3d/{texturize,rig,refine,animate}`, and decodes a
+ * Wraps [`blazen_llm::providers::concrete::three_d::Compat3dProvider`]
+ * which itself wraps
+ * [`blazen_3d::backends::compat::Compat3dProvider`]. The upstream
+ * contract does NOT include a generation endpoint, so
+ * [`generate_from_image`](Self::generate_from_image) returns
+ * [`BlazenError::Unsupported`] — use [`TripoSrProvider`] (or another
+ * generation backend) to produce the base mesh, then forward the
+ * result through this provider's post-proc methods.
+ *
+ * For every stage, this provider POSTs a `multipart/form-data`
+ * request with the mesh GLB and a JSON request body to
+ * `{base_url}/v1/3d/{texturize,rig,refine,animate}` and decodes a
  * base64-wrapped JSON response into the corresponding result record.
  */
 open class Compat3dProvider: Compat3dProviderProtocol, @unchecked Sendable {
@@ -1591,6 +1868,11 @@ open class Compat3dProvider: Compat3dProviderProtocol, @unchecked Sendable {
      * `"https://3d.example.com"`). `api_key` is an optional bearer
      * token attached as `Authorization: Bearer ...`. `timeout_secs`
      * is an optional per-request timeout in seconds (default 600).
+     *
+     * `timeout_secs` is plumbed through `from_inner` because the
+     * blazen-llm `Compat3dProvider::new` constructor only accepts
+     * `(base_url, api_key)` — the per-request timeout is a builder
+     * on the inner `blazen_3d` provider.
      */
 public convenience init(baseUrl: String, apiKey: String?, timeoutSecs: UInt32?) {
     let handle =
@@ -1617,8 +1899,8 @@ public convenience init(baseUrl: String, apiKey: String?, timeoutSecs: UInt32?) 
 
     
     /**
-     * Animate a rigged 3D mesh from a text prompt, motion-capture clip,
-     * or driving video.
+     * Animate a rigged 3D mesh from a text prompt, motion-capture
+     * clip, or driving video.
      */
 open func animate(riggedGlb: Data, request: AnimateRequest)async throws  -> AnimateResult  {
     return
@@ -1633,8 +1915,60 @@ open func animate(riggedGlb: Data, request: AnimateRequest)async throws  -> Anim
             completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeAnimateResult_lift,
-            errorHandler: FfiConverterTypeThreeDError_lift
+            errorHandler: FfiConverterTypeBlazenError_lift
         )
+}
+    
+    /**
+     * Synchronous variant of [`animate`](Self::animate).
+     */
+open func animateBlocking(riggedGlb: Data, request: AnimateRequest)throws  -> AnimateResult  {
+    return try  FfiConverterTypeAnimateResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_compat3dprovider_animate_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(riggedGlb),
+        FfiConverterTypeAnimateRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * Generation isn't part of the compat-proxy wire contract.
+     *
+     * Mirrors the inner `ThreeDProvider::generate_3d` `Unsupported`
+     * path so the per-engine class surface stays uniform across
+     * [`TripoSrProvider`] and [`Compat3dProvider`].
+     */
+open func generateFromImage(imageBytes: Data, meshResolution: UInt32)async throws  -> ThreeDGenerateResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_compat3dprovider_generate_from_image(
+                    self.uniffiCloneHandle(),
+                    FfiConverterData.lower(imageBytes),FfiConverterUInt32.lower(meshResolution)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeThreeDGenerateResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of
+     * [`generate_from_image`](Self::generate_from_image) — surfaces
+     * the same `Unsupported` error as the async path.
+     */
+open func generateFromImageBlocking(imageBytes: Data, meshResolution: UInt32)throws  -> ThreeDGenerateResult  {
+    return try  FfiConverterTypeThreeDGenerateResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_compat3dprovider_generate_from_image_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(imageBytes),
+        FfiConverterUInt32.lower(meshResolution),$0
+    )
+})
 }
     
     /**
@@ -1653,8 +1987,21 @@ open func refine(meshGlb: Data, request: RefineRequest)async throws  -> RefineRe
             completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeRefineResult_lift,
-            errorHandler: FfiConverterTypeThreeDError_lift
+            errorHandler: FfiConverterTypeBlazenError_lift
         )
+}
+    
+    /**
+     * Synchronous variant of [`refine`](Self::refine).
+     */
+open func refineBlocking(meshGlb: Data, request: RefineRequest)throws  -> RefineResult  {
+    return try  FfiConverterTypeRefineResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_compat3dprovider_refine_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(meshGlb),
+        FfiConverterTypeRefineRequest_lower(request),$0
+    )
+})
 }
     
     /**
@@ -1674,8 +2021,21 @@ open func rig(meshGlb: Data, request: RigRequest)async throws  -> RigResult  {
             completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeRigResult_lift,
-            errorHandler: FfiConverterTypeThreeDError_lift
+            errorHandler: FfiConverterTypeBlazenError_lift
         )
+}
+    
+    /**
+     * Synchronous variant of [`rig`](Self::rig).
+     */
+open func rigBlocking(meshGlb: Data, request: RigRequest)throws  -> RigResult  {
+    return try  FfiConverterTypeRigResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_compat3dprovider_rig_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(meshGlb),
+        FfiConverterTypeRigRequest_lower(request),$0
+    )
+})
 }
     
     /**
@@ -1694,8 +2054,21 @@ open func texturize(meshGlb: Data, request: TexturizeRequest)async throws  -> Te
             completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
             freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
             liftFunc: FfiConverterTypeTexturizeResult_lift,
-            errorHandler: FfiConverterTypeThreeDError_lift
+            errorHandler: FfiConverterTypeBlazenError_lift
         )
+}
+    
+    /**
+     * Synchronous variant of [`texturize`](Self::texturize).
+     */
+open func texturizeBlocking(meshGlb: Data, request: TexturizeRequest)throws  -> TexturizeResult  {
+    return try  FfiConverterTypeTexturizeResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_compat3dprovider_texturize_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(meshGlb),
+        FfiConverterTypeTexturizeRequest_lower(request),$0
+    )
+})
 }
     
 
@@ -4921,20 +5294,20 @@ public func FfiConverterTypeCustomProvider_lower(_ value: CustomProvider) -> UIn
  * which applies any per-instance defaults attached via the builders before
  * forwarding to the underlying [`CustomProvider`].
  *
- * The paired [`BaseProvider`] handle returned by [`as_base`](Self::as_base)
+ * The paired [`LlmProviderDefaults`] handle returned by [`as_base`](Self::as_base)
  * exposes builder-style completion-defaults customisation
  * (`with_system_prompt`, `with_tools_json`, ...).
  */
 public protocol CustomProviderHandleProtocol: AnyObject, Sendable {
     
     /**
-     * Return the paired [`BaseProvider`] handle for builder-style chaining.
+     * Return the paired [`LlmProviderDefaults`] handle for builder-style chaining.
      *
      * Use for `.with_system_prompt(...)`, `.with_tools_json(...)`,
      * `.with_response_format_json(...)`, or to hand the provider to an API
      * expecting an opaque `Model`-shaped handle.
      */
-    func asBase()  -> BaseProvider
+    func asBase()  -> LlmProviderDefaults
     
     /**
      * Clone a voice from reference audio.
@@ -5066,7 +5439,7 @@ public protocol CustomProviderHandleProtocol: AnyObject, Sendable {
  * which applies any per-instance defaults attached via the builders before
  * forwarding to the underlying [`CustomProvider`].
  *
- * The paired [`BaseProvider`] handle returned by [`as_base`](Self::as_base)
+ * The paired [`LlmProviderDefaults`] handle returned by [`as_base`](Self::as_base)
  * exposes builder-style completion-defaults customisation
  * (`with_system_prompt`, `with_tools_json`, ...).
  */
@@ -5124,14 +5497,14 @@ open class CustomProviderHandle: CustomProviderHandleProtocol, @unchecked Sendab
 
     
     /**
-     * Return the paired [`BaseProvider`] handle for builder-style chaining.
+     * Return the paired [`LlmProviderDefaults`] handle for builder-style chaining.
      *
      * Use for `.with_system_prompt(...)`, `.with_tools_json(...)`,
      * `.with_response_format_json(...)`, or to hand the provider to an API
      * expecting an opaque `Model`-shaped handle.
      */
-open func asBase() -> BaseProvider  {
-    return try!  FfiConverterTypeBaseProvider_lift(try! rustCall() {
+open func asBase() -> LlmProviderDefaults  {
+    return try!  FfiConverterTypeLlmProviderDefaults_lift(try! rustCall() {
     uniffi_blazen_uniffi_fn_method_customproviderhandle_as_base(
             self.uniffiCloneHandle(),$0
     )
@@ -5757,6 +6130,1397 @@ public func FfiConverterTypeEmbeddingModel_lift(_ handle: UInt64) throws -> Embe
 #endif
 public func FfiConverterTypeEmbeddingModel_lower(_ value: EmbeddingModel) -> UInt64 {
     return FfiConverterTypeEmbeddingModel.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Vector-embedding capability trait.
+ *
+ * `dimensions` is a synchronous metadata accessor — `#[async_trait]`
+ * (used here for `embed`) tolerates sync methods alongside async
+ * methods in the same trait body, matching the pattern used by
+ * [`crate::provider_custom::CustomProvider`].
+ */
+public protocol EmbeddingProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+     */
+    func providerId()  -> String
+    
+    /**
+     * Capability bucket (always [`CapabilityKind::Embedding`] for this trait).
+     */
+    func capability()  -> CapabilityKind
+    
+    /**
+     * Compute embedding vectors for each input string.
+     */
+    func embed(texts: [String]) async throws  -> [[Float]]
+    
+    /**
+     * Return the dimensionality of vectors produced by [`embed`](Self::embed).
+     */
+    func dimensions()  -> UInt32
+    
+}
+/**
+ * Vector-embedding capability trait.
+ *
+ * `dimensions` is a synchronous metadata accessor — `#[async_trait]`
+ * (used here for `embed`) tolerates sync methods alongside async
+ * methods in the same trait body, matching the pattern used by
+ * [`crate::provider_custom::CustomProvider`].
+ */
+open class EmbeddingProvider: EmbeddingProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_embeddingprovider(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_embeddingprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+     */
+open func providerId() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_embeddingprovider_provider_id(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Capability bucket (always [`CapabilityKind::Embedding`] for this trait).
+     */
+open func capability() -> CapabilityKind  {
+    return try!  FfiConverterTypeCapabilityKind_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_embeddingprovider_capability(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Compute embedding vectors for each input string.
+     */
+open func embed(texts: [String])async throws  -> [[Float]]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_embeddingprovider_embed(
+                    self.uniffiCloneHandle(),
+                    FfiConverterSequenceString.lower(texts)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceSequenceFloat.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Return the dimensionality of vectors produced by [`embed`](Self::embed).
+     */
+open func dimensions() -> UInt32  {
+    return try!  FfiConverterUInt32.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_embeddingprovider_dimensions(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeEmbeddingProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = EmbeddingProvider
+
+    public static func lift(_ handle: UInt64) throws -> EmbeddingProvider {
+        return EmbeddingProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: EmbeddingProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> EmbeddingProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: EmbeddingProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmbeddingProvider_lift(_ handle: UInt64) throws -> EmbeddingProvider {
+    return try FfiConverterTypeEmbeddingProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeEmbeddingProvider_lower(_ value: EmbeddingProvider) -> UInt64 {
+    return FfiConverterTypeEmbeddingProvider.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Concrete TTS provider backed by the local F5-TTS engine.
+ *
+ * Wraps [`blazen_llm::providers::concrete::tts::F5Provider`].
+ */
+public protocol F5ProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+    func synthesize(text: String, voice: String?, language: String?) async throws  -> TtsResult
+    
+    /**
+     * Synchronous variant of [`synthesize`](Self::synthesize).
+     */
+    func synthesizeBlocking(text: String, voice: String?, language: String?) throws  -> TtsResult
+    
+}
+/**
+ * Concrete TTS provider backed by the local F5-TTS engine.
+ *
+ * Wraps [`blazen_llm::providers::concrete::tts::F5Provider`].
+ */
+open class F5Provider: F5ProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_f5provider(self.handle, $0) }
+    }
+    /**
+     * Construct an F5-TTS provider with default configuration.
+     */
+public convenience init() {
+    let handle =
+        try! rustCall() {
+    uniffi_blazen_uniffi_fn_constructor_f5provider_new($0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_f5provider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+open func synthesize(text: String, voice: String?, language: String?)async throws  -> TtsResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_f5provider_synthesize(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(text),FfiConverterOptionString.lower(voice),FfiConverterOptionString.lower(language)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTtsResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`synthesize`](Self::synthesize).
+     */
+open func synthesizeBlocking(text: String, voice: String?, language: String?)throws  -> TtsResult  {
+    return try  FfiConverterTypeTtsResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_f5provider_synthesize_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(text),
+        FfiConverterOptionString.lower(voice),
+        FfiConverterOptionString.lower(language),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeF5Provider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = F5Provider
+
+    public static func lift(_ handle: UInt64) throws -> F5Provider {
+        return F5Provider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: F5Provider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> F5Provider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: F5Provider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeF5Provider_lift(_ handle: UInt64) throws -> F5Provider {
+    return try FfiConverterTypeF5Provider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeF5Provider_lower(_ value: F5Provider) -> UInt64 {
+    return FfiConverterTypeF5Provider.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Concrete provider class for fal.ai's music + sfx endpoints.
+ *
+ * Wraps [`blazen_llm::providers::concrete::music::FalMusicProvider`].
+ * Both `generate_music` and `generate_sfx` are routed through it
+ * (fal's per-endpoint dispatch handles the underlying model selection).
+ *
+ * This type is part of the music concrete module, which is itself feature
+ * -gated behind `audio-music-musicgen` — when MusicGen is disabled the
+ * whole `concrete::music` module disappears, so fal.ai music callers fall
+ * back to the central [`crate::compute_music::new_fal_music_model`]
+ * factory which has no feature gate.
+ */
+public protocol FalMusicProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Generate `duration_seconds` of music conditioned on `prompt`.
+     */
+    func generateMusic(prompt: String, durationSeconds: Float) async throws  -> MusicResult
+    
+    /**
+     * Synchronous variant of [`generate_music`](Self::generate_music).
+     */
+    func generateMusicBlocking(prompt: String, durationSeconds: Float) throws  -> MusicResult
+    
+    /**
+     * Generate `duration_seconds` of sound-effect audio conditioned on
+     * `prompt`.
+     */
+    func generateSfx(prompt: String, durationSeconds: Float) async throws  -> MusicResult
+    
+    /**
+     * Synchronous variant of [`generate_sfx`](Self::generate_sfx).
+     */
+    func generateSfxBlocking(prompt: String, durationSeconds: Float) throws  -> MusicResult
+    
+}
+/**
+ * Concrete provider class for fal.ai's music + sfx endpoints.
+ *
+ * Wraps [`blazen_llm::providers::concrete::music::FalMusicProvider`].
+ * Both `generate_music` and `generate_sfx` are routed through it
+ * (fal's per-endpoint dispatch handles the underlying model selection).
+ *
+ * This type is part of the music concrete module, which is itself feature
+ * -gated behind `audio-music-musicgen` — when MusicGen is disabled the
+ * whole `concrete::music` module disappears, so fal.ai music callers fall
+ * back to the central [`crate::compute_music::new_fal_music_model`]
+ * factory which has no feature gate.
+ */
+open class FalMusicProvider: FalMusicProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_falmusicprovider(self.handle, $0) }
+    }
+    /**
+     * Build a new fal.ai-backed music provider.
+     *
+     * `api_key` may be empty when the provider resolves it from the
+     * `FAL_KEY` environment variable.
+     */
+public convenience init(apiKey: String) {
+    let handle =
+        try! rustCall() {
+    uniffi_blazen_uniffi_fn_constructor_falmusicprovider_new(
+        FfiConverterString.lower(apiKey),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_falmusicprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Generate `duration_seconds` of music conditioned on `prompt`.
+     */
+open func generateMusic(prompt: String, durationSeconds: Float)async throws  -> MusicResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_falmusicprovider_generate_music(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(prompt),FfiConverterFloat.lower(durationSeconds)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeMusicResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`generate_music`](Self::generate_music).
+     */
+open func generateMusicBlocking(prompt: String, durationSeconds: Float)throws  -> MusicResult  {
+    return try  FfiConverterTypeMusicResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_falmusicprovider_generate_music_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(prompt),
+        FfiConverterFloat.lower(durationSeconds),$0
+    )
+})
+}
+    
+    /**
+     * Generate `duration_seconds` of sound-effect audio conditioned on
+     * `prompt`.
+     */
+open func generateSfx(prompt: String, durationSeconds: Float)async throws  -> MusicResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_falmusicprovider_generate_sfx(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(prompt),FfiConverterFloat.lower(durationSeconds)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeMusicResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`generate_sfx`](Self::generate_sfx).
+     */
+open func generateSfxBlocking(prompt: String, durationSeconds: Float)throws  -> MusicResult  {
+    return try  FfiConverterTypeMusicResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_falmusicprovider_generate_sfx_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(prompt),
+        FfiConverterFloat.lower(durationSeconds),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFalMusicProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = FalMusicProvider
+
+    public static func lift(_ handle: UInt64) throws -> FalMusicProvider {
+        return FalMusicProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: FalMusicProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FalMusicProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: FalMusicProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFalMusicProvider_lift(_ handle: UInt64) throws -> FalMusicProvider {
+    return try FfiConverterTypeFalMusicProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFalMusicProvider_lower(_ value: FalMusicProvider) -> UInt64 {
+    return FfiConverterTypeFalMusicProvider.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Hosted fal.ai speech-to-text provider.
+ *
+ * Thin wrapper around `blazen_llm::providers::concrete::stt::FalSttProvider`
+ * that surfaces only the [`SttProvider`] capability. Construction is
+ * cheap; the underlying fal client handles endpoint selection,
+ * queueing, and result polling per call.
+ */
+public protocol FalSttProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Transcribe audio at `audio_source` and return the transcript.
+     *
+     * `audio_source` should be an `http(s)://` URL or a `data:` URI
+     * reachable by fal.ai's workers. `language` is an optional
+     * ISO-639-1 hint; when omitted fal performs language detection.
+     *
+     * # Errors
+     *
+     * Returns `BlazenError::Provider { kind: "SttTranscribe", ... }`
+     * on HTTP / fal queue / decoding errors.
+     */
+    func transcribe(audioSource: String, language: String?) async throws  -> SttResult
+    
+    /**
+     * Synchronous variant of [`transcribe`](Self::transcribe).
+     */
+    func transcribeBlocking(audioSource: String, language: String?) throws  -> SttResult
+    
+}
+/**
+ * Hosted fal.ai speech-to-text provider.
+ *
+ * Thin wrapper around `blazen_llm::providers::concrete::stt::FalSttProvider`
+ * that surfaces only the [`SttProvider`] capability. Construction is
+ * cheap; the underlying fal client handles endpoint selection,
+ * queueing, and result polling per call.
+ */
+open class FalSttProvider: FalSttProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_falsttprovider(self.handle, $0) }
+    }
+    /**
+     * Build a `FalSttProvider` with the given fal.ai API key.
+     */
+public convenience init(apiKey: String) {
+    let handle =
+        try! rustCall() {
+    uniffi_blazen_uniffi_fn_constructor_falsttprovider_new(
+        FfiConverterString.lower(apiKey),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_falsttprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Transcribe audio at `audio_source` and return the transcript.
+     *
+     * `audio_source` should be an `http(s)://` URL or a `data:` URI
+     * reachable by fal.ai's workers. `language` is an optional
+     * ISO-639-1 hint; when omitted fal performs language detection.
+     *
+     * # Errors
+     *
+     * Returns `BlazenError::Provider { kind: "SttTranscribe", ... }`
+     * on HTTP / fal queue / decoding errors.
+     */
+open func transcribe(audioSource: String, language: String?)async throws  -> SttResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_falsttprovider_transcribe(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(audioSource),FfiConverterOptionString.lower(language)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSttResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`transcribe`](Self::transcribe).
+     */
+open func transcribeBlocking(audioSource: String, language: String?)throws  -> SttResult  {
+    return try  FfiConverterTypeSttResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_falsttprovider_transcribe_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(audioSource),
+        FfiConverterOptionString.lower(language),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFalSttProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = FalSttProvider
+
+    public static func lift(_ handle: UInt64) throws -> FalSttProvider {
+        return FalSttProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: FalSttProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FalSttProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: FalSttProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFalSttProvider_lift(_ handle: UInt64) throws -> FalSttProvider {
+    return try FfiConverterTypeFalSttProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFalSttProvider_lower(_ value: FalSttProvider) -> UInt64 {
+    return FfiConverterTypeFalSttProvider.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Concrete TTS provider backed by fal.ai's hosted TTS endpoints.
+ *
+ * Wraps [`blazen_llm::providers::concrete::tts::FalTtsProvider`].
+ */
+public protocol FalTtsProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+    func synthesize(text: String, voice: String?, language: String?) async throws  -> TtsResult
+    
+    /**
+     * Synchronous variant of [`synthesize`](Self::synthesize).
+     */
+    func synthesizeBlocking(text: String, voice: String?, language: String?) throws  -> TtsResult
+    
+}
+/**
+ * Concrete TTS provider backed by fal.ai's hosted TTS endpoints.
+ *
+ * Wraps [`blazen_llm::providers::concrete::tts::FalTtsProvider`].
+ */
+open class FalTtsProvider: FalTtsProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_falttsprovider(self.handle, $0) }
+    }
+    /**
+     * Construct from a fal.ai API key. An empty `api_key` falls back to
+     * the `FAL_KEY` environment variable.
+     */
+public convenience init(apiKey: String)throws  {
+    let handle =
+        try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_constructor_falttsprovider_new(
+        FfiConverterString.lower(apiKey),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_falttsprovider(handle, $0) }
+    }
+
+    
+    /**
+     * Construct with an explicit default fal TTS endpoint
+     * (e.g. `"fal-ai/dia-tts"`).
+     */
+public static func withModel(apiKey: String, defaultModel: String?)throws  -> FalTtsProvider  {
+    return try  FfiConverterTypeFalTtsProvider_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_constructor_falttsprovider_with_model(
+        FfiConverterString.lower(apiKey),
+        FfiConverterOptionString.lower(defaultModel),$0
+    )
+})
+}
+    
+
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+open func synthesize(text: String, voice: String?, language: String?)async throws  -> TtsResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_falttsprovider_synthesize(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(text),FfiConverterOptionString.lower(voice),FfiConverterOptionString.lower(language)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTtsResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`synthesize`](Self::synthesize).
+     */
+open func synthesizeBlocking(text: String, voice: String?, language: String?)throws  -> TtsResult  {
+    return try  FfiConverterTypeTtsResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_falttsprovider_synthesize_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(text),
+        FfiConverterOptionString.lower(voice),
+        FfiConverterOptionString.lower(language),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFalTtsProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = FalTtsProvider
+
+    public static func lift(_ handle: UInt64) throws -> FalTtsProvider {
+        return FalTtsProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: FalTtsProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FalTtsProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: FalTtsProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFalTtsProvider_lift(_ handle: UInt64) throws -> FalTtsProvider {
+    return try FfiConverterTypeFalTtsProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFalTtsProvider_lower(_ value: FalTtsProvider) -> UInt64 {
+    return FfiConverterTypeFalTtsProvider.lower(value)
+}
+
+
+
+
+
+
+/**
+ * fal.ai-backed voice-conversion provider.
+ *
+ * Wraps [`blazen_llm::providers::concrete::vc::FalVcProvider`] which
+ * routes requests through fal.ai's compute queue against the model id
+ * supplied at construction time or per call (the upstream provider reads
+ * `request.parameters.model` when present, else falls back to its built-in
+ * default fal VC endpoint).
+ *
+ * Voice cloning and listing are not part of fal's stable cloud VC surface
+ * today, so this FFI class only exposes `convert_voice` — the upstream
+ * trait's default `Unsupported` impls for `clone_voice` / `list_voices`
+ * would surface a sentinel error to foreign callers, which is worse UX
+ * than the method just not existing.
+ */
+public protocol FalVcProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Convert the source utterance at `input_path` (an `http(s)://` /
+     * `data:` URL reachable by fal's workers) into the target voice
+     * `target_voice_id`.
+     *
+     * Unlike the native [`RvcProvider`], fal requires a URL — local file
+     * paths won't work since fal's workers can't reach the caller's
+     * disk. Pass a presigned / public URL or a `data:` URI.
+     *
+     * # Errors
+     *
+     * Returns `BlazenError::Provider { kind: "VcConvert", ... }` on HTTP
+     * / fal queue / endpoint-shape errors.
+     */
+    func convertVoice(inputPath: String, targetVoiceId: String) async throws  -> VcResult
+    
+    /**
+     * Synchronous variant of [`convert_voice`](Self::convert_voice).
+     */
+    func convertVoiceBlocking(inputPath: String, targetVoiceId: String) throws  -> VcResult
+    
+}
+/**
+ * fal.ai-backed voice-conversion provider.
+ *
+ * Wraps [`blazen_llm::providers::concrete::vc::FalVcProvider`] which
+ * routes requests through fal.ai's compute queue against the model id
+ * supplied at construction time or per call (the upstream provider reads
+ * `request.parameters.model` when present, else falls back to its built-in
+ * default fal VC endpoint).
+ *
+ * Voice cloning and listing are not part of fal's stable cloud VC surface
+ * today, so this FFI class only exposes `convert_voice` — the upstream
+ * trait's default `Unsupported` impls for `clone_voice` / `list_voices`
+ * would surface a sentinel error to foreign callers, which is worse UX
+ * than the method just not existing.
+ */
+open class FalVcProvider: FalVcProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_falvcprovider(self.handle, $0) }
+    }
+    /**
+     * Build a fal.ai-backed VC provider with the given API key.
+     *
+     * `api_key` may be empty when the fal client resolves it from the
+     * `FAL_KEY` environment variable.
+     */
+public convenience init(apiKey: String) {
+    let handle =
+        try! rustCall() {
+    uniffi_blazen_uniffi_fn_constructor_falvcprovider_new(
+        FfiConverterString.lower(apiKey),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_falvcprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Convert the source utterance at `input_path` (an `http(s)://` /
+     * `data:` URL reachable by fal's workers) into the target voice
+     * `target_voice_id`.
+     *
+     * Unlike the native [`RvcProvider`], fal requires a URL — local file
+     * paths won't work since fal's workers can't reach the caller's
+     * disk. Pass a presigned / public URL or a `data:` URI.
+     *
+     * # Errors
+     *
+     * Returns `BlazenError::Provider { kind: "VcConvert", ... }` on HTTP
+     * / fal queue / endpoint-shape errors.
+     */
+open func convertVoice(inputPath: String, targetVoiceId: String)async throws  -> VcResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_falvcprovider_convert_voice(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(inputPath),FfiConverterString.lower(targetVoiceId)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeVcResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`convert_voice`](Self::convert_voice).
+     */
+open func convertVoiceBlocking(inputPath: String, targetVoiceId: String)throws  -> VcResult  {
+    return try  FfiConverterTypeVcResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_falvcprovider_convert_voice_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(inputPath),
+        FfiConverterString.lower(targetVoiceId),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFalVcProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = FalVcProvider
+
+    public static func lift(_ handle: UInt64) throws -> FalVcProvider {
+        return FalVcProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: FalVcProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FalVcProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: FalVcProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFalVcProvider_lift(_ handle: UInt64) throws -> FalVcProvider {
+    return try FfiConverterTypeFalVcProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFalVcProvider_lower(_ value: FalVcProvider) -> UInt64 {
+    return FfiConverterTypeFalVcProvider.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Local faster-whisper (`CTranslate2`) speech-to-text provider.
+ *
+ * Construct with [`FasterWhisperProvider::new`] (sync — cheap). The
+ * ct2rs decoder is materialised lazily on the first transcribe call
+ * (Hugging Face download + `CTranslate2` model load).
+ */
+public protocol FasterWhisperProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Transcribe audio at `audio_source` and return the transcript.
+     *
+     * See [`WhisperCppProvider::transcribe`] for the `audio_source` /
+     * `language` semantics.
+     *
+     * # Errors
+     *
+     * Returns `BlazenError::Provider { kind: "SttTranscribe", ... }`
+     * when the backend fails to load or transcribe.
+     */
+    func transcribe(audioSource: String, language: String?) async throws  -> SttResult
+    
+    /**
+     * Synchronous variant of [`transcribe`](Self::transcribe).
+     */
+    func transcribeBlocking(audioSource: String, language: String?) throws  -> SttResult
+    
+}
+/**
+ * Local faster-whisper (`CTranslate2`) speech-to-text provider.
+ *
+ * Construct with [`FasterWhisperProvider::new`] (sync — cheap). The
+ * ct2rs decoder is materialised lazily on the first transcribe call
+ * (Hugging Face download + `CTranslate2` model load).
+ */
+open class FasterWhisperProvider: FasterWhisperProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_fasterwhisperprovider(self.handle, $0) }
+    }
+    /**
+     * Build a `FasterWhisperProvider`.
+     *
+     * `model_id` selects a Hugging Face bundle id (default
+     * `"Systran/faster-whisper-tiny"`). `model_dir` provides a pre-
+     * resolved local `CTranslate2` bundle directory; when supplied the
+     * HF download is skipped. `revision` pins a specific branch / tag /
+     * commit on the HF repo (default `"main"`).
+     */
+public convenience init(modelId: String?, modelDir: String?, revision: String?) {
+    let handle =
+        try! rustCall() {
+    uniffi_blazen_uniffi_fn_constructor_fasterwhisperprovider_new(
+        FfiConverterOptionString.lower(modelId),
+        FfiConverterOptionString.lower(modelDir),
+        FfiConverterOptionString.lower(revision),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_fasterwhisperprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Transcribe audio at `audio_source` and return the transcript.
+     *
+     * See [`WhisperCppProvider::transcribe`] for the `audio_source` /
+     * `language` semantics.
+     *
+     * # Errors
+     *
+     * Returns `BlazenError::Provider { kind: "SttTranscribe", ... }`
+     * when the backend fails to load or transcribe.
+     */
+open func transcribe(audioSource: String, language: String?)async throws  -> SttResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_fasterwhisperprovider_transcribe(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(audioSource),FfiConverterOptionString.lower(language)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSttResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`transcribe`](Self::transcribe).
+     */
+open func transcribeBlocking(audioSource: String, language: String?)throws  -> SttResult  {
+    return try  FfiConverterTypeSttResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_fasterwhisperprovider_transcribe_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(audioSource),
+        FfiConverterOptionString.lower(language),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeFasterWhisperProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = FasterWhisperProvider
+
+    public static func lift(_ handle: UInt64) throws -> FasterWhisperProvider {
+        return FasterWhisperProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: FasterWhisperProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> FasterWhisperProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: FasterWhisperProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFasterWhisperProvider_lift(_ handle: UInt64) throws -> FasterWhisperProvider {
+    return try FfiConverterTypeFasterWhisperProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeFasterWhisperProvider_lower(_ value: FasterWhisperProvider) -> UInt64 {
+    return FfiConverterTypeFasterWhisperProvider.lower(value)
 }
 
 
@@ -6789,6 +8553,873 @@ public func FfiConverterTypeImageGenModel_lift(_ handle: UInt64) throws -> Image
 #endif
 public func FfiConverterTypeImageGenModel_lower(_ value: ImageGenModel) -> UInt64 {
     return FfiConverterTypeImageGenModel.lower(value)
+}
+
+
+
+
+
+
+/**
+ * 2D image-generation capability trait.
+ */
+public protocol ImageGenProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+     */
+    func providerId()  -> String
+    
+    /**
+     * Capability bucket (always [`CapabilityKind::ImageGen`] for this trait).
+     */
+    func capability()  -> CapabilityKind
+    
+    /**
+     * Generate one or more images from a text prompt.
+     */
+    func generateImage(prompt: String, width: UInt32?, height: UInt32?) async throws  -> ImageGenResult
+    
+}
+/**
+ * 2D image-generation capability trait.
+ */
+open class ImageGenProvider: ImageGenProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_imagegenprovider(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_imagegenprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+     */
+open func providerId() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_imagegenprovider_provider_id(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Capability bucket (always [`CapabilityKind::ImageGen`] for this trait).
+     */
+open func capability() -> CapabilityKind  {
+    return try!  FfiConverterTypeCapabilityKind_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_imagegenprovider_capability(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Generate one or more images from a text prompt.
+     */
+open func generateImage(prompt: String, width: UInt32?, height: UInt32?)async throws  -> ImageGenResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_imagegenprovider_generate_image(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(prompt),FfiConverterOptionUInt32.lower(width),FfiConverterOptionUInt32.lower(height)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeImageGenResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeImageGenProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = ImageGenProvider
+
+    public static func lift(_ handle: UInt64) throws -> ImageGenProvider {
+        return ImageGenProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: ImageGenProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ImageGenProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: ImageGenProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeImageGenProvider_lift(_ handle: UInt64) throws -> ImageGenProvider {
+    return try FfiConverterTypeImageGenProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeImageGenProvider_lower(_ value: ImageGenProvider) -> UInt64 {
+    return FfiConverterTypeImageGenProvider.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Concrete TTS provider backed by the local Kokoro-82M engine.
+ *
+ * Wraps [`blazen_llm::providers::concrete::tts::KokoroProvider`].
+ */
+public protocol KokoroProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+    func synthesize(text: String, voice: String?, language: String?) async throws  -> TtsResult
+    
+    /**
+     * Synchronous variant of [`synthesize`](Self::synthesize).
+     */
+    func synthesizeBlocking(text: String, voice: String?, language: String?) throws  -> TtsResult
+    
+}
+/**
+ * Concrete TTS provider backed by the local Kokoro-82M engine.
+ *
+ * Wraps [`blazen_llm::providers::concrete::tts::KokoroProvider`].
+ */
+open class KokoroProvider: KokoroProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_kokoroprovider(self.handle, $0) }
+    }
+    /**
+     * Construct with optional voice / language / sample-rate overrides.
+     */
+public convenience init(voice: String?, language: String?, sampleRate: UInt32?)throws  {
+    let handle =
+        try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_constructor_kokoroprovider_new(
+        FfiConverterOptionString.lower(voice),
+        FfiConverterOptionString.lower(language),
+        FfiConverterOptionUInt32.lower(sampleRate),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_kokoroprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+open func synthesize(text: String, voice: String?, language: String?)async throws  -> TtsResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_kokoroprovider_synthesize(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(text),FfiConverterOptionString.lower(voice),FfiConverterOptionString.lower(language)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTtsResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`synthesize`](Self::synthesize).
+     */
+open func synthesizeBlocking(text: String, voice: String?, language: String?)throws  -> TtsResult  {
+    return try  FfiConverterTypeTtsResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_kokoroprovider_synthesize_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(text),
+        FfiConverterOptionString.lower(voice),
+        FfiConverterOptionString.lower(language),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeKokoroProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = KokoroProvider
+
+    public static func lift(_ handle: UInt64) throws -> KokoroProvider {
+        return KokoroProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: KokoroProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> KokoroProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: KokoroProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKokoroProvider_lift(_ handle: UInt64) throws -> KokoroProvider {
+    return try FfiConverterTypeKokoroProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeKokoroProvider_lower(_ value: KokoroProvider) -> UInt64 {
+    return FfiConverterTypeKokoroProvider.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Large-language-model capability trait — non-streaming completion.
+ *
+ * Streaming completion uses the existing
+ * [`crate::provider_custom::CustomProvider::stream`] surface
+ * (foreign-implementable callback shape) and is not duplicated here.
+ */
+public protocol LlmProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+     */
+    func providerId()  -> String
+    
+    /**
+     * Capability bucket (always [`CapabilityKind::Llm`] for this trait).
+     */
+    func capability()  -> CapabilityKind
+    
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    func complete(request: ModelRequest) async throws  -> ModelResponse
+    
+}
+/**
+ * Large-language-model capability trait — non-streaming completion.
+ *
+ * Streaming completion uses the existing
+ * [`crate::provider_custom::CustomProvider::stream`] surface
+ * (foreign-implementable callback shape) and is not duplicated here.
+ */
+open class LlmProvider: LlmProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_llmprovider(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_llmprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+     */
+open func providerId() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_llmprovider_provider_id(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Capability bucket (always [`CapabilityKind::Llm`] for this trait).
+     */
+open func capability() -> CapabilityKind  {
+    return try!  FfiConverterTypeCapabilityKind_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_llmprovider_capability(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+open func complete(request: ModelRequest)async throws  -> ModelResponse  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_llmprovider_complete(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeModelRequest_lower(request)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeModelResponse_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLlmProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = LlmProvider
+
+    public static func lift(_ handle: UInt64) throws -> LlmProvider {
+        return LlmProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: LlmProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LlmProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: LlmProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLlmProvider_lift(_ handle: UInt64) throws -> LlmProvider {
+    return try FfiConverterTypeLlmProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLlmProvider_lower(_ value: LlmProvider) -> UInt64 {
+    return FfiConverterTypeLlmProvider.lower(value)
+}
+
+
+
+
+
+
+/**
+ * A [`crate::llm::Model`] wrapped with applied
+ * [`ProviderDefaults`].
+ *
+ * Construct via [`LlmProviderDefaults::from_model`] (wraps an existing
+ * model with no defaults) or [`LlmProviderDefaults::with_defaults`]
+ * (wraps with explicit defaults). Mutate via the `with_*` builder methods.
+ *
+ * Phase B's `CustomProvider` factories will return `Arc<LlmProviderDefaults>`
+ * directly; for Phase A this class is reachable by lifting any existing
+ * `Model` factory result.
+ */
+public protocol LlmProviderDefaultsProtocol: AnyObject, Sendable {
+    
+    /**
+     * Unwrap to a plain [`Model`] handle that applies the
+     * configured defaults on every call.
+     *
+     * Use this when you want to pass the wrapped provider to an API that
+     * takes a generic `Model` (the agent runner, workflow
+     * steps, etc.).
+     */
+    func asModel()  -> Model
+    
+    /**
+     * Inspect the currently-configured defaults (data only — hooks are
+     * not surfaced in Phase A).
+     */
+    func defaults()  -> ProviderDefaults
+    
+    /**
+     * Extract structured output from the model by constraining its
+     * response to a JSON Schema.
+     *
+     * Mirrors the upstream
+     * [`blazen_llm::traits::StructuredOutput::extract`] blanket impl: the
+     * `schema_json` is injected as the request's `response_format` and
+     * the completion is dispatched as usual. Returns the model's raw
+     * content (which the foreign caller deserializes into its own typed
+     * shape — UniFFI cannot return a generic typed value across the FFI).
+     *
+     * `schema_json` must be a valid JSON Schema string; an empty string or
+     * malformed JSON falls back to `null` (the request is sent without a
+     * `response_format`).
+     */
+    func extract(schemaJson: String, messages: [ChatMessage]) async throws  -> String
+    
+    /**
+     * The model id of the wrapped inner `Model`.
+     */
+    func modelId()  -> String
+    
+    /**
+     * Replace the entire [`ProviderDefaults`] on this provider,
+     * returning a new `Arc<LlmProviderDefaults>` (clone-with-mutation).
+     */
+    func withDefaults(defaults: ProviderDefaults)  -> LlmProviderDefaults
+    
+    /**
+     * Set the default `response_format` (JSON-encoded `serde_json::Value`).
+     *
+     * Malformed JSON or an empty string is treated as JSON null.
+     */
+    func withResponseFormatJson(fmtJson: String)  -> LlmProviderDefaults
+    
+    /**
+     * Set the default system prompt.
+     */
+    func withSystemPrompt(prompt: String)  -> LlmProviderDefaults
+    
+    /**
+     * Set the default tools (JSON-encoded `Vec<ToolDefinition>`).
+     *
+     * Malformed JSON is treated as an empty tool list — matching the
+     * upstream `#[derive(Default)]` semantics. Foreign callers should
+     * validate the JSON before sending it across the FFI.
+     */
+    func withToolsJson(toolsJson: String)  -> LlmProviderDefaults
+    
+}
+/**
+ * A [`crate::llm::Model`] wrapped with applied
+ * [`ProviderDefaults`].
+ *
+ * Construct via [`LlmProviderDefaults::from_model`] (wraps an existing
+ * model with no defaults) or [`LlmProviderDefaults::with_defaults`]
+ * (wraps with explicit defaults). Mutate via the `with_*` builder methods.
+ *
+ * Phase B's `CustomProvider` factories will return `Arc<LlmProviderDefaults>`
+ * directly; for Phase A this class is reachable by lifting any existing
+ * `Model` factory result.
+ */
+open class LlmProviderDefaults: LlmProviderDefaultsProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_llmproviderdefaults(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_llmproviderdefaults(handle, $0) }
+    }
+
+    
+    /**
+     * Wrap an existing [`Model`] with empty defaults.
+     *
+     * Equivalent to using the wrapped model directly, but lets callers
+     * attach defaults later via the `with_*` methods.
+     */
+public static func fromModel(model: Model) -> LlmProviderDefaults  {
+    return try!  FfiConverterTypeLlmProviderDefaults_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_constructor_llmproviderdefaults_from_model(
+        FfiConverterTypeModel_lower(model),$0
+    )
+})
+}
+    
+    /**
+     * Wrap a [`Model`] with explicit
+     * [`ProviderDefaults`].
+     */
+public static func fromModelWithDefaults(model: Model, defaults: ProviderDefaults) -> LlmProviderDefaults  {
+    return try!  FfiConverterTypeLlmProviderDefaults_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_constructor_llmproviderdefaults_from_model_with_defaults(
+        FfiConverterTypeModel_lower(model),
+        FfiConverterTypeProviderDefaults_lower(defaults),$0
+    )
+})
+}
+    
+
+    
+    /**
+     * Unwrap to a plain [`Model`] handle that applies the
+     * configured defaults on every call.
+     *
+     * Use this when you want to pass the wrapped provider to an API that
+     * takes a generic `Model` (the agent runner, workflow
+     * steps, etc.).
+     */
+open func asModel() -> Model  {
+    return try!  FfiConverterTypeModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_llmproviderdefaults_as_model(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Inspect the currently-configured defaults (data only — hooks are
+     * not surfaced in Phase A).
+     */
+open func defaults() -> ProviderDefaults  {
+    return try!  FfiConverterTypeProviderDefaults_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_llmproviderdefaults_defaults(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Extract structured output from the model by constraining its
+     * response to a JSON Schema.
+     *
+     * Mirrors the upstream
+     * [`blazen_llm::traits::StructuredOutput::extract`] blanket impl: the
+     * `schema_json` is injected as the request's `response_format` and
+     * the completion is dispatched as usual. Returns the model's raw
+     * content (which the foreign caller deserializes into its own typed
+     * shape — UniFFI cannot return a generic typed value across the FFI).
+     *
+     * `schema_json` must be a valid JSON Schema string; an empty string or
+     * malformed JSON falls back to `null` (the request is sent without a
+     * `response_format`).
+     */
+open func extract(schemaJson: String, messages: [ChatMessage])async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_llmproviderdefaults_extract(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(schemaJson),FfiConverterSequenceTypeChatMessage.lower(messages)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * The model id of the wrapped inner `Model`.
+     */
+open func modelId() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_llmproviderdefaults_model_id(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Replace the entire [`ProviderDefaults`] on this provider,
+     * returning a new `Arc<LlmProviderDefaults>` (clone-with-mutation).
+     */
+open func withDefaults(defaults: ProviderDefaults) -> LlmProviderDefaults  {
+    return try!  FfiConverterTypeLlmProviderDefaults_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_llmproviderdefaults_with_defaults(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeProviderDefaults_lower(defaults),$0
+    )
+})
+}
+    
+    /**
+     * Set the default `response_format` (JSON-encoded `serde_json::Value`).
+     *
+     * Malformed JSON or an empty string is treated as JSON null.
+     */
+open func withResponseFormatJson(fmtJson: String) -> LlmProviderDefaults  {
+    return try!  FfiConverterTypeLlmProviderDefaults_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_llmproviderdefaults_with_response_format_json(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(fmtJson),$0
+    )
+})
+}
+    
+    /**
+     * Set the default system prompt.
+     */
+open func withSystemPrompt(prompt: String) -> LlmProviderDefaults  {
+    return try!  FfiConverterTypeLlmProviderDefaults_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_llmproviderdefaults_with_system_prompt(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(prompt),$0
+    )
+})
+}
+    
+    /**
+     * Set the default tools (JSON-encoded `Vec<ToolDefinition>`).
+     *
+     * Malformed JSON is treated as an empty tool list — matching the
+     * upstream `#[derive(Default)]` semantics. Foreign callers should
+     * validate the JSON before sending it across the FFI.
+     */
+open func withToolsJson(toolsJson: String) -> LlmProviderDefaults  {
+    return try!  FfiConverterTypeLlmProviderDefaults_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_llmproviderdefaults_with_tools_json(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(toolsJson),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeLlmProviderDefaults: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = LlmProviderDefaults
+
+    public static func lift(_ handle: UInt64) throws -> LlmProviderDefaults {
+        return LlmProviderDefaults(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: LlmProviderDefaults) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> LlmProviderDefaults {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: LlmProviderDefaults, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLlmProviderDefaults_lift(_ handle: UInt64) throws -> LlmProviderDefaults {
+    return try FfiConverterTypeLlmProviderDefaults.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeLlmProviderDefaults_lower(_ value: LlmProviderDefaults) -> UInt64 {
+    return FfiConverterTypeLlmProviderDefaults.lower(value)
 }
 
 
@@ -7948,6 +10579,193 @@ public func FfiConverterTypeModelClient_lower(_ value: ModelClient) -> UInt64 {
 
 
 /**
+ * Concrete provider class for Meta's `MusicGen` text-to-music model.
+ *
+ * Wraps [`blazen_llm::providers::concrete::music::MusicGenProvider`].
+ * Only `generate_music` is exposed — `MusicGen` is music-only and the
+ * upstream trait's `generate_sfx` would surface `Unsupported`, so we omit
+ * it from the FFI surface entirely.
+ */
+public protocol MusicGenProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Generate `duration_seconds` of music conditioned on `prompt`.
+     */
+    func generateMusic(prompt: String, durationSeconds: Float) async throws  -> MusicResult
+    
+    /**
+     * Synchronous variant of [`generate_music`](Self::generate_music).
+     */
+    func generateMusicBlocking(prompt: String, durationSeconds: Float) throws  -> MusicResult
+    
+}
+/**
+ * Concrete provider class for Meta's `MusicGen` text-to-music model.
+ *
+ * Wraps [`blazen_llm::providers::concrete::music::MusicGenProvider`].
+ * Only `generate_music` is exposed — `MusicGen` is music-only and the
+ * upstream trait's `generate_sfx` would surface `Unsupported`, so we omit
+ * it from the FFI surface entirely.
+ */
+open class MusicGenProvider: MusicGenProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_musicgenprovider(self.handle, $0) }
+    }
+    /**
+     * Build a new `MusicGen`-backed provider.
+     *
+     * `variant` selects the checkpoint (`"small"` / `"medium"` /
+     * `"large"`, case-insensitive); unrecognised values default to
+     * `Small`. `device` accepts `"cpu"`, `"cuda"`, `"cuda:N"`,
+     * `"metal"`, or `"metal:N"`; `None` lets the backend auto-detect.
+     * `cache_dir` overrides the Hugging Face Hub cache.
+     * `max_duration_seconds` overrides the default 30 s per-call safety
+     * cap.
+     */
+public convenience init(variant: String?, device: String?, cacheDir: String?, maxDurationSeconds: Float?)throws  {
+    let handle =
+        try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_constructor_musicgenprovider_new(
+        FfiConverterOptionString.lower(variant),
+        FfiConverterOptionString.lower(device),
+        FfiConverterOptionString.lower(cacheDir),
+        FfiConverterOptionFloat.lower(maxDurationSeconds),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_musicgenprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Generate `duration_seconds` of music conditioned on `prompt`.
+     */
+open func generateMusic(prompt: String, durationSeconds: Float)async throws  -> MusicResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_musicgenprovider_generate_music(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(prompt),FfiConverterFloat.lower(durationSeconds)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeMusicResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`generate_music`](Self::generate_music).
+     */
+open func generateMusicBlocking(prompt: String, durationSeconds: Float)throws  -> MusicResult  {
+    return try  FfiConverterTypeMusicResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_musicgenprovider_generate_music_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(prompt),
+        FfiConverterFloat.lower(durationSeconds),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMusicGenProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = MusicGenProvider
+
+    public static func lift(_ handle: UInt64) throws -> MusicGenProvider {
+        return MusicGenProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: MusicGenProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MusicGenProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: MusicGenProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMusicGenProvider_lift(_ handle: UInt64) throws -> MusicGenProvider {
+    return try FfiConverterTypeMusicGenProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMusicGenProvider_lower(_ value: MusicGenProvider) -> UInt64 {
+    return FfiConverterTypeMusicGenProvider.lower(value)
+}
+
+
+
+
+
+
+/**
  * A music / sound-effect generation model.
  *
  * Construct via one of the per-backend factory functions
@@ -8154,6 +10972,224 @@ public func FfiConverterTypeMusicModel_lift(_ handle: UInt64) throws -> MusicMod
 #endif
 public func FfiConverterTypeMusicModel_lower(_ value: MusicModel) -> UInt64 {
     return FfiConverterTypeMusicModel.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Text-to-music / text-to-sfx capability trait.
+ *
+ * Engines that only support music generation get the default
+ * [`generate_sfx`](MusicProvider::generate_sfx) impl which surfaces
+ * `Unsupported`. SFX-only engines override `generate_sfx` and inherit
+ * the default `generate_music` (which also surfaces `Unsupported`).
+ */
+public protocol MusicProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+     */
+    func providerId()  -> String
+    
+    /**
+     * Capability bucket (always [`CapabilityKind::Music`] for this trait).
+     */
+    func capability()  -> CapabilityKind
+    
+    /**
+     * Generate a music clip of approximately `duration_seconds`.
+     *
+     * Engines that do not support music generation surface
+     * `BlazenError::Unsupported` from the per-engine `impl` block
+     * (default trait bodies are not permitted by `#[uniffi::export]`).
+     */
+    func generateMusic(prompt: String, durationSeconds: Float) async throws  -> MusicResult
+    
+    /**
+     * Generate a sound-effect clip of approximately `duration_seconds`.
+     *
+     * Engines that do not support SFX generation surface
+     * `BlazenError::Unsupported` from the per-engine `impl` block.
+     */
+    func generateSfx(prompt: String, durationSeconds: Float) async throws  -> MusicResult
+    
+}
+/**
+ * Text-to-music / text-to-sfx capability trait.
+ *
+ * Engines that only support music generation get the default
+ * [`generate_sfx`](MusicProvider::generate_sfx) impl which surfaces
+ * `Unsupported`. SFX-only engines override `generate_sfx` and inherit
+ * the default `generate_music` (which also surfaces `Unsupported`).
+ */
+open class MusicProvider: MusicProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_musicprovider(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_musicprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+     */
+open func providerId() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_musicprovider_provider_id(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Capability bucket (always [`CapabilityKind::Music`] for this trait).
+     */
+open func capability() -> CapabilityKind  {
+    return try!  FfiConverterTypeCapabilityKind_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_musicprovider_capability(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Generate a music clip of approximately `duration_seconds`.
+     *
+     * Engines that do not support music generation surface
+     * `BlazenError::Unsupported` from the per-engine `impl` block
+     * (default trait bodies are not permitted by `#[uniffi::export]`).
+     */
+open func generateMusic(prompt: String, durationSeconds: Float)async throws  -> MusicResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_musicprovider_generate_music(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(prompt),FfiConverterFloat.lower(durationSeconds)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeMusicResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Generate a sound-effect clip of approximately `duration_seconds`.
+     *
+     * Engines that do not support SFX generation surface
+     * `BlazenError::Unsupported` from the per-engine `impl` block.
+     */
+open func generateSfx(prompt: String, durationSeconds: Float)async throws  -> MusicResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_musicprovider_generate_sfx(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(prompt),FfiConverterFloat.lower(durationSeconds)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeMusicResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeMusicProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = MusicProvider
+
+    public static func lift(_ handle: UInt64) throws -> MusicProvider {
+        return MusicProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: MusicProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> MusicProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: MusicProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMusicProvider_lift(_ handle: UInt64) throws -> MusicProvider {
+    return try FfiConverterTypeMusicProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeMusicProvider_lower(_ value: MusicProvider) -> UInt64 {
+    return FfiConverterTypeMusicProvider.lower(value)
 }
 
 
@@ -9525,6 +12561,1100 @@ public func FfiConverterTypePipelineBuilder_lower(_ value: PipelineBuilder) -> U
 
 
 /**
+ * Concrete TTS provider backed by the local Piper ONNX engine.
+ *
+ * Wraps [`blazen_llm::providers::concrete::tts::PiperProvider`].
+ */
+public protocol PiperProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+    func synthesize(text: String, voice: String?, language: String?) async throws  -> TtsResult
+    
+    /**
+     * Synchronous variant of [`synthesize`](Self::synthesize) — blocks on
+     * the shared Tokio runtime.
+     */
+    func synthesizeBlocking(text: String, voice: String?, language: String?) throws  -> TtsResult
+    
+}
+/**
+ * Concrete TTS provider backed by the local Piper ONNX engine.
+ *
+ * Wraps [`blazen_llm::providers::concrete::tts::PiperProvider`].
+ */
+open class PiperProvider: PiperProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_piperprovider(self.handle, $0) }
+    }
+    /**
+     * Construct from a Piper voice id + already-resolved local file paths.
+     *
+     * `onnx_path` points at the `<voice>.onnx` weights; `config_path` is
+     * the sidecar `<voice>.onnx.json` (pass `None` to derive automatically
+     * by appending `.json` to the onnx path). `default_speaker_id` is
+     * used at synthesis time when [`blazen_llm::compute::requests::SpeechRequest::voice`]
+     * is `None` — typical for multi-speaker voices.
+     */
+public convenience init(voiceId: String, onnxPath: String, configPath: String?, defaultSpeakerId: Int64?)throws  {
+    let handle =
+        try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_constructor_piperprovider_new(
+        FfiConverterString.lower(voiceId),
+        FfiConverterString.lower(onnxPath),
+        FfiConverterOptionString.lower(configPath),
+        FfiConverterOptionInt64.lower(defaultSpeakerId),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_piperprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+open func synthesize(text: String, voice: String?, language: String?)async throws  -> TtsResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_piperprovider_synthesize(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(text),FfiConverterOptionString.lower(voice),FfiConverterOptionString.lower(language)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTtsResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`synthesize`](Self::synthesize) — blocks on
+     * the shared Tokio runtime.
+     */
+open func synthesizeBlocking(text: String, voice: String?, language: String?)throws  -> TtsResult  {
+    return try  FfiConverterTypeTtsResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_piperprovider_synthesize_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(text),
+        FfiConverterOptionString.lower(voice),
+        FfiConverterOptionString.lower(language),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePiperProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = PiperProvider
+
+    public static func lift(_ handle: UInt64) throws -> PiperProvider {
+        return PiperProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: PiperProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PiperProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: PiperProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePiperProvider_lift(_ handle: UInt64) throws -> PiperProvider {
+    return try FfiConverterTypePiperProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePiperProvider_lower(_ value: PiperProvider) -> UInt64 {
+    return FfiConverterTypePiperProvider.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Concrete TTS provider backed by the local Qwen3-TTS engine.
+ *
+ * Wraps [`blazen_llm::providers::concrete::tts::Qwen3TtsProvider`].
+ */
+public protocol Qwen3TtsProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+    func synthesize(text: String, voice: String?, language: String?) async throws  -> TtsResult
+    
+    /**
+     * Synchronous variant of [`synthesize`](Self::synthesize).
+     */
+    func synthesizeBlocking(text: String, voice: String?, language: String?) throws  -> TtsResult
+    
+}
+/**
+ * Concrete TTS provider backed by the local Qwen3-TTS engine.
+ *
+ * Wraps [`blazen_llm::providers::concrete::tts::Qwen3TtsProvider`].
+ */
+open class Qwen3TtsProvider: Qwen3TtsProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_qwen3ttsprovider(self.handle, $0) }
+    }
+    /**
+     * Construct with optional voice / language / sample-rate overrides.
+     */
+public convenience init(voice: String?, language: String?, sampleRate: UInt32?)throws  {
+    let handle =
+        try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_constructor_qwen3ttsprovider_new(
+        FfiConverterOptionString.lower(voice),
+        FfiConverterOptionString.lower(language),
+        FfiConverterOptionUInt32.lower(sampleRate),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_qwen3ttsprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+open func synthesize(text: String, voice: String?, language: String?)async throws  -> TtsResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_qwen3ttsprovider_synthesize(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(text),FfiConverterOptionString.lower(voice),FfiConverterOptionString.lower(language)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTtsResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`synthesize`](Self::synthesize).
+     */
+open func synthesizeBlocking(text: String, voice: String?, language: String?)throws  -> TtsResult  {
+    return try  FfiConverterTypeTtsResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_qwen3ttsprovider_synthesize_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(text),
+        FfiConverterOptionString.lower(voice),
+        FfiConverterOptionString.lower(language),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeQwen3TtsProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = Qwen3TtsProvider
+
+    public static func lift(_ handle: UInt64) throws -> Qwen3TtsProvider {
+        return Qwen3TtsProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: Qwen3TtsProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> Qwen3TtsProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: Qwen3TtsProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeQwen3TtsProvider_lift(_ handle: UInt64) throws -> Qwen3TtsProvider {
+    return try FfiConverterTypeQwen3TtsProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeQwen3TtsProvider_lower(_ value: Qwen3TtsProvider) -> UInt64 {
+    return FfiConverterTypeQwen3TtsProvider.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Native Retrieval-based Voice Conversion (RVC) provider.
+ *
+ * Wraps [`blazen_llm::providers::concrete::vc::RvcProvider`] which itself
+ * wraps `blazen_llm::RvcBackend`. Loads target-voice weights lazily from
+ * the directory pointed to by the `BLAZEN_RVC_VOICE_DIR` environment
+ * variable on the first `convert_voice` call. Defaults the inference
+ * device to CPU; foreign callers needing CUDA / Metal should use the
+ * central [`crate::compute_vc::new_rvc_model`] factory which exposes a
+ * `device` parameter.
+ */
+public protocol RvcProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Register a new target voice from the reference utterance at
+     * `reference_path` under the backend-scoped identifier `voice_id`.
+     *
+     * After this returns, subsequent `convert_voice` calls can pass
+     * `voice_id` as their `target_voice_id`.
+     *
+     * # Errors
+     *
+     * Returns `BlazenError::Provider { kind: "VcClone", ... }` when
+     * the reference path is unreadable or registration fails.
+     */
+    func cloneVoice(voiceId: String, referencePath: String) async throws 
+    
+    /**
+     * Synchronous variant of [`clone_voice`](Self::clone_voice).
+     */
+    func cloneVoiceBlocking(voiceId: String, referencePath: String) throws 
+    
+    /**
+     * Convert the source utterance at `input_path` into the registered
+     * target voice `target_voice_id`.
+     *
+     * `input_path` is a local filesystem path to the source audio
+     * (16-bit PCM mono WAV at the backend's expected source rate,
+     * typically 16 kHz). `target_voice_id` selects which voice profile
+     * under `$BLAZEN_RVC_VOICE_DIR` to render into.
+     *
+     * # Errors
+     *
+     * Returns `BlazenError::Provider { kind: "VcConvert", ... }` when
+     * the source path is unreadable, the voice profile is missing, or
+     * the conversion pipeline fails.
+     */
+    func convertVoice(inputPath: String, targetVoiceId: String) async throws  -> VcResult
+    
+    /**
+     * Synchronous variant of [`convert_voice`](Self::convert_voice).
+     */
+    func convertVoiceBlocking(inputPath: String, targetVoiceId: String) throws  -> VcResult
+    
+    /**
+     * List the target voices currently known to the backend.
+     *
+     * # Errors
+     *
+     * Returns `BlazenError::Provider { kind: "VcListVoices", ... }`
+     * when the underlying backend's listing call fails.
+     */
+    func listTargetVoices() async throws  -> [TargetVoice]
+    
+    /**
+     * Synchronous variant of
+     * [`list_target_voices`](Self::list_target_voices).
+     */
+    func listTargetVoicesBlocking() throws  -> [TargetVoice]
+    
+}
+/**
+ * Native Retrieval-based Voice Conversion (RVC) provider.
+ *
+ * Wraps [`blazen_llm::providers::concrete::vc::RvcProvider`] which itself
+ * wraps `blazen_llm::RvcBackend`. Loads target-voice weights lazily from
+ * the directory pointed to by the `BLAZEN_RVC_VOICE_DIR` environment
+ * variable on the first `convert_voice` call. Defaults the inference
+ * device to CPU; foreign callers needing CUDA / Metal should use the
+ * central [`crate::compute_vc::new_rvc_model`] factory which exposes a
+ * `device` parameter.
+ */
+open class RvcProvider: RvcProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_rvcprovider(self.handle, $0) }
+    }
+    /**
+     * Build a new RVC-backed provider with the default CPU backend.
+     *
+     * Target voices are loaded lazily from `$BLAZEN_RVC_VOICE_DIR/<voice_id>/`
+     * on the first `convert_voice` call.
+     */
+public convenience init() {
+    let handle =
+        try! rustCall() {
+    uniffi_blazen_uniffi_fn_constructor_rvcprovider_new($0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_rvcprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Register a new target voice from the reference utterance at
+     * `reference_path` under the backend-scoped identifier `voice_id`.
+     *
+     * After this returns, subsequent `convert_voice` calls can pass
+     * `voice_id` as their `target_voice_id`.
+     *
+     * # Errors
+     *
+     * Returns `BlazenError::Provider { kind: "VcClone", ... }` when
+     * the reference path is unreadable or registration fails.
+     */
+open func cloneVoice(voiceId: String, referencePath: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_rvcprovider_clone_voice(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(voiceId),FfiConverterString.lower(referencePath)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`clone_voice`](Self::clone_voice).
+     */
+open func cloneVoiceBlocking(voiceId: String, referencePath: String)throws   {try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_rvcprovider_clone_voice_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(voiceId),
+        FfiConverterString.lower(referencePath),$0
+    )
+}
+}
+    
+    /**
+     * Convert the source utterance at `input_path` into the registered
+     * target voice `target_voice_id`.
+     *
+     * `input_path` is a local filesystem path to the source audio
+     * (16-bit PCM mono WAV at the backend's expected source rate,
+     * typically 16 kHz). `target_voice_id` selects which voice profile
+     * under `$BLAZEN_RVC_VOICE_DIR` to render into.
+     *
+     * # Errors
+     *
+     * Returns `BlazenError::Provider { kind: "VcConvert", ... }` when
+     * the source path is unreadable, the voice profile is missing, or
+     * the conversion pipeline fails.
+     */
+open func convertVoice(inputPath: String, targetVoiceId: String)async throws  -> VcResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_rvcprovider_convert_voice(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(inputPath),FfiConverterString.lower(targetVoiceId)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeVcResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`convert_voice`](Self::convert_voice).
+     */
+open func convertVoiceBlocking(inputPath: String, targetVoiceId: String)throws  -> VcResult  {
+    return try  FfiConverterTypeVcResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_rvcprovider_convert_voice_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(inputPath),
+        FfiConverterString.lower(targetVoiceId),$0
+    )
+})
+}
+    
+    /**
+     * List the target voices currently known to the backend.
+     *
+     * # Errors
+     *
+     * Returns `BlazenError::Provider { kind: "VcListVoices", ... }`
+     * when the underlying backend's listing call fails.
+     */
+open func listTargetVoices()async throws  -> [TargetVoice]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_rvcprovider_list_target_voices(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeTargetVoice.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of
+     * [`list_target_voices`](Self::list_target_voices).
+     */
+open func listTargetVoicesBlocking()throws  -> [TargetVoice]  {
+    return try  FfiConverterSequenceTypeTargetVoice.lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_rvcprovider_list_target_voices_blocking(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeRvcProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = RvcProvider
+
+    public static func lift(_ handle: UInt64) throws -> RvcProvider {
+        return RvcProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: RvcProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> RvcProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: RvcProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRvcProvider_lift(_ handle: UInt64) throws -> RvcProvider {
+    return try FfiConverterTypeRvcProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeRvcProvider_lower(_ value: RvcProvider) -> UInt64 {
+    return FfiConverterTypeRvcProvider.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Concrete TTS provider backed by the local Spark-TTS engine.
+ *
+ * Wraps [`blazen_llm::providers::concrete::tts::SparkTtsProvider`].
+ * **CC-BY-NC-SA-4.0** — non-commercial use only.
+ */
+public protocol SparkTtsProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+    func synthesize(text: String, voice: String?, language: String?) async throws  -> TtsResult
+    
+    /**
+     * Synchronous variant of [`synthesize`](Self::synthesize).
+     */
+    func synthesizeBlocking(text: String, voice: String?, language: String?) throws  -> TtsResult
+    
+}
+/**
+ * Concrete TTS provider backed by the local Spark-TTS engine.
+ *
+ * Wraps [`blazen_llm::providers::concrete::tts::SparkTtsProvider`].
+ * **CC-BY-NC-SA-4.0** — non-commercial use only.
+ */
+open class SparkTtsProvider: SparkTtsProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_sparkttsprovider(self.handle, $0) }
+    }
+    /**
+     * Construct with optional model id / bundle dir / revision overrides.
+     */
+public convenience init(modelId: String?, modelDir: String?, revision: String?) {
+    let handle =
+        try! rustCall() {
+    uniffi_blazen_uniffi_fn_constructor_sparkttsprovider_new(
+        FfiConverterOptionString.lower(modelId),
+        FfiConverterOptionString.lower(modelDir),
+        FfiConverterOptionString.lower(revision),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_sparkttsprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+open func synthesize(text: String, voice: String?, language: String?)async throws  -> TtsResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_sparkttsprovider_synthesize(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(text),FfiConverterOptionString.lower(voice),FfiConverterOptionString.lower(language)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTtsResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`synthesize`](Self::synthesize).
+     */
+open func synthesizeBlocking(text: String, voice: String?, language: String?)throws  -> TtsResult  {
+    return try  FfiConverterTypeTtsResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_sparkttsprovider_synthesize_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(text),
+        FfiConverterOptionString.lower(voice),
+        FfiConverterOptionString.lower(language),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSparkTtsProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = SparkTtsProvider
+
+    public static func lift(_ handle: UInt64) throws -> SparkTtsProvider {
+        return SparkTtsProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: SparkTtsProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SparkTtsProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: SparkTtsProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSparkTtsProvider_lift(_ handle: UInt64) throws -> SparkTtsProvider {
+    return try FfiConverterTypeSparkTtsProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSparkTtsProvider_lower(_ value: SparkTtsProvider) -> UInt64 {
+    return FfiConverterTypeSparkTtsProvider.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Concrete provider class for Stability AI's Stable Audio Open
+ * text-to-audio model.
+ *
+ * Wraps [`blazen_llm::providers::concrete::music::StableAudioProvider`].
+ * Stable Audio Open generates both music AND sfx, so both methods are
+ * wired through. The constructor is async because Stable Audio loads its
+ * weights at construction time — the sync `new_blocking` shim drives the
+ * shared Tokio runtime for non-async callers.
+ */
+public protocol StableAudioProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Generate `duration_seconds` of music conditioned on `prompt`.
+     */
+    func generateMusic(prompt: String, durationSeconds: Float) async throws  -> MusicResult
+    
+    /**
+     * Synchronous variant of [`generate_music`](Self::generate_music).
+     */
+    func generateMusicBlocking(prompt: String, durationSeconds: Float) throws  -> MusicResult
+    
+    /**
+     * Generate `duration_seconds` of sound-effect audio conditioned on
+     * `prompt`.
+     */
+    func generateSfx(prompt: String, durationSeconds: Float) async throws  -> MusicResult
+    
+    /**
+     * Synchronous variant of [`generate_sfx`](Self::generate_sfx).
+     */
+    func generateSfxBlocking(prompt: String, durationSeconds: Float) throws  -> MusicResult
+    
+}
+/**
+ * Concrete provider class for Stability AI's Stable Audio Open
+ * text-to-audio model.
+ *
+ * Wraps [`blazen_llm::providers::concrete::music::StableAudioProvider`].
+ * Stable Audio Open generates both music AND sfx, so both methods are
+ * wired through. The constructor is async because Stable Audio loads its
+ * weights at construction time — the sync `new_blocking` shim drives the
+ * shared Tokio runtime for non-async callers.
+ */
+open class StableAudioProvider: StableAudioProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_stableaudioprovider(self.handle, $0) }
+    }
+    /**
+     * Build a new Stable Audio Open-backed provider.
+     *
+     * `variant` selects the checkpoint (`"small"`, `"open-1.0"` /
+     * `"open1.0"` / `"open"` / `"1.0"`); unrecognised values default
+     * to `Small`. `tokenizer_path` must point at the T5 `SentencePiece`
+     * `tokenizer.json` shipped with the Stable Audio Open repo —
+     * required because Stable Audio's tokenizer is not auto-downloaded.
+     * `device` follows the same format as the other providers; `None`
+     * defaults to CPU. `max_duration_seconds` is accepted for API
+     * symmetry but Stable Audio enforces its own variant-dependent
+     * ceiling internally.
+     */
+public convenience init(variant: String?, tokenizerPath: String, device: String?, maxDurationSeconds: Float?)async throws  {
+    let handle =
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_constructor_stableaudioprovider_new(FfiConverterOptionString.lower(variant),FfiConverterString.lower(tokenizerPath),FfiConverterOptionString.lower(device),FfiConverterOptionFloat.lower(maxDurationSeconds)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_u64,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_u64,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_u64,
+            liftFunc: FfiConverterTypeStableAudioProvider_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+        
+        .uniffiCloneHandle()
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_stableaudioprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Generate `duration_seconds` of music conditioned on `prompt`.
+     */
+open func generateMusic(prompt: String, durationSeconds: Float)async throws  -> MusicResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_stableaudioprovider_generate_music(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(prompt),FfiConverterFloat.lower(durationSeconds)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeMusicResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`generate_music`](Self::generate_music).
+     */
+open func generateMusicBlocking(prompt: String, durationSeconds: Float)throws  -> MusicResult  {
+    return try  FfiConverterTypeMusicResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_stableaudioprovider_generate_music_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(prompt),
+        FfiConverterFloat.lower(durationSeconds),$0
+    )
+})
+}
+    
+    /**
+     * Generate `duration_seconds` of sound-effect audio conditioned on
+     * `prompt`.
+     */
+open func generateSfx(prompt: String, durationSeconds: Float)async throws  -> MusicResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_stableaudioprovider_generate_sfx(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(prompt),FfiConverterFloat.lower(durationSeconds)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeMusicResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`generate_sfx`](Self::generate_sfx).
+     */
+open func generateSfxBlocking(prompt: String, durationSeconds: Float)throws  -> MusicResult  {
+    return try  FfiConverterTypeMusicResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_stableaudioprovider_generate_sfx_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(prompt),
+        FfiConverterFloat.lower(durationSeconds),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeStableAudioProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = StableAudioProvider
+
+    public static func lift(_ handle: UInt64) throws -> StableAudioProvider {
+        return StableAudioProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: StableAudioProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> StableAudioProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: StableAudioProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStableAudioProvider_lift(_ handle: UInt64) throws -> StableAudioProvider {
+    return try FfiConverterTypeStableAudioProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeStableAudioProvider_lower(_ value: StableAudioProvider) -> UInt64 {
+    return FfiConverterTypeStableAudioProvider.lower(value)
+}
+
+
+
+
+
+
+/**
  * Step handler implemented in foreign code (Go / Swift / Kotlin / Ruby).
  *
  * The Rust workflow engine calls `invoke` whenever an event matching the
@@ -9955,6 +14085,177 @@ public func FfiConverterTypeSttModel_lower(_ value: SttModel) -> UInt64 {
 
 
 /**
+ * Speech-to-text capability trait.
+ */
+public protocol SttProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+     */
+    func providerId()  -> String
+    
+    /**
+     * Capability bucket (always [`CapabilityKind::Stt`] for this trait).
+     */
+    func capability()  -> CapabilityKind
+    
+    /**
+     * Transcribe the audio at `audio_source` (local path or URL) into
+     * text. `language` is an optional ISO-639 hint for the recognizer.
+     */
+    func transcribe(audioSource: String, language: String?) async throws  -> SttResult
+    
+}
+/**
+ * Speech-to-text capability trait.
+ */
+open class SttProvider: SttProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_sttprovider(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_sttprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+     */
+open func providerId() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_sttprovider_provider_id(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Capability bucket (always [`CapabilityKind::Stt`] for this trait).
+     */
+open func capability() -> CapabilityKind  {
+    return try!  FfiConverterTypeCapabilityKind_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_sttprovider_capability(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Transcribe the audio at `audio_source` (local path or URL) into
+     * text. `language` is an optional ISO-639 hint for the recognizer.
+     */
+open func transcribe(audioSource: String, language: String?)async throws  -> SttResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_sttprovider_transcribe(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(audioSource),FfiConverterOptionString.lower(language)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSttResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeSttProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = SttProvider
+
+    public static func lift(_ handle: UInt64) throws -> SttProvider {
+        return SttProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: SttProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SttProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: SttProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSttProvider_lift(_ handle: UInt64) throws -> SttProvider {
+    return try FfiConverterTypeSttProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeSttProvider_lower(_ value: SttProvider) -> UInt64 {
+    return FfiConverterTypeSttProvider.lower(value)
+}
+
+
+
+
+
+
+/**
  * A native single-image-to-3D model handle.
  *
  * Construct via [`new_triposr_3d_model`] (local, feature-gated). Once
@@ -10122,6 +14423,321 @@ public func FfiConverterTypeThreeDModel_lift(_ handle: UInt64) throws -> ThreeDM
 #endif
 public func FfiConverterTypeThreeDModel_lower(_ value: ThreeDModel) -> UInt64 {
     return FfiConverterTypeThreeDModel.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Image-to-3D mesh generation **and** post-processing capability trait.
+ *
+ * Implemented by every concrete 3D engine
+ * (`TripoSrProvider`, `Compat3dProvider`) so foreign code can dispatch
+ * the full 3D pipeline — generation plus the texturize / rig / refine
+ * / animate post-processing stages — through a single `ThreeDProvider`
+ * interface regardless of the backing engine.
+ *
+ * Engines that only cover one half of the pipeline surface
+ * `BlazenError::Unsupported` from the other half (e.g. `TripoSrProvider`
+ * is generation-only and returns `Unsupported` from `texturize`; the
+ * HTTP-proxy `Compat3dProvider` is post-proc-only and returns
+ * `Unsupported` from `generate_from_image`). UniFFI 0.31 forbids
+ * default method bodies on exported traits, so the `Unsupported`
+ * paths live in the per-engine `impl` blocks rather than the trait body.
+ */
+public protocol ThreeDProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+     */
+    func providerId()  -> String
+    
+    /**
+     * Capability bucket (always [`CapabilityKind::ThreeD`] for this trait).
+     */
+    func capability()  -> CapabilityKind
+    
+    /**
+     * Generate a 3D mesh from a single image.
+     *
+     * Post-proc-only engines (e.g. the HTTP-proxy
+     * [`crate::concrete::three_d::Compat3dProvider`]) surface
+     * [`BlazenError::Unsupported`] from this method.
+     */
+    func generateFromImage(imageBytes: Data, meshResolution: UInt32) async throws  -> ThreeDGenerateResult
+    
+    /**
+     * Apply or generate a texture / material for an existing mesh.
+     *
+     * Generation-only engines (e.g.
+     * [`crate::concrete::three_d::TripoSrProvider`]) surface
+     * [`BlazenError::Unsupported`] from this method.
+     */
+    func texturize(meshGlb: Data, request: TexturizeRequest) async throws  -> TexturizeResult
+    
+    /**
+     * Auto-rig a mesh, producing a GLB with skeletal armature
+     * (and optional skin weights) embedded.
+     */
+    func rig(meshGlb: Data, request: RigRequest) async throws  -> RigResult
+    
+    /**
+     * Refine a mesh: decimate, fill holes, unwrap UVs, retopologize, smooth.
+     */
+    func refine(meshGlb: Data, request: RefineRequest) async throws  -> RefineResult
+    
+    /**
+     * Animate a rigged mesh from a text prompt, mocap clip, or driving video.
+     */
+    func animate(riggedGlb: Data, request: AnimateRequest) async throws  -> AnimateResult
+    
+}
+/**
+ * Image-to-3D mesh generation **and** post-processing capability trait.
+ *
+ * Implemented by every concrete 3D engine
+ * (`TripoSrProvider`, `Compat3dProvider`) so foreign code can dispatch
+ * the full 3D pipeline — generation plus the texturize / rig / refine
+ * / animate post-processing stages — through a single `ThreeDProvider`
+ * interface regardless of the backing engine.
+ *
+ * Engines that only cover one half of the pipeline surface
+ * `BlazenError::Unsupported` from the other half (e.g. `TripoSrProvider`
+ * is generation-only and returns `Unsupported` from `texturize`; the
+ * HTTP-proxy `Compat3dProvider` is post-proc-only and returns
+ * `Unsupported` from `generate_from_image`). UniFFI 0.31 forbids
+ * default method bodies on exported traits, so the `Unsupported`
+ * paths live in the per-engine `impl` blocks rather than the trait body.
+ */
+open class ThreeDProvider: ThreeDProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_threedprovider(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_threedprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+     */
+open func providerId() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_threedprovider_provider_id(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Capability bucket (always [`CapabilityKind::ThreeD`] for this trait).
+     */
+open func capability() -> CapabilityKind  {
+    return try!  FfiConverterTypeCapabilityKind_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_threedprovider_capability(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Generate a 3D mesh from a single image.
+     *
+     * Post-proc-only engines (e.g. the HTTP-proxy
+     * [`crate::concrete::three_d::Compat3dProvider`]) surface
+     * [`BlazenError::Unsupported`] from this method.
+     */
+open func generateFromImage(imageBytes: Data, meshResolution: UInt32)async throws  -> ThreeDGenerateResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_threedprovider_generate_from_image(
+                    self.uniffiCloneHandle(),
+                    FfiConverterData.lower(imageBytes),FfiConverterUInt32.lower(meshResolution)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeThreeDGenerateResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Apply or generate a texture / material for an existing mesh.
+     *
+     * Generation-only engines (e.g.
+     * [`crate::concrete::three_d::TripoSrProvider`]) surface
+     * [`BlazenError::Unsupported`] from this method.
+     */
+open func texturize(meshGlb: Data, request: TexturizeRequest)async throws  -> TexturizeResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_threedprovider_texturize(
+                    self.uniffiCloneHandle(),
+                    FfiConverterData.lower(meshGlb),FfiConverterTypeTexturizeRequest_lower(request)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTexturizeResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Auto-rig a mesh, producing a GLB with skeletal armature
+     * (and optional skin weights) embedded.
+     */
+open func rig(meshGlb: Data, request: RigRequest)async throws  -> RigResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_threedprovider_rig(
+                    self.uniffiCloneHandle(),
+                    FfiConverterData.lower(meshGlb),FfiConverterTypeRigRequest_lower(request)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeRigResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Refine a mesh: decimate, fill holes, unwrap UVs, retopologize, smooth.
+     */
+open func refine(meshGlb: Data, request: RefineRequest)async throws  -> RefineResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_threedprovider_refine(
+                    self.uniffiCloneHandle(),
+                    FfiConverterData.lower(meshGlb),FfiConverterTypeRefineRequest_lower(request)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeRefineResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Animate a rigged mesh from a text prompt, mocap clip, or driving video.
+     */
+open func animate(riggedGlb: Data, request: AnimateRequest)async throws  -> AnimateResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_threedprovider_animate(
+                    self.uniffiCloneHandle(),
+                    FfiConverterData.lower(riggedGlb),FfiConverterTypeAnimateRequest_lower(request)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeAnimateResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeThreeDProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = ThreeDProvider
+
+    public static func lift(_ handle: UInt64) throws -> ThreeDProvider {
+        return ThreeDProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: ThreeDProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ThreeDProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: ThreeDProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeThreeDProvider_lift(_ handle: UInt64) throws -> ThreeDProvider {
+    return try FfiConverterTypeThreeDProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeThreeDProvider_lower(_ value: ThreeDProvider) -> UInt64 {
+    return FfiConverterTypeThreeDProvider.lower(value)
 }
 
 
@@ -10443,6 +15059,225 @@ public func FfiConverterTypeToolHandler_lower(_ value: ToolHandler) -> UInt64 {
 
 
 /**
+ * `TripoSR` single-image-to-3D provider.
+ *
+ * Wraps [`blazen_llm::providers::concrete::three_d::TripoSrProvider`]
+ * (the candle-runtime `TripoSrBackend` newtype + `ProviderMetadata`
+ * stamp). Construction loads the weights — either from `weights_path`
+ * (local directory) or by downloading from a Hugging Face repo
+ * (defaulting to `"stabilityai/TripoSR"`).
+ *
+ * Generation-only: the texturize / rig / refine / animate post-proc
+ * methods on the polymorphic [`crate::concrete::bases::ThreeDProvider`]
+ * trait surface [`crate::errors::BlazenError::Unsupported`] — pipe the
+ * generated GLB through [`Compat3dProvider`] (or another post-proc
+ * backend) to apply textures / armature / refinement / motion.
+ */
+public protocol TripoSrProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Generate a 3D mesh from a single input image.
+     *
+     * `image_bytes` is encoded PNG or JPEG payload, encoded as a
+     * `data:` URI for the upstream `ThreeDGeneration` impl (which
+     * expects an `image_url`). `mesh_resolution` controls the side
+     * length of the density grid sampled from the triplane during
+     * marching cubes; `256` matches the upstream TripoSR reference.
+     */
+    func generateFromImage(imageBytes: Data, meshResolution: UInt32) async throws  -> ThreeDGenerateResult
+    
+    /**
+     * Synchronous variant of
+     * [`generate_from_image`](Self::generate_from_image).
+     */
+    func generateFromImageBlocking(imageBytes: Data, meshResolution: UInt32) throws  -> ThreeDGenerateResult
+    
+}
+/**
+ * `TripoSR` single-image-to-3D provider.
+ *
+ * Wraps [`blazen_llm::providers::concrete::three_d::TripoSrProvider`]
+ * (the candle-runtime `TripoSrBackend` newtype + `ProviderMetadata`
+ * stamp). Construction loads the weights — either from `weights_path`
+ * (local directory) or by downloading from a Hugging Face repo
+ * (defaulting to `"stabilityai/TripoSR"`).
+ *
+ * Generation-only: the texturize / rig / refine / animate post-proc
+ * methods on the polymorphic [`crate::concrete::bases::ThreeDProvider`]
+ * trait surface [`crate::errors::BlazenError::Unsupported`] — pipe the
+ * generated GLB through [`Compat3dProvider`] (or another post-proc
+ * backend) to apply textures / armature / refinement / motion.
+ */
+open class TripoSrProvider: TripoSrProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_triposrprovider(self.handle, $0) }
+    }
+    /**
+     * Construct a `TripoSR` provider.
+     *
+     * - `hf_repo_id`: HuggingFace repo to fetch weights from.
+     * Defaults to `"stabilityai/TripoSR"` when `None`.
+     * - `revision`: optional branch / tag / commit pin on
+     * `hf_repo_id`.
+     * - `weights_path`: pre-resolved local weights directory. When
+     * supplied, the HF download is skipped entirely.
+     *
+     * The underlying `TripoSrProvider::new` is async (it may download
+     * weights from Hugging Face). UniFFI constructors are sync, so
+     * we drive it through the shared tokio [`runtime`] — matching
+     * the `new_triposr_3d_model` factory pattern in
+     * [`crate::compute`].
+     */
+public convenience init(hfRepoId: String?, revision: String?, weightsPath: String?)throws  {
+    let handle =
+        try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_constructor_triposrprovider_new(
+        FfiConverterOptionString.lower(hfRepoId),
+        FfiConverterOptionString.lower(revision),
+        FfiConverterOptionString.lower(weightsPath),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_triposrprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Generate a 3D mesh from a single input image.
+     *
+     * `image_bytes` is encoded PNG or JPEG payload, encoded as a
+     * `data:` URI for the upstream `ThreeDGeneration` impl (which
+     * expects an `image_url`). `mesh_resolution` controls the side
+     * length of the density grid sampled from the triplane during
+     * marching cubes; `256` matches the upstream TripoSR reference.
+     */
+open func generateFromImage(imageBytes: Data, meshResolution: UInt32)async throws  -> ThreeDGenerateResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_triposrprovider_generate_from_image(
+                    self.uniffiCloneHandle(),
+                    FfiConverterData.lower(imageBytes),FfiConverterUInt32.lower(meshResolution)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeThreeDGenerateResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of
+     * [`generate_from_image`](Self::generate_from_image).
+     */
+open func generateFromImageBlocking(imageBytes: Data, meshResolution: UInt32)throws  -> ThreeDGenerateResult  {
+    return try  FfiConverterTypeThreeDGenerateResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_triposrprovider_generate_from_image_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterData.lower(imageBytes),
+        FfiConverterUInt32.lower(meshResolution),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTripoSrProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = TripoSrProvider
+
+    public static func lift(_ handle: UInt64) throws -> TripoSrProvider {
+        return TripoSrProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: TripoSrProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TripoSrProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: TripoSrProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTripoSrProvider_lift(_ handle: UInt64) throws -> TripoSrProvider {
+    return try FfiConverterTypeTripoSrProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTripoSrProvider_lower(_ value: TripoSrProvider) -> UInt64 {
+    return FfiConverterTypeTripoSrProvider.lower(value)
+}
+
+
+
+
+
+
+/**
  * A text-to-speech model.
  *
  * Construct via [`new_piper_tts_model`] (local, feature-gated) or
@@ -10613,6 +15448,189 @@ public func FfiConverterTypeTtsModel_lift(_ handle: UInt64) throws -> TtsModel {
 #endif
 public func FfiConverterTypeTtsModel_lower(_ value: TtsModel) -> UInt64 {
     return FfiConverterTypeTtsModel.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Text-to-speech capability trait.
+ *
+ * Implemented by every concrete TTS engine
+ * (`PiperProvider`, `KokoroProvider`, `VibeVoiceProvider`,
+ * `Qwen3TtsProvider`, `SparkTtsProvider`, `BarkProvider`, `F5Provider`,
+ * `FalTtsProvider`) so foreign code can dispatch synthesis through a
+ * single `TtsProvider` interface regardless of the backing engine.
+ */
+public protocol TtsProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+     */
+    func providerId()  -> String
+    
+    /**
+     * Capability bucket (always [`CapabilityKind::Tts`] for this trait;
+     * duplicated for binding-surface uniformity).
+     */
+    func capability()  -> CapabilityKind
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+    func synthesize(text: String, voice: String?, language: String?) async throws  -> TtsResult
+    
+}
+/**
+ * Text-to-speech capability trait.
+ *
+ * Implemented by every concrete TTS engine
+ * (`PiperProvider`, `KokoroProvider`, `VibeVoiceProvider`,
+ * `Qwen3TtsProvider`, `SparkTtsProvider`, `BarkProvider`, `F5Provider`,
+ * `FalTtsProvider`) so foreign code can dispatch synthesis through a
+ * single `TtsProvider` interface regardless of the backing engine.
+ */
+open class TtsProvider: TtsProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_ttsprovider(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_ttsprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+     */
+open func providerId() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_ttsprovider_provider_id(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Capability bucket (always [`CapabilityKind::Tts`] for this trait;
+     * duplicated for binding-surface uniformity).
+     */
+open func capability() -> CapabilityKind  {
+    return try!  FfiConverterTypeCapabilityKind_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_ttsprovider_capability(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+open func synthesize(text: String, voice: String?, language: String?)async throws  -> TtsResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_ttsprovider_synthesize(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(text),FfiConverterOptionString.lower(voice),FfiConverterOptionString.lower(language)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTtsResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeTtsProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = TtsProvider
+
+    public static func lift(_ handle: UInt64) throws -> TtsProvider {
+        return TtsProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: TtsProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> TtsProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: TtsProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTtsProvider_lift(_ handle: UInt64) throws -> TtsProvider {
+    return try FfiConverterTypeTtsProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeTtsProvider_lower(_ value: TtsProvider) -> UInt64 {
+    return FfiConverterTypeTtsProvider.lower(value)
 }
 
 
@@ -12099,6 +17117,241 @@ public func FfiConverterTypeVcModel_lower(_ value: VcModel) -> UInt64 {
 
 
 /**
+ * Voice-conversion capability trait.
+ */
+public protocol VcProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+     */
+    func providerId()  -> String
+    
+    /**
+     * Capability bucket (always [`CapabilityKind::Vc`] for this trait).
+     */
+    func capability()  -> CapabilityKind
+    
+    /**
+     * Convert `input_path` (a source utterance) into the voice
+     * identified by `target_voice_id`.
+     */
+    func convertVoice(inputPath: String, targetVoiceId: String) async throws  -> VcResult
+    
+    /**
+     * Register a new target voice from a reference audio file.
+     *
+     * Engines that do not support cloning surface
+     * `BlazenError::Unsupported` from the per-engine `impl` block
+     * (default trait bodies are not permitted by `#[uniffi::export]`).
+     */
+    func cloneVoice(voiceId: String, referencePath: String) async throws 
+    
+    /**
+     * List the target voices known to this backend.
+     *
+     * Engines without an enumerable voice library return an empty
+     * `Vec` from the per-engine `impl` block.
+     */
+    func listTargetVoices() async throws  -> [TargetVoice]
+    
+}
+/**
+ * Voice-conversion capability trait.
+ */
+open class VcProvider: VcProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_vcprovider(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_vcprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Stable engine identifier (mirrors [`BaseProvider::provider_id`]).
+     */
+open func providerId() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_vcprovider_provider_id(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Capability bucket (always [`CapabilityKind::Vc`] for this trait).
+     */
+open func capability() -> CapabilityKind  {
+    return try!  FfiConverterTypeCapabilityKind_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_vcprovider_capability(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Convert `input_path` (a source utterance) into the voice
+     * identified by `target_voice_id`.
+     */
+open func convertVoice(inputPath: String, targetVoiceId: String)async throws  -> VcResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_vcprovider_convert_voice(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(inputPath),FfiConverterString.lower(targetVoiceId)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeVcResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Register a new target voice from a reference audio file.
+     *
+     * Engines that do not support cloning surface
+     * `BlazenError::Unsupported` from the per-engine `impl` block
+     * (default trait bodies are not permitted by `#[uniffi::export]`).
+     */
+open func cloneVoice(voiceId: String, referencePath: String)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_vcprovider_clone_voice(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(voiceId),FfiConverterString.lower(referencePath)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * List the target voices known to this backend.
+     *
+     * Engines without an enumerable voice library return an empty
+     * `Vec` from the per-engine `impl` block.
+     */
+open func listTargetVoices()async throws  -> [TargetVoice]  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_vcprovider_list_target_voices(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterSequenceTypeTargetVoice.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeVcProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = VcProvider
+
+    public static func lift(_ handle: UInt64) throws -> VcProvider {
+        return VcProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: VcProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> VcProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: VcProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeVcProvider_lift(_ handle: UInt64) throws -> VcProvider {
+    return try FfiConverterTypeVcProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeVcProvider_lower(_ value: VcProvider) -> UInt64 {
+    return FfiConverterTypeVcProvider.lower(value)
+}
+
+
+
+
+
+
+/**
  * Sink for streaming voice-conversion output, implemented in foreign
  * code.
  *
@@ -12480,6 +17733,595 @@ public func FfiConverterTypeVcStreamSink_lift(_ handle: UInt64) throws -> VcStre
 #endif
 public func FfiConverterTypeVcStreamSink_lower(_ value: VcStreamSink) -> UInt64 {
     return FfiConverterTypeVcStreamSink.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Concrete TTS provider backed by the local VibeVoice engine.
+ *
+ * Wraps [`blazen_llm::providers::concrete::tts::VibeVoiceProvider`].
+ */
+public protocol VibeVoiceProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+    func synthesize(text: String, voice: String?, language: String?) async throws  -> TtsResult
+    
+    /**
+     * Synchronous variant of [`synthesize`](Self::synthesize).
+     */
+    func synthesizeBlocking(text: String, voice: String?, language: String?) throws  -> TtsResult
+    
+}
+/**
+ * Concrete TTS provider backed by the local VibeVoice engine.
+ *
+ * Wraps [`blazen_llm::providers::concrete::tts::VibeVoiceProvider`].
+ */
+open class VibeVoiceProvider: VibeVoiceProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_vibevoiceprovider(self.handle, $0) }
+    }
+    /**
+     * Construct with optional voice / language / sample-rate overrides.
+     */
+public convenience init(voice: String?, language: String?, sampleRate: UInt32?)throws  {
+    let handle =
+        try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_constructor_vibevoiceprovider_new(
+        FfiConverterOptionString.lower(voice),
+        FfiConverterOptionString.lower(language),
+        FfiConverterOptionUInt32.lower(sampleRate),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_vibevoiceprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Synthesize `text` into an audio payload.
+     */
+open func synthesize(text: String, voice: String?, language: String?)async throws  -> TtsResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_vibevoiceprovider_synthesize(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(text),FfiConverterOptionString.lower(voice),FfiConverterOptionString.lower(language)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTtsResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`synthesize`](Self::synthesize).
+     */
+open func synthesizeBlocking(text: String, voice: String?, language: String?)throws  -> TtsResult  {
+    return try  FfiConverterTypeTtsResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_vibevoiceprovider_synthesize_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(text),
+        FfiConverterOptionString.lower(voice),
+        FfiConverterOptionString.lower(language),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeVibeVoiceProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = VibeVoiceProvider
+
+    public static func lift(_ handle: UInt64) throws -> VibeVoiceProvider {
+        return VibeVoiceProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: VibeVoiceProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> VibeVoiceProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: VibeVoiceProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeVibeVoiceProvider_lift(_ handle: UInt64) throws -> VibeVoiceProvider {
+    return try FfiConverterTypeVibeVoiceProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeVibeVoiceProvider_lower(_ value: VibeVoiceProvider) -> UInt64 {
+    return FfiConverterTypeVibeVoiceProvider.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Local whisper.cpp speech-to-text provider.
+ *
+ * Construct with [`WhisperCppProvider::new`] (sync — option validation
+ * only; weight loading is lazy on the first transcribe call). Use
+ * [`transcribe`](Self::transcribe) (async) or
+ * [`transcribe_blocking`](Self::transcribe_blocking) (sync) afterwards.
+ */
+public protocol WhisperCppProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Transcribe audio at `audio_source` and return the transcript.
+     *
+     * `audio_source` is a local file path (16-bit PCM mono WAV at
+     * 16 kHz) or an `http(s)://` / `data:` URL. `language` is an
+     * optional per-call ISO-639-1 override; when omitted the
+     * constructor's `language` hint (if any) is used.
+     *
+     * # Errors
+     *
+     * Returns `BlazenError::Provider { kind: "SttTranscribe", ... }`
+     * when the backend fails to decode or transcribe.
+     */
+    func transcribe(audioSource: String, language: String?) async throws  -> SttResult
+    
+    /**
+     * Synchronous variant of [`transcribe`](Self::transcribe).
+     */
+    func transcribeBlocking(audioSource: String, language: String?) throws  -> SttResult
+    
+}
+/**
+ * Local whisper.cpp speech-to-text provider.
+ *
+ * Construct with [`WhisperCppProvider::new`] (sync — option validation
+ * only; weight loading is lazy on the first transcribe call). Use
+ * [`transcribe`](Self::transcribe) (async) or
+ * [`transcribe_blocking`](Self::transcribe_blocking) (sync) afterwards.
+ */
+open class WhisperCppProvider: WhisperCppProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_whispercppprovider(self.handle, $0) }
+    }
+    /**
+     * Build a `WhisperCppProvider`.
+     *
+     * `model` selects the whisper.cpp variant (`"tiny"`, `"base"`,
+     * `"small"` (default), `"medium"`, `"large-v3"`). `device` picks
+     * the runtime device (`"cpu"`, `"cuda"`, etc.). `language` is an
+     * optional ISO-639-1 default-language hint (overridden per call).
+     *
+     * # Errors
+     *
+     * Returns `BlazenError::Provider { kind: "WhisperCppInit", ... }`
+     * when option validation fails.
+     */
+public convenience init(model: String?, device: String?, language: String?)throws  {
+    let handle =
+        try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_constructor_whispercppprovider_new(
+        FfiConverterOptionString.lower(model),
+        FfiConverterOptionString.lower(device),
+        FfiConverterOptionString.lower(language),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_whispercppprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Transcribe audio at `audio_source` and return the transcript.
+     *
+     * `audio_source` is a local file path (16-bit PCM mono WAV at
+     * 16 kHz) or an `http(s)://` / `data:` URL. `language` is an
+     * optional per-call ISO-639-1 override; when omitted the
+     * constructor's `language` hint (if any) is used.
+     *
+     * # Errors
+     *
+     * Returns `BlazenError::Provider { kind: "SttTranscribe", ... }`
+     * when the backend fails to decode or transcribe.
+     */
+open func transcribe(audioSource: String, language: String?)async throws  -> SttResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_whispercppprovider_transcribe(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(audioSource),FfiConverterOptionString.lower(language)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSttResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`transcribe`](Self::transcribe).
+     */
+open func transcribeBlocking(audioSource: String, language: String?)throws  -> SttResult  {
+    return try  FfiConverterTypeSttResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_whispercppprovider_transcribe_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(audioSource),
+        FfiConverterOptionString.lower(language),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWhisperCppProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = WhisperCppProvider
+
+    public static func lift(_ handle: UInt64) throws -> WhisperCppProvider {
+        return WhisperCppProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: WhisperCppProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WhisperCppProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: WhisperCppProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWhisperCppProvider_lift(_ handle: UInt64) throws -> WhisperCppProvider {
+    return try FfiConverterTypeWhisperCppProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWhisperCppProvider_lower(_ value: WhisperCppProvider) -> UInt64 {
+    return FfiConverterTypeWhisperCppProvider.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Streaming speech-to-text provider (chunked candle Whisper fronted by
+ * Silero VAD).
+ *
+ * Note: the underlying backend's blocking `transcribe` entry point
+ * returns `Unsupported` — only the streaming surface is functional in
+ * the upstream backend. The async / blocking methods below are exposed
+ * for API parity but will surface that error to the caller. Wire the
+ * streaming entrypoint directly via the backend if you need it.
+ */
+public protocol WhisperStreamingProviderProtocol: AnyObject, Sendable {
+    
+    /**
+     * Transcribe audio at `audio_source` and return the transcript.
+     *
+     * See [`WhisperCppProvider::transcribe`] for `audio_source` /
+     * `language` semantics.
+     *
+     * # Errors
+     *
+     * Returns `BlazenError::Provider { kind: "SttTranscribe", ... }`
+     * — typically `Unsupported` since the streaming backend's blocking
+     * path is intentionally not wired.
+     */
+    func transcribe(audioSource: String, language: String?) async throws  -> SttResult
+    
+    /**
+     * Synchronous variant of [`transcribe`](Self::transcribe).
+     */
+    func transcribeBlocking(audioSource: String, language: String?) throws  -> SttResult
+    
+}
+/**
+ * Streaming speech-to-text provider (chunked candle Whisper fronted by
+ * Silero VAD).
+ *
+ * Note: the underlying backend's blocking `transcribe` entry point
+ * returns `Unsupported` — only the streaming surface is functional in
+ * the upstream backend. The async / blocking methods below are exposed
+ * for API parity but will surface that error to the caller. Wire the
+ * streaming entrypoint directly via the backend if you need it.
+ */
+open class WhisperStreamingProvider: WhisperStreamingProviderProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_whisperstreamingprovider(self.handle, $0) }
+    }
+    /**
+     * Build a `WhisperStreamingProvider`.
+     *
+     * `model_id` selects the underlying candle Whisper HF model
+     * (default `"openai/whisper-base"`). `vad_model_path` overrides
+     * the Silero VAD ONNX location (default: download from HF on
+     * first use). `chunk_seconds` / `chunk_overlap_seconds` tune the
+     * sliding-window geometry; pass `None` for the defaults (`30.0` /
+     * `5.0`).
+     */
+public convenience init(modelId: String?, vadModelPath: String?, chunkSeconds: Float?, chunkOverlapSeconds: Float?) {
+    let handle =
+        try! rustCall() {
+    uniffi_blazen_uniffi_fn_constructor_whisperstreamingprovider_new(
+        FfiConverterOptionString.lower(modelId),
+        FfiConverterOptionString.lower(vadModelPath),
+        FfiConverterOptionFloat.lower(chunkSeconds),
+        FfiConverterOptionFloat.lower(chunkOverlapSeconds),$0
+    )
+}
+    self.init(unsafeFromHandle: handle)
+}
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_whisperstreamingprovider(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Transcribe audio at `audio_source` and return the transcript.
+     *
+     * See [`WhisperCppProvider::transcribe`] for `audio_source` /
+     * `language` semantics.
+     *
+     * # Errors
+     *
+     * Returns `BlazenError::Provider { kind: "SttTranscribe", ... }`
+     * — typically `Unsupported` since the streaming backend's blocking
+     * path is intentionally not wired.
+     */
+open func transcribe(audioSource: String, language: String?)async throws  -> SttResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_whisperstreamingprovider_transcribe(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(audioSource),FfiConverterOptionString.lower(language)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeSttResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`transcribe`](Self::transcribe).
+     */
+open func transcribeBlocking(audioSource: String, language: String?)throws  -> SttResult  {
+    return try  FfiConverterTypeSttResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_whisperstreamingprovider_transcribe_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(audioSource),
+        FfiConverterOptionString.lower(language),$0
+    )
+})
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWhisperStreamingProvider: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = WhisperStreamingProvider
+
+    public static func lift(_ handle: UInt64) throws -> WhisperStreamingProvider {
+        return WhisperStreamingProvider(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: WhisperStreamingProvider) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WhisperStreamingProvider {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: WhisperStreamingProvider, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWhisperStreamingProvider_lift(_ handle: UInt64) throws -> WhisperStreamingProvider {
+    return try FfiConverterTypeWhisperStreamingProvider.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWhisperStreamingProvider_lower(_ value: WhisperStreamingProvider) -> UInt64 {
+    return FfiConverterTypeWhisperStreamingProvider.lower(value)
 }
 
 
@@ -21413,6 +27255,177 @@ public func FfiConverterTypeBlazenError_lower(_ value: BlazenError) -> RustBuffe
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
+ * Coarse categorization of what a provider does.
+ *
+ * Mirrors [`blazen_llm::providers::root::CapabilityKind`] but is
+ * re-declared here so it can carry `#[derive(uniffi::Enum)]` for the
+ * FFI surface (the upstream enum uses `serde` derives that are not
+ * `uniffi::Enum`-compatible).
+ */
+
+public enum CapabilityKind: Equatable, Hashable {
+    
+    /**
+     * Large language model — chat / completion / streaming.
+     */
+    case llm
+    /**
+     * Text-to-speech audio synthesis.
+     */
+    case tts
+    /**
+     * Speech-to-text transcription.
+     */
+    case stt
+    /**
+     * Text-to-music / text-to-sfx audio generation.
+     */
+    case music
+    /**
+     * Voice conversion (source utterance + target voice → re-voiced audio).
+     */
+    case vc
+    /**
+     * 3D mesh generation (image-to-3D, text-to-3D).
+     */
+    case threeD
+    /**
+     * 2D image generation (text-to-image, image-to-image, upscale).
+     */
+    case imageGen
+    /**
+     * Vector embedding generation.
+     */
+    case embedding
+    /**
+     * Neural audio codec (PCM ↔ discrete codebook tokens).
+     */
+    case codec
+    /**
+     * Background removal on existing images.
+     */
+    case backgroundRemoval
+    /**
+     * Video generation (text-to-video, image-to-video).
+     */
+    case video
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension CapabilityKind: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeCapabilityKind: FfiConverterRustBuffer {
+    typealias SwiftType = CapabilityKind
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> CapabilityKind {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .llm
+        
+        case 2: return .tts
+        
+        case 3: return .stt
+        
+        case 4: return .music
+        
+        case 5: return .vc
+        
+        case 6: return .threeD
+        
+        case 7: return .imageGen
+        
+        case 8: return .embedding
+        
+        case 9: return .codec
+        
+        case 10: return .backgroundRemoval
+        
+        case 11: return .video
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: CapabilityKind, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .llm:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .tts:
+            writeInt(&buf, Int32(2))
+        
+        
+        case .stt:
+            writeInt(&buf, Int32(3))
+        
+        
+        case .music:
+            writeInt(&buf, Int32(4))
+        
+        
+        case .vc:
+            writeInt(&buf, Int32(5))
+        
+        
+        case .threeD:
+            writeInt(&buf, Int32(6))
+        
+        
+        case .imageGen:
+            writeInt(&buf, Int32(7))
+        
+        
+        case .embedding:
+            writeInt(&buf, Int32(8))
+        
+        
+        case .codec:
+            writeInt(&buf, Int32(9))
+        
+        
+        case .backgroundRemoval:
+            writeInt(&buf, Int32(10))
+        
+        
+        case .video:
+            writeInt(&buf, Int32(11))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCapabilityKind_lift(_ buf: RustBuffer) throws -> CapabilityKind {
+    return try FfiConverterTypeCapabilityKind.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeCapabilityKind_lower(_ value: CapabilityKind) -> RustBuffer {
+    return FfiConverterTypeCapabilityKind.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
  * How a worker declares its admission policy to the control plane.
  *
  * Carries the union of fields for the three flavours; consumers should
@@ -22013,150 +28026,6 @@ public func FfiConverterTypeStepOutput_lower(_ value: StepOutput) -> RustBuffer 
 }
 
 
-
-/**
- * Canonical error returned by every [`Compat3dProvider`] method.
- *
- * Absorbs the four parallel error enums from [`blazen_3d`] —
- * [`Texturizer3dError`], [`Rigger3dError`], [`Refiner3dError`], and
- * [`Animator3dError`] — into one flat shape. Foreign callers switch
- * on the variant rather than on which stage produced the error
- * (the call site already determines that).
- */
-public enum ThreeDError: Swift.Error, Equatable, Hashable, Foundation.LocalizedError {
-
-    
-    
-    /**
-     * The active backend reported a runtime failure (HTTP error,
-     * inference error, etc.).
-     */
-    case Backend(message: String
-    )
-    /**
-     * The caller-supplied input was malformed — invalid mesh bytes,
-     * unsupported container format, malformed request fields, etc.
-     */
-    case InvalidInput(message: String
-    )
-    /**
-     * I/O failure while reading a mesh file, reference image, or
-     * model file.
-     */
-    case Io(message: String
-    )
-    /**
-     * The selected backend is not available in this build (e.g. the
-     * `compat-proxy` feature is disabled).
-     */
-    case EngineNotAvailable(message: String
-    )
-    /**
-     * The capability requested is not supported by the active
-     * backend (e.g. PBR maps from an albedo-only texturizer, video-
-     * driven motion on a text-only animator).
-     */
-    case Unsupported(message: String
-    )
-
-    
-
-    
-
-    
-    public var errorDescription: String? {
-        String(reflecting: self)
-    }
-    
-}
-
-#if compiler(>=6)
-extension ThreeDError: Sendable {}
-#endif
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public struct FfiConverterTypeThreeDError: FfiConverterRustBuffer {
-    typealias SwiftType = ThreeDError
-
-    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> ThreeDError {
-        let variant: Int32 = try readInt(&buf)
-        switch variant {
-
-        
-
-        
-        case 1: return .Backend(
-            message: try FfiConverterString.read(from: &buf)
-            )
-        case 2: return .InvalidInput(
-            message: try FfiConverterString.read(from: &buf)
-            )
-        case 3: return .Io(
-            message: try FfiConverterString.read(from: &buf)
-            )
-        case 4: return .EngineNotAvailable(
-            message: try FfiConverterString.read(from: &buf)
-            )
-        case 5: return .Unsupported(
-            message: try FfiConverterString.read(from: &buf)
-            )
-
-         default: throw UniffiInternalError.unexpectedEnumCase
-        }
-    }
-
-    public static func write(_ value: ThreeDError, into buf: inout [UInt8]) {
-        switch value {
-
-        
-
-        
-        
-        case let .Backend(message):
-            writeInt(&buf, Int32(1))
-            FfiConverterString.write(message, into: &buf)
-            
-        
-        case let .InvalidInput(message):
-            writeInt(&buf, Int32(2))
-            FfiConverterString.write(message, into: &buf)
-            
-        
-        case let .Io(message):
-            writeInt(&buf, Int32(3))
-            FfiConverterString.write(message, into: &buf)
-            
-        
-        case let .EngineNotAvailable(message):
-            writeInt(&buf, Int32(4))
-            FfiConverterString.write(message, into: &buf)
-            
-        
-        case let .Unsupported(message):
-            writeInt(&buf, Int32(5))
-            FfiConverterString.write(message, into: &buf)
-            
-        }
-    }
-}
-
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeThreeDError_lift(_ buf: RustBuffer) throws -> ThreeDError {
-    return try FfiConverterTypeThreeDError.lift(buf)
-}
-
-#if swift(>=5.8)
-@_documentation(visibility: private)
-#endif
-public func FfiConverterTypeThreeDError_lower(_ value: ThreeDError) -> RustBuffer {
-    return FfiConverterTypeThreeDError.lower(value)
-}
-
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 /**
@@ -22347,6 +28216,30 @@ fileprivate struct FfiConverterOptionUInt64: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterUInt64.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionInt64: FfiConverterRustBuffer {
+    typealias SwiftType = Int64?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterInt64.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterInt64.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -23335,6 +29228,31 @@ fileprivate struct FfiConverterSequenceTypeBatchItem: FfiConverterRustBuffer {
         seq.reserveCapacity(Int(len))
         for _ in 0 ..< len {
             seq.append(try FfiConverterTypeBatchItem.read(from: &buf))
+        }
+        return seq
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterSequenceSequenceFloat: FfiConverterRustBuffer {
+    typealias SwiftType = [[Float]]
+
+    public static func write(_ value: [[Float]], into buf: inout [UInt8]) {
+        let len = Int32(value.count)
+        writeInt(&buf, len)
+        for item in value {
+            FfiConverterSequenceFloat.write(item, into: &buf)
+        }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> [[Float]] {
+        let len: Int32 = try readInt(&buf)
+        var seq = [[Float]]()
+        seq.reserveCapacity(Int(len))
+        for _ in 0 ..< len {
+            seq.append(try FfiConverterSequenceFloat.read(from: &buf))
         }
         return seq
     }
@@ -25100,6 +31018,282 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_error() != 5727) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_baseprovider_provider_id() != 23609) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_baseprovider_capability() != 59543) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_embeddingprovider_provider_id() != 58512) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_embeddingprovider_capability() != 43276) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_embeddingprovider_embed() != 54728) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_embeddingprovider_dimensions() != 35676) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_imagegenprovider_provider_id() != 34787) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_imagegenprovider_capability() != 15186) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_imagegenprovider_generate_image() != 50871) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_llmprovider_provider_id() != 42418) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_llmprovider_capability() != 42312) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_llmprovider_complete() != 36549) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_musicprovider_provider_id() != 16828) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_musicprovider_capability() != 52104) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_musicprovider_generate_music() != 2984) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_musicprovider_generate_sfx() != 43095) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_sttprovider_provider_id() != 60228) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_sttprovider_capability() != 480) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_sttprovider_transcribe() != 23696) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_threedprovider_provider_id() != 64296) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_threedprovider_capability() != 7290) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_threedprovider_generate_from_image() != 63488) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_threedprovider_texturize() != 54578) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_threedprovider_rig() != 56149) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_threedprovider_refine() != 319) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_threedprovider_animate() != 14496) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_ttsprovider_provider_id() != 1368) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_ttsprovider_capability() != 11459) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_ttsprovider_synthesize() != 24115) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_vcprovider_provider_id() != 18153) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_vcprovider_capability() != 50994) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_vcprovider_convert_voice() != 570) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_vcprovider_clone_voice() != 64054) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_vcprovider_list_target_voices() != 20906) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_music() != 18485) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_music_blocking() != 16150) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_sfx() != 37019) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_sfx_blocking() != 47783) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_falmusicprovider_generate_music() != 33661) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_falmusicprovider_generate_music_blocking() != 32415) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_falmusicprovider_generate_sfx() != 48301) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_falmusicprovider_generate_sfx_blocking() != 7478) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_musicgenprovider_generate_music() != 50613) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_musicgenprovider_generate_music_blocking() != 55856) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_stableaudioprovider_generate_music() != 2372) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_stableaudioprovider_generate_music_blocking() != 44293) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_stableaudioprovider_generate_sfx() != 2544) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_stableaudioprovider_generate_sfx_blocking() != 32006) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_falsttprovider_transcribe() != 64868) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_falsttprovider_transcribe_blocking() != 20278) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_fasterwhisperprovider_transcribe() != 30013) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_fasterwhisperprovider_transcribe_blocking() != 337) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_whispercppprovider_transcribe() != 59129) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_whispercppprovider_transcribe_blocking() != 57057) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_whisperstreamingprovider_transcribe() != 18640) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_whisperstreamingprovider_transcribe_blocking() != 6154) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_animate() != 1112) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_animate_blocking() != 47171) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_generate_from_image() != 33214) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_generate_from_image_blocking() != 59769) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_refine() != 4999) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_refine_blocking() != 11614) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_rig() != 65273) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_rig_blocking() != 56317) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_texturize() != 20429) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_texturize_blocking() != 29809) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_triposrprovider_generate_from_image() != 33276) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_triposrprovider_generate_from_image_blocking() != 18100) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_barkprovider_synthesize() != 60362) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_barkprovider_synthesize_blocking() != 27551) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_f5provider_synthesize() != 64185) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_f5provider_synthesize_blocking() != 26380) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_falttsprovider_synthesize() != 10212) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_falttsprovider_synthesize_blocking() != 30985) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_kokoroprovider_synthesize() != 15368) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_kokoroprovider_synthesize_blocking() != 18567) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_piperprovider_synthesize() != 24756) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_piperprovider_synthesize_blocking() != 7310) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_qwen3ttsprovider_synthesize() != 47593) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_qwen3ttsprovider_synthesize_blocking() != 7753) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_sparkttsprovider_synthesize() != 18781) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_sparkttsprovider_synthesize_blocking() != 58765) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_vibevoiceprovider_synthesize() != 29894) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_vibevoiceprovider_synthesize_blocking() != 23229) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_falvcprovider_convert_voice() != 53753) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_falvcprovider_convert_voice_blocking() != 25115) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_rvcprovider_clone_voice() != 38614) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_rvcprovider_clone_voice_blocking() != 9430) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_rvcprovider_convert_voice() != 23657) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_rvcprovider_convert_voice_blocking() != 51076) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_rvcprovider_list_target_voices() != 29004) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_rvcprovider_list_target_voices_blocking() != 56818) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle() != 640) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -25397,28 +31591,28 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_pipelinebuilder_total_timeout_ms() != 53032) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_baseprovider_as_model() != 58666) {
+    if (uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_as_model() != 7766) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_baseprovider_defaults() != 21474) {
+    if (uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_defaults() != 64482) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_baseprovider_extract() != 47282) {
+    if (uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_extract() != 58506) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_baseprovider_model_id() != 18282) {
+    if (uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_model_id() != 6884) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_baseprovider_with_defaults() != 47332) {
+    if (uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_with_defaults() != 35202) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_baseprovider_with_response_format_json() != 25582) {
+    if (uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_with_response_format_json() != 57277) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_baseprovider_with_system_prompt() != 27915) {
+    if (uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_with_system_prompt() != 47198) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_baseprovider_with_tools_json() != 43254) {
+    if (uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_with_tools_json() != 35513) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_customprovider_provider_id() != 63939) {
@@ -25472,7 +31666,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_customprovider_remove_background() != 5224) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_customproviderhandle_as_base() != 43943) {
+    if (uniffi_blazen_uniffi_checksum_method_customproviderhandle_as_base() != 13608) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_customproviderhandle_clone_voice() != 62032) {
@@ -25544,18 +31738,6 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_completionstreamsink_on_error() != 6341) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_animate() != 11536) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_refine() != 4070) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_rig() != 32321) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_blazen_uniffi_checksum_method_compat3dprovider_texturize() != 42136) {
-        return InitializationResult.apiChecksumMismatch
-    }
     if (uniffi_blazen_uniffi_checksum_method_stephandler_invoke() != 11814) {
         return InitializationResult.apiChecksumMismatch
     }
@@ -25581,6 +31763,69 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_constructor_agent_new() != 59656) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_audiogenprovider_new() != 3331) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_falmusicprovider_new() != 35233) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_musicgenprovider_new() != 41669) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_stableaudioprovider_new() != 49025) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_falsttprovider_new() != 52921) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_fasterwhisperprovider_new() != 56213) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_whispercppprovider_new() != 851) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_whisperstreamingprovider_new() != 27361) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_compat3dprovider_new() != 29686) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_triposrprovider_new() != 32176) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_barkprovider_new() != 7298) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_f5provider_new() != 7083) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_falttsprovider_new() != 33047) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_falttsprovider_with_model() != 25912) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_kokoroprovider_new() != 9867) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_piperprovider_new() != 4950) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_qwen3ttsprovider_new() != 53812) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_sparkttsprovider_new() != 6850) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_vibevoiceprovider_new() != 18188) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_falvcprovider_new() != 3575) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_constructor_rvcprovider_new() != 51672) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_constructor_controlplaneclient_connect() != 13355) {
@@ -25625,13 +31870,10 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_constructor_pipelinebuilder_new() != 61410) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model() != 28877) {
+    if (uniffi_blazen_uniffi_checksum_constructor_llmproviderdefaults_from_model() != 19304) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model_with_defaults() != 44881) {
-        return InitializationResult.apiChecksumMismatch
-    }
-    if (uniffi_blazen_uniffi_checksum_constructor_compat3dprovider_new() != 19300) {
+    if (uniffi_blazen_uniffi_checksum_constructor_llmproviderdefaults_from_model_with_defaults() != 59859) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_constructor_workflowbuilder_new() != 14241) {

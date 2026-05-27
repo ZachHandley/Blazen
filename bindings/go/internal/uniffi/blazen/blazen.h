@@ -468,6 +468,482 @@ static void call_UniffiCallbackInterfaceVcStreamSinkMethod2(
 
 
 #endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_BASE_PROVIDER_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_BASE_PROVIDER_METHOD0
+typedef void (*UniffiCallbackInterfaceBaseProviderMethod0)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceBaseProviderMethod0(
+				UniffiCallbackInterfaceBaseProviderMethod0 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_BASE_PROVIDER_METHOD1
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_BASE_PROVIDER_METHOD1
+typedef void (*UniffiCallbackInterfaceBaseProviderMethod1)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceBaseProviderMethod1(
+				UniffiCallbackInterfaceBaseProviderMethod1 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_EMBEDDING_PROVIDER_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_EMBEDDING_PROVIDER_METHOD0
+typedef void (*UniffiCallbackInterfaceEmbeddingProviderMethod0)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceEmbeddingProviderMethod0(
+				UniffiCallbackInterfaceEmbeddingProviderMethod0 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_EMBEDDING_PROVIDER_METHOD1
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_EMBEDDING_PROVIDER_METHOD1
+typedef void (*UniffiCallbackInterfaceEmbeddingProviderMethod1)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceEmbeddingProviderMethod1(
+				UniffiCallbackInterfaceEmbeddingProviderMethod1 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_EMBEDDING_PROVIDER_METHOD2
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_EMBEDDING_PROVIDER_METHOD2
+typedef void (*UniffiCallbackInterfaceEmbeddingProviderMethod2)(uint64_t uniffi_handle, RustBuffer texts, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback);
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceEmbeddingProviderMethod2(
+				UniffiCallbackInterfaceEmbeddingProviderMethod2 cb, uint64_t uniffi_handle, RustBuffer texts, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback)
+{
+	return cb(uniffi_handle, texts, uniffi_future_callback, uniffi_callback_data, uniffi_out_dropped_callback);
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_EMBEDDING_PROVIDER_METHOD3
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_EMBEDDING_PROVIDER_METHOD3
+typedef void (*UniffiCallbackInterfaceEmbeddingProviderMethod3)(uint64_t uniffi_handle, uint32_t* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceEmbeddingProviderMethod3(
+				UniffiCallbackInterfaceEmbeddingProviderMethod3 cb, uint64_t uniffi_handle, uint32_t* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_IMAGE_GEN_PROVIDER_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_IMAGE_GEN_PROVIDER_METHOD0
+typedef void (*UniffiCallbackInterfaceImageGenProviderMethod0)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceImageGenProviderMethod0(
+				UniffiCallbackInterfaceImageGenProviderMethod0 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_IMAGE_GEN_PROVIDER_METHOD1
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_IMAGE_GEN_PROVIDER_METHOD1
+typedef void (*UniffiCallbackInterfaceImageGenProviderMethod1)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceImageGenProviderMethod1(
+				UniffiCallbackInterfaceImageGenProviderMethod1 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_IMAGE_GEN_PROVIDER_METHOD2
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_IMAGE_GEN_PROVIDER_METHOD2
+typedef void (*UniffiCallbackInterfaceImageGenProviderMethod2)(uint64_t uniffi_handle, RustBuffer prompt, RustBuffer width, RustBuffer height, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback);
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceImageGenProviderMethod2(
+				UniffiCallbackInterfaceImageGenProviderMethod2 cb, uint64_t uniffi_handle, RustBuffer prompt, RustBuffer width, RustBuffer height, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback)
+{
+	return cb(uniffi_handle, prompt, width, height, uniffi_future_callback, uniffi_callback_data, uniffi_out_dropped_callback);
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_LLM_PROVIDER_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_LLM_PROVIDER_METHOD0
+typedef void (*UniffiCallbackInterfaceLlmProviderMethod0)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceLlmProviderMethod0(
+				UniffiCallbackInterfaceLlmProviderMethod0 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_LLM_PROVIDER_METHOD1
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_LLM_PROVIDER_METHOD1
+typedef void (*UniffiCallbackInterfaceLlmProviderMethod1)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceLlmProviderMethod1(
+				UniffiCallbackInterfaceLlmProviderMethod1 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_LLM_PROVIDER_METHOD2
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_LLM_PROVIDER_METHOD2
+typedef void (*UniffiCallbackInterfaceLlmProviderMethod2)(uint64_t uniffi_handle, RustBuffer request, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback);
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceLlmProviderMethod2(
+				UniffiCallbackInterfaceLlmProviderMethod2 cb, uint64_t uniffi_handle, RustBuffer request, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback)
+{
+	return cb(uniffi_handle, request, uniffi_future_callback, uniffi_callback_data, uniffi_out_dropped_callback);
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_MUSIC_PROVIDER_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_MUSIC_PROVIDER_METHOD0
+typedef void (*UniffiCallbackInterfaceMusicProviderMethod0)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceMusicProviderMethod0(
+				UniffiCallbackInterfaceMusicProviderMethod0 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_MUSIC_PROVIDER_METHOD1
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_MUSIC_PROVIDER_METHOD1
+typedef void (*UniffiCallbackInterfaceMusicProviderMethod1)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceMusicProviderMethod1(
+				UniffiCallbackInterfaceMusicProviderMethod1 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_MUSIC_PROVIDER_METHOD2
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_MUSIC_PROVIDER_METHOD2
+typedef void (*UniffiCallbackInterfaceMusicProviderMethod2)(uint64_t uniffi_handle, RustBuffer prompt, float duration_seconds, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback);
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceMusicProviderMethod2(
+				UniffiCallbackInterfaceMusicProviderMethod2 cb, uint64_t uniffi_handle, RustBuffer prompt, float duration_seconds, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback)
+{
+	return cb(uniffi_handle, prompt, duration_seconds, uniffi_future_callback, uniffi_callback_data, uniffi_out_dropped_callback);
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_MUSIC_PROVIDER_METHOD3
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_MUSIC_PROVIDER_METHOD3
+typedef void (*UniffiCallbackInterfaceMusicProviderMethod3)(uint64_t uniffi_handle, RustBuffer prompt, float duration_seconds, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback);
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceMusicProviderMethod3(
+				UniffiCallbackInterfaceMusicProviderMethod3 cb, uint64_t uniffi_handle, RustBuffer prompt, float duration_seconds, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback)
+{
+	return cb(uniffi_handle, prompt, duration_seconds, uniffi_future_callback, uniffi_callback_data, uniffi_out_dropped_callback);
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_STT_PROVIDER_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_STT_PROVIDER_METHOD0
+typedef void (*UniffiCallbackInterfaceSttProviderMethod0)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceSttProviderMethod0(
+				UniffiCallbackInterfaceSttProviderMethod0 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_STT_PROVIDER_METHOD1
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_STT_PROVIDER_METHOD1
+typedef void (*UniffiCallbackInterfaceSttProviderMethod1)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceSttProviderMethod1(
+				UniffiCallbackInterfaceSttProviderMethod1 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_STT_PROVIDER_METHOD2
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_STT_PROVIDER_METHOD2
+typedef void (*UniffiCallbackInterfaceSttProviderMethod2)(uint64_t uniffi_handle, RustBuffer audio_source, RustBuffer language, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback);
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceSttProviderMethod2(
+				UniffiCallbackInterfaceSttProviderMethod2 cb, uint64_t uniffi_handle, RustBuffer audio_source, RustBuffer language, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback)
+{
+	return cb(uniffi_handle, audio_source, language, uniffi_future_callback, uniffi_callback_data, uniffi_out_dropped_callback);
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_THREE_D_PROVIDER_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_THREE_D_PROVIDER_METHOD0
+typedef void (*UniffiCallbackInterfaceThreeDProviderMethod0)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceThreeDProviderMethod0(
+				UniffiCallbackInterfaceThreeDProviderMethod0 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_THREE_D_PROVIDER_METHOD1
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_THREE_D_PROVIDER_METHOD1
+typedef void (*UniffiCallbackInterfaceThreeDProviderMethod1)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceThreeDProviderMethod1(
+				UniffiCallbackInterfaceThreeDProviderMethod1 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_THREE_D_PROVIDER_METHOD2
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_THREE_D_PROVIDER_METHOD2
+typedef void (*UniffiCallbackInterfaceThreeDProviderMethod2)(uint64_t uniffi_handle, RustBuffer image_bytes, uint32_t mesh_resolution, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback);
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceThreeDProviderMethod2(
+				UniffiCallbackInterfaceThreeDProviderMethod2 cb, uint64_t uniffi_handle, RustBuffer image_bytes, uint32_t mesh_resolution, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback)
+{
+	return cb(uniffi_handle, image_bytes, mesh_resolution, uniffi_future_callback, uniffi_callback_data, uniffi_out_dropped_callback);
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_THREE_D_PROVIDER_METHOD3
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_THREE_D_PROVIDER_METHOD3
+typedef void (*UniffiCallbackInterfaceThreeDProviderMethod3)(uint64_t uniffi_handle, RustBuffer mesh_glb, RustBuffer request, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback);
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceThreeDProviderMethod3(
+				UniffiCallbackInterfaceThreeDProviderMethod3 cb, uint64_t uniffi_handle, RustBuffer mesh_glb, RustBuffer request, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback)
+{
+	return cb(uniffi_handle, mesh_glb, request, uniffi_future_callback, uniffi_callback_data, uniffi_out_dropped_callback);
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_THREE_D_PROVIDER_METHOD4
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_THREE_D_PROVIDER_METHOD4
+typedef void (*UniffiCallbackInterfaceThreeDProviderMethod4)(uint64_t uniffi_handle, RustBuffer mesh_glb, RustBuffer request, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback);
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceThreeDProviderMethod4(
+				UniffiCallbackInterfaceThreeDProviderMethod4 cb, uint64_t uniffi_handle, RustBuffer mesh_glb, RustBuffer request, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback)
+{
+	return cb(uniffi_handle, mesh_glb, request, uniffi_future_callback, uniffi_callback_data, uniffi_out_dropped_callback);
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_THREE_D_PROVIDER_METHOD5
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_THREE_D_PROVIDER_METHOD5
+typedef void (*UniffiCallbackInterfaceThreeDProviderMethod5)(uint64_t uniffi_handle, RustBuffer mesh_glb, RustBuffer request, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback);
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceThreeDProviderMethod5(
+				UniffiCallbackInterfaceThreeDProviderMethod5 cb, uint64_t uniffi_handle, RustBuffer mesh_glb, RustBuffer request, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback)
+{
+	return cb(uniffi_handle, mesh_glb, request, uniffi_future_callback, uniffi_callback_data, uniffi_out_dropped_callback);
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_THREE_D_PROVIDER_METHOD6
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_THREE_D_PROVIDER_METHOD6
+typedef void (*UniffiCallbackInterfaceThreeDProviderMethod6)(uint64_t uniffi_handle, RustBuffer rigged_glb, RustBuffer request, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback);
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceThreeDProviderMethod6(
+				UniffiCallbackInterfaceThreeDProviderMethod6 cb, uint64_t uniffi_handle, RustBuffer rigged_glb, RustBuffer request, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback)
+{
+	return cb(uniffi_handle, rigged_glb, request, uniffi_future_callback, uniffi_callback_data, uniffi_out_dropped_callback);
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_TTS_PROVIDER_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_TTS_PROVIDER_METHOD0
+typedef void (*UniffiCallbackInterfaceTtsProviderMethod0)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceTtsProviderMethod0(
+				UniffiCallbackInterfaceTtsProviderMethod0 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_TTS_PROVIDER_METHOD1
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_TTS_PROVIDER_METHOD1
+typedef void (*UniffiCallbackInterfaceTtsProviderMethod1)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceTtsProviderMethod1(
+				UniffiCallbackInterfaceTtsProviderMethod1 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_TTS_PROVIDER_METHOD2
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_TTS_PROVIDER_METHOD2
+typedef void (*UniffiCallbackInterfaceTtsProviderMethod2)(uint64_t uniffi_handle, RustBuffer text, RustBuffer voice, RustBuffer language, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback);
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceTtsProviderMethod2(
+				UniffiCallbackInterfaceTtsProviderMethod2 cb, uint64_t uniffi_handle, RustBuffer text, RustBuffer voice, RustBuffer language, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback)
+{
+	return cb(uniffi_handle, text, voice, language, uniffi_future_callback, uniffi_callback_data, uniffi_out_dropped_callback);
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_VC_PROVIDER_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_VC_PROVIDER_METHOD0
+typedef void (*UniffiCallbackInterfaceVcProviderMethod0)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceVcProviderMethod0(
+				UniffiCallbackInterfaceVcProviderMethod0 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_VC_PROVIDER_METHOD1
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_VC_PROVIDER_METHOD1
+typedef void (*UniffiCallbackInterfaceVcProviderMethod1)(uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceVcProviderMethod1(
+				UniffiCallbackInterfaceVcProviderMethod1 cb, uint64_t uniffi_handle, RustBuffer* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_VC_PROVIDER_METHOD2
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_VC_PROVIDER_METHOD2
+typedef void (*UniffiCallbackInterfaceVcProviderMethod2)(uint64_t uniffi_handle, RustBuffer input_path, RustBuffer target_voice_id, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback);
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceVcProviderMethod2(
+				UniffiCallbackInterfaceVcProviderMethod2 cb, uint64_t uniffi_handle, RustBuffer input_path, RustBuffer target_voice_id, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback)
+{
+	return cb(uniffi_handle, input_path, target_voice_id, uniffi_future_callback, uniffi_callback_data, uniffi_out_dropped_callback);
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_VC_PROVIDER_METHOD3
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_VC_PROVIDER_METHOD3
+typedef void (*UniffiCallbackInterfaceVcProviderMethod3)(uint64_t uniffi_handle, RustBuffer voice_id, RustBuffer reference_path, UniffiForeignFutureCompleteVoid uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback);
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceVcProviderMethod3(
+				UniffiCallbackInterfaceVcProviderMethod3 cb, uint64_t uniffi_handle, RustBuffer voice_id, RustBuffer reference_path, UniffiForeignFutureCompleteVoid uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback)
+{
+	return cb(uniffi_handle, voice_id, reference_path, uniffi_future_callback, uniffi_callback_data, uniffi_out_dropped_callback);
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_VC_PROVIDER_METHOD4
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_VC_PROVIDER_METHOD4
+typedef void (*UniffiCallbackInterfaceVcProviderMethod4)(uint64_t uniffi_handle, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback);
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceVcProviderMethod4(
+				UniffiCallbackInterfaceVcProviderMethod4 cb, uint64_t uniffi_handle, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback)
+{
+	return cb(uniffi_handle, uniffi_future_callback, uniffi_callback_data, uniffi_out_dropped_callback);
+}
+
+
+#endif
 #ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_CONTROL_PLANE_ASSIGNMENT_HANDLER_METHOD0
 #define UNIFFI_FFIDEF_CALLBACK_INTERFACE_CONTROL_PLANE_ASSIGNMENT_HANDLER_METHOD0
 typedef void (*UniffiCallbackInterfaceControlPlaneAssignmentHandlerMethod0)(uint64_t uniffi_handle, RustBuffer run_id, RustBuffer workflow_name, RustBuffer input_json, RustBuffer* uniffi_out_return, RustCallStatus* callStatus );
@@ -1003,6 +1479,112 @@ typedef struct UniffiVTableCallbackInterfaceVcStreamSink {
 } UniffiVTableCallbackInterfaceVcStreamSink;
 
 #endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_BASE_PROVIDER
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_BASE_PROVIDER
+typedef struct UniffiVTableCallbackInterfaceBaseProvider {
+    UniffiCallbackInterfaceFree uniffiFree;
+    UniffiCallbackInterfaceClone uniffiClone;
+    UniffiCallbackInterfaceBaseProviderMethod0 providerId;
+    UniffiCallbackInterfaceBaseProviderMethod1 capability;
+} UniffiVTableCallbackInterfaceBaseProvider;
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_EMBEDDING_PROVIDER
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_EMBEDDING_PROVIDER
+typedef struct UniffiVTableCallbackInterfaceEmbeddingProvider {
+    UniffiCallbackInterfaceFree uniffiFree;
+    UniffiCallbackInterfaceClone uniffiClone;
+    UniffiCallbackInterfaceEmbeddingProviderMethod0 providerId;
+    UniffiCallbackInterfaceEmbeddingProviderMethod1 capability;
+    UniffiCallbackInterfaceEmbeddingProviderMethod2 embed;
+    UniffiCallbackInterfaceEmbeddingProviderMethod3 dimensions;
+} UniffiVTableCallbackInterfaceEmbeddingProvider;
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_IMAGE_GEN_PROVIDER
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_IMAGE_GEN_PROVIDER
+typedef struct UniffiVTableCallbackInterfaceImageGenProvider {
+    UniffiCallbackInterfaceFree uniffiFree;
+    UniffiCallbackInterfaceClone uniffiClone;
+    UniffiCallbackInterfaceImageGenProviderMethod0 providerId;
+    UniffiCallbackInterfaceImageGenProviderMethod1 capability;
+    UniffiCallbackInterfaceImageGenProviderMethod2 generateImage;
+} UniffiVTableCallbackInterfaceImageGenProvider;
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_LLM_PROVIDER
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_LLM_PROVIDER
+typedef struct UniffiVTableCallbackInterfaceLlmProvider {
+    UniffiCallbackInterfaceFree uniffiFree;
+    UniffiCallbackInterfaceClone uniffiClone;
+    UniffiCallbackInterfaceLlmProviderMethod0 providerId;
+    UniffiCallbackInterfaceLlmProviderMethod1 capability;
+    UniffiCallbackInterfaceLlmProviderMethod2 complete;
+} UniffiVTableCallbackInterfaceLlmProvider;
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_MUSIC_PROVIDER
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_MUSIC_PROVIDER
+typedef struct UniffiVTableCallbackInterfaceMusicProvider {
+    UniffiCallbackInterfaceFree uniffiFree;
+    UniffiCallbackInterfaceClone uniffiClone;
+    UniffiCallbackInterfaceMusicProviderMethod0 providerId;
+    UniffiCallbackInterfaceMusicProviderMethod1 capability;
+    UniffiCallbackInterfaceMusicProviderMethod2 generateMusic;
+    UniffiCallbackInterfaceMusicProviderMethod3 generateSfx;
+} UniffiVTableCallbackInterfaceMusicProvider;
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_STT_PROVIDER
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_STT_PROVIDER
+typedef struct UniffiVTableCallbackInterfaceSttProvider {
+    UniffiCallbackInterfaceFree uniffiFree;
+    UniffiCallbackInterfaceClone uniffiClone;
+    UniffiCallbackInterfaceSttProviderMethod0 providerId;
+    UniffiCallbackInterfaceSttProviderMethod1 capability;
+    UniffiCallbackInterfaceSttProviderMethod2 transcribe;
+} UniffiVTableCallbackInterfaceSttProvider;
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_THREE_D_PROVIDER
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_THREE_D_PROVIDER
+typedef struct UniffiVTableCallbackInterfaceThreeDProvider {
+    UniffiCallbackInterfaceFree uniffiFree;
+    UniffiCallbackInterfaceClone uniffiClone;
+    UniffiCallbackInterfaceThreeDProviderMethod0 providerId;
+    UniffiCallbackInterfaceThreeDProviderMethod1 capability;
+    UniffiCallbackInterfaceThreeDProviderMethod2 generateFromImage;
+    UniffiCallbackInterfaceThreeDProviderMethod3 texturize;
+    UniffiCallbackInterfaceThreeDProviderMethod4 rig;
+    UniffiCallbackInterfaceThreeDProviderMethod5 refine;
+    UniffiCallbackInterfaceThreeDProviderMethod6 animate;
+} UniffiVTableCallbackInterfaceThreeDProvider;
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_TTS_PROVIDER
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_TTS_PROVIDER
+typedef struct UniffiVTableCallbackInterfaceTtsProvider {
+    UniffiCallbackInterfaceFree uniffiFree;
+    UniffiCallbackInterfaceClone uniffiClone;
+    UniffiCallbackInterfaceTtsProviderMethod0 providerId;
+    UniffiCallbackInterfaceTtsProviderMethod1 capability;
+    UniffiCallbackInterfaceTtsProviderMethod2 synthesize;
+} UniffiVTableCallbackInterfaceTtsProvider;
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_VC_PROVIDER
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_VC_PROVIDER
+typedef struct UniffiVTableCallbackInterfaceVcProvider {
+    UniffiCallbackInterfaceFree uniffiFree;
+    UniffiCallbackInterfaceClone uniffiClone;
+    UniffiCallbackInterfaceVcProviderMethod0 providerId;
+    UniffiCallbackInterfaceVcProviderMethod1 capability;
+    UniffiCallbackInterfaceVcProviderMethod2 convertVoice;
+    UniffiCallbackInterfaceVcProviderMethod3 cloneVoice;
+    UniffiCallbackInterfaceVcProviderMethod4 listTargetVoices;
+} UniffiVTableCallbackInterfaceVcProvider;
+
+#endif
 #ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_CONTROL_PLANE_ASSIGNMENT_HANDLER
 #define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_CONTROL_PLANE_ASSIGNMENT_HANDLER
 typedef struct UniffiVTableCallbackInterfaceControlPlaneAssignmentHandler {
@@ -1348,6 +1930,864 @@ uint64_t uniffi_blazen_uniffi_fn_method_vcstreamsink_on_done(uint64_t ptr
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VCSTREAMSINK_ON_ERROR
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VCSTREAMSINK_ON_ERROR
 uint64_t uniffi_blazen_uniffi_fn_method_vcstreamsink_on_error(uint64_t ptr, RustBuffer cause
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_BASEPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_BASEPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_baseprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_BASEPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_BASEPROVIDER
+void uniffi_blazen_uniffi_fn_free_baseprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_PROVIDER_ID
+RustBuffer uniffi_blazen_uniffi_fn_method_baseprovider_provider_id(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_CAPABILITY
+RustBuffer uniffi_blazen_uniffi_fn_method_baseprovider_capability(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_EMBEDDINGPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_EMBEDDINGPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_embeddingprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_EMBEDDINGPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_EMBEDDINGPROVIDER
+void uniffi_blazen_uniffi_fn_free_embeddingprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_EMBEDDINGPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_EMBEDDINGPROVIDER_PROVIDER_ID
+RustBuffer uniffi_blazen_uniffi_fn_method_embeddingprovider_provider_id(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_EMBEDDINGPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_EMBEDDINGPROVIDER_CAPABILITY
+RustBuffer uniffi_blazen_uniffi_fn_method_embeddingprovider_capability(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_EMBEDDINGPROVIDER_EMBED
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_EMBEDDINGPROVIDER_EMBED
+uint64_t uniffi_blazen_uniffi_fn_method_embeddingprovider_embed(uint64_t ptr, RustBuffer texts
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_EMBEDDINGPROVIDER_DIMENSIONS
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_EMBEDDINGPROVIDER_DIMENSIONS
+uint32_t uniffi_blazen_uniffi_fn_method_embeddingprovider_dimensions(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_IMAGEGENPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_IMAGEGENPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_imagegenprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_IMAGEGENPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_IMAGEGENPROVIDER
+void uniffi_blazen_uniffi_fn_free_imagegenprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_IMAGEGENPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_IMAGEGENPROVIDER_PROVIDER_ID
+RustBuffer uniffi_blazen_uniffi_fn_method_imagegenprovider_provider_id(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_IMAGEGENPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_IMAGEGENPROVIDER_CAPABILITY
+RustBuffer uniffi_blazen_uniffi_fn_method_imagegenprovider_capability(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_IMAGEGENPROVIDER_GENERATE_IMAGE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_IMAGEGENPROVIDER_GENERATE_IMAGE
+uint64_t uniffi_blazen_uniffi_fn_method_imagegenprovider_generate_image(uint64_t ptr, RustBuffer prompt, RustBuffer width, RustBuffer height
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_LLMPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_LLMPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_llmprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_LLMPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_LLMPROVIDER
+void uniffi_blazen_uniffi_fn_free_llmprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDER_PROVIDER_ID
+RustBuffer uniffi_blazen_uniffi_fn_method_llmprovider_provider_id(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDER_CAPABILITY
+RustBuffer uniffi_blazen_uniffi_fn_method_llmprovider_capability(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDER_COMPLETE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDER_COMPLETE
+uint64_t uniffi_blazen_uniffi_fn_method_llmprovider_complete(uint64_t ptr, RustBuffer request
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_MUSICPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_MUSICPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_musicprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_MUSICPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_MUSICPROVIDER
+void uniffi_blazen_uniffi_fn_free_musicprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_MUSICPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_MUSICPROVIDER_PROVIDER_ID
+RustBuffer uniffi_blazen_uniffi_fn_method_musicprovider_provider_id(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_MUSICPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_MUSICPROVIDER_CAPABILITY
+RustBuffer uniffi_blazen_uniffi_fn_method_musicprovider_capability(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_MUSICPROVIDER_GENERATE_MUSIC
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_MUSICPROVIDER_GENERATE_MUSIC
+uint64_t uniffi_blazen_uniffi_fn_method_musicprovider_generate_music(uint64_t ptr, RustBuffer prompt, float duration_seconds
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_MUSICPROVIDER_GENERATE_SFX
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_MUSICPROVIDER_GENERATE_SFX
+uint64_t uniffi_blazen_uniffi_fn_method_musicprovider_generate_sfx(uint64_t ptr, RustBuffer prompt, float duration_seconds
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_STTPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_STTPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_sttprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_STTPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_STTPROVIDER
+void uniffi_blazen_uniffi_fn_free_sttprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_STTPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_STTPROVIDER_PROVIDER_ID
+RustBuffer uniffi_blazen_uniffi_fn_method_sttprovider_provider_id(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_STTPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_STTPROVIDER_CAPABILITY
+RustBuffer uniffi_blazen_uniffi_fn_method_sttprovider_capability(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_STTPROVIDER_TRANSCRIBE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_STTPROVIDER_TRANSCRIBE
+uint64_t uniffi_blazen_uniffi_fn_method_sttprovider_transcribe(uint64_t ptr, RustBuffer audio_source, RustBuffer language
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_THREEDPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_THREEDPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_threedprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_THREEDPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_THREEDPROVIDER
+void uniffi_blazen_uniffi_fn_free_threedprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDPROVIDER_PROVIDER_ID
+RustBuffer uniffi_blazen_uniffi_fn_method_threedprovider_provider_id(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDPROVIDER_CAPABILITY
+RustBuffer uniffi_blazen_uniffi_fn_method_threedprovider_capability(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDPROVIDER_GENERATE_FROM_IMAGE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDPROVIDER_GENERATE_FROM_IMAGE
+uint64_t uniffi_blazen_uniffi_fn_method_threedprovider_generate_from_image(uint64_t ptr, RustBuffer image_bytes, uint32_t mesh_resolution
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDPROVIDER_TEXTURIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDPROVIDER_TEXTURIZE
+uint64_t uniffi_blazen_uniffi_fn_method_threedprovider_texturize(uint64_t ptr, RustBuffer mesh_glb, RustBuffer request
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDPROVIDER_RIG
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDPROVIDER_RIG
+uint64_t uniffi_blazen_uniffi_fn_method_threedprovider_rig(uint64_t ptr, RustBuffer mesh_glb, RustBuffer request
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDPROVIDER_REFINE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDPROVIDER_REFINE
+uint64_t uniffi_blazen_uniffi_fn_method_threedprovider_refine(uint64_t ptr, RustBuffer mesh_glb, RustBuffer request
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDPROVIDER_ANIMATE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_THREEDPROVIDER_ANIMATE
+uint64_t uniffi_blazen_uniffi_fn_method_threedprovider_animate(uint64_t ptr, RustBuffer rigged_glb, RustBuffer request
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_TTSPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_TTSPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_ttsprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_TTSPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_TTSPROVIDER
+void uniffi_blazen_uniffi_fn_free_ttsprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_TTSPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_TTSPROVIDER_PROVIDER_ID
+RustBuffer uniffi_blazen_uniffi_fn_method_ttsprovider_provider_id(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_TTSPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_TTSPROVIDER_CAPABILITY
+RustBuffer uniffi_blazen_uniffi_fn_method_ttsprovider_capability(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_TTSPROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_TTSPROVIDER_SYNTHESIZE
+uint64_t uniffi_blazen_uniffi_fn_method_ttsprovider_synthesize(uint64_t ptr, RustBuffer text, RustBuffer voice, RustBuffer language
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_VCPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_VCPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_vcprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_VCPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_VCPROVIDER
+void uniffi_blazen_uniffi_fn_free_vcprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VCPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VCPROVIDER_PROVIDER_ID
+RustBuffer uniffi_blazen_uniffi_fn_method_vcprovider_provider_id(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VCPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VCPROVIDER_CAPABILITY
+RustBuffer uniffi_blazen_uniffi_fn_method_vcprovider_capability(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VCPROVIDER_CONVERT_VOICE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VCPROVIDER_CONVERT_VOICE
+uint64_t uniffi_blazen_uniffi_fn_method_vcprovider_convert_voice(uint64_t ptr, RustBuffer input_path, RustBuffer target_voice_id
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VCPROVIDER_CLONE_VOICE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VCPROVIDER_CLONE_VOICE
+uint64_t uniffi_blazen_uniffi_fn_method_vcprovider_clone_voice(uint64_t ptr, RustBuffer voice_id, RustBuffer reference_path
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VCPROVIDER_LIST_TARGET_VOICES
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VCPROVIDER_LIST_TARGET_VOICES
+uint64_t uniffi_blazen_uniffi_fn_method_vcprovider_list_target_voices(uint64_t ptr
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_AUDIOGENPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_AUDIOGENPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_audiogenprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_AUDIOGENPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_AUDIOGENPROVIDER
+void uniffi_blazen_uniffi_fn_free_audiogenprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_AUDIOGENPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_AUDIOGENPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_audiogenprovider_new(RustBuffer repo_id, RustBuffer revision, RustBuffer device, RustBuffer cache_dir, RustBuffer max_duration_seconds, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_AUDIOGENPROVIDER_GENERATE_MUSIC
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_AUDIOGENPROVIDER_GENERATE_MUSIC
+uint64_t uniffi_blazen_uniffi_fn_method_audiogenprovider_generate_music(uint64_t ptr, RustBuffer prompt, float duration_seconds
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_AUDIOGENPROVIDER_GENERATE_MUSIC_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_AUDIOGENPROVIDER_GENERATE_MUSIC_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_audiogenprovider_generate_music_blocking(uint64_t ptr, RustBuffer prompt, float duration_seconds, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_AUDIOGENPROVIDER_GENERATE_SFX
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_AUDIOGENPROVIDER_GENERATE_SFX
+uint64_t uniffi_blazen_uniffi_fn_method_audiogenprovider_generate_sfx(uint64_t ptr, RustBuffer prompt, float duration_seconds
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_AUDIOGENPROVIDER_GENERATE_SFX_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_AUDIOGENPROVIDER_GENERATE_SFX_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_audiogenprovider_generate_sfx_blocking(uint64_t ptr, RustBuffer prompt, float duration_seconds, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_FALMUSICPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_FALMUSICPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_falmusicprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_FALMUSICPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_FALMUSICPROVIDER
+void uniffi_blazen_uniffi_fn_free_falmusicprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_FALMUSICPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_FALMUSICPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_falmusicprovider_new(RustBuffer api_key, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALMUSICPROVIDER_GENERATE_MUSIC
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALMUSICPROVIDER_GENERATE_MUSIC
+uint64_t uniffi_blazen_uniffi_fn_method_falmusicprovider_generate_music(uint64_t ptr, RustBuffer prompt, float duration_seconds
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALMUSICPROVIDER_GENERATE_MUSIC_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALMUSICPROVIDER_GENERATE_MUSIC_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_falmusicprovider_generate_music_blocking(uint64_t ptr, RustBuffer prompt, float duration_seconds, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALMUSICPROVIDER_GENERATE_SFX
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALMUSICPROVIDER_GENERATE_SFX
+uint64_t uniffi_blazen_uniffi_fn_method_falmusicprovider_generate_sfx(uint64_t ptr, RustBuffer prompt, float duration_seconds
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALMUSICPROVIDER_GENERATE_SFX_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALMUSICPROVIDER_GENERATE_SFX_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_falmusicprovider_generate_sfx_blocking(uint64_t ptr, RustBuffer prompt, float duration_seconds, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_MUSICGENPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_MUSICGENPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_musicgenprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_MUSICGENPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_MUSICGENPROVIDER
+void uniffi_blazen_uniffi_fn_free_musicgenprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_MUSICGENPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_MUSICGENPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_musicgenprovider_new(RustBuffer variant, RustBuffer device, RustBuffer cache_dir, RustBuffer max_duration_seconds, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_MUSICGENPROVIDER_GENERATE_MUSIC
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_MUSICGENPROVIDER_GENERATE_MUSIC
+uint64_t uniffi_blazen_uniffi_fn_method_musicgenprovider_generate_music(uint64_t ptr, RustBuffer prompt, float duration_seconds
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_MUSICGENPROVIDER_GENERATE_MUSIC_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_MUSICGENPROVIDER_GENERATE_MUSIC_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_musicgenprovider_generate_music_blocking(uint64_t ptr, RustBuffer prompt, float duration_seconds, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_STABLEAUDIOPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_STABLEAUDIOPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_stableaudioprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_STABLEAUDIOPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_STABLEAUDIOPROVIDER
+void uniffi_blazen_uniffi_fn_free_stableaudioprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_STABLEAUDIOPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_STABLEAUDIOPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_stableaudioprovider_new(RustBuffer variant, RustBuffer tokenizer_path, RustBuffer device, RustBuffer max_duration_seconds
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_STABLEAUDIOPROVIDER_GENERATE_MUSIC
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_STABLEAUDIOPROVIDER_GENERATE_MUSIC
+uint64_t uniffi_blazen_uniffi_fn_method_stableaudioprovider_generate_music(uint64_t ptr, RustBuffer prompt, float duration_seconds
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_STABLEAUDIOPROVIDER_GENERATE_MUSIC_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_STABLEAUDIOPROVIDER_GENERATE_MUSIC_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_stableaudioprovider_generate_music_blocking(uint64_t ptr, RustBuffer prompt, float duration_seconds, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_STABLEAUDIOPROVIDER_GENERATE_SFX
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_STABLEAUDIOPROVIDER_GENERATE_SFX
+uint64_t uniffi_blazen_uniffi_fn_method_stableaudioprovider_generate_sfx(uint64_t ptr, RustBuffer prompt, float duration_seconds
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_STABLEAUDIOPROVIDER_GENERATE_SFX_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_STABLEAUDIOPROVIDER_GENERATE_SFX_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_stableaudioprovider_generate_sfx_blocking(uint64_t ptr, RustBuffer prompt, float duration_seconds, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_FALSTTPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_FALSTTPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_falsttprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_FALSTTPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_FALSTTPROVIDER
+void uniffi_blazen_uniffi_fn_free_falsttprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_FALSTTPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_FALSTTPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_falsttprovider_new(RustBuffer api_key, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALSTTPROVIDER_TRANSCRIBE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALSTTPROVIDER_TRANSCRIBE
+uint64_t uniffi_blazen_uniffi_fn_method_falsttprovider_transcribe(uint64_t ptr, RustBuffer audio_source, RustBuffer language
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALSTTPROVIDER_TRANSCRIBE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALSTTPROVIDER_TRANSCRIBE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_falsttprovider_transcribe_blocking(uint64_t ptr, RustBuffer audio_source, RustBuffer language, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_FASTERWHISPERPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_FASTERWHISPERPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_fasterwhisperprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_FASTERWHISPERPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_FASTERWHISPERPROVIDER
+void uniffi_blazen_uniffi_fn_free_fasterwhisperprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_FASTERWHISPERPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_FASTERWHISPERPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_fasterwhisperprovider_new(RustBuffer model_id, RustBuffer model_dir, RustBuffer revision, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FASTERWHISPERPROVIDER_TRANSCRIBE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FASTERWHISPERPROVIDER_TRANSCRIBE
+uint64_t uniffi_blazen_uniffi_fn_method_fasterwhisperprovider_transcribe(uint64_t ptr, RustBuffer audio_source, RustBuffer language
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FASTERWHISPERPROVIDER_TRANSCRIBE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FASTERWHISPERPROVIDER_TRANSCRIBE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_fasterwhisperprovider_transcribe_blocking(uint64_t ptr, RustBuffer audio_source, RustBuffer language, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_WHISPERCPPPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_WHISPERCPPPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_whispercppprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_WHISPERCPPPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_WHISPERCPPPROVIDER
+void uniffi_blazen_uniffi_fn_free_whispercppprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_WHISPERCPPPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_WHISPERCPPPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_whispercppprovider_new(RustBuffer model, RustBuffer device, RustBuffer language, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WHISPERCPPPROVIDER_TRANSCRIBE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WHISPERCPPPROVIDER_TRANSCRIBE
+uint64_t uniffi_blazen_uniffi_fn_method_whispercppprovider_transcribe(uint64_t ptr, RustBuffer audio_source, RustBuffer language
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WHISPERCPPPROVIDER_TRANSCRIBE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WHISPERCPPPROVIDER_TRANSCRIBE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_whispercppprovider_transcribe_blocking(uint64_t ptr, RustBuffer audio_source, RustBuffer language, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_WHISPERSTREAMINGPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_WHISPERSTREAMINGPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_whisperstreamingprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_WHISPERSTREAMINGPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_WHISPERSTREAMINGPROVIDER
+void uniffi_blazen_uniffi_fn_free_whisperstreamingprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_WHISPERSTREAMINGPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_WHISPERSTREAMINGPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_whisperstreamingprovider_new(RustBuffer model_id, RustBuffer vad_model_path, RustBuffer chunk_seconds, RustBuffer chunk_overlap_seconds, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WHISPERSTREAMINGPROVIDER_TRANSCRIBE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WHISPERSTREAMINGPROVIDER_TRANSCRIBE
+uint64_t uniffi_blazen_uniffi_fn_method_whisperstreamingprovider_transcribe(uint64_t ptr, RustBuffer audio_source, RustBuffer language
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WHISPERSTREAMINGPROVIDER_TRANSCRIBE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WHISPERSTREAMINGPROVIDER_TRANSCRIBE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_whisperstreamingprovider_transcribe_blocking(uint64_t ptr, RustBuffer audio_source, RustBuffer language, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_COMPAT3DPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_COMPAT3DPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_compat3dprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_COMPAT3DPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_COMPAT3DPROVIDER
+void uniffi_blazen_uniffi_fn_free_compat3dprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_COMPAT3DPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_COMPAT3DPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_compat3dprovider_new(RustBuffer base_url, RustBuffer api_key, RustBuffer timeout_secs, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_ANIMATE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_ANIMATE
+uint64_t uniffi_blazen_uniffi_fn_method_compat3dprovider_animate(uint64_t ptr, RustBuffer rigged_glb, RustBuffer request
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_ANIMATE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_ANIMATE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_compat3dprovider_animate_blocking(uint64_t ptr, RustBuffer rigged_glb, RustBuffer request, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_GENERATE_FROM_IMAGE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_GENERATE_FROM_IMAGE
+uint64_t uniffi_blazen_uniffi_fn_method_compat3dprovider_generate_from_image(uint64_t ptr, RustBuffer _image_bytes, uint32_t _mesh_resolution
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_GENERATE_FROM_IMAGE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_GENERATE_FROM_IMAGE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_compat3dprovider_generate_from_image_blocking(uint64_t ptr, RustBuffer image_bytes, uint32_t mesh_resolution, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_REFINE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_REFINE
+uint64_t uniffi_blazen_uniffi_fn_method_compat3dprovider_refine(uint64_t ptr, RustBuffer mesh_glb, RustBuffer request
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_REFINE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_REFINE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_compat3dprovider_refine_blocking(uint64_t ptr, RustBuffer mesh_glb, RustBuffer request, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_RIG
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_RIG
+uint64_t uniffi_blazen_uniffi_fn_method_compat3dprovider_rig(uint64_t ptr, RustBuffer mesh_glb, RustBuffer request
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_RIG_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_RIG_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_compat3dprovider_rig_blocking(uint64_t ptr, RustBuffer mesh_glb, RustBuffer request, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_TEXTURIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_TEXTURIZE
+uint64_t uniffi_blazen_uniffi_fn_method_compat3dprovider_texturize(uint64_t ptr, RustBuffer mesh_glb, RustBuffer request
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_TEXTURIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_TEXTURIZE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_compat3dprovider_texturize_blocking(uint64_t ptr, RustBuffer mesh_glb, RustBuffer request, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_TRIPOSRPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_TRIPOSRPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_triposrprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_TRIPOSRPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_TRIPOSRPROVIDER
+void uniffi_blazen_uniffi_fn_free_triposrprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_TRIPOSRPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_TRIPOSRPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_triposrprovider_new(RustBuffer hf_repo_id, RustBuffer revision, RustBuffer weights_path, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_TRIPOSRPROVIDER_GENERATE_FROM_IMAGE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_TRIPOSRPROVIDER_GENERATE_FROM_IMAGE
+uint64_t uniffi_blazen_uniffi_fn_method_triposrprovider_generate_from_image(uint64_t ptr, RustBuffer image_bytes, uint32_t mesh_resolution
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_TRIPOSRPROVIDER_GENERATE_FROM_IMAGE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_TRIPOSRPROVIDER_GENERATE_FROM_IMAGE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_triposrprovider_generate_from_image_blocking(uint64_t ptr, RustBuffer image_bytes, uint32_t mesh_resolution, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_BARKPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_BARKPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_barkprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_BARKPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_BARKPROVIDER
+void uniffi_blazen_uniffi_fn_free_barkprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_BARKPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_BARKPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_barkprovider_new(RustCallStatus *out_status
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BARKPROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BARKPROVIDER_SYNTHESIZE
+uint64_t uniffi_blazen_uniffi_fn_method_barkprovider_synthesize(uint64_t ptr, RustBuffer text, RustBuffer voice, RustBuffer language
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BARKPROVIDER_SYNTHESIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BARKPROVIDER_SYNTHESIZE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_barkprovider_synthesize_blocking(uint64_t ptr, RustBuffer text, RustBuffer voice, RustBuffer language, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_F5PROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_F5PROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_f5provider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_F5PROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_F5PROVIDER
+void uniffi_blazen_uniffi_fn_free_f5provider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_F5PROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_F5PROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_f5provider_new(RustCallStatus *out_status
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_F5PROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_F5PROVIDER_SYNTHESIZE
+uint64_t uniffi_blazen_uniffi_fn_method_f5provider_synthesize(uint64_t ptr, RustBuffer text, RustBuffer voice, RustBuffer language
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_F5PROVIDER_SYNTHESIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_F5PROVIDER_SYNTHESIZE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_f5provider_synthesize_blocking(uint64_t ptr, RustBuffer text, RustBuffer voice, RustBuffer language, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_FALTTSPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_FALTTSPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_falttsprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_FALTTSPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_FALTTSPROVIDER
+void uniffi_blazen_uniffi_fn_free_falttsprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_FALTTSPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_FALTTSPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_falttsprovider_new(RustBuffer api_key, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_FALTTSPROVIDER_WITH_MODEL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_FALTTSPROVIDER_WITH_MODEL
+uint64_t uniffi_blazen_uniffi_fn_constructor_falttsprovider_with_model(RustBuffer api_key, RustBuffer default_model, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALTTSPROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALTTSPROVIDER_SYNTHESIZE
+uint64_t uniffi_blazen_uniffi_fn_method_falttsprovider_synthesize(uint64_t ptr, RustBuffer text, RustBuffer voice, RustBuffer language
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALTTSPROVIDER_SYNTHESIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALTTSPROVIDER_SYNTHESIZE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_falttsprovider_synthesize_blocking(uint64_t ptr, RustBuffer text, RustBuffer voice, RustBuffer language, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_KOKOROPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_KOKOROPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_kokoroprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_KOKOROPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_KOKOROPROVIDER
+void uniffi_blazen_uniffi_fn_free_kokoroprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_KOKOROPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_KOKOROPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_kokoroprovider_new(RustBuffer voice, RustBuffer language, RustBuffer sample_rate, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_KOKOROPROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_KOKOROPROVIDER_SYNTHESIZE
+uint64_t uniffi_blazen_uniffi_fn_method_kokoroprovider_synthesize(uint64_t ptr, RustBuffer text, RustBuffer voice, RustBuffer language
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_KOKOROPROVIDER_SYNTHESIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_KOKOROPROVIDER_SYNTHESIZE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_kokoroprovider_synthesize_blocking(uint64_t ptr, RustBuffer text, RustBuffer voice, RustBuffer language, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_PIPERPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_PIPERPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_piperprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_PIPERPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_PIPERPROVIDER
+void uniffi_blazen_uniffi_fn_free_piperprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_PIPERPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_PIPERPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_piperprovider_new(RustBuffer voice_id, RustBuffer onnx_path, RustBuffer config_path, RustBuffer default_speaker_id, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_PIPERPROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_PIPERPROVIDER_SYNTHESIZE
+uint64_t uniffi_blazen_uniffi_fn_method_piperprovider_synthesize(uint64_t ptr, RustBuffer text, RustBuffer voice, RustBuffer language
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_PIPERPROVIDER_SYNTHESIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_PIPERPROVIDER_SYNTHESIZE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_piperprovider_synthesize_blocking(uint64_t ptr, RustBuffer text, RustBuffer voice, RustBuffer language, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_QWEN3TTSPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_QWEN3TTSPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_qwen3ttsprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_QWEN3TTSPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_QWEN3TTSPROVIDER
+void uniffi_blazen_uniffi_fn_free_qwen3ttsprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_QWEN3TTSPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_QWEN3TTSPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_qwen3ttsprovider_new(RustBuffer voice, RustBuffer language, RustBuffer sample_rate, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_QWEN3TTSPROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_QWEN3TTSPROVIDER_SYNTHESIZE
+uint64_t uniffi_blazen_uniffi_fn_method_qwen3ttsprovider_synthesize(uint64_t ptr, RustBuffer text, RustBuffer voice, RustBuffer language
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_QWEN3TTSPROVIDER_SYNTHESIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_QWEN3TTSPROVIDER_SYNTHESIZE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_qwen3ttsprovider_synthesize_blocking(uint64_t ptr, RustBuffer text, RustBuffer voice, RustBuffer language, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_SPARKTTSPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_SPARKTTSPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_sparkttsprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_SPARKTTSPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_SPARKTTSPROVIDER
+void uniffi_blazen_uniffi_fn_free_sparkttsprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_SPARKTTSPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_SPARKTTSPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_sparkttsprovider_new(RustBuffer model_id, RustBuffer model_dir, RustBuffer revision, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_SPARKTTSPROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_SPARKTTSPROVIDER_SYNTHESIZE
+uint64_t uniffi_blazen_uniffi_fn_method_sparkttsprovider_synthesize(uint64_t ptr, RustBuffer text, RustBuffer voice, RustBuffer language
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_SPARKTTSPROVIDER_SYNTHESIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_SPARKTTSPROVIDER_SYNTHESIZE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_sparkttsprovider_synthesize_blocking(uint64_t ptr, RustBuffer text, RustBuffer voice, RustBuffer language, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_VIBEVOICEPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_VIBEVOICEPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_vibevoiceprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_VIBEVOICEPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_VIBEVOICEPROVIDER
+void uniffi_blazen_uniffi_fn_free_vibevoiceprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_VIBEVOICEPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_VIBEVOICEPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_vibevoiceprovider_new(RustBuffer voice, RustBuffer language, RustBuffer sample_rate, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VIBEVOICEPROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VIBEVOICEPROVIDER_SYNTHESIZE
+uint64_t uniffi_blazen_uniffi_fn_method_vibevoiceprovider_synthesize(uint64_t ptr, RustBuffer text, RustBuffer voice, RustBuffer language
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VIBEVOICEPROVIDER_SYNTHESIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_VIBEVOICEPROVIDER_SYNTHESIZE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_vibevoiceprovider_synthesize_blocking(uint64_t ptr, RustBuffer text, RustBuffer voice, RustBuffer language, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_FALVCPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_FALVCPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_falvcprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_FALVCPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_FALVCPROVIDER
+void uniffi_blazen_uniffi_fn_free_falvcprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_FALVCPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_FALVCPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_falvcprovider_new(RustBuffer api_key, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALVCPROVIDER_CONVERT_VOICE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALVCPROVIDER_CONVERT_VOICE
+uint64_t uniffi_blazen_uniffi_fn_method_falvcprovider_convert_voice(uint64_t ptr, RustBuffer input_path, RustBuffer target_voice_id
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALVCPROVIDER_CONVERT_VOICE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_FALVCPROVIDER_CONVERT_VOICE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_falvcprovider_convert_voice_blocking(uint64_t ptr, RustBuffer input_path, RustBuffer target_voice_id, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_RVCPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_RVCPROVIDER
+uint64_t uniffi_blazen_uniffi_fn_clone_rvcprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_RVCPROVIDER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_RVCPROVIDER
+void uniffi_blazen_uniffi_fn_free_rvcprovider(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_RVCPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_RVCPROVIDER_NEW
+uint64_t uniffi_blazen_uniffi_fn_constructor_rvcprovider_new(RustCallStatus *out_status
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_RVCPROVIDER_CLONE_VOICE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_RVCPROVIDER_CLONE_VOICE
+uint64_t uniffi_blazen_uniffi_fn_method_rvcprovider_clone_voice(uint64_t ptr, RustBuffer voice_id, RustBuffer reference_path
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_RVCPROVIDER_CLONE_VOICE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_RVCPROVIDER_CLONE_VOICE_BLOCKING
+void uniffi_blazen_uniffi_fn_method_rvcprovider_clone_voice_blocking(uint64_t ptr, RustBuffer voice_id, RustBuffer reference_path, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_RVCPROVIDER_CONVERT_VOICE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_RVCPROVIDER_CONVERT_VOICE
+uint64_t uniffi_blazen_uniffi_fn_method_rvcprovider_convert_voice(uint64_t ptr, RustBuffer input_path, RustBuffer target_voice_id
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_RVCPROVIDER_CONVERT_VOICE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_RVCPROVIDER_CONVERT_VOICE_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_rvcprovider_convert_voice_blocking(uint64_t ptr, RustBuffer input_path, RustBuffer target_voice_id, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_RVCPROVIDER_LIST_TARGET_VOICES
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_RVCPROVIDER_LIST_TARGET_VOICES
+uint64_t uniffi_blazen_uniffi_fn_method_rvcprovider_list_target_voices(uint64_t ptr
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_RVCPROVIDER_LIST_TARGET_VOICES_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_RVCPROVIDER_LIST_TARGET_VOICES_BLOCKING
+RustBuffer uniffi_blazen_uniffi_fn_method_rvcprovider_list_target_voices_blocking(uint64_t ptr, RustCallStatus *out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_CONTROLPLANEASSIGNMENTHANDLER
@@ -2126,64 +3566,64 @@ uint64_t uniffi_blazen_uniffi_fn_method_pipelinebuilder_timeout_per_stage_ms(uin
 uint64_t uniffi_blazen_uniffi_fn_method_pipelinebuilder_total_timeout_ms(uint64_t ptr, uint64_t millis, RustCallStatus *out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_BASEPROVIDER
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_BASEPROVIDER
-uint64_t uniffi_blazen_uniffi_fn_clone_baseprovider(uint64_t handle, RustCallStatus *out_status
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_LLMPROVIDERDEFAULTS
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_LLMPROVIDERDEFAULTS
+uint64_t uniffi_blazen_uniffi_fn_clone_llmproviderdefaults(uint64_t handle, RustCallStatus *out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_BASEPROVIDER
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_BASEPROVIDER
-void uniffi_blazen_uniffi_fn_free_baseprovider(uint64_t handle, RustCallStatus *out_status
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_LLMPROVIDERDEFAULTS
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_LLMPROVIDERDEFAULTS
+void uniffi_blazen_uniffi_fn_free_llmproviderdefaults(uint64_t handle, RustCallStatus *out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_BASEPROVIDER_FROM_MODEL
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_BASEPROVIDER_FROM_MODEL
-uint64_t uniffi_blazen_uniffi_fn_constructor_baseprovider_from_model(uint64_t model, RustCallStatus *out_status
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_LLMPROVIDERDEFAULTS_FROM_MODEL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_LLMPROVIDERDEFAULTS_FROM_MODEL
+uint64_t uniffi_blazen_uniffi_fn_constructor_llmproviderdefaults_from_model(uint64_t model, RustCallStatus *out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_BASEPROVIDER_FROM_MODEL_WITH_DEFAULTS
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_BASEPROVIDER_FROM_MODEL_WITH_DEFAULTS
-uint64_t uniffi_blazen_uniffi_fn_constructor_baseprovider_from_model_with_defaults(uint64_t model, RustBuffer defaults, RustCallStatus *out_status
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_LLMPROVIDERDEFAULTS_FROM_MODEL_WITH_DEFAULTS
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_LLMPROVIDERDEFAULTS_FROM_MODEL_WITH_DEFAULTS
+uint64_t uniffi_blazen_uniffi_fn_constructor_llmproviderdefaults_from_model_with_defaults(uint64_t model, RustBuffer defaults, RustCallStatus *out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_AS_MODEL
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_AS_MODEL
-uint64_t uniffi_blazen_uniffi_fn_method_baseprovider_as_model(uint64_t ptr, RustCallStatus *out_status
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDERDEFAULTS_AS_MODEL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDERDEFAULTS_AS_MODEL
+uint64_t uniffi_blazen_uniffi_fn_method_llmproviderdefaults_as_model(uint64_t ptr, RustCallStatus *out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_DEFAULTS
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_DEFAULTS
-RustBuffer uniffi_blazen_uniffi_fn_method_baseprovider_defaults(uint64_t ptr, RustCallStatus *out_status
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDERDEFAULTS_DEFAULTS
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDERDEFAULTS_DEFAULTS
+RustBuffer uniffi_blazen_uniffi_fn_method_llmproviderdefaults_defaults(uint64_t ptr, RustCallStatus *out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_EXTRACT
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_EXTRACT
-uint64_t uniffi_blazen_uniffi_fn_method_baseprovider_extract(uint64_t ptr, RustBuffer schema_json, RustBuffer messages
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDERDEFAULTS_EXTRACT
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDERDEFAULTS_EXTRACT
+uint64_t uniffi_blazen_uniffi_fn_method_llmproviderdefaults_extract(uint64_t ptr, RustBuffer schema_json, RustBuffer messages
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_MODEL_ID
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_MODEL_ID
-RustBuffer uniffi_blazen_uniffi_fn_method_baseprovider_model_id(uint64_t ptr, RustCallStatus *out_status
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDERDEFAULTS_MODEL_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDERDEFAULTS_MODEL_ID
+RustBuffer uniffi_blazen_uniffi_fn_method_llmproviderdefaults_model_id(uint64_t ptr, RustCallStatus *out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_WITH_DEFAULTS
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_WITH_DEFAULTS
-uint64_t uniffi_blazen_uniffi_fn_method_baseprovider_with_defaults(uint64_t ptr, RustBuffer defaults, RustCallStatus *out_status
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDERDEFAULTS_WITH_DEFAULTS
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDERDEFAULTS_WITH_DEFAULTS
+uint64_t uniffi_blazen_uniffi_fn_method_llmproviderdefaults_with_defaults(uint64_t ptr, RustBuffer defaults, RustCallStatus *out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_WITH_RESPONSE_FORMAT_JSON
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_WITH_RESPONSE_FORMAT_JSON
-uint64_t uniffi_blazen_uniffi_fn_method_baseprovider_with_response_format_json(uint64_t ptr, RustBuffer fmt_json, RustCallStatus *out_status
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDERDEFAULTS_WITH_RESPONSE_FORMAT_JSON
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDERDEFAULTS_WITH_RESPONSE_FORMAT_JSON
+uint64_t uniffi_blazen_uniffi_fn_method_llmproviderdefaults_with_response_format_json(uint64_t ptr, RustBuffer fmt_json, RustCallStatus *out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_WITH_SYSTEM_PROMPT
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_WITH_SYSTEM_PROMPT
-uint64_t uniffi_blazen_uniffi_fn_method_baseprovider_with_system_prompt(uint64_t ptr, RustBuffer prompt, RustCallStatus *out_status
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDERDEFAULTS_WITH_SYSTEM_PROMPT
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDERDEFAULTS_WITH_SYSTEM_PROMPT
+uint64_t uniffi_blazen_uniffi_fn_method_llmproviderdefaults_with_system_prompt(uint64_t ptr, RustBuffer prompt, RustCallStatus *out_status
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_WITH_TOOLS_JSON
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_BASEPROVIDER_WITH_TOOLS_JSON
-uint64_t uniffi_blazen_uniffi_fn_method_baseprovider_with_tools_json(uint64_t ptr, RustBuffer tools_json, RustCallStatus *out_status
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDERDEFAULTS_WITH_TOOLS_JSON
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_LLMPROVIDERDEFAULTS_WITH_TOOLS_JSON
+uint64_t uniffi_blazen_uniffi_fn_method_llmproviderdefaults_with_tools_json(uint64_t ptr, RustBuffer tools_json, RustCallStatus *out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_CUSTOMPROVIDER
@@ -2429,41 +3869,6 @@ uint64_t uniffi_blazen_uniffi_fn_method_completionstreamsink_on_done(uint64_t pt
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPLETIONSTREAMSINK_ON_ERROR
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPLETIONSTREAMSINK_ON_ERROR
 uint64_t uniffi_blazen_uniffi_fn_method_completionstreamsink_on_error(uint64_t ptr, RustBuffer err
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_COMPAT3DPROVIDER
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_COMPAT3DPROVIDER
-uint64_t uniffi_blazen_uniffi_fn_clone_compat3dprovider(uint64_t handle, RustCallStatus *out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_COMPAT3DPROVIDER
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_COMPAT3DPROVIDER
-void uniffi_blazen_uniffi_fn_free_compat3dprovider(uint64_t handle, RustCallStatus *out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_COMPAT3DPROVIDER_NEW
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CONSTRUCTOR_COMPAT3DPROVIDER_NEW
-uint64_t uniffi_blazen_uniffi_fn_constructor_compat3dprovider_new(RustBuffer base_url, RustBuffer api_key, RustBuffer timeout_secs, RustCallStatus *out_status
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_ANIMATE
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_ANIMATE
-uint64_t uniffi_blazen_uniffi_fn_method_compat3dprovider_animate(uint64_t ptr, RustBuffer rigged_glb, RustBuffer request
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_REFINE
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_REFINE
-uint64_t uniffi_blazen_uniffi_fn_method_compat3dprovider_refine(uint64_t ptr, RustBuffer mesh_glb, RustBuffer request
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_RIG
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_RIG
-uint64_t uniffi_blazen_uniffi_fn_method_compat3dprovider_rig(uint64_t ptr, RustBuffer mesh_glb, RustBuffer request
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_TEXTURIZE
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_COMPAT3DPROVIDER_TEXTURIZE
-uint64_t uniffi_blazen_uniffi_fn_method_compat3dprovider_texturize(uint64_t ptr, RustBuffer mesh_glb, RustBuffer request
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_STEPHANDLER
@@ -3708,6 +5113,558 @@ uint16_t uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_error(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_PROVIDER_ID
+uint16_t uniffi_blazen_uniffi_checksum_method_baseprovider_provider_id(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_CAPABILITY
+uint16_t uniffi_blazen_uniffi_checksum_method_baseprovider_capability(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_EMBEDDINGPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_EMBEDDINGPROVIDER_PROVIDER_ID
+uint16_t uniffi_blazen_uniffi_checksum_method_embeddingprovider_provider_id(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_EMBEDDINGPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_EMBEDDINGPROVIDER_CAPABILITY
+uint16_t uniffi_blazen_uniffi_checksum_method_embeddingprovider_capability(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_EMBEDDINGPROVIDER_EMBED
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_EMBEDDINGPROVIDER_EMBED
+uint16_t uniffi_blazen_uniffi_checksum_method_embeddingprovider_embed(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_EMBEDDINGPROVIDER_DIMENSIONS
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_EMBEDDINGPROVIDER_DIMENSIONS
+uint16_t uniffi_blazen_uniffi_checksum_method_embeddingprovider_dimensions(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_IMAGEGENPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_IMAGEGENPROVIDER_PROVIDER_ID
+uint16_t uniffi_blazen_uniffi_checksum_method_imagegenprovider_provider_id(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_IMAGEGENPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_IMAGEGENPROVIDER_CAPABILITY
+uint16_t uniffi_blazen_uniffi_checksum_method_imagegenprovider_capability(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_IMAGEGENPROVIDER_GENERATE_IMAGE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_IMAGEGENPROVIDER_GENERATE_IMAGE
+uint16_t uniffi_blazen_uniffi_checksum_method_imagegenprovider_generate_image(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDER_PROVIDER_ID
+uint16_t uniffi_blazen_uniffi_checksum_method_llmprovider_provider_id(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDER_CAPABILITY
+uint16_t uniffi_blazen_uniffi_checksum_method_llmprovider_capability(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDER_COMPLETE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDER_COMPLETE
+uint16_t uniffi_blazen_uniffi_checksum_method_llmprovider_complete(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_MUSICPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_MUSICPROVIDER_PROVIDER_ID
+uint16_t uniffi_blazen_uniffi_checksum_method_musicprovider_provider_id(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_MUSICPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_MUSICPROVIDER_CAPABILITY
+uint16_t uniffi_blazen_uniffi_checksum_method_musicprovider_capability(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_MUSICPROVIDER_GENERATE_MUSIC
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_MUSICPROVIDER_GENERATE_MUSIC
+uint16_t uniffi_blazen_uniffi_checksum_method_musicprovider_generate_music(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_MUSICPROVIDER_GENERATE_SFX
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_MUSICPROVIDER_GENERATE_SFX
+uint16_t uniffi_blazen_uniffi_checksum_method_musicprovider_generate_sfx(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STTPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STTPROVIDER_PROVIDER_ID
+uint16_t uniffi_blazen_uniffi_checksum_method_sttprovider_provider_id(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STTPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STTPROVIDER_CAPABILITY
+uint16_t uniffi_blazen_uniffi_checksum_method_sttprovider_capability(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STTPROVIDER_TRANSCRIBE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STTPROVIDER_TRANSCRIBE
+uint16_t uniffi_blazen_uniffi_checksum_method_sttprovider_transcribe(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDPROVIDER_PROVIDER_ID
+uint16_t uniffi_blazen_uniffi_checksum_method_threedprovider_provider_id(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDPROVIDER_CAPABILITY
+uint16_t uniffi_blazen_uniffi_checksum_method_threedprovider_capability(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDPROVIDER_GENERATE_FROM_IMAGE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDPROVIDER_GENERATE_FROM_IMAGE
+uint16_t uniffi_blazen_uniffi_checksum_method_threedprovider_generate_from_image(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDPROVIDER_TEXTURIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDPROVIDER_TEXTURIZE
+uint16_t uniffi_blazen_uniffi_checksum_method_threedprovider_texturize(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDPROVIDER_RIG
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDPROVIDER_RIG
+uint16_t uniffi_blazen_uniffi_checksum_method_threedprovider_rig(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDPROVIDER_REFINE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDPROVIDER_REFINE
+uint16_t uniffi_blazen_uniffi_checksum_method_threedprovider_refine(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDPROVIDER_ANIMATE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_THREEDPROVIDER_ANIMATE
+uint16_t uniffi_blazen_uniffi_checksum_method_threedprovider_animate(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_TTSPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_TTSPROVIDER_PROVIDER_ID
+uint16_t uniffi_blazen_uniffi_checksum_method_ttsprovider_provider_id(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_TTSPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_TTSPROVIDER_CAPABILITY
+uint16_t uniffi_blazen_uniffi_checksum_method_ttsprovider_capability(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_TTSPROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_TTSPROVIDER_SYNTHESIZE
+uint16_t uniffi_blazen_uniffi_checksum_method_ttsprovider_synthesize(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_VCPROVIDER_PROVIDER_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_VCPROVIDER_PROVIDER_ID
+uint16_t uniffi_blazen_uniffi_checksum_method_vcprovider_provider_id(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_VCPROVIDER_CAPABILITY
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_VCPROVIDER_CAPABILITY
+uint16_t uniffi_blazen_uniffi_checksum_method_vcprovider_capability(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_VCPROVIDER_CONVERT_VOICE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_VCPROVIDER_CONVERT_VOICE
+uint16_t uniffi_blazen_uniffi_checksum_method_vcprovider_convert_voice(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_VCPROVIDER_CLONE_VOICE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_VCPROVIDER_CLONE_VOICE
+uint16_t uniffi_blazen_uniffi_checksum_method_vcprovider_clone_voice(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_VCPROVIDER_LIST_TARGET_VOICES
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_VCPROVIDER_LIST_TARGET_VOICES
+uint16_t uniffi_blazen_uniffi_checksum_method_vcprovider_list_target_voices(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_AUDIOGENPROVIDER_GENERATE_MUSIC
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_AUDIOGENPROVIDER_GENERATE_MUSIC
+uint16_t uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_music(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_AUDIOGENPROVIDER_GENERATE_MUSIC_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_AUDIOGENPROVIDER_GENERATE_MUSIC_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_music_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_AUDIOGENPROVIDER_GENERATE_SFX
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_AUDIOGENPROVIDER_GENERATE_SFX
+uint16_t uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_sfx(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_AUDIOGENPROVIDER_GENERATE_SFX_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_AUDIOGENPROVIDER_GENERATE_SFX_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_sfx_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALMUSICPROVIDER_GENERATE_MUSIC
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALMUSICPROVIDER_GENERATE_MUSIC
+uint16_t uniffi_blazen_uniffi_checksum_method_falmusicprovider_generate_music(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALMUSICPROVIDER_GENERATE_MUSIC_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALMUSICPROVIDER_GENERATE_MUSIC_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_falmusicprovider_generate_music_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALMUSICPROVIDER_GENERATE_SFX
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALMUSICPROVIDER_GENERATE_SFX
+uint16_t uniffi_blazen_uniffi_checksum_method_falmusicprovider_generate_sfx(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALMUSICPROVIDER_GENERATE_SFX_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALMUSICPROVIDER_GENERATE_SFX_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_falmusicprovider_generate_sfx_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_MUSICGENPROVIDER_GENERATE_MUSIC
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_MUSICGENPROVIDER_GENERATE_MUSIC
+uint16_t uniffi_blazen_uniffi_checksum_method_musicgenprovider_generate_music(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_MUSICGENPROVIDER_GENERATE_MUSIC_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_MUSICGENPROVIDER_GENERATE_MUSIC_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_musicgenprovider_generate_music_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STABLEAUDIOPROVIDER_GENERATE_MUSIC
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STABLEAUDIOPROVIDER_GENERATE_MUSIC
+uint16_t uniffi_blazen_uniffi_checksum_method_stableaudioprovider_generate_music(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STABLEAUDIOPROVIDER_GENERATE_MUSIC_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STABLEAUDIOPROVIDER_GENERATE_MUSIC_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_stableaudioprovider_generate_music_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STABLEAUDIOPROVIDER_GENERATE_SFX
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STABLEAUDIOPROVIDER_GENERATE_SFX
+uint16_t uniffi_blazen_uniffi_checksum_method_stableaudioprovider_generate_sfx(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STABLEAUDIOPROVIDER_GENERATE_SFX_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STABLEAUDIOPROVIDER_GENERATE_SFX_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_stableaudioprovider_generate_sfx_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALSTTPROVIDER_TRANSCRIBE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALSTTPROVIDER_TRANSCRIBE
+uint16_t uniffi_blazen_uniffi_checksum_method_falsttprovider_transcribe(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALSTTPROVIDER_TRANSCRIBE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALSTTPROVIDER_TRANSCRIBE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_falsttprovider_transcribe_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FASTERWHISPERPROVIDER_TRANSCRIBE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FASTERWHISPERPROVIDER_TRANSCRIBE
+uint16_t uniffi_blazen_uniffi_checksum_method_fasterwhisperprovider_transcribe(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FASTERWHISPERPROVIDER_TRANSCRIBE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FASTERWHISPERPROVIDER_TRANSCRIBE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_fasterwhisperprovider_transcribe_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WHISPERCPPPROVIDER_TRANSCRIBE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WHISPERCPPPROVIDER_TRANSCRIBE
+uint16_t uniffi_blazen_uniffi_checksum_method_whispercppprovider_transcribe(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WHISPERCPPPROVIDER_TRANSCRIBE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WHISPERCPPPROVIDER_TRANSCRIBE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_whispercppprovider_transcribe_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WHISPERSTREAMINGPROVIDER_TRANSCRIBE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WHISPERSTREAMINGPROVIDER_TRANSCRIBE
+uint16_t uniffi_blazen_uniffi_checksum_method_whisperstreamingprovider_transcribe(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WHISPERSTREAMINGPROVIDER_TRANSCRIBE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WHISPERSTREAMINGPROVIDER_TRANSCRIBE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_whisperstreamingprovider_transcribe_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_ANIMATE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_ANIMATE
+uint16_t uniffi_blazen_uniffi_checksum_method_compat3dprovider_animate(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_ANIMATE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_ANIMATE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_compat3dprovider_animate_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_GENERATE_FROM_IMAGE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_GENERATE_FROM_IMAGE
+uint16_t uniffi_blazen_uniffi_checksum_method_compat3dprovider_generate_from_image(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_GENERATE_FROM_IMAGE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_GENERATE_FROM_IMAGE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_compat3dprovider_generate_from_image_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_REFINE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_REFINE
+uint16_t uniffi_blazen_uniffi_checksum_method_compat3dprovider_refine(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_REFINE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_REFINE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_compat3dprovider_refine_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_RIG
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_RIG
+uint16_t uniffi_blazen_uniffi_checksum_method_compat3dprovider_rig(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_RIG_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_RIG_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_compat3dprovider_rig_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_TEXTURIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_TEXTURIZE
+uint16_t uniffi_blazen_uniffi_checksum_method_compat3dprovider_texturize(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_TEXTURIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_TEXTURIZE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_compat3dprovider_texturize_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_TRIPOSRPROVIDER_GENERATE_FROM_IMAGE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_TRIPOSRPROVIDER_GENERATE_FROM_IMAGE
+uint16_t uniffi_blazen_uniffi_checksum_method_triposrprovider_generate_from_image(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_TRIPOSRPROVIDER_GENERATE_FROM_IMAGE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_TRIPOSRPROVIDER_GENERATE_FROM_IMAGE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_triposrprovider_generate_from_image_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BARKPROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BARKPROVIDER_SYNTHESIZE
+uint16_t uniffi_blazen_uniffi_checksum_method_barkprovider_synthesize(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BARKPROVIDER_SYNTHESIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BARKPROVIDER_SYNTHESIZE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_barkprovider_synthesize_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_F5PROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_F5PROVIDER_SYNTHESIZE
+uint16_t uniffi_blazen_uniffi_checksum_method_f5provider_synthesize(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_F5PROVIDER_SYNTHESIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_F5PROVIDER_SYNTHESIZE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_f5provider_synthesize_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALTTSPROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALTTSPROVIDER_SYNTHESIZE
+uint16_t uniffi_blazen_uniffi_checksum_method_falttsprovider_synthesize(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALTTSPROVIDER_SYNTHESIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALTTSPROVIDER_SYNTHESIZE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_falttsprovider_synthesize_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_KOKOROPROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_KOKOROPROVIDER_SYNTHESIZE
+uint16_t uniffi_blazen_uniffi_checksum_method_kokoroprovider_synthesize(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_KOKOROPROVIDER_SYNTHESIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_KOKOROPROVIDER_SYNTHESIZE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_kokoroprovider_synthesize_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_PIPERPROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_PIPERPROVIDER_SYNTHESIZE
+uint16_t uniffi_blazen_uniffi_checksum_method_piperprovider_synthesize(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_PIPERPROVIDER_SYNTHESIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_PIPERPROVIDER_SYNTHESIZE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_piperprovider_synthesize_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_QWEN3TTSPROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_QWEN3TTSPROVIDER_SYNTHESIZE
+uint16_t uniffi_blazen_uniffi_checksum_method_qwen3ttsprovider_synthesize(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_QWEN3TTSPROVIDER_SYNTHESIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_QWEN3TTSPROVIDER_SYNTHESIZE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_qwen3ttsprovider_synthesize_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_SPARKTTSPROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_SPARKTTSPROVIDER_SYNTHESIZE
+uint16_t uniffi_blazen_uniffi_checksum_method_sparkttsprovider_synthesize(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_SPARKTTSPROVIDER_SYNTHESIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_SPARKTTSPROVIDER_SYNTHESIZE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_sparkttsprovider_synthesize_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_VIBEVOICEPROVIDER_SYNTHESIZE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_VIBEVOICEPROVIDER_SYNTHESIZE
+uint16_t uniffi_blazen_uniffi_checksum_method_vibevoiceprovider_synthesize(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_VIBEVOICEPROVIDER_SYNTHESIZE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_VIBEVOICEPROVIDER_SYNTHESIZE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_vibevoiceprovider_synthesize_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALVCPROVIDER_CONVERT_VOICE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALVCPROVIDER_CONVERT_VOICE
+uint16_t uniffi_blazen_uniffi_checksum_method_falvcprovider_convert_voice(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALVCPROVIDER_CONVERT_VOICE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_FALVCPROVIDER_CONVERT_VOICE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_falvcprovider_convert_voice_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_RVCPROVIDER_CLONE_VOICE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_RVCPROVIDER_CLONE_VOICE
+uint16_t uniffi_blazen_uniffi_checksum_method_rvcprovider_clone_voice(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_RVCPROVIDER_CLONE_VOICE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_RVCPROVIDER_CLONE_VOICE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_rvcprovider_clone_voice_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_RVCPROVIDER_CONVERT_VOICE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_RVCPROVIDER_CONVERT_VOICE
+uint16_t uniffi_blazen_uniffi_checksum_method_rvcprovider_convert_voice(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_RVCPROVIDER_CONVERT_VOICE_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_RVCPROVIDER_CONVERT_VOICE_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_rvcprovider_convert_voice_blocking(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_RVCPROVIDER_LIST_TARGET_VOICES
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_RVCPROVIDER_LIST_TARGET_VOICES
+uint16_t uniffi_blazen_uniffi_checksum_method_rvcprovider_list_target_voices(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_RVCPROVIDER_LIST_TARGET_VOICES_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_RVCPROVIDER_LIST_TARGET_VOICES_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_rvcprovider_list_target_voices_blocking(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_CONTROLPLANEASSIGNMENTHANDLER_HANDLE
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_CONTROLPLANEASSIGNMENTHANDLER_HANDLE
 uint16_t uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle(void
@@ -4302,51 +6259,51 @@ uint16_t uniffi_blazen_uniffi_checksum_method_pipelinebuilder_total_timeout_ms(v
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_AS_MODEL
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_AS_MODEL
-uint16_t uniffi_blazen_uniffi_checksum_method_baseprovider_as_model(void
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDERDEFAULTS_AS_MODEL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDERDEFAULTS_AS_MODEL
+uint16_t uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_as_model(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_DEFAULTS
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_DEFAULTS
-uint16_t uniffi_blazen_uniffi_checksum_method_baseprovider_defaults(void
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDERDEFAULTS_DEFAULTS
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDERDEFAULTS_DEFAULTS
+uint16_t uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_defaults(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_EXTRACT
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_EXTRACT
-uint16_t uniffi_blazen_uniffi_checksum_method_baseprovider_extract(void
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDERDEFAULTS_EXTRACT
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDERDEFAULTS_EXTRACT
+uint16_t uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_extract(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_MODEL_ID
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_MODEL_ID
-uint16_t uniffi_blazen_uniffi_checksum_method_baseprovider_model_id(void
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDERDEFAULTS_MODEL_ID
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDERDEFAULTS_MODEL_ID
+uint16_t uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_model_id(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_WITH_DEFAULTS
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_WITH_DEFAULTS
-uint16_t uniffi_blazen_uniffi_checksum_method_baseprovider_with_defaults(void
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDERDEFAULTS_WITH_DEFAULTS
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDERDEFAULTS_WITH_DEFAULTS
+uint16_t uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_with_defaults(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_WITH_RESPONSE_FORMAT_JSON
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_WITH_RESPONSE_FORMAT_JSON
-uint16_t uniffi_blazen_uniffi_checksum_method_baseprovider_with_response_format_json(void
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDERDEFAULTS_WITH_RESPONSE_FORMAT_JSON
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDERDEFAULTS_WITH_RESPONSE_FORMAT_JSON
+uint16_t uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_with_response_format_json(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_WITH_SYSTEM_PROMPT
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_WITH_SYSTEM_PROMPT
-uint16_t uniffi_blazen_uniffi_checksum_method_baseprovider_with_system_prompt(void
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDERDEFAULTS_WITH_SYSTEM_PROMPT
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDERDEFAULTS_WITH_SYSTEM_PROMPT
+uint16_t uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_with_system_prompt(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_WITH_TOOLS_JSON
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_BASEPROVIDER_WITH_TOOLS_JSON
-uint16_t uniffi_blazen_uniffi_checksum_method_baseprovider_with_tools_json(void
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDERDEFAULTS_WITH_TOOLS_JSON
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_LLMPROVIDERDEFAULTS_WITH_TOOLS_JSON
+uint16_t uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_with_tools_json(void
     
 );
 #endif
@@ -4596,30 +6553,6 @@ uint16_t uniffi_blazen_uniffi_checksum_method_completionstreamsink_on_error(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_ANIMATE
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_ANIMATE
-uint16_t uniffi_blazen_uniffi_checksum_method_compat3dprovider_animate(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_REFINE
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_REFINE
-uint16_t uniffi_blazen_uniffi_checksum_method_compat3dprovider_refine(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_RIG
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_RIG
-uint16_t uniffi_blazen_uniffi_checksum_method_compat3dprovider_rig(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_TEXTURIZE
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_COMPAT3DPROVIDER_TEXTURIZE
-uint16_t uniffi_blazen_uniffi_checksum_method_compat3dprovider_texturize(void
-    
-);
-#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STEPHANDLER_INVOKE
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_STEPHANDLER_INVOKE
 uint16_t uniffi_blazen_uniffi_checksum_method_stephandler_invoke(void
@@ -4671,6 +6604,132 @@ uint16_t uniffi_blazen_uniffi_checksum_method_workflowbuilder_timeout_ms(void
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_AGENT_NEW
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_AGENT_NEW
 uint16_t uniffi_blazen_uniffi_checksum_constructor_agent_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_AUDIOGENPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_AUDIOGENPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_audiogenprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_FALMUSICPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_FALMUSICPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_falmusicprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_MUSICGENPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_MUSICGENPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_musicgenprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_STABLEAUDIOPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_STABLEAUDIOPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_stableaudioprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_FALSTTPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_FALSTTPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_falsttprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_FASTERWHISPERPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_FASTERWHISPERPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_fasterwhisperprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_WHISPERCPPPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_WHISPERCPPPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_whispercppprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_WHISPERSTREAMINGPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_WHISPERSTREAMINGPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_whisperstreamingprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_COMPAT3DPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_COMPAT3DPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_compat3dprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_TRIPOSRPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_TRIPOSRPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_triposrprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_BARKPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_BARKPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_barkprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_F5PROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_F5PROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_f5provider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_FALTTSPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_FALTTSPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_falttsprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_FALTTSPROVIDER_WITH_MODEL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_FALTTSPROVIDER_WITH_MODEL
+uint16_t uniffi_blazen_uniffi_checksum_constructor_falttsprovider_with_model(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_KOKOROPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_KOKOROPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_kokoroprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_PIPERPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_PIPERPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_piperprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_QWEN3TTSPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_QWEN3TTSPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_qwen3ttsprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_SPARKTTSPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_SPARKTTSPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_sparkttsprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_VIBEVOICEPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_VIBEVOICEPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_vibevoiceprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_FALVCPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_FALVCPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_falvcprovider_new(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_RVCPROVIDER_NEW
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_RVCPROVIDER_NEW
+uint16_t uniffi_blazen_uniffi_checksum_constructor_rvcprovider_new(void
     
 );
 #endif
@@ -4758,21 +6817,15 @@ uint16_t uniffi_blazen_uniffi_checksum_constructor_pipelinebuilder_new(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_BASEPROVIDER_FROM_MODEL
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_BASEPROVIDER_FROM_MODEL
-uint16_t uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model(void
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_LLMPROVIDERDEFAULTS_FROM_MODEL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_LLMPROVIDERDEFAULTS_FROM_MODEL
+uint16_t uniffi_blazen_uniffi_checksum_constructor_llmproviderdefaults_from_model(void
     
 );
 #endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_BASEPROVIDER_FROM_MODEL_WITH_DEFAULTS
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_BASEPROVIDER_FROM_MODEL_WITH_DEFAULTS
-uint16_t uniffi_blazen_uniffi_checksum_constructor_baseprovider_from_model_with_defaults(void
-    
-);
-#endif
-#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_COMPAT3DPROVIDER_NEW
-#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_COMPAT3DPROVIDER_NEW
-uint16_t uniffi_blazen_uniffi_checksum_constructor_compat3dprovider_new(void
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_LLMPROVIDERDEFAULTS_FROM_MODEL_WITH_DEFAULTS
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_CONSTRUCTOR_LLMPROVIDERDEFAULTS_FROM_MODEL_WITH_DEFAULTS
+uint16_t uniffi_blazen_uniffi_checksum_constructor_llmproviderdefaults_from_model_with_defaults(void
     
 );
 #endif
