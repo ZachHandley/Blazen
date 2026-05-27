@@ -40,6 +40,22 @@ pub mod vc;
 #[cfg(feature = "triposr")]
 pub mod three_d;
 
+// Image generation — `DiffusionProvider` is gated on the `diffusion`
+// feature (matches the upstream bridge in `crate::backends::diffusion`),
+// while `FalImageGenProvider` is always available because the fal
+// provider itself is not feature-gated. The module compiles on every
+// configuration; the inner items each carry their own cfg-gate so a
+// no-default-features build still picks up `FalImageGenProvider` even
+// without `diffusion`.
+pub mod image;
+
+// Embedding providers — per-backend gating lives inside `embed.rs`:
+// fastembed (`embed-fastembed`), tract (`embed-tract`), candle
+// (`candle-embed`) for local backends, and OpenAI / fal for cloud
+// backends (gated on the reqwest / wasm cfg matrix used by the rest of
+// the cloud-provider modules).
+pub mod embed;
+
 // LLM provider impls live alongside their existing provider definitions
 // in `crate::providers::{openai,anthropic,...}` — added by sub-wave
 // P4.1.i.
