@@ -471,26 +471,9 @@ module Blazen
     # @yield [kind, *args] block-form alternative to the kwargs
     # @return [void]
     def complete(model, request, on_chunk: nil, on_done: nil, on_error: nil, &block)
-      handlers = build_handlers(on_chunk, on_done, on_error, block)
-      sink_id = register_sink(handlers)
-      registered = true
-
-      begin
-        vtable = build_vtable(sink_id)
-        req_ptr = consume_request!(request)
-
-        out_err = ::FFI::MemoryPointer.new(:pointer)
-        Blazen::FFI.blazen_complete_streaming_blocking(model.ptr, req_ptr, vtable, out_err)
-
-        # The cabi has now consumed the vtable's +user_data+ and will
-        # eventually call +drop_user_data+ (which unregisters the sink).
-        # Mark +registered+ false so our +ensure+ arm doesn't double-drop.
-        registered = false
-        Blazen::FFI.check_error!(out_err)
-        nil
-      ensure
-        unregister_sink(sink_id) if registered
-      end
+      drive_completion(model.ptr, request, :blazen_complete_streaming_blocking,
+                       blocking: true,
+                       on_chunk: on_chunk, on_done: on_done, on_error: on_error, &block)
     end
 
     # Asynchronous variant of {complete}. Returns when the streaming
@@ -508,34 +491,9 @@ module Blazen
     # @yield [kind, *args] block-form alternative to the kwargs
     # @return [void]
     def complete_async(model, request, on_chunk: nil, on_done: nil, on_error: nil, &block)
-      handlers = build_handlers(on_chunk, on_done, on_error, block)
-      sink_id = register_sink(handlers)
-      registered = true
-
-      begin
-        vtable = build_vtable(sink_id)
-        req_ptr = consume_request!(request)
-
-        fut = Blazen::FFI.blazen_complete_streaming(model.ptr, req_ptr, vtable)
-        # The cabi has now consumed the vtable's +user_data+ (regardless
-        # of whether +fut+ is null — +blazen_complete_streaming+'s
-        # null-return paths still call +drop_user_data+). Mark
-        # +registered+ false to avoid double-drop.
-        registered = false
-
-        if fut.nil? || fut.null?
-          raise Blazen::InternalError, "blazen_complete_streaming returned null"
-        end
-
-        Blazen::FFI.await_future(fut) do |f|
-          out_err = ::FFI::MemoryPointer.new(:pointer)
-          Blazen::FFI.blazen_future_take_unit(f, out_err)
-          Blazen::FFI.check_error!(out_err)
-        end
-        nil
-      ensure
-        unregister_sink(sink_id) if registered
-      end
+      drive_completion(model.ptr, request, :blazen_complete_streaming,
+                       blocking: false,
+                       on_chunk: on_chunk, on_done: on_done, on_error: on_error, &block)
     end
 
     # Drives a streaming music (or SFX) generation, dispatching each
@@ -578,65 +536,18 @@ module Blazen
         raise ArgumentError, "mode must be :music or :sfx (got #{mode.inspect})"
       end
 
-      handlers = build_music_handlers(on_chunk, on_done, on_error, block)
-      sink_id = register_sink(handlers)
-      registered = true
-      dur = Float(duration_seconds)
-
-      begin
-        vtable = build_music_vtable(sink_id)
-
+      sym =
         if blocking
-          out_err = ::FFI::MemoryPointer.new(:pointer)
-          Blazen::FFI.with_cstring(prompt.to_s) do |p|
-            if mode == :music
-              Blazen::FFI.blazen_music_model_stream_generate_music_blocking(
-                model.ptr, p, dur, vtable, out_err,
-              )
-            else
-              Blazen::FFI.blazen_music_model_stream_generate_sfx_blocking(
-                model.ptr, p, dur, vtable, out_err,
-              )
-            end
-          end
-          # The cabi has now consumed +user_data+ and will eventually
-          # invoke +drop_user_data+ (which unregisters the sink). Mark
-          # +registered+ false BEFORE +check_error!+ so an exception
-          # doesn't trigger a double-drop in the +ensure+ arm.
-          registered = false
-          Blazen::FFI.check_error!(out_err)
+          mode == :music ? :blazen_music_model_stream_generate_music_blocking
+                         : :blazen_music_model_stream_generate_sfx_blocking
+        elsif mode == :music
+          :blazen_music_model_stream_generate_music
         else
-          fut = Blazen::FFI.with_cstring(prompt.to_s) do |p|
-            if mode == :music
-              Blazen::FFI.blazen_music_model_stream_generate_music(
-                model.ptr, p, dur, vtable,
-              )
-            else
-              Blazen::FFI.blazen_music_model_stream_generate_sfx(
-                model.ptr, p, dur, vtable,
-              )
-            end
-          end
-          # The cabi has consumed +user_data+ regardless of whether
-          # +fut+ is null — the null-return paths still invoke
-          # +drop_user_data+ — so mark +registered+ false now.
-          registered = false
-
-          if fut.nil? || fut.null?
-            raise Blazen::InternalError,
-                  "blazen_music_model_stream_generate_#{mode} returned null"
-          end
-
-          Blazen::FFI.await_future(fut) do |f|
-            out_err = ::FFI::MemoryPointer.new(:pointer)
-            Blazen::FFI.blazen_future_take_unit(f, out_err)
-            Blazen::FFI.check_error!(out_err)
-          end
+          :blazen_music_model_stream_generate_sfx
         end
-        nil
-      ensure
-        unregister_sink(sink_id) if registered
-      end
+
+      drive_music_stream(model.ptr, prompt, duration_seconds, sym, blocking: blocking,
+                         on_chunk: on_chunk, on_done: on_done, on_error: on_error, &block)
     end
 
     # Drives a streaming voice-conversion call over +pcm_samples+
@@ -675,6 +586,126 @@ module Blazen
         raise ArgumentError, "model must be Blazen::Compute::VcModel"
       end
 
+      sym = blocking ? :blazen_vc_model_stream_convert_pcm_to_sink_blocking
+                     : :blazen_vc_model_stream_convert_pcm_to_sink
+
+      drive_vc_stream(model.ptr, pcm_samples, target_voice_id, sym, blocking: blocking,
+                      on_chunk: on_chunk, on_done: on_done, on_error: on_error, &block)
+    end
+
+    # ---------------------------------------------------------------------
+    # Per-engine stream cores (symbol-parameterised)
+    # ---------------------------------------------------------------------
+    #
+    # These drive a stream against an arbitrary cabi entry point named by
+    # +sym+, given a raw provider handle (+ptr+, an +::FFI::Pointer+ /
+    # +AutoPointer+). They carry the same sink-registry + vtable machinery
+    # as the public {complete}/{stream_music}/{stream_convert} wrappers, but
+    # leave the choice of cabi symbol + provider handle to the caller — so
+    # the per-engine provider classes ({Blazen::OpenAiProvider#stream},
+    # {Blazen::MusicGenProvider#stream_generate_music},
+    # {Blazen::RvcProvider#stream_convert_pcm}, …) can route to their own
+    # +blazen_<engine>_provider_*+ streaming symbols.
+
+    # Drive a streaming chat completion through +sym+
+    # (+blazen_<engine>_provider_complete_streaming[_blocking]+ or the
+    # central +blazen_complete_streaming[_blocking]+). +request+ is consumed.
+    #
+    # @param ptr [::FFI::Pointer] live provider/model handle
+    # @param request [Blazen::Llm::ModelRequest] consumed by the call
+    # @param sym [Symbol] cabi streaming entry point
+    # @param blocking [Boolean] +true+ for the blocking variant
+    # @return [void]
+    def drive_completion(ptr, request, sym, blocking:,
+                         on_chunk: nil, on_done: nil, on_error: nil, &block)
+      handlers = build_handlers(on_chunk, on_done, on_error, block)
+      sink_id = register_sink(handlers)
+      registered = true
+
+      begin
+        vtable = build_vtable(sink_id)
+        req_ptr = consume_request!(request)
+
+        if blocking
+          out_err = ::FFI::MemoryPointer.new(:pointer)
+          Blazen::FFI.public_send(sym, ptr, req_ptr, vtable, out_err)
+          registered = false
+          Blazen::FFI.check_error!(out_err)
+        else
+          fut = Blazen::FFI.public_send(sym, ptr, req_ptr, vtable)
+          registered = false
+          raise Blazen::InternalError, "#{sym} returned null" if fut.nil? || fut.null?
+
+          Blazen::FFI.await_future(fut) do |f|
+            out_err = ::FFI::MemoryPointer.new(:pointer)
+            Blazen::FFI.blazen_future_take_unit(f, out_err)
+            Blazen::FFI.check_error!(out_err)
+          end
+        end
+        nil
+      ensure
+        unregister_sink(sink_id) if registered
+      end
+    end
+
+    # Drive a streaming music / SFX generation through +sym+
+    # (+blazen_<engine>_provider_stream_{music,sfx}[_blocking]+ or the
+    # central +blazen_music_model_stream_generate_{music,sfx}[_blocking]+).
+    #
+    # @param ptr [::FFI::Pointer] live provider/model handle
+    # @param prompt [String]
+    # @param duration_seconds [Float]
+    # @param sym [Symbol] cabi streaming entry point
+    # @param blocking [Boolean]
+    # @return [void]
+    def drive_music_stream(ptr, prompt, duration_seconds, sym, blocking:,
+                           on_chunk: nil, on_done: nil, on_error: nil, &block)
+      handlers = build_music_handlers(on_chunk, on_done, on_error, block)
+      sink_id = register_sink(handlers)
+      registered = true
+      dur = Float(duration_seconds)
+
+      begin
+        vtable = build_music_vtable(sink_id)
+
+        if blocking
+          out_err = ::FFI::MemoryPointer.new(:pointer)
+          Blazen::FFI.with_cstring(prompt.to_s) do |p|
+            Blazen::FFI.public_send(sym, ptr, p, dur, vtable, out_err)
+          end
+          registered = false
+          Blazen::FFI.check_error!(out_err)
+        else
+          fut = Blazen::FFI.with_cstring(prompt.to_s) do |p|
+            Blazen::FFI.public_send(sym, ptr, p, dur, vtable)
+          end
+          registered = false
+          raise Blazen::InternalError, "#{sym} returned null" if fut.nil? || fut.null?
+
+          Blazen::FFI.await_future(fut) do |f|
+            out_err = ::FFI::MemoryPointer.new(:pointer)
+            Blazen::FFI.blazen_future_take_unit(f, out_err)
+            Blazen::FFI.check_error!(out_err)
+          end
+        end
+        nil
+      ensure
+        unregister_sink(sink_id) if registered
+      end
+    end
+
+    # Drive a streaming voice-conversion through +sym+
+    # (+blazen_rvc_provider_stream_convert_pcm[_blocking]+ or the central
+    # +blazen_vc_model_stream_convert_pcm_to_sink[_blocking]+).
+    #
+    # @param ptr [::FFI::Pointer] live provider/model handle
+    # @param pcm_samples [Array<Float>, #to_a]
+    # @param target_voice_id [String]
+    # @param sym [Symbol] cabi streaming entry point
+    # @param blocking [Boolean]
+    # @return [void]
+    def drive_vc_stream(ptr, pcm_samples, target_voice_id, sym, blocking:,
+                        on_chunk: nil, on_done: nil, on_error: nil, &block)
       arr = pcm_samples.to_a
       len = arr.length
       buf = ::FFI::MemoryPointer.new(:float, [len, 1].max)
@@ -690,31 +721,16 @@ module Blazen
         if blocking
           out_err = ::FFI::MemoryPointer.new(:pointer)
           Blazen::FFI.with_cstring(target_voice_id.to_s) do |v|
-            Blazen::FFI.blazen_vc_model_stream_convert_pcm_to_sink_blocking(
-              model.ptr, buf, len, v, vtable, out_err,
-            )
+            Blazen::FFI.public_send(sym, ptr, buf, len, v, vtable, out_err)
           end
-          # The cabi has now consumed +user_data+ and will eventually
-          # invoke +drop_user_data+ (which unregisters the sink). Mark
-          # +registered+ false BEFORE +check_error!+ so an exception
-          # doesn't trigger a double-drop in the +ensure+ arm.
           registered = false
           Blazen::FFI.check_error!(out_err)
         else
           fut = Blazen::FFI.with_cstring(target_voice_id.to_s) do |v|
-            Blazen::FFI.blazen_vc_model_stream_convert_pcm_to_sink(
-              model.ptr, buf, len, v, vtable,
-            )
+            Blazen::FFI.public_send(sym, ptr, buf, len, v, vtable)
           end
-          # The cabi has consumed +user_data+ regardless of whether
-          # +fut+ is null — the null-return paths still invoke
-          # +drop_user_data+ — so mark +registered+ false now.
           registered = false
-
-          if fut.nil? || fut.null?
-            raise Blazen::InternalError,
-                  "blazen_vc_model_stream_convert_pcm_to_sink returned null"
-          end
+          raise Blazen::InternalError, "#{sym} returned null" if fut.nil? || fut.null?
 
           Blazen::FFI.await_future(fut) do |f|
             out_err = ::FFI::MemoryPointer.new(:pointer)

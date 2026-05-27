@@ -59,6 +59,21 @@ module Blazen
       Blazen::FFI.check_error!(out_err)
       Blazen::Llm::ModelResponse.new(out_resp.read_pointer)
     end
+
+    # Drives a streaming chat completion through this provider's own
+    # +blazen_<engine>_provider_complete_streaming[_blocking]+ symbol. The
+    # +request+ is consumed by the call. See {Blazen::Streaming} for the
+    # event/callback contract (+:chunk+ / +:done+ / +:error+).
+    def llm_stream(request, sym, blocking:, on_chunk: nil, on_done: nil, on_error: nil, &block)
+      unless Blazen::FFI.respond_to?(sym)
+        raise Blazen::UnsupportedError, "blazen cabi missing #{sym} symbol"
+      end
+
+      Blazen::Streaming.drive_completion(
+        @handle, request, sym, blocking: blocking,
+        on_chunk: on_chunk, on_done: on_done, on_error: on_error, &block
+      )
+    end
   end
 
   # @api private
@@ -68,6 +83,9 @@ module Blazen
   # Blazen<X>Provider **out_model, BlazenError **out_err) -> int32_t+.
   def self._define_llm_provider_3str(klass_name, provider_id, factory_sym,
                                      free_sym, complete_sym, complete_blocking_sym)
+    base                = factory_sym.to_s.sub(/_new\z/, "")
+    stream_sym          = :"#{base}_complete_streaming"
+    stream_blocking_sym = :"#{base}_complete_streaming_blocking"
     klass = Class.new(LlmProvider) do
       include LlmProviderImpl
 
@@ -98,6 +116,13 @@ module Blazen
       define_method(:complete_blocking) do |request|
         llm_complete_blocking(request, complete_blocking_sym)
       end
+
+      define_method(:stream) do |request, **opts, &block|
+        llm_stream(request, stream_blocking_sym, blocking: true, **opts, &block)
+      end
+      define_method(:stream_async) do |request, **opts, &block|
+        llm_stream(request, stream_sym, blocking: false, **opts, &block)
+      end
     end
     const_set(klass_name, klass)
   end
@@ -109,6 +134,9 @@ module Blazen
   # BlazenError **out_err) -> int32_t+.
   def self._define_llm_provider_2str(klass_name, provider_id, factory_sym,
                                      free_sym, complete_sym, complete_blocking_sym)
+    base                = factory_sym.to_s.sub(/_new\z/, "")
+    stream_sym          = :"#{base}_complete_streaming"
+    stream_blocking_sym = :"#{base}_complete_streaming_blocking"
     klass = Class.new(LlmProvider) do
       include LlmProviderImpl
 
@@ -136,6 +164,13 @@ module Blazen
       define_method(:complete) { |request| llm_complete(request, complete_sym) }
       define_method(:complete_blocking) do |request|
         llm_complete_blocking(request, complete_blocking_sym)
+      end
+
+      define_method(:stream) do |request, **opts, &block|
+        llm_stream(request, stream_blocking_sym, blocking: true, **opts, &block)
+      end
+      define_method(:stream_async) do |request, **opts, &block|
+        llm_stream(request, stream_sym, blocking: false, **opts, &block)
       end
     end
     const_set(klass_name, klass)
@@ -271,6 +306,16 @@ module Blazen
     def complete_blocking(request)
       llm_complete_blocking(request, :blazen_azure_openai_provider_complete_blocking)
     end
+
+    def stream(request, **opts, &block)
+      llm_stream(request, :blazen_azure_openai_provider_complete_streaming_blocking,
+                 blocking: true, **opts, &block)
+    end
+
+    def stream_async(request, **opts, &block)
+      llm_stream(request, :blazen_azure_openai_provider_complete_streaming,
+                 blocking: false, **opts, &block)
+    end
   end
 
   # AWS Bedrock: +api_key+ + +region+ + +model+.
@@ -311,6 +356,16 @@ module Blazen
 
     def complete_blocking(request)
       llm_complete_blocking(request, :blazen_bedrock_provider_complete_blocking)
+    end
+
+    def stream(request, **opts, &block)
+      llm_stream(request, :blazen_bedrock_provider_complete_streaming_blocking,
+                 blocking: true, **opts, &block)
+    end
+
+    def stream_async(request, **opts, &block)
+      llm_stream(request, :blazen_bedrock_provider_complete_streaming,
+                 blocking: false, **opts, &block)
     end
   end
 end

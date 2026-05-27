@@ -94,6 +94,25 @@ module Blazen
       Blazen::FFI.check_error!(out_err)
       Blazen::Compute::VcModel._take_target_voice_list(out_list.read_pointer)
     end
+
+    # Drives a streaming voice-conversion over +pcm_samples+ (Array of f32
+    # PCM samples) through this provider's own
+    # +blazen_<engine>_provider_stream_convert_pcm[_blocking]+ symbol. Each
+    # {Blazen::Compute::VcChunk} is dispatched per {Blazen::Streaming}'s
+    # event/callback contract (+:chunk+ / +:done+ / +:error+). Raises
+    # {Blazen::UnsupportedError} when the engine lacks streaming (e.g. the
+    # HTTP-backed +FalVcProvider+).
+    def vc_stream_convert(pcm_samples, target_voice_id, sym, blocking:,
+                          on_chunk: nil, on_done: nil, on_error: nil, &block)
+      unless Blazen::FFI.respond_to?(sym)
+        raise Blazen::UnsupportedError, "blazen cabi missing #{sym} symbol"
+      end
+
+      Blazen::Streaming.drive_vc_stream(
+        @handle, pcm_samples, target_voice_id, sym, blocking: blocking,
+        on_chunk: on_chunk, on_done: on_done, on_error: on_error, &block
+      )
+    end
   end
 
   # Local RVC (Retrieval-based Voice Conversion). Infallible constructor;
@@ -149,6 +168,18 @@ module Blazen
     def list_target_voices_blocking
       vc_list_target_voices_blocking(:blazen_rvc_provider_list_target_voices_blocking)
     end
+
+    def stream_convert_pcm(pcm_samples, target_voice_id, **opts, &block)
+      vc_stream_convert(pcm_samples, target_voice_id,
+                        :blazen_rvc_provider_stream_convert_pcm_blocking,
+                        blocking: true, **opts, &block)
+    end
+
+    def stream_convert_pcm_async(pcm_samples, target_voice_id, **opts, &block)
+      vc_stream_convert(pcm_samples, target_voice_id,
+                        :blazen_rvc_provider_stream_convert_pcm,
+                        blocking: false, **opts, &block)
+    end
   end
 
   # fal.ai-hosted voice conversion. +clone_voice+ and +list_target_voices+
@@ -203,6 +234,21 @@ module Blazen
 
     def list_target_voices_blocking
       vc_list_target_voices_blocking(:blazen_fal_vc_provider_list_target_voices_blocking)
+    end
+
+    # fal.ai voice conversion is HTTP request/response — no streaming
+    # surface. These exist for API parity and surface
+    # {Blazen::UnsupportedError}.
+    def stream_convert_pcm(pcm_samples, target_voice_id, **opts, &block)
+      vc_stream_convert(pcm_samples, target_voice_id,
+                        :blazen_fal_vc_provider_stream_convert_pcm_blocking,
+                        blocking: true, **opts, &block)
+    end
+
+    def stream_convert_pcm_async(pcm_samples, target_voice_id, **opts, &block)
+      vc_stream_convert(pcm_samples, target_voice_id,
+                        :blazen_fal_vc_provider_stream_convert_pcm,
+                        blocking: false, **opts, &block)
     end
   end
 end

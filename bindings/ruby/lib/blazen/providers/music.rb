@@ -47,6 +47,24 @@ module Blazen
       Blazen::FFI.check_error!(out_err)
       Blazen::Compute::MusicResult.new(out_result.read_pointer)
     end
+
+    # Drives a streaming music / SFX generation through this provider's own
+    # +blazen_<engine>_provider_stream_{music,sfx}[_blocking]+ symbol. Each
+    # {Blazen::Compute::MusicChunk} is dispatched per {Blazen::Streaming}'s
+    # event/callback contract (+:chunk+ / +:done+ / +:error+). Raises
+    # {Blazen::UnsupportedError} when the engine lacks that streaming symbol
+    # (e.g. MusicGen has no SFX stream; +FalMusicProvider+ streams nothing).
+    def music_stream(prompt, duration_seconds, sym, blocking:,
+                     on_chunk: nil, on_done: nil, on_error: nil, &block)
+      unless Blazen::FFI.respond_to?(sym)
+        raise Blazen::UnsupportedError, "blazen cabi missing #{sym} symbol"
+      end
+
+      Blazen::Streaming.drive_music_stream(
+        @handle, prompt, duration_seconds, sym, blocking: blocking,
+        on_chunk: on_chunk, on_done: on_done, on_error: on_error, &block
+      )
+    end
   end
 
   # Local Meta MusicGen.
@@ -103,6 +121,32 @@ module Blazen
       music_generate_blocking(
         prompt, duration_seconds, :blazen_musicgen_provider_generate_sfx_blocking,
       )
+    end
+
+    def stream_generate_music(prompt, duration_seconds:, **opts, &block)
+      music_stream(prompt, duration_seconds,
+                   :blazen_musicgen_provider_stream_music_blocking,
+                   blocking: true, **opts, &block)
+    end
+
+    def stream_generate_music_async(prompt, duration_seconds:, **opts, &block)
+      music_stream(prompt, duration_seconds,
+                   :blazen_musicgen_provider_stream_music,
+                   blocking: false, **opts, &block)
+    end
+
+    # MusicGen is music-only — no SFX streaming symbol exists, so this
+    # surfaces {Blazen::UnsupportedError} (parity with +generate_sfx+).
+    def stream_generate_sfx(prompt, duration_seconds:, **opts, &block)
+      music_stream(prompt, duration_seconds,
+                   :blazen_musicgen_provider_stream_sfx_blocking,
+                   blocking: true, **opts, &block)
+    end
+
+    def stream_generate_sfx_async(prompt, duration_seconds:, **opts, &block)
+      music_stream(prompt, duration_seconds,
+                   :blazen_musicgen_provider_stream_sfx,
+                   blocking: false, **opts, &block)
     end
   end
 
@@ -165,6 +209,32 @@ module Blazen
         prompt, duration_seconds, :blazen_audiogen_provider_generate_sfx_blocking,
       )
     end
+
+    # AudioGen is SFX-only upstream — +stream_generate_music+ surfaces the
+    # upstream Unsupported error (parity with +generate_music+).
+    def stream_generate_music(prompt, duration_seconds:, **opts, &block)
+      music_stream(prompt, duration_seconds,
+                   :blazen_audiogen_provider_stream_music_blocking,
+                   blocking: true, **opts, &block)
+    end
+
+    def stream_generate_music_async(prompt, duration_seconds:, **opts, &block)
+      music_stream(prompt, duration_seconds,
+                   :blazen_audiogen_provider_stream_music,
+                   blocking: false, **opts, &block)
+    end
+
+    def stream_generate_sfx(prompt, duration_seconds:, **opts, &block)
+      music_stream(prompt, duration_seconds,
+                   :blazen_audiogen_provider_stream_sfx_blocking,
+                   blocking: true, **opts, &block)
+    end
+
+    def stream_generate_sfx_async(prompt, duration_seconds:, **opts, &block)
+      music_stream(prompt, duration_seconds,
+                   :blazen_audiogen_provider_stream_sfx,
+                   blocking: false, **opts, &block)
+    end
   end
 
   # Local Stability AI Stable Audio Open.
@@ -222,6 +292,30 @@ module Blazen
         prompt, duration_seconds, :blazen_stable_audio_provider_generate_sfx_blocking,
       )
     end
+
+    def stream_generate_music(prompt, duration_seconds:, **opts, &block)
+      music_stream(prompt, duration_seconds,
+                   :blazen_stable_audio_provider_stream_music_blocking,
+                   blocking: true, **opts, &block)
+    end
+
+    def stream_generate_music_async(prompt, duration_seconds:, **opts, &block)
+      music_stream(prompt, duration_seconds,
+                   :blazen_stable_audio_provider_stream_music,
+                   blocking: false, **opts, &block)
+    end
+
+    def stream_generate_sfx(prompt, duration_seconds:, **opts, &block)
+      music_stream(prompt, duration_seconds,
+                   :blazen_stable_audio_provider_stream_sfx_blocking,
+                   blocking: true, **opts, &block)
+    end
+
+    def stream_generate_sfx_async(prompt, duration_seconds:, **opts, &block)
+      music_stream(prompt, duration_seconds,
+                   :blazen_stable_audio_provider_stream_sfx,
+                   blocking: false, **opts, &block)
+    end
   end
 
   # fal.ai-hosted music / SFX.
@@ -267,6 +361,32 @@ module Blazen
       music_generate_blocking(
         prompt, duration_seconds, :blazen_fal_music_provider_generate_sfx_blocking,
       )
+    end
+
+    # fal.ai music is HTTP request/response — no streaming surface. These
+    # exist for API parity and surface {Blazen::UnsupportedError}.
+    def stream_generate_music(prompt, duration_seconds:, **opts, &block)
+      music_stream(prompt, duration_seconds,
+                   :blazen_fal_music_provider_stream_music_blocking,
+                   blocking: true, **opts, &block)
+    end
+
+    def stream_generate_music_async(prompt, duration_seconds:, **opts, &block)
+      music_stream(prompt, duration_seconds,
+                   :blazen_fal_music_provider_stream_music,
+                   blocking: false, **opts, &block)
+    end
+
+    def stream_generate_sfx(prompt, duration_seconds:, **opts, &block)
+      music_stream(prompt, duration_seconds,
+                   :blazen_fal_music_provider_stream_sfx_blocking,
+                   blocking: true, **opts, &block)
+    end
+
+    def stream_generate_sfx_async(prompt, duration_seconds:, **opts, &block)
+      music_stream(prompt, duration_seconds,
+                   :blazen_fal_music_provider_stream_sfx,
+                   blocking: false, **opts, &block)
     end
   end
 end

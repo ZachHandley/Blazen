@@ -480,6 +480,51 @@ RSpec.describe "Blazen per-engine provider classes" do
   end
 
   # ----------------------------------------------------------------
+  # Per-engine streaming surface
+  # ----------------------------------------------------------------
+  #
+  # Method-definition checks only (no construction / no cabi-symbol
+  # dependency) — proves every per-engine class carries its streaming
+  # entry points regardless of which features the loaded cabi was built
+  # with. The actual wire behaviour is covered by the env-gated live specs
+  # in music_spec / vc_spec / blazen_spec.
+  describe "per-engine streaming surface", :aggregate_failures do
+    llm_classes = [
+      Blazen::OpenAiProvider, Blazen::AnthropicProvider, Blazen::GeminiProvider,
+      Blazen::FalLlmProvider, Blazen::MistralProvider, Blazen::FireworksProvider,
+      Blazen::DeepSeekProvider, Blazen::PerplexityProvider, Blazen::TogetherProvider,
+      Blazen::GroqProvider, Blazen::OpenRouterProvider, Blazen::CohereProvider,
+      Blazen::XaiProvider, Blazen::AzureOpenAiProvider, Blazen::BedrockProvider,
+    ]
+    llm_classes.each do |klass|
+      it "#{klass.name.split('::').last} defines #stream / #stream_async" do
+        expect(klass.instance_methods).to include(:stream, :stream_async)
+      end
+    end
+
+    music_classes = [
+      Blazen::MusicGenProvider, Blazen::AudioGenProvider,
+      Blazen::StableAudioProvider, Blazen::FalMusicProvider,
+    ]
+    music_classes.each do |klass|
+      it "#{klass.name.split('::').last} defines streaming music + SFX entry points" do
+        expect(klass.instance_methods).to include(
+          :stream_generate_music, :stream_generate_music_async,
+          :stream_generate_sfx, :stream_generate_sfx_async,
+        )
+      end
+    end
+
+    [Blazen::RvcProvider, Blazen::FalVcProvider].each do |klass|
+      it "#{klass.name.split('::').last} defines #stream_convert_pcm[_async]" do
+        expect(klass.instance_methods).to include(
+          :stream_convert_pcm, :stream_convert_pcm_async,
+        )
+      end
+    end
+  end
+
+  # ----------------------------------------------------------------
   # GC finalizer hygiene
   # ----------------------------------------------------------------
   describe "GC hygiene" do

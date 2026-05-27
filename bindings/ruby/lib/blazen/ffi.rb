@@ -2209,18 +2209,28 @@ module Blazen
       blazen_musicgen_provider_generate_music_blocking
       blazen_musicgen_provider_generate_sfx
       blazen_musicgen_provider_generate_sfx_blocking
+      blazen_musicgen_provider_stream_music
+      blazen_musicgen_provider_stream_music_blocking
       blazen_musicgen_provider_free
       blazen_audiogen_provider_new
       blazen_audiogen_provider_generate_music
       blazen_audiogen_provider_generate_music_blocking
       blazen_audiogen_provider_generate_sfx
       blazen_audiogen_provider_generate_sfx_blocking
+      blazen_audiogen_provider_stream_music
+      blazen_audiogen_provider_stream_music_blocking
+      blazen_audiogen_provider_stream_sfx
+      blazen_audiogen_provider_stream_sfx_blocking
       blazen_audiogen_provider_free
       blazen_stable_audio_provider_new
       blazen_stable_audio_provider_generate_music
       blazen_stable_audio_provider_generate_music_blocking
       blazen_stable_audio_provider_generate_sfx
       blazen_stable_audio_provider_generate_sfx_blocking
+      blazen_stable_audio_provider_stream_music
+      blazen_stable_audio_provider_stream_music_blocking
+      blazen_stable_audio_provider_stream_sfx
+      blazen_stable_audio_provider_stream_sfx_blocking
       blazen_stable_audio_provider_free
       blazen_fal_music_provider_new
       blazen_fal_music_provider_generate_music
@@ -2245,6 +2255,16 @@ module Blazen
         when /_generate_(music|sfx)_blocking$/
           attach_function sym, %i[pointer pointer float pointer pointer], :int32,
                           blocking: true
+        when /_stream_(music|sfx)_blocking$/
+          attach_function sym,
+                          [:pointer, :pointer, :float,
+                           BlazenMusicStreamSinkVTable.by_value, :pointer],
+                          :int32, blocking: true
+        when /_stream_(music|sfx)$/
+          attach_function sym,
+                          [:pointer, :pointer, :float,
+                           BlazenMusicStreamSinkVTable.by_value],
+                          :pointer
         when /_free$/
           attach_function sym, [:pointer], :void
         end
@@ -2262,6 +2282,8 @@ module Blazen
       blazen_rvc_provider_clone_voice_blocking
       blazen_rvc_provider_list_target_voices
       blazen_rvc_provider_list_target_voices_blocking
+      blazen_rvc_provider_stream_convert_pcm
+      blazen_rvc_provider_stream_convert_pcm_blocking
       blazen_rvc_provider_free
       blazen_fal_vc_provider_new
       blazen_fal_vc_provider_convert_voice
@@ -2289,6 +2311,16 @@ module Blazen
           attach_function sym, [:pointer], :pointer
         when /_list_target_voices_blocking$/
           attach_function sym, %i[pointer pointer pointer], :int32, blocking: true
+        when /_stream_convert_pcm_blocking$/
+          attach_function sym,
+                          [:pointer, :pointer, :size_t, :pointer,
+                           BlazenVcStreamSinkVTable.by_value, :pointer],
+                          :int32, blocking: true
+        when /_stream_convert_pcm$/
+          attach_function sym,
+                          [:pointer, :pointer, :size_t, :pointer,
+                           BlazenVcStreamSinkVTable.by_value],
+                          :pointer
         when /_free$/
           attach_function sym, [:pointer], :void
         end
@@ -2439,6 +2471,8 @@ module Blazen
     ].each do |engine|
       complete_sym          = :"blazen_#{engine}_provider_complete"
       complete_blocking_sym = :"blazen_#{engine}_provider_complete_blocking"
+      stream_sym            = :"blazen_#{engine}_provider_complete_streaming"
+      stream_blocking_sym   = :"blazen_#{engine}_provider_complete_streaming_blocking"
       free_sym              = :"blazen_#{engine}_provider_free"
 
       begin
@@ -2450,6 +2484,26 @@ module Blazen
       begin
         attach_function complete_blocking_sym,
                         %i[pointer pointer pointer pointer], :int32, blocking: true
+      rescue ::FFI::NotFoundError
+        # Feature-gated.
+      end
+
+      # Per-engine streaming completion (+sink+ by value so the cabi consumes
+      # +user_data+ even on early-return failure paths).
+      begin
+        attach_function stream_blocking_sym,
+                        [:pointer, :pointer,
+                         BlazenCompletionStreamSinkVTable.by_value, :pointer],
+                        :int32, blocking: true
+      rescue ::FFI::NotFoundError
+        # Feature-gated.
+      end
+
+      begin
+        attach_function stream_sym,
+                        [:pointer, :pointer,
+                         BlazenCompletionStreamSinkVTable.by_value],
+                        :pointer
       rescue ::FFI::NotFoundError
         # Feature-gated.
       end
