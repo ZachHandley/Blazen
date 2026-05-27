@@ -826,6 +826,416 @@ impl FalLlmProvider {
 }
 
 // ---------------------------------------------------------------------------
+// OpenAiCompatProvider — generic OpenAI Chat Completions-compatible server
+// ---------------------------------------------------------------------------
+
+/// Concrete LLM provider wrapping
+/// [`blazen_llm::providers::openai_compat::OpenAiCompatProvider`].
+///
+/// Targets any service that speaks the official OpenAI Chat Completions
+/// wire format (vLLM, llama-server, local proxies, ...) using
+/// `Authorization: Bearer <api_key>` auth.
+#[derive(uniffi::Object)]
+pub struct OpenAiCompatProvider {
+    inner: Arc<blazen_llm::providers::openai_compat::OpenAiCompatProvider>,
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl OpenAiCompatProvider {
+    /// Construct a new OpenAI-compatible provider.
+    ///
+    /// `provider_name` is the logical id reported by the provider.
+    /// `base_url` is the server root (e.g. `http://localhost:8000/v1`).
+    /// `api_key` is the bearer token. `model` is the default chat model.
+    #[uniffi::constructor]
+    #[must_use]
+    pub fn new(
+        provider_name: String,
+        base_url: String,
+        api_key: String,
+        model: String,
+    ) -> Arc<Self> {
+        let config = blazen_llm::providers::openai_compat::OpenAiCompatConfig {
+            provider_name,
+            base_url,
+            api_key,
+            default_model: model,
+            auth_method: blazen_llm::providers::openai_compat::AuthMethod::Bearer,
+            extra_headers: Vec::new(),
+            query_params: Vec::new(),
+            supports_model_listing: false,
+        };
+        let provider = blazen_llm::providers::openai_compat::OpenAiCompatProvider::new(config);
+        Arc::new(Self {
+            inner: Arc::new(provider),
+        })
+    }
+
+    /// Perform a non-streaming chat / completion request.
+    pub async fn complete(
+        self: Arc<Self>,
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
+        use blazen_llm::providers::capabilities::LLMProvider as _;
+        let core_req: blazen_llm::types::ModelRequest = request.try_into()?;
+        let core_res = self.inner.complete(core_req).await?;
+        Ok(core_res.into())
+    }
+}
+
+#[uniffi::export]
+impl OpenAiCompatProvider {
+    /// Synchronous variant of [`complete`](Self::complete).
+    pub fn complete_blocking(
+        self: Arc<Self>,
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
+        let this = Arc::clone(&self);
+        crate::runtime::runtime().block_on(async move { this.complete(request).await })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// OllamaProvider — local Ollama server (OpenAI-compatible protocol)
+// ---------------------------------------------------------------------------
+
+/// Concrete LLM provider wrapping an Ollama server via
+/// [`blazen_llm::CustomProviderHandle`] (built by [`blazen_llm::ollama`]).
+#[derive(uniffi::Object)]
+pub struct OllamaProvider {
+    inner: Arc<blazen_llm::CustomProviderHandle>,
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl OllamaProvider {
+    /// Construct a new Ollama provider targeting
+    /// `http://{host}:{port}/v1`.
+    #[uniffi::constructor]
+    #[must_use]
+    pub fn new(host: String, port: u16, model: String) -> Arc<Self> {
+        let provider = blazen_llm::ollama(host, port, model);
+        Arc::new(Self {
+            inner: Arc::new(provider),
+        })
+    }
+
+    /// Perform a non-streaming chat / completion request.
+    pub async fn complete(
+        self: Arc<Self>,
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
+        use blazen_llm::providers::capabilities::LLMProvider as _;
+        let core_req: blazen_llm::types::ModelRequest = request.try_into()?;
+        let core_res = self.inner.complete(core_req).await?;
+        Ok(core_res.into())
+    }
+}
+
+#[uniffi::export]
+impl OllamaProvider {
+    /// Synchronous variant of [`complete`](Self::complete).
+    pub fn complete_blocking(
+        self: Arc<Self>,
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
+        let this = Arc::clone(&self);
+        crate::runtime::runtime().block_on(async move { this.complete(request).await })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// LmStudioProvider — local LM Studio server (OpenAI-compatible protocol)
+// ---------------------------------------------------------------------------
+
+/// Concrete LLM provider wrapping an LM Studio server via
+/// [`blazen_llm::CustomProviderHandle`] (built by
+/// [`blazen_llm::lm_studio`]).
+#[derive(uniffi::Object)]
+pub struct LmStudioProvider {
+    inner: Arc<blazen_llm::CustomProviderHandle>,
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl LmStudioProvider {
+    /// Construct a new LM Studio provider targeting
+    /// `http://{host}:{port}/v1`.
+    #[uniffi::constructor]
+    #[must_use]
+    pub fn new(host: String, port: u16, model: String) -> Arc<Self> {
+        let provider = blazen_llm::lm_studio(host, port, model);
+        Arc::new(Self {
+            inner: Arc::new(provider),
+        })
+    }
+
+    /// Perform a non-streaming chat / completion request.
+    pub async fn complete(
+        self: Arc<Self>,
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
+        use blazen_llm::providers::capabilities::LLMProvider as _;
+        let core_req: blazen_llm::types::ModelRequest = request.try_into()?;
+        let core_res = self.inner.complete(core_req).await?;
+        Ok(core_res.into())
+    }
+}
+
+#[uniffi::export]
+impl LmStudioProvider {
+    /// Synchronous variant of [`complete`](Self::complete).
+    pub fn complete_blocking(
+        self: Arc<Self>,
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
+        let this = Arc::clone(&self);
+        crate::runtime::runtime().block_on(async move { this.complete(request).await })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// MistralRsProvider — local mistral.rs chat-completion backend
+// ---------------------------------------------------------------------------
+
+/// Concrete LLM provider wrapping
+/// [`blazen_llm::MistralRsProvider`].
+#[cfg(feature = "mistralrs")]
+#[derive(uniffi::Object)]
+pub struct MistralRsProvider {
+    inner: Arc<blazen_llm::MistralRsProvider>,
+}
+
+#[cfg(feature = "mistralrs")]
+#[uniffi::export(async_runtime = "tokio")]
+impl MistralRsProvider {
+    /// Construct a local mistral.rs chat-completion provider.
+    ///
+    /// `model_id` is a `HuggingFace` repo id or local GGUF path. The
+    /// optional `device`/`quantization` strings follow Blazen's parser
+    /// format (`"cpu"`, `"cuda:0"`, `"metal"`, `"q4_k_m"`, ...). Set
+    /// `vision = true` for multimodal models (LLaVA / Qwen2-VL).
+    #[uniffi::constructor]
+    pub fn new(
+        model_id: String,
+        device: Option<String>,
+        quantization: Option<String>,
+        context_length: Option<u32>,
+        vision: bool,
+    ) -> Result<Arc<Self>, BlazenError> {
+        let opts = blazen_llm::MistralRsOptions {
+            model_id,
+            quantization,
+            device,
+            context_length: context_length.map(|c| c as usize),
+            max_batch_size: None,
+            chat_template: None,
+            cache_dir: None,
+            vision,
+            initial_adapters: Vec::new(),
+        };
+        let provider = blazen_llm::MistralRsProvider::from_options(opts).map_err(|e| {
+            BlazenError::Provider {
+                kind: "MistralRsInit".into(),
+                message: e.to_string(),
+                provider: Some("mistralrs".into()),
+                status: None,
+                endpoint: None,
+                request_id: None,
+                detail: None,
+                retry_after_ms: None,
+            }
+        })?;
+        Ok(Arc::new(Self {
+            inner: Arc::new(provider),
+        }))
+    }
+
+    /// Perform a non-streaming chat / completion request.
+    pub async fn complete(
+        self: Arc<Self>,
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
+        use blazen_llm::providers::capabilities::LLMProvider as _;
+        let core_req: blazen_llm::types::ModelRequest = request.try_into()?;
+        let core_res = self.inner.complete(core_req).await?;
+        Ok(core_res.into())
+    }
+}
+
+#[cfg(feature = "mistralrs")]
+#[uniffi::export]
+impl MistralRsProvider {
+    /// Synchronous variant of [`complete`](Self::complete).
+    pub fn complete_blocking(
+        self: Arc<Self>,
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
+        let this = Arc::clone(&self);
+        crate::runtime::runtime().block_on(async move { this.complete(request).await })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// LlamaCppProvider — local llama.cpp chat-completion backend
+// ---------------------------------------------------------------------------
+
+/// Concrete LLM provider wrapping
+/// [`blazen_llm::LlamaCppProvider`].
+#[cfg(feature = "llamacpp")]
+#[derive(uniffi::Object)]
+pub struct LlamaCppProvider {
+    inner: Arc<blazen_llm::LlamaCppProvider>,
+}
+
+#[cfg(feature = "llamacpp")]
+#[uniffi::export(async_runtime = "tokio")]
+impl LlamaCppProvider {
+    /// Construct a local llama.cpp chat-completion provider.
+    ///
+    /// `model_path` is either a local GGUF file path or a `HuggingFace`
+    /// repo id; `n_gpu_layers` offloads the given number of layers to the
+    /// GPU when the device supports it.
+    #[uniffi::constructor]
+    pub fn new(
+        model_path: String,
+        device: Option<String>,
+        quantization: Option<String>,
+        context_length: Option<u32>,
+        n_gpu_layers: Option<u32>,
+    ) -> Result<Arc<Self>, BlazenError> {
+        let opts = blazen_llm::LlamaCppOptions {
+            model_path: Some(model_path),
+            device,
+            quantization,
+            context_length: context_length.map(|c| c as usize),
+            n_gpu_layers,
+            cache_dir: None,
+            initial_adapters: Vec::new(),
+        };
+        let provider = crate::runtime::runtime()
+            .block_on(async { blazen_llm::LlamaCppProvider::from_options(opts).await })
+            .map_err(|e| BlazenError::Provider {
+                kind: "LlamaCppInit".into(),
+                message: e.to_string(),
+                provider: Some("llamacpp".into()),
+                status: None,
+                endpoint: None,
+                request_id: None,
+                detail: None,
+                retry_after_ms: None,
+            })?;
+        Ok(Arc::new(Self {
+            inner: Arc::new(provider),
+        }))
+    }
+
+    /// Perform a non-streaming chat / completion request.
+    pub async fn complete(
+        self: Arc<Self>,
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
+        use blazen_llm::providers::capabilities::LLMProvider as _;
+        let core_req: blazen_llm::types::ModelRequest = request.try_into()?;
+        let core_res = self.inner.complete(core_req).await?;
+        Ok(core_res.into())
+    }
+}
+
+#[cfg(feature = "llamacpp")]
+#[uniffi::export]
+impl LlamaCppProvider {
+    /// Synchronous variant of [`complete`](Self::complete).
+    pub fn complete_blocking(
+        self: Arc<Self>,
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
+        let this = Arc::clone(&self);
+        crate::runtime::runtime().block_on(async move { this.complete(request).await })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// CandleLlmProvider — local candle chat-completion backend
+// ---------------------------------------------------------------------------
+
+/// Concrete LLM provider wrapping
+/// [`blazen_llm::CandleLlmProvider`] through the
+/// [`blazen_llm::CandleLlmModel`] trait bridge.
+#[cfg(feature = "candle-llm")]
+#[derive(uniffi::Object)]
+pub struct CandleLlmProvider {
+    inner: Arc<blazen_llm::CandleLlmModel>,
+}
+
+#[cfg(feature = "candle-llm")]
+#[uniffi::export(async_runtime = "tokio")]
+impl CandleLlmProvider {
+    /// Construct a local candle chat-completion provider.
+    ///
+    /// `model_id` is a `HuggingFace` repo id; `revision` pins a specific
+    /// branch / tag / commit. The optional `device`/`quantization`
+    /// strings follow Blazen's parser format.
+    #[uniffi::constructor]
+    pub fn new(
+        model_id: String,
+        device: Option<String>,
+        quantization: Option<String>,
+        revision: Option<String>,
+        context_length: Option<u32>,
+    ) -> Result<Arc<Self>, BlazenError> {
+        let opts = blazen_llm::CandleLlmOptions {
+            model_id: Some(model_id),
+            device,
+            quantization,
+            revision,
+            context_length: context_length.map(|c| c as usize),
+            cache_dir: None,
+            initial_adapters: Vec::new(),
+            force_safetensors: false,
+        };
+        let provider = blazen_llm::CandleLlmProvider::from_options(opts).map_err(|e| {
+            BlazenError::Provider {
+                kind: "CandleLlmInit".into(),
+                message: e.to_string(),
+                provider: Some("candle".into()),
+                status: None,
+                endpoint: None,
+                request_id: None,
+                detail: None,
+                retry_after_ms: None,
+            }
+        })?;
+        let bridge = blazen_llm::CandleLlmModel::new(provider);
+        Ok(Arc::new(Self {
+            inner: Arc::new(bridge),
+        }))
+    }
+
+    /// Perform a non-streaming chat / completion request.
+    pub async fn complete(
+        self: Arc<Self>,
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
+        use blazen_llm::providers::capabilities::LLMProvider as _;
+        let core_req: blazen_llm::types::ModelRequest = request.try_into()?;
+        let core_res = self.inner.complete(core_req).await?;
+        Ok(core_res.into())
+    }
+}
+
+#[cfg(feature = "candle-llm")]
+#[uniffi::export]
+impl CandleLlmProvider {
+    /// Synchronous variant of [`complete`](Self::complete).
+    pub fn complete_blocking(
+        self: Arc<Self>,
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
+        let this = Arc::clone(&self);
+        crate::runtime::runtime().block_on(async move { this.complete(request).await })
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Polymorphic capability-base trait impls
 // ---------------------------------------------------------------------------
 //
@@ -1274,22 +1684,185 @@ impl crate::concrete::bases::LlmProvider for FalLlmProvider {
     }
 }
 
-// ---------------------------------------------------------------------------
-// Deferred: OpenAiCompatProvider
-// ---------------------------------------------------------------------------
-//
-// `blazen_llm::providers::openai_compat::OpenAiCompatProvider`'s
-// constructor takes an `OpenAiCompatConfig` struct that carries an
-// `AuthMethod` enum (Bearer / ApiKey / Custom-header-named) and a
-// `Vec<(String, String)>` of custom HTTP headers. Neither maps cleanly
-// to a flat uniffi `Record` (the `AuthMethod` enum has variant fields
-// the foreign-bindgen surface can't express ergonomically, and the
-// header tuple-vec inflates the FFI surface with marshalling overhead).
-//
-// Deferring this concrete until a follow-up sub-task lifts a typed
-// `OpenAiCompatOptions` UDL record. Users that need OpenAI-compatible
-// endpoints today can point `OpenAiProvider::new(..., base_url=Some(...))`
-// at their proxy — that covers the bearer-auth case.
+// OpenAiCompatProvider -----------------------------------------------------
+
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for OpenAiCompatProvider {
+    fn provider_id(&self) -> String {
+        "openai-compat".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Llm
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::concrete::bases::LlmProvider for OpenAiCompatProvider {
+    fn provider_id(&self) -> String {
+        "openai-compat".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Llm
+    }
+
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
+        use blazen_llm::providers::capabilities::LLMProvider as _;
+        let core_req: blazen_llm::types::ModelRequest = request.try_into()?;
+        let core_res = self.inner.complete(core_req).await?;
+        Ok(core_res.into())
+    }
+}
+
+// OllamaProvider -----------------------------------------------------------
+
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for OllamaProvider {
+    fn provider_id(&self) -> String {
+        "ollama".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Llm
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::concrete::bases::LlmProvider for OllamaProvider {
+    fn provider_id(&self) -> String {
+        "ollama".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Llm
+    }
+
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
+        use blazen_llm::providers::capabilities::LLMProvider as _;
+        let core_req: blazen_llm::types::ModelRequest = request.try_into()?;
+        let core_res = self.inner.complete(core_req).await?;
+        Ok(core_res.into())
+    }
+}
+
+// LmStudioProvider ---------------------------------------------------------
+
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for LmStudioProvider {
+    fn provider_id(&self) -> String {
+        "lm-studio".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Llm
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::concrete::bases::LlmProvider for LmStudioProvider {
+    fn provider_id(&self) -> String {
+        "lm-studio".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Llm
+    }
+
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
+        use blazen_llm::providers::capabilities::LLMProvider as _;
+        let core_req: blazen_llm::types::ModelRequest = request.try_into()?;
+        let core_res = self.inner.complete(core_req).await?;
+        Ok(core_res.into())
+    }
+}
+
+// MistralRsProvider --------------------------------------------------------
+
+#[cfg(feature = "mistralrs")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for MistralRsProvider {
+    fn provider_id(&self) -> String {
+        "mistralrs".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Llm
+    }
+}
+
+#[cfg(feature = "mistralrs")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::LlmProvider for MistralRsProvider {
+    fn provider_id(&self) -> String {
+        "mistralrs".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Llm
+    }
+
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
+        use blazen_llm::providers::capabilities::LLMProvider as _;
+        let core_req: blazen_llm::types::ModelRequest = request.try_into()?;
+        let core_res = self.inner.complete(core_req).await?;
+        Ok(core_res.into())
+    }
+}
+
+// LlamaCppProvider ---------------------------------------------------------
+
+#[cfg(feature = "llamacpp")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for LlamaCppProvider {
+    fn provider_id(&self) -> String {
+        "llamacpp".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Llm
+    }
+}
+
+#[cfg(feature = "llamacpp")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::LlmProvider for LlamaCppProvider {
+    fn provider_id(&self) -> String {
+        "llamacpp".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Llm
+    }
+
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
+        use blazen_llm::providers::capabilities::LLMProvider as _;
+        let core_req: blazen_llm::types::ModelRequest = request.try_into()?;
+        let core_res = self.inner.complete(core_req).await?;
+        Ok(core_res.into())
+    }
+}
+
+// CandleLlmProvider --------------------------------------------------------
+
+#[cfg(feature = "candle-llm")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for CandleLlmProvider {
+    fn provider_id(&self) -> String {
+        "candle".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Llm
+    }
+}
+
+#[cfg(feature = "candle-llm")]
+#[async_trait::async_trait]
+impl crate::concrete::bases::LlmProvider for CandleLlmProvider {
+    fn provider_id(&self) -> String {
+        "candle".to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Llm
+    }
+
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
+        use blazen_llm::providers::capabilities::LLMProvider as _;
+        let core_req: blazen_llm::types::ModelRequest = request.try_into()?;
+        let core_res = self.inner.complete(core_req).await?;
+        Ok(core_res.into())
+    }
+}
 
 // ---------------------------------------------------------------------------
 // Per-engine streaming free functions
@@ -1688,4 +2261,150 @@ pub fn fal_llm_provider_complete_streaming_blocking(
     sink: Arc<dyn CompletionStreamSink>,
 ) -> Result<(), BlazenError> {
     crate::runtime::runtime().block_on(fal_llm_provider_complete_streaming(provider, request, sink))
+}
+
+// OpenAiCompatProvider -----------------------------------------------------
+
+/// Stream a chat / completion from [`OpenAiCompatProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn openai_compat_provider_complete_streaming(
+    provider: Arc<OpenAiCompatProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`openai_compat_provider_complete_streaming`].
+#[uniffi::export]
+pub fn openai_compat_provider_complete_streaming_blocking(
+    provider: Arc<OpenAiCompatProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(openai_compat_provider_complete_streaming(
+        provider, request, sink,
+    ))
+}
+
+// OllamaProvider -----------------------------------------------------------
+
+/// Stream a chat / completion from [`OllamaProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn ollama_provider_complete_streaming(
+    provider: Arc<OllamaProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`ollama_provider_complete_streaming`].
+#[uniffi::export]
+pub fn ollama_provider_complete_streaming_blocking(
+    provider: Arc<OllamaProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(ollama_provider_complete_streaming(provider, request, sink))
+}
+
+// LmStudioProvider ---------------------------------------------------------
+
+/// Stream a chat / completion from [`LmStudioProvider`] into `sink`.
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn lm_studio_provider_complete_streaming(
+    provider: Arc<LmStudioProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`lm_studio_provider_complete_streaming`].
+#[uniffi::export]
+pub fn lm_studio_provider_complete_streaming_blocking(
+    provider: Arc<LmStudioProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(lm_studio_provider_complete_streaming(
+        provider, request, sink,
+    ))
+}
+
+// MistralRsProvider --------------------------------------------------------
+
+/// Stream a chat / completion from [`MistralRsProvider`] into `sink`.
+#[cfg(feature = "mistralrs")]
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn mistralrs_provider_complete_streaming(
+    provider: Arc<MistralRsProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`mistralrs_provider_complete_streaming`].
+#[cfg(feature = "mistralrs")]
+#[uniffi::export]
+pub fn mistralrs_provider_complete_streaming_blocking(
+    provider: Arc<MistralRsProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(mistralrs_provider_complete_streaming(
+        provider, request, sink,
+    ))
+}
+
+// LlamaCppProvider ---------------------------------------------------------
+
+/// Stream a chat / completion from [`LlamaCppProvider`] into `sink`.
+#[cfg(feature = "llamacpp")]
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn llamacpp_provider_complete_streaming(
+    provider: Arc<LlamaCppProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`llamacpp_provider_complete_streaming`].
+#[cfg(feature = "llamacpp")]
+#[uniffi::export]
+pub fn llamacpp_provider_complete_streaming_blocking(
+    provider: Arc<LlamaCppProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(llamacpp_provider_complete_streaming(
+        provider, request, sink,
+    ))
+}
+
+// CandleLlmProvider --------------------------------------------------------
+
+/// Stream a chat / completion from [`CandleLlmProvider`] into `sink`.
+#[cfg(feature = "candle-llm")]
+#[uniffi::export(async_runtime = "tokio")]
+pub async fn candle_provider_complete_streaming(
+    provider: Arc<CandleLlmProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    drive_provider_stream(provider.inner.as_ref(), request, sink).await
+}
+
+/// Synchronous variant of [`candle_provider_complete_streaming`].
+#[cfg(feature = "candle-llm")]
+#[uniffi::export]
+pub fn candle_provider_complete_streaming_blocking(
+    provider: Arc<CandleLlmProvider>,
+    request: ModelRequest,
+    sink: Arc<dyn CompletionStreamSink>,
+) -> Result<(), BlazenError> {
+    crate::runtime::runtime().block_on(candle_provider_complete_streaming(provider, request, sink))
 }

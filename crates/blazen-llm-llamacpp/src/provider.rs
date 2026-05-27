@@ -185,6 +185,14 @@ pub struct LlamaCppProvider {
         std::sync::Arc<tokio::sync::RwLock<std::collections::HashMap<String, MountedAdapter>>>,
 }
 
+impl std::fmt::Debug for LlamaCppProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LlamaCppProvider")
+            .field("model_path", &self.model_path)
+            .finish_non_exhaustive()
+    }
+}
+
 /// Interior-mutability cell for a `LlamaLoraAdapter`. The upstream wrapper
 /// holds a raw `NonNull` pointer with no Send/Sync impls; we move it into
 /// inference threads via `spawn_blocking`, which requires Send. The

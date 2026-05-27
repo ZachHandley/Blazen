@@ -95,6 +95,14 @@ impl CandleLlmModel {
     }
 }
 
+impl std::fmt::Debug for CandleLlmModel {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CandleLlmModel")
+            .field("model_id", &self.model_id)
+            .finish_non_exhaustive()
+    }
+}
+
 #[async_trait]
 impl crate::traits::Model for CandleLlmModel {
     fn model_id(&self) -> &str {
@@ -201,6 +209,40 @@ impl crate::traits::Model for CandleLlmModel {
         });
 
         Ok(Box::pin(stream))
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Provider-hierarchy bridge (BaseProvider + LLMProvider)
+// ---------------------------------------------------------------------------
+
+impl crate::providers::root::BaseProvider for CandleLlmModel {
+    fn metadata(&self) -> &crate::providers::root::ProviderMetadata {
+        static META: std::sync::LazyLock<crate::providers::root::ProviderMetadata> =
+            std::sync::LazyLock::new(|| {
+                crate::providers::root::ProviderMetadata::new(
+                    "candle",
+                    crate::providers::root::CapabilityKind::Llm,
+                )
+            });
+        &META
+    }
+}
+
+#[async_trait]
+impl crate::providers::capabilities::LLMProvider for CandleLlmModel {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
+        <Self as crate::traits::Model>::complete(self, request).await
+    }
+    async fn stream(
+        &self,
+        request: ModelRequest,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
+    {
+        <Self as crate::traits::Model>::stream(self, request).await
+    }
+    fn model_id(&self) -> &str {
+        <Self as crate::traits::Model>::model_id(self)
     }
 }
 

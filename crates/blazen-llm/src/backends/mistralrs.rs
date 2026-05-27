@@ -279,6 +279,40 @@ impl crate::traits::Model for MistralRsProvider {
 }
 
 // ---------------------------------------------------------------------------
+// Provider-hierarchy bridge (BaseProvider + LLMProvider)
+// ---------------------------------------------------------------------------
+
+impl crate::providers::root::BaseProvider for MistralRsProvider {
+    fn metadata(&self) -> &crate::providers::root::ProviderMetadata {
+        static META: std::sync::LazyLock<crate::providers::root::ProviderMetadata> =
+            std::sync::LazyLock::new(|| {
+                crate::providers::root::ProviderMetadata::new(
+                    "mistralrs",
+                    crate::providers::root::CapabilityKind::Llm,
+                )
+            });
+        &META
+    }
+}
+
+#[async_trait]
+impl crate::providers::capabilities::LLMProvider for MistralRsProvider {
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
+        <Self as crate::traits::Model>::complete(self, request).await
+    }
+    async fn stream(
+        &self,
+        request: ModelRequest,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
+    {
+        <Self as crate::traits::Model>::stream(self, request).await
+    }
+    fn model_id(&self) -> &str {
+        <Self as crate::traits::Model>::model_id(self)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // LocalModel implementation
 // ---------------------------------------------------------------------------
 

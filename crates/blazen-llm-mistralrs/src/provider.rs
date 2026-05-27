@@ -259,6 +259,14 @@ pub struct MistralRsProvider {
     mounted_adapters: std::sync::Arc<tokio::sync::RwLock<Vec<MountedAdapter>>>,
 }
 
+impl std::fmt::Debug for MistralRsProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("MistralRsProvider")
+            .field("model_id", &self.model_id)
+            .finish_non_exhaustive()
+    }
+}
+
 impl MistralRsProvider {
     /// Create a new provider from the given options.
     ///
