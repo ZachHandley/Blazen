@@ -223,9 +223,42 @@ jobs:
         # tested by the test-python job below via uv + maturin.
         run: cargo nextest run --workspace --all-features --exclude blazen-py
 
-      - name: Workspace tests (doc tests)
+      - name: Doc tests (per-crate to dodge native-symbol collisions)
         if: steps.check.outputs.completed != 'true'
-        run: cargo test --workspace --doc --all-features --exclude blazen-py
+        # Workspace-wide `--doc --all-features` cannot link: cargo's feature
+        # unification activates blazen-uniffi/cabi/node's `local-all` default,
+        # which turns on BOTH `llamacpp` (llama-cpp-sys-2) and `whispercpp`
+        # (whisper-rs-sys) on blazen-llm. Those sys crates each bundle ggml's
+        # gguf.cpp statically; blazen-llm also pulls sentencepiece-sys + ort-sys
+        # which each bundle libprotobuf statically. Rust 1.83+ merges every
+        # crate's doctests into ONE binary, so rust-lld hits duplicate
+        # gguf_*/protobuf symbols. The collision poisons any workspace-context
+        # doctest that links blazen-llm, even under --no-default-features.
+        #
+        # Run doc tests per-crate so feature unification is scoped to each
+        # crate's own subtree. blazen-llm uses a curated set that exercises the
+        # provider/embed/llm/diffusion surface without the mutually-conflicting
+        # native audio/codec backends (all 23 of its doctests pass this way).
+        # Skipped crates pull BOTH backends under --all-features and carry
+        # generated/thin surfaces with no meaningful doctests: the FFI crates
+        # (uniffi/cabi/node/manager) and the blazen-cli binary (the only
+        # library/bin that fails a standalone `--doc --all-features` build —
+        # verified by sweeping all 47 members locally). blazen-py is excluded
+        # because it can't build a standalone Rust test binary (extension-module).
+        run: |
+          set -euo pipefail
+          SKIP="blazen-py blazen-llm blazen-uniffi blazen-cabi blazen-node blazen-manager blazen-cli"
+          for crate in $(cargo metadata --no-deps --format-version 1 \
+              | python3 -c "import json,sys; print('\n'.join(p['name'] for p in json.load(sys.stdin)['packages']))"); do
+            case " $SKIP " in *" $crate "*) continue ;; esac
+            echo "::group::doctest $crate"
+            cargo test --doc -p "$crate" --all-features
+            echo "::endgroup::"
+          done
+          echo "::group::doctest blazen-llm (curated)"
+          cargo test --doc -p blazen-llm --no-default-features \
+            --features "content-detect,reqwest,tiktoken,embed,mistralrs,candle-llm,diffusion,vllm,ollama,tgi,lmstudio"
+          echo "::endgroup::"
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
@@ -696,6 +729,13 @@ jobs:
     runs-on: ubuntu-latest
     needs: [detect, version, lint]
     if: needs.detect.outputs.web_only != 'true'
+    # This job is heavy — it serially compiles stub_gen, napi build, wasm-pack,
+    # uniffi-bindgen + cabi cdylib (8+ cargo invocations). Halve CARGO_BUILD_JOBS
+    # to 2 (vs the workflow-level 4) so a single audit-bindings run doesn't
+    # peg every core if it co-locates with another heavy job on the same host
+    # (e.g. BeastPC self-advertising the ubuntu-latest label).
+    env:
+      CARGO_BUILD_JOBS: "2"
     steps:
       - name: Checkout
         uses: actions/checkout@v4

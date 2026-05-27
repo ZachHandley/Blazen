@@ -103,6 +103,7 @@ local-all = [
     "diffusion",
     "whispercpp",
     "tts",
+    "audio-tts-piper",
     "audio-music-stable-audio",
     "audio-music-musicgen",
     "audio-music-audiogen",
