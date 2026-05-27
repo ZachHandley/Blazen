@@ -54,13 +54,11 @@ env:
   # to 89 (Ada — matches the 4090 BeastPC GPU). Bump to "89;120" when the
   # inbound 5070 Ti / 5090 Blackwell box is wired in.
   CUDA_COMPUTE_CAP: "89"
-  # cudarc's build.rs probes `nvcc --version` via PATH and panics when nvcc
-  # isn't found (forgejo-runner's systemd Environment= is empty, so the
-  # interactive-shell PATH addition for /opt/cuda/bin doesn't apply). Set
-  # CUDA_HOME so cudarc / candle-kernels (bindgen-cuda) / candle-core all
-  # resolve ${CUDA_HOME}/bin/nvcc directly. /opt/cuda matches the Arch
-  # `cuda` package layout on the BeastPC runner.
-  CUDA_HOME: "/opt/cuda"
+  # CUDA_HOME + PATH for nvcc are set by the per-job setup-cuda-toolkit step
+  # (see the `Setup CUDA Toolkit` step below) — it probes /opt/cuda, /usr,
+  # etc. and exports CUDA_HOME deterministically. The forgejo-runner systemd
+  # unit has empty Environment= so the interactive shell's CUDA path
+  # addition doesn't reach jobs.
 
 jobs:
   e2e:
@@ -77,6 +75,11 @@ jobs:
         # cached locally. Matches live-models.yaml's setup style — light, no
         # sccache (this is a heavy GPU box, not the shared ubuntu pool).
         uses: https://github.com/dtolnay/rust-toolchain@stable
+
+      - name: Setup CUDA Toolkit
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
+        with:
+          required: 'true'
 
       - name: Install nextest
         uses: https://github.com/taiki-e/install-action@v2

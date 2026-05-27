@@ -32,14 +32,12 @@ env:
   # (Ada — covers the 4070 Ti minibeast + 4090 BeastPC). Bump to "89;120"
   # when the inbound 5070 Ti / 5090 Blackwell rig joins CI.
   CUDA_COMPUTE_CAP: "89"
-  # cudarc's build.rs probes `nvcc --version` via PATH and panics when nvcc
-  # isn't found. The forgejo-runner systemd unit runs with an empty
-  # Environment= and doesn't pick up /opt/cuda/bin from the user shell, so
-  # set CUDA_HOME explicitly — cudarc, candle-kernels (bindgen-cuda) and
-  # candle-core all honor it and resolve ${CUDA_HOME}/bin/nvcc directly,
-  # skipping the PATH lookup. /opt/cuda matches the Arch `cuda` package
-  # layout on our minibeast + BeastPC runners.
-  CUDA_HOME: "/opt/cuda"
+  # CUDA_HOME + PATH for nvcc are set per-job by setup-cuda-toolkit, which
+  # probes /opt/cuda (Arch), /usr/local/cuda (NVIDIA repo), /usr (Ubuntu
+  # nvidia-cuda-toolkit apt package), etc. The forgejo-runner systemd unit
+  # has empty Environment= so the user shell's PATH addition doesn't reach
+  # jobs — every Rust-building job runs setup-cuda-toolkit after Setup Rust
+  # so cudarc / candle-kernels / bindgen-cuda find nvcc deterministically.
 
 jobs:
   # ===========================================
@@ -144,6 +142,12 @@ jobs:
           sccache-key-prefix: sccache/blazen-lint
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
+      - name: Setup CUDA Toolkit
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
+        with:
+          required: 'true'
+
       - name: Format check
         if: steps.check.outputs.completed != 'true'
         run: cargo fmt --all -- --check
@@ -196,6 +200,12 @@ jobs:
           sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-test
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Setup CUDA Toolkit
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
+        with:
+          required: 'true'
 
       - name: Workspace tests (unit + integration)
         if: steps.check.outputs.completed != 'true'
@@ -252,6 +262,12 @@ jobs:
           sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-python
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Setup CUDA Toolkit
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
+        with:
+          required: 'true'
 
       - name: Setup Python + uv
         if: steps.check.outputs.completed != 'true'
@@ -329,6 +345,12 @@ jobs:
           sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-node
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Setup CUDA Toolkit
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
+        with:
+          required: 'true'
 
       - name: Setup Node
         if: steps.check.outputs.completed != 'true'
@@ -410,6 +432,12 @@ jobs:
           sccache-key-prefix: sccache/blazen-go
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
+      - name: Setup CUDA Toolkit
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
+        with:
+          required: 'true'
+
       - name: Build blazen-uniffi (release)
         if: steps.check.outputs.completed != 'true'
         run: cargo build -p blazen-uniffi --release
@@ -485,6 +513,12 @@ jobs:
           sccache-key-prefix: sccache/blazen-swift
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
+      - name: Setup CUDA Toolkit
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
+        with:
+          required: 'true'
+
       - name: Setup Swift
         if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-swift@main
@@ -552,6 +586,12 @@ jobs:
           sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-kotlin
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Setup CUDA Toolkit
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
+        with:
+          required: 'true'
 
       - name: Build blazen-uniffi (release)
         if: steps.check.outputs.completed != 'true'
@@ -627,6 +667,12 @@ jobs:
           sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-ruby
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Setup CUDA Toolkit
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
+        with:
+          required: 'true'
 
       - name: Build blazen-cabi (release)
         if: steps.check.outputs.completed != 'true'
@@ -712,6 +758,12 @@ jobs:
           sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-audit
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Setup CUDA Toolkit
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
+        with:
+          required: 'true'
 
       - name: Setup Node
         if: steps.check.outputs.completed != 'true'
@@ -950,6 +1002,12 @@ jobs:
           sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-smoke-compute
           registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Setup CUDA Toolkit
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
+        with:
+          required: 'true'
 
       - name: Setup Python + uv
         if: steps.check.outputs.completed != 'true'
