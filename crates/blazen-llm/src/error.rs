@@ -483,6 +483,43 @@ impl From<blazen_3d::Animator3dError> for BlazenError {
     }
 }
 
+// ---------------------------------------------------------------------------
+// blazen-audio-music / blazen-audio-vc capability-trait errors
+// ---------------------------------------------------------------------------
+//
+// The `MusicProvider` / `VcProvider` capability traits in
+// `crates/blazen-llm/src/providers/capabilities.rs` delegate their streaming
+// methods to the underlying `MusicBackend::stream_generate_*` /
+// `VoiceConversionBackend::stream_convert` backends, whose stream items carry
+// `MusicError` / `VcError`. These `From` impls let the concrete providers map
+// both the outer call error and the per-item stream error into `BlazenError`
+// with `?` / `Result::map_err`. The mapping mirrors the private
+// `to_blazen_error` helper in `crate::backends::audio_music`.
+
+#[cfg(feature = "audio-music")]
+impl From<blazen_audio_music::MusicError> for BlazenError {
+    fn from(err: blazen_audio_music::MusicError) -> Self {
+        use blazen_audio_music::MusicError as E;
+        match err {
+            E::EngineNotAvailable | E::NotYetImplemented(_) => Self::unsupported(err.to_string()),
+            E::InvalidInput(msg) => Self::validation(msg),
+            other => Self::provider("music", other.to_string()),
+        }
+    }
+}
+
+#[cfg(feature = "audio-vc")]
+impl From<blazen_audio_vc::VcError> for BlazenError {
+    fn from(err: blazen_audio_vc::VcError) -> Self {
+        use blazen_audio_vc::VcError as E;
+        match err {
+            E::EngineNotAvailable(_) | E::Unsupported(_) => Self::unsupported(err.to_string()),
+            E::VoiceNotFound(_) => Self::validation(err.to_string()),
+            other => Self::provider("vc", other.to_string()),
+        }
+    }
+}
+
 /// Backwards-compatible alias.
 #[deprecated(note = "use BlazenError instead")]
 pub type LlmError = BlazenError;

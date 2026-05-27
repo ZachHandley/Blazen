@@ -23,10 +23,13 @@
 
 #![allow(dead_code, unused_imports)]
 
+use std::pin::Pin;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use futures_util::{Stream, StreamExt};
 
+use crate::MusicChunk;
 use crate::compute::requests::MusicRequest;
 use crate::compute::results::AudioResult;
 use crate::error::BlazenError;
@@ -173,6 +176,21 @@ impl MusicProvider for MusicGenProvider {
     }
     // generate_sfx — defaults to Unsupported via the trait. MusicGen is
     // music-only; callers wanting SFX should use AudioGenProvider.
+
+    async fn stream_generate_music(
+        &self,
+        prompt: String,
+        duration_seconds: f32,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<MusicChunk, BlazenError>> + Send>>, BlazenError>
+    {
+        use crate::MusicBackend;
+        let stream = self
+            .inner
+            .stream_generate_music(&prompt, duration_seconds)
+            .await?;
+        Ok(Box::pin(stream.map(|item| item.map_err(BlazenError::from))))
+    }
+    // stream_generate_sfx — music-only; inherits the Unsupported default.
 }
 
 // ===========================================================================
@@ -264,6 +282,22 @@ impl MusicProvider for AudioGenProvider {
         use crate::compute::traits::AudioGeneration;
         self.inner.generate_sfx(request).await
     }
+
+    async fn stream_generate_sfx(
+        &self,
+        prompt: String,
+        duration_seconds: f32,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<MusicChunk, BlazenError>> + Send>>, BlazenError>
+    {
+        use crate::MusicBackend;
+        let stream = self
+            .inner
+            .stream_generate_sfx(&prompt, duration_seconds)
+            .await?;
+        Ok(Box::pin(stream.map(|item| item.map_err(BlazenError::from))))
+    }
+    // stream_generate_music — AudioGen is sfx-primary; inherits the
+    // Unsupported default for streaming music.
 }
 
 // ===========================================================================
@@ -363,6 +397,34 @@ impl MusicProvider for StableAudioProvider {
     async fn generate_sfx(&self, request: MusicRequest) -> Result<AudioResult, BlazenError> {
         use crate::compute::traits::AudioGeneration;
         self.inner.generate_sfx(request).await
+    }
+
+    async fn stream_generate_music(
+        &self,
+        prompt: String,
+        duration_seconds: f32,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<MusicChunk, BlazenError>> + Send>>, BlazenError>
+    {
+        use crate::MusicBackend;
+        let stream = self
+            .inner
+            .stream_generate_music(&prompt, duration_seconds)
+            .await?;
+        Ok(Box::pin(stream.map(|item| item.map_err(BlazenError::from))))
+    }
+
+    async fn stream_generate_sfx(
+        &self,
+        prompt: String,
+        duration_seconds: f32,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<MusicChunk, BlazenError>> + Send>>, BlazenError>
+    {
+        use crate::MusicBackend;
+        let stream = self
+            .inner
+            .stream_generate_sfx(&prompt, duration_seconds)
+            .await?;
+        Ok(Box::pin(stream.map(|item| item.map_err(BlazenError::from))))
     }
 }
 

@@ -38,9 +38,11 @@
 
 #![allow(dead_code, unused_imports)]
 
+use std::pin::Pin;
 use std::sync::Arc;
 
 use async_trait::async_trait;
+use futures_util::{Stream, StreamExt};
 
 use crate::compute::requests::VoiceCloneRequest;
 use crate::compute::results::{AudioResult, VoiceHandle};
@@ -256,6 +258,27 @@ impl VcProvider for RvcProvider {
                 metadata: serde_json::Value::Object(serde_json::Map::new()),
             })
             .collect())
+    }
+
+    async fn stream_convert_pcm(
+        &self,
+        input_pcm: Vec<f32>,
+        target_voice_id: String,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<Vec<f32>, BlazenError>> + Send>>, BlazenError>
+    {
+        // The backend's `stream_convert` consumes a stream of source PCM
+        // frames; wrap the single input buffer in a one-shot stream (the
+        // capability surface ships one buffer per call, matching the
+        // uniffi `stream_convert_pcm` adapter). Items yielded by the
+        // backend stream carry `VcError`, which we map into `BlazenError`.
+        let input_stream = futures_util::stream::once(async move { input_pcm });
+        let out_stream = self
+            .inner
+            .stream_convert(Box::pin(input_stream), &target_voice_id)
+            .await?;
+        Ok(Box::pin(
+            out_stream.map(|item| item.map_err(BlazenError::from)),
+        ))
     }
 }
 

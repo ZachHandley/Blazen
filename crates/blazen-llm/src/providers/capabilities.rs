@@ -34,6 +34,8 @@ use std::sync::Arc;
 use async_trait::async_trait;
 use futures_util::Stream;
 
+#[cfg(feature = "audio-music")]
+use crate::MusicChunk;
 #[cfg(feature = "threed")]
 use crate::compute::requests::{AnimateRequest, RefineRequest, RigRequest, TexturizeRequest};
 use crate::compute::requests::{
@@ -139,6 +141,44 @@ pub trait MusicProvider: BaseProvider {
             "sound effect generation not supported by this provider",
         ))
     }
+
+    /// Stream music generation for low-latency / progressive playback.
+    ///
+    /// Yields [`MusicChunk`]s as the backend produces them; the
+    /// concatenated samples equal a single
+    /// [`generate_music`](MusicProvider::generate_music) call. Defaults
+    /// to `BlazenError::Unsupported`; providers that wrap a streaming
+    /// [`MusicBackend`](crate::MusicBackend) override this.
+    #[cfg(feature = "audio-music")]
+    async fn stream_generate_music(
+        &self,
+        _prompt: String,
+        _duration_seconds: f32,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<MusicChunk, BlazenError>> + Send>>, BlazenError>
+    {
+        Err(BlazenError::unsupported(
+            "streaming music generation not supported by this provider",
+        ))
+    }
+
+    /// Stream SFX generation for low-latency / progressive playback.
+    ///
+    /// Yields [`MusicChunk`]s as the backend produces them; the
+    /// concatenated samples equal a single
+    /// [`generate_sfx`](MusicProvider::generate_sfx) call. Defaults to
+    /// `BlazenError::Unsupported`; providers that wrap a streaming
+    /// [`MusicBackend`](crate::MusicBackend) override this.
+    #[cfg(feature = "audio-music")]
+    async fn stream_generate_sfx(
+        &self,
+        _prompt: String,
+        _duration_seconds: f32,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<MusicChunk, BlazenError>> + Send>>, BlazenError>
+    {
+        Err(BlazenError::unsupported(
+            "streaming sfx generation not supported by this provider",
+        ))
+    }
 }
 
 // ---------------------------------------------------------------------------
@@ -176,6 +216,37 @@ pub trait VcProvider: BaseProvider {
     async fn delete_voice(&self, _voice: &VoiceHandle) -> Result<(), BlazenError> {
         Err(BlazenError::unsupported(
             "delete_voice not supported by this provider",
+        ))
+    }
+
+    /// Stream voice conversion for low-latency / real-time use.
+    ///
+    /// Consumes a single buffer of 32-bit float PCM samples
+    /// (`input_pcm`) at the backend's expected source sample rate and
+    /// yields converted PCM sample chunks at the target voice's native
+    /// rate. Defaults to `BlazenError::Unsupported`; providers that wrap
+    /// a streaming
+    /// [`VoiceConversionBackend`](crate::VoiceConversionBackend)
+    /// override this.
+    ///
+    /// # Item type
+    ///
+    /// The yielded item is the raw `Vec<f32>` PCM frame straight from the
+    /// backend's
+    /// [`stream_convert`](crate::VoiceConversionBackend::stream_convert),
+    /// not a richer chunk record. The `blazen-uniffi` wrapper re-wraps
+    /// each frame into its FFI `VcChunk` (adding `is_final` /
+    /// `latency_seconds`); there is no `VcChunk` type at this layer, so
+    /// the faithful mapping is the backend's native sample buffer.
+    #[cfg(feature = "audio-vc")]
+    async fn stream_convert_pcm(
+        &self,
+        _input_pcm: Vec<f32>,
+        _target_voice_id: String,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<Vec<f32>, BlazenError>> + Send>>, BlazenError>
+    {
+        Err(BlazenError::unsupported(
+            "streaming voice conversion not supported by this provider",
         ))
     }
 }
@@ -410,12 +481,38 @@ impl_arc_passthrough!(
     transcribe(request: TranscriptionRequest) -> Result<TranscriptionResult, BlazenError>,
 );
 
-// Music
-impl_arc_passthrough!(
-    MusicProvider,
-    generate_music(request: MusicRequest) -> Result<AudioResult, BlazenError>,
-    generate_sfx(request: MusicRequest) -> Result<AudioResult, BlazenError>,
-);
+// Music — cfg-gated streaming methods don't fit the simple macro shape;
+// hand-expand so `Arc<P>` forwards the overridden streaming impls instead of
+// silently falling back to the trait defaults.
+#[async_trait]
+impl<P: MusicProvider + ?Sized> MusicProvider for Arc<P> {
+    async fn generate_music(&self, request: MusicRequest) -> Result<AudioResult, BlazenError> {
+        (**self).generate_music(request).await
+    }
+    async fn generate_sfx(&self, request: MusicRequest) -> Result<AudioResult, BlazenError> {
+        (**self).generate_sfx(request).await
+    }
+    #[cfg(feature = "audio-music")]
+    async fn stream_generate_music(
+        &self,
+        prompt: String,
+        duration_seconds: f32,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<MusicChunk, BlazenError>> + Send>>, BlazenError>
+    {
+        (**self)
+            .stream_generate_music(prompt, duration_seconds)
+            .await
+    }
+    #[cfg(feature = "audio-music")]
+    async fn stream_generate_sfx(
+        &self,
+        prompt: String,
+        duration_seconds: f32,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<MusicChunk, BlazenError>> + Send>>, BlazenError>
+    {
+        (**self).stream_generate_sfx(prompt, duration_seconds).await
+    }
+}
 
 // VC — VcProvider's list_voices/delete_voice take refs that don't fit the
 // simple macro shape; expand by hand.
@@ -432,6 +529,17 @@ impl<P: VcProvider + ?Sized> VcProvider for Arc<P> {
     }
     async fn delete_voice(&self, voice: &VoiceHandle) -> Result<(), BlazenError> {
         (**self).delete_voice(voice).await
+    }
+    #[cfg(feature = "audio-vc")]
+    async fn stream_convert_pcm(
+        &self,
+        input_pcm: Vec<f32>,
+        target_voice_id: String,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<Vec<f32>, BlazenError>> + Send>>, BlazenError>
+    {
+        (**self)
+            .stream_convert_pcm(input_pcm, target_voice_id)
+            .await
     }
 }
 
