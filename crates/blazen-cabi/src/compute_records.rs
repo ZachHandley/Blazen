@@ -1079,7 +1079,6 @@ pub unsafe extern "C" fn blazen_target_voice_list_free(list: *mut BlazenTargetVo
 // cabi build fails because the inner uniffi `ThreeDGenerateResult` doesn't
 // exist without `triposr`.)
 // ---------------------------------------------------------------------------
-#[cfg(feature = "triposr")]
 
 /// Opaque handle wrapping
 /// [`blazen_uniffi::compute::ThreeDGenerateResult`].
@@ -1090,6 +1089,7 @@ pub unsafe extern "C" fn blazen_target_voice_list_free(list: *mut BlazenTargetVo
 /// 3D model bytes (typically GLB / gltf-binary) and an IANA MIME type
 /// string so foreign callers can dispatch on the format without sniffing
 /// the buffer.
+#[cfg(feature = "triposr")]
 pub struct BlazenThreeDGenerateResult(pub(crate) InnerThreeDGenerateResult);
 
 #[cfg(feature = "triposr")]
