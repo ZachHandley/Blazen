@@ -1,16 +1,6 @@
 import Foundation
 import UniFFIBlazen
 
-/// A chat completion model handle.
-///
-/// Build one via the `Providers` factory functions (e.g.
-/// `Providers.openAI(apiKey:model:baseURL:)`), then call
-/// `complete(_:)` or `completeStream(_:)` to generate responses.
-public typealias Model = UniFFIBlazen.Model
-
-/// An embedding model handle.
-public typealias EmbeddingModel = UniFFIBlazen.EmbeddingModel
-
 /// A single message in a chat conversation. `role` is `"system"`,
 /// `"user"`, `"assistant"`, or `"tool"`; `content` is the text payload
 /// (empty when the message carries only tool calls or media).
@@ -36,36 +26,6 @@ public typealias Media = UniFFIBlazen.Media
 
 /// Token-usage statistics for a completion or embedding request.
 public typealias TokenUsage = UniFFIBlazen.TokenUsage
-
-// MARK: - Idiomatic helpers
-
-public extension Model {
-    /// Perform a chat completion. Convenience alias matching the
-    /// idiomatic `model.complete(request)` shape preferred over the
-    /// underlying argument-labelled `complete(request:)` API.
-    func complete(_ request: ModelRequest) async throws -> ModelResponse {
-        try await complete(request: request)
-    }
-
-    /// The model's identifier (e.g. `"gpt-4o"`, `"claude-3-5-sonnet"`).
-    /// Re-exposed as a property because callers think of the id as
-    /// metadata, not a method.
-    var id: String { modelId() }
-}
-
-public extension EmbeddingModel {
-    /// Embed one or more text strings, returning one vector per input.
-    /// Convenience alias matching `model.embed(["hello", "world"])`.
-    func embed(_ inputs: [String]) async throws -> EmbeddingResponse {
-        try await embed(inputs: inputs)
-    }
-
-    /// The model's identifier (e.g. `"text-embedding-3-small"`).
-    var id: String { modelId() }
-
-    /// Vector dimensionality. Re-exposed as a property.
-    var dimension: UInt32 { dimensions() }
-}
 
 // MARK: - Ergonomic constructors for value records
 

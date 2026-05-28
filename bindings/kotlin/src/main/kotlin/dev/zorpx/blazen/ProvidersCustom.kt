@@ -198,60 +198,22 @@ public typealias ThreeDProviderDefaults = UniffiThreeDProviderDefaults
 // ---------------------------------------------------------------------------
 
 /**
- * A [`Model`][dev.zorpx.blazen.uniffi.Model] wrapped
- * with applied [ProviderDefaults].
+ * Capability-tag base class for every per-engine provider. Exposes
+ * [`providerId()`][UniffiBaseProvider.providerId] and
+ * [`capability()`][UniffiBaseProvider.capability] only — chainable
+ * defaults builders (`withSystemPrompt`, `withToolsJson`,
+ * `withResponseFormatJson`, `withDefaults`) now live on
+ * [`LlmProviderDefaults`][dev.zorpx.blazen.uniffi.LlmProviderDefaults].
  *
- * Construct via:
- * - [`BaseProvider.fromModel(model)`][UniffiBaseProvider.Companion.fromModel]
- *   — wrap an existing model with empty defaults.
- * - [`BaseProvider.withDefaults(model, defaults)`][UniffiBaseProvider.Companion.withDefaults]
- *   — wrap with explicit defaults.
- *
- * Mutate via the `with*` builders, each of which returns a fresh
- * `BaseProvider` (clone-with-mutation, matching Rust's `Arc<BaseProvider>`
- * semantics):
- * - [`withSystemPrompt(prompt)`][UniffiBaseProvider.withSystemPrompt]
- * - [`withToolsJson(json)`][UniffiBaseProvider.withToolsJson]
- * - [`withResponseFormatJson(json)`][UniffiBaseProvider.withResponseFormatJson]
- * - [`withDefaults(defaults)`][UniffiBaseProvider.withDefaults]
- *
- * Inspect with [`defaults()`][UniffiBaseProvider.defaults],
- * [`modelId()`][UniffiBaseProvider.modelId], and unwrap with
- * [`asModel()`][UniffiBaseProvider.asModel] for use
- * with APIs that take a generic `Model`.
+ * Per-engine concrete providers (e.g. `OpenAiProvider`,
+ * `AnthropicProvider`, `PiperProvider`, `DiffusionProvider`, ...) are
+ * exposed directly from the generated [`dev.zorpx.blazen.uniffi`] package
+ * — instantiate them by name.
  *
  * `BaseProvider` is [AutoCloseable] — close it (or rely on the JVM
  * cleaner) to release the underlying native handle.
  */
 public typealias BaseProvider = UniffiBaseProvider
-
-/**
- * Convenience accessor: the default system prompt currently configured
- * on this provider, or `null` if none is set.
- *
- * Equivalent to `defaults().systemPrompt`, but reads more naturally as
- * a property at call sites that only need the system prompt.
- */
-public val BaseProvider.systemPrompt: String?
-    get() = defaults().systemPrompt
-
-/**
- * Convenience accessor: the JSON-encoded default tool list currently
- * configured on this provider, or `null` if none is set.
- *
- * Equivalent to `defaults().toolsJson`.
- */
-public val BaseProvider.toolsJson: String?
-    get() = defaults().toolsJson
-
-/**
- * Convenience accessor: the JSON-encoded default `response_format`
- * currently configured on this provider, or `null` if none is set.
- *
- * Equivalent to `defaults().responseFormatJson`.
- */
-public val BaseProvider.responseFormatJson: String?
-    get() = defaults().responseFormatJson
 
 // ---------------------------------------------------------------------------
 // CustomProvider + CustomProviderHandle re-exports

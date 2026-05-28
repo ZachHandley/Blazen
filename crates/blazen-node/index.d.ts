@@ -241,118 +241,6 @@ export declare class BackgroundRemovalProviderDefaults {
 export type JsBackgroundRemovalProviderDefaults = BackgroundRemovalProviderDefaults
 
 /**
- * A completion provider wrapper that applies a
- * [`JsProviderDefaults`] to every completion request before
- * delegating to the inner model.
- *
- * `BaseProvider` is intended to be subclassed from JavaScript:
- *
- * ```javascript
- * import { BaseProvider, Model } from "blazen";
- *
- * class TerseLlm extends BaseProvider {
- *   constructor() {
- *     const inner = Model.openai({ apiKey: "sk-..." });
- *     super(inner);
- *     this.withSystemPrompt("Be terse.");
- *   }
- * }
- * ```
- *
- * Today (V1) the constructor stores an opaque reference to the inner
- * object — Phase D will wire `class extends` to fire the JS `complete`
- * override before falling back to the inner Rust model.
- */
-export declare class BaseProvider {
-  /**
-   * Construct a new [`BaseProvider`].
-   *
-   * `inner` is the underlying completion model — pass a
-   * [`JsModel`] instance. JS subclasses that fully
-   * override `complete` may pass `null` here (Phase D will wire
-   * subclass dispatch end-to-end; today calls to `complete` on a
-   * subclass-only provider report unsupported).
-   *
-   * `defaults` optionally seeds the
-   * [`JsProviderDefaults`]; when omitted, an empty
-   * defaults bag is created.
-   */
-  constructor(inner?: JsModel | undefined | null, defaults?: JsProviderDefaults | undefined | null)
-  /**
-   * Set the default system prompt prepended to requests when no
-   * system message is already present.
-   */
-  withSystemPrompt(prompt: string): BaseProvider
-  /** Replace the default tools appended to every completion request. */
-  withTools(tools: Array<JsToolDefinition>): BaseProvider
-  /** Set the default `responseFormat` (JSON Schema object). */
-  withResponseFormat(format: any): BaseProvider
-  /**
-   * Set the universal `beforeRequest` hook (fires for any request
-   * type). V1: stored only — Phase B wires dispatch.
-   */
-  withBeforeRequest(hook: BeforeRequestTsfn): BaseProvider
-  /**
-   * Set the typed `beforeModel` hook (fires after the universal
-   * hook, with a typed completion request). V1: stored only — Phase
-   * B wires dispatch.
-   */
-  withBeforeModel(hook: BeforeModelTsfn): BaseProvider
-  /** Replace the entire defaults bag. */
-  withDefaults(defaults: JsProviderDefaults): BaseProvider
-  /** The currently-configured defaults. */
-  get defaults(): JsProviderDefaults
-  /**
-   * The inner model's `modelId`. Returns the empty string when the
-   * provider was constructed without a Rust-side `inner` (JS subclass
-   * path).
-   */
-  get modelId(): string
-  /**
-   * The provider identifier used for logging. Defaults to the inner
-   * model's `modelId` when present, otherwise `"base"`. Subclasses
-   * may override.
-   */
-  get providerId(): string
-  /**
-   * Typed structured extraction.
-   *
-   * Sends a completion request with a JSON Schema `response_format`
-   * envelope and parses the model's response as JSON. The schema
-   * argument is a plain JSON Schema object (callers using zod can
-   * convert with `zodToJsonSchema(zSchema)` from the `zod-to-json-schema`
-   * package).
-   *
-   * The `response_format` is wired up as the `OpenAI`-style
-   * `{"type":"json_schema","json_schema":{"name":"Extract","schema":...,"strict":true}}`
-   * envelope; provider implementations that don't natively support
-   * structured outputs fall back to a system-instruction shim (see
-   * `crates/blazen-llm/src/providers/anthropic.rs::build_json_schema_system_instruction`).
-   *
-   * Returns the parsed JSON value. The TypeScript surface declares
-   * the return as `any` because the schema shape is only known at
-   * runtime; callers can narrow via TS generics on their wrapper.
-   *
-   * ```typescript
-   * const schema = {
-   *   type: "object",
-   *   properties: {
-   *     name: { type: "string" },
-   *     age:  { type: "integer" },
-   *   },
-   *   required: ["name", "age"],
-   * };
-   * const result = await provider.extract(schema, [
-   *   ChatMessage.user("My name is Alice and I am 30."),
-   * ]);
-   * // -> { name: "Alice", age: 30 }
-   * ```
-   */
-  extract(schema: any, messages: Array<JsChatMessage>): Promise<any>
-}
-export type JsBaseProvider = BaseProvider
-
-/**
  * Universal provider defaults applicable to every provider role.
  *
  * Carries cross-cutting fields (currently just the `beforeRequest`
@@ -2601,6 +2489,118 @@ export declare class LlamaCppProvider {
   memoryBytes(): Promise<number | null>
 }
 export type JsLlamaCppProvider = LlamaCppProvider
+
+/**
+ * A completion provider wrapper that applies a
+ * [`JsProviderDefaults`] to every completion request before
+ * delegating to the inner model.
+ *
+ * `LlmProviderDefaults` is intended to be subclassed from JavaScript:
+ *
+ * ```javascript
+ * import { LlmProviderDefaults, Model } from "blazen";
+ *
+ * class TerseLlm extends LlmProviderDefaults {
+ *   constructor() {
+ *     const inner = Model.openai({ apiKey: "sk-..." });
+ *     super(inner);
+ *     this.withSystemPrompt("Be terse.");
+ *   }
+ * }
+ * ```
+ *
+ * Today (V1) the constructor stores an opaque reference to the inner
+ * object — Phase D will wire `class extends` to fire the JS `complete`
+ * override before falling back to the inner Rust model.
+ */
+export declare class LlmProviderDefaults {
+  /**
+   * Construct a new [`LlmProviderDefaults`].
+   *
+   * `inner` is the underlying completion model — pass a
+   * [`JsModel`] instance. JS subclasses that fully
+   * override `complete` may pass `null` here (Phase D will wire
+   * subclass dispatch end-to-end; today calls to `complete` on a
+   * subclass-only provider report unsupported).
+   *
+   * `defaults` optionally seeds the
+   * [`JsProviderDefaults`]; when omitted, an empty
+   * defaults bag is created.
+   */
+  constructor(inner?: JsModel | undefined | null, defaults?: JsProviderDefaults | undefined | null)
+  /**
+   * Set the default system prompt prepended to requests when no
+   * system message is already present.
+   */
+  withSystemPrompt(prompt: string): LlmProviderDefaults
+  /** Replace the default tools appended to every completion request. */
+  withTools(tools: Array<JsToolDefinition>): LlmProviderDefaults
+  /** Set the default `responseFormat` (JSON Schema object). */
+  withResponseFormat(format: any): LlmProviderDefaults
+  /**
+   * Set the universal `beforeRequest` hook (fires for any request
+   * type). V1: stored only — Phase B wires dispatch.
+   */
+  withBeforeRequest(hook: BeforeRequestTsfn): LlmProviderDefaults
+  /**
+   * Set the typed `beforeModel` hook (fires after the universal
+   * hook, with a typed completion request). V1: stored only — Phase
+   * B wires dispatch.
+   */
+  withBeforeModel(hook: BeforeModelTsfn): LlmProviderDefaults
+  /** Replace the entire defaults bag. */
+  withDefaults(defaults: JsProviderDefaults): LlmProviderDefaults
+  /** The currently-configured defaults. */
+  get defaults(): JsProviderDefaults
+  /**
+   * The inner model's `modelId`. Returns the empty string when the
+   * provider was constructed without a Rust-side `inner` (JS subclass
+   * path).
+   */
+  get modelId(): string
+  /**
+   * The provider identifier used for logging. Defaults to the inner
+   * model's `modelId` when present, otherwise `"base"`. Subclasses
+   * may override.
+   */
+  get providerId(): string
+  /**
+   * Typed structured extraction.
+   *
+   * Sends a completion request with a JSON Schema `response_format`
+   * envelope and parses the model's response as JSON. The schema
+   * argument is a plain JSON Schema object (callers using zod can
+   * convert with `zodToJsonSchema(zSchema)` from the `zod-to-json-schema`
+   * package).
+   *
+   * The `response_format` is wired up as the `OpenAI`-style
+   * `{"type":"json_schema","json_schema":{"name":"Extract","schema":...,"strict":true}}`
+   * envelope; provider implementations that don't natively support
+   * structured outputs fall back to a system-instruction shim (see
+   * `crates/blazen-llm/src/providers/anthropic.rs::build_json_schema_system_instruction`).
+   *
+   * Returns the parsed JSON value. The TypeScript surface declares
+   * the return as `any` because the schema shape is only known at
+   * runtime; callers can narrow via TS generics on their wrapper.
+   *
+   * ```typescript
+   * const schema = {
+   *   type: "object",
+   *   properties: {
+   *     name: { type: "string" },
+   *     age:  { type: "integer" },
+   *   },
+   *   required: ["name", "age"],
+   * };
+   * const result = await provider.extract(schema, [
+   *   ChatMessage.user("My name is Alice and I am 30."),
+   * ]);
+   * // -> { name: "Alice", age: 30 }
+   * ```
+   */
+  extract(schema: any, messages: Array<JsChatMessage>): Promise<any>
+}
+export type JsBaseProvider = LlmProviderDefaults
 
 /**
  * Base class for in-process model providers that load weights into

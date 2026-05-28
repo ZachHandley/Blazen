@@ -16,8 +16,11 @@ public typealias BatchResult = UniFFIBlazen.BatchResult
 /// Run a batch of completion requests with bounded concurrency.
 ///
 /// - Parameters:
-///   - model: the completion model to drive (one provider / one model id;
-///     dispatch across providers from caller code instead).
+///   - provider: the LLM provider to drive (the polymorphic
+///     `UniFFIBlazen.LlmProvider` — per-engine providers like
+///     `OpenAiProvider`, `AnthropicProvider`, ... do not satisfy this
+///     parameter directly; dispatch across engines from caller code
+///     using a `CustomProvider` adapter when polymorphic routing is needed).
 ///   - requests: the requests to send, in order.
 ///   - maxConcurrency: hard cap on in-flight requests. `0` means
 ///     unlimited (every request dispatched in parallel).
@@ -30,12 +33,12 @@ public typealias BatchResult = UniFFIBlazen.BatchResult
 /// to the upstream wire format (typically a malformed
 /// `parameters_json` / `response_format_json` payload).
 public func completeBatch(
-    model: Model,
+    provider: LlmProvider,
     requests: [ModelRequest],
     maxConcurrency: UInt32 = 8
 ) async throws -> BatchResult {
     try await UniFFIBlazen.completeBatch(
-        model: model,
+        provider: provider,
         requests: requests,
         maxConcurrency: maxConcurrency
     )

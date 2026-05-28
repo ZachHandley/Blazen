@@ -182,52 +182,16 @@ public extension ProviderDefaults {
 
 // MARK: - BaseProvider
 
-/// A `Model` wrapped with applied `ProviderDefaults`.
-///
-/// Construct via the static factories `BaseProvider.fromModel(model:)`
-/// (wraps an existing model with no defaults) or
-/// `BaseProvider.withDefaults(model:defaults:)` (wraps with explicit
-/// defaults). Mutate via the chainable `with*` builder methods, each of
-/// which returns a fresh `BaseProvider` so the original handle is never
-/// mutated in place.
+/// Capability-tag base class for every per-engine provider. Exposes
+/// `providerId()` and `capability()` only — chainable defaults
+/// (`withSystemPrompt`, `withToolsJson`, `withResponseFormatJson`,
+/// `withDefaults`) now live on `UniFFIBlazen.LlmProviderDefaults`.
 public typealias BaseProvider = UniFFIBlazen.BaseProvider
 
-public extension BaseProvider {
-    /// The wrapped model's identifier (e.g. `"gpt-4o"`,
-    /// `"claude-3-5-sonnet"`). Re-exposed as a property because callers
-    /// think of the id as metadata, not a method.
-    var id: String { modelId() }
-
-    /// Wrap this provider with a new default system prompt. Returns a
-    /// fresh `BaseProvider`; the receiver is unchanged.
-    @discardableResult
-    func withSystemPrompt(_ prompt: String) -> BaseProvider {
-        withSystemPrompt(prompt: prompt)
-    }
-
-    /// Wrap this provider with a new default tool list, encoded as a
-    /// JSON `Vec<ToolDefinition>`. Returns a fresh `BaseProvider`.
-    /// Malformed JSON is treated as an empty tool list.
-    @discardableResult
-    func withToolsJson(_ toolsJson: String) -> BaseProvider {
-        withToolsJson(toolsJson: toolsJson)
-    }
-
-    /// Wrap this provider with a new default `response_format` value,
-    /// encoded as a JSON `serde_json::Value`. Malformed JSON or an empty
-    /// string is treated as JSON null. Returns a fresh `BaseProvider`.
-    @discardableResult
-    func withResponseFormatJson(_ formatJson: String) -> BaseProvider {
-        withResponseFormatJson(fmtJson: formatJson)
-    }
-
-    /// Replace the entire `ProviderDefaults` record on this
-    /// provider in one call. Returns a fresh `BaseProvider`.
-    @discardableResult
-    func withDefaults(_ defaults: ProviderDefaults) -> BaseProvider {
-        withDefaults(defaults: defaults)
-    }
-}
+/// Chainable per-completion defaults wrapper. Returned by the upstream
+/// builders so callers can layer system prompt / tool list / response
+/// format onto an existing provider without mutating it in place.
+public typealias LlmProviderDefaults = UniFFIBlazen.LlmProviderDefaults
 
 // MARK: - CustomProvider protocol
 

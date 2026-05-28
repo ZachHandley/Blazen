@@ -29,53 +29,26 @@ public enum StreamEvent: Sendable, Equatable {
     case done(finishReason: String, usage: TokenUsage)
 }
 
-public extension Model {
-    /// Run a streaming completion, surfacing each chunk and the terminal
-    /// `done` signal through an `AsyncThrowingStream`.
-    ///
-    /// Iterate with `for try await event in model.completeStream(request)`:
-    ///
-    /// ```swift
-    /// for try await event in model.completeStream(request) {
-    ///     switch event {
-    ///     case .chunk(let chunk):
-    ///         print(chunk.contentDelta, terminator: "")
-    ///     case .done(let reason, _):
-    ///         print("\n[done: \(reason)]")
-    ///     }
-    /// }
-    /// ```
-    ///
-    /// Provider failures and sink-side errors are surfaced by the stream
-    /// throwing — they are not emitted as a final `.done` event. Cancel
-    /// the iterator (e.g. by breaking out of the `for-await` loop or
-    /// cancelling the enclosing `Task`) to tear the stream down early;
-    /// the underlying Tokio task observes the cancellation and shuts down
-    /// cooperatively.
-    func completeStream(
-        _ request: ModelRequest
-    ) -> AsyncThrowingStream<StreamEvent, Error> {
-        let model = self
-        return AsyncThrowingStream(StreamEvent.self, bufferingPolicy: .unbounded) { continuation in
-            let sink = AsyncStreamSink(continuation: continuation)
-            let task = Task<Void, Never> {
-                do {
-                    try await completeStreaming(model: model, request: request, sink: sink)
-                    // Sink already finished the continuation on `onDone` /
-                    // `onError`; this is the no-error fall-through.
-                } catch {
-                    // `completeStreaming` itself can throw before any chunk
-                    // has been dispatched (e.g. malformed request). Surface
-                    // those failures the same way the sink would.
-                    sink.finish(throwing: wrap(error))
-                }
-            }
-            continuation.onTermination = { _ in
-                task.cancel()
-            }
-        }
-    }
-}
+// Per-engine streaming is exposed from the generated `UniFFIBlazen` module
+// as `<engine>ProviderCompleteStreaming(provider:request:sink:)` free
+// functions (e.g. `openAiProviderCompleteStreaming`,
+// `anthropicProviderCompleteStreaming`). Pair one of those with the
+// `AsyncStreamSink` adapter below to project chunks into an
+// `AsyncThrowingStream<StreamEvent, Error>`:
+//
+// ```swift
+// let stream = AsyncThrowingStream(StreamEvent.self, bufferingPolicy: .unbounded) { continuation in
+//     let sink = AsyncStreamSink(continuation: continuation)
+//     let task = Task<Void, Never> {
+//         do {
+//             try await openAiProviderCompleteStreaming(provider: provider, request: request, sink: sink)
+//         } catch {
+//             sink.finish(throwing: wrap(error))
+//         }
+//     }
+//     continuation.onTermination = { _ in task.cancel() }
+// }
+// ```
 
 /// Sink-side adapter that bridges UniFFI's `CompletionStreamSink`
 /// callbacks into an `AsyncThrowingStream` continuation.
