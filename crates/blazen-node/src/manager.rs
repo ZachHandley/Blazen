@@ -549,46 +549,6 @@ impl JsModelManager {
     /// Throws on empty repo id, gated/missing repo, PEFT-adapter-only
     /// repo (use [`Self::load_adapter`] instead), missing backend
     /// feature, or any provider construction failure.
-    #[cfg(feature = "hf-loader")]
-    #[napi(js_name = "loadFromHf")]
-    pub async fn load_from_hf(
-        &self,
-        id: String,
-        repo: String,
-        options: Option<JsHfLoadOptions>,
-    ) -> napi::Result<String> {
-        let opts = options.unwrap_or(JsHfLoadOptions {
-            backend_hint: None,
-            revision: None,
-            hf_token: None,
-            cache_dir: None,
-            device: None,
-            gguf_file: None,
-            memory_estimate_bytes: None,
-            pool: None,
-        });
-        let pool = match opts.pool.as_deref() {
-            Some(label) => Some(parse_pool_label(label)?),
-            None => None,
-        };
-        let rust_opts = HfLoadOptions {
-            backend_hint: opts.backend_hint.map(BackendHint::from),
-            revision: opts.revision,
-            hf_token: opts.hf_token,
-            cache_dir: opts.cache_dir.map(std::path::PathBuf::from),
-            device: opts.device,
-            gguf_file: opts.gguf_file,
-            memory_estimate_bytes: opts.memory_estimate_bytes.map(|b| b.get_u64().1),
-            pool,
-        };
-        let backend = self
-            .inner
-            .load_from_hf(id, &repo, rust_opts)
-            .await
-            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
-        Ok(backend.as_str().to_string())
-    }
-
     /// Mount a PEFT-format `LoRA` adapter onto a registered model.
     ///
     /// `adapterDir` must contain the canonical PEFT layout
@@ -652,6 +612,67 @@ impl JsModelManager {
                 memory_bytes: BigInt::from(s.memory_bytes),
             })
             .collect())
+    }
+}
+
+// `load_from_hf` lives in its own `#[napi]` impl block gated on
+// `hf-loader`. The napi proc-macro generates `_c_callback` shim symbols
+// per method but does not honor `#[cfg]` on individual methods (the
+// shims still reference the gated symbol). Splitting into a separate
+// gated impl block makes the macro and the cfg agree: when `hf-loader`
+// is off (e.g. the wasi build), neither the method nor its shim exist.
+#[cfg(feature = "hf-loader")]
+#[napi]
+#[allow(clippy::missing_errors_doc, clippy::needless_pass_by_value)]
+impl JsModelManager {
+    /// Load a model from Hugging Face by repo id.
+    ///
+    /// Inspects the repo's siblings, picks a backend (mistral.rs /
+    /// candle / llama.cpp) per the rules documented on
+    /// [`blazen_manager::hf_loader::choose_backend`], computes a memory
+    /// estimate from the sibling sizes, and registers the model under
+    /// `id`. The model starts unloaded — call [`Self::load`] or
+    /// [`Self::ensure_loaded`] to materialize it.
+    ///
+    /// Returns the chosen backend as a lower-case string
+    /// (`"mistralrs"` / `"candle"` / `"llamacpp"`).
+    #[napi(js_name = "loadFromHf")]
+    pub async fn load_from_hf(
+        &self,
+        id: String,
+        repo: String,
+        options: Option<JsHfLoadOptions>,
+    ) -> napi::Result<String> {
+        let opts = options.unwrap_or(JsHfLoadOptions {
+            backend_hint: None,
+            revision: None,
+            hf_token: None,
+            cache_dir: None,
+            device: None,
+            gguf_file: None,
+            memory_estimate_bytes: None,
+            pool: None,
+        });
+        let pool = match opts.pool.as_deref() {
+            Some(label) => Some(parse_pool_label(label)?),
+            None => None,
+        };
+        let rust_opts = HfLoadOptions {
+            backend_hint: opts.backend_hint.map(BackendHint::from),
+            revision: opts.revision,
+            hf_token: opts.hf_token,
+            cache_dir: opts.cache_dir.map(std::path::PathBuf::from),
+            device: opts.device,
+            gguf_file: opts.gguf_file,
+            memory_estimate_bytes: opts.memory_estimate_bytes.map(|b| b.get_u64().1),
+            pool,
+        };
+        let backend = self
+            .inner
+            .load_from_hf(id, &repo, rust_opts)
+            .await
+            .map_err(|e| napi::Error::from_reason(e.to_string()))?;
+        Ok(backend.as_str().to_string())
     }
 }
 
