@@ -20,8 +20,6 @@
 //!
 //! [`forward`]: LoraLayer::forward
 
-#![cfg(feature = "engine")]
-
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 

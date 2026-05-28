@@ -16,8 +16,6 @@
 //! [`crate::lib`] does not re-export this module, matching the GGUF
 //! engine's gating pattern.
 
-#![cfg(feature = "engine")]
-
 use std::path::PathBuf;
 
 use candle_core::{DType, Device, IndexOp, Tensor};

@@ -29,8 +29,6 @@
 //!   transformers in [`t2s`] / [`s2a`], wired together by [`pipeline`]
 //!   via [`codec`] + [`weights`].
 
-#![cfg(feature = "maskgct")]
-
 mod codec;
 mod pipeline;
 mod s2a;

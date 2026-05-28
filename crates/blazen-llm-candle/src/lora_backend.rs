@@ -24,8 +24,6 @@
 //! in the table. This matches PEFT's `add_weighted_adapter` semantics
 //! and is what Wave A did at the llama.cpp layer.
 
-#![cfg(feature = "engine")]
-
 use std::collections::HashMap;
 
 use candle_core::{DType, Device, Shape, Tensor, safetensors::MmapedSafetensors};
