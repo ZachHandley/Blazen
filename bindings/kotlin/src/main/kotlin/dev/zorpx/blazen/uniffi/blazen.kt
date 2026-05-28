@@ -2127,47 +2127,113 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_func_complete_batch_blocking(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_diffusion_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_anthropic_provider_complete_streaming(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_fal_image_gen_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_anthropic_provider_complete_streaming_blocking(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_fal_stt_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_azure_openai_provider_complete_streaming(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_fal_tts_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_azure_openai_provider_complete_streaming_blocking(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_faster_whisper_stt_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_bedrock_provider_complete_streaming(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_local_tts_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_bedrock_provider_complete_streaming_blocking(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_piper_tts_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_candle_provider_complete_streaming(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_spark_tts_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_candle_provider_complete_streaming_blocking(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_triposr_3d_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_cohere_provider_complete_streaming(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_whisper_stt_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_cohere_provider_complete_streaming_blocking(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_audiogen_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_deepseek_provider_complete_streaming(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_fal_music_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_deepseek_provider_complete_streaming_blocking(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_musicgen_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_fal_llm_provider_complete_streaming(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_stable_audio_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_fal_llm_provider_complete_streaming_blocking(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_stream_generate_music_to_sink(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_fireworks_provider_complete_streaming(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_stream_generate_music_to_sink_blocking(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_fireworks_provider_complete_streaming_blocking(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_stream_generate_sfx_to_sink(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_gemini_provider_complete_streaming(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_stream_generate_sfx_to_sink_blocking(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_gemini_provider_complete_streaming_blocking(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_rvc_model(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_groq_provider_complete_streaming(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_stream_convert_pcm_to_sink(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_groq_provider_complete_streaming_blocking(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_stream_convert_pcm_to_sink_blocking(): Short
+    external fun uniffi_blazen_uniffi_checksum_func_llamacpp_provider_complete_streaming(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_llamacpp_provider_complete_streaming_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_lm_studio_provider_complete_streaming(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_lm_studio_provider_complete_streaming_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_mistral_provider_complete_streaming(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_mistral_provider_complete_streaming_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_mistralrs_provider_complete_streaming(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_mistralrs_provider_complete_streaming_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_ollama_provider_complete_streaming(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_ollama_provider_complete_streaming_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_openai_compat_provider_complete_streaming(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_openai_compat_provider_complete_streaming_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_openai_provider_complete_streaming(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_openai_provider_complete_streaming_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_openrouter_provider_complete_streaming(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_openrouter_provider_complete_streaming_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_perplexity_provider_complete_streaming(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_perplexity_provider_complete_streaming_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_together_provider_complete_streaming(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_together_provider_complete_streaming_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_xai_provider_complete_streaming(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_xai_provider_complete_streaming_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_audiogen_provider_stream_music_to_sink(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_audiogen_provider_stream_music_to_sink_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_audiogen_provider_stream_sfx_to_sink(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_audiogen_provider_stream_sfx_to_sink_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_musicgen_provider_stream_music_to_sink(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_musicgen_provider_stream_music_to_sink_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_stable_audio_provider_stream_music_to_sink(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_stable_audio_provider_stream_music_to_sink_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_stable_audio_provider_stream_sfx_to_sink(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_stable_audio_provider_stream_sfx_to_sink_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_rvc_provider_stream_convert_pcm_to_sink(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_func_rvc_provider_stream_convert_pcm_to_sink_blocking(): Short
 
     external fun uniffi_blazen_uniffi_checksum_func_new_redb_checkpoint_store(): Short
 
@@ -2185,65 +2251,7 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_func_openai_compat(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_func_new_anthropic_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_azure_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_bedrock_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_candle_embedding_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_candle_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_cohere_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_custom_model_with_openai_protocol(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_deepseek_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_fal_embedding_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_fal_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_fastembed_embedding_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_fireworks_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_gemini_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_groq_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_llamacpp_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_lm_studio_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_mistral_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_mistralrs_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_ollama_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_openai_compat_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_openai_embedding_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_openai_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_openrouter_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_perplexity_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_together_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_tract_embedding_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_new_xai_model(): Short
-
     external fun uniffi_blazen_uniffi_checksum_func_init(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_complete_streaming(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_func_complete_streaming_blocking(): Short
 
     external fun uniffi_blazen_uniffi_checksum_func_init_langfuse(): Short
 
@@ -2261,47 +2269,11 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_method_toolhandler_execute(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_method_imagegenmodel_generate(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_imagegenmodel_generate_blocking(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_sttmodel_transcribe(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_sttmodel_transcribe_blocking(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_threedmodel_generate_from_image(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_threedmodel_generate_from_image_blocking(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_ttsmodel_synthesize(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_ttsmodel_synthesize_blocking(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_musicmodel_generate_music(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_musicmodel_generate_music_blocking(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_musicmodel_generate_sfx(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_musicmodel_generate_sfx_blocking(): Short
-
     external fun uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_chunk(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_done(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_error(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_vcmodel_convert_voice(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_vcmodel_convert_voice_blocking(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_vcmodel_list_target_voices(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_vcmodel_list_target_voices_blocking(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_vcmodel_register_target_voice(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_vcmodel_register_target_voice_blocking(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_chunk(): Short
 
@@ -2376,6 +2348,128 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_blazen_uniffi_checksum_method_vcprovider_clone_voice(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_vcprovider_list_target_voices(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_candleembedprovider_dimensions(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_candleembedprovider_embed(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_candleembedprovider_embed_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_falembeddingprovider_dimensions(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_falembeddingprovider_embed(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_falembeddingprovider_embed_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_fastembedprovider_dimensions(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_fastembedprovider_embed(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_fastembedprovider_embed_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_openaiembeddingprovider_dimensions(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_openaiembeddingprovider_embed(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_openaiembeddingprovider_embed_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_tractembedprovider_dimensions(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_tractembedprovider_embed(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_tractembedprovider_embed_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_diffusionprovider_generate_image(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_diffusionprovider_generate_image_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_falimagegenprovider_generate_image(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_falimagegenprovider_generate_image_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_anthropicprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_anthropicprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_azureopenaiprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_azureopenaiprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_bedrockprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_bedrockprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_candlellmprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_candlellmprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_cohereprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_cohereprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_deepseekprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_deepseekprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_falllmprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_falllmprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_fireworksprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_fireworksprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_geminiprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_geminiprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_groqprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_groqprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_llamacppprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_llamacppprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_lmstudioprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_lmstudioprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_mistralprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_mistralprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_mistralrsprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_mistralrsprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_ollamaprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_ollamaprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_openaicompatprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_openaicompatprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_openaiprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_openaiprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_openrouterprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_openrouterprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_perplexityprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_perplexityprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_togetherprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_togetherprovider_complete_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_xaiprovider_complete(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_xaiprovider_complete_blocking(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_music(): Short
 
@@ -2522,20 +2616,6 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_blazen_uniffi_checksum_method_controlplaneworker_run(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_controlplaneworker_shutdown(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_embeddingmodel_dimensions(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_embeddingmodel_embed(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_embeddingmodel_embed_blocking(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_embeddingmodel_model_id(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_model_complete(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_model_complete_blocking(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_model_model_id(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_load(): Short
 
@@ -2691,8 +2771,6 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_total_timeout_ms(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_as_model(): Short
-
     external fun uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_defaults(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_extract(): Short
@@ -2807,6 +2885,62 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_constructor_agent_new(): Short
 
+    external fun uniffi_blazen_uniffi_checksum_constructor_candleembedprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_falembeddingprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_fastembedprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_openaiembeddingprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_tractembedprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_diffusionprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_falimagegenprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_anthropicprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_azureopenaiprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_bedrockprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_candlellmprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_cohereprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_deepseekprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_falllmprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_fireworksprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_geminiprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_groqprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_llamacppprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_lmstudioprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_mistralprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_mistralrsprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_ollamaprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_openaicompatprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_openaiprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_openrouterprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_perplexityprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_togetherprovider_new(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_constructor_xaiprovider_new(): Short
+
     external fun uniffi_blazen_uniffi_checksum_constructor_audiogenprovider_new(): Short
 
     external fun uniffi_blazen_uniffi_checksum_constructor_falmusicprovider_new(): Short
@@ -2877,10 +3011,6 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_constructor_pipelinebuilder_new(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_constructor_llmproviderdefaults_from_model(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_constructor_llmproviderdefaults_from_model_with_defaults(): Short
-
     external fun uniffi_blazen_uniffi_checksum_constructor_workflowbuilder_new(): Short
 
     external fun ffi_blazen_uniffi_uniffi_contract_version(): Int
@@ -2917,7 +3047,7 @@ internal object UniffiLib {
     ): Unit
 
     external fun uniffi_blazen_uniffi_fn_constructor_agent_new(
-        `model`: Long,
+        `provider`: Long,
         `systemPrompt`: RustBuffer.ByValue,
         `tools`: RustBuffer.ByValue,
         `toolHandler`: Long,
@@ -2954,144 +3084,6 @@ internal object UniffiLib {
         `argumentsJson`: RustBuffer.ByValue,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_clone_imagegenmodel(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_free_imagegenmodel(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    external fun uniffi_blazen_uniffi_fn_method_imagegenmodel_generate(
-        `ptr`: Long,
-        `prompt`: RustBuffer.ByValue,
-        `negativePrompt`: RustBuffer.ByValue,
-        `width`: RustBuffer.ByValue,
-        `height`: RustBuffer.ByValue,
-        `numImages`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_method_imagegenmodel_generate_blocking(
-        `ptr`: Long,
-        `prompt`: RustBuffer.ByValue,
-        `negativePrompt`: RustBuffer.ByValue,
-        `width`: RustBuffer.ByValue,
-        `height`: RustBuffer.ByValue,
-        `numImages`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    external fun uniffi_blazen_uniffi_fn_clone_sttmodel(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_free_sttmodel(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    external fun uniffi_blazen_uniffi_fn_method_sttmodel_transcribe(
-        `ptr`: Long,
-        `audioSource`: RustBuffer.ByValue,
-        `language`: RustBuffer.ByValue,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_method_sttmodel_transcribe_blocking(
-        `ptr`: Long,
-        `audioSource`: RustBuffer.ByValue,
-        `language`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    external fun uniffi_blazen_uniffi_fn_clone_threedmodel(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_free_threedmodel(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    external fun uniffi_blazen_uniffi_fn_method_threedmodel_generate_from_image(
-        `ptr`: Long,
-        `imageBytes`: RustBuffer.ByValue,
-        `meshResolution`: Int,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_method_threedmodel_generate_from_image_blocking(
-        `ptr`: Long,
-        `imageBytes`: RustBuffer.ByValue,
-        `meshResolution`: Int,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    external fun uniffi_blazen_uniffi_fn_clone_ttsmodel(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_free_ttsmodel(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    external fun uniffi_blazen_uniffi_fn_method_ttsmodel_synthesize(
-        `ptr`: Long,
-        `text`: RustBuffer.ByValue,
-        `voice`: RustBuffer.ByValue,
-        `language`: RustBuffer.ByValue,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_method_ttsmodel_synthesize_blocking(
-        `ptr`: Long,
-        `text`: RustBuffer.ByValue,
-        `voice`: RustBuffer.ByValue,
-        `language`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    external fun uniffi_blazen_uniffi_fn_clone_musicmodel(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_free_musicmodel(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    external fun uniffi_blazen_uniffi_fn_method_musicmodel_generate_music(
-        `ptr`: Long,
-        `prompt`: RustBuffer.ByValue,
-        `durationSeconds`: Float,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_method_musicmodel_generate_music_blocking(
-        `ptr`: Long,
-        `prompt`: RustBuffer.ByValue,
-        `durationSeconds`: Float,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    external fun uniffi_blazen_uniffi_fn_method_musicmodel_generate_sfx(
-        `ptr`: Long,
-        `prompt`: RustBuffer.ByValue,
-        `durationSeconds`: Float,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_method_musicmodel_generate_sfx_blocking(
-        `ptr`: Long,
-        `prompt`: RustBuffer.ByValue,
-        `durationSeconds`: Float,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
     external fun uniffi_blazen_uniffi_fn_clone_musicstreamsink(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
@@ -3115,49 +3107,6 @@ internal object UniffiLib {
         `ptr`: Long,
         `cause`: RustBuffer.ByValue,
     ): Long
-
-    external fun uniffi_blazen_uniffi_fn_clone_vcmodel(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_free_vcmodel(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    external fun uniffi_blazen_uniffi_fn_method_vcmodel_convert_voice(
-        `ptr`: Long,
-        `inputAudioPath`: RustBuffer.ByValue,
-        `targetVoiceId`: RustBuffer.ByValue,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_method_vcmodel_convert_voice_blocking(
-        `ptr`: Long,
-        `inputAudioPath`: RustBuffer.ByValue,
-        `targetVoiceId`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    external fun uniffi_blazen_uniffi_fn_method_vcmodel_list_target_voices(`ptr`: Long): Long
-
-    external fun uniffi_blazen_uniffi_fn_method_vcmodel_list_target_voices_blocking(
-        `ptr`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    external fun uniffi_blazen_uniffi_fn_method_vcmodel_register_target_voice(
-        `ptr`: Long,
-        `voiceId`: RustBuffer.ByValue,
-        `referenceAudioPath`: RustBuffer.ByValue,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_method_vcmodel_register_target_voice_blocking(
-        `ptr`: Long,
-        `voiceId`: RustBuffer.ByValue,
-        `referenceAudioPath`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
 
     external fun uniffi_blazen_uniffi_fn_clone_vcstreamsink(
         `handle`: Long,
@@ -3453,6 +3402,814 @@ internal object UniffiLib {
     ): Long
 
     external fun uniffi_blazen_uniffi_fn_method_vcprovider_list_target_voices(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_clone_candleembedprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_candleembedprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_candleembedprovider_new(
+        `modelId`: RustBuffer.ByValue,
+        `cacheDir`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_candleembedprovider_dimensions(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Int
+
+    external fun uniffi_blazen_uniffi_fn_method_candleembedprovider_embed(
+        `ptr`: Long,
+        `texts`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_candleembedprovider_embed_blocking(
+        `ptr`: Long,
+        `texts`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_falembeddingprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_falembeddingprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_falembeddingprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_falembeddingprovider_dimensions(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Int
+
+    external fun uniffi_blazen_uniffi_fn_method_falembeddingprovider_embed(
+        `ptr`: Long,
+        `texts`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_falembeddingprovider_embed_blocking(
+        `ptr`: Long,
+        `texts`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_fastembedprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_fastembedprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_fastembedprovider_new(
+        `modelId`: RustBuffer.ByValue,
+        `cacheDir`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_fastembedprovider_dimensions(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Int
+
+    external fun uniffi_blazen_uniffi_fn_method_fastembedprovider_embed(
+        `ptr`: Long,
+        `texts`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_fastembedprovider_embed_blocking(
+        `ptr`: Long,
+        `texts`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_openaiembeddingprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_openaiembeddingprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_openaiembeddingprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_openaiembeddingprovider_dimensions(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Int
+
+    external fun uniffi_blazen_uniffi_fn_method_openaiembeddingprovider_embed(
+        `ptr`: Long,
+        `texts`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_openaiembeddingprovider_embed_blocking(
+        `ptr`: Long,
+        `texts`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_tractembedprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_tractembedprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_tractembedprovider_new(
+        `modelId`: RustBuffer.ByValue,
+        `cacheDir`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_tractembedprovider_dimensions(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Int
+
+    external fun uniffi_blazen_uniffi_fn_method_tractembedprovider_embed(
+        `ptr`: Long,
+        `texts`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_tractembedprovider_embed_blocking(
+        `ptr`: Long,
+        `texts`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_diffusionprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_diffusionprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_diffusionprovider_new(
+        `optionsJson`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_diffusionprovider_generate_image(
+        `ptr`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `width`: RustBuffer.ByValue,
+        `height`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_diffusionprovider_generate_image_blocking(
+        `ptr`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `width`: RustBuffer.ByValue,
+        `height`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_falimagegenprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_falimagegenprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_falimagegenprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `defaultModel`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_falimagegenprovider_generate_image(
+        `ptr`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `width`: RustBuffer.ByValue,
+        `height`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_falimagegenprovider_generate_image_blocking(
+        `ptr`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `width`: RustBuffer.ByValue,
+        `height`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_anthropicprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_anthropicprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_anthropicprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_anthropicprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_anthropicprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_azureopenaiprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_azureopenaiprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_azureopenaiprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `resourceName`: RustBuffer.ByValue,
+        `deploymentName`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_azureopenaiprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_azureopenaiprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_bedrockprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_bedrockprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_bedrockprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `region`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_bedrockprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_bedrockprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_candlellmprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_candlellmprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_candlellmprovider_new(
+        `modelId`: RustBuffer.ByValue,
+        `device`: RustBuffer.ByValue,
+        `quantization`: RustBuffer.ByValue,
+        `revision`: RustBuffer.ByValue,
+        `contextLength`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_candlellmprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_candlellmprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_cohereprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_cohereprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_cohereprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_cohereprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_cohereprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_deepseekprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_deepseekprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_deepseekprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_deepseekprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_deepseekprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_falllmprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_falllmprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_falllmprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_falllmprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_falllmprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_fireworksprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_fireworksprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_fireworksprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_fireworksprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_fireworksprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_geminiprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_geminiprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_geminiprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_geminiprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_geminiprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_groqprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_groqprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_groqprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_groqprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_groqprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_llamacppprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_llamacppprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_llamacppprovider_new(
+        `modelPath`: RustBuffer.ByValue,
+        `device`: RustBuffer.ByValue,
+        `quantization`: RustBuffer.ByValue,
+        `contextLength`: RustBuffer.ByValue,
+        `nGpuLayers`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_llamacppprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_llamacppprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_lmstudioprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_lmstudioprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_lmstudioprovider_new(
+        `host`: RustBuffer.ByValue,
+        `port`: Short,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_lmstudioprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_lmstudioprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_mistralprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_mistralprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_mistralprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_mistralprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_mistralprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_mistralrsprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_mistralrsprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_mistralrsprovider_new(
+        `modelId`: RustBuffer.ByValue,
+        `device`: RustBuffer.ByValue,
+        `quantization`: RustBuffer.ByValue,
+        `contextLength`: RustBuffer.ByValue,
+        `vision`: Byte,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_mistralrsprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_mistralrsprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_ollamaprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_ollamaprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_ollamaprovider_new(
+        `host`: RustBuffer.ByValue,
+        `port`: Short,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_ollamaprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_ollamaprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_openaicompatprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_openaicompatprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_openaicompatprovider_new(
+        `providerName`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_openaicompatprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_openaicompatprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_openaiprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_openaiprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_openaiprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        `baseUrl`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_openaiprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_openaiprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_openrouterprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_openrouterprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_openrouterprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_openrouterprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_openrouterprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_perplexityprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_perplexityprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_perplexityprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_perplexityprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_perplexityprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_togetherprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_togetherprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_togetherprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_togetherprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_togetherprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_clone_xaiprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_xaiprovider(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_constructor_xaiprovider_new(
+        `apiKey`: RustBuffer.ByValue,
+        `model`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_xaiprovider_complete(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_xaiprovider_complete_blocking(
+        `ptr`: Long,
+        `request`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
 
     external fun uniffi_blazen_uniffi_fn_clone_audiogenprovider(
         `handle`: Long,
@@ -4322,63 +5079,6 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
-    external fun uniffi_blazen_uniffi_fn_clone_embeddingmodel(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_free_embeddingmodel(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    external fun uniffi_blazen_uniffi_fn_method_embeddingmodel_dimensions(
-        `ptr`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Int
-
-    external fun uniffi_blazen_uniffi_fn_method_embeddingmodel_embed(
-        `ptr`: Long,
-        `inputs`: RustBuffer.ByValue,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_method_embeddingmodel_embed_blocking(
-        `ptr`: Long,
-        `inputs`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    external fun uniffi_blazen_uniffi_fn_method_embeddingmodel_model_id(
-        `ptr`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    external fun uniffi_blazen_uniffi_fn_clone_model(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_free_model(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    external fun uniffi_blazen_uniffi_fn_method_model_complete(
-        `ptr`: Long,
-        `request`: RustBuffer.ByValue,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_method_model_complete_blocking(
-        `ptr`: Long,
-        `request`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    external fun uniffi_blazen_uniffi_fn_method_model_model_id(
-        `ptr`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
     external fun uniffi_blazen_uniffi_fn_clone_foreignlocalmodel(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
@@ -4993,22 +5693,6 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
-    external fun uniffi_blazen_uniffi_fn_constructor_llmproviderdefaults_from_model(
-        `model`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_constructor_llmproviderdefaults_from_model_with_defaults(
-        `model`: Long,
-        `defaults`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_method_llmproviderdefaults_as_model(
-        `ptr`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
     external fun uniffi_blazen_uniffi_fn_method_llmproviderdefaults_defaults(
         `ptr`: Long,
         uniffi_out_err: UniffiRustCallStatus,
@@ -5377,165 +6061,375 @@ internal object UniffiLib {
     external fun uniffi_blazen_uniffi_fn_func_version(uniffi_out_err: UniffiRustCallStatus): RustBuffer.ByValue
 
     external fun uniffi_blazen_uniffi_fn_func_complete_batch(
-        `model`: Long,
+        `provider`: Long,
         `requests`: RustBuffer.ByValue,
         `maxConcurrency`: Int,
     ): Long
 
     external fun uniffi_blazen_uniffi_fn_func_complete_batch_blocking(
-        `model`: Long,
+        `provider`: Long,
         `requests`: RustBuffer.ByValue,
         `maxConcurrency`: Int,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
-    external fun uniffi_blazen_uniffi_fn_func_new_diffusion_model(
-        `modelId`: RustBuffer.ByValue,
-        `device`: RustBuffer.ByValue,
-        `width`: RustBuffer.ByValue,
-        `height`: RustBuffer.ByValue,
-        `numInferenceSteps`: RustBuffer.ByValue,
-        `guidanceScale`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
+    external fun uniffi_blazen_uniffi_fn_func_anthropic_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_fal_image_gen_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
+    external fun uniffi_blazen_uniffi_fn_func_anthropic_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_azure_openai_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_fal_stt_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
+    external fun uniffi_blazen_uniffi_fn_func_azure_openai_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_bedrock_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_fal_tts_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
+    external fun uniffi_blazen_uniffi_fn_func_bedrock_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_candle_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_faster_whisper_stt_model(
-        `modelId`: RustBuffer.ByValue,
-        `modelDir`: RustBuffer.ByValue,
-        `revision`: RustBuffer.ByValue,
+    external fun uniffi_blazen_uniffi_fn_func_candle_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_cohere_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_local_tts_model(
-        `model`: RustBuffer.ByValue,
-        `voice`: RustBuffer.ByValue,
-        `language`: RustBuffer.ByValue,
-        `sampleRate`: RustBuffer.ByValue,
+    external fun uniffi_blazen_uniffi_fn_func_cohere_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_deepseek_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_piper_tts_model(
-        `modelId`: RustBuffer.ByValue,
-        `speakerId`: RustBuffer.ByValue,
-        `sampleRate`: RustBuffer.ByValue,
+    external fun uniffi_blazen_uniffi_fn_func_deepseek_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_fal_llm_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_spark_tts_model(
-        `modelId`: RustBuffer.ByValue,
-        `modelDir`: RustBuffer.ByValue,
-        `revision`: RustBuffer.ByValue,
+    external fun uniffi_blazen_uniffi_fn_func_fal_llm_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_fireworks_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_triposr_3d_model(
-        `hfRepoId`: RustBuffer.ByValue,
-        `revision`: RustBuffer.ByValue,
-        `weightsPath`: RustBuffer.ByValue,
+    external fun uniffi_blazen_uniffi_fn_func_fireworks_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_gemini_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_whisper_stt_model(
-        `model`: RustBuffer.ByValue,
-        `device`: RustBuffer.ByValue,
-        `language`: RustBuffer.ByValue,
+    external fun uniffi_blazen_uniffi_fn_func_gemini_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_groq_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_audiogen_model(
-        `repoId`: RustBuffer.ByValue,
-        `revision`: RustBuffer.ByValue,
-        `device`: RustBuffer.ByValue,
-        `cacheDir`: RustBuffer.ByValue,
-        `maxDurationSeconds`: RustBuffer.ByValue,
+    external fun uniffi_blazen_uniffi_fn_func_groq_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_llamacpp_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_fal_music_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
+    external fun uniffi_blazen_uniffi_fn_func_llamacpp_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_lm_studio_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_musicgen_model(
-        `variant`: RustBuffer.ByValue,
-        `device`: RustBuffer.ByValue,
-        `cacheDir`: RustBuffer.ByValue,
-        `maxDurationSeconds`: RustBuffer.ByValue,
+    external fun uniffi_blazen_uniffi_fn_func_lm_studio_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_mistral_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_stable_audio_model(
-        `variant`: RustBuffer.ByValue,
-        `tokenizerPath`: RustBuffer.ByValue,
-        `device`: RustBuffer.ByValue,
-        `maxDurationSeconds`: RustBuffer.ByValue,
+    external fun uniffi_blazen_uniffi_fn_func_mistral_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_mistralrs_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_stream_generate_music_to_sink(
-        `model`: Long,
+    external fun uniffi_blazen_uniffi_fn_func_mistralrs_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_ollama_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_ollama_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_openai_compat_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_openai_compat_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_openai_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_openai_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_openrouter_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_openrouter_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_perplexity_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_perplexity_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_together_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_together_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_xai_provider_complete_streaming(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_xai_provider_complete_streaming_blocking(
+        `provider`: Long,
+        `request`: RustBuffer.ByValue,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_audiogen_provider_stream_music_to_sink(
+        `provider`: Long,
         `prompt`: RustBuffer.ByValue,
         `durationSeconds`: Float,
         `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_stream_generate_music_to_sink_blocking(
-        `model`: Long,
+    external fun uniffi_blazen_uniffi_fn_func_audiogen_provider_stream_music_to_sink_blocking(
+        `provider`: Long,
         `prompt`: RustBuffer.ByValue,
         `durationSeconds`: Float,
         `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
-    external fun uniffi_blazen_uniffi_fn_func_stream_generate_sfx_to_sink(
-        `model`: Long,
+    external fun uniffi_blazen_uniffi_fn_func_audiogen_provider_stream_sfx_to_sink(
+        `provider`: Long,
         `prompt`: RustBuffer.ByValue,
         `durationSeconds`: Float,
         `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_stream_generate_sfx_to_sink_blocking(
-        `model`: Long,
+    external fun uniffi_blazen_uniffi_fn_func_audiogen_provider_stream_sfx_to_sink_blocking(
+        `provider`: Long,
         `prompt`: RustBuffer.ByValue,
         `durationSeconds`: Float,
         `sink`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
-    external fun uniffi_blazen_uniffi_fn_func_new_rvc_model(
-        `voiceDir`: RustBuffer.ByValue,
-        `device`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
+    external fun uniffi_blazen_uniffi_fn_func_musicgen_provider_stream_music_to_sink(
+        `provider`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `durationSeconds`: Float,
+        `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_stream_convert_pcm_to_sink(
-        `model`: Long,
+    external fun uniffi_blazen_uniffi_fn_func_musicgen_provider_stream_music_to_sink_blocking(
+        `provider`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `durationSeconds`: Float,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_stable_audio_provider_stream_music_to_sink(
+        `provider`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `durationSeconds`: Float,
+        `sink`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_stable_audio_provider_stream_music_to_sink_blocking(
+        `provider`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `durationSeconds`: Float,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_stable_audio_provider_stream_sfx_to_sink(
+        `provider`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `durationSeconds`: Float,
+        `sink`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_func_stable_audio_provider_stream_sfx_to_sink_blocking(
+        `provider`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `durationSeconds`: Float,
+        `sink`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_func_rvc_provider_stream_convert_pcm_to_sink(
+        `provider`: Long,
         `inputPcm`: RustBuffer.ByValue,
         `targetVoiceId`: RustBuffer.ByValue,
         `sink`: Long,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_stream_convert_pcm_to_sink_blocking(
-        `model`: Long,
+    external fun uniffi_blazen_uniffi_fn_func_rvc_provider_stream_convert_pcm_to_sink_blocking(
+        `provider`: Long,
         `inputPcm`: RustBuffer.ByValue,
         `targetVoiceId`: RustBuffer.ByValue,
         `sink`: Long,
@@ -5590,222 +6484,7 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
-    external fun uniffi_blazen_uniffi_fn_func_new_anthropic_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_azure_model(
-        `apiKey`: RustBuffer.ByValue,
-        `resourceName`: RustBuffer.ByValue,
-        `deploymentName`: RustBuffer.ByValue,
-        `apiVersion`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_bedrock_model(
-        `apiKey`: RustBuffer.ByValue,
-        `region`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_candle_embedding_model(
-        `modelId`: RustBuffer.ByValue,
-        `device`: RustBuffer.ByValue,
-        `revision`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_candle_model(
-        `modelId`: RustBuffer.ByValue,
-        `device`: RustBuffer.ByValue,
-        `quantization`: RustBuffer.ByValue,
-        `revision`: RustBuffer.ByValue,
-        `contextLength`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_cohere_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_custom_model_with_openai_protocol(
-        `providerId`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `apiKey`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_deepseek_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_fal_embedding_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `dimensions`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_fal_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        `endpoint`: RustBuffer.ByValue,
-        `enterprise`: Byte,
-        `autoRouteModality`: Byte,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_fastembed_embedding_model(
-        `modelName`: RustBuffer.ByValue,
-        `maxBatchSize`: RustBuffer.ByValue,
-        `showDownloadProgress`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_fireworks_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_gemini_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_groq_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_llamacpp_model(
-        `modelPath`: RustBuffer.ByValue,
-        `device`: RustBuffer.ByValue,
-        `quantization`: RustBuffer.ByValue,
-        `contextLength`: RustBuffer.ByValue,
-        `nGpuLayers`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_lm_studio_model(
-        `host`: RustBuffer.ByValue,
-        `port`: Short,
-        `model`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_mistral_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_mistralrs_model(
-        `modelId`: RustBuffer.ByValue,
-        `device`: RustBuffer.ByValue,
-        `quantization`: RustBuffer.ByValue,
-        `contextLength`: RustBuffer.ByValue,
-        `vision`: Byte,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_ollama_model(
-        `host`: RustBuffer.ByValue,
-        `port`: Short,
-        `model`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_openai_compat_model(
-        `providerName`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_openai_embedding_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_openai_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_openrouter_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_perplexity_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_together_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_tract_embedding_model(
-        `modelName`: RustBuffer.ByValue,
-        `maxBatchSize`: RustBuffer.ByValue,
-        `showDownloadProgress`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_new_xai_model(
-        `apiKey`: RustBuffer.ByValue,
-        `model`: RustBuffer.ByValue,
-        `baseUrl`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
     external fun uniffi_blazen_uniffi_fn_func_init(uniffi_out_err: UniffiRustCallStatus): Unit
-
-    external fun uniffi_blazen_uniffi_fn_func_complete_streaming(
-        `model`: Long,
-        `request`: RustBuffer.ByValue,
-        `sink`: Long,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_func_complete_streaming_blocking(
-        `model`: Long,
-        `request`: RustBuffer.ByValue,
-        `sink`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
 
     external fun uniffi_blazen_uniffi_fn_func_init_langfuse(
         `publicKey`: RustBuffer.ByValue,
@@ -6049,73 +6728,172 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_func_version() != 61949.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_complete_batch() != 26653.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_complete_batch() != 40219.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_complete_batch_blocking() != 12966.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_complete_batch_blocking() != 16259.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_diffusion_model() != 18747.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_anthropic_provider_complete_streaming() != 23179.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_fal_image_gen_model() != 23891.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_anthropic_provider_complete_streaming_blocking() != 53504.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_fal_stt_model() != 31656.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_azure_openai_provider_complete_streaming() != 19210.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_fal_tts_model() != 32558.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_azure_openai_provider_complete_streaming_blocking() != 44142.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_faster_whisper_stt_model() != 65529.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_bedrock_provider_complete_streaming() != 37653.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_local_tts_model() != 31651.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_bedrock_provider_complete_streaming_blocking() != 6407.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_piper_tts_model() != 32182.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_candle_provider_complete_streaming() != 57256.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_spark_tts_model() != 28081.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_candle_provider_complete_streaming_blocking() != 33501.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_triposr_3d_model() != 57200.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_cohere_provider_complete_streaming() != 35846.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_whisper_stt_model() != 40916.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_cohere_provider_complete_streaming_blocking() != 19165.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_audiogen_model() != 43231.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_deepseek_provider_complete_streaming() != 59939.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_fal_music_model() != 18015.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_deepseek_provider_complete_streaming_blocking() != 28631.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_musicgen_model() != 54644.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_fal_llm_provider_complete_streaming() != 37892.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_stable_audio_model() != 2556.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_fal_llm_provider_complete_streaming_blocking() != 18129.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_stream_generate_music_to_sink() != 62355.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_fireworks_provider_complete_streaming() != 14494.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_stream_generate_music_to_sink_blocking() != 23279.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_fireworks_provider_complete_streaming_blocking() != 16332.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_stream_generate_sfx_to_sink() != 10355.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_gemini_provider_complete_streaming() != 14346.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_stream_generate_sfx_to_sink_blocking() != 49910.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_gemini_provider_complete_streaming_blocking() != 22713.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_rvc_model() != 51978.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_groq_provider_complete_streaming() != 31795.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_stream_convert_pcm_to_sink() != 29415.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_groq_provider_complete_streaming_blocking() != 36665.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_stream_convert_pcm_to_sink_blocking() != 36415.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_func_llamacpp_provider_complete_streaming() != 29745.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_llamacpp_provider_complete_streaming_blocking() != 38538.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_lm_studio_provider_complete_streaming() != 33206.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_lm_studio_provider_complete_streaming_blocking() != 60755.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_mistral_provider_complete_streaming() != 12524.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_mistral_provider_complete_streaming_blocking() != 35415.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_mistralrs_provider_complete_streaming() != 24514.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_mistralrs_provider_complete_streaming_blocking() != 62324.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_ollama_provider_complete_streaming() != 14891.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_ollama_provider_complete_streaming_blocking() != 48674.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_openai_compat_provider_complete_streaming() != 57379.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_openai_compat_provider_complete_streaming_blocking() != 19322.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_openai_provider_complete_streaming() != 45059.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_openai_provider_complete_streaming_blocking() != 6496.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_openrouter_provider_complete_streaming() != 43889.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_openrouter_provider_complete_streaming_blocking() != 55581.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_perplexity_provider_complete_streaming() != 60503.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_perplexity_provider_complete_streaming_blocking() != 12399.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_together_provider_complete_streaming() != 7906.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_together_provider_complete_streaming_blocking() != 56308.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_xai_provider_complete_streaming() != 112.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_xai_provider_complete_streaming_blocking() != 59375.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_audiogen_provider_stream_music_to_sink() != 7488.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_audiogen_provider_stream_music_to_sink_blocking() != 15954.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_audiogen_provider_stream_sfx_to_sink() != 7846.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_audiogen_provider_stream_sfx_to_sink_blocking() != 26148.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_musicgen_provider_stream_music_to_sink() != 41094.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_musicgen_provider_stream_music_to_sink_blocking() != 24954.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_stable_audio_provider_stream_music_to_sink() != 20847.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_stable_audio_provider_stream_music_to_sink_blocking() != 14000.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_stable_audio_provider_stream_sfx_to_sink() != 18318.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_stable_audio_provider_stream_sfx_to_sink_blocking() != 35299.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_rvc_provider_stream_convert_pcm_to_sink() != 10400.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_func_rvc_provider_stream_convert_pcm_to_sink_blocking() != 26570.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_func_new_redb_checkpoint_store() != 15901.toShort()) {
@@ -6142,94 +6920,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_func_openai_compat() != 1651.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_anthropic_model() != 63174.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_azure_model() != 41519.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_bedrock_model() != 25844.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_candle_embedding_model() != 49772.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_candle_model() != 59984.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_cohere_model() != 47421.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_custom_model_with_openai_protocol() != 35849.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_deepseek_model() != 60107.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_fal_embedding_model() != 50719.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_fal_model() != 6726.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_fastembed_embedding_model() != 27141.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_fireworks_model() != 25660.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_gemini_model() != 5451.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_groq_model() != 63063.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_llamacpp_model() != 62567.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_lm_studio_model() != 54376.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_mistral_model() != 18547.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_mistralrs_model() != 56474.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_ollama_model() != 51199.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_openai_compat_model() != 1505.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_openai_embedding_model() != 64561.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_openai_model() != 52484.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_openrouter_model() != 25099.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_perplexity_model() != 49956.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_together_model() != 60884.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_tract_embedding_model() != 32866.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_new_xai_model() != 50122.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
     if (lib.uniffi_blazen_uniffi_checksum_func_init() != 33802.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_complete_streaming() != 22515.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_func_complete_streaming_blocking() != 64487.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_func_init_langfuse() != 16496.toShort()) {
@@ -6256,42 +6947,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_toolhandler_execute() != 37809.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_imagegenmodel_generate() != 52613.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_imagegenmodel_generate_blocking() != 37612.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_sttmodel_transcribe() != 4106.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_sttmodel_transcribe_blocking() != 20646.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_threedmodel_generate_from_image() != 56800.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_threedmodel_generate_from_image_blocking() != 16990.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_ttsmodel_synthesize() != 59860.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_ttsmodel_synthesize_blocking() != 50217.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_musicmodel_generate_music() != 60700.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_musicmodel_generate_music_blocking() != 33543.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_musicmodel_generate_sfx() != 21245.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_musicmodel_generate_sfx_blocking() != 60492.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
     if (lib.uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_chunk() != 7832.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
@@ -6299,24 +6954,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_musicstreamsink_on_error() != 44317.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_vcmodel_convert_voice() != 46177.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_vcmodel_convert_voice_blocking() != 59967.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_vcmodel_list_target_voices() != 2307.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_vcmodel_list_target_voices_blocking() != 32701.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_vcmodel_register_target_voice() != 15373.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_vcmodel_register_target_voice_blocking() != 31343.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_vcstreamsink_on_chunk() != 1538.toShort()) {
@@ -6428,6 +7065,189 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_vcprovider_list_target_voices() != 20906.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_candleembedprovider_dimensions() != 20480.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_candleembedprovider_embed() != 26491.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_candleembedprovider_embed_blocking() != 28294.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_falembeddingprovider_dimensions() != 54963.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_falembeddingprovider_embed() != 18023.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_falembeddingprovider_embed_blocking() != 36801.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_fastembedprovider_dimensions() != 27946.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_fastembedprovider_embed() != 22241.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_fastembedprovider_embed_blocking() != 49478.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_openaiembeddingprovider_dimensions() != 36117.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_openaiembeddingprovider_embed() != 50154.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_openaiembeddingprovider_embed_blocking() != 52270.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_tractembedprovider_dimensions() != 18526.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_tractembedprovider_embed() != 59965.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_tractembedprovider_embed_blocking() != 62815.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_diffusionprovider_generate_image() != 30173.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_diffusionprovider_generate_image_blocking() != 53939.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_falimagegenprovider_generate_image() != 19755.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_falimagegenprovider_generate_image_blocking() != 60031.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_anthropicprovider_complete() != 31012.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_anthropicprovider_complete_blocking() != 30514.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_azureopenaiprovider_complete() != 25281.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_azureopenaiprovider_complete_blocking() != 18528.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_bedrockprovider_complete() != 1274.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_bedrockprovider_complete_blocking() != 30053.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_candlellmprovider_complete() != 17724.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_candlellmprovider_complete_blocking() != 55435.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_cohereprovider_complete() != 52000.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_cohereprovider_complete_blocking() != 50974.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_deepseekprovider_complete() != 48602.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_deepseekprovider_complete_blocking() != 43171.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_falllmprovider_complete() != 1701.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_falllmprovider_complete_blocking() != 63746.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_fireworksprovider_complete() != 24689.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_fireworksprovider_complete_blocking() != 36073.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_geminiprovider_complete() != 12743.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_geminiprovider_complete_blocking() != 6383.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_groqprovider_complete() != 24549.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_groqprovider_complete_blocking() != 24192.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_llamacppprovider_complete() != 40542.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_llamacppprovider_complete_blocking() != 43656.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_lmstudioprovider_complete() != 28845.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_lmstudioprovider_complete_blocking() != 4167.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_mistralprovider_complete() != 17782.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_mistralprovider_complete_blocking() != 28600.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_mistralrsprovider_complete() != 25702.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_mistralrsprovider_complete_blocking() != 58005.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_ollamaprovider_complete() != 14555.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_ollamaprovider_complete_blocking() != 65217.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_openaicompatprovider_complete() != 39007.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_openaicompatprovider_complete_blocking() != 53120.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_openaiprovider_complete() != 22900.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_openaiprovider_complete_blocking() != 59004.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_openrouterprovider_complete() != 8526.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_openrouterprovider_complete_blocking() != 14875.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_perplexityprovider_complete() != 46725.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_perplexityprovider_complete_blocking() != 50822.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_togetherprovider_complete() != 64044.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_togetherprovider_complete_blocking() != 29699.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_xaiprovider_complete() != 28511.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_xaiprovider_complete_blocking() != 25933.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_music() != 18485.toShort()) {
@@ -6647,27 +7467,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_controlplaneworker_shutdown() != 13840.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_embeddingmodel_dimensions() != 11198.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_embeddingmodel_embed() != 24214.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_embeddingmodel_embed_blocking() != 65533.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_embeddingmodel_model_id() != 36076.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_model_complete() != 48637.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_model_complete_blocking() != 36439.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_method_model_model_id() != 39325.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_load() != 57606.toShort()) {
@@ -6901,16 +7700,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_pipelinebuilder_total_timeout_ms() != 53032.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_as_model() != 7766.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
     if (lib.uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_defaults() != 64482.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_extract() != 58506.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_model_id() != 6884.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_model_id() != 14839.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_with_defaults() != 35202.toShort()) {
@@ -7072,7 +7868,91 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_workflowbuilder_timeout_ms() != 61492.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_constructor_agent_new() != 59656.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_agent_new() != 56586.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_candleembedprovider_new() != 28640.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_falembeddingprovider_new() != 55725.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_fastembedprovider_new() != 59861.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_openaiembeddingprovider_new() != 39992.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_tractembedprovider_new() != 57829.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_diffusionprovider_new() != 63781.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_falimagegenprovider_new() != 19019.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_anthropicprovider_new() != 29229.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_azureopenaiprovider_new() != 64449.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_bedrockprovider_new() != 61319.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_candlellmprovider_new() != 54812.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_cohereprovider_new() != 14932.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_deepseekprovider_new() != 10888.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_falllmprovider_new() != 13763.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_fireworksprovider_new() != 11741.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_geminiprovider_new() != 47025.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_groqprovider_new() != 12582.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_llamacppprovider_new() != 36139.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_lmstudioprovider_new() != 64170.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_mistralprovider_new() != 35646.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_mistralrsprovider_new() != 2068.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_ollamaprovider_new() != 15245.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_openaicompatprovider_new() != 10689.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_openaiprovider_new() != 15073.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_openrouterprovider_new() != 233.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_perplexityprovider_new() != 22964.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_togetherprovider_new() != 10941.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_xaiprovider_new() != 26917.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_constructor_audiogenprovider_new() != 3331.toShort()) {
@@ -7178,12 +8058,6 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_constructor_pipelinebuilder_new() != 61410.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_constructor_llmproviderdefaults_from_model() != 19304.toShort()) {
-        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
-    }
-    if (lib.uniffi_blazen_uniffi_checksum_constructor_llmproviderdefaults_from_model_with_defaults() != 59859.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_constructor_workflowbuilder_new() != 14241.toShort()) {
@@ -7922,7 +8796,9 @@ open class Agent :
     /**
      * Build an agent.
      *
-     * - `model`: the completion model to drive.
+     * - `provider`: the LLM provider to drive (any per-engine class like
+     * `OpenAiProvider`, `AnthropicProvider`, etc., or a custom `LlmProvider`
+     * impl).
      * - `system_prompt`: optional system prompt prepended to the conversation
      * on every iteration.
      * - `tools`: the tools the model may invoke. The names embedded in each
@@ -7932,7 +8808,7 @@ open class Agent :
      * forced to produce a final answer.
      */
     constructor(
-        `model`: Model,
+        `provider`: LlmProvider,
         `systemPrompt`: kotlin.String?,
         `tools`: List<Tool>,
         `toolHandler`: ToolHandler,
@@ -7942,7 +8818,7 @@ open class Agent :
             UniffiWithHandle,
             uniffiRustCall { _status ->
                 UniffiLib.uniffi_blazen_uniffi_fn_constructor_agent_new(
-                    FfiConverterTypeModel.lower(`model`),
+                    FfiConverterTypeLlmProvider.lower(`provider`),
                     FfiConverterOptionalString.lower(`systemPrompt`),
                     FfiConverterSequenceTypeTool.lower(`tools`),
                     FfiConverterTypeToolHandler.lower(`toolHandler`),
@@ -8089,6 +8965,302 @@ public object FfiConverterTypeAgent : FfiConverter<Agent, Long> {
 
     override fun write(
         value: Agent,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::anthropic::AnthropicProvider`].
+ */
+public interface AnthropicProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::anthropic::AnthropicProvider`].
+ */
+open class AnthropicProvider :
+    Disposable,
+    AutoCloseable,
+    AnthropicProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new Anthropic provider.
+     */
+    constructor(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_anthropicprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterOptionalString.lower(`model`),
+                    FfiConverterOptionalString.lower(`baseUrl`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_anthropicprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_anthropicprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_anthropicprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_anthropicprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAnthropicProvider : FfiConverter<AnthropicProvider, Long> {
+    override fun lower(value: AnthropicProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): AnthropicProvider = AnthropicProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): AnthropicProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: AnthropicProvider) = 8UL
+
+    override fun write(
+        value: AnthropicProvider,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -8484,6 +9656,315 @@ public object FfiConverterTypeAudioGenProvider : FfiConverter<AudioGenProvider, 
 
     override fun write(
         value: AudioGenProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::azure::AzureOpenAiProvider`].
+ *
+ * Azure determines the underlying model from the `deployment_name`
+ * (and the URL from `resource_name` + `deployment_name`), so this
+ * concrete intentionally does NOT expose a separate `model` argument.
+ */
+public interface AzureOpenAiProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::azure::AzureOpenAiProvider`].
+ *
+ * Azure determines the underlying model from the `deployment_name`
+ * (and the URL from `resource_name` + `deployment_name`), so this
+ * concrete intentionally does NOT expose a separate `model` argument.
+ */
+open class AzureOpenAiProvider :
+    Disposable,
+    AutoCloseable,
+    AzureOpenAiProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new Azure OpenAI provider.
+     *
+     * `resource_name` is the Azure resource (e.g. `"my-resource"`) that
+     * forms part of the URL host (`<resource>.openai.azure.com`).
+     * `deployment_name` is the Azure deployment id — this doubles as
+     * the model selector (Azure routes by deployment, not model name).
+     */
+    constructor(`apiKey`: kotlin.String, `resourceName`: kotlin.String, `deploymentName`: kotlin.String) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_azureopenaiprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterString.lower(`resourceName`),
+                    FfiConverterString.lower(`deploymentName`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_azureopenaiprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_azureopenaiprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_azureopenaiprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_azureopenaiprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAzureOpenAiProvider : FfiConverter<AzureOpenAiProvider, Long> {
+    override fun lower(value: AzureOpenAiProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): AzureOpenAiProvider = AzureOpenAiProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): AzureOpenAiProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: AzureOpenAiProvider) = 8UL
+
+    override fun write(
+        value: AzureOpenAiProvider,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -9177,6 +10658,950 @@ public object FfiConverterTypeBaseProvider : FfiConverter<BaseProvider, Long> {
 //
 
 /**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::bedrock::BedrockProvider`].
+ */
+public interface BedrockProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::bedrock::BedrockProvider`].
+ */
+open class BedrockProvider :
+    Disposable,
+    AutoCloseable,
+    BedrockProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new Bedrock provider.
+     *
+     * `region` is the AWS region (e.g. `"us-east-1"`).
+     */
+    constructor(`apiKey`: kotlin.String, `region`: kotlin.String, `model`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_bedrockprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterString.lower(`region`),
+                    FfiConverterOptionalString.lower(`model`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_bedrockprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_bedrockprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_bedrockprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_bedrockprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeBedrockProvider : FfiConverter<BedrockProvider, Long> {
+    override fun lower(value: BedrockProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): BedrockProvider = BedrockProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): BedrockProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: BedrockProvider) = 8UL
+
+    override fun write(
+        value: BedrockProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete embedding provider wrapping
+ * [`blazen_llm::providers::concrete::embed::CandleEmbedProvider`].
+ *
+ * Loads BERT-family sentence-transformer weights from `HuggingFace`
+ * Hub and runs the forward pass via candle. Supports CPU, CUDA, and
+ * Metal devices (the `engine` feature on `blazen-embed-candle` must
+ * also be enabled for actual inference).
+ */
+public interface CandleEmbedProviderInterface {
+    /**
+     * Return the dimensionality of vectors produced by [`embed`](Self::embed).
+     */
+    fun `dimensions`(): kotlin.UInt
+
+    /**
+     * Compute embedding vectors for each input string.
+     */
+    suspend fun `embed`(`texts`: List<kotlin.String>): List<List<kotlin.Float>>
+
+    /**
+     * Synchronous variant of [`embed`](Self::embed).
+     */
+    fun `embedBlocking`(`texts`: List<kotlin.String>): List<List<kotlin.Float>>
+
+    companion object
+}
+
+/**
+ * Concrete embedding provider wrapping
+ * [`blazen_llm::providers::concrete::embed::CandleEmbedProvider`].
+ *
+ * Loads BERT-family sentence-transformer weights from `HuggingFace`
+ * Hub and runs the forward pass via candle. Supports CPU, CUDA, and
+ * Metal devices (the `engine` feature on `blazen-embed-candle` must
+ * also be enabled for actual inference).
+ */
+open class CandleEmbedProvider :
+    Disposable,
+    AutoCloseable,
+    CandleEmbedProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a candle embed provider.
+     *
+     * `model_id` is the HuggingFace repo id
+     * (e.g. `"sentence-transformers/all-MiniLM-L6-v2"`); `None`
+     * defaults to `sentence-transformers/all-MiniLM-L6-v2`. `cache_dir`
+     * overrides the model cache directory; `None` falls back to
+     * `blazen-model-cache`'s default.
+     *
+     * The underlying `CandleEmbedProvider::new` is async (HF download
+     * + weights load). UniFFI constructors are sync, so we drive it
+     * through the shared tokio [`crate::runtime`] — matching the
+     * `TripoSrProvider` pattern in [`crate::concrete::three_d`].
+     */
+    constructor(`modelId`: kotlin.String?, `cacheDir`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCallWithError(BlazenException) { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_candleembedprovider_new(
+                    FfiConverterOptionalString.lower(`modelId`),
+                    FfiConverterOptionalString.lower(`cacheDir`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_candleembedprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_candleembedprovider(handle, status)
+        }
+    }
+
+    /**
+     * Return the dimensionality of vectors produced by [`embed`](Self::embed).
+     */
+    override fun `dimensions`(): kotlin.UInt =
+        FfiConverterUInt.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_candleembedprovider_dimensions(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Compute embedding vectors for each input string.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `embed`(`texts`: List<kotlin.String>): List<List<kotlin.Float>> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_candleembedprovider_embed(
+                    uniffiHandle,
+                    FfiConverterSequenceString.lower(`texts`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceSequenceFloat.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`embed`](Self::embed).
+     */
+    @Throws(BlazenException::class)
+    override fun `embedBlocking`(`texts`: List<kotlin.String>): List<List<kotlin.Float>> =
+        FfiConverterSequenceSequenceFloat.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_candleembedprovider_embed_blocking(
+                        it,
+                        FfiConverterSequenceString.lower(`texts`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCandleEmbedProvider : FfiConverter<CandleEmbedProvider, Long> {
+    override fun lower(value: CandleEmbedProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): CandleEmbedProvider = CandleEmbedProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): CandleEmbedProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: CandleEmbedProvider) = 8UL
+
+    override fun write(
+        value: CandleEmbedProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::CandleLlmProvider`] through the
+ * [`blazen_llm::CandleLlmModel`] trait bridge.
+ */
+public interface CandleLlmProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::CandleLlmProvider`] through the
+ * [`blazen_llm::CandleLlmModel`] trait bridge.
+ */
+open class CandleLlmProvider :
+    Disposable,
+    AutoCloseable,
+    CandleLlmProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a local candle chat-completion provider.
+     *
+     * `model_id` is a `HuggingFace` repo id; `revision` pins a specific
+     * branch / tag / commit. The optional `device`/`quantization`
+     * strings follow Blazen's parser format.
+     */
+    constructor(
+        `modelId`: kotlin.String,
+        `device`: kotlin.String?,
+        `quantization`: kotlin.String?,
+        `revision`: kotlin.String?,
+        `contextLength`: kotlin.UInt?,
+    ) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCallWithError(BlazenException) { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_candlellmprovider_new(
+                    FfiConverterString.lower(`modelId`),
+                    FfiConverterOptionalString.lower(`device`),
+                    FfiConverterOptionalString.lower(`quantization`),
+                    FfiConverterOptionalString.lower(`revision`),
+                    FfiConverterOptionalUInt.lower(`contextLength`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_candlellmprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_candlellmprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_candlellmprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_candlellmprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCandleLlmProvider : FfiConverter<CandleLlmProvider, Long> {
+    override fun lower(value: CandleLlmProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): CandleLlmProvider = CandleLlmProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): CandleLlmProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: CandleLlmProvider) = 8UL
+
+    override fun write(
+        value: CandleLlmProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
  * A workflow-checkpoint store handle.
  *
  * Wraps any [`blazen_persist::CheckpointStore`] implementation behind a
@@ -9584,6 +12009,301 @@ public object FfiConverterTypeCheckpointStore : FfiConverter<CheckpointStore, Lo
 
     override fun write(
         value: CheckpointStore,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::cohere::CohereProvider`].
+ */
+public interface CohereProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::cohere::CohereProvider`].
+ */
+open class CohereProvider :
+    Disposable,
+    AutoCloseable,
+    CohereProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new Cohere provider.
+     */
+    constructor(`apiKey`: kotlin.String, `model`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_cohereprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterOptionalString.lower(`model`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_cohereprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_cohereprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_cohereprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_cohereprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeCohereProvider : FfiConverter<CohereProvider, Long> {
+    override fun lower(value: CohereProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): CohereProvider = CohereProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): CohereProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: CohereProvider) = 8UL
+
+    override fun write(
+        value: CohereProvider,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -15158,43 +17878,31 @@ public object FfiConverterTypeCustomProviderHandle : FfiConverter<CustomProvider
 //
 
 /**
- * An embedding model that produces vector embeddings for text inputs.
- *
- * Construct one via the per-provider factories in `providers.rs`.
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::deepseek::DeepSeekProvider`].
  */
-public interface EmbeddingModelInterface {
+public interface DeepSeekProviderInterface {
     /**
-     * The dimensionality of vectors produced by this model.
+     * Perform a non-streaming chat / completion request.
      */
-    fun `dimensions`(): kotlin.UInt
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
 
     /**
-     * Embed one or more text strings, returning one vector per input.
+     * Synchronous variant of [`complete`](Self::complete).
      */
-    suspend fun `embed`(`inputs`: List<kotlin.String>): EmbeddingResponse
-
-    /**
-     * Synchronous variant of [`embed`](Self::embed).
-     */
-    fun `embedBlocking`(`inputs`: List<kotlin.String>): EmbeddingResponse
-
-    /**
-     * The model's identifier (e.g. `"text-embedding-3-small"`).
-     */
-    fun `modelId`(): kotlin.String
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
 
     companion object
 }
 
 /**
- * An embedding model that produces vector embeddings for text inputs.
- *
- * Construct one via the per-provider factories in `providers.rs`.
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::deepseek::DeepSeekProvider`].
  */
-open class EmbeddingModel :
+open class DeepSeekProvider :
     Disposable,
     AutoCloseable,
-    EmbeddingModelInterface {
+    DeepSeekProviderInterface {
     /**
      * @suppress
      */
@@ -15216,6 +17924,21 @@ open class EmbeddingModel :
         this.handle = 0
         this.cleanable = null
     }
+
+    /**
+     * Construct a new DeepSeek provider.
+     */
+    constructor(`apiKey`: kotlin.String, `model`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_deepseekprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterOptionalString.lower(`model`),
+                    _status,
+                )
+            },
+        )
 
     protected val handle: Long
     protected val cleanable: UniffiCleaner.Cleanable?
@@ -15273,7 +17996,7 @@ open class EmbeddingModel :
                 return
             }
             uniffiRustCall { status ->
-                UniffiLib.uniffi_blazen_uniffi_fn_free_embeddingmodel(handle, status)
+                UniffiLib.uniffi_blazen_uniffi_fn_free_deepseekprovider(handle, status)
             }
         }
     }
@@ -15286,73 +18009,43 @@ open class EmbeddingModel :
             throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
         return uniffiRustCall { status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_clone_embeddingmodel(handle, status)
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_deepseekprovider(handle, status)
         }
     }
 
     /**
-     * The dimensionality of vectors produced by this model.
-     */
-    override fun `dimensions`(): kotlin.UInt =
-        FfiConverterUInt.lift(
-            callWithHandle {
-                uniffiRustCall { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_method_embeddingmodel_dimensions(
-                        it,
-                        _status,
-                    )
-                }
-            },
-        )
-
-    /**
-     * Embed one or more text strings, returning one vector per input.
+     * Perform a non-streaming chat / completion request.
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `embed`(`inputs`: List<kotlin.String>): EmbeddingResponse =
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_blazen_uniffi_fn_method_embeddingmodel_embed(
+                UniffiLib.uniffi_blazen_uniffi_fn_method_deepseekprovider_complete(
                     uniffiHandle,
-                    FfiConverterSequenceString.lower(`inputs`),
+                    FfiConverterTypeModelRequest.lower(`request`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
             { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
             { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
             // lift function
-            { FfiConverterTypeEmbeddingResponse.lift(it) },
+            { FfiConverterTypeModelResponse.lift(it) },
             // Error FFI converter
             BlazenException.ErrorHandler,
         )
 
     /**
-     * Synchronous variant of [`embed`](Self::embed).
+     * Synchronous variant of [`complete`](Self::complete).
      */
     @Throws(BlazenException::class)
-    override fun `embedBlocking`(`inputs`: List<kotlin.String>): EmbeddingResponse =
-        FfiConverterTypeEmbeddingResponse.lift(
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
             callWithHandle {
                 uniffiRustCallWithError(BlazenException) { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_method_embeddingmodel_embed_blocking(
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_deepseekprovider_complete_blocking(
                         it,
-                        FfiConverterSequenceString.lower(`inputs`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    /**
-     * The model's identifier (e.g. `"text-embedding-3-small"`).
-     */
-    override fun `modelId`(): kotlin.String =
-        FfiConverterString.lift(
-            callWithHandle {
-                uniffiRustCall { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_method_embeddingmodel_model_id(
-                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
                         _status,
                     )
                 }
@@ -15368,17 +18061,367 @@ open class EmbeddingModel :
 /**
  * @suppress
  */
-public object FfiConverterTypeEmbeddingModel : FfiConverter<EmbeddingModel, Long> {
-    override fun lower(value: EmbeddingModel): Long = value.uniffiCloneHandle()
+public object FfiConverterTypeDeepSeekProvider : FfiConverter<DeepSeekProvider, Long> {
+    override fun lower(value: DeepSeekProvider): Long = value.uniffiCloneHandle()
 
-    override fun lift(value: Long): EmbeddingModel = EmbeddingModel(UniffiWithHandle, value)
+    override fun lift(value: Long): DeepSeekProvider = DeepSeekProvider(UniffiWithHandle, value)
 
-    override fun read(buf: ByteBuffer): EmbeddingModel = lift(buf.getLong())
+    override fun read(buf: ByteBuffer): DeepSeekProvider = lift(buf.getLong())
 
-    override fun allocationSize(value: EmbeddingModel) = 8UL
+    override fun allocationSize(value: DeepSeekProvider) = 8UL
 
     override fun write(
-        value: EmbeddingModel,
+        value: DeepSeekProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete image-gen provider wrapping
+ * [`blazen_llm::providers::concrete::image::DiffusionProvider`].
+ *
+ * Backed by the local `diffusion-rs` (stable-diffusion.cpp) pipeline.
+ * Configuration is passed as a JSON-encoded
+ * [`blazen_image_diffusion::DiffusionOptions`] payload — the upstream
+ * options struct carries eight fields (model id, device, width,
+ * height, inference steps, guidance scale, scheduler, cache dir) and
+ * `DiffusionOptions: serde::Deserialize`, so a single JSON string
+ * keeps the UniFFI surface flat while still exposing every knob.
+ */
+public interface DiffusionProviderInterface {
+    /**
+     * Generate an image from a text prompt.
+     *
+     * `width` and `height` are paired: pass both or neither. When
+     * either is `None` the inner request omits the size override and
+     * the provider's default dimensions apply.
+     */
+    suspend fun `generateImage`(
+        `prompt`: kotlin.String,
+        `width`: kotlin.UInt?,
+        `height`: kotlin.UInt?,
+    ): ImageGenResult
+
+    /**
+     * Synchronous variant of [`generate_image`](Self::generate_image).
+     */
+    fun `generateImageBlocking`(
+        `prompt`: kotlin.String,
+        `width`: kotlin.UInt?,
+        `height`: kotlin.UInt?,
+    ): ImageGenResult
+
+    companion object
+}
+
+/**
+ * Concrete image-gen provider wrapping
+ * [`blazen_llm::providers::concrete::image::DiffusionProvider`].
+ *
+ * Backed by the local `diffusion-rs` (stable-diffusion.cpp) pipeline.
+ * Configuration is passed as a JSON-encoded
+ * [`blazen_image_diffusion::DiffusionOptions`] payload — the upstream
+ * options struct carries eight fields (model id, device, width,
+ * height, inference steps, guidance scale, scheduler, cache dir) and
+ * `DiffusionOptions: serde::Deserialize`, so a single JSON string
+ * keeps the UniFFI surface flat while still exposing every knob.
+ */
+open class DiffusionProvider :
+    Disposable,
+    AutoCloseable,
+    DiffusionProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new local diffusion-rs provider.
+     *
+     * `options_json` is an optional JSON-encoded
+     * [`blazen_llm::DiffusionOptions`]. When `None`, the upstream
+     * defaults are used (512x512, EulerA scheduler, 20 inference
+     * steps). Invalid JSON or option-validation failures surface as
+     * [`BlazenError::Provider`] with provider id `"diffusion-rs"`.
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::Provider`] when the JSON cannot be
+     * deserialized or when the upstream options validator rejects the
+     * payload (zero dimensions, empty model id, etc.).
+     */
+    constructor(`optionsJson`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCallWithError(BlazenException) { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_diffusionprovider_new(
+                    FfiConverterOptionalString.lower(`optionsJson`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_diffusionprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_diffusionprovider(handle, status)
+        }
+    }
+
+    /**
+     * Generate an image from a text prompt.
+     *
+     * `width` and `height` are paired: pass both or neither. When
+     * either is `None` the inner request omits the size override and
+     * the provider's default dimensions apply.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `generateImage`(
+        `prompt`: kotlin.String,
+        `width`: kotlin.UInt?,
+        `height`: kotlin.UInt?,
+    ): ImageGenResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_diffusionprovider_generate_image(
+                    uniffiHandle,
+                    FfiConverterString.lower(`prompt`),
+                    FfiConverterOptionalUInt.lower(`width`),
+                    FfiConverterOptionalUInt.lower(`height`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeImageGenResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`generate_image`](Self::generate_image).
+     */
+    @Throws(BlazenException::class)
+    override fun `generateImageBlocking`(
+        `prompt`: kotlin.String,
+        `width`: kotlin.UInt?,
+        `height`: kotlin.UInt?,
+    ): ImageGenResult =
+        FfiConverterTypeImageGenResult.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_diffusionprovider_generate_image_blocking(
+                        it,
+                        FfiConverterString.lower(`prompt`),
+                        FfiConverterOptionalUInt.lower(`width`),
+                        FfiConverterOptionalUInt.lower(`height`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeDiffusionProvider : FfiConverter<DiffusionProvider, Long> {
+    override fun lower(value: DiffusionProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): DiffusionProvider = DiffusionProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): DiffusionProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: DiffusionProvider) = 8UL
+
+    override fun write(
+        value: DiffusionProvider,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -16018,6 +19061,988 @@ public object FfiConverterTypeF5Provider : FfiConverter<F5Provider, Long> {
 
     override fun write(
         value: F5Provider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete embedding provider wrapping
+ * [`blazen_llm::providers::concrete::embed::FalEmbeddingProvider`].
+ *
+ * Targets fal's queue API at
+ * `https://queue.fal.run/openrouter/router/openai/v1/embeddings`.
+ * Defaults to `openai/text-embedding-3-small` (1536 dims).
+ */
+public interface FalEmbeddingProviderInterface {
+    /**
+     * Return the dimensionality of vectors produced by [`embed`](Self::embed).
+     */
+    fun `dimensions`(): kotlin.UInt
+
+    /**
+     * Compute embedding vectors for each input string.
+     */
+    suspend fun `embed`(`texts`: List<kotlin.String>): List<List<kotlin.Float>>
+
+    /**
+     * Synchronous variant of [`embed`](Self::embed).
+     */
+    fun `embedBlocking`(`texts`: List<kotlin.String>): List<List<kotlin.Float>>
+
+    companion object
+}
+
+/**
+ * Concrete embedding provider wrapping
+ * [`blazen_llm::providers::concrete::embed::FalEmbeddingProvider`].
+ *
+ * Targets fal's queue API at
+ * `https://queue.fal.run/openrouter/router/openai/v1/embeddings`.
+ * Defaults to `openai/text-embedding-3-small` (1536 dims).
+ */
+open class FalEmbeddingProvider :
+    Disposable,
+    AutoCloseable,
+    FalEmbeddingProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a fal embedding provider.
+     *
+     * `model` overrides the default `openai/text-embedding-3-small`
+     * model id when `Some`.
+     */
+    constructor(`apiKey`: kotlin.String, `model`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_falembeddingprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterOptionalString.lower(`model`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_falembeddingprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_falembeddingprovider(handle, status)
+        }
+    }
+
+    /**
+     * Return the dimensionality of vectors produced by [`embed`](Self::embed).
+     */
+    override fun `dimensions`(): kotlin.UInt =
+        FfiConverterUInt.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_falembeddingprovider_dimensions(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Compute embedding vectors for each input string.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `embed`(`texts`: List<kotlin.String>): List<List<kotlin.Float>> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_falembeddingprovider_embed(
+                    uniffiHandle,
+                    FfiConverterSequenceString.lower(`texts`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceSequenceFloat.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`embed`](Self::embed).
+     */
+    @Throws(BlazenException::class)
+    override fun `embedBlocking`(`texts`: List<kotlin.String>): List<List<kotlin.Float>> =
+        FfiConverterSequenceSequenceFloat.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_falembeddingprovider_embed_blocking(
+                        it,
+                        FfiConverterSequenceString.lower(`texts`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFalEmbeddingProvider : FfiConverter<FalEmbeddingProvider, Long> {
+    override fun lower(value: FalEmbeddingProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): FalEmbeddingProvider = FalEmbeddingProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): FalEmbeddingProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: FalEmbeddingProvider) = 8UL
+
+    override fun write(
+        value: FalEmbeddingProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete image-gen provider wrapping
+ * [`blazen_llm::providers::concrete::image::FalImageGenProvider`].
+ *
+ * Routes through the shared fal.ai queue executor. Image model
+ * selection happens per request via
+ * [`blazen_llm::compute::ImageRequest::model`]; the optional
+ * `default_model` passed at construction is stamped onto outgoing
+ * requests by the upstream concrete when the caller doesn't override.
+ * When neither is set, the fal bridge's built-in default model is used.
+ */
+public interface FalImageGenProviderInterface {
+    /**
+     * Generate an image from a text prompt.
+     */
+    suspend fun `generateImage`(
+        `prompt`: kotlin.String,
+        `width`: kotlin.UInt?,
+        `height`: kotlin.UInt?,
+    ): ImageGenResult
+
+    /**
+     * Synchronous variant of [`generate_image`](Self::generate_image).
+     */
+    fun `generateImageBlocking`(
+        `prompt`: kotlin.String,
+        `width`: kotlin.UInt?,
+        `height`: kotlin.UInt?,
+    ): ImageGenResult
+
+    companion object
+}
+
+/**
+ * Concrete image-gen provider wrapping
+ * [`blazen_llm::providers::concrete::image::FalImageGenProvider`].
+ *
+ * Routes through the shared fal.ai queue executor. Image model
+ * selection happens per request via
+ * [`blazen_llm::compute::ImageRequest::model`]; the optional
+ * `default_model` passed at construction is stamped onto outgoing
+ * requests by the upstream concrete when the caller doesn't override.
+ * When neither is set, the fal bridge's built-in default model is used.
+ */
+open class FalImageGenProvider :
+    Disposable,
+    AutoCloseable,
+    FalImageGenProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new fal.ai image-gen provider.
+     *
+     * `api_key` is the fal.ai API key. `default_model` is an optional
+     * default image model id (e.g. `"fal-ai/flux/schnell"`).
+     * `base_url` overrides the default fal queue URL
+     * (`https://queue.fal.run`) — used for proxies / staging
+     * environments.
+     */
+    constructor(`apiKey`: kotlin.String, `defaultModel`: kotlin.String?, `baseUrl`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_falimagegenprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterOptionalString.lower(`defaultModel`),
+                    FfiConverterOptionalString.lower(`baseUrl`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_falimagegenprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_falimagegenprovider(handle, status)
+        }
+    }
+
+    /**
+     * Generate an image from a text prompt.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `generateImage`(
+        `prompt`: kotlin.String,
+        `width`: kotlin.UInt?,
+        `height`: kotlin.UInt?,
+    ): ImageGenResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_falimagegenprovider_generate_image(
+                    uniffiHandle,
+                    FfiConverterString.lower(`prompt`),
+                    FfiConverterOptionalUInt.lower(`width`),
+                    FfiConverterOptionalUInt.lower(`height`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeImageGenResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`generate_image`](Self::generate_image).
+     */
+    @Throws(BlazenException::class)
+    override fun `generateImageBlocking`(
+        `prompt`: kotlin.String,
+        `width`: kotlin.UInt?,
+        `height`: kotlin.UInt?,
+    ): ImageGenResult =
+        FfiConverterTypeImageGenResult.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_falimagegenprovider_generate_image_blocking(
+                        it,
+                        FfiConverterString.lower(`prompt`),
+                        FfiConverterOptionalUInt.lower(`width`),
+                        FfiConverterOptionalUInt.lower(`height`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFalImageGenProvider : FfiConverter<FalImageGenProvider, Long> {
+    override fun lower(value: FalImageGenProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): FalImageGenProvider = FalImageGenProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): FalImageGenProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: FalImageGenProvider) = 8UL
+
+    override fun write(
+        value: FalImageGenProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::fal::FalProvider`].
+ *
+ * Named `FalLlmProvider` (not `FalProvider`) at the binding-surface
+ * layer to disambiguate from the per-capability `FalTtsProvider` /
+ * `FalSttProvider` / `FalMusicProvider` / `FalVcProvider` /
+ * `FalImageGenProvider` concretes. The Rust-side upstream type retains
+ * its original name (`blazen_llm::providers::fal::FalProvider`).
+ *
+ * `base_url` overrides the queue base URL
+ * (default `https://queue.fal.run`) — used for proxies / staging
+ * environments.
+ */
+public interface FalLlmProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::fal::FalProvider`].
+ *
+ * Named `FalLlmProvider` (not `FalProvider`) at the binding-surface
+ * layer to disambiguate from the per-capability `FalTtsProvider` /
+ * `FalSttProvider` / `FalMusicProvider` / `FalVcProvider` /
+ * `FalImageGenProvider` concretes. The Rust-side upstream type retains
+ * its original name (`blazen_llm::providers::fal::FalProvider`).
+ *
+ * `base_url` overrides the queue base URL
+ * (default `https://queue.fal.run`) — used for proxies / staging
+ * environments.
+ */
+open class FalLlmProvider :
+    Disposable,
+    AutoCloseable,
+    FalLlmProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new fal.ai LLM provider.
+     *
+     * `model` is the underlying LLM model id sent in the request body
+     * (e.g. `"anthropic/claude-sonnet-4.5"`, `"openai/gpt-4o"`).
+     * `base_url` overrides the default queue URL.
+     */
+    constructor(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_falllmprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterOptionalString.lower(`model`),
+                    FfiConverterOptionalString.lower(`baseUrl`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_falllmprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_falllmprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_falllmprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_falllmprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFalLlmProvider : FfiConverter<FalLlmProvider, Long> {
+    override fun lower(value: FalLlmProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): FalLlmProvider = FalLlmProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): FalLlmProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: FalLlmProvider) = 8UL
+
+    override fun write(
+        value: FalLlmProvider,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -17523,6 +21548,337 @@ public object FfiConverterTypeFalVcProvider : FfiConverter<FalVcProvider, Long> 
 //
 
 /**
+ * Concrete embedding provider wrapping
+ * [`blazen_llm::providers::concrete::embed::FastembedProvider`].
+ *
+ * Only available on ORT-supported targets
+ * (`x86_64-{linux,windows,macos}`, `aarch64-apple-darwin`). On other
+ * targets use [`TractEmbedProvider`] instead — same model catalog,
+ * pure-Rust runtime.
+ */
+public interface FastembedProviderInterface {
+    /**
+     * Return the dimensionality of vectors produced by [`embed`](Self::embed).
+     */
+    fun `dimensions`(): kotlin.UInt
+
+    /**
+     * Compute embedding vectors for each input string.
+     */
+    suspend fun `embed`(`texts`: List<kotlin.String>): List<List<kotlin.Float>>
+
+    /**
+     * Synchronous variant of [`embed`](Self::embed).
+     */
+    fun `embedBlocking`(`texts`: List<kotlin.String>): List<List<kotlin.Float>>
+
+    companion object
+}
+
+/**
+ * Concrete embedding provider wrapping
+ * [`blazen_llm::providers::concrete::embed::FastembedProvider`].
+ *
+ * Only available on ORT-supported targets
+ * (`x86_64-{linux,windows,macos}`, `aarch64-apple-darwin`). On other
+ * targets use [`TractEmbedProvider`] instead — same model catalog,
+ * pure-Rust runtime.
+ */
+open class FastembedProvider :
+    Disposable,
+    AutoCloseable,
+    FastembedProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a fastembed provider.
+     *
+     * `model_id` selects a fastembed model variant by debug-spelling
+     * name (e.g. `"BGESmallENV15"`, `"AllMiniLML6V2"`); `None` resolves
+     * to fastembed's default (`BGESmallENV15`). `cache_dir` overrides
+     * the model-weights cache directory; `None` uses fastembed's
+     * built-in cache (driven by `FASTEMBED_CACHE_DIR` / `HF_HOME`).
+     */
+    constructor(`modelId`: kotlin.String?, `cacheDir`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCallWithError(BlazenException) { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_fastembedprovider_new(
+                    FfiConverterOptionalString.lower(`modelId`),
+                    FfiConverterOptionalString.lower(`cacheDir`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_fastembedprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_fastembedprovider(handle, status)
+        }
+    }
+
+    /**
+     * Return the dimensionality of vectors produced by [`embed`](Self::embed).
+     */
+    override fun `dimensions`(): kotlin.UInt =
+        FfiConverterUInt.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_fastembedprovider_dimensions(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Compute embedding vectors for each input string.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `embed`(`texts`: List<kotlin.String>): List<List<kotlin.Float>> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_fastembedprovider_embed(
+                    uniffiHandle,
+                    FfiConverterSequenceString.lower(`texts`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceSequenceFloat.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`embed`](Self::embed).
+     */
+    @Throws(BlazenException::class)
+    override fun `embedBlocking`(`texts`: List<kotlin.String>): List<List<kotlin.Float>> =
+        FfiConverterSequenceSequenceFloat.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_fastembedprovider_embed_blocking(
+                        it,
+                        FfiConverterSequenceString.lower(`texts`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFastembedProvider : FfiConverter<FastembedProvider, Long> {
+    override fun lower(value: FastembedProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): FastembedProvider = FastembedProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): FastembedProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: FastembedProvider) = 8UL
+
+    override fun write(
+        value: FastembedProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
  * Local faster-whisper (`CTranslate2`) speech-to-text provider.
  *
  * Construct with [`FasterWhisperProvider::new`] (sync — cheap). The
@@ -17760,6 +22116,301 @@ public object FfiConverterTypeFasterWhisperProvider : FfiConverter<FasterWhisper
 
     override fun write(
         value: FasterWhisperProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::fireworks::FireworksProvider`].
+ */
+public interface FireworksProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::fireworks::FireworksProvider`].
+ */
+open class FireworksProvider :
+    Disposable,
+    AutoCloseable,
+    FireworksProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new Fireworks provider.
+     */
+    constructor(`apiKey`: kotlin.String, `model`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_fireworksprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterOptionalString.lower(`model`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_fireworksprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_fireworksprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_fireworksprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_fireworksprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeFireworksProvider : FfiConverter<FireworksProvider, Long> {
+    override fun lower(value: FireworksProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): FireworksProvider = FireworksProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): FireworksProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: FireworksProvider) = 8UL
+
+    override fun write(
+        value: FireworksProvider,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -18930,57 +23581,31 @@ public object FfiConverterTypeForeignTrainingProgress : FfiConverter<ForeignTrai
 //
 
 /**
- * An image-generation model.
- *
- * Construct via [`new_diffusion_model`] (local, feature-gated) or
- * [`new_fal_image_gen_model`] (cloud). Once obtained, call
- * [`generate`](Self::generate) (async) or
- * [`generate_blocking`](Self::generate_blocking) (sync) to render images.
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::gemini::GeminiProvider`].
  */
-public interface ImageGenModelInterface {
+public interface GeminiProviderInterface {
     /**
-     * Generate `num_images` images for `prompt` at the given dimensions.
-     *
-     * `negative_prompt` describes content to avoid; `model` overrides the
-     * provider's default endpoint (e.g. a specific fal.ai model id).
-     * Backends ignore knobs they don't support.
+     * Perform a non-streaming chat / completion request.
      */
-    suspend fun `generate`(
-        `prompt`: kotlin.String,
-        `negativePrompt`: kotlin.String?,
-        `width`: kotlin.UInt?,
-        `height`: kotlin.UInt?,
-        `numImages`: kotlin.UInt?,
-        `model`: kotlin.String?,
-    ): ImageGenResult
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
 
     /**
-     * Synchronous variant of [`generate`](Self::generate).
+     * Synchronous variant of [`complete`](Self::complete).
      */
-    fun `generateBlocking`(
-        `prompt`: kotlin.String,
-        `negativePrompt`: kotlin.String?,
-        `width`: kotlin.UInt?,
-        `height`: kotlin.UInt?,
-        `numImages`: kotlin.UInt?,
-        `model`: kotlin.String?,
-    ): ImageGenResult
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
 
     companion object
 }
 
 /**
- * An image-generation model.
- *
- * Construct via [`new_diffusion_model`] (local, feature-gated) or
- * [`new_fal_image_gen_model`] (cloud). Once obtained, call
- * [`generate`](Self::generate) (async) or
- * [`generate_blocking`](Self::generate_blocking) (sync) to render images.
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::gemini::GeminiProvider`].
  */
-open class ImageGenModel :
+open class GeminiProvider :
     Disposable,
     AutoCloseable,
-    ImageGenModelInterface {
+    GeminiProviderInterface {
     /**
      * @suppress
      */
@@ -19002,6 +23627,22 @@ open class ImageGenModel :
         this.handle = 0
         this.cleanable = null
     }
+
+    /**
+     * Construct a new Gemini provider.
+     */
+    constructor(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_geminiprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterOptionalString.lower(`model`),
+                    FfiConverterOptionalString.lower(`baseUrl`),
+                    _status,
+                )
+            },
+        )
 
     protected val handle: Long
     protected val cleanable: UniffiCleaner.Cleanable?
@@ -19059,7 +23700,7 @@ open class ImageGenModel :
                 return
             }
             uniffiRustCall { status ->
-                UniffiLib.uniffi_blazen_uniffi_fn_free_imagegenmodel(handle, status)
+                UniffiLib.uniffi_blazen_uniffi_fn_free_geminiprovider(handle, status)
             }
         }
     }
@@ -19072,71 +23713,43 @@ open class ImageGenModel :
             throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
         return uniffiRustCall { status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_clone_imagegenmodel(handle, status)
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_geminiprovider(handle, status)
         }
     }
 
     /**
-     * Generate `num_images` images for `prompt` at the given dimensions.
-     *
-     * `negative_prompt` describes content to avoid; `model` overrides the
-     * provider's default endpoint (e.g. a specific fal.ai model id).
-     * Backends ignore knobs they don't support.
+     * Perform a non-streaming chat / completion request.
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `generate`(
-        `prompt`: kotlin.String,
-        `negativePrompt`: kotlin.String?,
-        `width`: kotlin.UInt?,
-        `height`: kotlin.UInt?,
-        `numImages`: kotlin.UInt?,
-        `model`: kotlin.String?,
-    ): ImageGenResult =
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_blazen_uniffi_fn_method_imagegenmodel_generate(
+                UniffiLib.uniffi_blazen_uniffi_fn_method_geminiprovider_complete(
                     uniffiHandle,
-                    FfiConverterString.lower(`prompt`),
-                    FfiConverterOptionalString.lower(`negativePrompt`),
-                    FfiConverterOptionalUInt.lower(`width`),
-                    FfiConverterOptionalUInt.lower(`height`),
-                    FfiConverterOptionalUInt.lower(`numImages`),
-                    FfiConverterOptionalString.lower(`model`),
+                    FfiConverterTypeModelRequest.lower(`request`),
                 )
             },
             { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
             { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
             { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
             // lift function
-            { FfiConverterTypeImageGenResult.lift(it) },
+            { FfiConverterTypeModelResponse.lift(it) },
             // Error FFI converter
             BlazenException.ErrorHandler,
         )
 
     /**
-     * Synchronous variant of [`generate`](Self::generate).
+     * Synchronous variant of [`complete`](Self::complete).
      */
     @Throws(BlazenException::class)
-    override fun `generateBlocking`(
-        `prompt`: kotlin.String,
-        `negativePrompt`: kotlin.String?,
-        `width`: kotlin.UInt?,
-        `height`: kotlin.UInt?,
-        `numImages`: kotlin.UInt?,
-        `model`: kotlin.String?,
-    ): ImageGenResult =
-        FfiConverterTypeImageGenResult.lift(
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
             callWithHandle {
                 uniffiRustCallWithError(BlazenException) { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_method_imagegenmodel_generate_blocking(
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_geminiprovider_complete_blocking(
                         it,
-                        FfiConverterString.lower(`prompt`),
-                        FfiConverterOptionalString.lower(`negativePrompt`),
-                        FfiConverterOptionalUInt.lower(`width`),
-                        FfiConverterOptionalUInt.lower(`height`),
-                        FfiConverterOptionalUInt.lower(`numImages`),
-                        FfiConverterOptionalString.lower(`model`),
+                        FfiConverterTypeModelRequest.lower(`request`),
                         _status,
                     )
                 }
@@ -19152,17 +23765,312 @@ open class ImageGenModel :
 /**
  * @suppress
  */
-public object FfiConverterTypeImageGenModel : FfiConverter<ImageGenModel, Long> {
-    override fun lower(value: ImageGenModel): Long = value.uniffiCloneHandle()
+public object FfiConverterTypeGeminiProvider : FfiConverter<GeminiProvider, Long> {
+    override fun lower(value: GeminiProvider): Long = value.uniffiCloneHandle()
 
-    override fun lift(value: Long): ImageGenModel = ImageGenModel(UniffiWithHandle, value)
+    override fun lift(value: Long): GeminiProvider = GeminiProvider(UniffiWithHandle, value)
 
-    override fun read(buf: ByteBuffer): ImageGenModel = lift(buf.getLong())
+    override fun read(buf: ByteBuffer): GeminiProvider = lift(buf.getLong())
 
-    override fun allocationSize(value: ImageGenModel) = 8UL
+    override fun allocationSize(value: GeminiProvider) = 8UL
 
     override fun write(
-        value: ImageGenModel,
+        value: GeminiProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::groq::GroqProvider`].
+ */
+public interface GroqProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::groq::GroqProvider`].
+ */
+open class GroqProvider :
+    Disposable,
+    AutoCloseable,
+    GroqProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new Groq provider.
+     */
+    constructor(`apiKey`: kotlin.String, `model`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_groqprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterOptionalString.lower(`model`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_groqprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_groqprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_groqprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_groqprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeGroqProvider : FfiConverter<GroqProvider, Long> {
+    override fun lower(value: GroqProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): GroqProvider = GroqProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): GroqProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: GroqProvider) = 8UL
+
+    override fun write(
+        value: GroqProvider,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -19888,6 +24796,314 @@ public object FfiConverterTypeKokoroProvider : FfiConverter<KokoroProvider, Long
 //
 
 /**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::LlamaCppProvider`].
+ */
+public interface LlamaCppProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::LlamaCppProvider`].
+ */
+open class LlamaCppProvider :
+    Disposable,
+    AutoCloseable,
+    LlamaCppProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a local llama.cpp chat-completion provider.
+     *
+     * `model_path` is either a local GGUF file path or a `HuggingFace`
+     * repo id; `n_gpu_layers` offloads the given number of layers to the
+     * GPU when the device supports it.
+     */
+    constructor(
+        `modelPath`: kotlin.String,
+        `device`: kotlin.String?,
+        `quantization`: kotlin.String?,
+        `contextLength`: kotlin.UInt?,
+        `nGpuLayers`: kotlin.UInt?,
+    ) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCallWithError(BlazenException) { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_llamacppprovider_new(
+                    FfiConverterString.lower(`modelPath`),
+                    FfiConverterOptionalString.lower(`device`),
+                    FfiConverterOptionalString.lower(`quantization`),
+                    FfiConverterOptionalUInt.lower(`contextLength`),
+                    FfiConverterOptionalUInt.lower(`nGpuLayers`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_llamacppprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_llamacppprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_llamacppprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_llamacppprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeLlamaCppProvider : FfiConverter<LlamaCppProvider, Long> {
+    override fun lower(value: LlamaCppProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): LlamaCppProvider = LlamaCppProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): LlamaCppProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: LlamaCppProvider) = 8UL
+
+    override fun write(
+        value: LlamaCppProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
  * Large-language-model capability trait — non-streaming completion.
  *
  * Streaming completion uses the existing
@@ -20192,28 +25408,13 @@ public object FfiConverterTypeLlmProvider : FfiConverter<LlmProvider, Long> {
 //
 
 /**
- * A [`crate::llm::Model`] wrapped with applied
- * [`ProviderDefaults`].
+ * An LLM provider wrapped with applied [`ProviderDefaults`].
  *
- * Construct via [`LlmProviderDefaults::from_model`] (wraps an existing
- * model with no defaults) or [`LlmProviderDefaults::with_defaults`]
- * (wraps with explicit defaults). Mutate via the `with_*` builder methods.
- *
- * Phase B's `CustomProvider` factories will return `Arc<LlmProviderDefaults>`
- * directly; for Phase A this class is reachable by lifting any existing
- * `Model` factory result.
+ * Constructed internally by the `CustomProvider` machinery to carry
+ * builder-style defaults (`with_system_prompt`, etc.) alongside the inner
+ * provider handle. Mutate via the `with_*` builder methods.
  */
 public interface LlmProviderDefaultsInterface {
-    /**
-     * Unwrap to a plain [`Model`] handle that applies the
-     * configured defaults on every call.
-     *
-     * Use this when you want to pass the wrapped provider to an API that
-     * takes a generic `Model` (the agent runner, workflow
-     * steps, etc.).
-     */
-    fun `asModel`(): Model
-
     /**
      * Inspect the currently-configured defaults (data only — hooks are
      * not surfaced in Phase A).
@@ -20241,7 +25442,7 @@ public interface LlmProviderDefaultsInterface {
     ): kotlin.String
 
     /**
-     * The model id of the wrapped inner `Model`.
+     * The model id of the wrapped inner provider.
      */
     fun `modelId`(): kotlin.String
 
@@ -20276,16 +25477,11 @@ public interface LlmProviderDefaultsInterface {
 }
 
 /**
- * A [`crate::llm::Model`] wrapped with applied
- * [`ProviderDefaults`].
+ * An LLM provider wrapped with applied [`ProviderDefaults`].
  *
- * Construct via [`LlmProviderDefaults::from_model`] (wraps an existing
- * model with no defaults) or [`LlmProviderDefaults::with_defaults`]
- * (wraps with explicit defaults). Mutate via the `with_*` builder methods.
- *
- * Phase B's `CustomProvider` factories will return `Arc<LlmProviderDefaults>`
- * directly; for Phase A this class is reachable by lifting any existing
- * `Model` factory result.
+ * Constructed internally by the `CustomProvider` machinery to carry
+ * builder-style defaults (`with_system_prompt`, etc.) alongside the inner
+ * provider handle. Mutate via the `with_*` builder methods.
  */
 open class LlmProviderDefaults :
     Disposable,
@@ -20387,26 +25583,6 @@ open class LlmProviderDefaults :
     }
 
     /**
-     * Unwrap to a plain [`Model`] handle that applies the
-     * configured defaults on every call.
-     *
-     * Use this when you want to pass the wrapped provider to an API that
-     * takes a generic `Model` (the agent runner, workflow
-     * steps, etc.).
-     */
-    override fun `asModel`(): Model =
-        FfiConverterTypeModel.lift(
-            callWithHandle {
-                uniffiRustCall { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_method_llmproviderdefaults_as_model(
-                        it,
-                        _status,
-                    )
-                }
-            },
-        )
-
-    /**
      * Inspect the currently-configured defaults (data only — hooks are
      * not surfaced in Phase A).
      */
@@ -20461,7 +25637,7 @@ open class LlmProviderDefaults :
         )
 
     /**
-     * The model id of the wrapped inner `Model`.
+     * The model id of the wrapped inner provider.
      */
     override fun `modelId`(): kotlin.String =
         FfiConverterString.lift(
@@ -20546,41 +25722,10 @@ open class LlmProviderDefaults :
             },
         )
 
-    companion object {
-        /**
-         * Wrap an existing [`Model`] with empty defaults.
-         *
-         * Equivalent to using the wrapped model directly, but lets callers
-         * attach defaults later via the `with_*` methods.
-         */
-        fun `fromModel`(`model`: Model): LlmProviderDefaults =
-            FfiConverterTypeLlmProviderDefaults.lift(
-                uniffiRustCall { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_constructor_llmproviderdefaults_from_model(
-                        FfiConverterTypeModel.lower(`model`),
-                        _status,
-                    )
-                },
-            )
-
-        /**
-         * Wrap a [`Model`] with explicit
-         * [`ProviderDefaults`].
-         */
-        fun `fromModelWithDefaults`(
-            `model`: Model,
-            `defaults`: ProviderDefaults,
-        ): LlmProviderDefaults =
-            FfiConverterTypeLlmProviderDefaults.lift(
-                uniffiRustCall { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_constructor_llmproviderdefaults_from_model_with_defaults(
-                        FfiConverterTypeModel.lower(`model`),
-                        FfiConverterTypeProviderDefaults.lower(`defaults`),
-                        _status,
-                    )
-                },
-            )
-    }
+    /**
+     * @suppress
+     */
+    companion object
 }
 
 /**
@@ -20698,50 +25843,33 @@ public object FfiConverterTypeLlmProviderDefaults : FfiConverter<LlmProviderDefa
 //
 
 /**
- * A chat completion model.
- *
- * Construct one via the per-provider factories in `providers.rs` (e.g.
- * `Model::openai(options)` from the foreign-language side).
- * Once obtained, call [`complete`](Self::complete) (async) or
- * [`complete_blocking`](Self::complete_blocking) (sync) to generate
- * responses.
+ * Concrete LLM provider wrapping an LM Studio server via
+ * [`blazen_llm::CustomProviderHandle`] (built by
+ * [`blazen_llm::lm_studio`]).
  */
-public interface ModelInterface {
+public interface LmStudioProviderInterface {
     /**
-     * Perform a chat completion. Async on Swift / Kotlin; blocking on Go
-     * (UniFFI's Go bindgen wraps the future in a goroutine-friendly call).
+     * Perform a non-streaming chat / completion request.
      */
     suspend fun `complete`(`request`: ModelRequest): ModelResponse
 
     /**
-     * Synchronous variant of [`complete`](Self::complete) — blocks the
-     * current thread on the shared Tokio runtime. Handy for Ruby scripts
-     * and quick Go `main` functions where async machinery is overkill.
-     * Prefer the async [`complete`](Self::complete) in long-running services.
+     * Synchronous variant of [`complete`](Self::complete).
      */
     fun `completeBlocking`(`request`: ModelRequest): ModelResponse
-
-    /**
-     * The model's identifier (e.g. `"gpt-4o"`, `"claude-3-5-sonnet"`).
-     */
-    fun `modelId`(): kotlin.String
 
     companion object
 }
 
 /**
- * A chat completion model.
- *
- * Construct one via the per-provider factories in `providers.rs` (e.g.
- * `Model::openai(options)` from the foreign-language side).
- * Once obtained, call [`complete`](Self::complete) (async) or
- * [`complete_blocking`](Self::complete_blocking) (sync) to generate
- * responses.
+ * Concrete LLM provider wrapping an LM Studio server via
+ * [`blazen_llm::CustomProviderHandle`] (built by
+ * [`blazen_llm::lm_studio`]).
  */
-open class Model :
+open class LmStudioProvider :
     Disposable,
     AutoCloseable,
-    ModelInterface {
+    LmStudioProviderInterface {
     /**
      * @suppress
      */
@@ -20763,6 +25891,23 @@ open class Model :
         this.handle = 0
         this.cleanable = null
     }
+
+    /**
+     * Construct a new LM Studio provider targeting
+     * `http://{host}:{port}/v1`.
+     */
+    constructor(`host`: kotlin.String, `port`: kotlin.UShort, `model`: kotlin.String) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_lmstudioprovider_new(
+                    FfiConverterString.lower(`host`),
+                    FfiConverterUShort.lower(`port`),
+                    FfiConverterString.lower(`model`),
+                    _status,
+                )
+            },
+        )
 
     protected val handle: Long
     protected val cleanable: UniffiCleaner.Cleanable?
@@ -20820,7 +25965,7 @@ open class Model :
                 return
             }
             uniffiRustCall { status ->
-                UniffiLib.uniffi_blazen_uniffi_fn_free_model(handle, status)
+                UniffiLib.uniffi_blazen_uniffi_fn_free_lmstudioprovider(handle, status)
             }
         }
     }
@@ -20833,20 +25978,19 @@ open class Model :
             throw InternalException("uniffiCloneHandle() called on NoHandle object")
         }
         return uniffiRustCall { status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_clone_model(handle, status)
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_lmstudioprovider(handle, status)
         }
     }
 
     /**
-     * Perform a chat completion. Async on Swift / Kotlin; blocking on Go
-     * (UniFFI's Go bindgen wraps the future in a goroutine-friendly call).
+     * Perform a non-streaming chat / completion request.
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
     override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
         uniffiRustCallAsync(
             callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_blazen_uniffi_fn_method_model_complete(
+                UniffiLib.uniffi_blazen_uniffi_fn_method_lmstudioprovider_complete(
                     uniffiHandle,
                     FfiConverterTypeModelRequest.lower(`request`),
                 )
@@ -20861,34 +26005,16 @@ open class Model :
         )
 
     /**
-     * Synchronous variant of [`complete`](Self::complete) — blocks the
-     * current thread on the shared Tokio runtime. Handy for Ruby scripts
-     * and quick Go `main` functions where async machinery is overkill.
-     * Prefer the async [`complete`](Self::complete) in long-running services.
+     * Synchronous variant of [`complete`](Self::complete).
      */
     @Throws(BlazenException::class)
     override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
         FfiConverterTypeModelResponse.lift(
             callWithHandle {
                 uniffiRustCallWithError(BlazenException) { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_method_model_complete_blocking(
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_lmstudioprovider_complete_blocking(
                         it,
                         FfiConverterTypeModelRequest.lower(`request`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    /**
-     * The model's identifier (e.g. `"gpt-4o"`, `"claude-3-5-sonnet"`).
-     */
-    override fun `modelId`(): kotlin.String =
-        FfiConverterString.lift(
-            callWithHandle {
-                uniffiRustCall { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_method_model_model_id(
-                        it,
                         _status,
                     )
                 }
@@ -20904,17 +26030,621 @@ open class Model :
 /**
  * @suppress
  */
-public object FfiConverterTypeModel : FfiConverter<Model, Long> {
-    override fun lower(value: Model): Long = value.uniffiCloneHandle()
+public object FfiConverterTypeLmStudioProvider : FfiConverter<LmStudioProvider, Long> {
+    override fun lower(value: LmStudioProvider): Long = value.uniffiCloneHandle()
 
-    override fun lift(value: Long): Model = Model(UniffiWithHandle, value)
+    override fun lift(value: Long): LmStudioProvider = LmStudioProvider(UniffiWithHandle, value)
 
-    override fun read(buf: ByteBuffer): Model = lift(buf.getLong())
+    override fun read(buf: ByteBuffer): LmStudioProvider = lift(buf.getLong())
 
-    override fun allocationSize(value: Model) = 8UL
+    override fun allocationSize(value: LmStudioProvider) = 8UL
 
     override fun write(
-        value: Model,
+        value: LmStudioProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::mistral::MistralProvider`].
+ */
+public interface MistralProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::mistral::MistralProvider`].
+ */
+open class MistralProvider :
+    Disposable,
+    AutoCloseable,
+    MistralProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new Mistral provider.
+     */
+    constructor(`apiKey`: kotlin.String, `model`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_mistralprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterOptionalString.lower(`model`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_mistralprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_mistralprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_mistralprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_mistralprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMistralProvider : FfiConverter<MistralProvider, Long> {
+    override fun lower(value: MistralProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): MistralProvider = MistralProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): MistralProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: MistralProvider) = 8UL
+
+    override fun write(
+        value: MistralProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::MistralRsProvider`].
+ */
+public interface MistralRsProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::MistralRsProvider`].
+ */
+open class MistralRsProvider :
+    Disposable,
+    AutoCloseable,
+    MistralRsProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a local mistral.rs chat-completion provider.
+     *
+     * `model_id` is a `HuggingFace` repo id or local GGUF path. The
+     * optional `device`/`quantization` strings follow Blazen's parser
+     * format (`"cpu"`, `"cuda:0"`, `"metal"`, `"q4_k_m"`, ...). Set
+     * `vision = true` for multimodal models (LLaVA / Qwen2-VL).
+     */
+    constructor(
+        `modelId`: kotlin.String,
+        `device`: kotlin.String?,
+        `quantization`: kotlin.String?,
+        `contextLength`: kotlin.UInt?,
+        `vision`: kotlin.Boolean,
+    ) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCallWithError(BlazenException) { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_mistralrsprovider_new(
+                    FfiConverterString.lower(`modelId`),
+                    FfiConverterOptionalString.lower(`device`),
+                    FfiConverterOptionalString.lower(`quantization`),
+                    FfiConverterOptionalUInt.lower(`contextLength`),
+                    FfiConverterBoolean.lower(`vision`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_mistralrsprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_mistralrsprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_mistralrsprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_mistralrsprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeMistralRsProvider : FfiConverter<MistralRsProvider, Long> {
+    override fun lower(value: MistralRsProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): MistralRsProvider = MistralRsProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): MistralRsProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: MistralRsProvider) = 8UL
+
+    override fun write(
+        value: MistralRsProvider,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -22476,377 +28206,6 @@ public object FfiConverterTypeMusicGenProvider : FfiConverter<MusicGenProvider, 
 //
 
 /**
- * A music / sound-effect generation model.
- *
- * Construct via one of the per-backend factory functions
- * ([`new_musicgen_model`], [`new_stable_audio_model`],
- * [`new_audiogen_model`], or [`new_fal_music_model`]). Use the async
- * [`generate_music`](Self::generate_music) / [`generate_sfx`](Self::generate_sfx)
- * methods for one-shot rendering, or [`stream_generate_music_to_sink`] /
- * [`stream_generate_sfx_to_sink`] for chunk-level streaming.
- */
-public interface MusicModelInterface {
-    /**
-     * Generate `duration_seconds` of music conditioned on `prompt`.
-     */
-    suspend fun `generateMusic`(
-        `prompt`: kotlin.String,
-        `durationSeconds`: kotlin.Float,
-    ): MusicResult
-
-    /**
-     * Synchronous variant of [`generate_music`](Self::generate_music).
-     */
-    fun `generateMusicBlocking`(
-        `prompt`: kotlin.String,
-        `durationSeconds`: kotlin.Float,
-    ): MusicResult
-
-    /**
-     * Generate `duration_seconds` of sound-effect audio conditioned on
-     * `prompt`.
-     */
-    suspend fun `generateSfx`(
-        `prompt`: kotlin.String,
-        `durationSeconds`: kotlin.Float,
-    ): MusicResult
-
-    /**
-     * Synchronous variant of [`generate_sfx`](Self::generate_sfx).
-     */
-    fun `generateSfxBlocking`(
-        `prompt`: kotlin.String,
-        `durationSeconds`: kotlin.Float,
-    ): MusicResult
-
-    companion object
-}
-
-/**
- * A music / sound-effect generation model.
- *
- * Construct via one of the per-backend factory functions
- * ([`new_musicgen_model`], [`new_stable_audio_model`],
- * [`new_audiogen_model`], or [`new_fal_music_model`]). Use the async
- * [`generate_music`](Self::generate_music) / [`generate_sfx`](Self::generate_sfx)
- * methods for one-shot rendering, or [`stream_generate_music_to_sink`] /
- * [`stream_generate_sfx_to_sink`] for chunk-level streaming.
- */
-open class MusicModel :
-    Disposable,
-    AutoCloseable,
-    MusicModelInterface {
-    /**
-     * @suppress
-     */
-    @Suppress("UNUSED_PARAMETER")
-    constructor(withHandle: UniffiWithHandle, handle: Long) {
-        this.handle = handle
-        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
-    }
-
-    /**
-     * @suppress
-     *
-     * This constructor can be used to instantiate a fake object. Only used for tests. Any
-     * attempt to actually use an object constructed this way will fail as there is no
-     * connected Rust object.
-     */
-    @Suppress("UNUSED_PARAMETER")
-    constructor(noHandle: NoHandle) {
-        this.handle = 0
-        this.cleanable = null
-    }
-
-    protected val handle: Long
-    protected val cleanable: UniffiCleaner.Cleanable?
-
-    private val wasDestroyed = AtomicBoolean(false)
-    private val callCounter = AtomicLong(1)
-
-    override fun destroy() {
-        // Only allow a single call to this method.
-        // TODO: maybe we should log a warning if called more than once?
-        if (this.wasDestroyed.compareAndSet(false, true)) {
-            // This decrement always matches the initial count of 1 given at creation time.
-            if (this.callCounter.decrementAndGet() == 0L) {
-                cleanable?.clean()
-            }
-        }
-    }
-
-    @Synchronized
-    override fun close() {
-        this.destroy()
-    }
-
-    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
-        // Check and increment the call counter, to keep the object alive.
-        // This needs a compare-and-set retry loop in case of concurrent updates.
-        do {
-            val c = this.callCounter.get()
-            if (c == 0L) {
-                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
-            }
-            if (c == Long.MAX_VALUE) {
-                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
-            }
-        } while (!this.callCounter.compareAndSet(c, c + 1L))
-        // Now we can safely do the method call without the handle being freed concurrently.
-        try {
-            return block(this.uniffiCloneHandle())
-        } finally {
-            // This decrement always matches the increment we performed above.
-            if (this.callCounter.decrementAndGet() == 0L) {
-                cleanable?.clean()
-            }
-        }
-    }
-
-    // Use a static inner class instead of a closure so as not to accidentally
-    // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(
-        private val handle: Long,
-    ) : Runnable {
-        override fun run() {
-            if (handle == 0.toLong()) {
-                // Fake object created with `NoHandle`, don't try to free.
-                return
-            }
-            uniffiRustCall { status ->
-                UniffiLib.uniffi_blazen_uniffi_fn_free_musicmodel(handle, status)
-            }
-        }
-    }
-
-    /**
-     * @suppress
-     */
-    fun uniffiCloneHandle(): Long {
-        if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object")
-        }
-        return uniffiRustCall { status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_clone_musicmodel(handle, status)
-        }
-    }
-
-    /**
-     * Generate `duration_seconds` of music conditioned on `prompt`.
-     */
-    @Throws(BlazenException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `generateMusic`(
-        `prompt`: kotlin.String,
-        `durationSeconds`: kotlin.Float,
-    ): MusicResult =
-        uniffiRustCallAsync(
-            callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_blazen_uniffi_fn_method_musicmodel_generate_music(
-                    uniffiHandle,
-                    FfiConverterString.lower(`prompt`),
-                    FfiConverterFloat.lower(`durationSeconds`),
-                )
-            },
-            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-            // lift function
-            { FfiConverterTypeMusicResult.lift(it) },
-            // Error FFI converter
-            BlazenException.ErrorHandler,
-        )
-
-    /**
-     * Synchronous variant of [`generate_music`](Self::generate_music).
-     */
-    @Throws(BlazenException::class)
-    override fun `generateMusicBlocking`(
-        `prompt`: kotlin.String,
-        `durationSeconds`: kotlin.Float,
-    ): MusicResult =
-        FfiConverterTypeMusicResult.lift(
-            callWithHandle {
-                uniffiRustCallWithError(BlazenException) { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_method_musicmodel_generate_music_blocking(
-                        it,
-                        FfiConverterString.lower(`prompt`),
-                        FfiConverterFloat.lower(`durationSeconds`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    /**
-     * Generate `duration_seconds` of sound-effect audio conditioned on
-     * `prompt`.
-     */
-    @Throws(BlazenException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `generateSfx`(
-        `prompt`: kotlin.String,
-        `durationSeconds`: kotlin.Float,
-    ): MusicResult =
-        uniffiRustCallAsync(
-            callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_blazen_uniffi_fn_method_musicmodel_generate_sfx(
-                    uniffiHandle,
-                    FfiConverterString.lower(`prompt`),
-                    FfiConverterFloat.lower(`durationSeconds`),
-                )
-            },
-            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-            // lift function
-            { FfiConverterTypeMusicResult.lift(it) },
-            // Error FFI converter
-            BlazenException.ErrorHandler,
-        )
-
-    /**
-     * Synchronous variant of [`generate_sfx`](Self::generate_sfx).
-     */
-    @Throws(BlazenException::class)
-    override fun `generateSfxBlocking`(
-        `prompt`: kotlin.String,
-        `durationSeconds`: kotlin.Float,
-    ): MusicResult =
-        FfiConverterTypeMusicResult.lift(
-            callWithHandle {
-                uniffiRustCallWithError(BlazenException) { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_method_musicmodel_generate_sfx_blocking(
-                        it,
-                        FfiConverterString.lower(`prompt`),
-                        FfiConverterFloat.lower(`durationSeconds`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    /**
-     * @suppress
-     */
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeMusicModel : FfiConverter<MusicModel, Long> {
-    override fun lower(value: MusicModel): Long = value.uniffiCloneHandle()
-
-    override fun lift(value: Long): MusicModel = MusicModel(UniffiWithHandle, value)
-
-    override fun read(buf: ByteBuffer): MusicModel = lift(buf.getLong())
-
-    override fun allocationSize(value: MusicModel) = 8UL
-
-    override fun write(
-        value: MusicModel,
-        buf: ByteBuffer,
-    ) {
-        buf.putLong(lower(value))
-    }
-}
-
-// This template implements a class for working with a Rust struct via a handle
-// to the live Rust struct on the other side of the FFI.
-//
-// There's some subtlety here, because we have to be careful not to operate on a Rust
-// struct after it has been dropped, and because we must expose a public API for freeing
-// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
-//
-//   * Each instance holds an opaque handle to the underlying Rust struct.
-//     Method calls need to read this handle from the object's state and pass it in to
-//     the Rust FFI.
-//
-//   * When an instance is no longer needed, its handle should be passed to a
-//     special destructor function provided by the Rust FFI, which will drop the
-//     underlying Rust struct.
-//
-//   * Given an instance, calling code is expected to call the special
-//     `destroy` method in order to free it after use, either by calling it explicitly
-//     or by using a higher-level helper like the `use` method. Failing to do so risks
-//     leaking the underlying Rust struct.
-//
-//   * We can't assume that calling code will do the right thing, and must be prepared
-//     to handle Kotlin method calls executing concurrently with or even after a call to
-//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
-//
-//   * We must never allow Rust code to operate on the underlying Rust struct after
-//     the destructor has been called, and must never call the destructor more than once.
-//     Doing so may trigger memory unsafety.
-//
-//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
-//     is implemented to call the destructor when the Kotlin object becomes unreachable.
-//     This is done in a background thread. This is not a panacea, and client code should be aware that
-//      1. the thread may starve if some there are objects that have poorly performing
-//     `drop` methods or do significant work in their `drop` methods.
-//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
-//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
-//
-// If we try to implement this with mutual exclusion on access to the handle, there is the
-// possibility of a race between a method call and a concurrent call to `destroy`:
-//
-//    * Thread A starts a method call, reads the value of the handle, but is interrupted
-//      before it can pass the handle over the FFI to Rust.
-//    * Thread B calls `destroy` and frees the underlying Rust struct.
-//    * Thread A resumes, passing the already-read handle value to Rust and triggering
-//      a use-after-free.
-//
-// One possible solution would be to use a `ReadWriteLock`, with each method call taking
-// a read lock (and thus allowed to run concurrently) and the special `destroy` method
-// taking a write lock (and thus blocking on live method calls). However, we aim not to
-// generate methods with any hidden blocking semantics, and a `destroy` method that might
-// block if called incorrectly seems to meet that bar.
-//
-// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
-// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
-// has been called. These are updated according to the following rules:
-//
-//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
-//      The initial value for the flag is false.
-//
-//    * At the start of each method call, we atomically check the counter.
-//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
-//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
-//
-//    * At the end of each method call, we atomically decrement and check the counter.
-//      If it has reached zero then we destroy the underlying Rust struct.
-//
-//    * When `destroy` is called, we atomically flip the flag from false to true.
-//      If the flag was already true we silently fail.
-//      Otherwise we atomically decrement and check the counter.
-//      If it has reached zero then we destroy the underlying Rust struct.
-//
-// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
-// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
-//
-// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
-// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
-// of the underlying Rust code.
-//
-// This makes a cleaner a better alternative to _not_ calling `destroy()` as
-// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
-// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
-// thread may be starved, and the app will leak memory.
-//
-// In this case, `destroy`ing manually may be a better solution.
-//
-// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
-// with Rust peers are reclaimed:
-//
-// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
-// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
-// 3. The memory is reclaimed when the process terminates.
-//
-// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
-//
-
-/**
  * Text-to-music / text-to-sfx capability trait.
  *
  * Engines that only support music generation get the default
@@ -23704,6 +29063,1544 @@ public object FfiConverterTypeMusicStreamSink : FfiConverter<MusicStreamSink, Lo
 //
 
 /**
+ * Concrete LLM provider wrapping an Ollama server via
+ * [`blazen_llm::CustomProviderHandle`] (built by [`blazen_llm::ollama`]).
+ */
+public interface OllamaProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping an Ollama server via
+ * [`blazen_llm::CustomProviderHandle`] (built by [`blazen_llm::ollama`]).
+ */
+open class OllamaProvider :
+    Disposable,
+    AutoCloseable,
+    OllamaProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new Ollama provider targeting
+     * `http://{host}:{port}/v1`.
+     */
+    constructor(`host`: kotlin.String, `port`: kotlin.UShort, `model`: kotlin.String) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_ollamaprovider_new(
+                    FfiConverterString.lower(`host`),
+                    FfiConverterUShort.lower(`port`),
+                    FfiConverterString.lower(`model`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_ollamaprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_ollamaprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_ollamaprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_ollamaprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeOllamaProvider : FfiConverter<OllamaProvider, Long> {
+    override fun lower(value: OllamaProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): OllamaProvider = OllamaProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): OllamaProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: OllamaProvider) = 8UL
+
+    override fun write(
+        value: OllamaProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::openai_compat::OpenAiCompatProvider`].
+ *
+ * Targets any service that speaks the official OpenAI Chat Completions
+ * wire format (vLLM, llama-server, local proxies, ...) using
+ * `Authorization: Bearer <api_key>` auth.
+ */
+public interface OpenAiCompatProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::openai_compat::OpenAiCompatProvider`].
+ *
+ * Targets any service that speaks the official OpenAI Chat Completions
+ * wire format (vLLM, llama-server, local proxies, ...) using
+ * `Authorization: Bearer <api_key>` auth.
+ */
+open class OpenAiCompatProvider :
+    Disposable,
+    AutoCloseable,
+    OpenAiCompatProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new OpenAI-compatible provider.
+     *
+     * `provider_name` is the logical id reported by the provider.
+     * `base_url` is the server root (e.g. `http://localhost:8000/v1`).
+     * `api_key` is the bearer token. `model` is the default chat model.
+     */
+    constructor(`providerName`: kotlin.String, `baseUrl`: kotlin.String, `apiKey`: kotlin.String, `model`: kotlin.String) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_openaicompatprovider_new(
+                    FfiConverterString.lower(`providerName`),
+                    FfiConverterString.lower(`baseUrl`),
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterString.lower(`model`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_openaicompatprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_openaicompatprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_openaicompatprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_openaicompatprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeOpenAiCompatProvider : FfiConverter<OpenAiCompatProvider, Long> {
+    override fun lower(value: OpenAiCompatProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): OpenAiCompatProvider = OpenAiCompatProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): OpenAiCompatProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: OpenAiCompatProvider) = 8UL
+
+    override fun write(
+        value: OpenAiCompatProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete embedding provider wrapping
+ * [`blazen_llm::providers::concrete::embed::OpenAiEmbeddingProvider`].
+ *
+ * Targets `https://api.openai.com/v1/embeddings`. Defaults to
+ * `text-embedding-3-small` (1536 dims). `model` overrides the default
+ * model id — note that the `OpenAiEmbeddingModel` builder couples
+ * model and dimensions, so this wrapper only exposes the model name
+ * and leaves dimensions at the OpenAI-published default for the
+ * chosen model (1536 for `-small`, 3072 for `-large`).
+ */
+public interface OpenAiEmbeddingProviderInterface {
+    /**
+     * Return the dimensionality of vectors produced by [`embed`](Self::embed).
+     */
+    fun `dimensions`(): kotlin.UInt
+
+    /**
+     * Compute embedding vectors for each input string.
+     */
+    suspend fun `embed`(`texts`: List<kotlin.String>): List<List<kotlin.Float>>
+
+    /**
+     * Synchronous variant of [`embed`](Self::embed).
+     */
+    fun `embedBlocking`(`texts`: List<kotlin.String>): List<List<kotlin.Float>>
+
+    companion object
+}
+
+/**
+ * Concrete embedding provider wrapping
+ * [`blazen_llm::providers::concrete::embed::OpenAiEmbeddingProvider`].
+ *
+ * Targets `https://api.openai.com/v1/embeddings`. Defaults to
+ * `text-embedding-3-small` (1536 dims). `model` overrides the default
+ * model id — note that the `OpenAiEmbeddingModel` builder couples
+ * model and dimensions, so this wrapper only exposes the model name
+ * and leaves dimensions at the OpenAI-published default for the
+ * chosen model (1536 for `-small`, 3072 for `-large`).
+ */
+open class OpenAiEmbeddingProvider :
+    Disposable,
+    AutoCloseable,
+    OpenAiEmbeddingProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct an `OpenAI` embedding provider.
+     *
+     * `model` overrides the default `text-embedding-3-small` model id
+     * when `Some`. For full control over dimensions / base URL / retry
+     * config, build a
+     * [`blazen_llm::providers::openai::OpenAiEmbeddingModel`] directly
+     * and pass it via [`OpenAiEmbeddingProvider::from_model`] (not
+     * exposed across the foreign binding surface — Rust-side only).
+     */
+    constructor(`apiKey`: kotlin.String, `model`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_openaiembeddingprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterOptionalString.lower(`model`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_openaiembeddingprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_openaiembeddingprovider(handle, status)
+        }
+    }
+
+    /**
+     * Return the dimensionality of vectors produced by [`embed`](Self::embed).
+     */
+    override fun `dimensions`(): kotlin.UInt =
+        FfiConverterUInt.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_openaiembeddingprovider_dimensions(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Compute embedding vectors for each input string.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `embed`(`texts`: List<kotlin.String>): List<List<kotlin.Float>> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_openaiembeddingprovider_embed(
+                    uniffiHandle,
+                    FfiConverterSequenceString.lower(`texts`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceSequenceFloat.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`embed`](Self::embed).
+     */
+    @Throws(BlazenException::class)
+    override fun `embedBlocking`(`texts`: List<kotlin.String>): List<List<kotlin.Float>> =
+        FfiConverterSequenceSequenceFloat.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_openaiembeddingprovider_embed_blocking(
+                        it,
+                        FfiConverterSequenceString.lower(`texts`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeOpenAiEmbeddingProvider : FfiConverter<OpenAiEmbeddingProvider, Long> {
+    override fun lower(value: OpenAiEmbeddingProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): OpenAiEmbeddingProvider = OpenAiEmbeddingProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): OpenAiEmbeddingProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: OpenAiEmbeddingProvider) = 8UL
+
+    override fun write(
+        value: OpenAiEmbeddingProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::openai::OpenAiProvider`].
+ */
+public interface OpenAiProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::openai::OpenAiProvider`].
+ */
+open class OpenAiProvider :
+    Disposable,
+    AutoCloseable,
+    OpenAiProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new OpenAI provider.
+     *
+     * `api_key` — bearer token. `model` overrides the provider's
+     * default chat model when `Some`. `base_url` overrides the official
+     * `https://api.openai.com/v1` endpoint (for proxies / local
+     * OpenAI-compatible servers).
+     */
+    constructor(`apiKey`: kotlin.String, `model`: kotlin.String?, `baseUrl`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_openaiprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterOptionalString.lower(`model`),
+                    FfiConverterOptionalString.lower(`baseUrl`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_openaiprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_openaiprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_openaiprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_openaiprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeOpenAiProvider : FfiConverter<OpenAiProvider, Long> {
+    override fun lower(value: OpenAiProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): OpenAiProvider = OpenAiProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): OpenAiProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: OpenAiProvider) = 8UL
+
+    override fun write(
+        value: OpenAiProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::openrouter::OpenRouterProvider`].
+ */
+public interface OpenRouterProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::openrouter::OpenRouterProvider`].
+ */
+open class OpenRouterProvider :
+    Disposable,
+    AutoCloseable,
+    OpenRouterProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new OpenRouter provider.
+     */
+    constructor(`apiKey`: kotlin.String, `model`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_openrouterprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterOptionalString.lower(`model`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_openrouterprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_openrouterprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_openrouterprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_openrouterprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeOpenRouterProvider : FfiConverter<OpenRouterProvider, Long> {
+    override fun lower(value: OpenRouterProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): OpenRouterProvider = OpenRouterProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): OpenRouterProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: OpenRouterProvider) = 8UL
+
+    override fun write(
+        value: OpenRouterProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
  * Client handle for invoking workflows on a remote [`PeerServer`].
  *
  * Construct with [`PeerClient::connect`]. RPCs go out over a multiplexed
@@ -24376,6 +31273,301 @@ public object FfiConverterTypePeerServer : FfiConverter<PeerServer, Long> {
 
     override fun write(
         value: PeerServer,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::perplexity::PerplexityProvider`].
+ */
+public interface PerplexityProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::perplexity::PerplexityProvider`].
+ */
+open class PerplexityProvider :
+    Disposable,
+    AutoCloseable,
+    PerplexityProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new Perplexity provider.
+     */
+    constructor(`apiKey`: kotlin.String, `model`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_perplexityprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterOptionalString.lower(`model`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_perplexityprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_perplexityprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_perplexityprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_perplexityprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePerplexityProvider : FfiConverter<PerplexityProvider, Long> {
+    override fun lower(value: PerplexityProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): PerplexityProvider = PerplexityProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): PerplexityProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: PerplexityProvider) = 8UL
+
+    override fun write(
+        value: PerplexityProvider,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -27430,322 +34622,6 @@ public object FfiConverterTypeStepHandler : FfiConverter<StepHandler, Long> {
 //
 
 /**
- * A speech-to-text model.
- *
- * Construct via [`new_whisper_stt_model`] (local, feature-gated) or
- * [`new_fal_stt_model`] (cloud). Once obtained, call
- * [`transcribe`](Self::transcribe) (async) or
- * [`transcribe_blocking`](Self::transcribe_blocking) (sync) to transcribe
- * audio.
- */
-public interface SttModelInterface {
-    /**
-     * Transcribe audio at `audio_source` and return the transcript.
-     *
-     * `audio_source` is interpreted per-backend: the whisper.cpp backend
-     * treats it as a local file path (16-bit PCM mono WAV at 16 kHz);
-     * fal.ai treats it as an HTTP(S) URL or a `data:` URI. `language` is
-     * an optional ISO-639-1 hint — when omitted, providers that support
-     * language detection will auto-detect.
-     */
-    suspend fun `transcribe`(
-        `audioSource`: kotlin.String,
-        `language`: kotlin.String?,
-    ): SttResult
-
-    /**
-     * Synchronous variant of [`transcribe`](Self::transcribe).
-     */
-    fun `transcribeBlocking`(
-        `audioSource`: kotlin.String,
-        `language`: kotlin.String?,
-    ): SttResult
-
-    companion object
-}
-
-/**
- * A speech-to-text model.
- *
- * Construct via [`new_whisper_stt_model`] (local, feature-gated) or
- * [`new_fal_stt_model`] (cloud). Once obtained, call
- * [`transcribe`](Self::transcribe) (async) or
- * [`transcribe_blocking`](Self::transcribe_blocking) (sync) to transcribe
- * audio.
- */
-open class SttModel :
-    Disposable,
-    AutoCloseable,
-    SttModelInterface {
-    /**
-     * @suppress
-     */
-    @Suppress("UNUSED_PARAMETER")
-    constructor(withHandle: UniffiWithHandle, handle: Long) {
-        this.handle = handle
-        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
-    }
-
-    /**
-     * @suppress
-     *
-     * This constructor can be used to instantiate a fake object. Only used for tests. Any
-     * attempt to actually use an object constructed this way will fail as there is no
-     * connected Rust object.
-     */
-    @Suppress("UNUSED_PARAMETER")
-    constructor(noHandle: NoHandle) {
-        this.handle = 0
-        this.cleanable = null
-    }
-
-    protected val handle: Long
-    protected val cleanable: UniffiCleaner.Cleanable?
-
-    private val wasDestroyed = AtomicBoolean(false)
-    private val callCounter = AtomicLong(1)
-
-    override fun destroy() {
-        // Only allow a single call to this method.
-        // TODO: maybe we should log a warning if called more than once?
-        if (this.wasDestroyed.compareAndSet(false, true)) {
-            // This decrement always matches the initial count of 1 given at creation time.
-            if (this.callCounter.decrementAndGet() == 0L) {
-                cleanable?.clean()
-            }
-        }
-    }
-
-    @Synchronized
-    override fun close() {
-        this.destroy()
-    }
-
-    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
-        // Check and increment the call counter, to keep the object alive.
-        // This needs a compare-and-set retry loop in case of concurrent updates.
-        do {
-            val c = this.callCounter.get()
-            if (c == 0L) {
-                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
-            }
-            if (c == Long.MAX_VALUE) {
-                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
-            }
-        } while (!this.callCounter.compareAndSet(c, c + 1L))
-        // Now we can safely do the method call without the handle being freed concurrently.
-        try {
-            return block(this.uniffiCloneHandle())
-        } finally {
-            // This decrement always matches the increment we performed above.
-            if (this.callCounter.decrementAndGet() == 0L) {
-                cleanable?.clean()
-            }
-        }
-    }
-
-    // Use a static inner class instead of a closure so as not to accidentally
-    // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(
-        private val handle: Long,
-    ) : Runnable {
-        override fun run() {
-            if (handle == 0.toLong()) {
-                // Fake object created with `NoHandle`, don't try to free.
-                return
-            }
-            uniffiRustCall { status ->
-                UniffiLib.uniffi_blazen_uniffi_fn_free_sttmodel(handle, status)
-            }
-        }
-    }
-
-    /**
-     * @suppress
-     */
-    fun uniffiCloneHandle(): Long {
-        if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object")
-        }
-        return uniffiRustCall { status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_clone_sttmodel(handle, status)
-        }
-    }
-
-    /**
-     * Transcribe audio at `audio_source` and return the transcript.
-     *
-     * `audio_source` is interpreted per-backend: the whisper.cpp backend
-     * treats it as a local file path (16-bit PCM mono WAV at 16 kHz);
-     * fal.ai treats it as an HTTP(S) URL or a `data:` URI. `language` is
-     * an optional ISO-639-1 hint — when omitted, providers that support
-     * language detection will auto-detect.
-     */
-    @Throws(BlazenException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `transcribe`(
-        `audioSource`: kotlin.String,
-        `language`: kotlin.String?,
-    ): SttResult =
-        uniffiRustCallAsync(
-            callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_blazen_uniffi_fn_method_sttmodel_transcribe(
-                    uniffiHandle,
-                    FfiConverterString.lower(`audioSource`),
-                    FfiConverterOptionalString.lower(`language`),
-                )
-            },
-            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-            // lift function
-            { FfiConverterTypeSttResult.lift(it) },
-            // Error FFI converter
-            BlazenException.ErrorHandler,
-        )
-
-    /**
-     * Synchronous variant of [`transcribe`](Self::transcribe).
-     */
-    @Throws(BlazenException::class)
-    override fun `transcribeBlocking`(
-        `audioSource`: kotlin.String,
-        `language`: kotlin.String?,
-    ): SttResult =
-        FfiConverterTypeSttResult.lift(
-            callWithHandle {
-                uniffiRustCallWithError(BlazenException) { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_method_sttmodel_transcribe_blocking(
-                        it,
-                        FfiConverterString.lower(`audioSource`),
-                        FfiConverterOptionalString.lower(`language`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    /**
-     * @suppress
-     */
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeSttModel : FfiConverter<SttModel, Long> {
-    override fun lower(value: SttModel): Long = value.uniffiCloneHandle()
-
-    override fun lift(value: Long): SttModel = SttModel(UniffiWithHandle, value)
-
-    override fun read(buf: ByteBuffer): SttModel = lift(buf.getLong())
-
-    override fun allocationSize(value: SttModel) = 8UL
-
-    override fun write(
-        value: SttModel,
-        buf: ByteBuffer,
-    ) {
-        buf.putLong(lower(value))
-    }
-}
-
-// This template implements a class for working with a Rust struct via a handle
-// to the live Rust struct on the other side of the FFI.
-//
-// There's some subtlety here, because we have to be careful not to operate on a Rust
-// struct after it has been dropped, and because we must expose a public API for freeing
-// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
-//
-//   * Each instance holds an opaque handle to the underlying Rust struct.
-//     Method calls need to read this handle from the object's state and pass it in to
-//     the Rust FFI.
-//
-//   * When an instance is no longer needed, its handle should be passed to a
-//     special destructor function provided by the Rust FFI, which will drop the
-//     underlying Rust struct.
-//
-//   * Given an instance, calling code is expected to call the special
-//     `destroy` method in order to free it after use, either by calling it explicitly
-//     or by using a higher-level helper like the `use` method. Failing to do so risks
-//     leaking the underlying Rust struct.
-//
-//   * We can't assume that calling code will do the right thing, and must be prepared
-//     to handle Kotlin method calls executing concurrently with or even after a call to
-//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
-//
-//   * We must never allow Rust code to operate on the underlying Rust struct after
-//     the destructor has been called, and must never call the destructor more than once.
-//     Doing so may trigger memory unsafety.
-//
-//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
-//     is implemented to call the destructor when the Kotlin object becomes unreachable.
-//     This is done in a background thread. This is not a panacea, and client code should be aware that
-//      1. the thread may starve if some there are objects that have poorly performing
-//     `drop` methods or do significant work in their `drop` methods.
-//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
-//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
-//
-// If we try to implement this with mutual exclusion on access to the handle, there is the
-// possibility of a race between a method call and a concurrent call to `destroy`:
-//
-//    * Thread A starts a method call, reads the value of the handle, but is interrupted
-//      before it can pass the handle over the FFI to Rust.
-//    * Thread B calls `destroy` and frees the underlying Rust struct.
-//    * Thread A resumes, passing the already-read handle value to Rust and triggering
-//      a use-after-free.
-//
-// One possible solution would be to use a `ReadWriteLock`, with each method call taking
-// a read lock (and thus allowed to run concurrently) and the special `destroy` method
-// taking a write lock (and thus blocking on live method calls). However, we aim not to
-// generate methods with any hidden blocking semantics, and a `destroy` method that might
-// block if called incorrectly seems to meet that bar.
-//
-// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
-// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
-// has been called. These are updated according to the following rules:
-//
-//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
-//      The initial value for the flag is false.
-//
-//    * At the start of each method call, we atomically check the counter.
-//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
-//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
-//
-//    * At the end of each method call, we atomically decrement and check the counter.
-//      If it has reached zero then we destroy the underlying Rust struct.
-//
-//    * When `destroy` is called, we atomically flip the flag from false to true.
-//      If the flag was already true we silently fail.
-//      Otherwise we atomically decrement and check the counter.
-//      If it has reached zero then we destroy the underlying Rust struct.
-//
-// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
-// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
-//
-// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
-// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
-// of the underlying Rust code.
-//
-// This makes a cleaner a better alternative to _not_ calling `destroy()` as
-// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
-// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
-// thread may be starved, and the app will leak memory.
-//
-// In this case, `destroy`ing manually may be a better solution.
-//
-// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
-// with Rust peers are reclaimed:
-//
-// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
-// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
-// 3. The memory is reclaimed when the process terminates.
-//
-// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
-//
-
-/**
  * Speech-to-text capability trait.
  */
 public interface SttProviderInterface {
@@ -27950,318 +34826,6 @@ public object FfiConverterTypeSttProvider : FfiConverter<SttProvider, Long> {
 
     override fun write(
         value: SttProvider,
-        buf: ByteBuffer,
-    ) {
-        buf.putLong(lower(value))
-    }
-}
-
-// This template implements a class for working with a Rust struct via a handle
-// to the live Rust struct on the other side of the FFI.
-//
-// There's some subtlety here, because we have to be careful not to operate on a Rust
-// struct after it has been dropped, and because we must expose a public API for freeing
-// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
-//
-//   * Each instance holds an opaque handle to the underlying Rust struct.
-//     Method calls need to read this handle from the object's state and pass it in to
-//     the Rust FFI.
-//
-//   * When an instance is no longer needed, its handle should be passed to a
-//     special destructor function provided by the Rust FFI, which will drop the
-//     underlying Rust struct.
-//
-//   * Given an instance, calling code is expected to call the special
-//     `destroy` method in order to free it after use, either by calling it explicitly
-//     or by using a higher-level helper like the `use` method. Failing to do so risks
-//     leaking the underlying Rust struct.
-//
-//   * We can't assume that calling code will do the right thing, and must be prepared
-//     to handle Kotlin method calls executing concurrently with or even after a call to
-//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
-//
-//   * We must never allow Rust code to operate on the underlying Rust struct after
-//     the destructor has been called, and must never call the destructor more than once.
-//     Doing so may trigger memory unsafety.
-//
-//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
-//     is implemented to call the destructor when the Kotlin object becomes unreachable.
-//     This is done in a background thread. This is not a panacea, and client code should be aware that
-//      1. the thread may starve if some there are objects that have poorly performing
-//     `drop` methods or do significant work in their `drop` methods.
-//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
-//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
-//
-// If we try to implement this with mutual exclusion on access to the handle, there is the
-// possibility of a race between a method call and a concurrent call to `destroy`:
-//
-//    * Thread A starts a method call, reads the value of the handle, but is interrupted
-//      before it can pass the handle over the FFI to Rust.
-//    * Thread B calls `destroy` and frees the underlying Rust struct.
-//    * Thread A resumes, passing the already-read handle value to Rust and triggering
-//      a use-after-free.
-//
-// One possible solution would be to use a `ReadWriteLock`, with each method call taking
-// a read lock (and thus allowed to run concurrently) and the special `destroy` method
-// taking a write lock (and thus blocking on live method calls). However, we aim not to
-// generate methods with any hidden blocking semantics, and a `destroy` method that might
-// block if called incorrectly seems to meet that bar.
-//
-// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
-// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
-// has been called. These are updated according to the following rules:
-//
-//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
-//      The initial value for the flag is false.
-//
-//    * At the start of each method call, we atomically check the counter.
-//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
-//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
-//
-//    * At the end of each method call, we atomically decrement and check the counter.
-//      If it has reached zero then we destroy the underlying Rust struct.
-//
-//    * When `destroy` is called, we atomically flip the flag from false to true.
-//      If the flag was already true we silently fail.
-//      Otherwise we atomically decrement and check the counter.
-//      If it has reached zero then we destroy the underlying Rust struct.
-//
-// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
-// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
-//
-// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
-// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
-// of the underlying Rust code.
-//
-// This makes a cleaner a better alternative to _not_ calling `destroy()` as
-// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
-// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
-// thread may be starved, and the app will leak memory.
-//
-// In this case, `destroy`ing manually may be a better solution.
-//
-// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
-// with Rust peers are reclaimed:
-//
-// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
-// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
-// 3. The memory is reclaimed when the process terminates.
-//
-// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
-//
-
-/**
- * A native single-image-to-3D model handle.
- *
- * Construct via [`new_triposr_3d_model`] (local, feature-gated). Once
- * obtained, call [`generate_from_image`](Self::generate_from_image)
- * (async) or [`generate_from_image_blocking`](Self::generate_from_image_blocking)
- * (sync) to render a 3D mesh from a PNG / JPEG image.
- */
-public interface ThreeDModelInterface {
-    /**
-     * Generate a 3D mesh from a single input image.
-     *
-     * `image_bytes` is encoded PNG or JPEG payload. `mesh_resolution`
-     * controls the side length of the density grid sampled from the
-     * triplane during marching cubes; `256` matches the upstream
-     * `TripoSR` reference and is a reasonable default.
-     */
-    suspend fun `generateFromImage`(
-        `imageBytes`: kotlin.ByteArray,
-        `meshResolution`: kotlin.UInt,
-    ): ThreeDGenerateResult
-
-    /**
-     * Synchronous variant of [`generate_from_image`](Self::generate_from_image).
-     */
-    fun `generateFromImageBlocking`(
-        `imageBytes`: kotlin.ByteArray,
-        `meshResolution`: kotlin.UInt,
-    ): ThreeDGenerateResult
-
-    companion object
-}
-
-/**
- * A native single-image-to-3D model handle.
- *
- * Construct via [`new_triposr_3d_model`] (local, feature-gated). Once
- * obtained, call [`generate_from_image`](Self::generate_from_image)
- * (async) or [`generate_from_image_blocking`](Self::generate_from_image_blocking)
- * (sync) to render a 3D mesh from a PNG / JPEG image.
- */
-open class ThreeDModel :
-    Disposable,
-    AutoCloseable,
-    ThreeDModelInterface {
-    /**
-     * @suppress
-     */
-    @Suppress("UNUSED_PARAMETER")
-    constructor(withHandle: UniffiWithHandle, handle: Long) {
-        this.handle = handle
-        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
-    }
-
-    /**
-     * @suppress
-     *
-     * This constructor can be used to instantiate a fake object. Only used for tests. Any
-     * attempt to actually use an object constructed this way will fail as there is no
-     * connected Rust object.
-     */
-    @Suppress("UNUSED_PARAMETER")
-    constructor(noHandle: NoHandle) {
-        this.handle = 0
-        this.cleanable = null
-    }
-
-    protected val handle: Long
-    protected val cleanable: UniffiCleaner.Cleanable?
-
-    private val wasDestroyed = AtomicBoolean(false)
-    private val callCounter = AtomicLong(1)
-
-    override fun destroy() {
-        // Only allow a single call to this method.
-        // TODO: maybe we should log a warning if called more than once?
-        if (this.wasDestroyed.compareAndSet(false, true)) {
-            // This decrement always matches the initial count of 1 given at creation time.
-            if (this.callCounter.decrementAndGet() == 0L) {
-                cleanable?.clean()
-            }
-        }
-    }
-
-    @Synchronized
-    override fun close() {
-        this.destroy()
-    }
-
-    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
-        // Check and increment the call counter, to keep the object alive.
-        // This needs a compare-and-set retry loop in case of concurrent updates.
-        do {
-            val c = this.callCounter.get()
-            if (c == 0L) {
-                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
-            }
-            if (c == Long.MAX_VALUE) {
-                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
-            }
-        } while (!this.callCounter.compareAndSet(c, c + 1L))
-        // Now we can safely do the method call without the handle being freed concurrently.
-        try {
-            return block(this.uniffiCloneHandle())
-        } finally {
-            // This decrement always matches the increment we performed above.
-            if (this.callCounter.decrementAndGet() == 0L) {
-                cleanable?.clean()
-            }
-        }
-    }
-
-    // Use a static inner class instead of a closure so as not to accidentally
-    // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(
-        private val handle: Long,
-    ) : Runnable {
-        override fun run() {
-            if (handle == 0.toLong()) {
-                // Fake object created with `NoHandle`, don't try to free.
-                return
-            }
-            uniffiRustCall { status ->
-                UniffiLib.uniffi_blazen_uniffi_fn_free_threedmodel(handle, status)
-            }
-        }
-    }
-
-    /**
-     * @suppress
-     */
-    fun uniffiCloneHandle(): Long {
-        if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object")
-        }
-        return uniffiRustCall { status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_clone_threedmodel(handle, status)
-        }
-    }
-
-    /**
-     * Generate a 3D mesh from a single input image.
-     *
-     * `image_bytes` is encoded PNG or JPEG payload. `mesh_resolution`
-     * controls the side length of the density grid sampled from the
-     * triplane during marching cubes; `256` matches the upstream
-     * `TripoSR` reference and is a reasonable default.
-     */
-    @Throws(BlazenException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `generateFromImage`(
-        `imageBytes`: kotlin.ByteArray,
-        `meshResolution`: kotlin.UInt,
-    ): ThreeDGenerateResult =
-        uniffiRustCallAsync(
-            callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_blazen_uniffi_fn_method_threedmodel_generate_from_image(
-                    uniffiHandle,
-                    FfiConverterByteArray.lower(`imageBytes`),
-                    FfiConverterUInt.lower(`meshResolution`),
-                )
-            },
-            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-            // lift function
-            { FfiConverterTypeThreeDGenerateResult.lift(it) },
-            // Error FFI converter
-            BlazenException.ErrorHandler,
-        )
-
-    /**
-     * Synchronous variant of [`generate_from_image`](Self::generate_from_image).
-     */
-    @Throws(BlazenException::class)
-    override fun `generateFromImageBlocking`(
-        `imageBytes`: kotlin.ByteArray,
-        `meshResolution`: kotlin.UInt,
-    ): ThreeDGenerateResult =
-        FfiConverterTypeThreeDGenerateResult.lift(
-            callWithHandle {
-                uniffiRustCallWithError(BlazenException) { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_method_threedmodel_generate_from_image_blocking(
-                        it,
-                        FfiConverterByteArray.lower(`imageBytes`),
-                        FfiConverterUInt.lower(`meshResolution`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    /**
-     * @suppress
-     */
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeThreeDModel : FfiConverter<ThreeDModel, Long> {
-    override fun lower(value: ThreeDModel): Long = value.uniffiCloneHandle()
-
-    override fun lift(value: Long): ThreeDModel = ThreeDModel(UniffiWithHandle, value)
-
-    override fun read(buf: ByteBuffer): ThreeDModel = lift(buf.getLong())
-
-    override fun allocationSize(value: ThreeDModel) = 8UL
-
-    override fun write(
-        value: ThreeDModel,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -28848,6 +35412,301 @@ public object FfiConverterTypeThreeDProvider : FfiConverter<ThreeDProvider, Long
 //
 
 /**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::together::TogetherProvider`].
+ */
+public interface TogetherProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::together::TogetherProvider`].
+ */
+open class TogetherProvider :
+    Disposable,
+    AutoCloseable,
+    TogetherProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new Together provider.
+     */
+    constructor(`apiKey`: kotlin.String, `model`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_togetherprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterOptionalString.lower(`model`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_togetherprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_togetherprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_togetherprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_togetherprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTogetherProvider : FfiConverter<TogetherProvider, Long> {
+    override fun lower(value: TogetherProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): TogetherProvider = TogetherProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): TogetherProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: TogetherProvider) = 8UL
+
+    override fun write(
+        value: TogetherProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
  * Foreign-language tool executor invoked by the agent loop.
  *
  * Implementations receive the LLM's chosen `tool_name` plus a JSON-encoded
@@ -29278,6 +36137,335 @@ public object FfiConverterTypeToolHandler : FfiConverter<ToolHandler, Long> {
 //
 
 /**
+ * Concrete embedding provider wrapping
+ * [`blazen_llm::providers::concrete::embed::TractEmbedProvider`].
+ *
+ * Drop-in replacement for [`FastembedProvider`] on targets that lack
+ * ORT prebuilt binaries (musl Linux, aarch64-linux, wasm). Loads the
+ * same fastembed model catalog via `tract_onnx`.
+ */
+public interface TractEmbedProviderInterface {
+    /**
+     * Return the dimensionality of vectors produced by [`embed`](Self::embed).
+     */
+    fun `dimensions`(): kotlin.UInt
+
+    /**
+     * Compute embedding vectors for each input string.
+     */
+    suspend fun `embed`(`texts`: List<kotlin.String>): List<List<kotlin.Float>>
+
+    /**
+     * Synchronous variant of [`embed`](Self::embed).
+     */
+    fun `embedBlocking`(`texts`: List<kotlin.String>): List<List<kotlin.Float>>
+
+    companion object
+}
+
+/**
+ * Concrete embedding provider wrapping
+ * [`blazen_llm::providers::concrete::embed::TractEmbedProvider`].
+ *
+ * Drop-in replacement for [`FastembedProvider`] on targets that lack
+ * ORT prebuilt binaries (musl Linux, aarch64-linux, wasm). Loads the
+ * same fastembed model catalog via `tract_onnx`.
+ */
+open class TractEmbedProvider :
+    Disposable,
+    AutoCloseable,
+    TractEmbedProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a tract embed provider.
+     *
+     * `model_id` selects a model variant by debug-spelling name
+     * (case-insensitive, same catalog as [`FastembedProvider`]); `None`
+     * resolves to `BGESmallENV15`. `cache_dir` overrides the model
+     * cache directory; `None` falls back to `blazen-model-cache`'s
+     * default.
+     */
+    constructor(`modelId`: kotlin.String?, `cacheDir`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCallWithError(BlazenException) { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_tractembedprovider_new(
+                    FfiConverterOptionalString.lower(`modelId`),
+                    FfiConverterOptionalString.lower(`cacheDir`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_tractembedprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_tractembedprovider(handle, status)
+        }
+    }
+
+    /**
+     * Return the dimensionality of vectors produced by [`embed`](Self::embed).
+     */
+    override fun `dimensions`(): kotlin.UInt =
+        FfiConverterUInt.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_tractembedprovider_dimensions(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Compute embedding vectors for each input string.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `embed`(`texts`: List<kotlin.String>): List<List<kotlin.Float>> =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_tractembedprovider_embed(
+                    uniffiHandle,
+                    FfiConverterSequenceString.lower(`texts`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterSequenceSequenceFloat.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`embed`](Self::embed).
+     */
+    @Throws(BlazenException::class)
+    override fun `embedBlocking`(`texts`: List<kotlin.String>): List<List<kotlin.Float>> =
+        FfiConverterSequenceSequenceFloat.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_tractembedprovider_embed_blocking(
+                        it,
+                        FfiConverterSequenceString.lower(`texts`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeTractEmbedProvider : FfiConverter<TractEmbedProvider, Long> {
+    override fun lower(value: TractEmbedProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): TractEmbedProvider = TractEmbedProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): TractEmbedProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: TractEmbedProvider) = 8UL
+
+    override fun write(
+        value: TractEmbedProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
  * `TripoSR` single-image-to-3D provider.
  *
  * Wraps [`blazen_llm::providers::concrete::three_d::TripoSrProvider`]
@@ -29536,326 +36724,6 @@ public object FfiConverterTypeTripoSrProvider : FfiConverter<TripoSrProvider, Lo
 
     override fun write(
         value: TripoSrProvider,
-        buf: ByteBuffer,
-    ) {
-        buf.putLong(lower(value))
-    }
-}
-
-// This template implements a class for working with a Rust struct via a handle
-// to the live Rust struct on the other side of the FFI.
-//
-// There's some subtlety here, because we have to be careful not to operate on a Rust
-// struct after it has been dropped, and because we must expose a public API for freeing
-// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
-//
-//   * Each instance holds an opaque handle to the underlying Rust struct.
-//     Method calls need to read this handle from the object's state and pass it in to
-//     the Rust FFI.
-//
-//   * When an instance is no longer needed, its handle should be passed to a
-//     special destructor function provided by the Rust FFI, which will drop the
-//     underlying Rust struct.
-//
-//   * Given an instance, calling code is expected to call the special
-//     `destroy` method in order to free it after use, either by calling it explicitly
-//     or by using a higher-level helper like the `use` method. Failing to do so risks
-//     leaking the underlying Rust struct.
-//
-//   * We can't assume that calling code will do the right thing, and must be prepared
-//     to handle Kotlin method calls executing concurrently with or even after a call to
-//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
-//
-//   * We must never allow Rust code to operate on the underlying Rust struct after
-//     the destructor has been called, and must never call the destructor more than once.
-//     Doing so may trigger memory unsafety.
-//
-//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
-//     is implemented to call the destructor when the Kotlin object becomes unreachable.
-//     This is done in a background thread. This is not a panacea, and client code should be aware that
-//      1. the thread may starve if some there are objects that have poorly performing
-//     `drop` methods or do significant work in their `drop` methods.
-//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
-//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
-//
-// If we try to implement this with mutual exclusion on access to the handle, there is the
-// possibility of a race between a method call and a concurrent call to `destroy`:
-//
-//    * Thread A starts a method call, reads the value of the handle, but is interrupted
-//      before it can pass the handle over the FFI to Rust.
-//    * Thread B calls `destroy` and frees the underlying Rust struct.
-//    * Thread A resumes, passing the already-read handle value to Rust and triggering
-//      a use-after-free.
-//
-// One possible solution would be to use a `ReadWriteLock`, with each method call taking
-// a read lock (and thus allowed to run concurrently) and the special `destroy` method
-// taking a write lock (and thus blocking on live method calls). However, we aim not to
-// generate methods with any hidden blocking semantics, and a `destroy` method that might
-// block if called incorrectly seems to meet that bar.
-//
-// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
-// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
-// has been called. These are updated according to the following rules:
-//
-//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
-//      The initial value for the flag is false.
-//
-//    * At the start of each method call, we atomically check the counter.
-//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
-//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
-//
-//    * At the end of each method call, we atomically decrement and check the counter.
-//      If it has reached zero then we destroy the underlying Rust struct.
-//
-//    * When `destroy` is called, we atomically flip the flag from false to true.
-//      If the flag was already true we silently fail.
-//      Otherwise we atomically decrement and check the counter.
-//      If it has reached zero then we destroy the underlying Rust struct.
-//
-// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
-// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
-//
-// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
-// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
-// of the underlying Rust code.
-//
-// This makes a cleaner a better alternative to _not_ calling `destroy()` as
-// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
-// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
-// thread may be starved, and the app will leak memory.
-//
-// In this case, `destroy`ing manually may be a better solution.
-//
-// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
-// with Rust peers are reclaimed:
-//
-// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
-// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
-// 3. The memory is reclaimed when the process terminates.
-//
-// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
-//
-
-/**
- * A text-to-speech model.
- *
- * Construct via [`new_piper_tts_model`] (local, feature-gated) or
- * [`new_fal_tts_model`] (cloud). Once obtained, call
- * [`synthesize`](Self::synthesize) (async) or
- * [`synthesize_blocking`](Self::synthesize_blocking) (sync) to generate
- * speech.
- */
-public interface TtsModelInterface {
-    /**
-     * Synthesize speech from `text` and return the audio payload.
-     *
-     * `voice` selects a provider-specific voice id; `language` is an
-     * optional ISO-639-1 hint. Both are ignored by providers that don't
-     * support them.
-     */
-    suspend fun `synthesize`(
-        `text`: kotlin.String,
-        `voice`: kotlin.String?,
-        `language`: kotlin.String?,
-    ): TtsResult
-
-    /**
-     * Synchronous variant of [`synthesize`](Self::synthesize) — blocks on
-     * the shared Tokio runtime.
-     */
-    fun `synthesizeBlocking`(
-        `text`: kotlin.String,
-        `voice`: kotlin.String?,
-        `language`: kotlin.String?,
-    ): TtsResult
-
-    companion object
-}
-
-/**
- * A text-to-speech model.
- *
- * Construct via [`new_piper_tts_model`] (local, feature-gated) or
- * [`new_fal_tts_model`] (cloud). Once obtained, call
- * [`synthesize`](Self::synthesize) (async) or
- * [`synthesize_blocking`](Self::synthesize_blocking) (sync) to generate
- * speech.
- */
-open class TtsModel :
-    Disposable,
-    AutoCloseable,
-    TtsModelInterface {
-    /**
-     * @suppress
-     */
-    @Suppress("UNUSED_PARAMETER")
-    constructor(withHandle: UniffiWithHandle, handle: Long) {
-        this.handle = handle
-        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
-    }
-
-    /**
-     * @suppress
-     *
-     * This constructor can be used to instantiate a fake object. Only used for tests. Any
-     * attempt to actually use an object constructed this way will fail as there is no
-     * connected Rust object.
-     */
-    @Suppress("UNUSED_PARAMETER")
-    constructor(noHandle: NoHandle) {
-        this.handle = 0
-        this.cleanable = null
-    }
-
-    protected val handle: Long
-    protected val cleanable: UniffiCleaner.Cleanable?
-
-    private val wasDestroyed = AtomicBoolean(false)
-    private val callCounter = AtomicLong(1)
-
-    override fun destroy() {
-        // Only allow a single call to this method.
-        // TODO: maybe we should log a warning if called more than once?
-        if (this.wasDestroyed.compareAndSet(false, true)) {
-            // This decrement always matches the initial count of 1 given at creation time.
-            if (this.callCounter.decrementAndGet() == 0L) {
-                cleanable?.clean()
-            }
-        }
-    }
-
-    @Synchronized
-    override fun close() {
-        this.destroy()
-    }
-
-    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
-        // Check and increment the call counter, to keep the object alive.
-        // This needs a compare-and-set retry loop in case of concurrent updates.
-        do {
-            val c = this.callCounter.get()
-            if (c == 0L) {
-                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
-            }
-            if (c == Long.MAX_VALUE) {
-                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
-            }
-        } while (!this.callCounter.compareAndSet(c, c + 1L))
-        // Now we can safely do the method call without the handle being freed concurrently.
-        try {
-            return block(this.uniffiCloneHandle())
-        } finally {
-            // This decrement always matches the increment we performed above.
-            if (this.callCounter.decrementAndGet() == 0L) {
-                cleanable?.clean()
-            }
-        }
-    }
-
-    // Use a static inner class instead of a closure so as not to accidentally
-    // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(
-        private val handle: Long,
-    ) : Runnable {
-        override fun run() {
-            if (handle == 0.toLong()) {
-                // Fake object created with `NoHandle`, don't try to free.
-                return
-            }
-            uniffiRustCall { status ->
-                UniffiLib.uniffi_blazen_uniffi_fn_free_ttsmodel(handle, status)
-            }
-        }
-    }
-
-    /**
-     * @suppress
-     */
-    fun uniffiCloneHandle(): Long {
-        if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object")
-        }
-        return uniffiRustCall { status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_clone_ttsmodel(handle, status)
-        }
-    }
-
-    /**
-     * Synthesize speech from `text` and return the audio payload.
-     *
-     * `voice` selects a provider-specific voice id; `language` is an
-     * optional ISO-639-1 hint. Both are ignored by providers that don't
-     * support them.
-     */
-    @Throws(BlazenException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `synthesize`(
-        `text`: kotlin.String,
-        `voice`: kotlin.String?,
-        `language`: kotlin.String?,
-    ): TtsResult =
-        uniffiRustCallAsync(
-            callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_blazen_uniffi_fn_method_ttsmodel_synthesize(
-                    uniffiHandle,
-                    FfiConverterString.lower(`text`),
-                    FfiConverterOptionalString.lower(`voice`),
-                    FfiConverterOptionalString.lower(`language`),
-                )
-            },
-            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-            // lift function
-            { FfiConverterTypeTtsResult.lift(it) },
-            // Error FFI converter
-            BlazenException.ErrorHandler,
-        )
-
-    /**
-     * Synchronous variant of [`synthesize`](Self::synthesize) — blocks on
-     * the shared Tokio runtime.
-     */
-    @Throws(BlazenException::class)
-    override fun `synthesizeBlocking`(
-        `text`: kotlin.String,
-        `voice`: kotlin.String?,
-        `language`: kotlin.String?,
-    ): TtsResult =
-        FfiConverterTypeTtsResult.lift(
-            callWithHandle {
-                uniffiRustCallWithError(BlazenException) { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_method_ttsmodel_synthesize_blocking(
-                        it,
-                        FfiConverterString.lower(`text`),
-                        FfiConverterOptionalString.lower(`voice`),
-                        FfiConverterOptionalString.lower(`language`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    /**
-     * @suppress
-     */
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeTtsModel : FfiConverter<TtsModel, Long> {
-    override fun lower(value: TtsModel): Long = value.uniffiCloneHandle()
-
-    override fun lift(value: Long): TtsModel = TtsModel(UniffiWithHandle, value)
-
-    override fun read(buf: ByteBuffer): TtsModel = lift(buf.getLong())
-
-    override fun allocationSize(value: TtsModel) = 8UL
-
-    override fun write(
-        value: TtsModel,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -32049,428 +38917,6 @@ public object FfiConverterTypeUniffiRatedJsonlDataset : FfiConverter<UniffiRated
 
     override fun write(
         value: UniffiRatedJsonlDataset,
-        buf: ByteBuffer,
-    ) {
-        buf.putLong(lower(value))
-    }
-}
-
-// This template implements a class for working with a Rust struct via a handle
-// to the live Rust struct on the other side of the FFI.
-//
-// There's some subtlety here, because we have to be careful not to operate on a Rust
-// struct after it has been dropped, and because we must expose a public API for freeing
-// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
-//
-//   * Each instance holds an opaque handle to the underlying Rust struct.
-//     Method calls need to read this handle from the object's state and pass it in to
-//     the Rust FFI.
-//
-//   * When an instance is no longer needed, its handle should be passed to a
-//     special destructor function provided by the Rust FFI, which will drop the
-//     underlying Rust struct.
-//
-//   * Given an instance, calling code is expected to call the special
-//     `destroy` method in order to free it after use, either by calling it explicitly
-//     or by using a higher-level helper like the `use` method. Failing to do so risks
-//     leaking the underlying Rust struct.
-//
-//   * We can't assume that calling code will do the right thing, and must be prepared
-//     to handle Kotlin method calls executing concurrently with or even after a call to
-//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
-//
-//   * We must never allow Rust code to operate on the underlying Rust struct after
-//     the destructor has been called, and must never call the destructor more than once.
-//     Doing so may trigger memory unsafety.
-//
-//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
-//     is implemented to call the destructor when the Kotlin object becomes unreachable.
-//     This is done in a background thread. This is not a panacea, and client code should be aware that
-//      1. the thread may starve if some there are objects that have poorly performing
-//     `drop` methods or do significant work in their `drop` methods.
-//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
-//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
-//
-// If we try to implement this with mutual exclusion on access to the handle, there is the
-// possibility of a race between a method call and a concurrent call to `destroy`:
-//
-//    * Thread A starts a method call, reads the value of the handle, but is interrupted
-//      before it can pass the handle over the FFI to Rust.
-//    * Thread B calls `destroy` and frees the underlying Rust struct.
-//    * Thread A resumes, passing the already-read handle value to Rust and triggering
-//      a use-after-free.
-//
-// One possible solution would be to use a `ReadWriteLock`, with each method call taking
-// a read lock (and thus allowed to run concurrently) and the special `destroy` method
-// taking a write lock (and thus blocking on live method calls). However, we aim not to
-// generate methods with any hidden blocking semantics, and a `destroy` method that might
-// block if called incorrectly seems to meet that bar.
-//
-// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
-// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
-// has been called. These are updated according to the following rules:
-//
-//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
-//      The initial value for the flag is false.
-//
-//    * At the start of each method call, we atomically check the counter.
-//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
-//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
-//
-//    * At the end of each method call, we atomically decrement and check the counter.
-//      If it has reached zero then we destroy the underlying Rust struct.
-//
-//    * When `destroy` is called, we atomically flip the flag from false to true.
-//      If the flag was already true we silently fail.
-//      Otherwise we atomically decrement and check the counter.
-//      If it has reached zero then we destroy the underlying Rust struct.
-//
-// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
-// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
-//
-// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
-// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
-// of the underlying Rust code.
-//
-// This makes a cleaner a better alternative to _not_ calling `destroy()` as
-// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
-// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
-// thread may be starved, and the app will leak memory.
-//
-// In this case, `destroy`ing manually may be a better solution.
-//
-// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
-// with Rust peers are reclaimed:
-//
-// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
-// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
-// 3. The memory is reclaimed when the process terminates.
-//
-// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
-//
-
-/**
- * A voice-conversion model.
- *
- * Construct via one of the per-backend factory functions (currently just
- * [`new_rvc_model`], gated on `audio-vc-rvc`). Use the async
- * [`convert_voice`](Self::convert_voice) method for one-shot rendering,
- * [`list_target_voices`](Self::list_target_voices) /
- * [`register_target_voice`](Self::register_target_voice) for voice
- * management, or [`stream_convert_pcm_to_sink`] for chunk-level
- * streaming.
- */
-public interface VcModelInterface {
-    /**
-     * Convert the source utterance at `input_audio_path` into the voice
-     * of the registered target speaker `target_voice_id`.
-     */
-    suspend fun `convertVoice`(
-        `inputAudioPath`: kotlin.String,
-        `targetVoiceId`: kotlin.String,
-    ): VcResult
-
-    /**
-     * Synchronous variant of [`convert_voice`](Self::convert_voice).
-     */
-    fun `convertVoiceBlocking`(
-        `inputAudioPath`: kotlin.String,
-        `targetVoiceId`: kotlin.String,
-    ): VcResult
-
-    /**
-     * List the target voices this backend can currently render.
-     */
-    suspend fun `listTargetVoices`(): List<TargetVoice>
-
-    /**
-     * Synchronous variant of
-     * [`list_target_voices`](Self::list_target_voices).
-     */
-    fun `listTargetVoicesBlocking`(): List<TargetVoice>
-
-    /**
-     * Register a new target voice from the reference utterance at
-     * `reference_audio_path`.
-     */
-    suspend fun `registerTargetVoice`(
-        `voiceId`: kotlin.String,
-        `referenceAudioPath`: kotlin.String,
-    )
-
-    /**
-     * Synchronous variant of
-     * [`register_target_voice`](Self::register_target_voice).
-     */
-    fun `registerTargetVoiceBlocking`(
-        `voiceId`: kotlin.String,
-        `referenceAudioPath`: kotlin.String,
-    )
-
-    companion object
-}
-
-/**
- * A voice-conversion model.
- *
- * Construct via one of the per-backend factory functions (currently just
- * [`new_rvc_model`], gated on `audio-vc-rvc`). Use the async
- * [`convert_voice`](Self::convert_voice) method for one-shot rendering,
- * [`list_target_voices`](Self::list_target_voices) /
- * [`register_target_voice`](Self::register_target_voice) for voice
- * management, or [`stream_convert_pcm_to_sink`] for chunk-level
- * streaming.
- */
-open class VcModel :
-    Disposable,
-    AutoCloseable,
-    VcModelInterface {
-    /**
-     * @suppress
-     */
-    @Suppress("UNUSED_PARAMETER")
-    constructor(withHandle: UniffiWithHandle, handle: Long) {
-        this.handle = handle
-        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
-    }
-
-    /**
-     * @suppress
-     *
-     * This constructor can be used to instantiate a fake object. Only used for tests. Any
-     * attempt to actually use an object constructed this way will fail as there is no
-     * connected Rust object.
-     */
-    @Suppress("UNUSED_PARAMETER")
-    constructor(noHandle: NoHandle) {
-        this.handle = 0
-        this.cleanable = null
-    }
-
-    protected val handle: Long
-    protected val cleanable: UniffiCleaner.Cleanable?
-
-    private val wasDestroyed = AtomicBoolean(false)
-    private val callCounter = AtomicLong(1)
-
-    override fun destroy() {
-        // Only allow a single call to this method.
-        // TODO: maybe we should log a warning if called more than once?
-        if (this.wasDestroyed.compareAndSet(false, true)) {
-            // This decrement always matches the initial count of 1 given at creation time.
-            if (this.callCounter.decrementAndGet() == 0L) {
-                cleanable?.clean()
-            }
-        }
-    }
-
-    @Synchronized
-    override fun close() {
-        this.destroy()
-    }
-
-    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
-        // Check and increment the call counter, to keep the object alive.
-        // This needs a compare-and-set retry loop in case of concurrent updates.
-        do {
-            val c = this.callCounter.get()
-            if (c == 0L) {
-                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
-            }
-            if (c == Long.MAX_VALUE) {
-                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
-            }
-        } while (!this.callCounter.compareAndSet(c, c + 1L))
-        // Now we can safely do the method call without the handle being freed concurrently.
-        try {
-            return block(this.uniffiCloneHandle())
-        } finally {
-            // This decrement always matches the increment we performed above.
-            if (this.callCounter.decrementAndGet() == 0L) {
-                cleanable?.clean()
-            }
-        }
-    }
-
-    // Use a static inner class instead of a closure so as not to accidentally
-    // capture `this` as part of the cleanable's action.
-    private class UniffiCleanAction(
-        private val handle: Long,
-    ) : Runnable {
-        override fun run() {
-            if (handle == 0.toLong()) {
-                // Fake object created with `NoHandle`, don't try to free.
-                return
-            }
-            uniffiRustCall { status ->
-                UniffiLib.uniffi_blazen_uniffi_fn_free_vcmodel(handle, status)
-            }
-        }
-    }
-
-    /**
-     * @suppress
-     */
-    fun uniffiCloneHandle(): Long {
-        if (handle == 0.toLong()) {
-            throw InternalException("uniffiCloneHandle() called on NoHandle object")
-        }
-        return uniffiRustCall { status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_clone_vcmodel(handle, status)
-        }
-    }
-
-    /**
-     * Convert the source utterance at `input_audio_path` into the voice
-     * of the registered target speaker `target_voice_id`.
-     */
-    @Throws(BlazenException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `convertVoice`(
-        `inputAudioPath`: kotlin.String,
-        `targetVoiceId`: kotlin.String,
-    ): VcResult =
-        uniffiRustCallAsync(
-            callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_blazen_uniffi_fn_method_vcmodel_convert_voice(
-                    uniffiHandle,
-                    FfiConverterString.lower(`inputAudioPath`),
-                    FfiConverterString.lower(`targetVoiceId`),
-                )
-            },
-            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-            // lift function
-            { FfiConverterTypeVcResult.lift(it) },
-            // Error FFI converter
-            BlazenException.ErrorHandler,
-        )
-
-    /**
-     * Synchronous variant of [`convert_voice`](Self::convert_voice).
-     */
-    @Throws(BlazenException::class)
-    override fun `convertVoiceBlocking`(
-        `inputAudioPath`: kotlin.String,
-        `targetVoiceId`: kotlin.String,
-    ): VcResult =
-        FfiConverterTypeVcResult.lift(
-            callWithHandle {
-                uniffiRustCallWithError(BlazenException) { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_method_vcmodel_convert_voice_blocking(
-                        it,
-                        FfiConverterString.lower(`inputAudioPath`),
-                        FfiConverterString.lower(`targetVoiceId`),
-                        _status,
-                    )
-                }
-            },
-        )
-
-    /**
-     * List the target voices this backend can currently render.
-     */
-    @Throws(BlazenException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `listTargetVoices`(): List<TargetVoice> =
-        uniffiRustCallAsync(
-            callWithHandle { uniffiHandle ->
-                UniffiLib.uniffi_blazen_uniffi_fn_method_vcmodel_list_target_voices(
-                    uniffiHandle,
-                )
-            },
-            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
-            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
-            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
-            // lift function
-            { FfiConverterSequenceTypeTargetVoice.lift(it) },
-            // Error FFI converter
-            BlazenException.ErrorHandler,
-        )
-
-    /**
-     * Synchronous variant of
-     * [`list_target_voices`](Self::list_target_voices).
-     */
-    @Throws(BlazenException::class)
-    override fun `listTargetVoicesBlocking`(): List<TargetVoice> =
-        FfiConverterSequenceTypeTargetVoice.lift(
-            callWithHandle {
-                uniffiRustCallWithError(BlazenException) { _status ->
-                    UniffiLib.uniffi_blazen_uniffi_fn_method_vcmodel_list_target_voices_blocking(
-                        it,
-                        _status,
-                    )
-                }
-            },
-        )
-
-    /**
-     * Register a new target voice from the reference utterance at
-     * `reference_audio_path`.
-     */
-    @Throws(BlazenException::class)
-    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-    override suspend fun `registerTargetVoice`(
-        `voiceId`: kotlin.String,
-        `referenceAudioPath`: kotlin.String,
-    ) = uniffiRustCallAsync(
-        callWithHandle { uniffiHandle ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_vcmodel_register_target_voice(
-                uniffiHandle,
-                FfiConverterString.lower(`voiceId`),
-                FfiConverterString.lower(`referenceAudioPath`),
-            )
-        },
-        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
-        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
-        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
-        // lift function
-        { Unit },
-        // Error FFI converter
-        BlazenException.ErrorHandler,
-    )
-
-    /**
-     * Synchronous variant of
-     * [`register_target_voice`](Self::register_target_voice).
-     */
-    @Throws(BlazenException::class)
-    override fun `registerTargetVoiceBlocking`(
-        `voiceId`: kotlin.String,
-        `referenceAudioPath`: kotlin.String,
-    ) = callWithHandle {
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_method_vcmodel_register_target_voice_blocking(
-                it,
-                FfiConverterString.lower(`voiceId`),
-                FfiConverterString.lower(`referenceAudioPath`),
-                _status,
-            )
-        }
-    }
-
-    /**
-     * @suppress
-     */
-    companion object
-}
-
-/**
- * @suppress
- */
-public object FfiConverterTypeVcModel : FfiConverter<VcModel, Long> {
-    override fun lower(value: VcModel): Long = value.uniffiCloneHandle()
-
-    override fun lift(value: Long): VcModel = VcModel(UniffiWithHandle, value)
-
-    override fun read(buf: ByteBuffer): VcModel = lift(buf.getLong())
-
-    override fun allocationSize(value: VcModel) = 8UL
-
-    override fun write(
-        value: VcModel,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -35042,6 +41488,301 @@ public object FfiConverterTypeWorkflowBuilder : FfiConverter<WorkflowBuilder, Lo
     }
 }
 
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::xai::XaiProvider`].
+ */
+public interface XaiProviderInterface {
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    suspend fun `complete`(`request`: ModelRequest): ModelResponse
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    fun `completeBlocking`(`request`: ModelRequest): ModelResponse
+
+    companion object
+}
+
+/**
+ * Concrete LLM provider wrapping
+ * [`blazen_llm::providers::xai::XaiProvider`].
+ */
+open class XaiProvider :
+    Disposable,
+    AutoCloseable,
+    XaiProviderInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    /**
+     * Construct a new xAI provider.
+     */
+    constructor(`apiKey`: kotlin.String, `model`: kotlin.String?) :
+        this(
+            UniffiWithHandle,
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_xaiprovider_new(
+                    FfiConverterString.lower(`apiKey`),
+                    FfiConverterOptionalString.lower(`model`),
+                    _status,
+                )
+            },
+        )
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_xaiprovider(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_xaiprovider(handle, status)
+        }
+    }
+
+    /**
+     * Perform a non-streaming chat / completion request.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `complete`(`request`: ModelRequest): ModelResponse =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_xaiprovider_complete(
+                    uniffiHandle,
+                    FfiConverterTypeModelRequest.lower(`request`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeModelResponse.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    @Throws(BlazenException::class)
+    override fun `completeBlocking`(`request`: ModelRequest): ModelResponse =
+        FfiConverterTypeModelResponse.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_xaiprovider_complete_blocking(
+                        it,
+                        FfiConverterTypeModelRequest.lower(`request`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeXaiProvider : FfiConverter<XaiProvider, Long> {
+    override fun lower(value: XaiProvider): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): XaiProvider = XaiProvider(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): XaiProvider = lift(buf.getLong())
+
+    override fun allocationSize(value: XaiProvider) = 8UL
+
+    override fun write(
+        value: XaiProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
 /**
  * Result returned by [`ForeignLocalModel::load_adapter`], mirroring
  * [`blazen_llm::AdapterHandle`].
@@ -37437,8 +44178,7 @@ public object FfiConverterTypeModelStatusRecord : FfiConverterRustBuffer<ModelSt
  *
  * `samples` is 32-bit float PCM in `[-1.0, 1.0]` at the backend's expected
  * output sample rate (the same `sample_rate` field on the
- * [`MusicResult`] returned by the non-streaming
- * `generate_music` / `generate_sfx` calls).
+ * [`MusicResult`] returned by the non-streaming generate calls).
  *
  * `is_final` is `true` for the final chunk of a generation call;
  * implementations should treat it as a UI hint rather than the
@@ -38573,8 +45313,8 @@ public object FfiConverterTypeSttResult : FfiConverterRustBuffer<SttResult> {
 }
 
 /**
- * A registered target speaker that a [`VcModel`] can render source audio
- * into.
+ * A registered target speaker that a voice-conversion provider can
+ * render source audio into.
  *
  * Mirrors [`blazen_llm::TargetVoice`] (when the `audio-vc` feature is on)
  * 1:1 across the FFI boundary so foreign code sees a stable record shape
@@ -38583,8 +45323,8 @@ public object FfiConverterTypeSttResult : FfiConverterRustBuffer<SttResult> {
  */
 data class TargetVoice(
     /**
-     * Backend-scoped identifier passed back to
-     * [`VcModel::convert_voice`] / [`VcModel::register_target_voice`].
+     * Backend-scoped identifier passed to the concrete provider's
+     * convert / register entry points.
      */
     var `id`: kotlin.String,
     /**
@@ -38740,7 +45480,7 @@ public object FfiConverterTypeTexturizeResult : FfiConverterRustBuffer<Texturize
 }
 
 /**
- * Result of a [`ThreeDModel::generate_from_image`] call.
+ * Result of a single-image-to-3D generation call.
  *
  * Carries the rendered model as bytes (typically GLB / glTF-binary at
  * `model/gltf-binary`) plus the IANA MIME type so foreign callers can
@@ -42004,38 +48744,6 @@ public object FfiConverterOptionalDouble : FfiConverterRustBuffer<kotlin.Double?
 /**
  * @suppress
  */
-public object FfiConverterOptionalBoolean : FfiConverterRustBuffer<kotlin.Boolean?> {
-    override fun read(buf: ByteBuffer): kotlin.Boolean? {
-        if (buf.get().toInt() == 0) {
-            return null
-        }
-        return FfiConverterBoolean.read(buf)
-    }
-
-    override fun allocationSize(value: kotlin.Boolean?): ULong {
-        if (value == null) {
-            return 1UL
-        } else {
-            return 1UL + FfiConverterBoolean.allocationSize(value)
-        }
-    }
-
-    override fun write(
-        value: kotlin.Boolean?,
-        buf: ByteBuffer,
-    ) {
-        if (value == null) {
-            buf.put(0)
-        } else {
-            buf.put(1)
-            FfiConverterBoolean.write(value, buf)
-        }
-    }
-}
-
-/**
- * @suppress
- */
 public object FfiConverterOptionalString : FfiConverterRustBuffer<kotlin.String?> {
     override fun read(buf: ByteBuffer): kotlin.String? {
         if (buf.get().toInt() == 0) {
@@ -43253,8 +49961,8 @@ fun `version`(): kotlin.String =
 /**
  * Run a batch of completion requests with bounded concurrency.
  *
- * - `model`: the model to drive (one provider, one model id; for cross-model
- * batches dispatch from foreign code instead).
+ * - `provider`: the LLM provider to drive (one provider, one model id; for
+ * cross-model batches dispatch from foreign code instead).
  * - `requests`: the requests to send, in order. Each is converted to the
  * upstream wire format before dispatch; conversion errors short-circuit
  * the entire batch (the request list is rejected as a whole, since a bad
@@ -43276,13 +49984,13 @@ fun `version`(): kotlin.String =
 @Throws(BlazenException::class)
 @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
 suspend fun `completeBatch`(
-    `model`: Model,
+    `provider`: LlmProvider,
     `requests`: List<ModelRequest>,
     `maxConcurrency`: kotlin.UInt,
 ): BatchResult =
     uniffiRustCallAsync(
         UniffiLib.uniffi_blazen_uniffi_fn_func_complete_batch(
-            FfiConverterTypeModel.lower(`model`),
+            FfiConverterTypeLlmProvider.lower(`provider`),
             FfiConverterSequenceTypeModelRequest.lower(`requests`),
             FfiConverterUInt.lower(`maxConcurrency`),
         ),
@@ -43305,14 +50013,14 @@ suspend fun `completeBatch`(
  */
 @Throws(BlazenException::class)
 fun `completeBatchBlocking`(
-    `model`: Model,
+    `provider`: LlmProvider,
     `requests`: List<ModelRequest>,
     `maxConcurrency`: kotlin.UInt,
 ): BatchResult =
     FfiConverterTypeBatchResult.lift(
         uniffiRustCallWithError(BlazenException) { _status ->
             UniffiLib.uniffi_blazen_uniffi_fn_func_complete_batch_blocking(
-                FfiConverterTypeModel.lower(`model`),
+                FfiConverterTypeLlmProvider.lower(`provider`),
                 FfiConverterSequenceTypeModelRequest.lower(`requests`),
                 FfiConverterUInt.lower(`maxConcurrency`),
                 _status,
@@ -43321,430 +50029,884 @@ fun `completeBatchBlocking`(
     )
 
 /**
- * Build a local diffusion-rs image-generation model.
- *
- * `model_id` is the HuggingFace repo id of the Stable Diffusion variant
- * (e.g. `"stabilityai/stable-diffusion-2-1"`). `device` follows the same
- * device-string format as the local-LLM factories. `width` / `height` /
- * `num_inference_steps` / `guidance_scale` set provider defaults applied
- * to every generate call. Calls surface the upstream "engine not yet
- * wired" message until the Phase 5.3 work lands; construction succeeds so
- * foreign callers can plumb their options today.
- */
-@Throws(BlazenException::class)
-fun `newDiffusionModel`(
-    `modelId`: kotlin.String?,
-    `device`: kotlin.String?,
-    `width`: kotlin.UInt?,
-    `height`: kotlin.UInt?,
-    `numInferenceSteps`: kotlin.UInt?,
-    `guidanceScale`: kotlin.Float?,
-): ImageGenModel =
-    FfiConverterTypeImageGenModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_diffusion_model(
-                FfiConverterOptionalString.lower(`modelId`),
-                FfiConverterOptionalString.lower(`device`),
-                FfiConverterOptionalUInt.lower(`width`),
-                FfiConverterOptionalUInt.lower(`height`),
-                FfiConverterOptionalUInt.lower(`numInferenceSteps`),
-                FfiConverterOptionalFloat.lower(`guidanceScale`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a fal.ai-backed [`ImageGenModel`].
- *
- * `api_key` may be empty when the provider resolves it from `FAL_KEY`.
- * `model` overrides the default fal image-gen endpoint (e.g.
- * `"fal-ai/flux/dev"`); when `None`, fal routes to its current default
- * image model. The per-call `model` argument on
- * [`ImageGenModel::generate`] takes precedence over this default when
- * both are set.
- */
-@Throws(BlazenException::class)
-fun `newFalImageGenModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-): ImageGenModel =
-    FfiConverterTypeImageGenModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_image_gen_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a fal.ai-backed [`SttModel`].
- *
- * `api_key` may be empty when the provider resolves it from `FAL_KEY`.
- * `model` overrides the default fal transcription endpoint (e.g.
- * `"fal-ai/whisper"`); when `None`, fal routes to its current default
- * Whisper endpoint.
- */
-@Throws(BlazenException::class)
-fun `newFalSttModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-): SttModel =
-    FfiConverterTypeSttModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_stt_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a fal.ai-backed [`TtsModel`].
- *
- * `api_key` may be empty when the provider resolves it from `FAL_KEY`.
- * `model` overrides the default fal TTS endpoint (e.g.
- * `"fal-ai/dia-tts"`); when `None`, the per-call `voice` / `language`
- * arguments decide which endpoint fal routes to.
- */
-@Throws(BlazenException::class)
-fun `newFalTtsModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-): TtsModel =
-    FfiConverterTypeTtsModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_tts_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a local faster-whisper speech-to-text model.
- *
- * `model_id` selects a Hugging Face bundle id (default
- * `"Systran/faster-whisper-tiny"`). Larger variants
- * (`"Systran/faster-whisper-{base,small,medium,large-v3}"`) are drop-in
- * replacements. `model_dir` provides a pre-resolved local CTranslate2
- * bundle directory; when supplied the HF download is skipped. `revision`
- * pins a specific branch / tag / commit on the repo (default `main`).
- */
-@Throws(BlazenException::class)
-fun `newFasterWhisperSttModel`(
-    `modelId`: kotlin.String?,
-    `modelDir`: kotlin.String?,
-    `revision`: kotlin.String?,
-): SttModel =
-    FfiConverterTypeSttModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_faster_whisper_stt_model(
-                FfiConverterOptionalString.lower(`modelId`),
-                FfiConverterOptionalString.lower(`modelDir`),
-                FfiConverterOptionalString.lower(`revision`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a local TTS model backed by `any-tts`.
- *
- * `model` is one of `"kokoro82m"`, `"vibevoice"`, or `"qwen3_tts"` (or
- * any of the snake_case aliases); pass null to default to Kokoro-82M.
- * `voice` selects a speaker preset (e.g. `"af_bella"`); pass null to
- * use the model default. `sample_rate` overrides the model's native
- * sample rate.
- */
-@Throws(BlazenException::class)
-fun `newLocalTtsModel`(
-    `model`: kotlin.String?,
-    `voice`: kotlin.String?,
-    `language`: kotlin.String?,
-    `sampleRate`: kotlin.UInt?,
-): TtsModel =
-    FfiConverterTypeTtsModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_local_tts_model(
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`voice`),
-                FfiConverterOptionalString.lower(`language`),
-                FfiConverterOptionalUInt.lower(`sampleRate`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a local Piper text-to-speech model.
- *
- * `model_id` is a Piper voice id like `"en_US-amy-medium"` — this is
- * resolved to the `rhasspy/piper-voices` repo path
- * `en/en_US/amy/medium/en_US-amy-medium.onnx[.json]` and the two files
- * are downloaded (or read from cache) before the backend is built.
- *
- * `model_id` is required at the value level — pass `None` and the factory
- * returns a `PiperInit` error. The optional wrapper exists so foreign
- * language wrappers (Swift, Go) can default it to `nil` / `*string` and
- * surface the requirement as a runtime error instead of an unchecked
- * optional parameter on every call site.
- *
- * `speaker_id` is forwarded to the Piper ONNX session for
- * multi-speaker voices (e.g. `en_US-libritts_r-medium` exposes 904
- * speakers). `None` defaults to speaker 0 / the voice's single
- * speaker.
- *
- * `sample_rate` is reserved; the Piper voice file is authoritative
- * for the output sample rate. If provided, it is logged at trace
- * level and otherwise ignored.
- */
-@Throws(BlazenException::class)
-fun `newPiperTtsModel`(
-    `modelId`: kotlin.String?,
-    `speakerId`: kotlin.UInt?,
-    `sampleRate`: kotlin.UInt?,
-): TtsModel =
-    FfiConverterTypeTtsModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_piper_tts_model(
-                FfiConverterOptionalString.lower(`modelId`),
-                FfiConverterOptionalUInt.lower(`speakerId`),
-                FfiConverterOptionalUInt.lower(`sampleRate`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a local Spark-TTS text-to-speech model.
- *
- * `model_id` selects a Hugging Face bundle id; default is
- * `"SparkAudio/Spark-TTS-0.5B"` when omitted. `revision` pins a specific
- * branch / tag / commit on the repo (default `main`). `model_dir` provides
- * a pre-resolved local bundle directory containing the `LLM/` + `BiCodec/`
- * subtrees; when supplied, the HF download step is skipped entirely.
- *
- * The bundle ships under the **CC-BY-NC-SA-4.0** license — non-commercial
- * use only. The backend emits a one-shot warning via `warn_nc_once` on
- * first synthesis.
- */
-@Throws(BlazenException::class)
-fun `newSparkTtsModel`(
-    `modelId`: kotlin.String?,
-    `modelDir`: kotlin.String?,
-    `revision`: kotlin.String?,
-): TtsModel =
-    FfiConverterTypeTtsModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_spark_tts_model(
-                FfiConverterOptionalString.lower(`modelId`),
-                FfiConverterOptionalString.lower(`modelDir`),
-                FfiConverterOptionalString.lower(`revision`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a local TripoSR single-image-to-3D model.
- *
- * `hf_repo_id` selects the Hugging Face repo to fetch weights from
- * (default `"stabilityai/TripoSR"`). `revision` pins a specific branch
- * / tag / commit on that repo (default `main`). `weights_path` provides
- * a pre-resolved local directory containing the `image_encoder.safetensors`
- * / `transformer.safetensors` / `nerf_field.safetensors` triple; when
- * supplied, the HF download is skipped entirely.
- *
- * Weights ship under MIT (matches the upstream TripoSR code license).
- */
-@Throws(BlazenException::class)
-fun `newTriposr3dModel`(
-    `hfRepoId`: kotlin.String?,
-    `revision`: kotlin.String?,
-    `weightsPath`: kotlin.String?,
-): ThreeDModel =
-    FfiConverterTypeThreeDModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_triposr_3d_model(
-                FfiConverterOptionalString.lower(`hfRepoId`),
-                FfiConverterOptionalString.lower(`revision`),
-                FfiConverterOptionalString.lower(`weightsPath`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a local whisper.cpp speech-to-text model.
- *
- * `model` selects a Whisper variant by name (case-insensitive:
- * `"tiny"`, `"base"`, `"small"`, `"medium"`, `"large-v3"`); unrecognised
- * values default to `Small`. `device` accepts the same format strings as
- * `blazen_llm::Device::parse` (`"cpu"`, `"cuda"`, `"cuda:N"`, `"metal"`).
- * `language` is an optional default ISO-639-1 hint (overridable per
- * [`SttModel::transcribe`] call).
- */
-@Throws(BlazenException::class)
-fun `newWhisperSttModel`(
-    `model`: kotlin.String?,
-    `device`: kotlin.String?,
-    `language`: kotlin.String?,
-): SttModel =
-    FfiConverterTypeSttModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_whisper_stt_model(
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`device`),
-                FfiConverterOptionalString.lower(`language`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a native AudioGen-backed [`MusicModel`].
- *
- * `repo_id` overrides the default Hugging Face repo (defaults to
- * `facebook/audiogen-medium`). `revision` pins a specific commit / tag.
- * `device` / `cache_dir` / `max_duration_seconds` follow the MusicGen
- * factory's conventions.
- */
-@Throws(BlazenException::class)
-fun `newAudiogenModel`(
-    `repoId`: kotlin.String?,
-    `revision`: kotlin.String?,
-    `device`: kotlin.String?,
-    `cacheDir`: kotlin.String?,
-    `maxDurationSeconds`: kotlin.Float?,
-): MusicModel =
-    FfiConverterTypeMusicModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_audiogen_model(
-                FfiConverterOptionalString.lower(`repoId`),
-                FfiConverterOptionalString.lower(`revision`),
-                FfiConverterOptionalString.lower(`device`),
-                FfiConverterOptionalString.lower(`cacheDir`),
-                FfiConverterOptionalFloat.lower(`maxDurationSeconds`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a fal.ai-backed [`MusicModel`].
- *
- * `api_key` may be empty when the provider resolves it from `FAL_KEY`.
- * `model` overrides the default fal music / SFX endpoint (the same
- * override is applied to both `generate_music` and `generate_sfx` calls
- * — fal's per-endpoint dispatch handles the routing).
- */
-@Throws(BlazenException::class)
-fun `newFalMusicModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-): MusicModel =
-    FfiConverterTypeMusicModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_music_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a native MusicGen-backed [`MusicModel`].
- *
- * `variant` selects the MusicGen checkpoint by name (case-insensitive:
- * `"small"`, `"medium"`, `"large"`); unrecognised values default to
- * `Small`. `device` accepts the same format strings as
- * `blazen_llm::Device::parse` (`"cpu"`, `"cuda"`, `"cuda:N"`, `"metal"`);
- * `None` defers to the backend's auto-detection (CUDA → Metal → CPU).
- * `cache_dir` overrides the Hugging Face Hub cache directory.
- * `max_duration_seconds` overrides the default 30 s per-call safety cap
- * (hard ceiling stays at `MUSICGEN_MAX_DURATION_HARD_LIMIT`).
- */
-@Throws(BlazenException::class)
-fun `newMusicgenModel`(
-    `variant`: kotlin.String?,
-    `device`: kotlin.String?,
-    `cacheDir`: kotlin.String?,
-    `maxDurationSeconds`: kotlin.Float?,
-): MusicModel =
-    FfiConverterTypeMusicModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_musicgen_model(
-                FfiConverterOptionalString.lower(`variant`),
-                FfiConverterOptionalString.lower(`device`),
-                FfiConverterOptionalString.lower(`cacheDir`),
-                FfiConverterOptionalFloat.lower(`maxDurationSeconds`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a native Stable Audio Open-backed [`MusicModel`].
- *
- * `variant` selects the Stable Audio Open checkpoint by name
- * (case-insensitive: `"small"`, `"open-1.0"` / `"open1.0"`); unrecognised
- * values default to `Small`. `tokenizer_path` must point at the T5
- * SentencePiece `tokenizer.json` shipped with the Stable Audio Open repo
- * — required because Stable Audio's tokenizer is not auto-downloaded by
- * the backend today. `device` follows the same device-string format as
- * the MusicGen factory. `max_duration_seconds` is accepted for API
- * symmetry but Stable Audio enforces its own variant-dependent ceiling
- * internally.
- */
-@Throws(BlazenException::class)
-fun `newStableAudioModel`(
-    `variant`: kotlin.String?,
-    `tokenizerPath`: kotlin.String,
-    `device`: kotlin.String?,
-    `maxDurationSeconds`: kotlin.Float?,
-): MusicModel =
-    FfiConverterTypeMusicModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_stable_audio_model(
-                FfiConverterOptionalString.lower(`variant`),
-                FfiConverterString.lower(`tokenizerPath`),
-                FfiConverterOptionalString.lower(`device`),
-                FfiConverterOptionalFloat.lower(`maxDurationSeconds`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Drive a streaming music-generation call, dispatching each chunk to the
- * sink.
- *
- * On success, calls `sink.on_done()` exactly once and returns `Ok(())`.
- * On a backend-side or sink-side failure, calls `sink.on_error(...)` and
- * returns `Ok(())` — error delivery is the sink's responsibility, matching
- * the convention `complete_streaming` established for chat completions.
- *
- * The only failure mode that propagates back to the caller is a panic in
- * the sink itself or the runtime; init errors (e.g. fal.ai not supporting
- * streaming, MusicGen weight-download failure) are delivered through
- * `on_error`.
+ * Stream a chat / completion from [`AnthropicProvider`] into `sink`.
  */
 @Throws(BlazenException::class)
 @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-suspend fun `streamGenerateMusicToSink`(
-    `model`: MusicModel,
+suspend fun `anthropicProviderCompleteStreaming`(
+    `provider`: AnthropicProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_anthropic_provider_complete_streaming(
+        FfiConverterTypeAnthropicProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`anthropic_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `anthropicProviderCompleteStreamingBlocking`(
+    `provider`: AnthropicProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_anthropic_provider_complete_streaming_blocking(
+        FfiConverterTypeAnthropicProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`AzureOpenAiProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `azureOpenaiProviderCompleteStreaming`(
+    `provider`: AzureOpenAiProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_azure_openai_provider_complete_streaming(
+        FfiConverterTypeAzureOpenAiProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`azure_openai_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `azureOpenaiProviderCompleteStreamingBlocking`(
+    `provider`: AzureOpenAiProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_azure_openai_provider_complete_streaming_blocking(
+        FfiConverterTypeAzureOpenAiProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`BedrockProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `bedrockProviderCompleteStreaming`(
+    `provider`: BedrockProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_bedrock_provider_complete_streaming(
+        FfiConverterTypeBedrockProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`bedrock_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `bedrockProviderCompleteStreamingBlocking`(
+    `provider`: BedrockProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_bedrock_provider_complete_streaming_blocking(
+        FfiConverterTypeBedrockProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`CandleLlmProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `candleProviderCompleteStreaming`(
+    `provider`: CandleLlmProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_candle_provider_complete_streaming(
+        FfiConverterTypeCandleLlmProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`candle_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `candleProviderCompleteStreamingBlocking`(
+    `provider`: CandleLlmProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_candle_provider_complete_streaming_blocking(
+        FfiConverterTypeCandleLlmProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`CohereProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `cohereProviderCompleteStreaming`(
+    `provider`: CohereProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_cohere_provider_complete_streaming(
+        FfiConverterTypeCohereProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`cohere_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `cohereProviderCompleteStreamingBlocking`(
+    `provider`: CohereProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_cohere_provider_complete_streaming_blocking(
+        FfiConverterTypeCohereProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`DeepSeekProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `deepseekProviderCompleteStreaming`(
+    `provider`: DeepSeekProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_deepseek_provider_complete_streaming(
+        FfiConverterTypeDeepSeekProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`deepseek_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `deepseekProviderCompleteStreamingBlocking`(
+    `provider`: DeepSeekProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_deepseek_provider_complete_streaming_blocking(
+        FfiConverterTypeDeepSeekProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`FalLlmProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `falLlmProviderCompleteStreaming`(
+    `provider`: FalLlmProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_fal_llm_provider_complete_streaming(
+        FfiConverterTypeFalLlmProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`fal_llm_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `falLlmProviderCompleteStreamingBlocking`(
+    `provider`: FalLlmProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_fal_llm_provider_complete_streaming_blocking(
+        FfiConverterTypeFalLlmProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`FireworksProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `fireworksProviderCompleteStreaming`(
+    `provider`: FireworksProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_fireworks_provider_complete_streaming(
+        FfiConverterTypeFireworksProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`fireworks_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `fireworksProviderCompleteStreamingBlocking`(
+    `provider`: FireworksProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_fireworks_provider_complete_streaming_blocking(
+        FfiConverterTypeFireworksProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`GeminiProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `geminiProviderCompleteStreaming`(
+    `provider`: GeminiProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_gemini_provider_complete_streaming(
+        FfiConverterTypeGeminiProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`gemini_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `geminiProviderCompleteStreamingBlocking`(
+    `provider`: GeminiProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_gemini_provider_complete_streaming_blocking(
+        FfiConverterTypeGeminiProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`GroqProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `groqProviderCompleteStreaming`(
+    `provider`: GroqProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_groq_provider_complete_streaming(
+        FfiConverterTypeGroqProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`groq_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `groqProviderCompleteStreamingBlocking`(
+    `provider`: GroqProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_groq_provider_complete_streaming_blocking(
+        FfiConverterTypeGroqProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`LlamaCppProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `llamacppProviderCompleteStreaming`(
+    `provider`: LlamaCppProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_llamacpp_provider_complete_streaming(
+        FfiConverterTypeLlamaCppProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`llamacpp_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `llamacppProviderCompleteStreamingBlocking`(
+    `provider`: LlamaCppProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_llamacpp_provider_complete_streaming_blocking(
+        FfiConverterTypeLlamaCppProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`LmStudioProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `lmStudioProviderCompleteStreaming`(
+    `provider`: LmStudioProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_lm_studio_provider_complete_streaming(
+        FfiConverterTypeLmStudioProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`lm_studio_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `lmStudioProviderCompleteStreamingBlocking`(
+    `provider`: LmStudioProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_lm_studio_provider_complete_streaming_blocking(
+        FfiConverterTypeLmStudioProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`MistralProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `mistralProviderCompleteStreaming`(
+    `provider`: MistralProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_mistral_provider_complete_streaming(
+        FfiConverterTypeMistralProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`mistral_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `mistralProviderCompleteStreamingBlocking`(
+    `provider`: MistralProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_mistral_provider_complete_streaming_blocking(
+        FfiConverterTypeMistralProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`MistralRsProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `mistralrsProviderCompleteStreaming`(
+    `provider`: MistralRsProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_mistralrs_provider_complete_streaming(
+        FfiConverterTypeMistralRsProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`mistralrs_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `mistralrsProviderCompleteStreamingBlocking`(
+    `provider`: MistralRsProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_mistralrs_provider_complete_streaming_blocking(
+        FfiConverterTypeMistralRsProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`OllamaProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `ollamaProviderCompleteStreaming`(
+    `provider`: OllamaProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_ollama_provider_complete_streaming(
+        FfiConverterTypeOllamaProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`ollama_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `ollamaProviderCompleteStreamingBlocking`(
+    `provider`: OllamaProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_ollama_provider_complete_streaming_blocking(
+        FfiConverterTypeOllamaProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`OpenAiCompatProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `openaiCompatProviderCompleteStreaming`(
+    `provider`: OpenAiCompatProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_openai_compat_provider_complete_streaming(
+        FfiConverterTypeOpenAiCompatProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`openai_compat_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `openaiCompatProviderCompleteStreamingBlocking`(
+    `provider`: OpenAiCompatProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_openai_compat_provider_complete_streaming_blocking(
+        FfiConverterTypeOpenAiCompatProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`OpenAiProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `openaiProviderCompleteStreaming`(
+    `provider`: OpenAiProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_openai_provider_complete_streaming(
+        FfiConverterTypeOpenAiProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`openai_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `openaiProviderCompleteStreamingBlocking`(
+    `provider`: OpenAiProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_openai_provider_complete_streaming_blocking(
+        FfiConverterTypeOpenAiProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`OpenRouterProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `openrouterProviderCompleteStreaming`(
+    `provider`: OpenRouterProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_openrouter_provider_complete_streaming(
+        FfiConverterTypeOpenRouterProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`openrouter_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `openrouterProviderCompleteStreamingBlocking`(
+    `provider`: OpenRouterProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_openrouter_provider_complete_streaming_blocking(
+        FfiConverterTypeOpenRouterProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`PerplexityProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `perplexityProviderCompleteStreaming`(
+    `provider`: PerplexityProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_perplexity_provider_complete_streaming(
+        FfiConverterTypePerplexityProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`perplexity_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `perplexityProviderCompleteStreamingBlocking`(
+    `provider`: PerplexityProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_perplexity_provider_complete_streaming_blocking(
+        FfiConverterTypePerplexityProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`TogetherProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `togetherProviderCompleteStreaming`(
+    `provider`: TogetherProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_together_provider_complete_streaming(
+        FfiConverterTypeTogetherProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`together_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `togetherProviderCompleteStreamingBlocking`(
+    `provider`: TogetherProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_together_provider_complete_streaming_blocking(
+        FfiConverterTypeTogetherProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream a chat / completion from [`XaiProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `xaiProviderCompleteStreaming`(
+    `provider`: XaiProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_xai_provider_complete_streaming(
+        FfiConverterTypeXaiProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`xai_provider_complete_streaming`].
+ */
+@Throws(BlazenException::class)
+fun `xaiProviderCompleteStreamingBlocking`(
+    `provider`: XaiProvider,
+    `request`: ModelRequest,
+    `sink`: CompletionStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_xai_provider_complete_streaming_blocking(
+        FfiConverterTypeXaiProvider.lower(`provider`),
+        FfiConverterTypeModelRequest.lower(`request`),
+        FfiConverterTypeCompletionStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream music generation from [`AudioGenProvider`] into `sink`.
+ *
+ * AudioGen is sfx-primary — its upstream `stream_generate_music` returns
+ * `BlazenError::Unsupported`, which this function delivers through the
+ * sink's `on_error` callback. Prefer
+ * [`audiogen_provider_stream_sfx_to_sink`].
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `audiogenProviderStreamMusicToSink`(
+    `provider`: AudioGenProvider,
     `prompt`: kotlin.String,
     `durationSeconds`: kotlin.Float,
     `sink`: MusicStreamSink,
 ) = uniffiRustCallAsync(
-    UniffiLib.uniffi_blazen_uniffi_fn_func_stream_generate_music_to_sink(
-        FfiConverterTypeMusicModel.lower(`model`),
+    UniffiLib.uniffi_blazen_uniffi_fn_func_audiogen_provider_stream_music_to_sink(
+        FfiConverterTypeAudioGenProvider.lower(`provider`),
         FfiConverterString.lower(`prompt`),
         FfiConverterFloat.lower(`durationSeconds`),
         FfiConverterTypeMusicStreamSink.lower(`sink`),
@@ -43759,18 +50921,17 @@ suspend fun `streamGenerateMusicToSink`(
 )
 
 /**
- * Synchronous variant of [`stream_generate_music_to_sink`] — blocks the
- * current thread on the shared Tokio runtime.
+ * Synchronous variant of [`audiogen_provider_stream_music_to_sink`].
  */
 @Throws(BlazenException::class)
-fun `streamGenerateMusicToSinkBlocking`(
-    `model`: MusicModel,
+fun `audiogenProviderStreamMusicToSinkBlocking`(
+    `provider`: AudioGenProvider,
     `prompt`: kotlin.String,
     `durationSeconds`: kotlin.Float,
     `sink`: MusicStreamSink,
 ) = uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_stream_generate_music_to_sink_blocking(
-        FfiConverterTypeMusicModel.lower(`model`),
+    UniffiLib.uniffi_blazen_uniffi_fn_func_audiogen_provider_stream_music_to_sink_blocking(
+        FfiConverterTypeAudioGenProvider.lower(`provider`),
         FfiConverterString.lower(`prompt`),
         FfiConverterFloat.lower(`durationSeconds`),
         FfiConverterTypeMusicStreamSink.lower(`sink`),
@@ -43779,19 +50940,18 @@ fun `streamGenerateMusicToSinkBlocking`(
 }
 
 /**
- * Drive a streaming SFX-generation call, dispatching each chunk to the
- * sink. Same semantics as [`stream_generate_music_to_sink`].
+ * Stream SFX generation from [`AudioGenProvider`] into `sink`.
  */
 @Throws(BlazenException::class)
 @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-suspend fun `streamGenerateSfxToSink`(
-    `model`: MusicModel,
+suspend fun `audiogenProviderStreamSfxToSink`(
+    `provider`: AudioGenProvider,
     `prompt`: kotlin.String,
     `durationSeconds`: kotlin.Float,
     `sink`: MusicStreamSink,
 ) = uniffiRustCallAsync(
-    UniffiLib.uniffi_blazen_uniffi_fn_func_stream_generate_sfx_to_sink(
-        FfiConverterTypeMusicModel.lower(`model`),
+    UniffiLib.uniffi_blazen_uniffi_fn_func_audiogen_provider_stream_sfx_to_sink(
+        FfiConverterTypeAudioGenProvider.lower(`provider`),
         FfiConverterString.lower(`prompt`),
         FfiConverterFloat.lower(`durationSeconds`),
         FfiConverterTypeMusicStreamSink.lower(`sink`),
@@ -43806,18 +50966,17 @@ suspend fun `streamGenerateSfxToSink`(
 )
 
 /**
- * Synchronous variant of [`stream_generate_sfx_to_sink`] — blocks the
- * current thread on the shared Tokio runtime.
+ * Synchronous variant of [`audiogen_provider_stream_sfx_to_sink`].
  */
 @Throws(BlazenException::class)
-fun `streamGenerateSfxToSinkBlocking`(
-    `model`: MusicModel,
+fun `audiogenProviderStreamSfxToSinkBlocking`(
+    `provider`: AudioGenProvider,
     `prompt`: kotlin.String,
     `durationSeconds`: kotlin.Float,
     `sink`: MusicStreamSink,
 ) = uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_stream_generate_sfx_to_sink_blocking(
-        FfiConverterTypeMusicModel.lower(`model`),
+    UniffiLib.uniffi_blazen_uniffi_fn_func_audiogen_provider_stream_sfx_to_sink_blocking(
+        FfiConverterTypeAudioGenProvider.lower(`provider`),
         FfiConverterString.lower(`prompt`),
         FfiConverterFloat.lower(`durationSeconds`),
         FfiConverterTypeMusicStreamSink.lower(`sink`),
@@ -43826,63 +50985,158 @@ fun `streamGenerateSfxToSinkBlocking`(
 }
 
 /**
- * Build a native RVC-backed [`VcModel`].
- *
- * `voice_dir` overrides the per-process `BLAZEN_RVC_VOICE_DIR`
- * environment variable that the RVC pipeline reads to locate voice
- * profiles on disk (each voice is expected to live at
- * `<voice_dir>/<voice_id>/` with `model.pth`, `index.index`, and
- * `metadata.json`). When `None`, the existing process-environment value
- * is used unchanged. Setting this from inside the factory mutates global
- * process state via `std::env::set_var` — callers running multiple RVC
- * instances in the same process should pick a single voice directory
- * rather than racing factory calls.
- *
- * `device` accepts the same format strings as `blazen_llm::Device::parse`
- * (`"cpu"`, `"cuda"`, `"cuda:N"`, `"metal"`); `None` defers to CPU.
+ * Stream music generation from [`MusicGenProvider`] into `sink`.
  */
 @Throws(BlazenException::class)
-fun `newRvcModel`(
-    `voiceDir`: kotlin.String?,
-    `device`: kotlin.String?,
-): VcModel =
-    FfiConverterTypeVcModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_rvc_model(
-                FfiConverterOptionalString.lower(`voiceDir`),
-                FfiConverterOptionalString.lower(`device`),
-                _status,
-            )
-        },
-    )
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `musicgenProviderStreamMusicToSink`(
+    `provider`: MusicGenProvider,
+    `prompt`: kotlin.String,
+    `durationSeconds`: kotlin.Float,
+    `sink`: MusicStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_musicgen_provider_stream_music_to_sink(
+        FfiConverterTypeMusicGenProvider.lower(`provider`),
+        FfiConverterString.lower(`prompt`),
+        FfiConverterFloat.lower(`durationSeconds`),
+        FfiConverterTypeMusicStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
 
 /**
- * Drive a streaming voice-conversion call, dispatching each chunk to the
- * sink.
+ * Synchronous variant of [`musicgen_provider_stream_music_to_sink`].
+ */
+@Throws(BlazenException::class)
+fun `musicgenProviderStreamMusicToSinkBlocking`(
+    `provider`: MusicGenProvider,
+    `prompt`: kotlin.String,
+    `durationSeconds`: kotlin.Float,
+    `sink`: MusicStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_musicgen_provider_stream_music_to_sink_blocking(
+        FfiConverterTypeMusicGenProvider.lower(`provider`),
+        FfiConverterString.lower(`prompt`),
+        FfiConverterFloat.lower(`durationSeconds`),
+        FfiConverterTypeMusicStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream music generation from [`StableAudioProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `stableAudioProviderStreamMusicToSink`(
+    `provider`: StableAudioProvider,
+    `prompt`: kotlin.String,
+    `durationSeconds`: kotlin.Float,
+    `sink`: MusicStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_stable_audio_provider_stream_music_to_sink(
+        FfiConverterTypeStableAudioProvider.lower(`provider`),
+        FfiConverterString.lower(`prompt`),
+        FfiConverterFloat.lower(`durationSeconds`),
+        FfiConverterTypeMusicStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`stable_audio_provider_stream_music_to_sink`].
+ */
+@Throws(BlazenException::class)
+fun `stableAudioProviderStreamMusicToSinkBlocking`(
+    `provider`: StableAudioProvider,
+    `prompt`: kotlin.String,
+    `durationSeconds`: kotlin.Float,
+    `sink`: MusicStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_stable_audio_provider_stream_music_to_sink_blocking(
+        FfiConverterTypeStableAudioProvider.lower(`provider`),
+        FfiConverterString.lower(`prompt`),
+        FfiConverterFloat.lower(`durationSeconds`),
+        FfiConverterTypeMusicStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream SFX generation from [`StableAudioProvider`] into `sink`.
+ */
+@Throws(BlazenException::class)
+@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+suspend fun `stableAudioProviderStreamSfxToSink`(
+    `provider`: StableAudioProvider,
+    `prompt`: kotlin.String,
+    `durationSeconds`: kotlin.Float,
+    `sink`: MusicStreamSink,
+) = uniffiRustCallAsync(
+    UniffiLib.uniffi_blazen_uniffi_fn_func_stable_audio_provider_stream_sfx_to_sink(
+        FfiConverterTypeStableAudioProvider.lower(`provider`),
+        FfiConverterString.lower(`prompt`),
+        FfiConverterFloat.lower(`durationSeconds`),
+        FfiConverterTypeMusicStreamSink.lower(`sink`),
+    ),
+    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+    // lift function
+    { Unit },
+    // Error FFI converter
+    BlazenException.ErrorHandler,
+)
+
+/**
+ * Synchronous variant of [`stable_audio_provider_stream_sfx_to_sink`].
+ */
+@Throws(BlazenException::class)
+fun `stableAudioProviderStreamSfxToSinkBlocking`(
+    `provider`: StableAudioProvider,
+    `prompt`: kotlin.String,
+    `durationSeconds`: kotlin.Float,
+    `sink`: MusicStreamSink,
+) = uniffiRustCallWithError(BlazenException) { _status ->
+    UniffiLib.uniffi_blazen_uniffi_fn_func_stable_audio_provider_stream_sfx_to_sink_blocking(
+        FfiConverterTypeStableAudioProvider.lower(`provider`),
+        FfiConverterString.lower(`prompt`),
+        FfiConverterFloat.lower(`durationSeconds`),
+        FfiConverterTypeMusicStreamSink.lower(`sink`),
+        _status,
+    )
+}
+
+/**
+ * Stream voice conversion from [`RvcProvider`] into `sink`.
  *
  * `input_pcm` is the full source utterance as 32-bit float PCM at the
  * backend's expected source sample rate (typically 16 kHz mono for RVC).
- *
- * On success, calls `sink.on_done()` exactly once and returns `Ok(())`.
- * On a backend-side or sink-side failure, calls `sink.on_error(...)` and
- * returns `Ok(())` — error delivery is the sink's responsibility, matching
- * the convention `complete_streaming` and `stream_generate_music_to_sink`
- * established.
- *
- * The only failure mode that propagates back to the caller is a panic in
- * the sink itself or the runtime; init errors (e.g. voice-not-found,
- * backend-not-built-with-feature) are delivered through `on_error`.
+ * Each converted PCM frame is delivered as a [`VcChunk`]; the sink's
+ * `on_done` callback fires once on successful completion.
  */
 @Throws(BlazenException::class)
 @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-suspend fun `streamConvertPcmToSink`(
-    `model`: VcModel,
+suspend fun `rvcProviderStreamConvertPcmToSink`(
+    `provider`: RvcProvider,
     `inputPcm`: List<kotlin.Float>,
     `targetVoiceId`: kotlin.String,
     `sink`: VcStreamSink,
 ) = uniffiRustCallAsync(
-    UniffiLib.uniffi_blazen_uniffi_fn_func_stream_convert_pcm_to_sink(
-        FfiConverterTypeVcModel.lower(`model`),
+    UniffiLib.uniffi_blazen_uniffi_fn_func_rvc_provider_stream_convert_pcm_to_sink(
+        FfiConverterTypeRvcProvider.lower(`provider`),
         FfiConverterSequenceFloat.lower(`inputPcm`),
         FfiConverterString.lower(`targetVoiceId`),
         FfiConverterTypeVcStreamSink.lower(`sink`),
@@ -43897,18 +51151,17 @@ suspend fun `streamConvertPcmToSink`(
 )
 
 /**
- * Synchronous variant of [`stream_convert_pcm_to_sink`] — blocks the
- * current thread on the shared Tokio runtime.
+ * Synchronous variant of [`rvc_provider_stream_convert_pcm_to_sink`].
  */
 @Throws(BlazenException::class)
-fun `streamConvertPcmToSinkBlocking`(
-    `model`: VcModel,
+fun `rvcProviderStreamConvertPcmToSinkBlocking`(
+    `provider`: RvcProvider,
     `inputPcm`: List<kotlin.Float>,
     `targetVoiceId`: kotlin.String,
     `sink`: VcStreamSink,
 ) = uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_stream_convert_pcm_to_sink_blocking(
-        FfiConverterTypeVcModel.lower(`model`),
+    UniffiLib.uniffi_blazen_uniffi_fn_func_rvc_provider_stream_convert_pcm_to_sink_blocking(
+        FfiConverterTypeRvcProvider.lower(`provider`),
         FfiConverterSequenceFloat.lower(`inputPcm`),
         FfiConverterString.lower(`targetVoiceId`),
         FfiConverterTypeVcStreamSink.lower(`sink`),
@@ -44109,648 +51362,6 @@ fun `openaiCompat`(
     )
 
 /**
- * Build an Anthropic Messages-API chat-completion model.
- */
-@Throws(BlazenException::class)
-fun `newAnthropicModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-    `baseUrl`: kotlin.String?,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_anthropic_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`baseUrl`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build an Azure `OpenAI` chat-completion model.
- *
- * Azure derives its endpoint from `resource_name` + `deployment_name` and
- * its model id from `deployment_name`, so `base_url` is intentionally not
- * exposed here. `api_version` defaults to the provider's pinned API
- * version when `None`.
- */
-@Throws(BlazenException::class)
-fun `newAzureModel`(
-    `apiKey`: kotlin.String,
-    `resourceName`: kotlin.String,
-    `deploymentName`: kotlin.String,
-    `apiVersion`: kotlin.String?,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_azure_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterString.lower(`resourceName`),
-                FfiConverterString.lower(`deploymentName`),
-                FfiConverterOptionalString.lower(`apiVersion`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build an AWS Bedrock chat-completion model.
- *
- * `region` selects the AWS region (e.g. `"us-east-1"`); `api_key` is the
- * Bedrock API key (which can be obtained via `aws bedrock` IAM keys or
- * passed as an empty string to resolve from `AWS_BEARER_TOKEN_BEDROCK`).
- */
-@Throws(BlazenException::class)
-fun `newBedrockModel`(
-    `apiKey`: kotlin.String,
-    `region`: kotlin.String,
-    `model`: kotlin.String?,
-    `baseUrl`: kotlin.String?,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_bedrock_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterString.lower(`region`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`baseUrl`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a local candle text-embedding model.
- *
- * Loads weights from `HuggingFace` and runs inference on-device. Defaults
- * to `"sentence-transformers/all-MiniLM-L6-v2"` when `model_id` is `None`.
- */
-@Throws(BlazenException::class)
-fun `newCandleEmbeddingModel`(
-    `modelId`: kotlin.String?,
-    `device`: kotlin.String?,
-    `revision`: kotlin.String?,
-): EmbeddingModel =
-    FfiConverterTypeEmbeddingModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_candle_embedding_model(
-                FfiConverterOptionalString.lower(`modelId`),
-                FfiConverterOptionalString.lower(`device`),
-                FfiConverterOptionalString.lower(`revision`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a local candle chat-completion model.
- *
- * Wraps [`CandleLlmProvider`](blazen_llm::CandleLlmProvider) through the
- * [`CandleLlmModel`](blazen_llm::CandleLlmModel) trait
- * bridge so it satisfies the same `Model` trait as remote
- * providers.
- */
-@Throws(BlazenException::class)
-fun `newCandleModel`(
-    `modelId`: kotlin.String,
-    `device`: kotlin.String?,
-    `quantization`: kotlin.String?,
-    `revision`: kotlin.String?,
-    `contextLength`: kotlin.UInt?,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_candle_model(
-                FfiConverterString.lower(`modelId`),
-                FfiConverterOptionalString.lower(`device`),
-                FfiConverterOptionalString.lower(`quantization`),
-                FfiConverterOptionalString.lower(`revision`),
-                FfiConverterOptionalUInt.lower(`contextLength`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a Cohere chat-completion model.
- */
-@Throws(BlazenException::class)
-fun `newCohereModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-    `baseUrl`: kotlin.String?,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_cohere_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`baseUrl`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Construct a [`Model`] that speaks the `OpenAI` chat-completions
- * protocol against an arbitrary base URL.
- *
- * This is the same wire format as
- * [`new_openai_compat_model`], but wrapped in a
- * [`blazen_llm::CustomProviderHandle`] for consistent ergonomics with the
- * `new_ollama_model` / `new_lm_studio_model`
- * factories. `api_key` is optional: passing `None` (or an empty `Some`)
- * omits the `Authorization` header entirely.
- */
-@Throws(BlazenException::class)
-fun `newCustomModelWithOpenaiProtocol`(
-    `providerId`: kotlin.String,
-    `baseUrl`: kotlin.String,
-    `model`: kotlin.String,
-    `apiKey`: kotlin.String?,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_custom_model_with_openai_protocol(
-                FfiConverterString.lower(`providerId`),
-                FfiConverterString.lower(`baseUrl`),
-                FfiConverterString.lower(`model`),
-                FfiConverterOptionalString.lower(`apiKey`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a `DeepSeek` chat-completion model.
- */
-@Throws(BlazenException::class)
-fun `newDeepseekModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-    `baseUrl`: kotlin.String?,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_deepseek_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`baseUrl`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a fal.ai embedding model.
- *
- * Routes through fal's OpenAI-compatible embeddings endpoint.
- * `model` defaults to `"openai/text-embedding-3-small"` (1536 dims);
- * `dimensions` overrides the produced vector size (matching the upstream
- * model's supported dimensionality).
- */
-@Throws(BlazenException::class)
-fun `newFalEmbeddingModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-    `dimensions`: kotlin.UInt?,
-): EmbeddingModel =
-    FfiConverterTypeEmbeddingModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_embedding_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalUInt.lower(`dimensions`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a fal.ai chat-completion model.
- *
- * `endpoint` selects the fal endpoint family — one of
- * `"openai_chat"` (default), `"openai_responses"`, `"openai_embeddings"`,
- * `"openrouter"`, `"any_llm"`. Unrecognised values fall back to
- * `OpenAiChat`. `enterprise` promotes the endpoint to its enterprise /
- * SOC2-eligible variant; `auto_route_modality` toggles automatic routing
- * to a vision/audio/video endpoint when the request carries media.
- */
-@Throws(BlazenException::class)
-fun `newFalModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-    `baseUrl`: kotlin.String?,
-    `endpoint`: kotlin.String?,
-    `enterprise`: kotlin.Boolean,
-    `autoRouteModality`: kotlin.Boolean,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fal_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`baseUrl`),
-                FfiConverterOptionalString.lower(`endpoint`),
-                FfiConverterBoolean.lower(`enterprise`),
-                FfiConverterBoolean.lower(`autoRouteModality`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a local fastembed (ONNX Runtime) embedding model.
- *
- * `model_name` selects a variant from fastembed's catalog (case-insensitive
- * debug spelling: `"BGESmallENV15"`, `"AllMiniLML6V2"`, ...). When `None`,
- * defaults to `BGESmallENV15`.
- */
-@Throws(BlazenException::class)
-fun `newFastembedEmbeddingModel`(
-    `modelName`: kotlin.String?,
-    `maxBatchSize`: kotlin.UInt?,
-    `showDownloadProgress`: kotlin.Boolean?,
-): EmbeddingModel =
-    FfiConverterTypeEmbeddingModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fastembed_embedding_model(
-                FfiConverterOptionalString.lower(`modelName`),
-                FfiConverterOptionalUInt.lower(`maxBatchSize`),
-                FfiConverterOptionalBoolean.lower(`showDownloadProgress`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a Fireworks AI chat-completion model.
- */
-@Throws(BlazenException::class)
-fun `newFireworksModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-    `baseUrl`: kotlin.String?,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_fireworks_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`baseUrl`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a Google Gemini chat-completion model.
- */
-@Throws(BlazenException::class)
-fun `newGeminiModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-    `baseUrl`: kotlin.String?,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_gemini_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`baseUrl`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a Groq chat-completion model.
- */
-@Throws(BlazenException::class)
-fun `newGroqModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-    `baseUrl`: kotlin.String?,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_groq_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`baseUrl`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a local llama.cpp chat-completion model.
- *
- * `model_path` is either a local GGUF file path or a `HuggingFace` repo
- * id; `n_gpu_layers` offloads the given number of layers to the GPU when
- * the device supports it.
- */
-@Throws(BlazenException::class)
-fun `newLlamacppModel`(
-    `modelPath`: kotlin.String,
-    `device`: kotlin.String?,
-    `quantization`: kotlin.String?,
-    `contextLength`: kotlin.UInt?,
-    `nGpuLayers`: kotlin.UInt?,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_llamacpp_model(
-                FfiConverterString.lower(`modelPath`),
-                FfiConverterOptionalString.lower(`device`),
-                FfiConverterOptionalString.lower(`quantization`),
-                FfiConverterOptionalUInt.lower(`contextLength`),
-                FfiConverterOptionalUInt.lower(`nGpuLayers`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Construct a [`Model`] for an LM Studio server.
- *
- * Convenience wrapper around [`blazen_llm::lm_studio`] — targets LM Studio's
- * local `OpenAI`-compatible endpoint on `http://{host}:{port}/v1`.
- */
-@Throws(BlazenException::class)
-fun `newLmStudioModel`(
-    `host`: kotlin.String,
-    `port`: kotlin.UShort,
-    `model`: kotlin.String,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_lm_studio_model(
-                FfiConverterString.lower(`host`),
-                FfiConverterUShort.lower(`port`),
-                FfiConverterString.lower(`model`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a Mistral chat-completion model.
- */
-@Throws(BlazenException::class)
-fun `newMistralModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-    `baseUrl`: kotlin.String?,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_mistral_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`baseUrl`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a local mistral.rs chat-completion model.
- *
- * `model_id` is the `HuggingFace` repo id (e.g.
- * `"mistralai/Mistral-7B-Instruct-v0.3"`) or a local GGUF path. The
- * optional `device`/`quantization` strings follow Blazen's parser format
- * (`"cpu"`, `"cuda:0"`, `"metal"`, `"q4_k_m"`, ...). Set `vision = true`
- * for multimodal models like LLaVA / Qwen2-VL.
- */
-@Throws(BlazenException::class)
-fun `newMistralrsModel`(
-    `modelId`: kotlin.String,
-    `device`: kotlin.String?,
-    `quantization`: kotlin.String?,
-    `contextLength`: kotlin.UInt?,
-    `vision`: kotlin.Boolean,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_mistralrs_model(
-                FfiConverterString.lower(`modelId`),
-                FfiConverterOptionalString.lower(`device`),
-                FfiConverterOptionalString.lower(`quantization`),
-                FfiConverterOptionalUInt.lower(`contextLength`),
-                FfiConverterBoolean.lower(`vision`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Construct a [`Model`] for an Ollama server.
- *
- * Convenience for [`new_custom_model_with_openai_protocol`] with
- * `base_url = format!("http://{host}:{port}/v1")` and no API key. Delegates
- * to [`blazen_llm::ollama`], which knows how to speak Ollama's flavour of
- * the `OpenAI` chat-completions protocol.
- */
-@Throws(BlazenException::class)
-fun `newOllamaModel`(
-    `host`: kotlin.String,
-    `port`: kotlin.UShort,
-    `model`: kotlin.String,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_ollama_model(
-                FfiConverterString.lower(`host`),
-                FfiConverterUShort.lower(`port`),
-                FfiConverterString.lower(`model`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a generic OpenAI-compatible chat-completion model.
- *
- * Targets any service that speaks the official OpenAI Chat Completions
- * wire format (vLLM, llama-server, LM Studio, local proxies, ...). Uses
- * `Authorization: Bearer <api_key>` auth.
- */
-@Throws(BlazenException::class)
-fun `newOpenaiCompatModel`(
-    `providerName`: kotlin.String,
-    `baseUrl`: kotlin.String,
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_openai_compat_model(
-                FfiConverterString.lower(`providerName`),
-                FfiConverterString.lower(`baseUrl`),
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterString.lower(`model`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build an `OpenAI` embedding model.
- *
- * Defaults to `text-embedding-3-small` (1536 dimensions) when `model` is
- * `None`. Passing a custom `model` keeps the model's default
- * dimensionality; callers needing a non-default dimensionality should
- * drop down to the underlying Rust API.
- */
-@Throws(BlazenException::class)
-fun `newOpenaiEmbeddingModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-    `baseUrl`: kotlin.String?,
-): EmbeddingModel =
-    FfiConverterTypeEmbeddingModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_openai_embedding_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`baseUrl`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build an `OpenAI` chat-completion model.
- *
- * `base_url` defaults to `https://api.openai.com/v1`; override it to target
- * any OpenAI-compatible proxy that uses the official-OpenAI request shape.
- */
-@Throws(BlazenException::class)
-fun `newOpenaiModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-    `baseUrl`: kotlin.String?,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_openai_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`baseUrl`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build an `OpenRouter` chat-completion model.
- */
-@Throws(BlazenException::class)
-fun `newOpenrouterModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-    `baseUrl`: kotlin.String?,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_openrouter_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`baseUrl`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a Perplexity chat-completion model.
- */
-@Throws(BlazenException::class)
-fun `newPerplexityModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-    `baseUrl`: kotlin.String?,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_perplexity_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`baseUrl`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a Together AI chat-completion model.
- */
-@Throws(BlazenException::class)
-fun `newTogetherModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-    `baseUrl`: kotlin.String?,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_together_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`baseUrl`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build a local tract (pure-Rust ONNX) embedding model.
- *
- * Drop-in replacement for [`new_fastembed_embedding_model`] for targets
- * where the prebuilt ONNX Runtime binaries can't link (musl-libc, some
- * sandboxed environments). Loads the same fastembed model catalog via
- * `tract_onnx`.
- */
-@Throws(BlazenException::class)
-fun `newTractEmbeddingModel`(
-    `modelName`: kotlin.String?,
-    `maxBatchSize`: kotlin.UInt?,
-    `showDownloadProgress`: kotlin.Boolean?,
-): EmbeddingModel =
-    FfiConverterTypeEmbeddingModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_tract_embedding_model(
-                FfiConverterOptionalString.lower(`modelName`),
-                FfiConverterOptionalUInt.lower(`maxBatchSize`),
-                FfiConverterOptionalBoolean.lower(`showDownloadProgress`),
-                _status,
-            )
-        },
-    )
-
-/**
- * Build an xAI (Grok) chat-completion model.
- */
-@Throws(BlazenException::class)
-fun `newXaiModel`(
-    `apiKey`: kotlin.String,
-    `model`: kotlin.String?,
-    `baseUrl`: kotlin.String?,
-): Model =
-    FfiConverterTypeModel.lift(
-        uniffiRustCallWithError(BlazenException) { _status ->
-            UniffiLib.uniffi_blazen_uniffi_fn_func_new_xai_model(
-                FfiConverterString.lower(`apiKey`),
-                FfiConverterOptionalString.lower(`model`),
-                FfiConverterOptionalString.lower(`baseUrl`),
-                _status,
-            )
-        },
-    )
-
-/**
  * Eagerly initialise the Tokio runtime and tracing subscriber.
  *
  * Safe to call multiple times — both initialisations are idempotent.
@@ -44762,65 +51373,6 @@ fun `init`() =
     uniffiRustCall { _status ->
         UniffiLib.uniffi_blazen_uniffi_fn_func_init(_status)
     }
-
-/**
- * Drive a streaming chat completion, dispatching each chunk to the sink.
- *
- * On success, calls `sink.on_done(finish_reason, usage)` exactly once and
- * returns `Ok(())`. On a provider-side failure (or sink-side
- * `on_chunk`/`on_done` failure), calls `sink.on_error(...)` exactly once
- * and returns `Ok(())` — the error is *delivered* via the sink, not
- * propagated to this function's caller. This keeps the foreign-language
- * surface symmetric: the sink owns both happy-path and error-path
- * observation.
- *
- * The only way this function itself returns `Err` is when the initial
- * request conversion fails (malformed JSON in tool definitions, etc.) or
- * when the upstream `stream()` call fails to *start* the stream. Sink
- * callback failures are surfaced via `on_error`.
- */
-@Throws(BlazenException::class)
-@Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-suspend fun `completeStreaming`(
-    `model`: Model,
-    `request`: ModelRequest,
-    `sink`: CompletionStreamSink,
-) = uniffiRustCallAsync(
-    UniffiLib.uniffi_blazen_uniffi_fn_func_complete_streaming(
-        FfiConverterTypeModel.lower(`model`),
-        FfiConverterTypeModelRequest.lower(`request`),
-        FfiConverterTypeCompletionStreamSink.lower(`sink`),
-    ),
-    { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
-    { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
-    { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
-    // lift function
-    { Unit },
-    // Error FFI converter
-    BlazenException.ErrorHandler,
-)
-
-/**
- * Synchronous variant of [`complete_streaming`] — blocks the current
- * thread on the shared Tokio runtime.
- *
- * Handy for Ruby scripts and quick Go main fns where async machinery is
- * overkill. The sink's `async` methods still run on the shared runtime
- * (they're just driven synchronously from the caller's thread).
- */
-@Throws(BlazenException::class)
-fun `completeStreamingBlocking`(
-    `model`: Model,
-    `request`: ModelRequest,
-    `sink`: CompletionStreamSink,
-) = uniffiRustCallWithError(BlazenException) { _status ->
-    UniffiLib.uniffi_blazen_uniffi_fn_func_complete_streaming_blocking(
-        FfiConverterTypeModel.lower(`model`),
-        FfiConverterTypeModelRequest.lower(`request`),
-        FfiConverterTypeCompletionStreamSink.lower(`sink`),
-        _status,
-    )
-}
 
 /**
  * Initialize the Langfuse LLM-observability exporter and install it as the

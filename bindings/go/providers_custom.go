@@ -473,15 +473,6 @@ func optBaseProviderDefaultsToFFI(d *BaseProviderDefaults) *uniffiblazen.BasePro
 	return &v
 }
 
-// baseProviderDefaultsFromFFI lifts a UniFFI optional record into the
-// wrapper form. A nil input yields a nil output.
-func baseProviderDefaultsFromFFI(d *uniffiblazen.BaseProviderDefaults) *BaseProviderDefaults {
-	if d == nil {
-		return nil
-	}
-	return &BaseProviderDefaults{}
-}
-
 // ---------------------------------------------------------------------
 // ProviderDefaults
 // ---------------------------------------------------------------------
@@ -535,17 +526,6 @@ func (d *ProviderDefaults) toFFI() uniffiblazen.ProviderDefaults {
 		SystemPrompt:       optString(d.SystemPrompt),
 		ToolsJson:          optString(d.ToolsJSON),
 		ResponseFormatJson: optString(d.ResponseFormatJSON),
-	}
-}
-
-// completionProviderDefaultsFromFFI lifts a UniFFI record into the
-// wrapper form.
-func completionProviderDefaultsFromFFI(d uniffiblazen.ProviderDefaults) *ProviderDefaults {
-	return &ProviderDefaults{
-		Base:               baseProviderDefaultsFromFFI(d.Base),
-		SystemPrompt:       stringOrEmpty(d.SystemPrompt),
-		ToolsJSON:          stringOrEmpty(d.ToolsJson),
-		ResponseFormatJSON: stringOrEmpty(d.ResponseFormatJson),
 	}
 }
 
@@ -750,71 +730,17 @@ func (d *BackgroundRemovalProviderDefaults) toFFI() uniffiblazen.BackgroundRemov
 // BaseProvider
 // ---------------------------------------------------------------------
 
-// BaseProvider wraps a [Model] with a
-// [ProviderDefaults] block that is applied before every
-// completion call.
+// BaseProvider is the capability-erased provider handle returned by
+// every concrete per-engine provider (e.g. [uniffiblazen.OpenAiProvider],
+// [uniffiblazen.PiperProvider], [uniffiblazen.FalImageGenProvider]).
 //
-// On the Rust side the underlying handle is `Arc<RwLock<...>>`, so the
-// builder methods clone-with-mutation: each call returns a fresh
-// BaseProvider that shares the inner model but carries the new
-// defaults. The original is unchanged and safe to keep using.
-//
-// Aliased from the UniFFI surface so callers obtain BaseProvider
-// handles directly from [CustomProviderHandle.AsBase] without paying
-// for an idiomatic wrapper that would have to mirror every builder
-// method one-to-one. Call [BaseProvider.Destroy] when finished to
-// release the underlying native handle; UniFFI also installs a
-// finalizer as a safety net.
+// It exposes [BaseProvider.ProviderId] and [BaseProvider.Capability]
+// for introspection; callers select a per-engine provider directly
+// (via the generated `uniffiblazen.New*Provider` constructors) when
+// they need to dispatch capability-specific calls. Call
+// [BaseProvider.Destroy] when finished to release the underlying
+// native handle; UniFFI also installs a finalizer as a safety net.
 type BaseProvider = uniffiblazen.BaseProvider
-
-// NewBaseProviderFromModel wraps an existing
-// [Model] with an empty [ProviderDefaults]. Use
-// the builder methods on the returned [BaseProvider] to attach
-// defaults afterwards.
-//
-// The supplied [Model] continues to be usable independently;
-// the returned [BaseProvider] holds its own reference to the inner
-// Rust handle.
-func NewBaseProviderFromModel(model *Model) (*BaseProvider, error) {
-	ensureInit()
-	if model == nil || model.inner == nil {
-		return nil, &ValidationError{Message: "completion model is nil or closed"}
-	}
-	return uniffiblazen.BaseProviderFromModel(model.inner), nil
-}
-
-// NewBaseProviderWithDefaults wraps an existing [Model] with
-// explicit [ProviderDefaults] in a single step. Equivalent
-// to [NewBaseProviderFromModel] followed by
-// [BaseProvider.WithDefaults], but avoids the intermediate handle.
-func NewBaseProviderWithDefaults(model *Model, defaults *ProviderDefaults) (*BaseProvider, error) {
-	ensureInit()
-	if model == nil || model.inner == nil {
-		return nil, &ValidationError{Message: "completion model is nil or closed"}
-	}
-	var ffi uniffiblazen.ProviderDefaults
-	if defaults != nil {
-		ffi = defaults.toFFI()
-	}
-	return uniffiblazen.BaseProviderFromModelWithDefaults(model.inner, ffi), nil
-}
-
-// ProviderDefaultsOf returns a snapshot of the
-// currently-configured completion defaults on a [BaseProvider]. The
-// returned value is a copy — mutating it has no effect on the
-// provider; use the [BaseProvider.WithDefaults] / [BaseProvider.WithSystemPrompt] /
-// [BaseProvider.WithToolsJson] / [BaseProvider.WithResponseFormatJson]
-// builders to change defaults.
-//
-// Companion to the typed [BaseProvider.Defaults] method on the
-// UniFFI handle: this helper lifts the raw FFI defaults into the
-// idiomatic Go-side [ProviderDefaults] struct.
-func ProviderDefaultsOf(p *BaseProvider) *ProviderDefaults {
-	if p == nil {
-		return nil
-	}
-	return completionProviderDefaultsFromFFI(p.Defaults())
-}
 
 // ---------------------------------------------------------------------
 // CustomProvider

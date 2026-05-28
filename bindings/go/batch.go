@@ -95,7 +95,12 @@ func batchResultFromFFI(r uniffiblazen.BatchResult) *BatchResult {
 }
 
 // CompleteBatch dispatches a batch of completion requests through the
-// supplied model with a bounded concurrency cap.
+// supplied LLM provider with a bounded concurrency cap.
+//
+// provider is a capability-erased [*uniffiblazen.LlmProvider] handle —
+// obtain one from a concrete per-engine constructor (e.g.
+// [uniffiblazen.NewOpenAiProvider], [uniffiblazen.NewAnthropicProvider])
+// and pass it directly.
 //
 // maxConcurrency = 0 means unlimited (every request dispatched in
 // parallel, bounded only by the provider's own rate limits). For most
@@ -107,15 +112,14 @@ func batchResultFromFFI(r uniffiblazen.BatchResult) *BatchResult {
 // Cancellation propagation into the runtime is a known gap pending an
 // upstream UniFFI feature.
 //
-// A non-nil error return indicates a batch-level failure (e.g. the
-// model handle is closed, or every request failed input validation
-// before dispatch). Per-request failures surface as [BatchItemFailure]
-// entries inside the returned [BatchResult] and do not produce an
-// error here.
-func CompleteBatch(ctx context.Context, model *Model, requests []ModelRequest, maxConcurrency uint32) (*BatchResult, error) {
+// A non-nil error return indicates a batch-level failure (e.g. every
+// request failed input validation before dispatch). Per-request
+// failures surface as [BatchItemFailure] entries inside the returned
+// [BatchResult] and do not produce an error here.
+func CompleteBatch(ctx context.Context, provider *uniffiblazen.LlmProvider, requests []ModelRequest, maxConcurrency uint32) (*BatchResult, error) {
 	ensureInit()
-	if model == nil || model.inner == nil {
-		return nil, &ValidationError{Message: "model is nil or closed"}
+	if provider == nil {
+		return nil, &ValidationError{Message: "provider is nil"}
 	}
 	ffiReqs := make([]uniffiblazen.ModelRequest, len(requests))
 	for i, r := range requests {
@@ -127,7 +131,7 @@ func CompleteBatch(ctx context.Context, model *Model, requests []ModelRequest, m
 	}
 	done := make(chan batchOutcome, 1)
 	go func() {
-		res, err := uniffiblazen.CompleteBatch(model.inner, ffiReqs, maxConcurrency)
+		res, err := uniffiblazen.CompleteBatch(provider, ffiReqs, maxConcurrency)
 		done <- batchOutcome{res: res, err: err}
 	}()
 	select {
@@ -151,16 +155,16 @@ func CompleteBatch(ctx context.Context, model *Model, requests []ModelRequest, m
 // the distinction between batch-level errors (returned here) versus
 // per-request failures (carried inside [BatchResult.Responses]) are
 // identical to [CompleteBatch].
-func CompleteBatchBlocking(model *Model, requests []ModelRequest, maxConcurrency uint32) (*BatchResult, error) {
+func CompleteBatchBlocking(provider *uniffiblazen.LlmProvider, requests []ModelRequest, maxConcurrency uint32) (*BatchResult, error) {
 	ensureInit()
-	if model == nil || model.inner == nil {
-		return nil, &ValidationError{Message: "model is nil or closed"}
+	if provider == nil {
+		return nil, &ValidationError{Message: "provider is nil"}
 	}
 	ffiReqs := make([]uniffiblazen.ModelRequest, len(requests))
 	for i, r := range requests {
 		ffiReqs[i] = r.toFFI()
 	}
-	res, err := uniffiblazen.CompleteBatchBlocking(model.inner, ffiReqs, maxConcurrency)
+	res, err := uniffiblazen.CompleteBatchBlocking(provider, ffiReqs, maxConcurrency)
 	if err != nil {
 		return nil, wrapErr(err)
 	}

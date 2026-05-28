@@ -109,7 +109,13 @@ type Agent struct {
 	once  sync.Once
 }
 
-// NewAgent constructs an agent over the given completion model.
+// NewAgent constructs an agent over the given LLM provider.
+//
+// provider is a capability-erased [*uniffiblazen.LlmProvider] handle —
+// obtain one from a concrete per-engine constructor (e.g.
+// [uniffiblazen.NewOpenAiProvider], [uniffiblazen.NewAnthropicProvider])
+// and pass it directly. Per-engine providers automatically lift into
+// `*LlmProvider` via the generated capability-bucket helpers.
 //
 // systemPrompt is the system message prepended to every turn; pass the
 // empty string to omit. tools is the catalogue exposed to the model
@@ -118,20 +124,20 @@ type Agent struct {
 // safety cap on the LLM round-trip count; the loop terminates with the
 // model's last message if exceeded.
 //
-// model and handler must be non-nil; both are programmer errors that
-// panic immediately rather than returning an error, mirroring the
+// provider and handler must be non-nil; both are programmer errors
+// that panic immediately rather than returning an error, mirroring the
 // upstream FFI contract that [uniffiblazen.NewAgent] is infallible.
-func NewAgent(model *Model, systemPrompt string, tools []Tool, handler ToolHandler, maxIterations uint32) *Agent {
+func NewAgent(provider *uniffiblazen.LlmProvider, systemPrompt string, tools []Tool, handler ToolHandler, maxIterations uint32) *Agent {
 	ensureInit()
-	if model == nil || model.inner == nil {
-		panic("blazen.NewAgent: model must not be nil or closed")
+	if provider == nil {
+		panic("blazen.NewAgent: provider must not be nil")
 	}
 	if handler == nil {
 		panic("blazen.NewAgent: handler must not be nil")
 	}
 	adapter := &toolHandlerAdapter{inner: handler}
 	inner := uniffiblazen.NewAgent(
-		model.inner,
+		provider,
 		optString(systemPrompt),
 		toolSliceToFFI(tools),
 		adapter,

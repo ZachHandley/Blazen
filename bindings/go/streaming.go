@@ -155,64 +155,63 @@ func (s *channelSink) OnError(uniffiErr *uniffiblazen.BlazenError) error {
 // closed at that point.
 var errStreamConsumerGone = &ValidationError{Message: "stream consumer no longer receiving"}
 
-// Stream drives a streaming completion. The returned channel receives
-// [StreamChunkEvent] values as the model emits them, then exactly one of
-// [StreamDoneEvent] (success) or [StreamErrorEvent] (failure) as the
-// terminal event, and is then closed.
+// NewStreamSink returns a fresh [CompletionStreamSink] that bridges
+// streaming completion callbacks into the returned Go channel. The
+// channel receives [StreamChunkEvent] values as the provider emits
+// them, then exactly one terminal [StreamDoneEvent] (success) or
+// [StreamErrorEvent] (failure), and is then closed.
 //
-// The model handle must be alive for the duration of the stream — do not
-// call [Model.Close] until the channel has been drained.
+// Pair this with one of the per-engine streaming free functions
+// generated under [internal/uniffi/blazen] (e.g.
+// [uniffiblazen.OpenaiProviderCompleteStreaming],
+// [uniffiblazen.AnthropicProviderCompleteStreaming]). The typical
+// shape is:
 //
-// If ctx is cancelled the channel receives a [StreamErrorEvent] carrying
-// ctx.Err() and is closed; the underlying Rust stream observes the
-// closure on its next chunk delivery and tears down cooperatively, but
-// cancellation propagation is best-effort and the provider request keeps
-// running until it finishes naturally.
+//	sink, ch := blazen.NewStreamSink()
+//	go func() {
+//	    if err := uniffiblazen.OpenaiProviderCompleteStreaming(prov, req, sink); err != nil {
+//	        // err is already delivered to ch via OnError; the return
+//	        // value covers early failures before the sink fires.
+//	    }
+//	}()
+//	for ev := range ch {
+//	    // ...
+//	}
 //
 // Always drain the channel. A buffered consumer that stops reading
 // before the terminal event will prevent the background goroutine from
-// exiting and pin the model handle in memory.
-func Stream(ctx context.Context, model *Model, req ModelRequest) <-chan StreamEvent {
+// exiting.
+func NewStreamSink() (CompletionStreamSink, <-chan StreamEvent) {
 	ensureInit()
 	ch := make(chan StreamEvent, streamChannelBuffer)
-
-	if model == nil || model.inner == nil {
-		// Fast-fail path: deliver a single terminal error and close.
-		go func() {
-			ch <- &StreamErrorEvent{Err: &ValidationError{Message: "completion model has been closed"}}
-			close(ch)
-		}()
-		return ch
-	}
-
 	sink := &channelSink{
 		ch:   ch,
 		done: make(chan struct{}),
 	}
+	return sink, ch
+}
 
-	// ctx watcher: races the sink's terminal callbacks to deliver
-	// ctx.Err() if the caller cancels before the stream completes.
+// WatchContext arranges for ctx cancellation to deliver a terminal
+// [StreamErrorEvent] (carrying ctx.Err()) on the channel returned by
+// [NewStreamSink]. The watcher exits as soon as the stream reaches a
+// natural terminal state (OnDone / OnError), so it is safe to call even
+// when ctx is never cancelled.
+//
+// sink must be a [CompletionStreamSink] returned by [NewStreamSink];
+// passing any other value is a no-op.
+func WatchContext(ctx context.Context, sink CompletionStreamSink) {
+	cs, ok := sink.(*channelSink)
+	if !ok {
+		return
+	}
 	go func() {
 		select {
 		case <-ctx.Done():
-			sink.finish(&StreamErrorEvent{Err: ctx.Err()})
-		case <-sink.done:
+			cs.finish(&StreamErrorEvent{Err: ctx.Err()})
+		case <-cs.done:
 			// Terminal event already delivered by OnDone/OnError.
 		}
 	}()
-
-	// FFI driver: blocks on CompleteStreaming, which itself returns only
-	// when the sink has been fully drained on the Rust side. Sink
-	// callbacks have already closed the channel by the time this returns
-	// successfully; the early-failure (request validation) path needs an
-	// explicit finish so the consumer is not left waiting forever.
-	go func() {
-		if err := uniffiblazen.CompleteStreaming(model.inner, req.toFFI(), sink); err != nil {
-			sink.finish(&StreamErrorEvent{Err: wrapErr(err)})
-		}
-	}()
-
-	return ch
 }
 
 // Compile-time interface check: catch generator drift early. If the FFI
