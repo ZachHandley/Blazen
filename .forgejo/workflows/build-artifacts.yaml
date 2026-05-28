@@ -111,6 +111,20 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
       OPENSSL_STATIC: ${{ matrix.openssl-vendored }}
       OPENSSL_VENDORED: ${{ matrix.openssl-vendored }}
+      # rust-musl-cross base images inherit ENV TARGET_CC / TARGET_CXX /
+      # TARGET_AR pointing at the musl cross-compiler. When cargo builds a
+      # build-script that depends on aws-lc-sys (HOST = gnu, TARGET = gnu
+      # during the build-dep compile), aws-lc-sys reads TARGET_CC, sees the
+      # musl gcc, sets CC_x86_64_unknown_linux_gnu to it, then runs its
+      # memcmp self-test using the wrong toolchain and panics with the
+      # GCC bug 95189 false positive. Forcing empty strings here makes cc-rs
+      # / aws-lc-sys fall back to the host gnu gcc (provided by the
+      # base image's build-essential install).
+      # No-op on non-musl matrix entries (alpine arm64, glibc gnu, macOS,
+      # Windows MSVC) because none of those container envs set these vars.
+      TARGET_CC: ""
+      TARGET_CXX: ""
+      TARGET_AR: ""
     steps:
       - name: Setup container runtime
         if: matrix.container-kind
@@ -688,6 +702,20 @@ jobs:
       MACOSX_DEPLOYMENT_TARGET: ${{ matrix.deployment-target }}
       OPENSSL_STATIC: ${{ matrix.openssl-vendored }}
       OPENSSL_VENDORED: ${{ matrix.openssl-vendored }}
+      # rust-musl-cross base images inherit ENV TARGET_CC / TARGET_CXX /
+      # TARGET_AR pointing at the musl cross-compiler. When cargo builds a
+      # build-script that depends on aws-lc-sys (HOST = gnu, TARGET = gnu
+      # during the build-dep compile), aws-lc-sys reads TARGET_CC, sees the
+      # musl gcc, sets CC_x86_64_unknown_linux_gnu to it, then runs its
+      # memcmp self-test using the wrong toolchain and panics with the
+      # GCC bug 95189 false positive. Forcing empty strings here makes cc-rs
+      # / aws-lc-sys fall back to the host gnu gcc (provided by the
+      # base image's build-essential install).
+      # No-op on non-musl matrix entries (alpine arm64, glibc gnu, macOS,
+      # Windows MSVC) because none of those container envs set these vars.
+      TARGET_CC: ""
+      TARGET_CXX: ""
+      TARGET_AR: ""
     steps:
       - name: Setup container runtime
         if: matrix.container-kind
