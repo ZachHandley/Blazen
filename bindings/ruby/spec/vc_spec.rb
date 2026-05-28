@@ -5,16 +5,15 @@ require "fileutils"
 
 # Spec for the voice-conversion (RVC) surface: the per-engine
 # +Blazen::RvcProvider+ class for construction + non-streaming
-# conversion, plus the streaming-handle class +Blazen::Compute::VcModel+
-# (+ VcChunk + VcResult + TargetVoice) that drives
-# +Blazen::Streaming.stream_convert+.
+# conversion, plus the typed-result wrappers
+# ({Blazen::Compute::VcChunk} / {Blazen::Compute::VcResult} /
+# {Blazen::Compute::TargetVoice}) returned by its capability methods.
 #
-# Hermetic specs (construction / null-pointer rejection / streaming
-# routing) run unconditionally. Live specs that exercise the real RVC
-# pipeline are gated behind +BLAZEN_RUN_RVC_TESTS=1+ plus a populated
-# voice directory and reference input — the pipeline is expensive (loads
-# RVC + HuBERT + rmvpe weights) and CI doesn't carry those models by
-# default.
+# Hermetic specs (construction / null-pointer rejection) run
+# unconditionally. Live specs that exercise the real RVC pipeline are
+# gated behind +BLAZEN_RUN_RVC_TESTS=1+ plus a populated voice directory
+# and reference input — the pipeline is expensive (loads RVC + HuBERT +
+# rmvpe weights) and CI doesn't carry those models by default.
 
 RSpec.describe "voice-conversion (RVC) surface" do
   before(:all) { Blazen.init }
@@ -51,13 +50,6 @@ RSpec.describe "voice-conversion (RVC) surface" do
     end
   end
 
-  describe Blazen::Compute::VcModel do
-    it "rejects a nil pointer at construction" do
-      expect { described_class.new(nil) }
-        .to raise_error(ArgumentError, /pointer must be non-null/)
-    end
-  end
-
   describe Blazen::Compute::VcChunk do
     it "rejects a nil pointer at construction" do
       expect { described_class.new(nil) }
@@ -79,20 +71,13 @@ RSpec.describe "voice-conversion (RVC) surface" do
     end
   end
 
-  describe ".stream_convert routing", :aggregate_failures do
-    it "rejects a non-VcModel argument" do
-      expect do
-        Blazen::Streaming.stream_convert(Object.new, [0.0, 0.0], "voice-1")
-      end.to raise_error(ArgumentError, /VcModel/)
-    end
-  end
-
   describe "#list_target_voices_blocking on an empty voice dir" do
-    if Blazen::FFI.respond_to?(:blazen_vc_model_new_rvc)
+    if Blazen::FFI.respond_to?(:blazen_rvc_provider_new)
       it "returns [] or raises a Blazen::Error (both acceptable)" do
         empty_dir = File.join(scratch_dir, "voices-empty")
         FileUtils.mkdir_p(empty_dir)
-        model = Blazen::Compute::VcModel.rvc(voice_dir: empty_dir, device: "cpu")
+        ENV["BLAZEN_RVC_VOICE_DIR"] = empty_dir
+        model = Blazen::RvcProvider.new
         begin
           voices = model.list_target_voices_blocking
           expect(voices).to be_an(Array)
@@ -118,12 +103,7 @@ RSpec.describe "voice-conversion (RVC) surface" do
      !ENV["BLAZEN_RVC_VOICE_ID"].to_s.empty? &&
      !ENV["BLAZEN_RVC_INPUT_WAV"].to_s.empty?
     describe "live RVC conversion" do
-      let(:model) do
-        Blazen::Compute::VcModel.rvc(
-          voice_dir: ENV.fetch("BLAZEN_RVC_VOICE_DIR"),
-          device:    ENV["BLAZEN_RVC_DEVICE"], # nil falls back to CPU
-        )
-      end
+      let(:model) { Blazen::RvcProvider.new }
 
       let(:voice_id)  { ENV.fetch("BLAZEN_RVC_VOICE_ID") }
       let(:input_wav) { ENV.fetch("BLAZEN_RVC_INPUT_WAV") }
@@ -135,7 +115,7 @@ RSpec.describe "voice-conversion (RVC) surface" do
       end
 
       it "converts via the blocking surface" do
-        result = model.convert_voice_blocking(input_wav, voice_id)
+        result = model.convert_voice_blocking(input_wav, target_voice_id: voice_id)
         expect(result).to be_a(Blazen::Compute::VcResult)
         expect(result.bytes.bytesize.positive?).to be(true)
         expect(result.mime_type).to match(%r{audio/})
@@ -149,7 +129,7 @@ RSpec.describe "voice-conversion (RVC) surface" do
         # f32, and feed that back as the streaming input. This avoids a
         # WAV-decoder dependency in the spec while still exercising the
         # streaming pipeline end-to-end.
-        prepared = model.convert_voice_blocking(input_wav, voice_id)
+        prepared = model.convert_voice_blocking(input_wav, target_voice_id: voice_id)
         wav_bytes = prepared.bytes
         skip "blocking surface returned empty audio" if wav_bytes.bytesize <= 44
 

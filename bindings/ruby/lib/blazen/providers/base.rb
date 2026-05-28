@@ -8,10 +8,11 @@
 # and +llm.rb+.
 #
 # These are the sole construction surface for the compute family of
-# engines. The legacy +Blazen::Compute.*+ keyword-arg factories have
-# been removed; only the typed-result wrappers and the
-# streaming-capable +Blazen::Compute::MusicModel+ / +VcModel+ handles
-# remain under that namespace (see +blazen/providers/compute_results.rb+).
+# engines. The legacy +Blazen::Compute.*+ keyword-arg factories and the
+# central +Blazen::Compute::MusicModel+ / +VcModel+ / +TtsModel+ /
+# +SttModel+ / +ImageGenModel+ / +ThreeDModel+ wrappers have been
+# removed; only the typed-result wrappers remain under that namespace
+# (see +blazen/providers/compute_results.rb+).
 #
 # Each concrete subclass:
 #

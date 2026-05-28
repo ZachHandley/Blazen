@@ -5,14 +5,14 @@ require "spec_helper"
 # Spec for the music surface: the per-engine provider classes
 # (+Blazen::FalMusicProvider+, +Blazen::MusicGenProvider+,
 # +Blazen::AudioGenProvider+, +Blazen::StableAudioProvider+) for
-# construction + non-streaming generation, plus the streaming-handle
-# class +Blazen::Compute::MusicModel+ (+ MusicChunk + MusicResult) that
-# drives +Blazen::Streaming.stream_music+.
+# construction + non-streaming generation, plus the typed-result
+# wrappers ({Blazen::Compute::MusicChunk} / {Blazen::Compute::MusicResult})
+# returned by their capability methods.
 #
-# The construction / wrapper specs run unconditionally because the fal
-# factory is always present in the cabi build. The streaming + live-API
-# specs are gated behind +BLAZEN_RUN_LIVE_FAL_MUSIC=1+ so CI doesn't
-# burn API credit on every run.
+# The construction specs run unconditionally because the fal provider
+# factory is always present in the cabi build. Live-API specs are gated
+# behind +BLAZEN_RUN_LIVE_FAL_MUSIC=1+ so CI doesn't burn API credit on
+# every run.
 
 RSpec.describe "music surface" do
   before(:all) { Blazen.init }
@@ -97,36 +97,6 @@ RSpec.describe "music surface" do
     end
   end
 
-  describe Blazen::Compute::MusicModel do
-    # The streaming-capable handle is built via the +.fal+ class factory
-    # (always present in the cabi build).
-    let(:model) { Blazen::Compute::MusicModel.fal(api_key: "sk-test") }
-
-    it "constructs via the fal class factory" do
-      expect(model).to be_a(Blazen::Compute::MusicModel)
-      expect(model.ptr).not_to be_null
-    end
-
-    it "exposes async + blocking variants for music + SFX" do
-      expect(model).to respond_to(:generate_music)
-      expect(model).to respond_to(:generate_music_blocking)
-      expect(model).to respond_to(:generate_sfx)
-      expect(model).to respond_to(:generate_sfx_blocking)
-    end
-
-    it "exposes streaming entry points for music + SFX" do
-      expect(model).to respond_to(:stream_generate_music)
-      expect(model).to respond_to(:stream_generate_music_async)
-      expect(model).to respond_to(:stream_generate_sfx)
-      expect(model).to respond_to(:stream_generate_sfx_async)
-    end
-
-    it "rejects a nil pointer at construction" do
-      expect { Blazen::Compute::MusicModel.new(nil) }
-        .to raise_error(ArgumentError, /pointer must be non-null/)
-    end
-  end
-
   describe Blazen::Compute::MusicChunk do
     it "rejects a nil pointer at construction" do
       expect { described_class.new(nil) }
@@ -141,31 +111,15 @@ RSpec.describe "music surface" do
     end
   end
 
-  describe ".stream_music routing", :aggregate_failures do
-    let(:model) { Blazen::Compute::MusicModel.fal(api_key: "sk-test") }
-
-    it "rejects a non-MusicModel argument" do
-      expect do
-        Blazen::Streaming.stream_music(Object.new, "p", 1.0)
-      end.to raise_error(ArgumentError, /MusicModel/)
-    end
-
-    it "rejects an unknown mode" do
-      expect do
-        Blazen::Streaming.stream_music(model, "p", 1.0, mode: :bogus)
-      end.to raise_error(ArgumentError, /must be :music or :sfx/)
-    end
-  end
-
   # ---------------------------------------------------------------------
   # Live-API specs (require +FAL_KEY+ + +BLAZEN_RUN_LIVE_FAL_MUSIC=1+).
   # ---------------------------------------------------------------------
   if ENV["BLAZEN_RUN_LIVE_FAL_MUSIC"] == "1" && !ENV["FAL_KEY"].to_s.empty?
     describe "live fal music generation" do
-      let(:model) { Blazen::Compute::MusicModel.fal(api_key: ENV.fetch("FAL_KEY")) }
+      let(:model) { Blazen::FalMusicProvider.new(api_key: ENV.fetch("FAL_KEY")) }
 
       it "round-trips a short music clip via the blocking surface" do
-        result = model.generate_music_blocking("piano cinematic intro", 5.0)
+        result = model.generate_music_blocking("piano cinematic intro", duration_seconds: 5.0)
         expect(result).to be_a(Blazen::Compute::MusicResult)
         # fal returns either inline bytes or a URL — assert that at least
         # one of the two is populated.
@@ -174,7 +128,7 @@ RSpec.describe "music surface" do
       end
 
       it "round-trips a short SFX clip via the blocking surface" do
-        result = model.generate_sfx_blocking("dog barking", 3.0)
+        result = model.generate_sfx_blocking("dog barking", duration_seconds: 3.0)
         expect(result).to be_a(Blazen::Compute::MusicResult)
         expect(result.bytes.bytesize.positive? || !result.url.nil?).to be(true)
       end

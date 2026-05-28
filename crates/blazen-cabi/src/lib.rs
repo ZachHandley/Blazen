@@ -14,15 +14,9 @@ pub mod agent;
 pub mod agent_records;
 pub mod batch;
 pub mod batch_records;
-pub mod compute;
-#[cfg(feature = "triposr")]
-pub mod compute_3d;
-pub mod compute_factories;
-pub mod compute_music;
 pub mod compute_records;
 pub mod compute_requests;
 pub mod compute_results;
-pub mod compute_vc;
 #[cfg(feature = "distributed")]
 pub mod controlplane;
 #[cfg(feature = "distributed")]

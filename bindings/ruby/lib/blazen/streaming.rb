@@ -496,103 +496,6 @@ module Blazen
                        on_chunk: on_chunk, on_done: on_done, on_error: on_error, &block)
     end
 
-    # Drives a streaming music (or SFX) generation, dispatching each
-    # {Blazen::Compute::MusicChunk} to the supplied callbacks (or block).
-    #
-    # When +blocking:+ is +true+, blocks the calling thread on the cabi
-    # tokio runtime until +on_done+ or +on_error+ fires. When +false+,
-    # returns when the resolving future completes (composes with
-    # +Fiber.scheduler+).
-    #
-    # Either pass explicit per-event handlers via the +on_chunk:+,
-    # +on_done:+, +on_error:+ kwargs, OR pass a single block that receives
-    # +(kind, *args)+:
-    #
-    # * +:chunk+ — +args = [chunk]+, where +chunk+ is a
-    #   {Blazen::Compute::MusicChunk}.
-    # * +:done+  — +args = []+ (music streams carry no done payload).
-    # * +:error+ — +args = [err]+, where +err+ is a {Blazen::Error}
-    #   subclass.
-    #
-    # @param model [Blazen::Compute::MusicModel]
-    # @param prompt [String]
-    # @param duration_seconds [Float]
-    # @param mode [Symbol] +:music+ (default) or +:sfx+ to select which
-    #   pump pair to drive
-    # @param blocking [Boolean] +true+ for the blocking variant,
-    #   +false+ for the async (future-returning) variant
-    # @param on_chunk [#call(chunk)] called for each {Blazen::Compute::MusicChunk}
-    # @param on_done [#call] called once when the stream completes normally
-    # @param on_error [#call(err)] called once on fatal stream errors
-    # @yield [kind, *args] block-form alternative to the kwargs
-    # @return [void]
-    def stream_music(model, prompt, duration_seconds,
-                     mode: :music, blocking: true,
-                     on_chunk: nil, on_done: nil, on_error: nil, &block)
-      unless model.is_a?(Blazen::Compute::MusicModel)
-        raise ArgumentError, "model must be Blazen::Compute::MusicModel"
-      end
-      unless %i[music sfx].include?(mode)
-        raise ArgumentError, "mode must be :music or :sfx (got #{mode.inspect})"
-      end
-
-      sym =
-        if blocking
-          mode == :music ? :blazen_music_model_stream_generate_music_blocking
-                         : :blazen_music_model_stream_generate_sfx_blocking
-        elsif mode == :music
-          :blazen_music_model_stream_generate_music
-        else
-          :blazen_music_model_stream_generate_sfx
-        end
-
-      drive_music_stream(model.ptr, prompt, duration_seconds, sym, blocking: blocking,
-                         on_chunk: on_chunk, on_done: on_done, on_error: on_error, &block)
-    end
-
-    # Drives a streaming voice-conversion call over +pcm_samples+
-    # (Array of f32 PCM samples), dispatching each
-    # {Blazen::Compute::VcChunk} to the supplied callbacks (or block).
-    #
-    # When +blocking:+ is +true+, blocks the calling thread on the cabi
-    # tokio runtime until +on_done+ or +on_error+ fires. When +false+,
-    # returns when the resolving future completes (composes with
-    # +Fiber.scheduler+).
-    #
-    # Either pass explicit per-event handlers via the +on_chunk:+,
-    # +on_done:+, +on_error:+ kwargs, OR pass a single block that
-    # receives +(kind, *args)+:
-    #
-    # * +:chunk+ — +args = [chunk]+, where +chunk+ is a
-    #   {Blazen::Compute::VcChunk}.
-    # * +:done+  — +args = []+ (vc streams carry no done payload).
-    # * +:error+ — +args = [err]+, where +err+ is a {Blazen::Error}
-    #   subclass.
-    #
-    # @param model [Blazen::Compute::VcModel]
-    # @param pcm_samples [Array<Float>, #to_a]
-    # @param target_voice_id [String]
-    # @param blocking [Boolean] +true+ for the blocking variant,
-    #   +false+ for the async (future-returning) variant
-    # @param on_chunk [#call(chunk)] called for each {Blazen::Compute::VcChunk}
-    # @param on_done [#call] called once when the stream completes normally
-    # @param on_error [#call(err)] called once on fatal stream errors
-    # @yield [kind, *args] block-form alternative to the kwargs
-    # @return [void]
-    def stream_convert(model, pcm_samples, target_voice_id,
-                       blocking: true,
-                       on_chunk: nil, on_done: nil, on_error: nil, &block)
-      unless model.is_a?(Blazen::Compute::VcModel)
-        raise ArgumentError, "model must be Blazen::Compute::VcModel"
-      end
-
-      sym = blocking ? :blazen_vc_model_stream_convert_pcm_to_sink_blocking
-                     : :blazen_vc_model_stream_convert_pcm_to_sink
-
-      drive_vc_stream(model.ptr, pcm_samples, target_voice_id, sym, blocking: blocking,
-                      on_chunk: on_chunk, on_done: on_done, on_error: on_error, &block)
-    end
-
     # ---------------------------------------------------------------------
     # Per-engine stream cores (symbol-parameterised)
     # ---------------------------------------------------------------------
@@ -600,9 +503,9 @@ module Blazen
     # These drive a stream against an arbitrary cabi entry point named by
     # +sym+, given a raw provider handle (+ptr+, an +::FFI::Pointer+ /
     # +AutoPointer+). They carry the same sink-registry + vtable machinery
-    # as the public {complete}/{stream_music}/{stream_convert} wrappers, but
-    # leave the choice of cabi symbol + provider handle to the caller — so
-    # the per-engine provider classes ({Blazen::OpenAiProvider#stream},
+    # as the public {complete} wrapper, but leave the choice of cabi
+    # symbol + provider handle to the caller — so the per-engine provider
+    # classes ({Blazen::OpenAiProvider#stream},
     # {Blazen::MusicGenProvider#stream_generate_music},
     # {Blazen::RvcProvider#stream_convert_pcm}, …) can route to their own
     # +blazen_<engine>_provider_*+ streaming symbols.
@@ -649,8 +552,7 @@ module Blazen
     end
 
     # Drive a streaming music / SFX generation through +sym+
-    # (+blazen_<engine>_provider_stream_{music,sfx}[_blocking]+ or the
-    # central +blazen_music_model_stream_generate_{music,sfx}[_blocking]+).
+    # (+blazen_<engine>_provider_stream_{music,sfx}[_blocking]+).
     #
     # @param ptr [::FFI::Pointer] live provider/model handle
     # @param prompt [String]
@@ -695,8 +597,8 @@ module Blazen
     end
 
     # Drive a streaming voice-conversion through +sym+
-    # (+blazen_rvc_provider_stream_convert_pcm[_blocking]+ or the central
-    # +blazen_vc_model_stream_convert_pcm_to_sink[_blocking]+).
+    # (+blazen_rvc_provider_stream_convert_pcm[_blocking]+ /
+    # +blazen_fal_vc_provider_stream_convert_pcm[_blocking]+).
     #
     # @param ptr [::FFI::Pointer] live provider/model handle
     # @param pcm_samples [Array<Float>, #to_a]

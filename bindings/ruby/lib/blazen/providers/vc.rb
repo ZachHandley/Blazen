@@ -84,7 +84,7 @@ module Blazen
         Blazen::FFI.blazen_future_take_target_voice_list(f, out_list, out_err)
       end
       Blazen::FFI.check_error!(out_err)
-      Blazen::Compute::VcModel._take_target_voice_list(out_list.read_pointer)
+      Blazen::Compute::TargetVoice._take_list(out_list.read_pointer)
     end
 
     def vc_list_target_voices_blocking(blocking_sym)
@@ -92,7 +92,7 @@ module Blazen
       out_err  = ::FFI::MemoryPointer.new(:pointer)
       Blazen::FFI.public_send(blocking_sym, @handle, out_list, out_err)
       Blazen::FFI.check_error!(out_err)
-      Blazen::Compute::VcModel._take_target_voice_list(out_list.read_pointer)
+      Blazen::Compute::TargetVoice._take_list(out_list.read_pointer)
     end
 
     # Drives a streaming voice-conversion over +pcm_samples+ (Array of f32

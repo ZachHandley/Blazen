@@ -61,24 +61,10 @@ pub mod workflow;
 
 pub use agent::{Agent, AgentResult, ToolHandler};
 pub use batch::{BatchItem, BatchResult, complete_batch, complete_batch_blocking};
-#[cfg(feature = "audio-stt-faster-whisper")]
-pub use compute::new_faster_whisper_stt_model;
-#[cfg(all(feature = "tts", feature = "audio-tts-spark"))]
-pub use compute::new_spark_tts_model;
-pub use compute::{ImageGenModel, ImageGenResult, SttModel, SttResult, TtsModel, TtsResult};
 #[cfg(feature = "triposr")]
-pub use compute::{ThreeDGenerateResult, ThreeDModel, new_triposr_3d_model};
-#[cfg(feature = "audio-music-audiogen")]
-pub use compute_music::new_audiogen_model;
-#[cfg(feature = "audio-music-musicgen")]
-pub use compute_music::new_musicgen_model;
-#[cfg(feature = "audio-music-stable-audio")]
-pub use compute_music::new_stable_audio_model;
-pub use compute_music::{
-    MusicChunk, MusicModel, MusicResult, MusicStreamSink, new_fal_music_model,
-    stream_generate_music_to_sink, stream_generate_music_to_sink_blocking,
-    stream_generate_sfx_to_sink, stream_generate_sfx_to_sink_blocking,
-};
+pub use compute::ThreeDGenerateResult;
+pub use compute::{ImageGenResult, SttResult, TtsResult};
+pub use compute_music::{MusicChunk, MusicResult, MusicStreamSink};
 pub use compute_types::{
     AudioResult, BackgroundRemovalRequest, Generated3DModel, GeneratedAudio, GeneratedImage,
     GeneratedVideo, ImageRequest, ImageResult, MediaOutput, MusicRequest, RequestTiming,
@@ -86,12 +72,7 @@ pub use compute_types::{
     TranscriptionSegment, UpscaleRequest, VideoRequest, VideoResult, VoiceCloneRequest,
     VoiceHandle,
 };
-#[cfg(feature = "audio-vc-rvc")]
-pub use compute_vc::new_rvc_model;
-pub use compute_vc::{
-    TargetVoice, VcChunk, VcModel, VcResult, VcStreamSink, stream_convert_pcm_to_sink,
-    stream_convert_pcm_to_sink_blocking,
-};
+pub use compute_vc::{TargetVoice, VcChunk, VcResult, VcStreamSink};
 #[cfg(feature = "distributed")]
 pub use controlplane::{
     ControlPlaneAdmission, ControlPlaneAdmissionMode, ControlPlaneAssignmentHandler,

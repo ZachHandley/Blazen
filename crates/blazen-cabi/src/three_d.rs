@@ -237,7 +237,7 @@ pub unsafe extern "C" fn blazen_triposr_provider_generate_from_image_blocking(
     image_bytes: *const u8,
     image_bytes_len: usize,
     mesh_resolution: u32,
-    out_result: *mut *mut crate::compute_3d::BlazenThreeDGenerateResult,
+    out_result: *mut *mut crate::compute_records::BlazenThreeDGenerateResult,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     if model.is_null() {
@@ -262,7 +262,8 @@ pub unsafe extern "C" fn blazen_triposr_provider_generate_from_image_blocking(
             if !out_result.is_null() {
                 // SAFETY: caller has guaranteed `out_result` is writable.
                 unsafe {
-                    *out_result = crate::compute_3d::BlazenThreeDGenerateResult::from(v).into_ptr();
+                    *out_result =
+                        crate::compute_records::BlazenThreeDGenerateResult::from(v).into_ptr();
                 }
             }
             0

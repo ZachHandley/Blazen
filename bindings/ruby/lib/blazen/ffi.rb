@@ -332,12 +332,30 @@ module Blazen
                     [:pointer, :pointer, :pointer], :int32
     attach_function :blazen_future_take_batch_result,
                     [:pointer, :pointer, :pointer], :int32
-    attach_function :blazen_future_take_tts_result,
-                    [:pointer, :pointer, :pointer], :int32
-    attach_function :blazen_future_take_stt_result,
-                    [:pointer, :pointer, :pointer], :int32
-    attach_function :blazen_future_take_image_gen_result,
-                    [:pointer, :pointer, :pointer], :int32
+    # The +tts+ / +stt+ / +image_gen+ future-take helpers were exposed
+    # by the deleted central capability-erased *Model wrappers and are
+    # no longer exported by the cabi. The per-engine +_blocking+ paths
+    # (which write +out_result+ directly without going through a typed
+    # future) remain functional; the async paths through the per-engine
+    # provider classes are not currently wired through the cabi.
+    begin
+      attach_function :blazen_future_take_tts_result,
+                      [:pointer, :pointer, :pointer], :int32
+    rescue ::FFI::NotFoundError
+      # Removed alongside the central +Compute::TtsModel+ wrapper.
+    end
+    begin
+      attach_function :blazen_future_take_stt_result,
+                      [:pointer, :pointer, :pointer], :int32
+    rescue ::FFI::NotFoundError
+      # Removed alongside the central +Compute::SttModel+ wrapper.
+    end
+    begin
+      attach_function :blazen_future_take_image_gen_result,
+                      [:pointer, :pointer, :pointer], :int32
+    rescue ::FFI::NotFoundError
+      # Removed alongside the central +Compute::ImageGenModel+ wrapper.
+    end
     attach_function :blazen_future_take_model_response,
                     [:pointer, :pointer, :pointer], :int32
     attach_function :blazen_future_take_embedding_response,
@@ -404,87 +422,20 @@ module Blazen
     attach_function :blazen_batch_result_free,            [:pointer], :void
 
     # -------------------------------------------------------------------
-    # Compute — TTS / STT / ImageGen models and results
+    # Compute — typed-result accessors (TtsResult / SttResult /
+    # ImageGenResult)
     # -------------------------------------------------------------------
-    attach_function :blazen_tts_model_synthesize_blocking,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer],
-                    :int32,
-                    blocking: true
-    attach_function :blazen_tts_model_synthesize,
-                    [:pointer, :pointer, :pointer, :pointer],
-                    :pointer
-    attach_function :blazen_tts_model_free, [:pointer], :void
-
-    attach_function :blazen_stt_model_transcribe_blocking,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer],
-                    :int32,
-                    blocking: true
-    attach_function :blazen_stt_model_transcribe,
-                    [:pointer, :pointer, :pointer],
-                    :pointer
-    attach_function :blazen_stt_model_free, [:pointer], :void
-
-    attach_function :blazen_image_gen_model_generate_blocking,
-                    [:pointer, :pointer, :pointer, :int32, :int32, :int32,
-                     :pointer, :pointer, :pointer],
-                    :int32,
-                    blocking: true
-    attach_function :blazen_image_gen_model_generate,
-                    [:pointer, :pointer, :pointer, :int32, :int32, :int32, :pointer],
-                    :pointer
-    attach_function :blazen_image_gen_model_free, [:pointer], :void
-
-    # Compute provider factories
-    attach_function :blazen_tts_model_new_fal,
-                    [:pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_stt_model_new_fal,
-                    [:pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_image_gen_model_new_fal,
-                    [:pointer, :pointer, :pointer, :pointer], :int32
-    # Feature-gated symbols: tolerate FFI::NotFoundError so the loader
-    # works against any cabi build, full-features or minimal. Downstream
-    # callers in compute.rb / providers.rb already guard via
-    # +Blazen::FFI.respond_to?+ before invoking each.
-    begin
-      attach_function :blazen_tts_model_new_piper,
-                      [:pointer, :int32, :int32, :pointer, :pointer], :int32
-    rescue ::FFI::NotFoundError
-      # Optional: the local TTS factory was renamed away from "piper" in
-      # PR6; this symbol is kept attached only for older release builds
-      # that still export it.
-    end
-    begin
-      attach_function :blazen_stt_model_new_whisper,
-                      [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    rescue ::FFI::NotFoundError
-      # Optional: only present when libblazen_cabi was built with `whispercpp`.
-    end
-    begin
-      attach_function :blazen_tts_model_new_spark,
-                      [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    rescue ::FFI::NotFoundError
-      # Optional: only present when libblazen_cabi was built with `audio-tts-spark`.
-    end
-    begin
-      attach_function :blazen_stt_model_new_faster_whisper,
-                      [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    rescue ::FFI::NotFoundError
-      # Optional: only present when libblazen_cabi was built with `audio-stt-faster-whisper`.
-    end
-    begin
-      attach_function :blazen_three_d_model_new_triposr,
-                      [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    rescue ::FFI::NotFoundError
-      # Optional: only present when libblazen_cabi was built with `triposr`.
-    end
-    begin
-      attach_function :blazen_image_gen_model_new_diffusion,
-                      [:pointer, :pointer, :int32, :int32, :int32, :float,
-                       :pointer, :pointer],
-                      :int32
-    rescue ::FFI::NotFoundError
-      # Optional: only present when libblazen_cabi was built with `diffusion`.
-    end
+    #
+    # The central capability-erased *Model wrappers (+TtsModel+ /
+    # +SttModel+ / +ImageGenModel+ / +ThreeDModel+) plus their per-provider
+    # constructors (+blazen_{tts,stt,image_gen,three_d}_model_new_*+) and
+    # their generate / synthesize / transcribe entry points have been
+    # removed. The per-engine provider classes
+    # ({Blazen::FalTtsProvider}, {Blazen::PiperProvider},
+    # {Blazen::FalSttProvider}, {Blazen::WhisperCppProvider},
+    # {Blazen::FalImageGenProvider}, {Blazen::DiffusionProvider}, …) wrap
+    # the +blazen_<engine>_provider_*+ symbols directly. What remains here
+    # are the typed-result accessors handed to those providers' callers.
 
     # TtsResult accessors
     attach_function :blazen_tts_result_audio_base64, [:pointer], :pointer
@@ -504,75 +455,26 @@ module Blazen
     attach_function :blazen_image_gen_result_free,         [:pointer], :void
 
     # -------------------------------------------------------------------
-    # Compute — Music / SFX (MusicModel + MusicChunk + MusicResult)
+    # Compute — Music / SFX result + chunk accessors
     # -------------------------------------------------------------------
     #
-    # The fal factory is always present (no feature gate). The three native
-    # factories (+musicgen+ / +stable_audio+ / +audiogen+) are feature-gated
-    # in the cabi build; we rescue +::FFI::NotFoundError+ so a minimal
-    # libblazen_cabi loads cleanly and downstream callers can probe via
-    # +Blazen::FFI.respond_to?+.
-    attach_function :blazen_music_model_new_fal,
-                    [:pointer, :pointer, :pointer, :pointer], :int32
+    # The central +MusicModel+ wrapper plus its per-provider constructors
+    # (+blazen_music_model_new_*+), lifecycle (+blazen_music_model_free+),
+    # non-streaming generate entry points
+    # (+blazen_music_model_generate_{music,sfx}[_blocking]+) and streaming
+    # pumps (+blazen_music_model_stream_generate_{music,sfx}[_blocking]+)
+    # have been removed. The per-engine music providers
+    # ({Blazen::MusicGenProvider}, {Blazen::AudioGenProvider},
+    # {Blazen::StableAudioProvider}, {Blazen::FalMusicProvider}) wrap the
+    # +blazen_<engine>_provider_*+ symbols directly. What remains here is
+    # the result-consumption surface (futures + accessors) shared by every
+    # music engine.
     begin
-      attach_function :blazen_music_model_new_musicgen,
-                      [:pointer, :pointer, :pointer, :float, :pointer, :pointer], :int32
+      attach_function :blazen_future_take_music_result,
+                      [:pointer, :pointer, :pointer], :int32
     rescue ::FFI::NotFoundError
-      # Optional: only present when libblazen_cabi was built with the
-      # +music-musicgen+ feature.
+      # Removed alongside the central +Compute::MusicModel+ wrapper.
     end
-    begin
-      attach_function :blazen_music_model_new_stable_audio,
-                      [:pointer, :pointer, :pointer, :float, :pointer, :pointer], :int32
-    rescue ::FFI::NotFoundError
-      # Optional: only present when libblazen_cabi was built with the
-      # +music-stable-audio+ feature.
-    end
-    begin
-      attach_function :blazen_music_model_new_audiogen,
-                      [:pointer, :pointer, :pointer, :pointer, :float, :pointer, :pointer],
-                      :int32
-    rescue ::FFI::NotFoundError
-      # Optional: only present when libblazen_cabi was built with the
-      # +music-audiogen+ feature.
-    end
-
-    # Lifecycle + non-streaming generate
-    attach_function :blazen_music_model_free, [:pointer], :void
-    attach_function :blazen_music_model_generate_music_blocking,
-                    [:pointer, :pointer, :float, :pointer, :pointer], :int32,
-                    blocking: true
-    attach_function :blazen_music_model_generate_music,
-                    [:pointer, :pointer, :float], :pointer
-    attach_function :blazen_music_model_generate_sfx_blocking,
-                    [:pointer, :pointer, :float, :pointer, :pointer], :int32,
-                    blocking: true
-    attach_function :blazen_music_model_generate_sfx,
-                    [:pointer, :pointer, :float], :pointer
-    attach_function :blazen_future_take_music_result,
-                    [:pointer, :pointer, :pointer], :int32
-
-    # Streaming pumps (4: music + SFX, each in blocking / async flavor).
-    # +sink+ is passed by value so the cabi consumes the +user_data+ even
-    # on early-return failure paths.
-    attach_function :blazen_music_model_stream_generate_music_blocking,
-                    [:pointer, :pointer, :float,
-                     BlazenMusicStreamSinkVTable.by_value, :pointer],
-                    :int32,
-                    blocking: true
-    attach_function :blazen_music_model_stream_generate_music,
-                    [:pointer, :pointer, :float,
-                     BlazenMusicStreamSinkVTable.by_value],
-                    :pointer
-    attach_function :blazen_music_model_stream_generate_sfx_blocking,
-                    [:pointer, :pointer, :float,
-                     BlazenMusicStreamSinkVTable.by_value, :pointer],
-                    :int32,
-                    blocking: true
-    attach_function :blazen_music_model_stream_generate_sfx,
-                    [:pointer, :pointer, :float,
-                     BlazenMusicStreamSinkVTable.by_value],
-                    :pointer
 
     # MusicChunk accessors (caller-owned chunk handed to +on_chunk+ sink)
     attach_function :blazen_music_chunk_samples,
@@ -601,20 +503,17 @@ module Blazen
                     [:pointer], :void
 
     # -------------------------------------------------------------------
-    # Compute — Native 3D (ThreeDModel + ThreeDGenerateResult)
+    # Compute — Native 3D (ThreeDGenerateResult)
     # -------------------------------------------------------------------
     #
-    # Lifecycle + generate entry points are feature-gated under `triposr`
-    # in the cabi build; rescue `::FFI::NotFoundError` so a minimal
-    # libblazen_cabi loads cleanly and downstream callers in compute.rb
-    # probe via `Blazen::FFI.respond_to?` before invoking each.
+    # The central +ThreeDModel+ wrapper plus its constructor
+    # (+blazen_three_d_model_new_triposr+), lifecycle
+    # (+blazen_three_d_model_free+) and generate entry points
+    # (+blazen_three_d_model_generate_from_image[_blocking]+) have been
+    # removed. {Blazen::TripoSrProvider} wraps
+    # +blazen_triposr_provider_*+ directly. What remains here is the
+    # result-consumption surface (future + accessors).
     begin
-      attach_function :blazen_three_d_model_free, [:pointer], :void
-      attach_function :blazen_three_d_model_generate_from_image_blocking,
-                      [:pointer, :pointer, :size_t, :uint32, :pointer, :pointer], :int32,
-                      blocking: true
-      attach_function :blazen_three_d_model_generate_from_image,
-                      [:pointer, :pointer, :size_t, :uint32], :pointer
       attach_function :blazen_future_take_three_d_generate_result,
                       [:pointer, :pointer, :pointer], :int32
       attach_function :blazen_three_d_generate_result_model_bytes,
@@ -628,60 +527,32 @@ module Blazen
     end
 
     # -------------------------------------------------------------------
-    # Compute — Voice Conversion (RVC) (VcModel + VcChunk + VcResult +
-    # TargetVoice + TargetVoiceList)
+    # Compute — Voice Conversion result + chunk accessors
     # -------------------------------------------------------------------
     #
-    # The RVC factory (+blazen_vc_model_new_rvc+) is feature-gated under
-    # +audio-vc-rvc+ in the cabi build, so we rescue +FFI::NotFoundError+
-    # for it and surface the absence via +Blazen::FFI.respond_to?+ in
-    # +compute.rb+. All accessor / lifecycle / streaming / future-taker
-    # entry points are always present.
+    # The central +VcModel+ wrapper plus its constructor
+    # (+blazen_vc_model_new_rvc+), lifecycle (+blazen_vc_model_free+),
+    # convert / list / register entry points
+    # (+blazen_vc_model_{convert_voice,list_target_voices,register_target_voice}[_blocking]+)
+    # and streaming pump
+    # (+blazen_vc_model_stream_convert_pcm_to_sink[_blocking]+) have been
+    # removed. {Blazen::RvcProvider} and {Blazen::FalVcProvider} wrap
+    # +blazen_<engine>_provider_*+ directly. What remains here are the
+    # result-consumption surface (futures + accessors) shared by every
+    # VC engine.
+
     begin
-      attach_function :blazen_vc_model_new_rvc,
-                      [:pointer, :pointer, :pointer, :pointer], :int32
+      attach_function :blazen_future_take_vc_result,
+                      [:pointer, :pointer, :pointer], :int32
     rescue ::FFI::NotFoundError
-      # Optional: only present when libblazen_cabi was built with the
-      # +audio-vc-rvc+ feature.
+      # Removed alongside the central +Compute::VcModel+ wrapper.
     end
-
-    attach_function :blazen_vc_model_free, [:pointer], :void
-
-    attach_function :blazen_vc_model_convert_voice_blocking,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32,
-                    blocking: true
-    attach_function :blazen_vc_model_convert_voice,
-                    [:pointer, :pointer, :pointer], :pointer
-
-    attach_function :blazen_vc_model_list_target_voices_blocking,
-                    [:pointer, :pointer, :pointer], :int32,
-                    blocking: true
-    attach_function :blazen_vc_model_list_target_voices,
-                    [:pointer], :pointer
-
-    attach_function :blazen_vc_model_register_target_voice_blocking,
-                    [:pointer, :pointer, :pointer, :pointer], :int32,
-                    blocking: true
-    attach_function :blazen_vc_model_register_target_voice,
-                    [:pointer, :pointer, :pointer], :pointer
-
-    attach_function :blazen_future_take_vc_result,
-                    [:pointer, :pointer, :pointer], :int32
-    attach_function :blazen_future_take_target_voice_list,
-                    [:pointer, :pointer, :pointer], :int32
-
-    # Streaming pumps (2: blocking / async). +sink+ is passed by value so
-    # the cabi consumes the +user_data+ even on early-return failure
-    # paths.
-    attach_function :blazen_vc_model_stream_convert_pcm_to_sink_blocking,
-                    [:pointer, :pointer, :size_t, :pointer,
-                     BlazenVcStreamSinkVTable.by_value, :pointer],
-                    :int32,
-                    blocking: true
-    attach_function :blazen_vc_model_stream_convert_pcm_to_sink,
-                    [:pointer, :pointer, :size_t, :pointer,
-                     BlazenVcStreamSinkVTable.by_value],
-                    :pointer
+    begin
+      attach_function :blazen_future_take_target_voice_list,
+                      [:pointer, :pointer, :pointer], :int32
+    rescue ::FFI::NotFoundError
+      # Removed alongside the central +Compute::VcModel+ wrapper.
+    end
 
     # VcChunk accessors (caller-owned chunk handed to +on_chunk+ sink)
     attach_function :blazen_vc_chunk_samples,         [:pointer, :pointer], :pointer

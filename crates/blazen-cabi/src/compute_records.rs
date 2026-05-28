@@ -14,7 +14,8 @@
 use std::ffi::c_char;
 
 use blazen_uniffi::compute::{
-    ImageGenResult as InnerImageGenResult, SttResult as InnerSttResult, TtsResult as InnerTtsResult,
+    ImageGenResult as InnerImageGenResult, SttResult as InnerSttResult,
+    ThreeDGenerateResult as InnerThreeDGenerateResult, TtsResult as InnerTtsResult,
 };
 use blazen_uniffi::compute_music::{
     MusicChunk as InnerMusicChunk, MusicResult as InnerMusicResult,
@@ -1068,4 +1069,191 @@ pub unsafe extern "C" fn blazen_target_voice_list_free(list: *mut BlazenTargetVo
     }
     // SAFETY: per the `Box::into_raw` provenance contract.
     drop(unsafe { Box::from_raw(list) });
+}
+
+// ---------------------------------------------------------------------------
+// BlazenThreeDGenerateResult
+// ---------------------------------------------------------------------------
+
+/// Opaque handle wrapping
+/// [`blazen_uniffi::compute::ThreeDGenerateResult`].
+///
+/// Produced by per-engine cabi 3D-generation wrappers (e.g.
+/// `BlazenTripoSrProvider::generate_from_image`) and by the typed
+/// [`blazen_future_take_three_d_generate_result`] taker. Holds the encoded
+/// 3D model bytes (typically GLB / gltf-binary) and an IANA MIME type
+/// string so foreign callers can dispatch on the format without sniffing
+/// the buffer.
+pub struct BlazenThreeDGenerateResult(pub(crate) InnerThreeDGenerateResult);
+
+impl BlazenThreeDGenerateResult {
+    /// Heap-allocate the handle and return the raw pointer the caller owns.
+    pub(crate) fn into_ptr(self) -> *mut BlazenThreeDGenerateResult {
+        Box::into_raw(Box::new(self))
+    }
+}
+
+impl From<InnerThreeDGenerateResult> for BlazenThreeDGenerateResult {
+    fn from(inner: InnerThreeDGenerateResult) -> Self {
+        Self(inner)
+    }
+}
+
+/// Pops a typed `ThreeDGenerateResult` out of `fut`. On success returns
+/// `0` and writes a caller-owned `*mut BlazenThreeDGenerateResult` into
+/// `out`; on failure returns `-1` and writes a caller-owned
+/// `*mut BlazenError` into `err`.
+///
+/// `out` / `err` may be null when the caller wants to discard the value.
+///
+/// # Safety
+///
+/// `fut` must be a non-null pointer produced by a per-engine cabi
+/// 3D-generation wrapper (e.g. `blazen_triposr_provider_generate_from_image`),
+/// not yet freed, and not concurrently freed from another thread. `out`
+/// / `err` must be null OR writable pointers to the appropriate slot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_future_take_three_d_generate_result(
+    fut: *mut crate::future::BlazenFuture,
+    out: *mut *mut BlazenThreeDGenerateResult,
+    err: *mut *mut crate::error::BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the live-future-pointer contract.
+    match unsafe { crate::future::BlazenFuture::take_typed::<InnerThreeDGenerateResult>(fut) } {
+        Ok(v) => {
+            if !out.is_null() {
+                // SAFETY: caller has guaranteed `out` is writable.
+                unsafe {
+                    *out = BlazenThreeDGenerateResult::from(v).into_ptr();
+                }
+            }
+            0
+        }
+        Err(e) => {
+            if !err.is_null() {
+                // SAFETY: caller has guaranteed `err` is writable.
+                unsafe {
+                    *err = crate::error::BlazenError::from(e).into_ptr();
+                }
+            }
+            -1
+        }
+    }
+}
+
+/// Borrows the result's encoded 3D model bytes (GLB / gltf-binary).
+/// Writes the slice length into `*out_len` and returns the pointer to
+/// the first byte. The returned pointer is valid for the lifetime of the
+/// result handle (i.e. until [`blazen_three_d_generate_result_free`] is
+/// called); callers must NOT free the buffer directly.
+///
+/// Returns null and writes `0` into `*out_len` if `result` is null.
+///
+/// # Safety
+///
+/// `result` must be null OR a valid pointer to a
+/// `BlazenThreeDGenerateResult` produced by the cabi surface.
+/// `out_len` must be null OR a writable pointer to a single `usize` slot.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_three_d_generate_result_model_bytes(
+    result: *const BlazenThreeDGenerateResult,
+    out_len: *mut usize,
+) -> *const u8 {
+    if result.is_null() {
+        if !out_len.is_null() {
+            // SAFETY: caller upholds the out-pointer contract.
+            unsafe {
+                *out_len = 0;
+            }
+        }
+        return std::ptr::null();
+    }
+    // SAFETY: caller upholds the live-pointer contract documented above.
+    let result = unsafe { &*result };
+    let slice = result.0.model_bytes.as_slice();
+    if !out_len.is_null() {
+        // SAFETY: caller upholds the out-pointer contract.
+        unsafe {
+            *out_len = slice.len();
+        }
+    }
+    slice.as_ptr()
+}
+
+/// Returns the IANA MIME type of the encoded 3D model as a
+/// heap-allocated C string (typically `"model/gltf-binary"`). Caller
+/// frees with `blazen_string_free`. Returns null if `result` is null.
+///
+/// # Safety
+///
+/// `result` must be null OR a valid pointer to a
+/// `BlazenThreeDGenerateResult` produced by the cabi surface.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_three_d_generate_result_mime_type(
+    result: *const BlazenThreeDGenerateResult,
+) -> *mut c_char {
+    if result.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the live-pointer contract documented above.
+    let result = unsafe { &*result };
+    alloc_cstring(&result.0.mime_type)
+}
+
+/// Frees a `BlazenThreeDGenerateResult` produced by the cabi surface.
+/// Passing null is a no-op.
+///
+/// # Safety
+///
+/// `result` must be null OR a pointer produced by the cabi surface's
+/// 3D-generation wrapper. Double-free is undefined behavior.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_three_d_generate_result_free(
+    result: *mut BlazenThreeDGenerateResult,
+) {
+    if result.is_null() {
+        return;
+    }
+    // SAFETY: caller upholds the unique-ownership contract documented above.
+    drop(unsafe { Box::from_raw(result) });
+}
+
+#[cfg(test)]
+mod three_d_generate_result_tests {
+    use super::*;
+
+    /// `BlazenThreeDGenerateResult` round-trips bytes + mime through the C
+    /// accessor functions.
+    #[test]
+    fn blazen_three_d_generate_result_round_trips_accessors() {
+        let inner = InnerThreeDGenerateResult {
+            model_bytes: vec![0x67, 0x6c, 0x54, 0x46], // "glTF" magic
+            mime_type: "model/gltf-binary".to_string(),
+        };
+        let result = BlazenThreeDGenerateResult::from(inner).into_ptr();
+
+        let mut len: usize = 0;
+        // SAFETY: `result` is a live cabi handle; `len` is a writable stack slot.
+        let bytes_ptr = unsafe { blazen_three_d_generate_result_model_bytes(result, &raw mut len) };
+        assert!(!bytes_ptr.is_null());
+        assert_eq!(len, 4);
+        // SAFETY: ptr/len describe a live `Vec<u8>` borrowed from the result.
+        let bytes = unsafe { std::slice::from_raw_parts(bytes_ptr, len) };
+        assert_eq!(bytes, &[0x67_u8, 0x6c, 0x54, 0x46]);
+
+        // SAFETY: live result pointer.
+        let mime = unsafe { blazen_three_d_generate_result_mime_type(result) };
+        assert!(!mime.is_null());
+        // SAFETY: pointer minted by `alloc_cstring` above — valid NUL-terminated
+        // UTF-8 we can recover via `CStr`.
+        let mime_str = unsafe { std::ffi::CStr::from_ptr(mime).to_str().unwrap().to_owned() };
+        assert_eq!(mime_str, "model/gltf-binary");
+        // SAFETY: `mime` was minted by `alloc_cstring`.
+        unsafe { crate::string::blazen_string_free(mime) };
+
+        // SAFETY: `result` came from `into_ptr` above.
+        unsafe {
+            blazen_three_d_generate_result_free(result);
+        }
+    }
 }
