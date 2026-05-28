@@ -58,6 +58,7 @@ jobs:
     name: Resolve version
     runs-on: ubuntu-latest
     timeout-minutes: 5
+    needs: [detect]
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -68,7 +69,11 @@ jobs:
         id: version
         uses: https://forge.blackleafdigital.com/Public/actions/resolve-version@main
         with:
-          version: ${{ inputs.version_override }}
+          # Precedence: workflow_dispatch input > commit-msg [vX.Y.Z]
+          # marker > tag-bump fallback. resolve-version treats the
+          # `version:` input as highest-priority (source=input wins
+          # over source=tag-bump).
+          version: ${{ inputs.version_override != '' && inputs.version_override || needs.detect.outputs.version_marker }}
           tag-prefix: v
           bump: patch
           service-type: rust
@@ -77,21 +82,23 @@ jobs:
     name: Detect commit intent
     runs-on: ubuntu-latest
     outputs:
-      web_only:   ${{ steps.check.outputs.web_only }}
-      no_publish: ${{ steps.check.outputs.no_publish }}
+      web_only:       ${{ steps.check.outputs.web_only }}
+      no_publish:     ${{ steps.check.outputs.no_publish }}
+      version_marker: ${{ steps.check.outputs.version_marker }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
           fetch-depth: 1
 
-      - name: Inspect HEAD commit subject
+      - name: Inspect HEAD commit message
         id: check
         shell: bash
         run: |
-          MSG=$(git log -1 --pretty=%s)
-          echo "HEAD subject: ${MSG}"
-          if [[ "$MSG" == \[web\]* ]]; then
+          SUBJECT=$(git log -1 --pretty=%s)
+          BODY=$(git log -1 --pretty=%B)
+          echo "HEAD subject: ${SUBJECT}"
+          if [[ "$SUBJECT" == \[web\]* ]]; then
             echo "web_only=true" >> "$GITHUB_OUTPUT"
             echo "Detected [web] prefix — Rust jobs will be skipped."
           else
@@ -101,11 +108,29 @@ jobs:
           # (auto-tag job). Tests still run for signal. Mirrors ZLayer's
           # [np] semantics. workflow_dispatch ignores this — manual
           # dispatch is an explicit "release me anyway" signal.
-          if [[ "$MSG" == *"[np]"* ]]; then
+          if [[ "$SUBJECT" == *"[np]"* ]]; then
             echo "no_publish=true" >> "$GITHUB_OUTPUT"
             echo "Detected [np] — auto-tag will be skipped (no release dispatched)."
           else
             echo "no_publish=false" >> "$GITHUB_OUTPUT"
+          fi
+          # [vX.Y.Z] anywhere in subject OR body pins the next release
+          # version. Feeds resolve-version's highest-priority `version:`
+          # input in both the top-level `version` job and `auto-tag`'s
+          # `Resolve candidate next version` step, overriding the
+          # tag-bump fallback. Sticky across subsequent pushes via the
+          # existing orphan-retry in auto-tag (the first marked push
+          # creates `temp/v{VERSION}` and later pushes pick it up
+          # automatically even without the marker).
+          # Supports stable (1.2.3) + prerelease (1.2.3-rc1).
+          # Greedy match takes the FIRST occurrence; later occurrences
+          # are ignored, which is fine for typical squash commits.
+          if [[ "$BODY" =~ \[v([0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?)\] ]]; then
+            VER="${BASH_REMATCH[1]}"
+            echo "version_marker=${VER}" >> "$GITHUB_OUTPUT"
+            echo "Detected [v${VER}] marker — release will be pinned to v${VER}."
+          else
+            echo "version_marker=" >> "$GITHUB_OUTPUT"
           fi
 
   lint:
@@ -1121,6 +1146,11 @@ jobs:
         id: resolve
         uses: https://forge.blackleafdigital.com/Public/actions/resolve-version@main
         with:
+          # Commit-msg [vX.Y.Z] marker (from detect job) overrides the
+          # tag-bump fallback here. workflow_dispatch input_override is
+          # consumed by the Pick step below — keep this aligned with the
+          # priority used in the top-level `version` job.
+          version: ${{ needs.detect.outputs.version_marker }}
           tag-prefix: v
           bump: patch
 
