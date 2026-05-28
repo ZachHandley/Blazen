@@ -7,6 +7,16 @@
 //! crate's [`FastEmbedModel`] automatically implements
 //! `blazen_llm::EmbeddingModel`.
 //!
+//! # Target gating
+//!
+//! As of `ort-sys` 2.0.0-rc.12, pyke dropped `x86_64-apple-darwin` from
+//! their prebuilt distribution matrix. On that target this crate compiles
+//! to a stub (see `provider_stub`) — the public API remains, but
+//! [`FastEmbedModel::from_options`] always returns
+//! [`FastEmbedError::UnsupportedTarget`]. Consumers should route through
+//! `blazen-embed`'s facade, which picks `blazen-embed-tract` (pure-Rust
+//! ONNX) on those targets automatically.
+//!
 //! # Quick start
 //!
 //! ```rust,no_run
@@ -21,7 +31,14 @@
 //! ```
 
 mod options;
-mod provider;
-
 pub use options::FastEmbedOptions;
+
+#[cfg(not(all(target_arch = "x86_64", target_os = "macos")))]
+mod provider;
+#[cfg(not(all(target_arch = "x86_64", target_os = "macos")))]
 pub use provider::{FastEmbedError, FastEmbedModel, FastEmbedResponse};
+
+#[cfg(all(target_arch = "x86_64", target_os = "macos"))]
+mod provider_stub;
+#[cfg(all(target_arch = "x86_64", target_os = "macos"))]
+pub use provider_stub::{FastEmbedError, FastEmbedModel, FastEmbedResponse};

@@ -8,9 +8,19 @@ rust-version.workspace = true
 repository.workspace = true
 description = "Local embedding model backend for Blazen using fastembed-rs (ONNX Runtime)"
 
-[dependencies]
+# As of `ort-sys` 2.0.0-rc.12, pyke dropped `x86_64-apple-darwin` from
+# their prebuilt distribution matrix. On that target this crate compiles
+# to a stub (`provider_stub`) — the public types still exist (so
+# downstream consumer code needs no `#[cfg]` gates), but
+# `FastEmbedModel::from_options` returns `FastEmbedError::UnsupportedTarget`.
+# Use the tract backend via `blazen-embed`'s facade on Intel Mac.
+[target.'cfg(not(all(target_arch = "x86_64", target_os = "macos")))'.dependencies]
 fastembed = { workspace = true }
 tokio = { workspace = true }
+
+[dependencies]
+# Available on all targets — `FastEmbedOptions` is serde data + the stub
+# provider needs tracing + serde + serde_json for its public API surface.
 serde = { workspace = true }
 serde_json = { workspace = true }
 tracing = { workspace = true }

@@ -9,24 +9,25 @@ repository.workspace = true
 description = "Embedding backend facade for Blazen: picks fastembed (ORT) or tract (pure Rust) per target"
 
 # ORT (fastembed) prebuilt-binary support matrix per
-# `ort-sys-2.0.0-rc.10/build.rs:248-255` covers only:
+# `ort-sys-2.0.0-rc.12/build/download/dist.txt` covers only:
 #   - x86_64-unknown-linux-gnu  (glibc)
 #   - x86_64-pc-windows-msvc
-#   - x86_64-apple-darwin   (Intel mac universal2 slice)
-#   - aarch64-apple-darwin  (Apple Silicon universal2 slice)
-# Everything else (musl, aarch64-linux, aarch64-windows, wasm) must use tract.
+#   - aarch64-apple-darwin  (Apple Silicon — universal2 arm64 slice)
+# Everything else (musl, aarch64-linux, aarch64-windows, all wasm,
+# AND x86_64-apple-darwin) must use tract.
 #
-# NOTE on Intel mac: pyke historically did not ship Intel-mac prebuilts at the
-# `fastembed-rs` layer even though `ort` upstream does — the previous comment
-# excluded it. We now INCLUDE it because the supported-arch list above is the
-# canonical ORT matrix; if the pyke crate regresses on Intel mac, users can
-# force `embed-tract` to override.
-[target.'cfg(all(not(target_family = "wasm"), not(target_env = "musl"), any(all(target_arch = "x86_64", target_os = "linux"), all(target_arch = "x86_64", target_os = "windows"), all(target_arch = "x86_64", target_os = "macos"), all(target_arch = "aarch64", target_os = "macos"))))'.dependencies]
+# NOTE on x86_64-apple-darwin: pyke dropped Intel-mac prebuilts from the
+# rc.12 distribution. `blazen-embed-fastembed` compiles to a stub
+# implementation on that target (see its Cargo.toml + provider_stub.rs)
+# so the build still succeeds; the facade routes embeddings to
+# `blazen-embed-tract` here instead.
+[target.'cfg(all(not(target_family = "wasm"), not(target_env = "musl"), any(all(target_arch = "x86_64", target_os = "linux"), all(target_arch = "x86_64", target_os = "windows"), all(target_arch = "aarch64", target_os = "macos"))))'.dependencies]
 blazen-embed-fastembed = { workspace = true }
 
 # Tract (pure-Rust ONNX) is the default everywhere ORT is unsupported:
-# musl Linux, aarch64-unknown-linux-*, aarch64-pc-windows-msvc, all wasm.
-[target.'cfg(any(target_family = "wasm", target_env = "musl", all(target_arch = "aarch64", target_os = "linux"), all(target_arch = "aarch64", target_os = "windows")))'.dependencies]
+# musl Linux, aarch64-unknown-linux-*, aarch64-pc-windows-msvc, all wasm,
+# x86_64-apple-darwin (since rc.12).
+[target.'cfg(any(target_family = "wasm", target_env = "musl", all(target_arch = "aarch64", target_os = "linux"), all(target_arch = "aarch64", target_os = "windows"), all(target_arch = "x86_64", target_os = "macos")))'.dependencies]
 blazen-embed-tract = { workspace = true }
 
 [dependencies]
