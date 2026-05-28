@@ -45,11 +45,26 @@ fn main() {
     }
 
     // The fastembed embedding backend statically links ONNX Runtime, which
-    // calls GNU OpenMP runtime symbols (GOMP_*). The final cdylib must carry a
-    // DT_NEEDED entry for libgomp so those symbols resolve at dlopen time —
-    // without this the Ruby FFI load fails with `undefined symbol: GOMP_barrier`.
+    // calls OpenMP runtime symbols. The final cdylib must carry a load-time
+    // dep on the matching OpenMP runtime so those symbols resolve at dlopen
+    // time — without this the Ruby FFI load fails with e.g.
+    // `undefined symbol: GOMP_barrier` on linux or `___kmpc_fork_call` on
+    // macOS.
+    //
+    // The runtime name differs by platform: glibc/linux uses GNU OpenMP
+    // (`libgomp`), macOS uses LLVM OpenMP (`libomp` from homebrew). musl and
+    // windows targets bundle their OpenMP statically inside the ort prebuilt
+    // tarball, so no extra link line is needed there.
     if env::var_os("CARGO_FEATURE_FASTEMBED").is_some() {
-        println!("cargo:rustc-link-lib=dylib=gomp");
+        let target = env::var("TARGET").unwrap_or_default();
+        if target.contains("linux") && !target.contains("musl") {
+            println!("cargo:rustc-link-lib=dylib=gomp");
+        } else if target.contains("apple") {
+            // homebrew on aarch64 mac vs Intel mac
+            println!("cargo:rustc-link-search=/opt/homebrew/opt/libomp/lib");
+            println!("cargo:rustc-link-search=/usr/local/opt/libomp/lib");
+            println!("cargo:rustc-link-lib=dylib=omp");
+        }
     }
 
     println!("cargo:rerun-if-changed=src");
