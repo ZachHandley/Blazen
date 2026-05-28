@@ -14,9 +14,10 @@
 use std::ffi::c_char;
 
 use blazen_uniffi::compute::{
-    ImageGenResult as InnerImageGenResult, SttResult as InnerSttResult,
-    ThreeDGenerateResult as InnerThreeDGenerateResult, TtsResult as InnerTtsResult,
+    ImageGenResult as InnerImageGenResult, SttResult as InnerSttResult, TtsResult as InnerTtsResult,
 };
+#[cfg(feature = "triposr")]
+use blazen_uniffi::compute::ThreeDGenerateResult as InnerThreeDGenerateResult;
 use blazen_uniffi::compute_music::{
     MusicChunk as InnerMusicChunk, MusicResult as InnerMusicResult,
 };
@@ -1072,8 +1073,13 @@ pub unsafe extern "C" fn blazen_target_voice_list_free(list: *mut BlazenTargetVo
 }
 
 // ---------------------------------------------------------------------------
-// BlazenThreeDGenerateResult
+// BlazenThreeDGenerateResult (gated on `triposr` — only the TripoSR per-engine
+// blocking factory in `crate::three_d` produces these handles, and that whole
+// file is `#[cfg(feature = "triposr")]`. Without the gate, default-features
+// cabi build fails because the inner uniffi `ThreeDGenerateResult` doesn't
+// exist without `triposr`.)
 // ---------------------------------------------------------------------------
+#[cfg(feature = "triposr")]
 
 /// Opaque handle wrapping
 /// [`blazen_uniffi::compute::ThreeDGenerateResult`].
@@ -1086,6 +1092,7 @@ pub unsafe extern "C" fn blazen_target_voice_list_free(list: *mut BlazenTargetVo
 /// the buffer.
 pub struct BlazenThreeDGenerateResult(pub(crate) InnerThreeDGenerateResult);
 
+#[cfg(feature = "triposr")]
 impl BlazenThreeDGenerateResult {
     /// Heap-allocate the handle and return the raw pointer the caller owns.
     pub(crate) fn into_ptr(self) -> *mut BlazenThreeDGenerateResult {
@@ -1093,6 +1100,7 @@ impl BlazenThreeDGenerateResult {
     }
 }
 
+#[cfg(feature = "triposr")]
 impl From<InnerThreeDGenerateResult> for BlazenThreeDGenerateResult {
     fn from(inner: InnerThreeDGenerateResult) -> Self {
         Self(inner)
@@ -1113,6 +1121,7 @@ impl From<InnerThreeDGenerateResult> for BlazenThreeDGenerateResult {
 /// not yet freed, and not concurrently freed from another thread. `out`
 /// / `err` must be null OR writable pointers to the appropriate slot.
 #[unsafe(no_mangle)]
+#[cfg(feature = "triposr")]
 pub unsafe extern "C" fn blazen_future_take_three_d_generate_result(
     fut: *mut crate::future::BlazenFuture,
     out: *mut *mut BlazenThreeDGenerateResult,
@@ -1155,6 +1164,7 @@ pub unsafe extern "C" fn blazen_future_take_three_d_generate_result(
 /// `BlazenThreeDGenerateResult` produced by the cabi surface.
 /// `out_len` must be null OR a writable pointer to a single `usize` slot.
 #[unsafe(no_mangle)]
+#[cfg(feature = "triposr")]
 pub unsafe extern "C" fn blazen_three_d_generate_result_model_bytes(
     result: *const BlazenThreeDGenerateResult,
     out_len: *mut usize,
@@ -1189,6 +1199,7 @@ pub unsafe extern "C" fn blazen_three_d_generate_result_model_bytes(
 /// `result` must be null OR a valid pointer to a
 /// `BlazenThreeDGenerateResult` produced by the cabi surface.
 #[unsafe(no_mangle)]
+#[cfg(feature = "triposr")]
 pub unsafe extern "C" fn blazen_three_d_generate_result_mime_type(
     result: *const BlazenThreeDGenerateResult,
 ) -> *mut c_char {
@@ -1208,6 +1219,7 @@ pub unsafe extern "C" fn blazen_three_d_generate_result_mime_type(
 /// `result` must be null OR a pointer produced by the cabi surface's
 /// 3D-generation wrapper. Double-free is undefined behavior.
 #[unsafe(no_mangle)]
+#[cfg(feature = "triposr")]
 pub unsafe extern "C" fn blazen_three_d_generate_result_free(
     result: *mut BlazenThreeDGenerateResult,
 ) {
@@ -1219,6 +1231,7 @@ pub unsafe extern "C" fn blazen_three_d_generate_result_free(
 }
 
 #[cfg(test)]
+#[cfg(feature = "triposr")]
 mod three_d_generate_result_tests {
     use super::*;
 
