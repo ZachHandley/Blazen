@@ -24,6 +24,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         bash \
+        build-essential \
         ca-certificates \
         ccache \
         cmake \
@@ -36,6 +37,27 @@ RUN apt-get update \
         pkg-config \
         xz-utils \
     && rm -rf /var/lib/apt/lists/*
+
+# ---------------------------------------------------------------------------
+# rust-musl-cross sets ENV TARGET_CC=x86_64-unknown-linux-musl-gcc (likewise
+# TARGET_CXX/TARGET_AR) in its base image to support traditional makefile
+# cross-builds. These variables LEAK into the cargo build-dep compile path:
+# when cargo compiles a build-script that depends on aws-lc-sys (host=gnu,
+# target=gnu), cc::Build sees TARGET_CC set and uses the musl cross-compiler
+# for what should be a gnu-host compile. The resulting binary then fails
+# aws-lc-sys's runtime memcmp self-test (GCC bug 95189), and the panic
+# message blames the compiler version even though the real issue is the
+# wrong toolchain being picked.
+#
+# Empty-string the inherited vars (cc-rs treats empty as "not set"). The
+# workflow's per-job `Ensure musl toolchain on PATH and pin cargo linker`
+# step still sets CC_x86_64_unknown_linux_musl correctly for the actual
+# musl --target compile, so the cross-compiler is still used where it
+# should be.
+# ---------------------------------------------------------------------------
+ENV TARGET_CC="" \
+    TARGET_CXX="" \
+    TARGET_AR=""
 
 # ---------------------------------------------------------------------------
 # Short-triple symlinks so rustc's default linker lookup finds the cross

@@ -13,11 +13,11 @@
 
 use std::ffi::c_char;
 
+#[cfg(feature = "triposr")]
+use blazen_uniffi::compute::ThreeDGenerateResult as InnerThreeDGenerateResult;
 use blazen_uniffi::compute::{
     ImageGenResult as InnerImageGenResult, SttResult as InnerSttResult, TtsResult as InnerTtsResult,
 };
-#[cfg(feature = "triposr")]
-use blazen_uniffi::compute::ThreeDGenerateResult as InnerThreeDGenerateResult;
 use blazen_uniffi::compute_music::{
     MusicChunk as InnerMusicChunk, MusicResult as InnerMusicResult,
 };

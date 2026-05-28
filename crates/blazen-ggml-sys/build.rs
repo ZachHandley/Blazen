@@ -43,6 +43,15 @@ fn main() {
     // downstream `find_package(ggml REQUIRED)` resolves against our build.
     cfg.define("CMAKE_INSTALL_PREFIX", &install_prefix);
 
+    // Force `lib/` (not `lib64/`). ggml's CMakeLists.txt does
+    // `include(GNUInstallDirs)`, which on RHEL-based 64-bit hosts
+    // (manylinux_2_28, RHEL/Rocky/Fedora) defaults CMAKE_INSTALL_LIBDIR
+    // to `lib64`. Downstream code in this build.rs (and the install
+    // paths the three -sys consumers reach into via DEP_GGML_LIB)
+    // assume `lib/`. Pin it explicitly so the install layout is
+    // identical across Debian/Ubuntu/manylinux/Alpine hosts.
+    cfg.define("CMAKE_INSTALL_LIBDIR", "lib");
+
     if feature_enabled("native") {
         cfg.define("GGML_NATIVE", "ON");
     } else {

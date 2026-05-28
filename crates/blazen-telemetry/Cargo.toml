@@ -45,10 +45,11 @@ base64 = { workspace = true, optional = true }
 # Reqwest is the HTTP client for native langfuse and the native otlp-http
 # transport. On non-wasi wasm32 we ship a `web_sys::fetch`-backed HttpClient
 # instead; on wasi we ship a `blazen_llm::http::HttpClient`-backed one.
-# `reqwest` is kept as an unconditional optional dep so the `dep:reqwest`
-# feature activator works on every target — source-level `cfg(not(target_os
-# = "wasi"))` gates ensure it's never actually used on wasi.
-reqwest = { workspace = true, optional = true }
+# reqwest is declared as target-conditional below: it's only available
+# on non-wasi targets. The source-level `cfg(not(target_os = "wasi"))`
+# gates guarantee reqwest is never *used* on wasi; the target-conditional
+# dep declaration keeps the wasi build graph free of reqwest's hyper /
+# hyper-util / socket2 chain (socket2 has no wasm32-wasi backend).
 
 # Browser-only (`wasm32-unknown-unknown`): web-sys + wasm-bindgen primitives
 # for the fetch-backed `HttpClient` used by the OTLP HTTP exporter, and
@@ -65,6 +66,11 @@ web-sys = { version = "=0.3.99", optional = true, features = [
     "Headers",
     "Window",
 ] }
+
+[target.'cfg(not(target_os = "wasi"))'.dependencies]
+# Native + browser-wasm32 reqwest. Skipped on wasi where reqwest's hyper
+# backend (hyper-util -> socket2) doesn't compile.
+reqwest = { workspace = true, optional = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", default-features = false, features = ["rt", "rt-multi-thread", "time"] }
