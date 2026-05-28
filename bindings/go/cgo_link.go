@@ -28,6 +28,6 @@ package blazen
 // Tracked as a Phase 3 follow-up.
 
 /*
-#cgo LDFLAGS: -L${SRCDIR}/internal/clib/linux_amd64 -lblazen_uniffi -ldl -lm -lpthread -lstdc++ -Wl,--allow-multiple-definition
+#cgo LDFLAGS: -L${SRCDIR}/internal/clib/linux_amd64 -lblazen_uniffi -ldl -lm -lpthread -lstdc++ -lgomp -Wl,--allow-multiple-definition
 */
 import "C"

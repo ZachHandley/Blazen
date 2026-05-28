@@ -14,6 +14,6 @@ package blazen
 // the remaining protobuf vendoring follow-up that still needs the flag.
 
 /*
-#cgo LDFLAGS: -L${SRCDIR}/internal/clib/linux_arm64 -lblazen_uniffi -ldl -lm -lpthread -lstdc++ -Wl,--allow-multiple-definition
+#cgo LDFLAGS: -L${SRCDIR}/internal/clib/linux_arm64 -lblazen_uniffi -ldl -lm -lpthread -lstdc++ -lgomp -Wl,--allow-multiple-definition
 */
 import "C"
