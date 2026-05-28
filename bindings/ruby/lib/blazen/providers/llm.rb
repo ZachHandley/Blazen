@@ -30,6 +30,29 @@
 module Blazen
   # @api private
   module LlmProviderImpl
+    # Calls the per-engine +blazen_<engine>_provider_as_llm_provider+ C
+    # function to obtain a polymorphic +BlazenLlmProvider *+ handle that
+    # can be passed to {Blazen::Agents.new} / {Blazen::Batch.complete}.
+    # The returned {Blazen::LlmProvider} owns its own +AutoPointer+ with a
+    # +blazen_llm_provider_free+ finalizer.
+    #
+    # @return [Blazen::LlmProvider]
+    def as_llm_provider
+      sym = self.class::AS_LLM_PROVIDER_SYM
+      unless Blazen::FFI.respond_to?(sym)
+        raise Blazen::UnsupportedError, "blazen cabi missing #{sym} symbol"
+      end
+
+      raw = Blazen::FFI.public_send(sym, @handle)
+      if raw.nil? || raw.null?
+        raise Blazen::InternalError, "#{sym} returned a null pointer"
+      end
+
+      Blazen::LlmProvider.new(
+        ::FFI::AutoPointer.new(raw, Blazen::FFI.method(:blazen_llm_provider_free)),
+      )
+    end
+
     private
 
     # The completion cabi entry points consume the +BlazenModelRequest+
@@ -38,6 +61,11 @@ module Blazen
     def llm_complete(request, async_sym)
       unless request.is_a?(Blazen::Llm::ModelRequest)
         raise ArgumentError, "request must be a Blazen::Llm::ModelRequest"
+      end
+      unless Blazen::FFI.respond_to?(:blazen_future_take_model_response)
+        raise Blazen::UnsupportedError,
+              "blazen cabi does not export blazen_future_take_model_response; " \
+                "use #complete_blocking instead"
       end
 
       req_ptr = request.consume!
@@ -94,10 +122,12 @@ module Blazen
     base                = factory_sym.to_s.sub(/_new\z/, "")
     stream_sym          = :"#{base}_complete_streaming"
     stream_blocking_sym = :"#{base}_complete_streaming_blocking"
+    as_llm_sym          = :"#{base}_as_llm_provider"
     klass = Class.new(LlmProvider) do
       include LlmProviderImpl
 
       const_set(:PROVIDER_ID, provider_id)
+      const_set(:AS_LLM_PROVIDER_SYM, as_llm_sym)
 
       define_method(:initialize) do |api_key:, model: nil, base_url: nil|
         unless Blazen::FFI.respond_to?(factory_sym)
@@ -145,10 +175,12 @@ module Blazen
     base                = factory_sym.to_s.sub(/_new\z/, "")
     stream_sym          = :"#{base}_complete_streaming"
     stream_blocking_sym = :"#{base}_complete_streaming_blocking"
+    as_llm_sym          = :"#{base}_as_llm_provider"
     klass = Class.new(LlmProvider) do
       include LlmProviderImpl
 
       const_set(:PROVIDER_ID, provider_id)
+      const_set(:AS_LLM_PROVIDER_SYM, as_llm_sym)
 
       define_method(:initialize) do |api_key:, model: nil|
         unless Blazen::FFI.respond_to?(factory_sym)
@@ -278,6 +310,7 @@ module Blazen
     include LlmProviderImpl
 
     PROVIDER_ID = "azure-openai"
+    AS_LLM_PROVIDER_SYM = :blazen_azure_openai_provider_as_llm_provider
 
     # @param api_key [String]
     # @param resource_name [String] forms the URL host
@@ -331,6 +364,7 @@ module Blazen
     include LlmProviderImpl
 
     PROVIDER_ID = "bedrock"
+    AS_LLM_PROVIDER_SYM = :blazen_bedrock_provider_as_llm_provider
 
     # @param api_key [String]
     # @param region [String] e.g. +"us-east-1"+
@@ -398,6 +432,7 @@ module Blazen
     include LlmProviderImpl
 
     PROVIDER_ID = "openai-compat"
+    AS_LLM_PROVIDER_SYM = :blazen_openai_compat_provider_as_llm_provider
 
     # @param provider_name [String] label surfaced in errors / telemetry
     # @param base_url [String] OpenAI-protocol base URL
@@ -453,6 +488,7 @@ module Blazen
     include LlmProviderImpl
 
     PROVIDER_ID = "ollama"
+    AS_LLM_PROVIDER_SYM = :blazen_ollama_provider_as_llm_provider
 
     # @param host [String] e.g. +"127.0.0.1"+
     # @param port [Integer] TCP port (uint16)
@@ -503,6 +539,7 @@ module Blazen
     include LlmProviderImpl
 
     PROVIDER_ID = "lm-studio"
+    AS_LLM_PROVIDER_SYM = :blazen_lm_studio_provider_as_llm_provider
 
     # @param host [String] e.g. +"127.0.0.1"+
     # @param port [Integer] TCP port (uint16)
@@ -554,6 +591,7 @@ module Blazen
     include LlmProviderImpl
 
     PROVIDER_ID = "mistralrs"
+    AS_LLM_PROVIDER_SYM = :blazen_mistralrs_provider_as_llm_provider
 
     # @param model_id [String]
     # @param device [String, nil]
@@ -612,6 +650,7 @@ module Blazen
     include LlmProviderImpl
 
     PROVIDER_ID = "llamacpp"
+    AS_LLM_PROVIDER_SYM = :blazen_llamacpp_provider_as_llm_provider
 
     # @param model_path [String] path to the GGUF model file
     # @param device [String, nil]
@@ -672,6 +711,7 @@ module Blazen
     include LlmProviderImpl
 
     PROVIDER_ID = "candle"
+    AS_LLM_PROVIDER_SYM = :blazen_candle_provider_as_llm_provider
 
     # @param model_id [String]
     # @param device [String, nil]

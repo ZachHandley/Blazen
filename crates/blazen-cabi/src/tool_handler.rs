@@ -42,7 +42,7 @@ use blazen_uniffi::errors::{BlazenError as InnerError, BlazenResult};
 
 use crate::agent::BlazenAgent;
 use crate::error::BlazenError;
-use crate::llm::BlazenModel;
+use crate::llm_provider::BlazenLlmProvider;
 use crate::llm_records::BlazenTool;
 use crate::string::cstr_to_opt_string;
 
@@ -290,8 +290,9 @@ impl ToolHandler for CToolHandler {
 ///
 /// # Safety
 ///
-/// `model` must be null OR a live `BlazenModel` produced by the
-/// cabi surface. `system_prompt` must be null OR a NUL-terminated UTF-8
+/// `provider` must be null OR a live `BlazenLlmProvider` produced by the
+/// cabi surface (typically via a `blazen_<engine>_provider_as_llm_provider`
+/// conversion fn). `system_prompt` must be null OR a NUL-terminated UTF-8
 /// buffer valid for the duration of this call. When `tools_count > 0`,
 /// `tools` must point to an array of exactly `tools_count` valid
 /// `*mut BlazenTool` entries, each produced by the cabi surface; ownership
@@ -302,7 +303,7 @@ impl ToolHandler for CToolHandler {
 /// OR a writable slot for a single `*mut` write.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_agent_new(
-    model: *const BlazenModel,
+    provider: *const BlazenLlmProvider,
     system_prompt: *const c_char,
     tools: *const *mut BlazenTool,
     tools_count: usize,
@@ -311,16 +312,16 @@ pub unsafe extern "C" fn blazen_agent_new(
     out_agent: *mut *mut BlazenAgent,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
-    // ---- Validate model + reclaim tools (consuming them on the happy path,
+    // ---- Validate provider + reclaim tools (consuming them on the happy path,
     // dropping them on the error path) -----------------------------------
 
-    if model.is_null() {
+    if provider.is_null() {
         // No tools were reclaimed yet (we error out before the loop). The
         // tool_handler hasn't been wrapped, so we still need to drop its
         // user_data to honour the consume-on-call contract.
         (tool_handler.drop_user_data)(tool_handler.user_data);
         // SAFETY: `out_err` upholds the function-level contract.
-        return unsafe { write_internal_error(out_err, "blazen_agent_new: null model") };
+        return unsafe { write_internal_error(out_err, "blazen_agent_new: null provider") };
     }
     if tools_count > 0 && tools.is_null() {
         (tool_handler.drop_user_data)(tool_handler.user_data);
@@ -355,9 +356,9 @@ pub unsafe extern "C" fn blazen_agent_new(
 
     // ---- Borrow / copy remaining inputs --------------------------------
 
-    // SAFETY: caller has guaranteed `model` is a live `BlazenModel`.
-    let model_handle = unsafe { &*model };
-    let model_arc = Arc::clone(&model_handle.0);
+    // SAFETY: caller has guaranteed `provider` is a live `BlazenLlmProvider`.
+    let provider_handle = unsafe { &*provider };
+    let provider_arc = Arc::clone(&provider_handle.0);
 
     // SAFETY: caller upholds the NUL-terminated UTF-8 contract on
     // `system_prompt` (null is valid and becomes `None`).
@@ -376,7 +377,7 @@ pub unsafe extern "C" fn blazen_agent_new(
     // (Drop will fire when the Arc is dropped).
 
     let inner_agent: Arc<InnerAgent> = InnerAgent::new(
-        model_arc,
+        provider_arc,
         system_prompt_opt,
         inner_tools,
         handler,

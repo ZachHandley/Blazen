@@ -426,8 +426,9 @@ RSpec.describe Blazen do
 
     let(:model) { Blazen::Providers.openai(api_key: ENV.fetch("OPENAI_API_KEY")) }
 
-    it "constructs a Model" do
-      expect(model).to be_a(Blazen::Llm::Model)
+    it "constructs an OpenAiProvider that is a Blazen::LlmProvider" do
+      expect(model).to be_a(Blazen::OpenAiProvider)
+      expect(model).to be_a(Blazen::LlmProvider)
     end
 
     it "returns a non-empty content via complete_blocking" do

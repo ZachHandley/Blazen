@@ -17,6 +17,31 @@
 module Blazen
   # @api private
   module EmbeddingProviderImpl
+    # Calls the per-engine
+    # +blazen_<engine>_provider_as_embedding_provider+ C function to obtain
+    # a polymorphic +BlazenEmbeddingProvider *+ handle. The returned
+    # {Blazen::EmbeddingProvider} owns its own +AutoPointer+ with a
+    # +blazen_embedding_provider_free+ finalizer.
+    #
+    # @return [Blazen::EmbeddingProvider]
+    def as_embedding_provider
+      sym = self.class::AS_EMBEDDING_PROVIDER_SYM
+      unless Blazen::FFI.respond_to?(sym)
+        raise Blazen::UnsupportedError, "blazen cabi missing #{sym} symbol"
+      end
+
+      raw = Blazen::FFI.public_send(sym, @handle)
+      if raw.nil? || raw.null?
+        raise Blazen::InternalError, "#{sym} returned a null pointer"
+      end
+
+      Blazen::EmbeddingProvider.new(
+        ::FFI::AutoPointer.new(
+          raw, Blazen::FFI.method(:blazen_embedding_provider_free),
+        ),
+      )
+    end
+
     private
 
     # Build a +const char *const *+ array from a Ruby +Array<String>+,
@@ -69,6 +94,7 @@ module Blazen
     include EmbeddingProviderImpl
 
     PROVIDER_ID = "fastembed"
+    AS_EMBEDDING_PROVIDER_SYM = :blazen_fastembed_provider_as_embedding_provider
 
     # @param model_id [String, nil]
     # @param cache_dir [String, nil]
@@ -111,6 +137,7 @@ module Blazen
     include EmbeddingProviderImpl
 
     PROVIDER_ID = "tract"
+    AS_EMBEDDING_PROVIDER_SYM = :blazen_tract_embed_provider_as_embedding_provider
 
     # @param model_id [String, nil]
     # @param cache_dir [String, nil]
@@ -153,6 +180,7 @@ module Blazen
     include EmbeddingProviderImpl
 
     PROVIDER_ID = "candle"
+    AS_EMBEDDING_PROVIDER_SYM = :blazen_candle_embed_provider_as_embedding_provider
 
     # @param model_id [String, nil]
     # @param cache_dir [String, nil]
@@ -195,6 +223,7 @@ module Blazen
     include EmbeddingProviderImpl
 
     PROVIDER_ID = "openai-embedding"
+    AS_EMBEDDING_PROVIDER_SYM = :blazen_openai_embedding_provider_as_embedding_provider
 
     # @param api_key [String] empty string defers to +OPENAI_API_KEY+
     # @param model [String, nil] e.g. +"text-embedding-3-small"+
@@ -238,6 +267,7 @@ module Blazen
     include EmbeddingProviderImpl
 
     PROVIDER_ID = "fal-embedding"
+    AS_EMBEDDING_PROVIDER_SYM = :blazen_fal_embedding_provider_as_embedding_provider
 
     # @param api_key [String]
     # @param model [String, nil] e.g. +"openai/text-embedding-3-small"+

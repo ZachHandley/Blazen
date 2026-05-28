@@ -44,13 +44,25 @@ module Blazen
     #   the engine's +_free+ entry point.
     attr_reader :handle
 
-    # @param handle [::FFI::Pointer] caller-owned cabi opaque pointer
-    # @param free_fn [Method, Proc] the matching +blazen_<engine>_provider_free+
-    #   callable
-    def initialize(handle, free_fn)
+    # @param handle [::FFI::Pointer, ::FFI::AutoPointer] caller-owned cabi
+    #   opaque pointer. When +handle+ is already an {::FFI::AutoPointer} (as
+    #   it is when an {LlmProvider} / {EmbeddingProvider} instance is built
+    #   from a {#as_llm_provider} / {#as_embedding_provider} conversion),
+    #   it is adopted verbatim and +free_fn+ is ignored.
+    # @param free_fn [Method, Proc, nil] the matching
+    #   +blazen_<engine>_provider_free+ callable (required when +handle+ is
+    #   a raw {::FFI::Pointer})
+    def initialize(handle, free_fn = nil)
+      if handle.is_a?(::FFI::AutoPointer)
+        @handle = handle
+        return
+      end
+
       if handle.nil? || handle.null?
         raise ArgumentError, "#{self.class.name}: native pointer must be non-null"
       end
+
+      raise ArgumentError, "#{self.class.name}: free_fn required for raw pointers" if free_fn.nil?
 
       @handle = ::FFI::AutoPointer.new(handle, free_fn)
     end
@@ -238,10 +250,35 @@ module Blazen
   end
 
   # Abstract base for embedding providers (FastEmbed, Tract, Candle,
-  # OpenAI-embedding, fal-embedding).
+  # OpenAI-embedding, fal-embedding), AND the concrete polymorphic handle
+  # returned by per-engine +#as_embedding_provider+ conversions.
   #
-  # @abstract
+  # An instance constructed directly via {.new}(handle) wraps a
+  # +BlazenEmbeddingProvider *+ opaque (the cabi-side
+  # +Arc<dyn EmbeddingProvider>+). Per-engine subclasses extend this with
+  # engine-specific embed / dimensions / conversion methods.
   class EmbeddingProvider < BaseProvider
+    # Constructs an {EmbeddingProvider} that wraps a
+    # +BlazenEmbeddingProvider *+ opaque, taking ownership of the handle.
+    # The handle is freed via +blazen_embedding_provider_free+ on GC.
+    def initialize(handle, free_fn = nil)
+      if free_fn.nil? && !handle.is_a?(::FFI::AutoPointer) &&
+         Blazen::FFI.respond_to?(:blazen_embedding_provider_free)
+        free_fn = Blazen::FFI.method(:blazen_embedding_provider_free)
+      end
+      super
+    end
+
+    # Returns an {EmbeddingProvider} (a thin wrapper over
+    # +BlazenEmbeddingProvider *+). Default implementation on the abstract
+    # base returns +self+; per-engine subclasses override this to call the
+    # matching +blazen_<engine>_provider_as_embedding_provider+ C function.
+    #
+    # @return [EmbeddingProvider]
+    def as_embedding_provider
+      self
+    end
+
     # @param texts [Array<String>]
     # @return [Blazen::EmbeddingVectors] wrapper around
     #   +BlazenEmbeddingVectors *+ (lazy float array accessors)
@@ -263,10 +300,47 @@ module Blazen
 
   # Abstract base for chat-completion providers (OpenAI, Anthropic, Gemini,
   # Azure-OpenAI, Bedrock, fal-LLM, Mistral, Fireworks, DeepSeek, Perplexity,
-  # Together, Groq, OpenRouter, Cohere, xAI).
+  # Together, Groq, OpenRouter, Cohere, xAI), AND the concrete polymorphic
+  # handle returned by per-engine +#as_llm_provider+ conversions.
   #
-  # @abstract
+  # An instance constructed directly via {.new}(handle) wraps a
+  # +BlazenLlmProvider *+ opaque (the cabi-side +Arc<dyn LlmProvider>+) and
+  # is consumed by polymorphic entry points like {Blazen::Agents.new} and
+  # {Blazen::Batch.complete}. Subclasses (per-engine providers) extend
+  # this with engine-specific completion, streaming, and conversion
+  # methods.
   class LlmProvider < BaseProvider
+    # Constructs an {LlmProvider} that wraps a +BlazenLlmProvider *+
+    # opaque, taking ownership of the handle. The handle is freed via
+    # +blazen_llm_provider_free+ on GC.
+    #
+    # Per-engine subclasses bypass this default constructor and pass a
+    # different +free_fn+ to +BaseProvider#initialize+; user code typically
+    # builds an instance of this class through {#as_llm_provider} on a
+    # per-engine provider rather than calling +.new+ directly.
+    def initialize(handle, free_fn = nil)
+      if free_fn.nil? && !handle.is_a?(::FFI::AutoPointer) &&
+         Blazen::FFI.respond_to?(:blazen_llm_provider_free)
+        free_fn = Blazen::FFI.method(:blazen_llm_provider_free)
+      end
+      super
+    end
+
+    # Returns an {LlmProvider} (a thin wrapper over +BlazenLlmProvider *+)
+    # suitable for hand-off to {Blazen::Agents.new} / {Blazen::Batch.complete}.
+    #
+    # The default implementation on the abstract base returns +self+ — used
+    # by callers who already hold an {LlmProvider}-typed handle. Per-engine
+    # subclasses override this to call the matching
+    # +blazen_<engine>_provider_as_llm_provider+ C function and wrap the
+    # returned opaque in a fresh {LlmProvider} (with its own
+    # +blazen_llm_provider_free+ finalizer).
+    #
+    # @return [LlmProvider]
+    def as_llm_provider
+      self
+    end
+
     # @param request [Blazen::Llm::ModelRequest]
     # @return [Blazen::Llm::ModelResponse]
     def complete(request)

@@ -1,25 +1,18 @@
-//! [`LlmProviderDefaults`] — wraps any [`crate::llm::Model`] with a
+//! [`LlmProviderDefaults`] — wraps any LLM provider with a
 //! [`ProviderDefaults`] that is applied to every completion
-//! request before delegating to the inner model.
+//! request before delegating to the inner provider.
 //!
 //! Mirrors [`blazen_llm::providers::base::LlmProviderDefaults`]. Used as the
-//! foundation for Phase B's `CustomProvider`, and accessible directly so
-//! foreign-language callers can wrap any built-in provider with a system
-//! prompt + default tools + `response_format`.
+//! foundation for Phase B's `CustomProvider`, and accessible internally so
+//! the `CustomProvider` builder chain can carry through the system prompt /
+//! default tools / `response_format` slots without re-implementing them.
 //!
 //! ## Builder shape
 //!
 //! UniFFI `Object`s are reference-counted (`Arc<Self>`), so builder methods
 //! follow the clone-with-mutation pattern: each `with_*` method takes
 //! `self: Arc<Self>`, clones the inner state, mutates it, and returns a new
-//! `Arc<Self>`. Foreign callers see this as a fluent chain, e.g.:
-//!
-//! ```kotlin
-//! val provider = newOpenaiModel("sk-...")
-//!     .let { LlmProviderDefaults.fromModel(it) }
-//!     .withSystemPrompt("be terse")
-//!     .withToolsJson(toolsJson)
-//! ```
+//! `Arc<Self>`.
 
 use std::sync::Arc;
 
@@ -29,19 +22,14 @@ use blazen_llm::types::{ChatMessage as CoreChatMessage, ModelRequest as CoreMode
 use parking_lot::RwLock;
 
 use crate::errors::{BlazenError, BlazenResult};
-use crate::llm::{ChatMessage, Model};
+use crate::llm::ChatMessage;
 use crate::provider_defaults::ProviderDefaults;
 
-/// A [`crate::llm::Model`] wrapped with applied
-/// [`ProviderDefaults`].
+/// An LLM provider wrapped with applied [`ProviderDefaults`].
 ///
-/// Construct via [`LlmProviderDefaults::from_model`] (wraps an existing
-/// model with no defaults) or [`LlmProviderDefaults::with_defaults`]
-/// (wraps with explicit defaults). Mutate via the `with_*` builder methods.
-///
-/// Phase B's `CustomProvider` factories will return `Arc<LlmProviderDefaults>`
-/// directly; for Phase A this class is reachable by lifting any existing
-/// `Model` factory result.
+/// Constructed internally by the `CustomProvider` machinery to carry
+/// builder-style defaults (`with_system_prompt`, etc.) alongside the inner
+/// provider handle. Mutate via the `with_*` builder methods.
 #[derive(uniffi::Object)]
 pub struct LlmProviderDefaults {
     /// Mutable handle so the builder methods (`with_system_prompt`, etc.)
@@ -67,27 +55,6 @@ impl LlmProviderDefaults {
 
 #[uniffi::export]
 impl LlmProviderDefaults {
-    /// Wrap an existing [`Model`] with empty defaults.
-    ///
-    /// Equivalent to using the wrapped model directly, but lets callers
-    /// attach defaults later via the `with_*` methods.
-    #[uniffi::constructor]
-    #[must_use]
-    pub fn from_model(model: Arc<Model>) -> Arc<Self> {
-        let inner: Arc<dyn CoreModel> = Arc::clone(&model.inner);
-        Self::from_core(CoreBaseProvider::new(inner))
-    }
-
-    /// Wrap a [`Model`] with explicit
-    /// [`ProviderDefaults`].
-    #[uniffi::constructor]
-    #[must_use]
-    pub fn from_model_with_defaults(model: Arc<Model>, defaults: ProviderDefaults) -> Arc<Self> {
-        let inner: Arc<dyn CoreModel> = Arc::clone(&model.inner);
-        let core = CoreBaseProvider::with_defaults(inner, defaults.into());
-        Self::from_core(core)
-    }
-
     /// Replace the entire [`ProviderDefaults`] on this provider,
     /// returning a new `Arc<LlmProviderDefaults>` (clone-with-mutation).
     #[must_use]
@@ -140,26 +107,10 @@ impl LlmProviderDefaults {
         ProviderDefaults::from(self.inner.read().defaults())
     }
 
-    /// The model id of the wrapped inner `Model`.
+    /// The model id of the wrapped inner provider.
     #[must_use]
     pub fn model_id(self: Arc<Self>) -> String {
         self.inner.read().model_id().to_owned()
-    }
-
-    /// Unwrap to a plain [`Model`] handle that applies the
-    /// configured defaults on every call.
-    ///
-    /// Use this when you want to pass the wrapped provider to an API that
-    /// takes a generic `Model` (the agent runner, workflow
-    /// steps, etc.).
-    #[must_use]
-    pub fn as_model(self: Arc<Self>) -> Arc<Model> {
-        // LlmProviderDefaults implements Model — wrap it in the FFI
-        // Model handle so the wrapping defaults are applied on
-        // every call.
-        let core = self.snapshot();
-        let inner: Arc<dyn CoreModel> = Arc::new(core);
-        Model::from_arc(inner)
     }
 }
 

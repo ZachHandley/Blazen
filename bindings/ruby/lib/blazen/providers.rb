@@ -28,598 +28,200 @@ module Blazen
   module Providers
     module_function
 
-    # -------------------------------------------------------------------
-    # Internal helpers
-    # -------------------------------------------------------------------
-
-    # Common epilogue shared by every +Providers+ factory: pulls the model
-    # pointer out of +out_model+, raises on +out_err+, and wraps the
-    # pointer in +klass.new(raw_ptr)+. Returns the wrapped model instance.
-    #
-    # @api private
-    def _wrap_model(out_model, out_err, klass)
-      Blazen::FFI.check_error!(out_err)
-      ptr = out_model.read_pointer
-      if ptr.nil? || ptr.null?
-        raise Blazen::InternalError, "#{klass.name}: native factory returned null with no error"
-      end
-
-      klass.new(ptr)
-    end
-    private_class_method :_wrap_model
-
     # ------------------- Completion: cloud (common shape) -------------------
-
-    # OpenAI chat-completions model.
     #
-    # @param api_key [String]
-    # @param model [String, nil]
-    # @param base_url [String, nil]
-    # @return [Blazen::Llm::Model]
+    # NOTE: every factory in this module now returns the matching
+    # per-engine provider class ({Blazen::OpenAiProvider},
+    # {Blazen::AnthropicProvider}, …) rather than the removed central
+    # +Blazen::Llm::Model+ wrapper. Each per-engine class exposes
+    # +#complete+ / +#complete_blocking+ / +#stream+ / +#stream_async+
+    # directly + an +#as_llm_provider+ conversion for hand-off to
+    # {Blazen::Agents.new} / {Blazen::Batch.complete}.
+
+    # @return [Blazen::OpenAiProvider]
     def openai(api_key:, model: nil, base_url: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_model_new_openai(k, m, b, out_model, out_err)
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      Blazen::OpenAiProvider.new(api_key: api_key, model: model, base_url: base_url)
     end
 
-    # Anthropic Claude completion model.
-    #
-    # @param api_key [String]
-    # @param model [String, nil]
-    # @param base_url [String, nil]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::AnthropicProvider]
     def anthropic(api_key:, model: nil, base_url: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_model_new_anthropic(k, m, b, out_model, out_err)
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      Blazen::AnthropicProvider.new(api_key: api_key, model: model, base_url: base_url)
     end
 
-    # Google Gemini completion model.
-    #
-    # @param api_key [String]
-    # @param model [String, nil]
-    # @param base_url [String, nil]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::GeminiProvider]
     def gemini(api_key:, model: nil, base_url: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_model_new_gemini(k, m, b, out_model, out_err)
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      Blazen::GeminiProvider.new(api_key: api_key, model: model, base_url: base_url)
     end
 
-    # OpenRouter completion model.
-    #
-    # @param api_key [String]
-    # @param model [String, nil]
-    # @param base_url [String, nil]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::OpenRouterProvider]
     def openrouter(api_key:, model: nil, base_url: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_model_new_openrouter(k, m, b, out_model, out_err)
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      _ = base_url
+      Blazen::OpenRouterProvider.new(api_key: api_key, model: model)
     end
 
-    # Groq completion model.
-    #
-    # @param api_key [String]
-    # @param model [String, nil]
-    # @param base_url [String, nil]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::GroqProvider]
     def groq(api_key:, model: nil, base_url: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_model_new_groq(k, m, b, out_model, out_err)
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      _ = base_url
+      Blazen::GroqProvider.new(api_key: api_key, model: model)
     end
 
-    # Together AI completion model.
-    #
-    # @param api_key [String]
-    # @param model [String, nil]
-    # @param base_url [String, nil]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::TogetherProvider]
     def together(api_key:, model: nil, base_url: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_model_new_together(k, m, b, out_model, out_err)
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      _ = base_url
+      Blazen::TogetherProvider.new(api_key: api_key, model: model)
     end
 
-    # Mistral cloud completion model.
-    #
-    # @param api_key [String]
-    # @param model [String, nil]
-    # @param base_url [String, nil]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::MistralProvider]
     def mistral(api_key:, model: nil, base_url: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_model_new_mistral(k, m, b, out_model, out_err)
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      _ = base_url
+      Blazen::MistralProvider.new(api_key: api_key, model: model)
     end
 
-    # DeepSeek completion model.
-    #
-    # @param api_key [String]
-    # @param model [String, nil]
-    # @param base_url [String, nil]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::DeepSeekProvider]
     def deepseek(api_key:, model: nil, base_url: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_model_new_deepseek(k, m, b, out_model, out_err)
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      _ = base_url
+      Blazen::DeepSeekProvider.new(api_key: api_key, model: model)
     end
 
-    # Fireworks AI completion model.
-    #
-    # @param api_key [String]
-    # @param model [String, nil]
-    # @param base_url [String, nil]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::FireworksProvider]
     def fireworks(api_key:, model: nil, base_url: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_model_new_fireworks(k, m, b, out_model, out_err)
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      _ = base_url
+      Blazen::FireworksProvider.new(api_key: api_key, model: model)
     end
 
-    # Perplexity completion model.
-    #
-    # @param api_key [String]
-    # @param model [String, nil]
-    # @param base_url [String, nil]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::PerplexityProvider]
     def perplexity(api_key:, model: nil, base_url: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_model_new_perplexity(k, m, b, out_model, out_err)
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      _ = base_url
+      Blazen::PerplexityProvider.new(api_key: api_key, model: model)
     end
 
-    # xAI Grok completion model.
-    #
-    # @param api_key [String]
-    # @param model [String, nil]
-    # @param base_url [String, nil]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::XaiProvider]
     def xai(api_key:, model: nil, base_url: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_model_new_xai(k, m, b, out_model, out_err)
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      _ = base_url
+      Blazen::XaiProvider.new(api_key: api_key, model: model)
     end
 
-    # Cohere completion model.
-    #
-    # @param api_key [String]
-    # @param model [String, nil]
-    # @param base_url [String, nil]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::CohereProvider]
     def cohere(api_key:, model: nil, base_url: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_model_new_cohere(k, m, b, out_model, out_err)
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      _ = base_url
+      Blazen::CohereProvider.new(api_key: api_key, model: model)
     end
 
     # --------------- Completion: cloud (provider-specific shapes) ---------------
 
-    # Azure OpenAI completion model. +api_version+ is optional; +api_key+,
-    # +resource_name+, and +deployment_name+ are required (the underlying
-    # endpoint URL is derived from the latter two).
-    #
-    # @param api_key [String]
-    # @param resource_name [String]
-    # @param deployment_name [String]
-    # @param api_version [String, nil]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::AzureOpenAiProvider]
     def azure(api_key:, resource_name:, deployment_name:, api_version: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(resource_name) do |r|
-          Blazen::FFI.with_cstring(deployment_name) do |d|
-            Blazen::FFI.with_cstring(api_version) do |v|
-              Blazen::FFI.blazen_model_new_azure(k, r, d, v, out_model, out_err)
-            end
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      _ = api_version
+      Blazen::AzureOpenAiProvider.new(
+        api_key: api_key, resource_name: resource_name,
+        deployment_name: deployment_name,
+      )
     end
 
-    # AWS Bedrock completion model. +api_key+ may be an empty string to
-    # resolve the bearer token from +AWS_BEARER_TOKEN_BEDROCK+ at runtime.
-    #
-    # @param api_key [String]
-    # @param region [String] e.g. +"us-east-1"+
-    # @param model [String, nil]
-    # @param base_url [String, nil]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::BedrockProvider]
     def bedrock(api_key:, region:, model: nil, base_url: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(region) do |r|
-          Blazen::FFI.with_cstring(model) do |m|
-            Blazen::FFI.with_cstring(base_url) do |b|
-              Blazen::FFI.blazen_model_new_bedrock(k, r, m, b, out_model, out_err)
-            end
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      _ = base_url
+      Blazen::BedrockProvider.new(api_key: api_key, region: region, model: model)
     end
 
-    # Fal.ai chat-completion model.
-    #
-    # @param api_key [String]
-    # @param model [String, nil]
-    # @param endpoint [String, nil] fal endpoint family — one of
-    #   +"openai_chat"+ (default), +"openai_responses"+,
-    #   +"openai_embeddings"+, +"openrouter"+, +"any_llm"+
-    # @param enterprise [Boolean] use the enterprise endpoint variant
-    # @param auto_route_modality [Boolean] auto-route by request modality
-    # @param base_url [String, nil]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::FalLlmProvider]
     def fal(api_key:, model: nil, endpoint: nil,
             enterprise: false, auto_route_modality: false, base_url: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.with_cstring(endpoint) do |e|
-            Blazen::FFI.with_cstring(base_url) do |b|
-              Blazen::FFI.blazen_model_new_fal(
-                k, m, e, enterprise, auto_route_modality, b, out_model, out_err
-              )
-            end
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      _ = endpoint
+      _ = enterprise
+      _ = auto_route_modality
+      Blazen::FalLlmProvider.new(api_key: api_key, model: model, base_url: base_url)
     end
 
-    # Generic OpenAI-compatible completion model (vLLM, llama-server, LM
-    # Studio, etc.). All four arguments are required.
-    #
-    # @param provider_name [String]
-    # @param base_url [String]
-    # @param api_key [String]
-    # @param model [String]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::OpenAiCompatProvider]
     def openai_compat(provider_name:, base_url:, api_key:, model:)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(provider_name) do |p|
-        Blazen::FFI.with_cstring(base_url) do |b|
-          Blazen::FFI.with_cstring(api_key) do |k|
-            Blazen::FFI.with_cstring(model) do |m|
-              Blazen::FFI.blazen_model_new_openai_compat(
-                p, b, k, m, out_model, out_err
-              )
-            end
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      Blazen::OpenAiCompatProvider.new(
+        provider_name: provider_name, base_url: base_url,
+        api_key: api_key, model: model,
+      )
     end
 
-    # Model for an Ollama server.
-    #
-    # Convenience wrapper around {openai_compat}: builds
-    # +base_url = "http://#{host}:#{port}/v1"+ with no API key.
-    #
-    # @param host [String] e.g. +"localhost"+, +"192.168.1.50"+
-    # @param port [Integer] TCP port (Ollama default 11434)
-    # @param model [String] e.g. +"llama3.1"+
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::OllamaProvider]
     def ollama(host:, port: 11_434, model:)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(host) do |h|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.blazen_model_new_ollama(
-            h, port.to_i, m, out_model, out_err
-          )
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      Blazen::OllamaProvider.new(host: host, port: port, model: model)
     end
 
-    # Model for an LM Studio server.
-    #
-    # @param host [String]
-    # @param port [Integer] LM Studio default 1234
-    # @param model [String]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::LmStudioProvider]
     def lm_studio(host:, port: 1234, model:)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(host) do |h|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.blazen_model_new_lm_studio(
-            h, port.to_i, m, out_model, out_err
-          )
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      Blazen::LmStudioProvider.new(host: host, port: port, model: model)
     end
 
-    # Universal Model speaking the OpenAI chat-completions protocol
-    # against an arbitrary base URL. Pass +api_key: nil+ for unauthenticated
-    # local servers.
-    #
-    # @param provider_id [String]
-    # @param base_url [String]
-    # @param model [String]
-    # @param api_key [String, nil]
-    # @return [Blazen::Llm::Model]
+    # Backwards-compatible alias for the +OpenAiCompat+ shape.
+    # @return [Blazen::OpenAiCompatProvider]
     def custom_with_openai_protocol(provider_id:, base_url:, model:, api_key: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(provider_id) do |p|
-        Blazen::FFI.with_cstring(base_url) do |b|
-          Blazen::FFI.with_cstring(model) do |m|
-            Blazen::FFI.with_cstring(api_key) do |k|
-              Blazen::FFI.blazen_model_new_custom_with_openai_protocol(
-                p, b, m, k, out_model, out_err
-              )
-            end
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      Blazen::OpenAiCompatProvider.new(
+        provider_name: provider_id, base_url: base_url,
+        api_key: api_key.to_s, model: model,
+      )
     end
 
     # ------------------- Completion: local -------------------
 
-    # Local mistral.rs completion model.
-    #
-    # @param model_id [String] HuggingFace repo id or local GGUF path
-    # @param device [String, nil] e.g. +"cpu"+, +"cuda:0"+, +"metal"+
-    # @param quantization [String, nil] e.g. +"q4_k_m"+
-    # @param context_length [Integer, nil] override context window
-    # @param vision [Boolean] enable vision capabilities
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::MistralRsProvider]
     def mistralrs(model_id:, device: nil, quantization: nil,
                   context_length: nil, vision: false)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      ctx_len = context_length.nil? ? -1 : context_length.to_i
-      Blazen::FFI.with_cstring(model_id) do |mid|
-        Blazen::FFI.with_cstring(device) do |d|
-          Blazen::FFI.with_cstring(quantization) do |q|
-            Blazen::FFI.blazen_model_new_mistralrs(
-              mid, d, q, ctx_len, vision, out_model, out_err
-            )
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      Blazen::MistralRsProvider.new(
+        model_id: model_id, device: device, quantization: quantization,
+        context_length: context_length, vision: vision,
+      )
     end
 
-    # Local llama.cpp completion model.
-    #
-    # @param model_path [String]
-    # @param device [String, nil]
-    # @param quantization [String, nil]
-    # @param context_length [Integer, nil]
-    # @param n_gpu_layers [Integer, nil]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::LlamaCppProvider]
     def llamacpp(model_path:, device: nil, quantization: nil,
                  context_length: nil, n_gpu_layers: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      ctx_len = context_length.nil? ? -1 : context_length.to_i
-      gpu_layers = n_gpu_layers.nil? ? -1 : n_gpu_layers.to_i
-      Blazen::FFI.with_cstring(model_path) do |mp|
-        Blazen::FFI.with_cstring(device) do |d|
-          Blazen::FFI.with_cstring(quantization) do |q|
-            Blazen::FFI.blazen_model_new_llamacpp(
-              mp, d, q, ctx_len, gpu_layers, out_model, out_err
-            )
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      Blazen::LlamaCppProvider.new(
+        model_path: model_path, device: device, quantization: quantization,
+        context_length: context_length, n_gpu_layers: n_gpu_layers,
+      )
     end
 
-    # Local Candle (Rust-native) completion model.
-    #
-    # @param model_id [String]
-    # @param device [String, nil]
-    # @param quantization [String, nil]
-    # @param revision [String, nil]
-    # @param context_length [Integer, nil]
-    # @return [Blazen::Llm::Model]
+    # @return [Blazen::CandleLlmProvider]
     def candle(model_id:, device: nil, quantization: nil, revision: nil,
                context_length: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      ctx_len = context_length.nil? ? -1 : context_length.to_i
-      Blazen::FFI.with_cstring(model_id) do |mid|
-        Blazen::FFI.with_cstring(device) do |d|
-          Blazen::FFI.with_cstring(quantization) do |q|
-            Blazen::FFI.with_cstring(revision) do |r|
-              Blazen::FFI.blazen_model_new_candle(
-                mid, d, q, r, ctx_len, out_model, out_err
-              )
-            end
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::Model)
+      Blazen::CandleLlmProvider.new(
+        model_id: model_id, device: device, quantization: quantization,
+        revision: revision, context_length: context_length,
+      )
     end
 
     # ------------------- Embedding -------------------
 
-    # OpenAI embeddings model.
-    #
-    # @param api_key [String]
-    # @param model [String, nil] defaults to +"text-embedding-3-small"+
-    # @param base_url [String, nil]
-    # @return [Blazen::Llm::EmbeddingModel]
+    # @return [Blazen::OpenAiEmbeddingProvider]
     def openai_embedding(api_key:, model: nil, base_url: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.with_cstring(base_url) do |b|
-            Blazen::FFI.blazen_embedding_model_new_openai(k, m, b, out_model, out_err)
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::EmbeddingModel)
+      _ = base_url
+      Blazen::OpenAiEmbeddingProvider.new(api_key: api_key, model: model)
     end
 
-    # Fal.ai embeddings model.
-    #
-    # @param api_key [String]
-    # @param model [String, nil]
-    # @param dimensions [Integer, nil] target embedding dimensionality
-    # @return [Blazen::Llm::EmbeddingModel]
+    # @return [Blazen::FalEmbeddingProvider]
     def fal_embedding(api_key:, model: nil, dimensions: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      dim = dimensions.nil? ? -1 : dimensions.to_i
-      Blazen::FFI.with_cstring(api_key) do |k|
-        Blazen::FFI.with_cstring(model) do |m|
-          Blazen::FFI.blazen_embedding_model_new_fal(k, m, dim, out_model, out_err)
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::EmbeddingModel)
+      _ = dimensions
+      Blazen::FalEmbeddingProvider.new(api_key: api_key, model: model)
     end
 
-    # FastEmbed local embeddings model (ONNX Runtime).
-    #
-    # @param model_name [String, nil]
-    # @param max_batch_size [Integer, nil]
-    # @param show_download_progress [Boolean]
-    # @return [Blazen::Llm::EmbeddingModel]
+    # @return [Blazen::FastembedProvider]
     def fastembed(model_name: nil, max_batch_size: nil, show_download_progress: true)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      max_batch = max_batch_size.nil? ? -1 : max_batch_size.to_i
-      Blazen::FFI.with_cstring(model_name) do |n|
-        Blazen::FFI.blazen_embedding_model_new_fastembed(
-          n, max_batch, show_download_progress ? true : false, out_model, out_err
-        )
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::EmbeddingModel)
+      _ = max_batch_size
+      _ = show_download_progress
+      Blazen::FastembedProvider.new(model_id: model_name)
     end
 
-    # Local Candle text-embedding model.
-    #
-    # @param model_id [String, nil]
-    # @param device [String, nil]
-    # @param revision [String, nil]
-    # @return [Blazen::Llm::EmbeddingModel]
+    # @return [Blazen::CandleEmbedProvider]
     def candle_embedding(model_id: nil, device: nil, revision: nil)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      Blazen::FFI.with_cstring(model_id) do |mid|
-        Blazen::FFI.with_cstring(device) do |d|
-          Blazen::FFI.with_cstring(revision) do |r|
-            Blazen::FFI.blazen_embedding_model_new_candle(mid, d, r, out_model, out_err)
-          end
-        end
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::EmbeddingModel)
+      _ = device
+      _ = revision
+      Blazen::CandleEmbedProvider.new(model_id: model_id)
     end
 
-    # Local tract (pure-Rust ONNX) embeddings model.
-    #
-    # @param model_name [String, nil]
-    # @param max_batch_size [Integer, nil]
-    # @param show_download_progress [Boolean]
-    # @return [Blazen::Llm::EmbeddingModel]
+    # @return [Blazen::TractEmbedProvider]
     def tract(model_name: nil, max_batch_size: nil, show_download_progress: true)
-      out_model = ::FFI::MemoryPointer.new(:pointer)
-      out_err   = ::FFI::MemoryPointer.new(:pointer)
-      max_batch = max_batch_size.nil? ? -1 : max_batch_size.to_i
-      Blazen::FFI.with_cstring(model_name) do |n|
-        Blazen::FFI.blazen_embedding_model_new_tract(
-          n, max_batch, show_download_progress ? true : false, out_model, out_err
-        )
-      end
-      _wrap_model(out_model, out_err, Blazen::Llm::EmbeddingModel)
+      _ = max_batch_size
+      _ = show_download_progress
+      Blazen::TractEmbedProvider.new(model_id: model_name)
     end
 
     # ------------------- Compute: TTS / STT / image-gen -------------------

@@ -530,144 +530,19 @@ module Blazen
     # Models
     # ---------------------------------------------------------------------
 
-    # A configured chat-completion model bound to a specific provider. Wraps
-    # +BlazenModel *+.
-    #
-    # Instances are constructed via {Blazen::Providers} factory methods
-    # (e.g. {Blazen::Providers.openai}); user code shouldn't call +.new+
-    # directly.
-    class Model
-      include Handle
-
-      # @api private
-      # @param raw_ptr [::FFI::Pointer] caller-owned +BlazenModel *+
-      def initialize(raw_ptr)
-        set_handle!(raw_ptr, Blazen::FFI.method(:blazen_model_free))
-      end
-
-      # @return [String, nil] model identifier reported by the provider
-      def model_id
-        Blazen::FFI.consume_cstring(Blazen::FFI.blazen_model_model_id(@ptr))
-      end
-
-      # Issues a synchronous completion call, blocking the current thread
-      # until the provider returns. {Blazen::FFI.check_error!} translates
-      # cabi failures into the matching {Blazen::Error} subclass.
-      #
-      # @param request [Blazen::Llm::ModelRequest] consumed by the call
-      # @return [Blazen::Llm::ModelResponse]
-      def complete_blocking(request)
-        raise ArgumentError, "request must be Blazen::Llm::ModelRequest" \
-          unless request.is_a?(ModelRequest)
-
-        out_resp = ::FFI::MemoryPointer.new(:pointer)
-        out_err = ::FFI::MemoryPointer.new(:pointer)
-        req_ptr = request.consume!
-        Blazen::FFI.blazen_model_complete_blocking(@ptr, req_ptr, out_resp, out_err)
-        Blazen::FFI.check_error!(out_err)
-        ModelResponse.new(out_resp.read_pointer)
-      end
-
-      # Issues an asynchronous completion call, returning a {Blazen::Llm::ModelResponse}
-      # when the future resolves. Composes with +Fiber.scheduler+ when one
-      # is active (see {Blazen::FFI.await_future}).
-      #
-      # @param request [Blazen::Llm::ModelRequest] consumed by the call
-      # @return [Blazen::Llm::ModelResponse]
-      def complete(request)
-        raise ArgumentError, "request must be Blazen::Llm::ModelRequest" \
-          unless request.is_a?(ModelRequest)
-
-        req_ptr = request.consume!
-        fut = Blazen::FFI.blazen_model_complete(@ptr, req_ptr)
-        Blazen::FFI.await_future(fut) do |f|
-          out_resp = ::FFI::MemoryPointer.new(:pointer)
-          out_err = ::FFI::MemoryPointer.new(:pointer)
-          Blazen::FFI.blazen_future_take_model_response(f, out_resp, out_err)
-          Blazen::FFI.check_error!(out_err)
-          ModelResponse.new(out_resp.read_pointer)
-        end
-      end
-    end
-
-    # A configured embedding model bound to a specific provider. Wraps
-    # +BlazenEmbeddingModel *+.
-    #
-    # Instances are constructed via {Blazen::Providers} factory methods
-    # (e.g. {Blazen::Providers.openai_embedding}).
-    class EmbeddingModel
-      include Handle
-
-      # @api private
-      # @param raw_ptr [::FFI::Pointer] caller-owned +BlazenEmbeddingModel *+
-      def initialize(raw_ptr)
-        set_handle!(raw_ptr, Blazen::FFI.method(:blazen_embedding_model_free))
-      end
-
-      # @return [String, nil] model identifier reported by the provider
-      def model_id
-        Blazen::FFI.consume_cstring(Blazen::FFI.blazen_embedding_model_model_id(@ptr))
-      end
-
-      # @return [Integer] declared output dimensionality (may be +0+ if
-      #   the model reports it as variable)
-      def dimensions
-        Blazen::FFI.blazen_embedding_model_dimensions(@ptr)
-      end
-
-      # Synchronously embeds a list of input texts.
-      #
-      # @param texts [Array<String>] non-empty list of strings to embed
-      # @return [Blazen::Llm::EmbeddingResponse]
-      def embed_blocking(texts)
-        text_array = Array(texts)
-        raise ArgumentError, "texts must be non-empty" if text_array.empty?
-
-        # Build the +const char *const *+ array — keep each MemoryPointer
-        # alive until after the cabi call returns.
-        c_strings = text_array.map { |t| ::FFI::MemoryPointer.from_string(t.to_s) }
-        array_ptr = ::FFI::MemoryPointer.new(:pointer, c_strings.length)
-        c_strings.each_with_index { |s, i| array_ptr[i].put_pointer(0, s) }
-
-        out_resp = ::FFI::MemoryPointer.new(:pointer)
-        out_err = ::FFI::MemoryPointer.new(:pointer)
-        Blazen::FFI.blazen_embedding_model_embed_blocking(
-          @ptr, array_ptr, c_strings.length, out_resp, out_err
-        )
-        Blazen::FFI.check_error!(out_err)
-        # Keep c_strings + array_ptr alive across the call (a no-op
-        # assignment here is enough to retain the reference).
-        c_strings = nil # rubocop:disable Lint/UselessAssignment
-        array_ptr = nil # rubocop:disable Lint/UselessAssignment
-        EmbeddingResponse.new(out_resp.read_pointer)
-      end
-
-      # Asynchronously embeds a list of input texts.
-      #
-      # @param texts [Array<String>]
-      # @return [Blazen::Llm::EmbeddingResponse]
-      def embed(texts)
-        text_array = Array(texts)
-        raise ArgumentError, "texts must be non-empty" if text_array.empty?
-
-        c_strings = text_array.map { |t| ::FFI::MemoryPointer.from_string(t.to_s) }
-        array_ptr = ::FFI::MemoryPointer.new(:pointer, c_strings.length)
-        c_strings.each_with_index { |s, i| array_ptr[i].put_pointer(0, s) }
-
-        fut = Blazen::FFI.blazen_embedding_model_embed(@ptr, array_ptr, c_strings.length)
-        # Retain the input buffers for the duration of the future — the
-        # cabi side may still be reading them while the future polls.
-        Blazen::FFI.await_future(fut) do |f|
-          out_resp = ::FFI::MemoryPointer.new(:pointer)
-          out_err = ::FFI::MemoryPointer.new(:pointer)
-          Blazen::FFI.blazen_future_take_embedding_response(f, out_resp, out_err)
-          Blazen::FFI.check_error!(out_err)
-          c_strings = nil # rubocop:disable Lint/UselessAssignment
-          array_ptr = nil # rubocop:disable Lint/UselessAssignment
-          EmbeddingResponse.new(out_resp.read_pointer)
-        end
-      end
-    end
+    # The central capability-erased +Blazen::Llm::Model+ and
+    # +Blazen::Llm::EmbeddingModel+ wrapper classes have been removed. The
+    # cabi opaques they wrapped (+BlazenModel+ / +BlazenEmbeddingModel+)
+    # plus the +blazen_model_*+ / +blazen_embedding_model_*+ entry points
+    # are gone. Construction goes through the per-engine provider classes
+    # ({Blazen::OpenAiProvider}, {Blazen::AnthropicProvider},
+    # {Blazen::FastembedProvider}, {Blazen::OpenAiEmbeddingProvider}, …)
+    # in +lib/blazen/providers/llm.rb+ + +embed.rb+. Each per-engine class
+    # exposes +#complete+ / +#complete_blocking+ (or +#embed+ /
+    # +#embed_blocking+) directly against its own
+    # +blazen_<engine>_provider_*+ symbols, and an +#as_llm_provider+ /
+    # +#as_embedding_provider+ conversion for hand-off to
+    # {Blazen::Agents.new} / {Blazen::Batch.complete}.
 
     # ---------------------------------------------------------------------
     # Convenience builders (public module functions)
@@ -808,9 +683,7 @@ module Blazen
   ChatMessage        = Llm::ChatMessage        unless const_defined?(:ChatMessage, false)
   ModelRequest  = Llm::ModelRequest  unless const_defined?(:ModelRequest, false)
   ModelResponse = Llm::ModelResponse unless const_defined?(:ModelResponse, false)
-  Model    = Llm::Model    unless const_defined?(:Model, false)
   EmbeddingResponse  = Llm::EmbeddingResponse  unless const_defined?(:EmbeddingResponse, false)
-  EmbeddingModel     = Llm::EmbeddingModel     unless const_defined?(:EmbeddingModel, false)
   Media              = Llm::Media              unless const_defined?(:Media, false)
   Tool               = Llm::Tool               unless const_defined?(:Tool, false)
   ToolCall           = Llm::ToolCall           unless const_defined?(:ToolCall, false)

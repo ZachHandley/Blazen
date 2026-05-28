@@ -51,16 +51,12 @@ use async_trait::async_trait;
 use blazen_uniffi::compute_music::{MusicChunk as InnerMusicChunk, MusicStreamSink};
 use blazen_uniffi::compute_vc::{VcChunk as InnerVcChunk, VcStreamSink};
 use blazen_uniffi::errors::{BlazenError as InnerError, BlazenResult};
-use blazen_uniffi::llm::{Model as InnerModel, TokenUsage as InnerTokenUsage};
-use blazen_uniffi::streaming::{
-    CompletionStreamSink, StreamChunk as InnerStreamChunk, complete_streaming,
-    complete_streaming_blocking,
-};
+use blazen_uniffi::llm::TokenUsage as InnerTokenUsage;
+use blazen_uniffi::streaming::{CompletionStreamSink, StreamChunk as InnerStreamChunk};
 
 use crate::compute_records::{BlazenMusicChunk, BlazenVcChunk};
 use crate::error::BlazenError;
 use crate::future::BlazenFuture;
-use crate::llm::BlazenModel;
 #[cfg(feature = "candle-llm")]
 use crate::llm_providers::BlazenCandleLlmProvider;
 #[cfg(feature = "llamacpp")]
@@ -407,152 +403,6 @@ impl CompletionStreamSink for CStreamSink {
             }),
         }
     }
-}
-
-// ---------------------------------------------------------------------------
-// C entry points
-// ---------------------------------------------------------------------------
-
-/// Synchronously drives a streaming chat completion, dispatching chunks to
-/// the supplied sink. Blocks the calling thread on the cabi tokio runtime.
-///
-/// On success returns `0` (the sink's `on_done` has fired). On a stream-start
-/// failure returns `-1` and writes a fresh `*mut BlazenError` into `*out_err`;
-/// sink-side failures during the stream are delivered through `on_error`
-/// rather than this return path — see the upstream
-/// [`blazen_uniffi::streaming::complete_streaming`] for the full contract.
-///
-/// ## Ownership transfer
-///
-/// - `model` is BORROWED — the underlying `Arc<Model>` is cloned
-///   into the streaming call. Caller retains its handle.
-/// - `request` is CONSUMED — internally we `Box::from_raw` it and move the
-///   inner record out. Callers must NOT call `blazen_model_request_free`
-///   on the same pointer afterwards (double-free).
-/// - `sink` (the vtable) is CONSUMED — ownership of `user_data` transfers to
-///   the wrapping `CStreamSink`, which releases it via `drop_user_data` on
-///   drop. On every early-return failure path that aborts BEFORE constructing
-///   `CStreamSink`, this function explicitly invokes
-///   `(sink.drop_user_data)(sink.user_data)` to honour the same contract.
-///
-/// # Safety
-///
-/// `model` must be null OR a live `BlazenModel` produced by the
-/// cabi surface. `request` must be null OR a live `BlazenModelRequest`
-/// produced by the cabi surface; ownership transfers to this function.
-/// `sink.user_data` and the four `sink` function pointers must satisfy the
-/// contracts documented on [`BlazenCompletionStreamSinkVTable`]. `out_err`
-/// must be null OR a writable slot for a single `*mut BlazenError` write.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_complete_streaming_blocking(
-    model: *const BlazenModel,
-    request: *mut BlazenModelRequest,
-    sink: BlazenCompletionStreamSinkVTable,
-    out_err: *mut *mut BlazenError,
-) -> i32 {
-    // ---- Validate inputs, honouring the consume-on-call contract on every
-    // early-return path -------------------------------------------------
-
-    if model.is_null() {
-        (sink.drop_user_data)(sink.user_data);
-        if !request.is_null() {
-            // SAFETY: caller transferred ownership of `request`; reclaim and
-            // drop to avoid a leak.
-            drop(unsafe { Box::from_raw(request) });
-        }
-        // SAFETY: `out_err` upholds the function-level contract.
-        return unsafe { write_internal_error(out_err, "blazen_complete_streaming: null model") };
-    }
-    if request.is_null() {
-        (sink.drop_user_data)(sink.user_data);
-        // SAFETY: `out_err` upholds the function-level contract.
-        return unsafe { write_internal_error(out_err, "blazen_complete_streaming: null request") };
-    }
-
-    // SAFETY: caller has guaranteed `model` is a live `BlazenModel`.
-    let model_handle = unsafe { &*model };
-    let model_arc: Arc<InnerModel> = Arc::clone(&model_handle.0);
-
-    // SAFETY: caller has transferred ownership of `request`.
-    let request_box = unsafe { Box::from_raw(request) };
-    let inner_request = request_box.0;
-
-    // Wrap the vtable; from here on, `CStreamSink::drop` is responsible for
-    // calling `drop_user_data`.
-    let sink_arc: Arc<dyn CompletionStreamSink> = Arc::new(CStreamSink { vtable: sink });
-
-    // The upstream `complete_streaming_blocking` calls `runtime().block_on`
-    // on `blazen-uniffi`'s runtime — not the cabi runtime. That's fine: we
-    // don't need any cabi-runtime context here, and reusing the upstream
-    // runtime keeps semantics identical to a direct UniFFI call.
-    let result = complete_streaming_blocking(model_arc, inner_request, sink_arc);
-    match result {
-        Ok(()) => 0,
-        // SAFETY: `out_err` upholds the function-level contract.
-        Err(e) => unsafe { write_error(out_err, e) },
-    }
-}
-
-/// Asynchronously drives a streaming chat completion onto the cabi tokio
-/// runtime, returning an opaque future handle. The caller observes
-/// completion via the future's fd / [`crate::future::blazen_future_poll`] /
-/// [`crate::future::blazen_future_wait`], then calls
-/// [`crate::persist::blazen_future_take_unit`] to pop the result. Free the
-/// future with [`crate::future::blazen_future_free`].
-///
-/// Returns null if `model` is null or `request` is null. On those error
-/// paths the `request` (if non-null) is still consumed and freed, and the
-/// `sink.drop_user_data` thunk is still invoked, so no resources leak.
-///
-/// ## Ownership transfer
-///
-/// Same as [`blazen_complete_streaming_blocking`]: `model` is BORROWED,
-/// `request` is CONSUMED, `sink` is CONSUMED. Every code path — success or
-/// early-return failure — guarantees `request` is dropped and
-/// `sink.drop_user_data` is invoked exactly once.
-///
-/// # Safety
-///
-/// `model` must be null OR a live `BlazenModel`. `request` must be
-/// null OR a live `BlazenModelRequest`; ownership transfers to this
-/// function regardless of whether the call returns null. `sink` satisfies
-/// the [`BlazenCompletionStreamSinkVTable`] contract; its `user_data` is
-/// consumed.
-#[unsafe(no_mangle)]
-pub unsafe extern "C" fn blazen_complete_streaming(
-    model: *const BlazenModel,
-    request: *mut BlazenModelRequest,
-    sink: BlazenCompletionStreamSinkVTable,
-) -> *mut BlazenFuture {
-    if model.is_null() {
-        (sink.drop_user_data)(sink.user_data);
-        if !request.is_null() {
-            // SAFETY: caller transferred ownership of `request`; reclaim and
-            // drop to avoid a leak.
-            drop(unsafe { Box::from_raw(request) });
-        }
-        return std::ptr::null_mut();
-    }
-    if request.is_null() {
-        (sink.drop_user_data)(sink.user_data);
-        return std::ptr::null_mut();
-    }
-
-    // SAFETY: caller has guaranteed `model` is a live `BlazenModel`.
-    let model_handle = unsafe { &*model };
-    let model_arc: Arc<InnerModel> = Arc::clone(&model_handle.0);
-
-    // SAFETY: caller has transferred ownership of `request`.
-    let request_box = unsafe { Box::from_raw(request) };
-    let inner_request = request_box.0;
-
-    // Wrap the vtable; from here on, `CStreamSink::drop` is responsible for
-    // calling `drop_user_data`.
-    let sink_arc: Arc<dyn CompletionStreamSink> = Arc::new(CStreamSink { vtable: sink });
-
-    BlazenFuture::spawn::<(), _>(async move {
-        complete_streaming(model_arc, inner_request, sink_arc).await
-    })
 }
 
 // ===========================================================================

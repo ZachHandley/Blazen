@@ -356,10 +356,28 @@ module Blazen
     rescue ::FFI::NotFoundError
       # Removed alongside the central +Compute::ImageGenModel+ wrapper.
     end
-    attach_function :blazen_future_take_model_response,
-                    [:pointer, :pointer, :pointer], :int32
-    attach_function :blazen_future_take_embedding_response,
-                    [:pointer, :pointer, :pointer], :int32
+    # +blazen_future_take_model_response+ and
+    # +blazen_future_take_embedding_response+ were removed by the cabi
+    # provider-migration alongside the central +Blazen::Llm::Model+ /
+    # +Blazen::Llm::EmbeddingModel+ wrappers. The per-engine providers
+    # spawn an async future today (via +<engine>_provider_complete+ /
+    # +<engine>_provider_embed+) but the matching typed-future-take is
+    # not currently exported. We attach optimistically and rescue
+    # +NotFoundError+: the +_blocking+ variants on each per-engine
+    # provider are unaffected, so consumers without an exported take
+    # symbol can still drive completion / embedding synchronously.
+    begin
+      attach_function :blazen_future_take_model_response,
+                      [:pointer, :pointer, :pointer], :int32
+    rescue ::FFI::NotFoundError
+      # cabi-side take fn currently absent.
+    end
+    begin
+      attach_function :blazen_future_take_embedding_response,
+                      [:pointer, :pointer, :pointer], :int32
+    rescue ::FFI::NotFoundError
+      # cabi-side take fn currently absent.
+    end
     attach_function :blazen_future_take_workflow_result,
                     [:pointer, :pointer, :pointer], :int32
     attach_function :blazen_future_take_unit,
@@ -580,24 +598,21 @@ module Blazen
     attach_function :blazen_target_voice_list_free, [:pointer], :void
 
     # -------------------------------------------------------------------
-    # LLM — Model / EmbeddingModel
+    # LLM — polymorphic provider lifecycle
     # -------------------------------------------------------------------
-    attach_function :blazen_model_model_id, [:pointer], :pointer
-    attach_function :blazen_model_complete_blocking,
-                    [:pointer, :pointer, :pointer, :pointer], :int32,
-                    blocking: true
-    attach_function :blazen_model_complete,
-                    [:pointer, :pointer], :pointer
-    attach_function :blazen_model_free, [:pointer], :void
-
-    attach_function :blazen_embedding_model_model_id,   [:pointer], :pointer
-    attach_function :blazen_embedding_model_dimensions, [:pointer], :uint32
-    attach_function :blazen_embedding_model_embed_blocking,
-                    [:pointer, :pointer, :size_t, :pointer, :pointer], :int32,
-                    blocking: true
-    attach_function :blazen_embedding_model_embed,
-                    [:pointer, :pointer, :size_t], :pointer
-    attach_function :blazen_embedding_model_free, [:pointer], :void
+    #
+    # The central capability-erased +Model+ / +EmbeddingModel+ wrappers
+    # (+blazen_model_*+, +blazen_embedding_model_*+) and their per-provider
+    # constructors (+blazen_model_new_*+ / +blazen_embedding_model_new_*+)
+    # have been removed. Construction now goes through the per-engine
+    # provider classes ({Blazen::OpenAiProvider}, {Blazen::FastembedProvider},
+    # …); each exposes an +#as_llm_provider+ / +#as_embedding_provider+
+    # conversion that yields a polymorphic +BlazenLlmProvider *+ /
+    # +BlazenEmbeddingProvider *+ opaque suitable for hand-off to
+    # {Blazen::Agents.new} / {Blazen::Batch.complete} or any future
+    # consumer of the erased capability.
+    attach_function :blazen_llm_provider_free,        [:pointer], :void
+    attach_function :blazen_embedding_provider_free,  [:pointer], :void
 
     # -------------------------------------------------------------------
     # LLM records — Media / ToolCall / Tool / TokenUsage / ChatMessage /
@@ -745,69 +760,17 @@ module Blazen
     attach_function :blazen_voice_handle_free,              [:pointer], :void
 
     # -------------------------------------------------------------------
-    # Model provider factories
+    # Model / EmbeddingModel provider factories — REMOVED
     # -------------------------------------------------------------------
-    attach_function :blazen_model_new_openai,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_anthropic,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_gemini,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_openrouter,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_groq,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_together,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_mistral,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_deepseek,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_fireworks,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_perplexity,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_xai,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_cohere,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_azure,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_bedrock,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_fal,
-                    [:pointer, :pointer, :pointer, :bool, :bool, :pointer,
-                     :pointer, :pointer],
-                    :int32
-    attach_function :blazen_model_new_openai_compat,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_ollama,
-                    [:pointer, :uint16, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_lm_studio,
-                    [:pointer, :uint16, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_custom_with_openai_protocol,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_model_new_mistralrs,
-                    [:pointer, :pointer, :pointer, :int32, :bool, :pointer, :pointer],
-                    :int32
-    attach_function :blazen_model_new_llamacpp,
-                    [:pointer, :pointer, :pointer, :int32, :int32, :pointer, :pointer],
-                    :int32
-    attach_function :blazen_model_new_candle,
-                    [:pointer, :pointer, :pointer, :pointer, :int32, :pointer, :pointer],
-                    :int32
-
-    # EmbeddingModel provider factories
-    attach_function :blazen_embedding_model_new_openai,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_embedding_model_new_fal,
-                    [:pointer, :pointer, :int32, :pointer, :pointer], :int32
-    attach_function :blazen_embedding_model_new_fastembed,
-                    [:pointer, :int32, :bool, :pointer, :pointer], :int32
-    attach_function :blazen_embedding_model_new_candle,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32
-    attach_function :blazen_embedding_model_new_tract,
-                    [:pointer, :int32, :bool, :pointer, :pointer], :int32
+    #
+    # The central +blazen_model_new_<engine>+ (21 LLM engines) and
+    # +blazen_embedding_model_new_<engine>+ (5 embedding engines) C
+    # factories are gone alongside the +BlazenModel+ / +BlazenEmbeddingModel+
+    # opaques they returned. Construct providers through the per-engine
+    # classes ({Blazen::OpenAiProvider}, {Blazen::FastembedProvider}, …) —
+    # each owns its own +BlazenXxxProvider *+ opaque and exposes
+    # +#as_llm_provider+ / +#as_embedding_provider+ for hand-off to the
+    # polymorphic consumers.
 
     # -------------------------------------------------------------------
     # ApiProtocol — OpenAI vs custom selector for CustomProvider transport
@@ -1026,15 +989,12 @@ module Blazen
     # -------------------------------------------------------------------
     # Streaming
     # -------------------------------------------------------------------
-    attach_function :blazen_complete_streaming_blocking,
-                    [:pointer, :pointer,
-                     BlazenCompletionStreamSinkVTable.by_value, :pointer],
-                    :int32,
-                    blocking: true
-    attach_function :blazen_complete_streaming,
-                    [:pointer, :pointer,
-                     BlazenCompletionStreamSinkVTable.by_value],
-                    :pointer
+    #
+    # The central +blazen_complete_streaming[_blocking]+ entry points have
+    # been removed alongside the +BlazenModel+ wrapper. Streaming is now
+    # driven through the per-engine
+    # +blazen_<engine>_provider_complete_streaming[_blocking]+ symbols —
+    # see the per-engine block further down in this file.
     attach_function :blazen_stream_chunk_new,
                     [:pointer, :bool], :pointer
     attach_function :blazen_stream_chunk_tool_calls_push,
@@ -2256,31 +2216,40 @@ module Blazen
     end
 
     # -- Embedding providers (5 engines)
+    #
+    # Each engine exposes the standard +new+ / +embed+ / +embed_blocking+ /
+    # +dimensions+ / +free+ surface, PLUS a +_as_embedding_provider+
+    # conversion that yields a polymorphic +BlazenEmbeddingProvider *+.
     %i[
       blazen_fastembed_provider_new
       blazen_fastembed_provider_embed
       blazen_fastembed_provider_embed_blocking
       blazen_fastembed_provider_dimensions
+      blazen_fastembed_provider_as_embedding_provider
       blazen_fastembed_provider_free
       blazen_tract_embed_provider_new
       blazen_tract_embed_provider_embed
       blazen_tract_embed_provider_embed_blocking
       blazen_tract_embed_provider_dimensions
+      blazen_tract_embed_provider_as_embedding_provider
       blazen_tract_embed_provider_free
       blazen_candle_embed_provider_new
       blazen_candle_embed_provider_embed
       blazen_candle_embed_provider_embed_blocking
       blazen_candle_embed_provider_dimensions
+      blazen_candle_embed_provider_as_embedding_provider
       blazen_candle_embed_provider_free
       blazen_openai_embedding_provider_new
       blazen_openai_embedding_provider_embed
       blazen_openai_embedding_provider_embed_blocking
       blazen_openai_embedding_provider_dimensions
+      blazen_openai_embedding_provider_as_embedding_provider
       blazen_openai_embedding_provider_free
       blazen_fal_embedding_provider_new
       blazen_fal_embedding_provider_embed
       blazen_fal_embedding_provider_embed_blocking
       blazen_fal_embedding_provider_dimensions
+      blazen_fal_embedding_provider_as_embedding_provider
       blazen_fal_embedding_provider_free
     ].each do |sym|
       begin
@@ -2294,6 +2263,8 @@ module Blazen
                           blocking: true
         when /_dimensions$/
           attach_function sym, [:pointer], :uint32
+        when /_as_embedding_provider$/
+          attach_function sym, [:pointer], :pointer
         when /_free$/
           attach_function sym, [:pointer], :void
         end
@@ -2345,6 +2316,7 @@ module Blazen
       complete_blocking_sym = :"blazen_#{engine}_provider_complete_blocking"
       stream_sym            = :"blazen_#{engine}_provider_complete_streaming"
       stream_blocking_sym   = :"blazen_#{engine}_provider_complete_streaming_blocking"
+      as_llm_sym            = :"blazen_#{engine}_provider_as_llm_provider"
       free_sym              = :"blazen_#{engine}_provider_free"
 
       begin
@@ -2376,6 +2348,15 @@ module Blazen
                         [:pointer, :pointer,
                          BlazenCompletionStreamSinkVTable.by_value],
                         :pointer
+      rescue ::FFI::NotFoundError
+        # Feature-gated.
+      end
+
+      # Per-engine conversion: yields a polymorphic +BlazenLlmProvider *+
+      # opaque (a fresh +Arc<dyn LlmProvider>+ handle on the cabi side)
+      # suitable for hand-off to {Blazen::Agents.new} / {Blazen::Batch.complete}.
+      begin
+        attach_function as_llm_sym, [:pointer], :pointer
       rescue ::FFI::NotFoundError
         # Feature-gated.
       end

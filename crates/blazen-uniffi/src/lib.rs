@@ -83,8 +83,7 @@ pub use controlplane::{
 };
 pub use errors::{BlazenError, BlazenResult};
 pub use llm::{
-    ChatMessage, EmbeddingModel, EmbeddingResponse, Media, Model, ModelRequest, ModelResponse,
-    TokenUsage, Tool, ToolCall,
+    ChatMessage, EmbeddingResponse, Media, ModelRequest, ModelResponse, TokenUsage, Tool, ToolCall,
 };
 pub use local_model::{
     AdapterHandleRecord, AdapterOptionsRecord, AdapterStatusRecord, ForeignLocalModel,
@@ -112,9 +111,7 @@ pub use provider_defaults::{
     TranscriptionProviderDefaults, VideoProviderDefaults, VoiceCloningProviderDefaults,
 };
 pub use runtime::init;
-pub use streaming::{
-    CompletionStreamSink, StreamChunk, complete_streaming, complete_streaming_blocking,
-};
+pub use streaming::{CompletionStreamSink, StreamChunk};
 #[cfg(feature = "langfuse")]
 pub use telemetry::init_langfuse;
 #[cfg(feature = "otlp")]

@@ -462,38 +462,53 @@ module Blazen
     # The +request+ is consumed by the call (the cabi takes ownership of
     # the underlying +BlazenModelRequest *+).
     #
-    # @param model [Blazen::Llm::Model] streaming-capable model
-    # @param request [Blazen::Llm::ModelRequest] consumed by the call
-    # @param on_chunk [#call(chunk)] called for each {StreamChunk}
-    # @param on_done [#call(finish_reason, usage)] called once when the
-    #   stream completes normally
-    # @param on_error [#call(err)] called once on fatal stream errors
-    # @yield [kind, *args] block-form alternative to the kwargs
-    # @return [void]
-    def complete(model, request, on_chunk: nil, on_done: nil, on_error: nil, &block)
-      drive_completion(model.ptr, request, :blazen_complete_streaming_blocking,
-                       blocking: true,
-                       on_chunk: on_chunk, on_done: on_done, on_error: on_error, &block)
-    end
-
-    # Asynchronous variant of {complete}. Returns when the streaming
-    # future resolves; the sink callbacks fire on cabi tokio worker
-    # threads while the calling fiber yields (composes with
-    # +Fiber.scheduler+ — see {Blazen::FFI.await_future}).
+    # Streams a chat completion against any provider that responds to
+    # +#as_llm_provider+ (or against a {Blazen::LlmProvider} directly).
     #
-    # The +request+ is consumed by the call.
+    # NOTE: the polymorphic +BlazenLlmProvider *+ opaque does NOT itself
+    # expose a streaming entry point on the cabi side. Callers who hold
+    # only a polymorphic handle must instead use the per-engine
+    # provider's +#stream+ / +#stream_async+ methods (e.g.
+    # +Blazen::OpenAiProvider#stream+) — those route through this
+    # module's {drive_completion} symbol-parameterised core.
     #
-    # @param model [Blazen::Llm::Model] streaming-capable model
+    # When +provider+ is a per-engine class, this convenience wrapper
+    # delegates to its +#stream+ / +#stream_async+ method (if defined),
+    # which in turn calls +drive_completion+ with the engine-specific
+    # +blazen_<engine>_provider_complete_streaming[_blocking]+ symbol.
+    #
+    # @param provider [#stream] per-engine LLM provider exposing +#stream+
     # @param request [Blazen::Llm::ModelRequest] consumed by the call
     # @param on_chunk [#call(chunk)]
     # @param on_done [#call(finish_reason, usage)]
     # @param on_error [#call(err)]
     # @yield [kind, *args] block-form alternative to the kwargs
     # @return [void]
-    def complete_async(model, request, on_chunk: nil, on_done: nil, on_error: nil, &block)
-      drive_completion(model.ptr, request, :blazen_complete_streaming,
-                       blocking: false,
-                       on_chunk: on_chunk, on_done: on_done, on_error: on_error, &block)
+    def complete(provider, request, on_chunk: nil, on_done: nil, on_error: nil, &block)
+      unless provider.respond_to?(:stream)
+        raise ArgumentError,
+              "provider must expose a per-engine #stream method " \
+                "(got #{provider.class}); polymorphic LlmProvider " \
+                "handles do not expose streaming directly"
+      end
+
+      provider.stream(request,
+                      on_chunk: on_chunk, on_done: on_done, on_error: on_error, &block)
+    end
+
+    # Asynchronous variant of {complete}.
+    def complete_async(provider, request, on_chunk: nil, on_done: nil, on_error: nil,
+                       &block)
+      unless provider.respond_to?(:stream_async)
+        raise ArgumentError,
+              "provider must expose a per-engine #stream_async method " \
+                "(got #{provider.class}); polymorphic LlmProvider " \
+                "handles do not expose streaming directly"
+      end
+
+      provider.stream_async(request,
+                            on_chunk: on_chunk, on_done: on_done, on_error: on_error,
+                            &block)
     end
 
     # ---------------------------------------------------------------------

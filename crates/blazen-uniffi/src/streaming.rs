@@ -46,7 +46,7 @@
 //!     }
 //! }
 //!
-//! complete_streaming(model, request, Arc::new(PrintSink)).await?;
+//! <engine>_provider_complete_streaming(provider, request, Arc::new(PrintSink)).await?;
 //! ```
 
 use std::pin::Pin;
@@ -54,11 +54,8 @@ use std::sync::Arc;
 
 use futures_util::{Stream, StreamExt};
 
-use blazen_llm::ModelRequest as CoreModelRequest;
-
 use crate::errors::{BlazenError, BlazenResult};
-use crate::llm::{Model, ModelRequest, TokenUsage, ToolCall};
-use crate::runtime::runtime;
+use crate::llm::{TokenUsage, ToolCall};
 
 // ---------------------------------------------------------------------------
 // Wire-format records
@@ -139,50 +136,13 @@ pub trait CompletionStreamSink: Send + Sync {
 // Free function: drive a stream into a sink
 // ---------------------------------------------------------------------------
 
-/// Drive a streaming chat completion, dispatching each chunk to the sink.
-///
-/// On success, calls `sink.on_done(finish_reason, usage)` exactly once and
-/// returns `Ok(())`. On a provider-side failure (or sink-side
-/// `on_chunk`/`on_done` failure), calls `sink.on_error(...)` exactly once
-/// and returns `Ok(())` — the error is *delivered* via the sink, not
-/// propagated to this function's caller. This keeps the foreign-language
-/// surface symmetric: the sink owns both happy-path and error-path
-/// observation.
-///
-/// The only way this function itself returns `Err` is when the initial
-/// request conversion fails (malformed JSON in tool definitions, etc.) or
-/// when the upstream `stream()` call fails to *start* the stream. Sink
-/// callback failures are surfaced via `on_error`.
-#[uniffi::export(async_runtime = "tokio")]
-pub async fn complete_streaming(
-    model: Arc<Model>,
-    request: ModelRequest,
-    sink: Arc<dyn CompletionStreamSink>,
-) -> BlazenResult<()> {
-    let core_request = CoreModelRequest::try_from(request)?;
-    let stream = match model.inner.stream(core_request).await {
-        Ok(s) => s,
-        Err(err) => {
-            // Why: surface the start-of-stream failure both to the caller
-            // (return Err) and to the sink (so foreign-language consumers
-            // observing only the sink also see it).
-            let wire_err = BlazenError::from(err);
-            let _ = sink.on_error(clone_error(&wire_err)).await;
-            return Err(wire_err);
-        }
-    };
-
-    drive_completion_stream(stream, sink).await
-}
-
 /// Drive an already-started chat-completion stream into a [`CompletionStreamSink`].
 ///
-/// Shared by the central [`complete_streaming`] and the per-engine
-/// `<engine>_complete_streaming` free functions in
-/// [`crate::concrete::llm`]. The upstream `stream()` call (which can itself
-/// fail to *start* a stream) is the caller's responsibility — by the time
-/// this helper runs, the stream is live and every subsequent error is
-/// delivered through the sink (`on_error`), never propagated back.
+/// Shared by the per-engine `<engine>_provider_complete_streaming` free
+/// functions in [`crate::concrete::llm`]. The upstream `stream()` call (which
+/// can itself fail to *start* a stream) is the caller's responsibility — by
+/// the time this helper runs, the stream is live and every subsequent error
+/// is delivered through the sink (`on_error`), never propagated back.
 ///
 /// On success it calls `sink.on_done(finish_reason, usage)` exactly once
 /// and returns `Ok(())`. On a provider-side or sink-side failure it calls
@@ -251,21 +211,6 @@ pub(crate) async fn drive_completion_stream(
         let _ = sink.on_error(clone_error(&sink_err)).await;
     }
     Ok(())
-}
-
-/// Synchronous variant of [`complete_streaming`] — blocks the current
-/// thread on the shared Tokio runtime.
-///
-/// Handy for Ruby scripts and quick Go main fns where async machinery is
-/// overkill. The sink's `async` methods still run on the shared runtime
-/// (they're just driven synchronously from the caller's thread).
-#[uniffi::export]
-pub fn complete_streaming_blocking(
-    model: Arc<Model>,
-    request: ModelRequest,
-    sink: Arc<dyn CompletionStreamSink>,
-) -> BlazenResult<()> {
-    runtime().block_on(complete_streaming(model, request, sink))
 }
 
 // ---------------------------------------------------------------------------

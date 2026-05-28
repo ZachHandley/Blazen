@@ -4,17 +4,24 @@ module Blazen
   # Batch-completion helpers.
   #
   # Runs many {Blazen::Llm::ModelRequest}s through a single
-  # {Blazen::Llm::Model} with a bounded number of in-flight
-  # requests, then exposes the per-request success/failure result and
-  # aggregated usage/cost totals via {BatchResult} / {BatchItem}.
+  # {Blazen::LlmProvider} (or per-engine provider that responds to
+  # +#as_llm_provider+) with a bounded number of in-flight requests, then
+  # exposes the per-request success/failure result and aggregated
+  # usage/cost totals via {BatchResult} / {BatchItem}.
   module Batch
     module_function
 
     # Default max in-flight concurrency for {complete}.
     DEFAULT_MAX_CONCURRENCY = 4
 
-    # Runs multiple completion requests against +model+, bounded by
+    # Runs multiple completion requests against +provider+, bounded by
     # +max_concurrency+ in-flight requests at a time.
+    #
+    # +provider+ may be either a {Blazen::LlmProvider} (polymorphic
+    # +BlazenLlmProvider *+ handle) OR any per-engine class that responds
+    # to +#as_llm_provider+ ({Blazen::OpenAiProvider}, etc.) — the latter
+    # is auto-converted via +#as_llm_provider+ before hand-off to the
+    # cabi.
     #
     # Every request's underlying handle is **consumed** by this call —
     # callers MUST NOT reference the request wrappers again afterwards.
@@ -22,17 +29,18 @@ module Blazen
     # future-await pattern and composes with {Fiber.scheduler}; use
     # {complete_blocking} for an explicit thread-block.
     #
-    # @param model [Blazen::Llm::Model]
+    # @param provider [Blazen::LlmProvider, #as_llm_provider]
     # @param requests [Array<Blazen::Llm::ModelRequest>]
     # @param max_concurrency [Integer]
     # @return [Blazen::Batch::BatchResult]
-    def complete(model, requests, max_concurrency: DEFAULT_MAX_CONCURRENCY)
+    def complete(provider, requests, max_concurrency: DEFAULT_MAX_CONCURRENCY)
+      llm = Batch.send(:coerce_llm_provider, provider)
       reqs = Array(requests)
       array_mp, count = Batch.send(:pack_requests, reqs)
       out_result = ::FFI::MemoryPointer.new(:pointer)
       out_err    = ::FFI::MemoryPointer.new(:pointer)
 
-      fut = Blazen::FFI.blazen_complete_batch(model.ptr, array_mp, count, Integer(max_concurrency))
+      fut = Blazen::FFI.blazen_complete_batch(llm.ptr, array_mp, count, Integer(max_concurrency))
       if fut.nil? || fut.null?
         raise Blazen::ValidationError, "blazen_complete_batch returned a null future"
       end
@@ -46,20 +54,47 @@ module Blazen
 
     # Blocking-thread variant of {complete}.
     #
-    # @param model [Blazen::Llm::Model]
+    # @param provider [Blazen::LlmProvider, #as_llm_provider]
     # @param requests [Array<Blazen::Llm::ModelRequest>]
     # @param max_concurrency [Integer]
     # @return [Blazen::Batch::BatchResult]
-    def complete_blocking(model, requests, max_concurrency: DEFAULT_MAX_CONCURRENCY)
+    def complete_blocking(provider, requests, max_concurrency: DEFAULT_MAX_CONCURRENCY)
+      llm = Batch.send(:coerce_llm_provider, provider)
       reqs = Array(requests)
       array_mp, count = Batch.send(:pack_requests, reqs)
       out_result = ::FFI::MemoryPointer.new(:pointer)
       out_err    = ::FFI::MemoryPointer.new(:pointer)
       Blazen::FFI.blazen_complete_batch_blocking(
-        model.ptr, array_mp, count, Integer(max_concurrency), out_result, out_err
+        llm.ptr, array_mp, count, Integer(max_concurrency), out_result, out_err
       )
       Blazen::FFI.check_error!(out_err)
       BatchResult.new(out_result.read_pointer)
+    end
+
+    # Coerces +provider+ to a {Blazen::LlmProvider} polymorphic handle:
+    # passes {Blazen::LlmProvider} through (calling +#as_llm_provider+
+    # which yields +self+ for the abstract base, or a fresh polymorphic
+    # handle for per-engine subclasses), and otherwise requires the
+    # +#as_llm_provider+ duck-type.
+    #
+    # @api private
+    # @return [Blazen::LlmProvider]
+    def self.coerce_llm_provider(provider)
+      if provider.is_a?(Blazen::LlmProvider)
+        llm = provider.as_llm_provider
+      elsif provider.respond_to?(:as_llm_provider)
+        llm = provider.as_llm_provider
+      else
+        raise ArgumentError,
+              "provider must be a Blazen::LlmProvider or respond to #as_llm_provider"
+      end
+
+      unless llm.is_a?(Blazen::LlmProvider)
+        raise ArgumentError,
+              "#as_llm_provider must return a Blazen::LlmProvider (got #{llm.class})"
+      end
+
+      llm
     end
 
     # Packs an array of ModelRequest wrappers into a +const*+ pointer

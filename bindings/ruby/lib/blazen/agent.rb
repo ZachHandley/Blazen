@@ -8,9 +8,10 @@ module Blazen
   # +BlazenToolHandlerVTable+ trampoline.
   #
   # Use {Blazen::Agents.new} to construct an {Agent}: supply a backing
-  # {Blazen::Llm::Model}, a list of {Blazen::Llm::Tool} declarations,
-  # a callable +tool_handler+, and (optionally) a +system_prompt+ /
-  # +max_iterations+. The handler is invoked by the Rust agent loop every time
+  # provider ({Blazen::LlmProvider} or a per-engine class like
+  # {Blazen::OpenAiProvider} that responds to +#as_llm_provider+), a list
+  # of {Blazen::Llm::Tool} declarations, a callable +tool_handler+, and
+  # (optionally) a +system_prompt+ / +max_iterations+. The handler is invoked by the Rust agent loop every time
   # the model emits a tool call and must return either a +String+ (forwarded
   # verbatim) or a JSON-serializable Ruby value (encoded via +JSON.dump+).
   #
@@ -310,7 +311,11 @@ module Blazen
     # subsequent reads through the original Ruby wrapper raise
     # {Blazen::InternalError}.
     #
-    # @param model [Blazen::Llm::Model] backing completion model
+    # @param provider [Blazen::LlmProvider, #as_llm_provider] backing
+    #   completion provider — either a polymorphic {Blazen::LlmProvider}
+    #   (typically produced by per-engine +#as_llm_provider+) OR any
+    #   per-engine class that responds to +:as_llm_provider+
+    #   (auto-converted before hand-off to the cabi).
     # @param tool_handler [#call] callable taking +(tool_name, args_hash)+
     # @param tools [Array<Blazen::Llm::Tool>] declared tool list shown to the
     #   model (consumed)
@@ -318,10 +323,27 @@ module Blazen
     # @param max_iterations [Integer] safety cap on loop iterations
     #   (default: 16)
     # @return [Agent]
-    def new(model:, tool_handler:, tools: [], system_prompt: nil, max_iterations: 16)
-      unless model.is_a?(Blazen::Llm::Model)
-        raise ArgumentError, "model must be a Blazen::Llm::Model"
+    def new(provider: nil, tool_handler:, tools: [], system_prompt: nil,
+            max_iterations: 16, model: nil)
+      # Back-compat: the previous signature was +model:+; accept either.
+      provider ||= model
+      raise ArgumentError, "provider: is required" if provider.nil?
+
+      llm_provider =
+        if provider.is_a?(Blazen::LlmProvider)
+          provider.as_llm_provider
+        elsif provider.respond_to?(:as_llm_provider)
+          provider.as_llm_provider
+        else
+          raise ArgumentError,
+                "provider must be a Blazen::LlmProvider or respond to #as_llm_provider"
+        end
+      unless llm_provider.is_a?(Blazen::LlmProvider)
+        raise ArgumentError,
+              "#as_llm_provider must return a Blazen::LlmProvider " \
+                "(got #{llm_provider.class})"
       end
+
       unless tool_handler.respond_to?(:call)
         raise ArgumentError, "tool_handler must respond to #call(tool_name, args_hash)"
       end
@@ -358,7 +380,7 @@ module Blazen
         out_err = ::FFI::MemoryPointer.new(:pointer)
         Blazen::FFI.with_cstring(system_prompt) do |sp|
           Blazen::FFI.blazen_agent_new(
-            model.ptr,
+            llm_provider.ptr,
             sp,
             tools_arr,
             tool_ptrs.length,

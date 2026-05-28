@@ -438,10 +438,12 @@ typedef struct BlazenDeepSeekProvider BlazenDeepSeekProvider;
 typedef struct BlazenDiffusionProvider BlazenDiffusionProvider;
 
 /**
- * Opaque wrapper around [`blazen_uniffi::llm::EmbeddingModel`]. Construct
- * via the per-provider factories in Phase R4.
+ * Opaque wrapper around
+ * `Arc<dyn blazen_uniffi::concrete::bases::EmbeddingProvider>`.
+ *
+ * Free with [`blazen_embedding_provider_free`].
  */
-typedef struct BlazenEmbeddingModel BlazenEmbeddingModel;
+typedef struct BlazenEmbeddingProvider BlazenEmbeddingProvider;
 
 /**
  * Opaque wrapper around [`blazen_uniffi::llm::EmbeddingResponse`]. Produced
@@ -608,6 +610,13 @@ typedef struct BlazenKokoroProvider BlazenKokoroProvider;
 typedef struct BlazenLlamaCppProvider BlazenLlamaCppProvider;
 
 /**
+ * Opaque wrapper around `Arc<dyn blazen_uniffi::concrete::bases::LlmProvider>`.
+ *
+ * Free with [`blazen_llm_provider_free`].
+ */
+typedef struct BlazenLlmProvider BlazenLlmProvider;
+
+/**
  * Opaque handle wrapping
  * `Arc<blazen_uniffi::concrete::llm::LmStudioProvider>`.
  */
@@ -629,13 +638,6 @@ typedef struct BlazenMistralProvider BlazenMistralProvider;
  * `Arc<blazen_uniffi::concrete::llm::MistralRsProvider>`.
  */
 typedef struct BlazenMistralRsProvider BlazenMistralRsProvider;
-
-/**
- * Opaque wrapper around [`blazen_uniffi::llm::Model`]. Construct
- * via the per-provider factories in Phase R4 (e.g.
- * `blazen_model_openai`).
- */
-typedef struct BlazenModel BlazenModel;
 
 /**
  * Opaque wrapper around [`blazen_controlplane::ModelClient`]. The
@@ -2578,7 +2580,7 @@ int32_t blazen_future_take_agent_result(BlazenFuture *fut,
  *
  * # Safety
  *
- * - `model` must be null OR a live `BlazenModel` produced by the
+ * - `provider` must be null OR a live `BlazenLlmProvider` produced by the
  *   cabi surface.
  * - When `requests_count > 0`, `requests` must point to an array of exactly
  *   `requests_count` `BlazenModelRequest*` entries; each entry must be
@@ -2589,7 +2591,7 @@ int32_t blazen_future_take_agent_result(BlazenFuture *fut,
  *   of the matching pointer type.
  */
 
-int32_t blazen_complete_batch_blocking(const BlazenModel *model,
+int32_t blazen_complete_batch_blocking(const BlazenLlmProvider *provider,
                                        BlazenModelRequest *const *requests,
                                        uintptr_t requests_count,
                                        uint32_t max_concurrency,
@@ -2603,7 +2605,7 @@ int32_t blazen_complete_batch_blocking(const BlazenModel *model,
  * [`blazen_future_take_batch_result`]. Free the future with
  * `blazen_future_free`.
  *
- * Returns null if `model` is null, or if `requests` is null when
+ * Returns null if `provider` is null, or if `requests` is null when
  * `requests_count > 0`, or if any indexed `BlazenModelRequest*` element
  * is null. On every null-return path, ownership of any
  * `BlazenModelRequest*` elements that were already reclaimed is
@@ -2616,11 +2618,11 @@ int32_t blazen_complete_batch_blocking(const BlazenModel *model,
  *
  * # Safety
  *
- * Same as [`blazen_complete_batch_blocking`]: `model` must be null OR a live
- * `BlazenModel`; the `requests` array elements transfer ownership.
+ * Same as [`blazen_complete_batch_blocking`]: `provider` must be null OR a
+ * live `BlazenLlmProvider`; the `requests` array elements transfer ownership.
  */
 
-BlazenFuture *blazen_complete_batch(const BlazenModel *model,
+BlazenFuture *blazen_complete_batch(const BlazenLlmProvider *provider,
                                     BlazenModelRequest *const *requests,
                                     uintptr_t requests_count,
                                     uint32_t max_concurrency);
@@ -6100,6 +6102,61 @@ int32_t blazen_fal_embedding_provider_embed_blocking(const BlazenFalEmbeddingPro
  void blazen_fal_embedding_provider_free(BlazenFalEmbeddingProvider *model);
 
 /**
+ * Returns a fresh [`BlazenEmbeddingProvider`] cloned from this per-engine
+ * handle. Returns null on a null input. Caller frees with
+ * [`crate::embedding_provider::blazen_embedding_provider_free`].
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenFastembedProvider`.
+ */
+
+BlazenEmbeddingProvider *blazen_fastembed_provider_as_embedding_provider(const BlazenFastembedProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTractEmbedProvider`.
+ */
+
+BlazenEmbeddingProvider *blazen_tract_embed_provider_as_embedding_provider(const BlazenTractEmbedProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCandleEmbedProvider`.
+ */
+
+BlazenEmbeddingProvider *blazen_candle_embed_provider_as_embedding_provider(const BlazenCandleEmbedProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiEmbeddingProvider`.
+ */
+
+BlazenEmbeddingProvider *blazen_openai_embedding_provider_as_embedding_provider(const BlazenOpenAiEmbeddingProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenFalEmbeddingProvider`.
+ */
+
+BlazenEmbeddingProvider *blazen_fal_embedding_provider_as_embedding_provider(const BlazenFalEmbeddingProvider *handle);
+
+/**
+ * Frees a [`BlazenEmbeddingProvider`] handle. No-op on a null pointer.
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a pointer previously produced by one of the
+ * `blazen_<engine>_provider_as_embedding_provider` C functions in
+ * [`crate::embed`]. Double-free is undefined behavior.
+ */
+ void blazen_embedding_provider_free(BlazenEmbeddingProvider *handle);
+
+/**
  * Returns the variant tag for `err` — one of the `BLAZEN_ERROR_KIND_*`
  * constants. Returns `0` if `err` is null (which is otherwise an invalid
  * state — successful calls never produce an error handle).
@@ -6683,197 +6740,15 @@ int32_t blazen_fal_image_gen_provider_generate_image_blocking(const BlazenFalIma
  int32_t blazen_shutdown(void);
 
 /**
- * Returns the model's identifier (e.g. `"gpt-4o"`) as a caller-owned C
- * string. Returns null on a null handle. Caller frees with
- * `blazen_string_free`.
+ * Frees a [`BlazenLlmProvider`] handle. No-op on a null pointer.
  *
  * # Safety
  *
- * `model` must be null OR a live `BlazenModel` produced by the
- * cabi surface (and not yet freed).
+ * `handle` must be null OR a pointer previously produced by one of the
+ * `blazen_<engine>_provider_as_llm_provider` C functions in
+ * [`crate::llm_providers`]. Double-free is undefined behavior.
  */
- char *blazen_model_model_id(const BlazenModel *model);
-
-/**
- * Synchronously runs a chat completion on the cabi tokio runtime.
- *
- * On success returns `0` and writes a fresh `BlazenModelResponse*` into
- * `*out_response`. On failure returns `-1` and writes a fresh `BlazenError*`
- * into `*out_err`. Either out-parameter may be null to discard that side of
- * the result (typically only meaningful on the error path during a smoke
- * test).
- *
- * **The `request` pointer is consumed.** Internally we `Box::from_raw` it
- * and move its inner record out. Calling
- * [`blazen_model_request_free`](crate::llm_records::blazen_model_request_free)
- * on the same pointer afterwards is a double-free.
- *
- * # Safety
- *
- * `model` must be null OR a live `BlazenModel`. `request` must be
- * null OR a live `BlazenModelRequest` produced by the cabi surface;
- * ownership transfers to this function. `out_response` and `out_err` must
- * each be null OR point to a writable slot of the matching pointer type.
- */
-
-int32_t blazen_model_complete_blocking(const BlazenModel *model,
-                                       BlazenModelRequest *request,
-                                       BlazenModelResponse **out_response,
-                                       BlazenError **out_err);
-
-/**
- * Spawns a chat completion onto the cabi tokio runtime and returns an
- * opaque future handle. The caller observes completion via the future's
- * fd / `blazen_future_poll` / `blazen_future_wait`, then calls
- * [`blazen_future_take_model_response`] to pop the result. Free the
- * future with `blazen_future_free`.
- *
- * Returns null if either `model` or `request` is null (in which case the
- * `request`, if non-null, is still consumed and freed to avoid a leak).
- *
- * **The `request` pointer is consumed.** See
- * [`blazen_model_complete_blocking`] for details.
- *
- * # Safety
- *
- * `model` must be null OR a live `BlazenModel`. `request` must be
- * null OR a live `BlazenModelRequest`; ownership transfers to this
- * function regardless of whether the call returns null.
- */
- BlazenFuture *blazen_model_complete(const BlazenModel *model, BlazenModelRequest *request);
-
-/**
- * Frees a `BlazenModel` handle. No-op on a null pointer.
- *
- * # Safety
- *
- * `model` must be null OR a pointer previously produced by a provider
- * factory in the cabi surface. Double-free is undefined behavior.
- */
- void blazen_model_free(BlazenModel *model);
-
-/**
- * Returns the embedding model's identifier as a caller-owned C string.
- * Returns null on a null handle.
- *
- * # Safety
- *
- * `model` must be null OR a live `BlazenEmbeddingModel`.
- */
- char *blazen_embedding_model_model_id(const BlazenEmbeddingModel *model);
-
-/**
- * Returns the embedding vector dimensionality. Returns `0` on a null handle
- * (which is otherwise an invalid input — callers should null-check before
- * calling).
- *
- * # Safety
- *
- * `model` must be null OR a live `BlazenEmbeddingModel`.
- */
- uint32_t blazen_embedding_model_dimensions(const BlazenEmbeddingModel *model);
-
-/**
- * Synchronously embeds one or more input strings on the cabi tokio runtime.
- *
- * On success returns `0` and writes a fresh `BlazenEmbeddingResponse*` into
- * `*out_response`. On failure returns `-1` and writes a fresh `BlazenError*`
- * into `*out_err`.
- *
- * The `inputs` array is BORROWED — the cabi copies each string before the
- * blocking call returns. The caller retains ownership of the array and its
- * strings.
- *
- * # Safety
- *
- * `model` must be null OR a live `BlazenEmbeddingModel`. When
- * `inputs_count > 0`, `inputs` must point to an array of exactly
- * `inputs_count` valid `*const c_char` entries, each a NUL-terminated UTF-8
- * buffer valid for the duration of this call. `out_response` and `out_err`
- * must each be null OR point to a writable slot of the matching pointer
- * type.
- */
-
-int32_t blazen_embedding_model_embed_blocking(const BlazenEmbeddingModel *model,
-                                              const char *const *inputs,
-                                              uintptr_t inputs_count,
-                                              BlazenEmbeddingResponse **out_response,
-                                              BlazenError **out_err);
-
-/**
- * Spawns an embed task onto the cabi tokio runtime and returns an opaque
- * future handle. Pop the result with
- * [`blazen_future_take_embedding_response`].
- *
- * Returns null if `model` is null, if `inputs` is null and `inputs_count >
- * 0`, or if any indexed string is null / non-UTF-8. The `inputs` array is
- * copied out before the future is spawned, so the caller only has to keep
- * the array alive for the duration of this cabi call.
- *
- * # Safety
- *
- * `model` must be null OR a live `BlazenEmbeddingModel`. When
- * `inputs_count > 0`, `inputs` must point to an array of exactly
- * `inputs_count` valid `*const c_char` entries, each a NUL-terminated UTF-8
- * buffer valid for the duration of this call.
- */
-
-BlazenFuture *blazen_embedding_model_embed(const BlazenEmbeddingModel *model,
-                                           const char *const *inputs,
-                                           uintptr_t inputs_count);
-
-/**
- * Frees a `BlazenEmbeddingModel` handle. No-op on a null pointer.
- *
- * # Safety
- *
- * `model` must be null OR a pointer previously produced by a provider
- * factory in the cabi surface. Double-free is undefined behavior.
- */
- void blazen_embedding_model_free(BlazenEmbeddingModel *model);
-
-/**
- * Pops the [`BlazenModelResponse`] out of a future produced by
- * [`blazen_model_complete`].
- *
- * Returns `0` on success (writes the response into `*out` when non-null) or
- * `-1` on failure (writes a fresh `BlazenError*` into `*err` when non-null).
- * Both out-parameters may be null to discard the corresponding side.
- *
- * Calling this against a future produced by any other cabi entry point
- * (e.g. `blazen_embedding_model_embed`) yields a `BlazenError::Internal`
- * with a `type mismatch` message — see `BlazenFuture::take_typed`.
- *
- * # Safety
- *
- * `fut` must be null OR a pointer previously produced by
- * [`blazen_model_complete`] (and not yet freed, not concurrently
- * freed from another thread). `out` and `err` must each be null OR point to
- * a writable slot of the matching pointer type.
- */
-
-int32_t blazen_future_take_model_response(BlazenFuture *fut,
-                                          BlazenModelResponse **out,
-                                          BlazenError **err);
-
-/**
- * Pops the [`BlazenEmbeddingResponse`] out of a future produced by
- * [`blazen_embedding_model_embed`].
- *
- * Returns `0` on success (writes the response into `*out` when non-null) or
- * `-1` on failure (writes a fresh `BlazenError*` into `*err` when non-null).
- *
- * # Safety
- *
- * `fut` must be null OR a pointer previously produced by
- * [`blazen_embedding_model_embed`] (and not yet freed). `out` and `err`
- * must each be null OR point to a writable slot of the matching pointer
- * type.
- */
-
-int32_t blazen_future_take_embedding_response(BlazenFuture *fut,
-                                              BlazenEmbeddingResponse **out,
-                                              BlazenError **err);
+ void blazen_llm_provider_free(BlazenLlmProvider *handle);
 
 /**
  * Construct an `OpenAI` provider. `model` / `base_url` may be null to defer
@@ -7989,6 +7864,164 @@ int32_t blazen_candle_provider_complete_blocking(const BlazenCandleLlmProvider *
  * [`blazen_candle_provider_new`].
  */
  void blazen_candle_provider_free(BlazenCandleLlmProvider *model);
+
+/**
+ * Returns a fresh [`BlazenLlmProvider`] cloned from this per-engine handle.
+ * Returns null on a null input. Caller frees with
+ * [`crate::llm_provider::blazen_llm_provider_free`].
+ *
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiProvider`.
+ */
+ BlazenLlmProvider *blazen_openai_provider_as_llm_provider(const BlazenOpenAiProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenAnthropicProvider`.
+ */
+
+BlazenLlmProvider *blazen_anthropic_provider_as_llm_provider(const BlazenAnthropicProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenGeminiProvider`.
+ */
+ BlazenLlmProvider *blazen_gemini_provider_as_llm_provider(const BlazenGeminiProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenAzureOpenAiProvider`.
+ */
+
+BlazenLlmProvider *blazen_azure_openai_provider_as_llm_provider(const BlazenAzureOpenAiProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenBedrockProvider`.
+ */
+ BlazenLlmProvider *blazen_bedrock_provider_as_llm_provider(const BlazenBedrockProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenMistralProvider`.
+ */
+ BlazenLlmProvider *blazen_mistral_provider_as_llm_provider(const BlazenMistralProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenFireworksProvider`.
+ */
+
+BlazenLlmProvider *blazen_fireworks_provider_as_llm_provider(const BlazenFireworksProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenDeepSeekProvider`.
+ */
+ BlazenLlmProvider *blazen_deepseek_provider_as_llm_provider(const BlazenDeepSeekProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenPerplexityProvider`.
+ */
+
+BlazenLlmProvider *blazen_perplexity_provider_as_llm_provider(const BlazenPerplexityProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenTogetherProvider`.
+ */
+ BlazenLlmProvider *blazen_together_provider_as_llm_provider(const BlazenTogetherProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenGroqProvider`.
+ */
+ BlazenLlmProvider *blazen_groq_provider_as_llm_provider(const BlazenGroqProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenRouterProvider`.
+ */
+
+BlazenLlmProvider *blazen_openrouter_provider_as_llm_provider(const BlazenOpenRouterProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCohereProvider`.
+ */
+ BlazenLlmProvider *blazen_cohere_provider_as_llm_provider(const BlazenCohereProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenXaiProvider`.
+ */
+ BlazenLlmProvider *blazen_xai_provider_as_llm_provider(const BlazenXaiProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenFalLlmProvider`.
+ */
+ BlazenLlmProvider *blazen_fal_llm_provider_as_llm_provider(const BlazenFalLlmProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOpenAiCompatProvider`.
+ */
+
+BlazenLlmProvider *blazen_openai_compat_provider_as_llm_provider(const BlazenOpenAiCompatProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenOllamaProvider`.
+ */
+ BlazenLlmProvider *blazen_ollama_provider_as_llm_provider(const BlazenOllamaProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenLmStudioProvider`.
+ */
+ BlazenLlmProvider *blazen_lm_studio_provider_as_llm_provider(const BlazenLmStudioProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenMistralRsProvider`.
+ */
+
+BlazenLlmProvider *blazen_mistralrs_provider_as_llm_provider(const BlazenMistralRsProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenLlamaCppProvider`.
+ */
+ BlazenLlmProvider *blazen_llamacpp_provider_as_llm_provider(const BlazenLlamaCppProvider *handle);
+
+/**
+ * # Safety
+ *
+ * `handle` must be null OR a live `BlazenCandleLlmProvider`.
+ */
+ BlazenLlmProvider *blazen_candle_provider_as_llm_provider(const BlazenCandleLlmProvider *handle);
 
 /**
  * Constructs a new `Media` handle from the three required string fields.
@@ -12996,533 +13029,6 @@ bool blazen_background_removal_provider_defaults_has_before(const BlazenBackgrou
 void blazen_background_removal_provider_defaults_free(BlazenBackgroundRemovalProviderDefaults *handle);
 
 /**
- * Constructs an `OpenAI` chat-completion model.
- *
- * `api_key` is required (NUL-terminated UTF-8). `model` and `base_url` are
- * optional — pass null to use the upstream default.
- *
- * On success returns `0` and writes a caller-owned `*mut BlazenModel`
- * into `*out_model`. On error returns `-1` and writes a `*mut BlazenError`
- * into `*out_err`. Either out-parameter may be null to discard.
- *
- * # Safety
- *
- * `api_key` must be a valid NUL-terminated UTF-8 buffer. `model` and
- * `base_url` must each be null OR a valid NUL-terminated UTF-8 buffer.
- * `out_model` / `out_err` must each be null OR a valid destination for one
- * pointer write.
- */
-
-int32_t blazen_model_new_openai(const char *api_key,
-                                const char *model,
-                                const char *base_url,
-                                BlazenModel **out_model,
-                                BlazenError **out_err);
-
-/**
- * Constructs an Anthropic Messages-API chat-completion model.
- *
- * See [`blazen_model_new_openai`] for the argument and ownership
- * conventions — identical shape.
- *
- * # Safety
- *
- * Same contracts as [`blazen_model_new_openai`].
- */
-
-int32_t blazen_model_new_anthropic(const char *api_key,
-                                   const char *model,
-                                   const char *base_url,
-                                   BlazenModel **out_model,
-                                   BlazenError **out_err);
-
-/**
- * Constructs a Google Gemini chat-completion model.
- *
- * # Safety
- *
- * Same contracts as [`blazen_model_new_openai`].
- */
-
-int32_t blazen_model_new_gemini(const char *api_key,
-                                const char *model,
-                                const char *base_url,
-                                BlazenModel **out_model,
-                                BlazenError **out_err);
-
-/**
- * Constructs an `OpenRouter` chat-completion model.
- *
- * # Safety
- *
- * Same contracts as [`blazen_model_new_openai`].
- */
-
-int32_t blazen_model_new_openrouter(const char *api_key,
-                                    const char *model,
-                                    const char *base_url,
-                                    BlazenModel **out_model,
-                                    BlazenError **out_err);
-
-/**
- * Constructs a Groq chat-completion model.
- *
- * # Safety
- *
- * Same contracts as [`blazen_model_new_openai`].
- */
-
-int32_t blazen_model_new_groq(const char *api_key,
-                              const char *model,
-                              const char *base_url,
-                              BlazenModel **out_model,
-                              BlazenError **out_err);
-
-/**
- * Constructs a Together AI chat-completion model.
- *
- * # Safety
- *
- * Same contracts as [`blazen_model_new_openai`].
- */
-
-int32_t blazen_model_new_together(const char *api_key,
-                                  const char *model,
-                                  const char *base_url,
-                                  BlazenModel **out_model,
-                                  BlazenError **out_err);
-
-/**
- * Constructs a Mistral chat-completion model.
- *
- * # Safety
- *
- * Same contracts as [`blazen_model_new_openai`].
- */
-
-int32_t blazen_model_new_mistral(const char *api_key,
-                                 const char *model,
-                                 const char *base_url,
-                                 BlazenModel **out_model,
-                                 BlazenError **out_err);
-
-/**
- * Constructs a `DeepSeek` chat-completion model.
- *
- * # Safety
- *
- * Same contracts as [`blazen_model_new_openai`].
- */
-
-int32_t blazen_model_new_deepseek(const char *api_key,
-                                  const char *model,
-                                  const char *base_url,
-                                  BlazenModel **out_model,
-                                  BlazenError **out_err);
-
-/**
- * Constructs a Fireworks AI chat-completion model.
- *
- * # Safety
- *
- * Same contracts as [`blazen_model_new_openai`].
- */
-
-int32_t blazen_model_new_fireworks(const char *api_key,
-                                   const char *model,
-                                   const char *base_url,
-                                   BlazenModel **out_model,
-                                   BlazenError **out_err);
-
-/**
- * Constructs a Perplexity chat-completion model.
- *
- * # Safety
- *
- * Same contracts as [`blazen_model_new_openai`].
- */
-
-int32_t blazen_model_new_perplexity(const char *api_key,
-                                    const char *model,
-                                    const char *base_url,
-                                    BlazenModel **out_model,
-                                    BlazenError **out_err);
-
-/**
- * Constructs an xAI (Grok) chat-completion model.
- *
- * # Safety
- *
- * Same contracts as [`blazen_model_new_openai`].
- */
-
-int32_t blazen_model_new_xai(const char *api_key,
-                             const char *model,
-                             const char *base_url,
-                             BlazenModel **out_model,
-                             BlazenError **out_err);
-
-/**
- * Constructs a Cohere chat-completion model.
- *
- * # Safety
- *
- * Same contracts as [`blazen_model_new_openai`].
- */
-
-int32_t blazen_model_new_cohere(const char *api_key,
-                                const char *model,
-                                const char *base_url,
-                                BlazenModel **out_model,
-                                BlazenError **out_err);
-
-/**
- * Constructs an Azure `OpenAI` chat-completion model.
- *
- * Azure derives its endpoint from `resource_name` + `deployment_name` and its
- * model id from `deployment_name`, so there's no `model` / `base_url` knob.
- * `api_version` is optional — pass null to use the provider's pinned API
- * version.
- *
- * # Safety
- *
- * `api_key`, `resource_name`, and `deployment_name` must each be a valid
- * NUL-terminated UTF-8 buffer. `api_version` must be null OR a valid
- * NUL-terminated UTF-8 buffer. `out_model` / `out_err` must each be null OR
- * a valid destination for one pointer write.
- */
-
-int32_t blazen_model_new_azure(const char *api_key,
-                               const char *resource_name,
-                               const char *deployment_name,
-                               const char *api_version,
-                               BlazenModel **out_model,
-                               BlazenError **out_err);
-
-/**
- * Constructs an AWS Bedrock chat-completion model.
- *
- * `region` is the AWS region (e.g. `"us-east-1"`); `api_key` is the Bedrock
- * API key (pass an empty string to resolve from `AWS_BEARER_TOKEN_BEDROCK`).
- *
- * # Safety
- *
- * `api_key` and `region` must each be a valid NUL-terminated UTF-8 buffer.
- * `model` and `base_url` must each be null OR a valid NUL-terminated UTF-8
- * buffer. `out_model` / `out_err` must each be null OR a valid destination
- * for one pointer write.
- */
-
-int32_t blazen_model_new_bedrock(const char *api_key,
-                                 const char *region,
-                                 const char *model,
-                                 const char *base_url,
-                                 BlazenModel **out_model,
-                                 BlazenError **out_err);
-
-/**
- * Constructs a fal.ai chat-completion model.
- *
- * `endpoint` selects the fal endpoint family — one of `"openai_chat"`
- * (default when null), `"openai_responses"`, `"openai_embeddings"`,
- * `"openrouter"`, `"any_llm"`. Unrecognised values fall back to
- * `OpenAiChat`. `enterprise` promotes the endpoint to its enterprise
- * variant; `auto_route_modality` toggles automatic routing to a
- * vision/audio/video endpoint when the request carries media.
- *
- * # Safety
- *
- * `api_key` must be a valid NUL-terminated UTF-8 buffer. `model`,
- * `endpoint`, and `base_url` must each be null OR a valid NUL-terminated
- * UTF-8 buffer. `out_model` / `out_err` must each be null OR a valid
- * destination for one pointer write.
- */
-
-int32_t blazen_model_new_fal(const char *api_key,
-                             const char *model,
-                             const char *endpoint,
-                             bool enterprise,
-                             bool auto_route_modality,
-                             const char *base_url,
-                             BlazenModel **out_model,
-                             BlazenError **out_err);
-
-/**
- * Constructs a generic OpenAI-compatible chat-completion model.
- *
- * Targets any service that speaks the official `OpenAI` Chat Completions wire
- * format (vLLM, llama-server, LM Studio, local proxies, ...). All four
- * string arguments are REQUIRED.
- *
- * # Safety
- *
- * `provider_name`, `base_url`, `api_key`, and `model` must each be a valid
- * NUL-terminated UTF-8 buffer. `out_model` / `out_err` must each be null OR
- * a valid destination for one pointer write.
- */
-
-int32_t blazen_model_new_openai_compat(const char *provider_name,
-                                       const char *base_url,
-                                       const char *api_key,
-                                       const char *model,
-                                       BlazenModel **out_model,
-                                       BlazenError **out_err);
-
-/**
- * Constructs a `Model` for an Ollama server.
- *
- * Convenience wrapper around the OpenAI-compatible factory with
- * `base_url = format!("http://{host}:{port}/v1")` and no API key.
- *
- * On success returns `0` and writes a caller-owned `*mut BlazenModel`
- * into `*out_model`. On error returns `-1` and writes a `*mut BlazenError`
- * into `*out_err`. Either out-parameter may be null to discard.
- *
- * # Safety
- *
- * `host` and `model` must each be a valid NUL-terminated UTF-8 buffer.
- * `out_model` / `out_err` must each be null OR a valid destination for one
- * pointer write.
- */
-
-int32_t blazen_model_new_ollama(const char *host,
-                                uint16_t port,
-                                const char *model,
-                                BlazenModel **out_model,
-                                BlazenError **out_err);
-
-/**
- * Constructs a `Model` for an LM Studio server.
- *
- * See [`blazen_model_new_ollama`] for argument and ownership
- * conventions — identical shape.
- *
- * # Safety
- *
- * Same contracts as [`blazen_model_new_ollama`].
- */
-
-int32_t blazen_model_new_lm_studio(const char *host,
-                                   uint16_t port,
-                                   const char *model,
-                                   BlazenModel **out_model,
-                                   BlazenError **out_err);
-
-/**
- * Constructs a `Model` wrapping an arbitrary OpenAI-compatible
- * server via the universal `CustomProvider`.
- *
- * Pass `api_key = null` if the server does not require authentication
- * (typical for local LLM servers).
- *
- * # Safety
- *
- * `provider_id`, `base_url`, and `model` must each be a valid
- * NUL-terminated UTF-8 buffer. `api_key` must be null OR a valid
- * NUL-terminated UTF-8 buffer. `out_model` / `out_err` must each be null
- * OR a valid destination for one pointer write.
- */
-
-int32_t blazen_model_new_custom_with_openai_protocol(const char *provider_id,
-                                                     const char *base_url,
-                                                     const char *model,
-                                                     const char *api_key,
-                                                     BlazenModel **out_model,
-                                                     BlazenError **out_err);
-
-/**
- * Constructs a local mistral.rs chat-completion model.
- *
- * `model_id` is the `HuggingFace` repo id (e.g.
- * `"mistralai/Mistral-7B-Instruct-v0.3"`) or a local GGUF path. `device` and
- * `quantization` follow Blazen's parser format (`"cpu"`, `"cuda:0"`,
- * `"metal"`, `"q4_k_m"`, ...). `context_length` of `-1` means "use the
- * model's default"; non-negative values pass through. Set `vision = true`
- * for multimodal models like `LLaVA` / Qwen2-VL.
- *
- * Feature-gated on `mistralrs`.
- *
- * # Safety
- *
- * `model_id` must be a valid NUL-terminated UTF-8 buffer. `device` and
- * `quantization` must each be null OR a valid NUL-terminated UTF-8 buffer.
- * `out_model` / `out_err` must each be null OR a valid destination for one
- * pointer write.
- */
-
-int32_t blazen_model_new_mistralrs(const char *model_id,
-                                   const char *device,
-                                   const char *quantization,
-                                   int32_t context_length,
-                                   bool vision,
-                                   BlazenModel **out_model,
-                                   BlazenError **out_err);
-
-/**
- * Constructs a local llama.cpp chat-completion model.
- *
- * `model_path` is either a local GGUF file path or a `HuggingFace` repo id;
- * `n_gpu_layers` offloads the given number of layers to the GPU when the
- * device supports it. Both `context_length` and `n_gpu_layers` use `-1` to
- * mean "not set" (i.e. use the upstream default); non-negative values pass
- * through as `Some(value as u32)`.
- *
- * Feature-gated on `llamacpp`.
- *
- * # Safety
- *
- * `model_path` must be a valid NUL-terminated UTF-8 buffer. `device` and
- * `quantization` must each be null OR a valid NUL-terminated UTF-8 buffer.
- * `out_model` / `out_err` must each be null OR a valid destination for one
- * pointer write.
- */
-
-int32_t blazen_model_new_llamacpp(const char *model_path,
-                                  const char *device,
-                                  const char *quantization,
-                                  int32_t context_length,
-                                  int32_t n_gpu_layers,
-                                  BlazenModel **out_model,
-                                  BlazenError **out_err);
-
-/**
- * Constructs a local candle chat-completion model.
- *
- * Wraps `CandleLlmProvider` through the `CandleLlmModel` trait
- * bridge so it satisfies the same `Model` trait as remote
- * providers. `context_length` of `-1` means "use the model's default".
- *
- * Feature-gated on `candle-llm`.
- *
- * # Safety
- *
- * `model_id` must be a valid NUL-terminated UTF-8 buffer. `device`,
- * `quantization`, and `revision` must each be null OR a valid
- * NUL-terminated UTF-8 buffer. `out_model` / `out_err` must each be null OR
- * a valid destination for one pointer write.
- */
-
-int32_t blazen_model_new_candle(const char *model_id,
-                                const char *device,
-                                const char *quantization,
-                                const char *revision,
-                                int32_t context_length,
-                                BlazenModel **out_model,
-                                BlazenError **out_err);
-
-/**
- * Constructs an `OpenAI` embedding model.
- *
- * Defaults to `text-embedding-3-small` (1536 dimensions) when `model` is
- * null. `base_url` overrides the `OpenAI` base URL — pass null to use the
- * default.
- *
- * # Safety
- *
- * `api_key` must be a valid NUL-terminated UTF-8 buffer. `model` and
- * `base_url` must each be null OR a valid NUL-terminated UTF-8 buffer.
- * `out_model` / `out_err` must each be null OR a valid destination for one
- * pointer write.
- */
-
-int32_t blazen_embedding_model_new_openai(const char *api_key,
-                                          const char *model,
-                                          const char *base_url,
-                                          BlazenEmbeddingModel **out_model,
-                                          BlazenError **out_err);
-
-/**
- * Constructs a fal.ai embedding model.
- *
- * Routes through fal's OpenAI-compatible embeddings endpoint. `model`
- * defaults to `"openai/text-embedding-3-small"` (1536 dims) when null;
- * `dimensions` of `-1` keeps the model's default vector size, non-negative
- * values override it to the supplied dimensionality (must match an
- * upstream-supported size).
- *
- * # Safety
- *
- * `api_key` must be a valid NUL-terminated UTF-8 buffer. `model` must be
- * null OR a valid NUL-terminated UTF-8 buffer. `out_model` / `out_err` must
- * each be null OR a valid destination for one pointer write.
- */
-
-int32_t blazen_embedding_model_new_fal(const char *api_key,
-                                       const char *model,
-                                       int32_t dimensions,
-                                       BlazenEmbeddingModel **out_model,
-                                       BlazenError **out_err);
-
-/**
- * Constructs a local fastembed (ONNX Runtime) embedding model.
- *
- * `model_name` selects a variant from fastembed's catalog (case-insensitive
- * debug spelling: `"BGESmallENV15"`, `"AllMiniLML6V2"`, ...); when null,
- * defaults to `BGESmallENV15`. `max_batch_size` of `-1` keeps the upstream
- * default. `show_download_progress` is always applied (`UniFFI`'s
- * `Option<bool>` collapses to a plain bool here).
- *
- * Feature-gated on `embed`.
- *
- * # Safety
- *
- * `model_name` must be null OR a valid NUL-terminated UTF-8 buffer.
- * `out_model` / `out_err` must each be null OR a valid destination for one
- * pointer write.
- */
-
-int32_t blazen_embedding_model_new_fastembed(const char *model_name,
-                                             int32_t max_batch_size,
-                                             bool show_download_progress,
-                                             BlazenEmbeddingModel **out_model,
-                                             BlazenError **out_err);
-
-/**
- * Constructs a local candle text-embedding model.
- *
- * Loads weights from `HuggingFace` and runs inference on-device. Defaults
- * to `"sentence-transformers/all-MiniLM-L6-v2"` when `model_id` is null.
- *
- * Feature-gated on `candle-embed`.
- *
- * # Safety
- *
- * `model_id`, `device`, and `revision` must each be null OR a valid
- * NUL-terminated UTF-8 buffer. `out_model` / `out_err` must each be null OR
- * a valid destination for one pointer write.
- */
-
-int32_t blazen_embedding_model_new_candle(const char *model_id,
-                                          const char *device,
-                                          const char *revision,
-                                          BlazenEmbeddingModel **out_model,
-                                          BlazenError **out_err);
-
-/**
- * Constructs a local tract (pure-Rust ONNX) embedding model.
- *
- * Drop-in replacement for [`blazen_embedding_model_new_fastembed`] for
- * targets where the prebuilt ONNX Runtime binaries can't link (musl-libc,
- * some sandboxed environments). Loads the same fastembed model catalog via
- * `tract_onnx`. `model_name` of null defaults to `BGESmallENV15`;
- * `max_batch_size` of `-1` keeps the upstream default.
- *
- * Feature-gated on `tract`.
- *
- * # Safety
- *
- * `model_name` must be null OR a valid NUL-terminated UTF-8 buffer.
- * `out_model` / `out_err` must each be null OR a valid destination for one
- * pointer write.
- */
-
-int32_t blazen_embedding_model_new_tract(const char *model_name,
-                                         int32_t max_batch_size,
-                                         bool show_download_progress,
-                                         BlazenEmbeddingModel **out_model,
-                                         BlazenError **out_err);
-
-/**
  * Registers a step on a workflow builder. The vtable is consumed (its
  * `user_data` becomes owned by the workflow until the workflow drops).
  *
@@ -13559,76 +13065,6 @@ int32_t blazen_workflow_builder_add_step(BlazenWorkflowBuilder *builder,
                                          uintptr_t emits_count,
                                          BlazenStepHandlerVTable vtable,
                                          BlazenError **out_err);
-
-/**
- * Synchronously drives a streaming chat completion, dispatching chunks to
- * the supplied sink. Blocks the calling thread on the cabi tokio runtime.
- *
- * On success returns `0` (the sink's `on_done` has fired). On a stream-start
- * failure returns `-1` and writes a fresh `*mut BlazenError` into `*out_err`;
- * sink-side failures during the stream are delivered through `on_error`
- * rather than this return path — see the upstream
- * [`blazen_uniffi::streaming::complete_streaming`] for the full contract.
- *
- * ## Ownership transfer
- *
- * - `model` is BORROWED — the underlying `Arc<Model>` is cloned
- *   into the streaming call. Caller retains its handle.
- * - `request` is CONSUMED — internally we `Box::from_raw` it and move the
- *   inner record out. Callers must NOT call `blazen_model_request_free`
- *   on the same pointer afterwards (double-free).
- * - `sink` (the vtable) is CONSUMED — ownership of `user_data` transfers to
- *   the wrapping `CStreamSink`, which releases it via `drop_user_data` on
- *   drop. On every early-return failure path that aborts BEFORE constructing
- *   `CStreamSink`, this function explicitly invokes
- *   `(sink.drop_user_data)(sink.user_data)` to honour the same contract.
- *
- * # Safety
- *
- * `model` must be null OR a live `BlazenModel` produced by the
- * cabi surface. `request` must be null OR a live `BlazenModelRequest`
- * produced by the cabi surface; ownership transfers to this function.
- * `sink.user_data` and the four `sink` function pointers must satisfy the
- * contracts documented on [`BlazenCompletionStreamSinkVTable`]. `out_err`
- * must be null OR a writable slot for a single `*mut BlazenError` write.
- */
-
-int32_t blazen_complete_streaming_blocking(const BlazenModel *model,
-                                           BlazenModelRequest *request,
-                                           BlazenCompletionStreamSinkVTable sink,
-                                           BlazenError **out_err);
-
-/**
- * Asynchronously drives a streaming chat completion onto the cabi tokio
- * runtime, returning an opaque future handle. The caller observes
- * completion via the future's fd / [`crate::future::blazen_future_poll`] /
- * [`crate::future::blazen_future_wait`], then calls
- * [`crate::persist::blazen_future_take_unit`] to pop the result. Free the
- * future with [`crate::future::blazen_future_free`].
- *
- * Returns null if `model` is null or `request` is null. On those error
- * paths the `request` (if non-null) is still consumed and freed, and the
- * `sink.drop_user_data` thunk is still invoked, so no resources leak.
- *
- * ## Ownership transfer
- *
- * Same as [`blazen_complete_streaming_blocking`]: `model` is BORROWED,
- * `request` is CONSUMED, `sink` is CONSUMED. Every code path — success or
- * early-return failure — guarantees `request` is dropped and
- * `sink.drop_user_data` is invoked exactly once.
- *
- * # Safety
- *
- * `model` must be null OR a live `BlazenModel`. `request` must be
- * null OR a live `BlazenModelRequest`; ownership transfers to this
- * function regardless of whether the call returns null. `sink` satisfies
- * the [`BlazenCompletionStreamSinkVTable`] contract; its `user_data` is
- * consumed.
- */
-
-BlazenFuture *blazen_complete_streaming(const BlazenModel *model,
-                                        BlazenModelRequest *request,
-                                        BlazenCompletionStreamSinkVTable sink);
 
 /**
  * Synchronously drive a streaming chat completion through the
@@ -15598,8 +15034,9 @@ int32_t blazen_future_take_compat3d_result(BlazenFuture *fut,
  *
  * # Safety
  *
- * `model` must be null OR a live `BlazenModel` produced by the
- * cabi surface. `system_prompt` must be null OR a NUL-terminated UTF-8
+ * `provider` must be null OR a live `BlazenLlmProvider` produced by the
+ * cabi surface (typically via a `blazen_<engine>_provider_as_llm_provider`
+ * conversion fn). `system_prompt` must be null OR a NUL-terminated UTF-8
  * buffer valid for the duration of this call. When `tools_count > 0`,
  * `tools` must point to an array of exactly `tools_count` valid
  * `*mut BlazenTool` entries, each produced by the cabi surface; ownership
@@ -15610,7 +15047,7 @@ int32_t blazen_future_take_compat3d_result(BlazenFuture *fut,
  * OR a writable slot for a single `*mut` write.
  */
 
-int32_t blazen_agent_new(const BlazenModel *model,
+int32_t blazen_agent_new(const BlazenLlmProvider *provider,
                          const char *system_prompt,
                          BlazenTool *const *tools,
                          uintptr_t tools_count,

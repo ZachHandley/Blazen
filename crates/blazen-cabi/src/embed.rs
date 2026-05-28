@@ -1067,3 +1067,101 @@ pub unsafe extern "C" fn blazen_fal_embedding_provider_free(
     // SAFETY: caller upholds the `Box::into_raw` provenance contract.
     drop(unsafe { Box::from_raw(model) });
 }
+
+// ===========================================================================
+// Polymorphic `as_embedding_provider` conversions
+// ===========================================================================
+//
+// One C function per engine that clones the inner per-engine
+// `Arc<...Provider>`, coerces it to
+// `Arc<dyn blazen_uniffi::concrete::bases::EmbeddingProvider>`, and boxes the
+// result into a [`crate::embedding_provider::BlazenEmbeddingProvider`] handle.
+// Used by callers that need to pass a polymorphic embedding provider into a
+// surface that takes the trait object.
+//
+// The original per-engine handle is BORROWED and remains valid after the
+// conversion — both handles clean up independently.
+
+use crate::embedding_provider::BlazenEmbeddingProvider;
+
+/// Returns a fresh [`BlazenEmbeddingProvider`] cloned from this per-engine
+/// handle. Returns null on a null input. Caller frees with
+/// [`crate::embedding_provider::blazen_embedding_provider_free`].
+///
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenFastembedProvider`.
+#[cfg(feature = "fastembed")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_fastembed_provider_as_embedding_provider(
+    handle: *const BlazenFastembedProvider,
+) -> *mut BlazenEmbeddingProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenEmbeddingProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenTractEmbedProvider`.
+#[cfg(feature = "tract")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_tract_embed_provider_as_embedding_provider(
+    handle: *const BlazenTractEmbedProvider,
+) -> *mut BlazenEmbeddingProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenEmbeddingProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenCandleEmbedProvider`.
+#[cfg(feature = "candle-embed")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_candle_embed_provider_as_embedding_provider(
+    handle: *const BlazenCandleEmbedProvider,
+) -> *mut BlazenEmbeddingProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenEmbeddingProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenOpenAiEmbeddingProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_openai_embedding_provider_as_embedding_provider(
+    handle: *const BlazenOpenAiEmbeddingProvider,
+) -> *mut BlazenEmbeddingProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenEmbeddingProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenFalEmbeddingProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_fal_embedding_provider_as_embedding_provider(
+    handle: *const BlazenFalEmbeddingProvider,
+) -> *mut BlazenEmbeddingProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenEmbeddingProvider(h.0.clone()).into_ptr()
+}

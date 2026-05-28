@@ -3498,3 +3498,340 @@ pub unsafe extern "C" fn blazen_candle_provider_free(model: *mut BlazenCandleLlm
     // SAFETY: caller upholds the `Box::into_raw` provenance contract.
     drop(unsafe { Box::from_raw(model) });
 }
+
+// ===========================================================================
+// Polymorphic `as_llm_provider` conversions
+// ===========================================================================
+//
+// One C function per engine that clones the inner per-engine `Arc<...Provider>`,
+// coerces it to `Arc<dyn blazen_uniffi::concrete::bases::LlmProvider>`, and
+// boxes the result into a [`BlazenLlmProvider`] handle. Used by callers that
+// need to pass a polymorphic provider into a surface like
+// [`crate::tool_handler::blazen_agent_new`] or [`crate::batch`].
+//
+// The original per-engine handle is BORROWED and remains valid after the
+// conversion — both handles clean up independently.
+
+use crate::llm_provider::BlazenLlmProvider;
+
+/// Returns a fresh [`BlazenLlmProvider`] cloned from this per-engine handle.
+/// Returns null on a null input. Caller frees with
+/// [`crate::llm_provider::blazen_llm_provider_free`].
+///
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenOpenAiProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_openai_provider_as_llm_provider(
+    handle: *const BlazenOpenAiProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenAnthropicProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_anthropic_provider_as_llm_provider(
+    handle: *const BlazenAnthropicProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenGeminiProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_gemini_provider_as_llm_provider(
+    handle: *const BlazenGeminiProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenAzureOpenAiProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_azure_openai_provider_as_llm_provider(
+    handle: *const BlazenAzureOpenAiProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenBedrockProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_bedrock_provider_as_llm_provider(
+    handle: *const BlazenBedrockProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenMistralProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_mistral_provider_as_llm_provider(
+    handle: *const BlazenMistralProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenFireworksProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_fireworks_provider_as_llm_provider(
+    handle: *const BlazenFireworksProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenDeepSeekProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_deepseek_provider_as_llm_provider(
+    handle: *const BlazenDeepSeekProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenPerplexityProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_perplexity_provider_as_llm_provider(
+    handle: *const BlazenPerplexityProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenTogetherProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_together_provider_as_llm_provider(
+    handle: *const BlazenTogetherProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenGroqProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_groq_provider_as_llm_provider(
+    handle: *const BlazenGroqProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenOpenRouterProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_openrouter_provider_as_llm_provider(
+    handle: *const BlazenOpenRouterProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenCohereProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_cohere_provider_as_llm_provider(
+    handle: *const BlazenCohereProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenXaiProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_xai_provider_as_llm_provider(
+    handle: *const BlazenXaiProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenFalLlmProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_fal_llm_provider_as_llm_provider(
+    handle: *const BlazenFalLlmProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenOpenAiCompatProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_openai_compat_provider_as_llm_provider(
+    handle: *const BlazenOpenAiCompatProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenOllamaProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_ollama_provider_as_llm_provider(
+    handle: *const BlazenOllamaProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenLmStudioProvider`.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_lm_studio_provider_as_llm_provider(
+    handle: *const BlazenLmStudioProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenMistralRsProvider`.
+#[cfg(feature = "mistralrs")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_mistralrs_provider_as_llm_provider(
+    handle: *const BlazenMistralRsProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenLlamaCppProvider`.
+#[cfg(feature = "llamacpp")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_llamacpp_provider_as_llm_provider(
+    handle: *const BlazenLlamaCppProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}
+
+/// # Safety
+///
+/// `handle` must be null OR a live `BlazenCandleLlmProvider`.
+#[cfg(feature = "candle-llm")]
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_candle_provider_as_llm_provider(
+    handle: *const BlazenCandleLlmProvider,
+) -> *mut BlazenLlmProvider {
+    if handle.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `handle` is a live handle.
+    let h = unsafe { &*handle };
+    BlazenLlmProvider(h.0.clone()).into_ptr()
+}

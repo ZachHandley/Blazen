@@ -1,7 +1,10 @@
-//! LLM completion + embedding surface for the UniFFI bindings.
+//! LLM completion + embedding wire format for the UniFFI bindings.
 //!
-//! Mirrors `blazen-py`'s `Model` / `EmbeddingModel` shape, but using
-//! UniFFI's value-record + opaque-object idiom instead of PyO3 classes.
+//! Wave D deleted the central `Model` / `EmbeddingModel` opaques — per-engine
+//! concrete provider classes in [`crate::concrete::llm`] (`OpenAiProvider`,
+//! `AnthropicProvider`, …) are the surviving dispatch surface. This module
+//! now exposes only the value-record wire types and their conversions to
+//! the upstream `blazen_llm` domain types.
 //!
 //! ## Wire-format shape
 //!
@@ -24,16 +27,6 @@
 //!   values widen losslessly.
 //! - [`EmbeddingResponse::embeddings`] — `Vec<Vec<f64>>`. UniFFI doesn't
 //!   expose `f32` cleanly; upstream `f32` vectors widen losslessly.
-//!
-//! ## Provider construction
-//!
-//! [`Model`] and [`EmbeddingModel`] are *opaque* — there are no
-//! foreign-side constructors here. Per-provider factories live in
-//! `providers.rs`. This module only handles the dispatch surface (i.e.
-//! "given an Arc<dyn Model>, here is how `complete` / `embed`
-//! cross the FFI").
-
-use std::sync::Arc;
 
 use blazen_llm::types::{
     AudioContent as CoreAudioContent, ChatMessage as CoreChatMessage,
@@ -43,13 +36,9 @@ use blazen_llm::types::{
     ToolCall as CoreToolCall, ToolDefinition as CoreToolDefinition,
     VideoContent as CoreVideoContent,
 };
-use blazen_llm::{
-    EmbeddingModel as CoreEmbeddingModel, Model as CoreModel, ModelRequest as CoreModelRequest,
-    ModelResponse as CoreModelResponse,
-};
+use blazen_llm::{ModelRequest as CoreModelRequest, ModelResponse as CoreModelResponse};
 
-use crate::errors::{BlazenError, BlazenResult};
-use crate::runtime::runtime;
+use crate::errors::BlazenError;
 
 // ---------------------------------------------------------------------------
 // Wire-format records
@@ -520,142 +509,5 @@ impl From<CoreEmbeddingResponse> for EmbeddingResponse {
             model: resp.model,
             usage: resp.usage.map(TokenUsage::from).unwrap_or_default(),
         }
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Opaque model handles
-// ---------------------------------------------------------------------------
-
-/// A chat completion model.
-///
-/// Construct one via the per-provider factories in `providers.rs` (e.g.
-/// `Model::openai(options)` from the foreign-language side).
-/// Once obtained, call [`complete`](Self::complete) (async) or
-/// [`complete_blocking`](Self::complete_blocking) (sync) to generate
-/// responses.
-#[derive(uniffi::Object)]
-pub struct Model {
-    pub(crate) inner: Arc<dyn CoreModel>,
-}
-
-impl Model {
-    /// Wrap a `blazen_llm` completion model in the FFI handle.
-    ///
-    /// Used by `providers.rs` factories; not exposed across the FFI.
-    pub(crate) fn from_arc(inner: Arc<dyn CoreModel>) -> Arc<Self> {
-        Arc::new(Self { inner })
-    }
-}
-
-#[uniffi::export(async_runtime = "tokio")]
-impl Model {
-    /// Perform a chat completion. Async on Swift / Kotlin; blocking on Go
-    /// (UniFFI's Go bindgen wraps the future in a goroutine-friendly call).
-    pub async fn complete(self: Arc<Self>, request: ModelRequest) -> BlazenResult<ModelResponse> {
-        let core_request = CoreModelRequest::try_from(request)?;
-        let response = self
-            .inner
-            .complete(core_request)
-            .await
-            .map_err(BlazenError::from)?;
-        Ok(ModelResponse::from(response))
-    }
-
-    /// The model's identifier (e.g. `"gpt-4o"`, `"claude-3-5-sonnet"`).
-    #[must_use]
-    pub fn model_id(self: Arc<Self>) -> String {
-        self.inner.model_id().to_owned()
-    }
-}
-
-#[uniffi::export]
-impl Model {
-    /// Synchronous variant of [`complete`](Self::complete) — blocks the
-    /// current thread on the shared Tokio runtime. Handy for Ruby scripts
-    /// and quick Go `main` functions where async machinery is overkill.
-    /// Prefer the async [`complete`](Self::complete) in long-running services.
-    pub fn complete_blocking(
-        self: Arc<Self>,
-        request: ModelRequest,
-    ) -> BlazenResult<ModelResponse> {
-        let this = Arc::clone(&self);
-        runtime().block_on(async move { this.complete(request).await })
-    }
-}
-
-// Bridge impls so `Arc<Model>` coerces to `Arc<dyn LlmProvider>` during the
-// Wave B Agent/Batch refactor. `Model` itself is slated for deletion in Wave
-// D once cabi migrates to the per-engine provider classes directly; until
-// then these two impls keep the cabi call sites compiling unchanged.
-#[async_trait::async_trait]
-impl crate::concrete::bases::BaseProvider for Model {
-    fn provider_id(&self) -> String {
-        self.inner.model_id().to_string()
-    }
-    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
-        crate::concrete::bases::CapabilityKind::Llm
-    }
-}
-
-#[async_trait::async_trait]
-impl crate::concrete::bases::LlmProvider for Model {
-    fn provider_id(&self) -> String {
-        self.inner.model_id().to_string()
-    }
-    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
-        crate::concrete::bases::CapabilityKind::Llm
-    }
-
-    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
-        let core_req: CoreModelRequest = request.try_into()?;
-        let core_res = self.inner.complete(core_req).await?;
-        Ok(core_res.into())
-    }
-}
-
-/// An embedding model that produces vector embeddings for text inputs.
-///
-/// Construct one via the per-provider factories in `providers.rs`.
-#[derive(uniffi::Object)]
-pub struct EmbeddingModel {
-    pub(crate) inner: Arc<dyn CoreEmbeddingModel>,
-}
-
-impl EmbeddingModel {
-    pub(crate) fn from_arc(inner: Arc<dyn CoreEmbeddingModel>) -> Arc<Self> {
-        Arc::new(Self { inner })
-    }
-}
-
-#[uniffi::export(async_runtime = "tokio")]
-impl EmbeddingModel {
-    /// Embed one or more text strings, returning one vector per input.
-    pub async fn embed(self: Arc<Self>, inputs: Vec<String>) -> BlazenResult<EmbeddingResponse> {
-        let response = self.inner.embed(&inputs).await.map_err(BlazenError::from)?;
-        Ok(EmbeddingResponse::from(response))
-    }
-
-    /// The model's identifier (e.g. `"text-embedding-3-small"`).
-    #[must_use]
-    pub fn model_id(self: Arc<Self>) -> String {
-        self.inner.model_id().to_owned()
-    }
-
-    /// The dimensionality of vectors produced by this model.
-    #[must_use]
-    pub fn dimensions(self: Arc<Self>) -> u32 {
-        // `usize` doesn't cross FFI cleanly; widen to u32 (no embedding model
-        // produces vectors longer than 2^32 dimensions).
-        u32::try_from(self.inner.dimensions()).unwrap_or(u32::MAX)
-    }
-}
-
-#[uniffi::export]
-impl EmbeddingModel {
-    /// Synchronous variant of [`embed`](Self::embed).
-    pub fn embed_blocking(self: Arc<Self>, inputs: Vec<String>) -> BlazenResult<EmbeddingResponse> {
-        let this = Arc::clone(&self);
-        runtime().block_on(async move { this.embed(inputs).await })
     }
 }
