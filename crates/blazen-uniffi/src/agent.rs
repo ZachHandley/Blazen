@@ -32,10 +32,14 @@ use blazen_llm::types::{
     ToolOutput as CoreToolOutput,
 };
 
+use blazen_llm::traits::Model as CoreModel;
+
+use crate::concrete::bases::LlmProvider;
 use crate::errors::{
     BlazenError, BlazenError as UniffiBlazenError, BlazenResult, UniffiCallerErrorPayload,
 };
-use crate::llm::{Model, TokenUsage, Tool};
+use crate::llm::{TokenUsage, Tool};
+use crate::llm_adapter::UniffiLlmAdapter;
 use crate::runtime::runtime;
 
 // ---------------------------------------------------------------------------
@@ -223,7 +227,7 @@ impl CoreTool for ToolHandlerAdapter {
 /// underlying model handle is reference-counted, so cloning is cheap.
 #[derive(uniffi::Object)]
 pub struct Agent {
-    model: Arc<Model>,
+    core_model: Arc<dyn CoreModel>,
     system_prompt: Option<String>,
     tools: Vec<Tool>,
     handler: Arc<dyn ToolHandler>,
@@ -234,7 +238,9 @@ pub struct Agent {
 impl Agent {
     /// Build an agent.
     ///
-    /// - `model`: the completion model to drive.
+    /// - `provider`: the LLM provider to drive (any per-engine class like
+    ///   `OpenAiProvider`, `AnthropicProvider`, etc., or a custom `LlmProvider`
+    ///   impl).
     /// - `system_prompt`: optional system prompt prepended to the conversation
     ///   on every iteration.
     /// - `tools`: the tools the model may invoke. The names embedded in each
@@ -245,14 +251,15 @@ impl Agent {
     #[uniffi::constructor]
     #[must_use]
     pub fn new(
-        model: Arc<Model>,
+        provider: Arc<dyn LlmProvider>,
         system_prompt: Option<String>,
         tools: Vec<Tool>,
         tool_handler: Arc<dyn ToolHandler>,
         max_iterations: u32,
     ) -> Arc<Self> {
+        let core_model = UniffiLlmAdapter::into_core_model(provider);
         Arc::new(Self {
-            model,
+            core_model,
             system_prompt,
             tools,
             handler: tool_handler,
@@ -275,7 +282,7 @@ impl Agent {
             config = config.with_system_prompt(prompt.clone());
         }
         let messages = vec![CoreChatMessage::user(user_input)];
-        let result = core_run_agent(self.model.inner.as_ref(), messages, config)
+        let result = core_run_agent(self.core_model.as_ref(), messages, config)
             .await
             .map_err(BlazenError::from)?;
         Ok(agent_result_from_core(&result))

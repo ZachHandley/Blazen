@@ -438,6 +438,76 @@ impl From<CoreModelResponse> for ModelResponse {
     }
 }
 
+impl From<CoreModelRequest> for ModelRequest {
+    fn from(req: CoreModelRequest) -> Self {
+        // Preserve the message list verbatim — any leading system entry is just
+        // another `CoreChatMessage::system`, and the forward `TryFrom` re-prepends
+        // `system: Option<String>` on its own. Round-tripping the list keeps the
+        // adapter symmetric without splitting/joining the system slot.
+        let messages = req.messages.into_iter().map(ChatMessage::from).collect();
+        let tools = req.tools.into_iter().map(Tool::from).collect();
+        Self {
+            messages,
+            tools,
+            temperature: req.temperature.map(f64::from),
+            max_tokens: req.max_tokens,
+            top_p: req.top_p.map(f64::from),
+            model: req.model,
+            response_format_json: req.response_format.as_ref().map(ToString::to_string),
+            system: None,
+        }
+    }
+}
+
+impl TryFrom<ModelResponse> for CoreModelResponse {
+    type Error = BlazenError;
+    fn try_from(resp: ModelResponse) -> Result<Self, Self::Error> {
+        let tool_calls = resp
+            .tool_calls
+            .into_iter()
+            .map(CoreToolCall::try_from)
+            .collect::<Result<Vec<_>, _>>()?;
+        let content = if resp.content.is_empty() {
+            None
+        } else {
+            Some(resp.content)
+        };
+        let finish_reason = if resp.finish_reason.is_empty() {
+            None
+        } else {
+            Some(resp.finish_reason)
+        };
+        // u64 -> u32 narrowing: the wire format widened these for FFI uniformity.
+        // Saturate at u32::MAX on overflow rather than fail — token counts past
+        // 4 billion mean a misreporting provider, not data we want to error on.
+        let usage = Some(CoreTokenUsage {
+            prompt_tokens: u32::try_from(resp.usage.prompt_tokens).unwrap_or(u32::MAX),
+            completion_tokens: u32::try_from(resp.usage.completion_tokens).unwrap_or(u32::MAX),
+            total_tokens: u32::try_from(resp.usage.total_tokens).unwrap_or(u32::MAX),
+            reasoning_tokens: u32::try_from(resp.usage.reasoning_tokens).unwrap_or(u32::MAX),
+            cached_input_tokens: u32::try_from(resp.usage.cached_input_tokens).unwrap_or(u32::MAX),
+            audio_input_tokens: 0,
+            audio_output_tokens: 0,
+        });
+        Ok(Self {
+            content,
+            tool_calls,
+            reasoning: None,
+            citations: Vec::new(),
+            artifacts: Vec::new(),
+            usage,
+            model: resp.model,
+            finish_reason,
+            cost: None,
+            timing: None,
+            images: Vec::new(),
+            audio: Vec::new(),
+            videos: Vec::new(),
+            metadata: serde_json::Value::Null,
+        })
+    }
+}
+
 impl From<CoreEmbeddingResponse> for EmbeddingResponse {
     fn from(resp: CoreEmbeddingResponse) -> Self {
         let embeddings = resp
@@ -511,6 +581,36 @@ impl Model {
     ) -> BlazenResult<ModelResponse> {
         let this = Arc::clone(&self);
         runtime().block_on(async move { this.complete(request).await })
+    }
+}
+
+// Bridge impls so `Arc<Model>` coerces to `Arc<dyn LlmProvider>` during the
+// Wave B Agent/Batch refactor. `Model` itself is slated for deletion in Wave
+// D once cabi migrates to the per-engine provider classes directly; until
+// then these two impls keep the cabi call sites compiling unchanged.
+#[async_trait::async_trait]
+impl crate::concrete::bases::BaseProvider for Model {
+    fn provider_id(&self) -> String {
+        self.inner.model_id().to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Llm
+    }
+}
+
+#[async_trait::async_trait]
+impl crate::concrete::bases::LlmProvider for Model {
+    fn provider_id(&self) -> String {
+        self.inner.model_id().to_string()
+    }
+    fn capability(&self) -> crate::concrete::bases::CapabilityKind {
+        crate::concrete::bases::CapabilityKind::Llm
+    }
+
+    async fn complete(&self, request: ModelRequest) -> Result<ModelResponse, BlazenError> {
+        let core_req: CoreModelRequest = request.try_into()?;
+        let core_res = self.inner.complete(core_req).await?;
+        Ok(core_res.into())
     }
 }
 

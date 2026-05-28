@@ -28,8 +28,10 @@ use blazen_llm::batch::{
 };
 use blazen_llm::types::ModelRequest as CoreModelRequest;
 
+use crate::concrete::bases::LlmProvider;
 use crate::errors::{BlazenError, BlazenResult};
-use crate::llm::{Model, ModelRequest, ModelResponse, TokenUsage};
+use crate::llm::{ModelRequest, ModelResponse, TokenUsage};
+use crate::llm_adapter::UniffiLlmAdapter;
 use crate::runtime::runtime;
 
 // ---------------------------------------------------------------------------
@@ -74,8 +76,8 @@ pub struct BatchResult {
 
 /// Run a batch of completion requests with bounded concurrency.
 ///
-/// - `model`: the model to drive (one provider, one model id; for cross-model
-///   batches dispatch from foreign code instead).
+/// - `provider`: the LLM provider to drive (one provider, one model id; for
+///   cross-model batches dispatch from foreign code instead).
 /// - `requests`: the requests to send, in order. Each is converted to the
 ///   upstream wire format before dispatch; conversion errors short-circuit
 ///   the entire batch (the request list is rejected as a whole, since a bad
@@ -95,13 +97,14 @@ pub struct BatchResult {
 /// `response_format_json` payload).
 #[uniffi::export(async_runtime = "tokio")]
 pub async fn complete_batch(
-    model: Arc<Model>,
+    provider: Arc<dyn LlmProvider>,
     requests: Vec<ModelRequest>,
     max_concurrency: u32,
 ) -> BlazenResult<BatchResult> {
     let core_requests = build_core_requests(requests)?;
     let config = CoreBatchConfig::new(max_concurrency as usize);
-    let core_result = core_complete_batch(model.inner.as_ref(), core_requests, config).await;
+    let core_model = UniffiLlmAdapter::into_core_model(provider);
+    let core_result = core_complete_batch(core_model.as_ref(), core_requests, config).await;
     Ok(batch_result_from_core(core_result))
 }
 
@@ -113,11 +116,11 @@ pub async fn complete_batch(
 /// Same as [`complete_batch`].
 #[uniffi::export]
 pub fn complete_batch_blocking(
-    model: Arc<Model>,
+    provider: Arc<dyn LlmProvider>,
     requests: Vec<ModelRequest>,
     max_concurrency: u32,
 ) -> BlazenResult<BatchResult> {
-    runtime().block_on(async move { complete_batch(model, requests, max_concurrency).await })
+    runtime().block_on(async move { complete_batch(provider, requests, max_concurrency).await })
 }
 
 // ---------------------------------------------------------------------------

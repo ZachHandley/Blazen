@@ -39,6 +39,7 @@ pub mod concrete;
 pub mod controlplane;
 pub mod errors;
 pub mod llm;
+pub(crate) mod llm_adapter;
 pub mod local_model;
 pub mod manager;
 #[cfg(feature = "distributed")]
