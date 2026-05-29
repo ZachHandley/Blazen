@@ -96,6 +96,21 @@ where
     }
 }
 
+impl<S> Clone for Stage<S>
+where
+    S: Default + Clone + Send + Sync + 'static,
+{
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            workflow: self.workflow.clone(),
+            input_mapper: self.input_mapper.clone(),
+            condition: self.condition.clone(),
+            output_mapper: self.output_mapper.clone(),
+        }
+    }
+}
+
 impl<S> std::fmt::Debug for Stage<S>
 where
     S: Default + Clone + Send + Sync + 'static,
@@ -133,6 +148,19 @@ where
     pub branches: Vec<Stage<S>>,
     /// How to join the branch results.
     pub join_strategy: JoinStrategy,
+}
+
+impl<S> Clone for ParallelStage<S>
+where
+    S: Default + Clone + Send + Sync + 'static,
+{
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            branches: self.branches.clone(),
+            join_strategy: self.join_strategy,
+        }
+    }
 }
 
 impl<S> std::fmt::Debug for ParallelStage<S>
@@ -199,6 +227,21 @@ where
     pub on_round_complete: Option<RoundCompleteFn<S>>,
 }
 
+impl<S> Clone for LoopStage<S>
+where
+    S: Default + Clone + Send + Sync + 'static,
+{
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            max_iterations: self.max_iterations,
+            inner: self.inner.clone(),
+            until: self.until.clone(),
+            on_round_complete: self.on_round_complete.clone(),
+        }
+    }
+}
+
 impl<S> std::fmt::Debug for LoopStage<S>
 where
     S: Default + Clone + Send + Sync + 'static,
@@ -225,6 +268,19 @@ where
     Parallel(ParallelStage<S>),
     /// A loop stage that re-runs an inner stage until a predicate stops it.
     Loop(LoopStage<S>),
+}
+
+impl<S> Clone for StageKind<S>
+where
+    S: Default + Clone + Send + Sync + 'static,
+{
+    fn clone(&self) -> Self {
+        match self {
+            StageKind::Sequential(s) => StageKind::Sequential(s.clone()),
+            StageKind::Parallel(p) => StageKind::Parallel(p.clone()),
+            StageKind::Loop(l) => StageKind::Loop(l.clone()),
+        }
+    }
 }
 
 impl<S> StageKind<S>

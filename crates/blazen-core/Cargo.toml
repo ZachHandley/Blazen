@@ -72,6 +72,7 @@ blazen-macros = { workspace = true }
 serde.workspace = true
 serde_json.workspace = true
 tokio-stream.workspace = true
+blazen-pipeline = { path = "../blazen-pipeline" }
 
 [lints]
 workspace = true

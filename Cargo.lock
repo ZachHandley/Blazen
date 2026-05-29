@@ -978,6 +978,7 @@ dependencies = [
  "blazen-llm",
  "blazen-macros",
  "blazen-persist",
+ "blazen-pipeline",
  "blazen-telemetry",
  "chrono",
  "dashmap",
@@ -1457,6 +1458,7 @@ name = "blazen-pipeline"
 version = "0.0.0-dev"
 dependencies = [
  "anyhow",
+ "async-trait",
  "blazen-core",
  "blazen-events",
  "blazen-llm",

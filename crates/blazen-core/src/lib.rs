@@ -35,6 +35,7 @@ pub mod session_ref;
 pub mod snapshot;
 pub mod step;
 pub mod step_registry;
+pub mod sub_executable;
 pub mod value;
 pub mod workflow;
 
@@ -52,11 +53,12 @@ pub use session_ref::{
 pub use snapshot::{SNAPSHOT_VERSION, SerializedEvent, WorkflowSnapshot};
 pub use step::{
     JoinStrategy, ParallelSubWorkflowsStep, StepFn, StepKind, StepOutput, StepRegistration,
-    SubWorkflowInputMapper, SubWorkflowOutputMapper, SubWorkflowStep,
+    SubPipelineStep, SubWorkflowInputMapper, SubWorkflowOutputMapper, SubWorkflowStep,
 };
 pub use step_registry::{
     StepBuilderFn, StepDeserializerRegistry, lookup_step_builder, register_step_builder,
     registered_step_ids,
 };
+pub use sub_executable::SubExecutable;
 pub use value::{BytesWrapper, StateValue};
 pub use workflow::{SessionRefDeserializerFn, Workflow};

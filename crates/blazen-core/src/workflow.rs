@@ -86,6 +86,30 @@ pub struct Workflow {
     pub(crate) collect_history: bool,
 }
 
+/// Clone a [`Workflow`] blueprint. All fields are either primitives,
+/// `Arc`-wrapped closures, or maps of `Clone` step kinds — so clones
+/// share underlying handler registries and produce semantically
+/// equivalent independent run targets.
+impl Clone for Workflow {
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            step_registry: self.step_registry.clone(),
+            timeout: self.timeout,
+            retry_config: self.retry_config.clone(),
+            input_handler: self.input_handler.clone(),
+            auto_publish_events: self.auto_publish_events,
+            session_pause_policy: self.session_pause_policy,
+            #[cfg(feature = "persist")]
+            checkpoint_store: self.checkpoint_store.clone(),
+            #[cfg(feature = "persist")]
+            checkpoint_after_step: self.checkpoint_after_step,
+            #[cfg(feature = "telemetry")]
+            collect_history: self.collect_history,
+        }
+    }
+}
+
 impl std::fmt::Debug for Workflow {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("Workflow")
@@ -706,6 +730,39 @@ async fn rehydrate_serialized_session_refs(
         Ok(())
     } else {
         Err(WorkflowError::SessionRefsNotSerializable { keys: failures })
+    }
+}
+
+// ---------------------------------------------------------------------------
+// SubExecutable blanket impl
+// ---------------------------------------------------------------------------
+
+/// Blanket implementation so any [`Workflow`] can be embedded as a
+/// child runner via [`SubPipelineStep`](crate::step::SubPipelineStep) in
+/// the same shape as [`SubWorkflowStep`](crate::step::SubWorkflowStep)
+/// (which uses a concrete `Arc<Workflow>` directly).
+#[async_trait::async_trait]
+impl crate::sub_executable::SubExecutable for Workflow {
+    async fn execute(
+        &self,
+        input: serde_json::Value,
+        ctx: Context,
+    ) -> Result<serde_json::Value, WorkflowError> {
+        // Share the parent's session-ref registry so `__blazen_session_ref__`
+        // markers produced in the parent remain resolvable in the child run.
+        let session_refs = ctx.session_refs_arc().await;
+        let handler = self.run_with_registry(input, session_refs).await?;
+        let wf_result = handler.result().await?;
+        let result_json = if let Some(stop) = wf_result
+            .event
+            .as_any()
+            .downcast_ref::<blazen_events::StopEvent>()
+        {
+            stop.result.clone()
+        } else {
+            wf_result.event.to_json()
+        };
+        Ok(result_json)
     }
 }
 

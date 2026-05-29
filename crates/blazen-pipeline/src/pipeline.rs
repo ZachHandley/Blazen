@@ -73,6 +73,24 @@ where
     pub(crate) retry_config: Option<Arc<RetryConfig>>,
 }
 
+impl<S> Clone for Pipeline<S>
+where
+    S: Default + Clone + Send + Sync + 'static,
+{
+    fn clone(&self) -> Self {
+        Self {
+            name: self.name.clone(),
+            stages: self.stages.clone(),
+            persist_fn: self.persist_fn.clone(),
+            persist_json_fn: self.persist_json_fn.clone(),
+            event_envelope_tx: self.event_envelope_tx.clone(),
+            timeout_per_stage: self.timeout_per_stage,
+            total_timeout: self.total_timeout,
+            retry_config: self.retry_config.clone(),
+        }
+    }
+}
+
 impl<S> std::fmt::Debug for Pipeline<S>
 where
     S: Default + Clone + Send + Sync + 'static,
@@ -1522,4 +1540,35 @@ where
     }
 
     Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// SubExecutable impl — embed a Pipeline inside a parent Workflow
+// ---------------------------------------------------------------------------
+
+/// Lets a [`Pipeline`] be wrapped in a
+/// [`SubPipelineStep`](blazen_core::SubPipelineStep) and embedded as a
+/// child runner inside a parent [`blazen_core::Workflow`].
+///
+/// The trait takes `&self`, so each invocation clones the pipeline
+/// blueprint (cheap — every field is `Arc`-backed or `Copy`) and runs
+/// it to completion. The returned JSON is the pipeline's
+/// [`PipelineResult::final_output`](crate::snapshot::PipelineResult).
+#[async_trait::async_trait]
+impl<S> blazen_core::SubExecutable for Pipeline<S>
+where
+    S: Default + Clone + Send + Sync + 'static + serde::Serialize + serde::de::DeserializeOwned,
+{
+    async fn execute(
+        &self,
+        input: serde_json::Value,
+        _ctx: blazen_core::Context,
+    ) -> Result<serde_json::Value, blazen_core::WorkflowError> {
+        let handler = self.clone().start(input);
+        let result = handler
+            .result()
+            .await
+            .map_err(|e| blazen_core::WorkflowError::Other(anyhow::Error::new(e)))?;
+        serde_json::to_value(&result.final_output).map_err(blazen_core::WorkflowError::from)
+    }
 }

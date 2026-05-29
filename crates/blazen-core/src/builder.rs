@@ -13,7 +13,9 @@ use blazen_events::{InputRequestEvent, InputResponseEvent};
 use blazen_llm::retry::RetryConfig;
 
 use crate::error::WorkflowError;
-use crate::step::{ParallelSubWorkflowsStep, StepKind, StepRegistration, SubWorkflowStep};
+use crate::step::{
+    ParallelSubWorkflowsStep, StepKind, StepRegistration, SubPipelineStep, SubWorkflowStep,
+};
 use crate::workflow::Workflow;
 
 /// Async callback for handling input requests inline (without pausing).
@@ -143,6 +145,16 @@ impl WorkflowBuilder {
         self
     }
 
+    /// Register a sub-pipeline step that runs any
+    /// [`SubExecutable`](crate::SubExecutable) (e.g. a `Pipeline`) as
+    /// its handler. Mirrors [`add_subworkflow_step`](Self::add_subworkflow_step)
+    /// for trait-object child runners.
+    #[must_use]
+    pub fn add_subpipeline_step(mut self, step: SubPipelineStep) -> Self {
+        self.steps.push(StepKind::SubPipeline(step));
+        self
+    }
+
     /// Register a parallel sub-workflow fan-out step.
     #[must_use]
     pub fn add_parallel_subworkflows(mut self, step: ParallelSubWorkflowsStep) -> Self {
@@ -158,6 +170,7 @@ impl WorkflowBuilder {
         match self.steps.last_mut() {
             Some(StepKind::Regular(reg)) => &mut reg.timeout,
             Some(StepKind::SubWorkflow(step)) => &mut step.timeout,
+            Some(StepKind::SubPipeline(step)) => &mut step.timeout,
             Some(StepKind::ParallelSubWorkflows(_)) => panic!(
                 "{caller}() is not supported on a ParallelSubWorkflows step; \
                  set per-branch timeouts on each SubWorkflowStep instead"
@@ -176,6 +189,7 @@ impl WorkflowBuilder {
         match self.steps.last_mut() {
             Some(StepKind::Regular(reg)) => &mut reg.retry_config,
             Some(StepKind::SubWorkflow(step)) => &mut step.retry_config,
+            Some(StepKind::SubPipeline(step)) => &mut step.retry_config,
             Some(StepKind::ParallelSubWorkflows(_)) => panic!(
                 "{caller}() is not supported on a ParallelSubWorkflows step; \
                  set per-branch retries on each SubWorkflowStep instead"

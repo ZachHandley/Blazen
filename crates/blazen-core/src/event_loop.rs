@@ -30,7 +30,8 @@ use crate::session_ref::{
 };
 use crate::snapshot::{SNAPSHOT_VERSION, WorkflowSnapshot};
 use crate::step::{
-    JoinStrategy, ParallelSubWorkflowsStep, StepKind, StepOutput, StepRegistration, SubWorkflowStep,
+    JoinStrategy, ParallelSubWorkflowsStep, StepKind, StepOutput, StepRegistration,
+    SubPipelineStep, SubWorkflowStep,
 };
 
 // ---------------------------------------------------------------------------
@@ -983,6 +984,20 @@ fn dispatch_to_handlers(
                 #[cfg(feature = "telemetry")]
                 history_tx,
             ),
+            StepKind::SubPipeline(step) => dispatch_subpipeline_step(
+                step.clone(),
+                event,
+                ctx,
+                event_tx,
+                error_tx,
+                in_flight,
+                in_flight_count,
+                completed_steps,
+                run_id,
+                auto_publish_events,
+                #[cfg(feature = "telemetry")]
+                history_tx,
+            ),
         }
     }
 }
@@ -1488,6 +1503,241 @@ fn dispatch_subworkflow_step(
         }
         .instrument(step_span),
     );
+}
+
+// ---------------------------------------------------------------------------
+// Sub-pipeline dispatch (trait-object child runner)
+// ---------------------------------------------------------------------------
+
+/// Run one sub-pipeline step. The child is any
+/// [`SubExecutable`](crate::sub_executable::SubExecutable) (typically a
+/// `blazen_pipeline::Pipeline` or another `Workflow` wrapped via the
+/// blanket impl). Honors `step.timeout` and `step.retry_config` the same
+/// way as [`dispatch_subworkflow_step`]; on terminal failure emits a
+/// [`WorkflowError::SubWorkflowFailed`] tagged with the parent step name
+/// so existing error-handling paths apply uniformly.
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+fn dispatch_subpipeline_step(
+    step: SubPipelineStep,
+    event: &dyn AnyEvent,
+    ctx: &Context,
+    event_tx: &mpsc::UnboundedSender<EventEnvelope>,
+    error_tx: &mpsc::UnboundedSender<WorkflowError>,
+    in_flight: &mut JoinSet<()>,
+    in_flight_count: &Arc<AtomicUsize>,
+    completed_steps: &Arc<AtomicU32>,
+    run_id: Uuid,
+    auto_publish_events: bool,
+    #[cfg(feature = "telemetry")] history_tx: Option<
+        &mpsc::UnboundedSender<blazen_telemetry::HistoryEvent>,
+    >,
+) {
+    let event_clone = event.clone_boxed();
+    let event_type = event.event_type_id().to_owned();
+    let ctx_clone = ctx.clone();
+    let event_tx_clone = event_tx.clone();
+    let error_tx_clone = error_tx.clone();
+    let counter = Arc::clone(in_flight_count);
+    let progress_counter = Arc::clone(completed_steps);
+    let stream_ctx = if auto_publish_events {
+        Some(ctx.clone())
+    } else {
+        None
+    };
+
+    #[cfg(feature = "telemetry")]
+    let htx = history_tx.cloned();
+
+    #[cfg(feature = "telemetry")]
+    if let Some(ref tx) = htx {
+        let _ = tx.send(blazen_telemetry::HistoryEvent {
+            timestamp: Utc::now(),
+            sequence: 0,
+            kind: blazen_telemetry::HistoryEventKind::StepDispatched {
+                step_name: step.name.clone(),
+                event_type: event_type.clone(),
+            },
+        });
+    }
+
+    counter.fetch_add(1, Ordering::Relaxed);
+
+    let step_span = tracing::info_span!(
+        "workflow.subpipeline",
+        step_name = %step.name,
+        event_type = %event_type,
+        otel.status_code = tracing::field::Empty,
+        duration_ms = tracing::field::Empty,
+    );
+    let step_span_clone = step_span.clone();
+
+    in_flight.spawn(
+        async move {
+            if let Some(ref sctx) = stream_ctx {
+                publish_lifecycle_event(
+                    sctx,
+                    "step_started",
+                    Some(&step.name),
+                    Some(&event_type),
+                    None,
+                    None,
+                )
+                .await;
+            }
+
+            let start = Instant::now();
+            let outcome = run_subpipeline_with_retry(&step, &*event_clone, &ctx_clone).await;
+            let duration = u64::try_from(start.elapsed().as_millis()).unwrap_or(u64::MAX);
+            step_span_clone.record("duration_ms", duration);
+
+            match outcome {
+                Ok(output) => {
+                    step_span_clone.record("otel.status_code", "OK");
+
+                    #[cfg(feature = "telemetry")]
+                    if let Some(ref tx) = htx {
+                        let output_type = output.event_type_id().to_owned();
+                        let _ = tx.send(blazen_telemetry::HistoryEvent {
+                            timestamp: Utc::now(),
+                            sequence: 0,
+                            kind: blazen_telemetry::HistoryEventKind::StepCompleted {
+                                step_name: step.name.clone(),
+                                duration_ms: duration,
+                                output_type,
+                            },
+                        });
+                    }
+
+                    if let Some(ref sctx) = stream_ctx {
+                        publish_lifecycle_event(
+                            sctx,
+                            "step_completed",
+                            Some(&step.name),
+                            None,
+                            Some(duration),
+                            None,
+                        )
+                        .await;
+
+                        emit_workflow_progress(sctx, &progress_counter, &step.name, run_id).await;
+                    }
+
+                    let envelope = EventEnvelope::new(output, Some(step.name.clone()));
+                    let _ = event_tx_clone.send(envelope);
+                }
+                Err(err) => {
+                    step_span_clone.record("otel.status_code", "ERROR");
+                    let err_str = err.to_string();
+
+                    #[cfg(feature = "telemetry")]
+                    if let Some(ref tx) = htx {
+                        let _ = tx.send(blazen_telemetry::HistoryEvent {
+                            timestamp: Utc::now(),
+                            sequence: 0,
+                            kind: blazen_telemetry::HistoryEventKind::StepFailed {
+                                step_name: step.name.clone(),
+                                error: err_str.clone(),
+                                duration_ms: duration,
+                            },
+                        });
+                    }
+
+                    if let Some(ref sctx) = stream_ctx {
+                        publish_lifecycle_event(
+                            sctx,
+                            "step_failed",
+                            Some(&step.name),
+                            None,
+                            Some(duration),
+                            Some(&err_str),
+                        )
+                        .await;
+                    }
+
+                    tracing::error!(
+                        step = %step.name,
+                        error = %err,
+                        "sub-pipeline step failed"
+                    );
+                    let _ = error_tx_clone.send(WorkflowError::SubWorkflowFailed {
+                        step_name: step.name.clone(),
+                        message: err_str,
+                    });
+                }
+            }
+            counter.fetch_sub(1, Ordering::Relaxed);
+        }
+        .instrument(step_span),
+    );
+}
+
+/// Run one sub-pipeline step once with timeout applied.
+async fn run_subpipeline_once(
+    step: &SubPipelineStep,
+    event: &dyn AnyEvent,
+    ctx: &Context,
+) -> Result<Box<dyn AnyEvent>, WorkflowError> {
+    let input_json = (step.input_mapper)(event);
+
+    let exec_fut = step.executable.execute(input_json, ctx.clone());
+    let result_json = if let Some(d) = step.timeout {
+        if let Ok(r) = crate::runtime::timeout(d, exec_fut).await {
+            r?
+        } else {
+            let elapsed_ms = u64::try_from(d.as_millis()).unwrap_or(u64::MAX);
+            return Err(WorkflowError::StepTimeout {
+                step_name: step.name.clone(),
+                elapsed_ms,
+            });
+        }
+    } else {
+        exec_fut.await?
+    };
+
+    Ok((step.output_mapper)(result_json))
+}
+
+/// Run a sub-pipeline step with the resolved retry configuration applied.
+async fn run_subpipeline_with_retry(
+    step: &SubPipelineStep,
+    event: &dyn AnyEvent,
+    ctx: &Context,
+) -> Result<Box<dyn AnyEvent>, WorkflowError> {
+    let stack = ctx.retry_stack();
+    let resolved = blazen_llm::retry::resolve_retry(
+        None,
+        step.retry_config.as_ref(),
+        stack.workflow.as_ref(),
+        stack.pipeline.as_ref(),
+        stack.provider.as_ref(),
+    );
+
+    let max_retries = resolved.max_retries;
+    let mut last_err: Option<WorkflowError> = None;
+
+    for attempt in 0..=max_retries {
+        match run_subpipeline_once(step, event, ctx).await {
+            Ok(out) => return Ok(out),
+            Err(err) => {
+                tracing::warn!(
+                    step = %step.name,
+                    attempt = attempt + 1,
+                    max_attempts = max_retries + 1,
+                    error = %err,
+                    "sub-pipeline attempt failed"
+                );
+                last_err = Some(err);
+                if attempt < max_retries {
+                    let delay = compute_retry_delay(&resolved, attempt);
+                    crate::runtime::sleep(delay).await;
+                }
+            }
+        }
+    }
+
+    Err(last_err.unwrap_or_else(|| {
+        WorkflowError::Context("sub-pipeline retry loop exited without result".to_owned())
+    }))
 }
 
 /// Fan out into multiple parallel sub-workflows and join via the

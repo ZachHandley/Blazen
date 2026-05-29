@@ -281,6 +281,111 @@ impl SubWorkflowStep {
     }
 }
 
+/// A workflow step that delegates to any
+/// [`SubExecutable`](crate::sub_executable::SubExecutable).
+///
+/// Mirrors [`SubWorkflowStep`] except the embedded child is a trait
+/// object rather than a concrete [`Workflow`](crate::workflow::Workflow).
+/// This is the dispatch surface for embedding a `Pipeline` (or any
+/// other binding-language runner that implements `SubExecutable`)
+/// inside a parent workflow without the parent taking a dependency on
+/// the pipeline crate.
+///
+/// The parent workflow's event loop maps the parent event into the
+/// child input JSON via [`input_mapper`](Self::input_mapper), calls
+/// [`executable.execute`](crate::sub_executable::SubExecutable::execute),
+/// then routes the returned JSON through
+/// [`output_mapper`](Self::output_mapper). Child failures surface as
+/// [`WorkflowError::SubWorkflowFailed`]. Per-step `timeout` and
+/// `retry_config` apply to the child run as a whole.
+#[derive(Clone)]
+pub struct SubPipelineStep {
+    /// Human-readable name for this step (used in logging and errors).
+    pub name: String,
+    /// Event type identifiers this step accepts.
+    pub accepts: Vec<&'static str>,
+    /// Event type identifiers this step may emit (informational).
+    pub emits: Vec<&'static str>,
+    /// The child executable to run. Wrapped in [`Arc`] so the
+    /// registration (and the parent registry's `Vec<StepKind>` clones)
+    /// stays cheap to clone across dispatch attempts and retries.
+    pub executable: Arc<dyn crate::sub_executable::SubExecutable>,
+    /// Maps the parent event into the child executable's input JSON.
+    pub input_mapper: SubWorkflowInputMapper,
+    /// Maps the child's terminal result JSON into an event for the parent.
+    pub output_mapper: SubWorkflowOutputMapper,
+    /// Per-step wall-clock timeout for the entire child run. `None`
+    /// means inherit the child's own timeout policy (default).
+    pub timeout: Option<Duration>,
+    /// Per-step retry configuration. When `Some(cfg)`, the child run is
+    /// retried up to `cfg.max_retries` times on failure with the
+    /// configured backoff.
+    pub retry_config: Option<Arc<blazen_llm::retry::RetryConfig>>,
+}
+
+impl std::fmt::Debug for SubPipelineStep {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SubPipelineStep")
+            .field("name", &self.name)
+            .field("accepts", &self.accepts)
+            .field("emits", &self.emits)
+            .field("executable", &self.executable)
+            .field("timeout", &self.timeout)
+            .field("retry_config", &self.retry_config.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
+impl SubPipelineStep {
+    /// Create a sub-pipeline step with default JSON-passthrough mappers.
+    ///
+    /// The input mapper passes the parent event's JSON form
+    /// (`event.to_json()`) into the child executable as input.
+    /// The output mapper wraps the child's terminal JSON in a
+    /// `DynamicEvent` whose `event_type` is `"<step_name>::output"`.
+    #[must_use]
+    pub fn with_json_mappers(
+        name: impl Into<String>,
+        accepts: Vec<&'static str>,
+        emits: Vec<&'static str>,
+        executable: Arc<dyn crate::sub_executable::SubExecutable>,
+    ) -> Self {
+        let name_str = name.into();
+        let output_event_type: &'static str =
+            blazen_events::intern_event_type(&format!("{name_str}::output"));
+        let output_event_type_owned = output_event_type;
+        Self {
+            name: name_str,
+            accepts,
+            emits,
+            executable,
+            input_mapper: Arc::new(|event| event.to_json()),
+            output_mapper: Arc::new(move |value| {
+                Box::new(blazen_events::DynamicEvent {
+                    event_type: output_event_type_owned.to_string(),
+                    data: value,
+                })
+            }),
+            timeout: None,
+            retry_config: None,
+        }
+    }
+
+    /// Set a per-step wall-clock timeout for the entire child run.
+    #[must_use]
+    pub fn with_timeout(mut self, timeout: Duration) -> Self {
+        self.timeout = Some(timeout);
+        self
+    }
+
+    /// Set a per-step retry configuration applied to the child run as a whole.
+    #[must_use]
+    pub fn with_retry_config(mut self, cfg: blazen_llm::retry::RetryConfig) -> Self {
+        self.retry_config = Some(Arc::new(cfg));
+        self
+    }
+}
+
 /// Fan out into multiple parallel sub-workflow branches.
 ///
 /// Each branch is a [`SubWorkflowStep`] that runs concurrently. The
@@ -326,6 +431,9 @@ pub enum StepKind {
     SubWorkflow(SubWorkflowStep),
     /// A step that fans out into multiple sub-workflows in parallel.
     ParallelSubWorkflows(ParallelSubWorkflowsStep),
+    /// A step that runs any [`SubExecutable`](crate::SubExecutable) (e.g.
+    /// a `Pipeline`) as its handler.
+    SubPipeline(SubPipelineStep),
 }
 
 impl StepKind {
@@ -336,6 +444,7 @@ impl StepKind {
             StepKind::Regular(r) => &r.name,
             StepKind::SubWorkflow(s) => &s.name,
             StepKind::ParallelSubWorkflows(p) => &p.name,
+            StepKind::SubPipeline(s) => &s.name,
         }
     }
 
@@ -346,6 +455,7 @@ impl StepKind {
             StepKind::Regular(r) => &r.accepts,
             StepKind::SubWorkflow(s) => &s.accepts,
             StepKind::ParallelSubWorkflows(p) => &p.accepts,
+            StepKind::SubPipeline(s) => &s.accepts,
         }
     }
 
@@ -356,6 +466,7 @@ impl StepKind {
             StepKind::Regular(r) => &r.emits,
             StepKind::SubWorkflow(s) => &s.emits,
             StepKind::ParallelSubWorkflows(p) => &p.emits,
+            StepKind::SubPipeline(s) => &s.emits,
         }
     }
 }
@@ -375,6 +486,12 @@ impl From<SubWorkflowStep> for StepKind {
 impl From<ParallelSubWorkflowsStep> for StepKind {
     fn from(step: ParallelSubWorkflowsStep) -> Self {
         StepKind::ParallelSubWorkflows(step)
+    }
+}
+
+impl From<SubPipelineStep> for StepKind {
+    fn from(step: SubPipelineStep) -> Self {
+        StepKind::SubPipeline(step)
     }
 }
 
