@@ -2264,7 +2264,7 @@ mod training {
         #[pyo3(get, set)]
         pub lora: PyLoraConfig,
         #[pyo3(get, set)]
-        pub lambda: f32,
+        pub lambda_weight: f32,
     }
 
     #[gen_stub_pymethods]
@@ -2272,15 +2272,19 @@ mod training {
     impl PyOrpoConfig {
         /// Build an OrpoConfig.
         #[new]
-        #[pyo3(signature = (*, core, lora = None, lambda = 0.1))]
-        fn new(core: PyTrainCoreConfig, lora: Option<PyLoraConfig>, lambda: f32) -> PyResult<Self> {
-            if !lambda.is_finite() || lambda < 0.0 {
-                return Err(PyValueError::new_err("OrpoConfig.lambda must be >= 0"));
+        #[pyo3(signature = (*, core, lora = None, lambda_weight = 0.1))]
+        fn new(
+            core: PyTrainCoreConfig,
+            lora: Option<PyLoraConfig>,
+            lambda_weight: f32,
+        ) -> PyResult<Self> {
+            if !lambda_weight.is_finite() || lambda_weight < 0.0 {
+                return Err(PyValueError::new_err("OrpoConfig.lambda_weight must be >= 0"));
             }
             Ok(Self {
                 core,
                 lora: lora.unwrap_or_default(),
-                lambda,
+                lambda_weight,
             })
         }
     }
@@ -2290,7 +2294,7 @@ mod training {
             Self {
                 core: c.core.into(),
                 lora: c.lora.into(),
-                lambda: c.lambda,
+                lambda: c.lambda_weight,
             }
         }
     }
@@ -2712,7 +2716,7 @@ mod training {
         /// (ORPO).
         ///
         /// Reference-free. Combines an SFT loss on chosen completions with
-        /// an odds-ratio preference term weighted by ``config.lambda``.
+        /// an odds-ratio preference term weighted by ``config.lambda_weight``.
         #[gen_stub(override_return_type(
             type_repr = "typing.Coroutine[typing.Any, typing.Any, TrainedAdapter]",
             imports = ("typing",)

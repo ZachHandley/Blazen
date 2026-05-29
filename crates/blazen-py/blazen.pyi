@@ -7792,7 +7792,7 @@ class ModelManager:
         (ORPO).
         
         Reference-free. Combines an SFT loss on chosen completions with
-        an odds-ratio preference term weighted by ``config.lambda``.
+        an odds-ratio preference term weighted by ``config.lambda_weight``.
         """
     async def train_simpo(self, config: SimpoConfig, dataset: PreferenceJsonlDataset, progress: typing.Optional[typing.Any] = None) -> TrainedAdapter:
         r"""
@@ -8601,10 +8601,10 @@ class OrpoConfig:
     @lora.setter
     def lora(self, value: LoraConfig) -> None: ...
     @property
-    def lambda(self) -> builtins.float: ...
-    @lambda.setter
-    def lambda(self, value: builtins.float) -> None: ...
-    def __new__(cls, *, core: TrainCoreConfig, lora: typing.Optional[LoraConfig] = None, lambda: builtins.float = 0.10000000149011612) -> OrpoConfig:
+    def lambda_weight(self) -> builtins.float: ...
+    @lambda_weight.setter
+    def lambda_weight(self, value: builtins.float) -> None: ...
+    def __new__(cls, *, core: TrainCoreConfig, lora: typing.Optional[LoraConfig] = None, lambda_weight: builtins.float = 0.10000000149011612) -> OrpoConfig:
         r"""
         Build an OrpoConfig.
         """
