@@ -1428,3 +1428,34 @@ async fn test_loop_rejects_nested_loop() {
         "error must mention nested loop, got: {err}"
     );
 }
+
+#[tokio::test]
+async fn test_stage_async_three_stage_chain() {
+    // Three-stage chain: i32 -> i32 -> String -> bool.
+    // Stage 1: double the input integer.
+    // Stage 2: stringify the doubled integer.
+    // Stage 3: report whether the string length is >= 2.
+    let pipeline = PipelineBuilder::new("stage-async-chain")
+        .stage_async("double", |i: i32| async move {
+            Ok::<_, blazen_llm::BlazenError>(i * 2)
+        })
+        .stage_async("stringify", |i: i32| async move {
+            Ok::<_, blazen_llm::BlazenError>(format!("{i}"))
+        })
+        .stage_async("length-ge-2", |s: String| async move {
+            Ok::<_, blazen_llm::BlazenError>(s.len() >= 2)
+        })
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!(7));
+    let result = handler.result().await.unwrap();
+
+    assert_eq!(result.pipeline_name, "stage-async-chain");
+    assert_eq!(result.stage_results.len(), 3);
+
+    // 7 -> 14 -> "14" -> len 2 -> true.
+    let final_bool: bool = serde_json::from_value(result.final_output.clone())
+        .expect("final output deserializes as bool");
+    assert!(final_bool, "final output should be true, got: {:?}", result.final_output);
+}

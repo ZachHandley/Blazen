@@ -81,6 +81,43 @@ impl<S: Default + Clone + Send + Sync + 'static> PipelineBuilder<S> {
         self
     }
 
+    /// Add a sequential stage backed by a one-step typed async handler.
+    ///
+    /// Builds a single-step [`Workflow`] via
+    /// [`blazen_core::WorkflowBuilder::typed_step`], wraps it in a [`Stage`]
+    /// with no input mapper or condition, and appends it as a sequential
+    /// stage. The handler receives the deserialized stage input directly and
+    /// returns the typed output that will be serialized into the
+    /// `StopEvent` payload that propagates to the next stage.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the inner [`blazen_core::WorkflowBuilder`] fails to build a
+    /// single-step typed workflow. The trivial single-step shape constructed
+    /// here always validates, so this panic is unreachable in practice.
+    ///
+    /// [`Workflow`]: blazen_core::Workflow
+    #[must_use]
+    pub fn stage_async<I, O, F, Fut>(self, name: impl Into<String>, handler: F) -> Self
+    where
+        I: serde::de::DeserializeOwned + Send + 'static,
+        O: serde::Serialize + Send + 'static,
+        F: Fn(I) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<O, blazen_llm::BlazenError>> + Send + 'static,
+    {
+        let name = name.into();
+        let workflow = blazen_core::WorkflowBuilder::new(name.clone())
+            .typed_step(name.clone(), move |i: I, _ctx| handler(i))
+            .build()
+            .expect("trivial single-step typed workflow always validates");
+        self.stage(Stage {
+            name,
+            workflow,
+            input_mapper: None,
+            condition: None,
+        })
+    }
+
     /// Add a parallel stage (multiple branches) to the pipeline.
     #[must_use]
     pub fn parallel(mut self, parallel: ParallelStage<S>) -> Self {
