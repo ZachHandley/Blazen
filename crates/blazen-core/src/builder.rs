@@ -86,6 +86,55 @@ impl WorkflowBuilder {
         self
     }
 
+    /// Register a strongly-typed single-input / single-output step.
+    ///
+    /// The handler receives the `StartEvent.data` payload deserialized into
+    /// `I`; its `Ok(O)` return value is serialized into a `StopEvent`. The
+    /// step accepts [`StartEvent`](blazen_events::StartEvent) and emits
+    /// [`StopEvent`](blazen_events::StopEvent). Handler errors surface as
+    /// [`WorkflowError::Other`]; (de)serialization failures surface as
+    /// [`WorkflowError::Serialization`].
+    #[must_use]
+    pub fn typed_step<I, O, F, Fut>(self, name: impl Into<String>, handler: F) -> Self
+    where
+        I: serde::de::DeserializeOwned + Send + 'static,
+        O: serde::Serialize + Send + 'static,
+        F: Fn(I, crate::context::Context) -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = Result<O, blazen_llm::BlazenError>> + Send + 'static,
+    {
+        use blazen_events::Event as _;
+
+        let handler = Arc::new(handler);
+        let closure: crate::step::StepFn = Arc::new(move |event, ctx| {
+            let handler = Arc::clone(&handler);
+            Box::pin(async move {
+                let start = event
+                    .as_any()
+                    .downcast_ref::<blazen_events::StartEvent>()
+                    .ok_or_else(|| WorkflowError::EventDowncastFailed {
+                        expected: blazen_events::StartEvent::event_type(),
+                        got: event.event_type_id().to_string(),
+                    })?;
+                let typed_input: I = serde_json::from_value(start.data.clone())?;
+                let output: O = handler(typed_input, ctx)
+                    .await
+                    .map_err(|e| WorkflowError::Other(anyhow::Error::new(e)))?;
+                let result = serde_json::to_value(&output)?;
+                Ok(crate::step::StepOutput::Single(Box::new(
+                    blazen_events::StopEvent { result },
+                )))
+            })
+        });
+        let registration = StepRegistration::new(
+            name.into(),
+            vec![blazen_events::StartEvent::event_type()],
+            vec![blazen_events::StopEvent::event_type()],
+            closure,
+            1,
+        );
+        self.step(registration)
+    }
+
     /// Register a sub-workflow step that runs another [`Workflow`] as
     /// its handler.
     #[must_use]
@@ -510,5 +559,20 @@ mod tests {
     #[should_panic(expected = "no_step_retry() called before any step was registered")]
     fn no_step_retry_panics_without_step() {
         let _ = WorkflowBuilder::new("test").no_step_retry();
+    }
+
+    #[tokio::test]
+    async fn typed_step_roundtrip() {
+        let wf = WorkflowBuilder::new("double")
+            .typed_step("double", |i: i32, _ctx| async move {
+                Ok::<_, blazen_llm::BlazenError>(i * 2)
+            })
+            .build()
+            .unwrap();
+        let handler = wf.run(serde_json::json!(21)).await.unwrap();
+        let event = handler.result().await.unwrap().event;
+        let stop = event.downcast_ref::<StopEvent>().expect("StopEvent");
+        let doubled: i32 = serde_json::from_value(stop.result.clone()).unwrap();
+        assert_eq!(doubled, 42);
     }
 }
