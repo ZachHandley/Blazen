@@ -12,6 +12,11 @@ on:
         type: boolean
         required: false
         default: false
+      purge_existing:
+        description: 'DELETE all existing v{version} ci-status markers + the blazen-build artifact package before building. Required when a prior {version} build uploaded broken artifacts: the per-version verify-artifact gate would otherwise short-circuit every matrix entry and the dispatch would ship the cached broken artifact. Off by default to preserve resumable-build behavior.'
+        type: boolean
+        required: false
+        default: false
 
 concurrency:
   group: build-artifacts-${{ github.event.inputs.version }}
@@ -30,6 +35,23 @@ jobs:
     steps:
       - id: set
         run: echo "version=${{ github.event.inputs.version }}" >> "$GITHUB_OUTPUT"
+
+      # When dispatched with purge_existing=true, DELETE every ci-status
+      # marker for this version (except `release-complete`, which the
+      # orphan-retry detection relies on) AND the entire blazen-build
+      # generic-package version (the actual artifact uploads). Without this
+      # the per-matrix-entry verify-artifact gate would see "marker + 200"
+      # and skip every build, shipping the cached (broken) artifact.
+      - name: Purge previous markers + artifacts for ${{ github.event.inputs.version }}
+        if: github.event.inputs.purge_existing == 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: purge-version
+          version: ${{ github.event.inputs.version }}
+          purge-package: blazen-build
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
       # When dispatched manually with `ensure_temp_branch=true`, create
       # temp/v{VERSION} from the dispatch ref so release.yaml (dispatched by
