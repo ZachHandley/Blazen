@@ -1444,7 +1444,7 @@ jobs:
 
       - name: Short CARGO_TARGET_DIR (Windows MAX_PATH)
         if: steps.verify.outputs.completed != 'true' && runner.os == 'Windows'
-        shell: pwsh
+        shell: powershell
         run: |
           # sentencepiece-sys + protobuf-lite generate object paths that
           # exceed CMake's CMAKE_OBJECT_PATH_MAX=250 when CARGO_TARGET_DIR
@@ -1764,7 +1764,7 @@ jobs:
 
       - name: Short CARGO_TARGET_DIR (Windows MAX_PATH)
         if: steps.verify.outputs.completed != 'true' && runner.os == 'Windows'
-        shell: pwsh
+        shell: powershell
         run: |
           # sentencepiece-sys + protobuf-lite generate object paths that
           # exceed CMake's CMAKE_OBJECT_PATH_MAX=250 when CARGO_TARGET_DIR
