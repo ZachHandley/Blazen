@@ -31,8 +31,8 @@ tracing-subscriber = { version = "0.3", default-features = false, features = ["r
 tsify-next = { version = "0.5", features = ["js", "json"] }
 wasm-bindgen = "=0.2.122"
 wasm-bindgen-futures = "=0.4.72"
-js-sys = "=0.3.99"
-web-sys = { version = "=0.3.99", features = [
+js-sys = "0.3.99"
+web-sys = { version = "0.3.99", features = [
     "ReadableStream",
     "ReadableStreamDefaultController",
     "ReadableStreamDefaultReader",

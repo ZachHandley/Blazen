@@ -44,8 +44,8 @@ tract-onnx = { workspace = true, features = ["getrandom-js"] }
 ndarray = { workspace = true }
 wasm-bindgen = "=0.2.122"
 wasm-bindgen-futures = "=0.4.72"
-js-sys = "=0.3.99"
-web-sys = { version = "=0.3.99", features = ["Window", "Request", "RequestInit", "RequestMode", "Response"] }
+js-sys = "0.3.99"
+web-sys = { version = "0.3.99", features = ["Window", "Request", "RequestInit", "RequestMode", "Response"] }
 getrandom = { version = "0.4", features = ["wasm_js"] }
 
 # wasm32-wasip1* (the napi-rs wasi build for Cloudflare Workers / Deno): same

@@ -52,7 +52,7 @@ web-time = "1"
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dependencies]
 wasm-bindgen = "=0.2.122"
 wasm-bindgen-futures = "=0.4.72"
-js-sys = "=0.3.99"
+js-sys = "0.3.99"
 uuid = { workspace = true, features = ["js"] }
 
 # WASIp2 has working tokio time/rt (see blazen-node's wasi cfg block); use
