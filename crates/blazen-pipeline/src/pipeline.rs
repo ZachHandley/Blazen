@@ -24,7 +24,7 @@ use crate::builder::{PersistFn, PersistJsonFn};
 use crate::error::PipelineError;
 use crate::handler::{PipelineControl, PipelineEvent, PipelineHandler};
 use crate::snapshot::{PipelineResult, PipelineSnapshot, StageResult};
-use crate::stage::{JoinStrategy, ParallelStage, Stage, StageKind};
+use crate::stage::{JoinStrategy, LoopDecision, LoopStage, ParallelStage, Stage, StageKind};
 use crate::state::PipelineState;
 
 /// Lightweight, polled view of a running pipeline's progress.
@@ -477,6 +477,7 @@ where
                         pipeline_name,
                         run_id,
                         stage_idx,
+                        0,
                         &stage_results,
                         &state,
                         input,
@@ -510,63 +511,101 @@ where
 
         let stage_start = Instant::now();
 
-        // Race stage execution against control signals so pause/abort can
-        // interrupt a running stage.
-        let stage_future = async {
-            match stage {
-                StageKind::Sequential(s) => {
-                    run_sequential_stage(s, &state, stream_tx, timeout_per_stage, session_refs)
-                        .instrument(
-                            tracing::info_span!("pipeline.stage.sequential", stage_name = %s.name),
-                        )
-                        .await
-                }
-                StageKind::Parallel(p) => {
-                    run_parallel_stage(p, &state, stream_tx, timeout_per_stage, session_refs)
-                        .instrument(tracing::info_span!(
-                            "pipeline.stage.parallel",
-                            branch_count = p.branches.len()
-                        ))
-                        .await
-                }
+        // Loop stages need mutable access to the shared state across rounds
+        // (so each round's output is visible to the `until` predicate) and
+        // handle pause/abort at round boundaries internally. They are driven
+        // outside the `tokio::select!` race used for the leaf stage kinds.
+        let result = if let StageKind::Loop(loop_stage) = stage {
+            match run_loop_stage(
+                loop_stage,
+                &mut state,
+                stream_tx,
+                timeout_per_stage,
+                session_refs,
+                control_rx,
+                pipeline_name,
+                run_id,
+                stage_idx,
+                &stage_results,
+                input,
+            )
+            .instrument(tracing::info_span!(
+                "pipeline.stage.loop",
+                stage_name = %loop_stage.name,
+                max_iterations = loop_stage.max_iterations,
+            ))
+            .await
+            {
+                LoopOutcome::Finished(result) => result,
+                LoopOutcome::Paused(snapshot) => return RunOutcome::Paused(snapshot),
+                LoopOutcome::Aborted => return RunOutcome::Aborted,
             }
-        };
-
-        let result = tokio::select! {
-            biased;
-
-            // Control signal -- takes priority when both are ready.
-            Some(control) = control_rx.recv() => {
-                match control {
-                    PipelineControl::Pause => {
-                        // The stage future is dropped here, which drops any
-                        // inner WorkflowHandlers. Their Drop impls send Abort
-                        // to the inner workflow event loops, giving clean shutdown.
-                        let snapshot = build_snapshot(
-                            pipeline_name,
-                            run_id,
-                            stage_idx,
-                            &stage_results,
-                            &state,
-                            input,
-                        );
-                        return RunOutcome::Paused(snapshot);
+        } else {
+            // Race stage execution against control signals so pause/abort can
+            // interrupt a running stage.
+            let stage_future = async {
+                match stage {
+                    StageKind::Sequential(s) => run_sequential_stage(
+                        s,
+                        &state,
+                        stream_tx,
+                        timeout_per_stage,
+                        session_refs,
+                    )
+                    .instrument(
+                        tracing::info_span!("pipeline.stage.sequential", stage_name = %s.name),
+                    )
+                    .await,
+                    StageKind::Parallel(p) => {
+                        run_parallel_stage(p, &state, stream_tx, timeout_per_stage, session_refs)
+                            .instrument(tracing::info_span!(
+                                "pipeline.stage.parallel",
+                                branch_count = p.branches.len()
+                            ))
+                            .await
                     }
-                    PipelineControl::Resume => {
-                        // No-op during stage execution. True in-place resume
-                        // requires keeping the stage future alive, which is
-                        // deferred to a future task.
-                        continue;
-                    }
-                    PipelineControl::Abort => {
-                        // The stage future is dropped here, which drops any
-                        // inner WorkflowHandlers. Their Drop impls send Abort.
-                        return RunOutcome::Aborted;
+                    // Loop is handled above with mutable state; unreachable here.
+                    StageKind::Loop(_) => unreachable!("loop stage handled above"),
+                }
+            };
+
+            tokio::select! {
+                biased;
+
+                // Control signal -- takes priority when both are ready.
+                Some(control) = control_rx.recv() => {
+                    match control {
+                        PipelineControl::Pause => {
+                            // The stage future is dropped here, which drops any
+                            // inner WorkflowHandlers. Their Drop impls send Abort
+                            // to the inner workflow event loops, giving clean shutdown.
+                            let snapshot = build_snapshot(
+                                pipeline_name,
+                                run_id,
+                                stage_idx,
+                                0,
+                                &stage_results,
+                                &state,
+                                input,
+                            );
+                            return RunOutcome::Paused(snapshot);
+                        }
+                        PipelineControl::Resume => {
+                            // No-op during stage execution. True in-place resume
+                            // requires keeping the stage future alive, which is
+                            // deferred to a future task.
+                            continue;
+                        }
+                        PipelineControl::Abort => {
+                            // The stage future is dropped here, which drops any
+                            // inner WorkflowHandlers. Their Drop impls send Abort.
+                            return RunOutcome::Aborted;
+                        }
                     }
                 }
-            }
 
-            result = stage_future => result,
+                result = stage_future => result,
+            }
         };
 
         #[allow(clippy::cast_possible_truncation)]
@@ -830,6 +869,178 @@ where
             }))
         }
     }
+}
+
+/// What a [`run_loop_stage`] invocation produced.
+enum LoopOutcome {
+    /// The loop ran to completion (or failed); carries the stage result so
+    /// the caller folds it into the pipeline like any other stage.
+    Finished(Result<StageSuccess, StageOutcome>),
+    /// A pause control signal arrived at a round boundary; the snapshot
+    /// carries the current iteration so the loop can be resumed later.
+    Paused(PipelineSnapshot),
+    /// An abort control signal arrived at a round boundary.
+    Aborted,
+}
+
+/// Run a loop stage: re-run the inner stage until the `until` predicate
+/// returns [`LoopDecision::Done`] / [`LoopDecision::Abort`], or until
+/// `max_iterations` rounds have run.
+///
+/// Each round's inner-stage output is recorded into `state` under the inner
+/// stage's name so the `until` predicate (and `on_round_complete` hook) can
+/// observe per-round progress. The final round's output is returned as the
+/// loop stage's own [`StageSuccess`].
+///
+/// Pause / resume / abort control signals are honored at round boundaries,
+/// mirroring the between-stages handling in [`run_pipeline_loop`]. A paused
+/// snapshot carries the current iteration via
+/// [`PipelineSnapshot::current_iteration`].
+#[allow(clippy::too_many_arguments, clippy::too_many_lines)]
+async fn run_loop_stage<S>(
+    loop_stage: &LoopStage<S>,
+    state: &mut PipelineState<S>,
+    stream_tx: &broadcast::Sender<PipelineEvent>,
+    timeout: Option<Duration>,
+    session_refs: &Arc<SessionRefRegistry>,
+    control_rx: &mut mpsc::UnboundedReceiver<PipelineControl>,
+    pipeline_name: &str,
+    run_id: Uuid,
+    stage_idx: usize,
+    stage_results: &[StageResult],
+    input: &serde_json::Value,
+) -> LoopOutcome
+where
+    S: Default + Clone + Send + Sync + 'static + serde::Serialize,
+{
+    // Reject a nested loop up front with a clear error.
+    if let StageKind::Loop(_) = loop_stage.inner.as_ref() {
+        return LoopOutcome::Finished(Err(StageOutcome::Failed(PipelineError::ValidationFailed(
+            format!(
+                "nested loop not supported (loop stage '{}')",
+                loop_stage.name
+            ),
+        ))));
+    }
+
+    let mut last_success: Option<StageSuccess> = None;
+    let mut iteration: u32 = 0;
+    let mut total_usage = blazen_llm::types::TokenUsage::default();
+    let mut total_cost: f64 = 0.0;
+
+    loop {
+        // Cap on iterations: stop cleanly once we've run `max_iterations`.
+        if iteration >= loop_stage.max_iterations {
+            break;
+        }
+
+        // Honor control signals between rounds (non-blocking).
+        if let Ok(control) = control_rx.try_recv() {
+            match control {
+                PipelineControl::Pause => {
+                    let snapshot = build_snapshot(
+                        pipeline_name,
+                        run_id,
+                        stage_idx,
+                        iteration,
+                        stage_results,
+                        state,
+                        input,
+                    );
+                    return LoopOutcome::Paused(snapshot);
+                }
+                PipelineControl::Resume => {}
+                PipelineControl::Abort => return LoopOutcome::Aborted,
+            }
+        }
+
+        // Run the inner stage for this round, racing against control signals
+        // so a pause/abort can interrupt a long-running round.
+        let inner_future = async {
+            match loop_stage.inner.as_ref() {
+                StageKind::Sequential(s) => {
+                    run_sequential_stage(s, state, stream_tx, timeout, session_refs).await
+                }
+                StageKind::Parallel(p) => {
+                    run_parallel_stage(p, state, stream_tx, timeout, session_refs).await
+                }
+                // Rejected above before the loop began.
+                StageKind::Loop(_) => unreachable!("nested loop rejected above"),
+            }
+        };
+
+        let round_result = tokio::select! {
+            biased;
+
+            Some(control) = control_rx.recv() => {
+                match control {
+                    PipelineControl::Pause => {
+                        let snapshot = build_snapshot(
+                            pipeline_name,
+                            run_id,
+                            stage_idx,
+                            iteration,
+                            stage_results,
+                            state,
+                            input,
+                        );
+                        return LoopOutcome::Paused(snapshot);
+                    }
+                    PipelineControl::Resume => continue,
+                    PipelineControl::Abort => return LoopOutcome::Aborted,
+                }
+            }
+
+            result = inner_future => result,
+        };
+
+        match round_result {
+            Ok(success) => {
+                total_usage.add(&success.usage);
+                total_cost += success.cost_usd;
+                // Record this round's output under the inner stage name so
+                // the `until` predicate can observe it via `stage_result`.
+                state.record_stage_result(
+                    loop_stage.inner.name().to_owned(),
+                    success.output.clone(),
+                );
+                last_success = Some(success);
+            }
+            // A skipped inner stage still counts as a completed round but
+            // contributes no output/usage.
+            Err(StageOutcome::Skipped) => {}
+            Err(StageOutcome::Failed(e)) => {
+                return LoopOutcome::Finished(Err(StageOutcome::Failed(e)));
+            }
+        }
+
+        // Fire the per-round hook (after the round, before the decision).
+        if let Some(hook) = &loop_stage.on_round_complete {
+            hook(iteration, state).await;
+        }
+
+        iteration += 1;
+
+        match (loop_stage.until)(state, iteration) {
+            LoopDecision::Done => break,
+            // Fall through to the next round.
+            LoopDecision::Continue => {}
+            LoopDecision::Abort(msg) => {
+                return LoopOutcome::Finished(Err(StageOutcome::Failed(PipelineError::Workflow(
+                    blazen_core::WorkflowError::Other(anyhow::anyhow!(msg)),
+                ))));
+            }
+        }
+    }
+
+    let output = last_success
+        .as_ref()
+        .map_or(serde_json::Value::Null, |s| s.output.clone());
+    LoopOutcome::Finished(Ok(StageSuccess {
+        output,
+        usage: total_usage,
+        cost_usd: total_cost,
+    }))
 }
 
 /// Run a parallel stage with multiple branches.
@@ -1162,10 +1373,12 @@ fn extract_stop_result(event: &dyn AnyEvent) -> serde_json::Value {
 }
 
 /// Build a pipeline snapshot from the current state.
+#[allow(clippy::too_many_arguments)]
 fn build_snapshot<S>(
     pipeline_name: &str,
     run_id: Uuid,
     current_stage_index: usize,
+    current_iteration: u32,
     stage_results: &[StageResult],
     state: &PipelineState<S>,
     input: &serde_json::Value,
@@ -1182,6 +1395,7 @@ where
         active_snapshots: Vec::new(),
         shared_state: shared_state_to_map(state),
         input: input.clone(),
+        current_iteration,
     }
 }
 
@@ -1204,6 +1418,7 @@ where
         pipeline_name,
         run_id,
         next_stage_index,
+        0,
         stage_results,
         state,
         input,

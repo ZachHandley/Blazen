@@ -6,7 +6,10 @@ use std::time::Duration;
 use blazen_core::WorkflowBuilder;
 use blazen_core::step::{StepFn, StepOutput, StepRegistration};
 use blazen_events::{Event, StartEvent, StopEvent};
-use blazen_pipeline::{JoinStrategy, ParallelStage, PipelineBuilder, PipelineError, Stage};
+use blazen_pipeline::{
+    JoinStrategy, LoopDecision, LoopStage, ParallelStage, PipelineBuilder, PipelineError, Stage,
+    StageKind,
+};
 use tokio::sync::Mutex;
 use tokio_stream::StreamExt;
 
@@ -1240,4 +1243,188 @@ async fn pipeline_handler_progress_snapshot_advances() {
     let _ = handler.result().await.expect("pipeline completes");
     // (handler is consumed by `.result()`; if a future task wants to
     // sample after completion it must keep its own clone of the atomic.)
+}
+
+// ---------------------------------------------------------------------------
+// B2 — LoopStage / loop_until
+// ---------------------------------------------------------------------------
+
+/// Build a workflow whose single step increments the shared `counter` atomic
+/// and emits the new count as `{"count": n}`.
+fn counter_increment_workflow(counter: Arc<std::sync::atomic::AtomicU32>) -> blazen_core::Workflow {
+    let handler: StepFn = Arc::new(move |event, _ctx| {
+        let counter = counter.clone();
+        Box::pin(async move {
+            let _ = event
+                .as_any()
+                .downcast_ref::<StartEvent>()
+                .expect("expected StartEvent");
+            let n = counter.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+            Ok(StepOutput::Single(Box::new(StopEvent {
+                result: serde_json::json!({ "count": n }),
+            })))
+        })
+    });
+
+    let step = StepRegistration {
+        name: "increment".into(),
+        accepts: vec![StartEvent::event_type()],
+        emits: vec![StopEvent::event_type()],
+        handler,
+        max_concurrency: 0,
+        semaphore: None,
+        timeout: None,
+        retry_config: None,
+    };
+
+    WorkflowBuilder::new("increment")
+        .step(step)
+        .no_timeout()
+        .build()
+        .unwrap()
+}
+
+#[tokio::test]
+async fn test_loop_until_counter_done_after_five() {
+    let counter = Arc::new(std::sync::atomic::AtomicU32::new(0));
+    let rounds = Arc::new(std::sync::atomic::AtomicU32::new(0));
+
+    let inner = StageKind::Sequential(Stage {
+        name: "increment-body".into(),
+        workflow: counter_increment_workflow(counter.clone()),
+        input_mapper: None,
+        condition: None,
+    });
+
+    let rounds_hook = rounds.clone();
+    let loop_stage = LoopStage {
+        name: "count-to-five".into(),
+        max_iterations: 100,
+        inner: Box::new(inner),
+        until: Arc::new(|state, _iterations| {
+            let count = state
+                .stage_result("increment-body")
+                .and_then(|v| v.get("count"))
+                .and_then(serde_json::Value::as_u64)
+                .unwrap_or(0);
+            if count >= 5 {
+                LoopDecision::Done
+            } else {
+                LoopDecision::Continue
+            }
+        }),
+        on_round_complete: Some(Arc::new(move |_iteration, _state| {
+            let rounds_hook = rounds_hook.clone();
+            Box::pin(async move {
+                rounds_hook.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+            })
+        })),
+    };
+
+    let pipeline = PipelineBuilder::new("loop-counter")
+        .loop_stage(loop_stage)
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!({}));
+    let result = handler.result().await.unwrap();
+
+    // Exactly five increments ran.
+    assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 5);
+    // The on_round_complete hook fired exactly five times.
+    assert_eq!(rounds.load(std::sync::atomic::Ordering::SeqCst), 5);
+    // The loop stage's final output is the last round's output.
+    assert_eq!(result.final_output, serde_json::json!({ "count": 5 }));
+    // The loop contributes a single stage result under its own name.
+    assert_eq!(result.stage_results.len(), 1);
+    assert_eq!(result.stage_results[0].name, "count-to-five");
+}
+
+#[tokio::test]
+async fn test_loop_until_max_iterations_cap() {
+    let counter = Arc::new(std::sync::atomic::AtomicU32::new(0));
+
+    let inner = StageKind::Sequential(Stage {
+        name: "inc".into(),
+        workflow: counter_increment_workflow(counter.clone()),
+        input_mapper: None,
+        condition: None,
+    });
+
+    // `until` never returns Done, so the max_iterations cap stops the loop.
+    let pipeline = PipelineBuilder::new("loop-cap")
+        .loop_until("never-done", 3, inner, |_state, _iterations| {
+            LoopDecision::Continue
+        })
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!({}));
+    let result = handler.result().await.unwrap();
+
+    assert_eq!(counter.load(std::sync::atomic::Ordering::SeqCst), 3);
+    assert_eq!(result.final_output, serde_json::json!({ "count": 3 }));
+}
+
+#[tokio::test]
+async fn test_loop_until_abort_carries_reason() {
+    let inner = StageKind::Sequential(Stage {
+        name: "echo-body".into(),
+        workflow: echo_workflow(),
+        input_mapper: None,
+        condition: None,
+    });
+
+    let pipeline = PipelineBuilder::new("loop-abort")
+        .loop_until("abort-loop", 10, inner, |_state, _iterations| {
+            LoopDecision::Abort("loop bailed out".into())
+        })
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!({"text": "hi"}));
+    let err = handler
+        .result()
+        .await
+        .expect_err("aborting loop must fail the pipeline");
+
+    let msg = err.to_string();
+    assert!(
+        msg.contains("loop bailed out"),
+        "error must carry the abort reason, got: {msg}"
+    );
+}
+
+#[tokio::test]
+async fn test_loop_rejects_nested_loop() {
+    let leaf = StageKind::Sequential(Stage {
+        name: "leaf".into(),
+        workflow: echo_workflow(),
+        input_mapper: None,
+        condition: None,
+    });
+    let nested = StageKind::Loop(LoopStage {
+        name: "inner-loop".into(),
+        max_iterations: 1,
+        inner: Box::new(leaf),
+        until: Arc::new(|_s, _i| LoopDecision::Done),
+        on_round_complete: None,
+    });
+
+    let pipeline = PipelineBuilder::new("nested-loop")
+        .loop_until("outer-loop", 5, nested, |_state, _iterations| {
+            LoopDecision::Done
+        })
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!({"text": "x"}));
+    let err = handler
+        .result()
+        .await
+        .expect_err("nested loop must be rejected");
+    assert!(
+        err.to_string().contains("nested loop"),
+        "error must mention nested loop, got: {err}"
+    );
 }

@@ -18,7 +18,7 @@ use blazen_llm::retry::RetryConfig;
 use crate::error::PipelineError;
 use crate::pipeline::Pipeline;
 use crate::snapshot::PipelineSnapshot;
-use crate::stage::{ParallelStage, Stage, StageKind};
+use crate::stage::{LoopDecision, LoopStage, ParallelStage, Stage, StageKind};
 
 /// Async callback that receives a typed [`PipelineSnapshot`] after each
 /// stage completes.
@@ -85,6 +85,48 @@ impl<S: Default + Clone + Send + Sync + 'static> PipelineBuilder<S> {
     #[must_use]
     pub fn parallel(mut self, parallel: ParallelStage<S>) -> Self {
         self.stages.push(StageKind::Parallel(parallel));
+        self
+    }
+
+    /// Add a loop stage that re-runs `inner` until `until` signals completion.
+    ///
+    /// The inner stage may be [`StageKind::Sequential`] or
+    /// [`StageKind::Parallel`]; passing another [`StageKind::Loop`] is rejected
+    /// at execution time (nested loops are unsupported). The `until` predicate
+    /// is evaluated after each round with a reference to the current
+    /// [`PipelineState`] and the number of rounds completed so far (1-based),
+    /// returning a [`LoopDecision`] to continue, finish, or abort. The loop
+    /// stops after at most `max_iterations` rounds regardless.
+    ///
+    /// [`PipelineState`]: crate::state::PipelineState
+    #[must_use]
+    pub fn loop_until(
+        mut self,
+        name: impl Into<String>,
+        max_iterations: u32,
+        inner: StageKind<S>,
+        until: impl Fn(&crate::state::PipelineState<S>, u32) -> LoopDecision + Send + Sync + 'static,
+    ) -> Self {
+        self.stages.push(StageKind::Loop(LoopStage {
+            name: name.into(),
+            max_iterations,
+            inner: Box::new(inner),
+            until: Arc::new(until),
+            on_round_complete: None,
+        }));
+        self
+    }
+
+    /// Add a fully-constructed [`LoopStage`] to the pipeline.
+    ///
+    /// Use this when you need to set the `on_round_complete` hook (which
+    /// [`loop_until`] leaves unset). [`loop_until`] is the convenience path
+    /// for the common case.
+    ///
+    /// [`loop_until`]: PipelineBuilder::loop_until
+    #[must_use]
+    pub fn loop_stage(mut self, loop_stage: LoopStage<S>) -> Self {
+        self.stages.push(StageKind::Loop(loop_stage));
         self
     }
 

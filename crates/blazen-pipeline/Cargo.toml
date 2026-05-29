@@ -22,6 +22,7 @@ indexmap.workspace = true
 tracing.workspace = true
 futures-util.workspace = true
 thiserror.workspace = true
+anyhow.workspace = true
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", default-features = false, features = ["rt-multi-thread"] }

@@ -77,6 +77,13 @@ pub struct PipelineSnapshot {
     pub shared_state: HashMap<String, serde_json::Value>,
     /// The original pipeline input.
     pub input: serde_json::Value,
+    /// The current iteration of an in-progress [`LoopStage`] when the pipeline
+    /// was paused mid-loop. `0` for non-loop stages (and for snapshots
+    /// persisted by 0.5.x, which predate looping).
+    ///
+    /// [`LoopStage`]: crate::stage::LoopStage
+    #[serde(default)]
+    pub current_iteration: u32,
 }
 
 impl PipelineSnapshot {

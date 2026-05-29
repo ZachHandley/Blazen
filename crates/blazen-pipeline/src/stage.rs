@@ -4,6 +4,8 @@
 //! can be sequential (one workflow) or parallel (multiple branches running
 //! concurrently with a configurable join strategy).
 
+use std::future::Future;
+use std::pin::Pin;
 use std::sync::Arc;
 
 use blazen_core::Workflow;
@@ -91,7 +93,72 @@ where
     }
 }
 
-/// A stage in the pipeline -- either sequential or parallel.
+/// A function invoked after each round of a [`LoopStage`] completes.
+///
+/// Receives the just-completed iteration count (0-based) and a reference to
+/// the current pipeline state, returning a future that runs to completion
+/// before the next round (or loop exit) is decided.
+pub type RoundCompleteFn<S = Value> =
+    Arc<dyn Fn(u32, &PipelineState<S>) -> Pin<Box<dyn Future<Output = ()> + Send>> + Send + Sync>;
+
+/// A function that decides whether a [`LoopStage`] should keep iterating.
+///
+/// Receives the current pipeline state and the number of iterations completed
+/// so far (1-based after the just-finished round), and returns a
+/// [`LoopDecision`].
+pub type LoopUntilFn<S = Value> = Arc<dyn Fn(&PipelineState<S>, u32) -> LoopDecision + Send + Sync>;
+
+/// The decision returned by a [`LoopStage`]'s `until` predicate after each
+/// round.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LoopDecision {
+    /// Run the inner stage again (subject to the `max_iterations` cap).
+    Continue,
+    /// Stop looping cleanly; the loop stage succeeds.
+    Done,
+    /// Stop looping with an error carrying the given reason.
+    Abort(String),
+}
+
+/// A stage that repeatedly runs an inner stage until a predicate signals
+/// completion (or a maximum iteration count is reached).
+///
+/// The inner stage may be [`StageKind::Sequential`] or
+/// [`StageKind::Parallel`]; nesting another [`StageKind::Loop`] is rejected at
+/// execution time.
+pub struct LoopStage<S = Value>
+where
+    S: Default + Clone + Send + Sync + 'static,
+{
+    /// Human-readable name for this loop stage (used in results and logging).
+    pub name: String,
+    /// Hard cap on the number of rounds. The loop stops once this many rounds
+    /// have run even if `until` never returned [`LoopDecision::Done`].
+    pub max_iterations: u32,
+    /// The inner stage to run each round.
+    pub inner: Box<StageKind<S>>,
+    /// Predicate evaluated after each round to decide whether to continue,
+    /// finish, or abort.
+    pub until: LoopUntilFn<S>,
+    /// Optional async hook invoked after each round (before `until`).
+    pub on_round_complete: Option<RoundCompleteFn<S>>,
+}
+
+impl<S> std::fmt::Debug for LoopStage<S>
+where
+    S: Default + Clone + Send + Sync + 'static,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("LoopStage")
+            .field("name", &self.name)
+            .field("max_iterations", &self.max_iterations)
+            .field("inner_kind", &self.inner.name())
+            .field("has_on_round_complete", &self.on_round_complete.is_some())
+            .finish_non_exhaustive()
+    }
+}
+
+/// A stage in the pipeline -- sequential, parallel, or a loop.
 #[derive(Debug)]
 pub enum StageKind<S = Value>
 where
@@ -101,6 +168,8 @@ where
     Sequential(Stage<S>),
     /// A parallel stage with multiple branches.
     Parallel(ParallelStage<S>),
+    /// A loop stage that re-runs an inner stage until a predicate stops it.
+    Loop(LoopStage<S>),
 }
 
 impl<S> StageKind<S>
@@ -113,6 +182,7 @@ where
         match self {
             StageKind::Sequential(s) => &s.name,
             StageKind::Parallel(p) => &p.name,
+            StageKind::Loop(l) => &l.name,
         }
     }
 }
