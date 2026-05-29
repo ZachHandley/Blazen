@@ -1505,7 +1505,11 @@ async fn test_stage_async_three_stage_chain() {
     // 7 -> 14 -> "14" -> len 2 -> true.
     let final_bool: bool = serde_json::from_value(result.final_output.clone())
         .expect("final output deserializes as bool");
-    assert!(final_bool, "final output should be true, got: {:?}", result.final_output);
+    assert!(
+        final_bool,
+        "final output should be true, got: {:?}",
+        result.final_output
+    );
 }
 
 // ---------------------------------------------------------------------------
@@ -1537,8 +1541,8 @@ fn b4_report_to_fixes_workflow() -> blazen_core::Workflow {
                 .as_any()
                 .downcast_ref::<StartEvent>()
                 .expect("expected StartEvent");
-            let report: B4Report = serde_json::from_value(start.data.clone())
-                .expect("input deserializes as B4Report");
+            let report: B4Report =
+                serde_json::from_value(start.data.clone()).expect("input deserializes as B4Report");
             let fixes: Vec<B4Fix> = (0..report.issue_count)
                 .map(|i| B4Fix {
                     label: format!("fix-{i}"),
@@ -1692,4 +1696,77 @@ async fn pipeline_stage_with_typed_state_round_trip() {
     let final_count: u32 =
         serde_json::from_value(result.final_output.clone()).expect("final output is u32");
     assert_eq!(final_count, 3);
+}
+
+#[tokio::test]
+async fn test_on_event_envelope_receives_events() {
+    // Install an unbounded mpsc receiver and assert envelopes flow through it
+    // for a 2-stage pipeline. We don't pin an exact count — pipelines emit at
+    // minimum one `ProgressEvent` per stage at the run-loop boundary, plus
+    // any events forwarded by the inner workflows. We just require N > 0 and
+    // that the source_step values match real stage names.
+    let (env_tx, mut env_rx) =
+        tokio::sync::mpsc::unbounded_channel::<blazen_events::EventEnvelope>();
+
+    let pipeline = PipelineBuilder::new("envelope-fanout")
+        .on_event_envelope(env_tx)
+        .stage(Stage {
+            name: "first".into(),
+            workflow: prefix_workflow("a-"),
+            input_mapper: None,
+            condition: None,
+            output_mapper: None,
+        })
+        .stage(Stage {
+            name: "second".into(),
+            workflow: suffix_workflow("-z"),
+            input_mapper: None,
+            condition: None,
+            output_mapper: None,
+        })
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!({"text": "blazen"}));
+    let result = handler.result().await.unwrap();
+    assert_eq!(
+        result.final_output,
+        serde_json::json!({"text": "a-blazen-z"})
+    );
+
+    // Drain the receiver. The pipeline's executor task drops its
+    // `event_envelope_tx` clone when it finishes, which closes the channel
+    // and ends this loop cleanly. We bound the wait so a regression that
+    // leaks a sender doesn't hang CI.
+    let mut envelopes = Vec::new();
+    let drain = async {
+        while let Some(env) = env_rx.recv().await {
+            envelopes.push(env);
+        }
+    };
+    let _ = tokio::time::timeout(Duration::from_secs(2), drain).await;
+
+    assert!(
+        !envelopes.is_empty(),
+        "expected at least one EventEnvelope to be forwarded; got 0"
+    );
+    // At least the per-stage ProgressEvent fan-out site fires once per stage
+    // (2 stages). Per-workflow stream forwarding adds more on top.
+    assert!(
+        envelopes.len() >= 2,
+        "expected >= 2 envelopes (one per stage progress site), got {}",
+        envelopes.len()
+    );
+
+    // Every envelope should carry its originating stage name in source_step.
+    for env in &envelopes {
+        let src = env
+            .source_step
+            .as_deref()
+            .expect("each envelope should be tagged with a source_step");
+        assert!(
+            src == "first" || src == "second",
+            "unexpected source_step: {src}"
+        );
+    }
 }

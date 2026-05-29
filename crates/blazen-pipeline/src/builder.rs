@@ -43,6 +43,7 @@ where
     stages: Vec<StageKind<S>>,
     persist_fn: Option<PersistFn>,
     persist_json_fn: Option<PersistJsonFn>,
+    event_envelope_tx: Option<tokio::sync::mpsc::UnboundedSender<blazen_events::EventEnvelope>>,
     timeout_per_stage: Option<Duration>,
     total_timeout: Option<Duration>,
     retry_config: Option<Arc<RetryConfig>>,
@@ -68,6 +69,7 @@ impl<S: Default + Clone + Send + Sync + 'static> PipelineBuilder<S> {
             stages: Vec::new(),
             persist_fn: None,
             persist_json_fn: None,
+            event_envelope_tx: None,
             timeout_per_stage: None,
             total_timeout: None,
             retry_config: None,
@@ -184,6 +186,27 @@ impl<S: Default + Clone + Send + Sync + 'static> PipelineBuilder<S> {
         self
     }
 
+    /// Set an unbounded mpsc sender that will receive a
+    /// [`blazen_events::EventEnvelope`] for every event the pipeline
+    /// broadcasts on its `PipelineEvent` stream.
+    ///
+    /// Each envelope is constructed via [`blazen_events::EventEnvelope::new`]
+    /// from a fresh `clone_boxed()` of the event, tagged with the originating
+    /// stage name as `source_step`. Sends are best-effort: a closed receiver
+    /// is silently dropped, the pipeline keeps running.
+    ///
+    /// Pairs with the existing `PipelineEvent` broadcast — consumers that
+    /// want the envelope shape (id + timestamp + `source_step`) can subscribe
+    /// here instead of (or in addition to) `PipelineHandler::stream_events`.
+    #[must_use]
+    pub fn on_event_envelope(
+        mut self,
+        sink: tokio::sync::mpsc::UnboundedSender<blazen_events::EventEnvelope>,
+    ) -> Self {
+        self.event_envelope_tx = Some(sink);
+        self
+    }
+
     /// Set a per-stage timeout. Each stage's workflow will be given this
     /// duration before being considered timed out.
     #[must_use]
@@ -268,6 +291,7 @@ impl<S: Default + Clone + Send + Sync + 'static> PipelineBuilder<S> {
             stages: self.stages,
             persist_fn: self.persist_fn,
             persist_json_fn: self.persist_json_fn,
+            event_envelope_tx: self.event_envelope_tx,
             timeout_per_stage: self.timeout_per_stage,
             total_timeout: self.total_timeout,
             retry_config: self.retry_config,
@@ -288,6 +312,7 @@ impl PipelineBuilder<serde_json::Value> {
             stages: Vec::new(),
             persist_fn: self.persist_fn,
             persist_json_fn: self.persist_json_fn,
+            event_envelope_tx: self.event_envelope_tx,
             timeout_per_stage: self.timeout_per_stage,
             total_timeout: self.total_timeout,
             retry_config: self.retry_config,

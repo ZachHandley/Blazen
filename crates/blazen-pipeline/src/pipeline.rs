@@ -11,7 +11,7 @@ use std::time::{Duration, Instant};
 use blazen_core::SessionRefRegistry;
 use blazen_core::runtime;
 use blazen_core::runtime::{JoinHandle, JoinSet};
-use blazen_events::{AnyEvent, ProgressEvent, ProgressKind, StopEvent};
+use blazen_events::{AnyEvent, EventEnvelope, ProgressEvent, ProgressKind, StopEvent};
 use blazen_llm::retry::RetryConfig;
 use chrono::Utc;
 use tokio::sync::{broadcast, mpsc, oneshot};
@@ -67,6 +67,7 @@ where
     pub(crate) stages: Vec<StageKind<S>>,
     pub(crate) persist_fn: Option<PersistFn>,
     pub(crate) persist_json_fn: Option<PersistJsonFn>,
+    pub(crate) event_envelope_tx: Option<mpsc::UnboundedSender<EventEnvelope>>,
     pub(crate) timeout_per_stage: Option<Duration>,
     pub(crate) total_timeout: Option<Duration>,
     pub(crate) retry_config: Option<Arc<RetryConfig>>,
@@ -181,6 +182,7 @@ where
             self.retry_config.clone(),
             self.persist_fn,
             self.persist_json_fn,
+            self.event_envelope_tx,
             result_tx,
             stream_tx,
             control_rx,
@@ -269,6 +271,7 @@ async fn execute_pipeline<S>(
     retry_config: Option<Arc<RetryConfig>>,
     persist_fn: Option<PersistFn>,
     persist_json_fn: Option<PersistJsonFn>,
+    event_envelope_tx: Option<mpsc::UnboundedSender<EventEnvelope>>,
     result_tx: oneshot::Sender<Result<PipelineResult, PipelineError>>,
     stream_tx: broadcast::Sender<PipelineEvent>,
     mut control_rx: mpsc::UnboundedReceiver<PipelineControl>,
@@ -344,6 +347,7 @@ async fn execute_pipeline<S>(
         persist_fn.as_ref(),
         persist_json_fn.as_ref(),
         &stream_tx,
+        event_envelope_tx.as_ref(),
         &mut control_rx,
         &session_refs_for_run,
         &current_stage_for_run,
@@ -425,6 +429,7 @@ async fn run_pipeline_loop<S>(
     persist_fn: Option<&PersistFn>,
     persist_json_fn: Option<&PersistJsonFn>,
     stream_tx: &broadcast::Sender<PipelineEvent>,
+    event_envelope_tx: Option<&mpsc::UnboundedSender<EventEnvelope>>,
     control_rx: &mut mpsc::UnboundedReceiver<PipelineControl>,
     session_refs: &Arc<SessionRefRegistry>,
     current_stage: &Arc<AtomicUsize>,
@@ -463,11 +468,17 @@ where
             label: stage.name().to_owned(),
             run_id,
         };
+        let progress_event: Box<dyn AnyEvent> = Box::new(progress);
+        if let Some(env_tx) = event_envelope_tx {
+            let env =
+                EventEnvelope::new(progress_event.clone_boxed(), Some(stage.name().to_owned()));
+            let _ = env_tx.send(env);
+        }
         let _ = stream_tx.send(PipelineEvent {
             stage_name: stage.name().to_owned(),
             branch_name: None,
             workflow_run_id: Uuid::nil(),
-            event: Box::new(progress),
+            event: progress_event,
         });
         // Check for control signals between stages (non-blocking).
         if let Ok(control) = control_rx.try_recv() {
@@ -520,6 +531,7 @@ where
                 loop_stage,
                 &mut state,
                 stream_tx,
+                event_envelope_tx,
                 timeout_per_stage,
                 session_refs,
                 control_rx,
@@ -543,31 +555,40 @@ where
         } else {
             // Race stage execution against control signals so pause/abort can
             // interrupt a running stage.
-            let stage_future = async {
-                match stage {
-                    StageKind::Sequential(s) => run_sequential_stage(
-                        s,
-                        &state,
-                        stream_tx,
-                        timeout_per_stage,
-                        session_refs,
-                    )
-                    .instrument(
-                        tracing::info_span!("pipeline.stage.sequential", stage_name = %s.name),
-                    )
-                    .await,
-                    StageKind::Parallel(p) => {
-                        run_parallel_stage(p, &state, stream_tx, timeout_per_stage, session_refs)
+            let stage_future =
+                async {
+                    match stage {
+                        StageKind::Sequential(s) => run_sequential_stage(
+                            s,
+                            &state,
+                            stream_tx,
+                            event_envelope_tx,
+                            timeout_per_stage,
+                            session_refs,
+                        )
+                        .instrument(
+                            tracing::info_span!("pipeline.stage.sequential", stage_name = %s.name),
+                        )
+                        .await,
+                        StageKind::Parallel(p) => {
+                            run_parallel_stage(
+                                p,
+                                &state,
+                                stream_tx,
+                                event_envelope_tx,
+                                timeout_per_stage,
+                                session_refs,
+                            )
                             .instrument(tracing::info_span!(
                                 "pipeline.stage.parallel",
                                 branch_count = p.branches.len()
                             ))
                             .await
+                        }
+                        // Loop is handled above with mutable state; unreachable here.
+                        StageKind::Loop(_) => unreachable!("loop stage handled above"),
                     }
-                    // Loop is handled above with mutable state; unreachable here.
-                    StageKind::Loop(_) => unreachable!("loop stage handled above"),
-                }
-            };
+                };
 
             tokio::select! {
                 biased;
@@ -764,6 +785,7 @@ async fn run_sequential_stage<S>(
     stage: &Stage<S>,
     state: &PipelineState<S>,
     stream_tx: &broadcast::Sender<PipelineEvent>,
+    event_envelope_tx: Option<&mpsc::UnboundedSender<EventEnvelope>>,
     timeout: Option<Duration>,
     session_refs: &Arc<SessionRefRegistry>,
 ) -> Result<StageSuccess, StageOutcome>
@@ -800,6 +822,7 @@ where
 
     // Forward events in a separate task while awaiting the result.
     // Returns the per-stage usage / cost totals it observed.
+    let env_tx_clone = event_envelope_tx.cloned();
     let forward_handle: JoinHandle<(blazen_llm::types::TokenUsage, f64)> = runtime::spawn({
         let stage_name = stage_name.clone();
         async move {
@@ -830,6 +853,10 @@ where
                     if let Some(c) = ue.cost_usd {
                         cost += c;
                     }
+                }
+                if let Some(env_tx) = &env_tx_clone {
+                    let env = EventEnvelope::new(event.clone_boxed(), Some(stage_name.clone()));
+                    let _ = env_tx.send(env);
                 }
                 let pipeline_event = PipelineEvent {
                     stage_name: stage_name.clone(),
@@ -916,6 +943,7 @@ async fn run_loop_stage<S>(
     loop_stage: &LoopStage<S>,
     state: &mut PipelineState<S>,
     stream_tx: &broadcast::Sender<PipelineEvent>,
+    event_envelope_tx: Option<&mpsc::UnboundedSender<EventEnvelope>>,
     timeout: Option<Duration>,
     session_refs: &Arc<SessionRefRegistry>,
     control_rx: &mut mpsc::UnboundedReceiver<PipelineControl>,
@@ -974,10 +1002,26 @@ where
         let inner_future = async {
             match loop_stage.inner.as_ref() {
                 StageKind::Sequential(s) => {
-                    run_sequential_stage(s, state, stream_tx, timeout, session_refs).await
+                    run_sequential_stage(
+                        s,
+                        state,
+                        stream_tx,
+                        event_envelope_tx,
+                        timeout,
+                        session_refs,
+                    )
+                    .await
                 }
                 StageKind::Parallel(p) => {
-                    run_parallel_stage(p, state, stream_tx, timeout, session_refs).await
+                    run_parallel_stage(
+                        p,
+                        state,
+                        stream_tx,
+                        event_envelope_tx,
+                        timeout,
+                        session_refs,
+                    )
+                    .await
                 }
                 // Rejected above before the loop began.
                 StageKind::Loop(_) => unreachable!("nested loop rejected above"),
@@ -1063,6 +1107,7 @@ async fn run_parallel_stage<S>(
     parallel: &ParallelStage<S>,
     state: &PipelineState<S>,
     stream_tx: &broadcast::Sender<PipelineEvent>,
+    event_envelope_tx: Option<&mpsc::UnboundedSender<EventEnvelope>>,
     timeout: Option<Duration>,
     session_refs: &Arc<SessionRefRegistry>,
 ) -> Result<StageSuccess, StageOutcome>
@@ -1071,10 +1116,26 @@ where
 {
     match parallel.join_strategy {
         JoinStrategy::WaitAll => {
-            run_parallel_wait_all(parallel, state, stream_tx, timeout, session_refs).await
+            run_parallel_wait_all(
+                parallel,
+                state,
+                stream_tx,
+                event_envelope_tx,
+                timeout,
+                session_refs,
+            )
+            .await
         }
         JoinStrategy::FirstCompletes => {
-            run_parallel_first_completes(parallel, state, stream_tx, timeout, session_refs).await
+            run_parallel_first_completes(
+                parallel,
+                state,
+                stream_tx,
+                event_envelope_tx,
+                timeout,
+                session_refs,
+            )
+            .await
         }
     }
 }
@@ -1085,6 +1146,7 @@ async fn run_parallel_wait_all<S>(
     parallel: &ParallelStage<S>,
     state: &PipelineState<S>,
     stream_tx: &broadcast::Sender<PipelineEvent>,
+    event_envelope_tx: Option<&mpsc::UnboundedSender<EventEnvelope>>,
     timeout: Option<Duration>,
     session_refs: &Arc<SessionRefRegistry>,
 ) -> Result<StageSuccess, StageOutcome>
@@ -1133,6 +1195,7 @@ where
         let fwd_stage = stage_name;
         let fwd_branch = branch_name.clone();
         let fwd_tx = stream_tx.clone();
+        let fwd_env_tx = event_envelope_tx.cloned();
         let fh: JoinHandle<(blazen_llm::types::TokenUsage, f64)> = runtime::spawn(async move {
             let mut usage = blazen_llm::types::TokenUsage::default();
             let mut cost: f64 = 0.0;
@@ -1150,6 +1213,10 @@ where
                     if let Some(c) = ue.cost_usd {
                         cost += c;
                     }
+                }
+                if let Some(env_tx) = &fwd_env_tx {
+                    let env = EventEnvelope::new(event.clone_boxed(), Some(fwd_stage.clone()));
+                    let _ = env_tx.send(env);
                 }
                 let pipeline_event = PipelineEvent {
                     stage_name: fwd_stage.clone(),
@@ -1230,6 +1297,7 @@ async fn run_parallel_first_completes<S>(
     parallel: &ParallelStage<S>,
     state: &PipelineState<S>,
     stream_tx: &broadcast::Sender<PipelineEvent>,
+    event_envelope_tx: Option<&mpsc::UnboundedSender<EventEnvelope>>,
     timeout: Option<Duration>,
     session_refs: &Arc<SessionRefRegistry>,
 ) -> Result<StageSuccess, StageOutcome>
@@ -1277,6 +1345,7 @@ where
         let fwd_stage = stage_name;
         let fwd_branch = branch_name.clone();
         let fwd_tx = stream_tx.clone();
+        let fwd_env_tx = event_envelope_tx.cloned();
         let fh: JoinHandle<(blazen_llm::types::TokenUsage, f64)> = runtime::spawn(async move {
             let mut usage = blazen_llm::types::TokenUsage::default();
             let mut cost: f64 = 0.0;
@@ -1294,6 +1363,10 @@ where
                     if let Some(c) = ue.cost_usd {
                         cost += c;
                     }
+                }
+                if let Some(env_tx) = &fwd_env_tx {
+                    let env = EventEnvelope::new(event.clone_boxed(), Some(fwd_stage.clone()));
+                    let _ = env_tx.send(env);
                 }
                 let pipeline_event = PipelineEvent {
                     stage_name: fwd_stage.clone(),
