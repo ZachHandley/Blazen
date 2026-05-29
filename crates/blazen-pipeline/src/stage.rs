@@ -11,6 +11,7 @@ use std::sync::Arc;
 use blazen_core::Workflow;
 use serde_json::Value;
 
+use crate::error::PipelineError;
 use crate::state::PipelineState;
 
 /// A function that maps pipeline state into the JSON input for a stage's
@@ -19,6 +20,12 @@ pub type InputMapperFn<S = Value> = Arc<dyn Fn(&PipelineState<S>) -> Value + Sen
 
 /// A function that decides whether a stage should execute.
 pub type ConditionFn<S = Value> = Arc<dyn Fn(&PipelineState<S>) -> bool + Send + Sync>;
+
+/// A function that maps a stage's workflow output back into the typed
+/// pipeline state. Invoked after the stage's output has been recorded in the
+/// shared-state stage-result map, giving downstream stages a typed view.
+pub type OutputMapperFn<S = Value> =
+    Arc<dyn Fn(&mut PipelineState<S>, Value) -> Result<(), PipelineError> + Send + Sync>;
 
 /// A single sequential stage in the pipeline.
 ///
@@ -40,6 +47,53 @@ where
     /// When `None` the stage always runs. When the predicate returns `false`,
     /// the stage is skipped and its result is marked accordingly.
     pub condition: Option<ConditionFn<S>>,
+    /// Optional function invoked after the stage's workflow has produced its
+    /// output and that output has been recorded into the shared-state stage
+    /// result map. Receives the mutable [`PipelineState`] and the stage's
+    /// output JSON, and may project the output into the typed `S` state.
+    pub output_mapper: Option<OutputMapperFn<S>>,
+}
+
+impl<S> Stage<S>
+where
+    S: Default + Clone + Send + Sync + 'static,
+{
+    /// Wire this stage into the typed shared state `S` via a pair of
+    /// projection closures.
+    ///
+    /// `extract` reads from `PipelineState<S>` and produces the typed input
+    /// `I` that will be serialized into the workflow's JSON input
+    /// (replacing any pre-existing [`input_mapper`](Self::input_mapper)). If
+    /// serialization fails the input falls back to [`Value::Null`].
+    ///
+    /// `store` receives the deserialized output `O` (decoded from the
+    /// workflow's stop value) along with a mutable reference to the pipeline
+    /// state, so it can mutate `S` to make the result visible to downstream
+    /// stages (replacing any pre-existing
+    /// [`output_mapper`](Self::output_mapper)).
+    ///
+    /// Deserialization failures surface as
+    /// [`PipelineError::Serialization`] and abort the pipeline.
+    #[must_use]
+    pub fn with_typed_state<I, O>(
+        mut self,
+        extract: impl Fn(&PipelineState<S>) -> I + Send + Sync + 'static,
+        store: impl Fn(&mut PipelineState<S>, O) + Send + Sync + 'static,
+    ) -> Self
+    where
+        I: serde::Serialize + 'static,
+        O: serde::de::DeserializeOwned + 'static,
+    {
+        self.input_mapper = Some(Arc::new(move |state| {
+            serde_json::to_value(extract(state)).unwrap_or(Value::Null)
+        }));
+        self.output_mapper = Some(Arc::new(move |state, stop_value| {
+            let typed: O = serde_json::from_value(stop_value)?;
+            store(state, typed);
+            Ok(())
+        }));
+        self
+    }
 }
 
 impl<S> std::fmt::Debug for Stage<S>
@@ -51,6 +105,7 @@ where
             .field("name", &self.name)
             .field("has_input_mapper", &self.input_mapper.is_some())
             .field("has_condition", &self.condition.is_some())
+            .field("has_output_mapper", &self.output_mapper.is_some())
             .finish_non_exhaustive()
     }
 }

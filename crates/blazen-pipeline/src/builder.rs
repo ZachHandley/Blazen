@@ -115,6 +115,7 @@ impl<S: Default + Clone + Send + Sync + 'static> PipelineBuilder<S> {
             workflow,
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
     }
 

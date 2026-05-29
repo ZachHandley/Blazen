@@ -209,6 +209,7 @@ pub(crate) fn build_rust_stage(
         workflow,
         input_mapper,
         condition,
+        output_mapper: None,
     })
 }
 

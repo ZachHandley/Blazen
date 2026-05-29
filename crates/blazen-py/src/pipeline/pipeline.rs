@@ -73,6 +73,7 @@ impl PyPipeline {
             builder = match stage_kind {
                 blazen_pipeline::StageKind::Sequential(s) => builder.stage(s),
                 blazen_pipeline::StageKind::Parallel(p) => builder.parallel(p),
+                blazen_pipeline::StageKind::Loop(l) => builder.loop_stage(l),
             };
         }
         if let Some(t) = self.timeout_per_stage {
@@ -125,6 +126,7 @@ impl PyPipeline {
             builder = match stage_kind {
                 blazen_pipeline::StageKind::Sequential(s) => builder.stage(s),
                 blazen_pipeline::StageKind::Parallel(p) => builder.parallel(p),
+                blazen_pipeline::StageKind::Loop(l) => builder.loop_stage(l),
             };
         }
         if let Some(t) = self.timeout_per_stage {

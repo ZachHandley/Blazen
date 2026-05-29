@@ -643,7 +643,22 @@ where
                     usage: usage_for_result,
                     cost_usd: cost_for_result,
                 };
+                // Capture the output mapper (if any) for Sequential stages
+                // before we move `stage_output` into the shared-state
+                // result map. Parallel and Loop stages don't carry an
+                // `output_mapper` field — only `Stage<S>` does — so they
+                // simply skip this step.
+                let output_mapper = match stage {
+                    StageKind::Sequential(s) => s.output_mapper.clone(),
+                    StageKind::Parallel(_) | StageKind::Loop(_) => None,
+                };
+                let mapper_input = output_mapper.as_ref().map(|_| stage_output.clone());
                 state.record_stage_result(stage.name().to_owned(), stage_output);
+                if let (Some(om), Some(value)) = (output_mapper, mapper_input)
+                    && let Err(e) = om(&mut state, value)
+                {
+                    return RunOutcome::Failed(e);
+                }
                 stage_results.push(sr);
             }
             Err(StageOutcome::Skipped) => {

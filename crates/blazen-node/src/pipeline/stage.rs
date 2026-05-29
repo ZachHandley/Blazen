@@ -99,6 +99,7 @@ impl JsStage {
                 workflow: core_workflow,
                 input_mapper: None,
                 condition: None,
+                output_mapper: None,
             })),
         })
     }

@@ -75,12 +75,14 @@ async fn main() -> anyhow::Result<()> {
             workflow: extract_wf,
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .stage(Stage {
             name: "summarise".into(),
             workflow: summarise_wf,
             input_mapper: None, // receives previous stage's output
             condition: None,
+            output_mapper: None,
         })
         .build()?;
 
@@ -112,6 +114,7 @@ let pipeline = PipelineBuilder::new("analyze-pipeline")
         workflow: preprocess_wf,
         input_mapper: None,
         condition: None,
+        output_mapper: None,
     })
     .parallel(ParallelStage {
         name: "analyze".into(),
@@ -121,12 +124,14 @@ let pipeline = PipelineBuilder::new("analyze-pipeline")
                 workflow: sentiment_wf,
                 input_mapper: None,
                 condition: None,
+                output_mapper: None,
             },
             Stage {
                 name: "entities".into(),
                 workflow: entities_wf,
                 input_mapper: None,
                 condition: None,
+                output_mapper: None,
             },
         ],
         join_strategy: JoinStrategy::WaitAll,
@@ -161,6 +166,7 @@ Stage {
             .and_then(|v| v.as_array())
             .is_some_and(|arr| !arr.is_empty())
     })),
+    output_mapper: None,
 }
 ```
 

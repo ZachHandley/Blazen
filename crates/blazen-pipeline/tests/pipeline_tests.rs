@@ -240,12 +240,14 @@ async fn test_two_stage_sequential() {
             workflow: prefix_workflow("hello-"),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .stage(Stage {
             name: "add-suffix".into(),
             workflow: suffix_workflow("-world"),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .build()
         .unwrap();
@@ -269,18 +271,21 @@ async fn test_conditional_skip() {
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .stage(Stage {
             name: "skipped-stage".into(),
             workflow: prefix_workflow("SHOULD-NOT-SEE-"),
             input_mapper: None,
             condition: Some(Arc::new(|_state| false)),
+            output_mapper: None,
         })
         .stage(Stage {
             name: "final".into(),
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .build()
         .unwrap();
@@ -309,6 +314,7 @@ async fn test_input_mapper() {
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .stage(Stage {
             name: "mapped".into(),
@@ -323,6 +329,7 @@ async fn test_input_mapper() {
                 })
             })),
             condition: None,
+            output_mapper: None,
         })
         .build()
         .unwrap();
@@ -349,12 +356,14 @@ async fn test_parallel_wait_all() {
                     workflow: delayed_echo_workflow(10),
                     input_mapper: Some(Arc::new(|_| serde_json::json!({"branch": "fast"}))),
                     condition: None,
+                    output_mapper: None,
                 },
                 Stage {
                     name: "slow".into(),
                     workflow: delayed_echo_workflow(50),
                     input_mapper: Some(Arc::new(|_| serde_json::json!({"branch": "slow"}))),
                     condition: None,
+                    output_mapper: None,
                 },
             ],
             join_strategy: JoinStrategy::WaitAll,
@@ -382,12 +391,14 @@ async fn test_parallel_first_completes() {
                     workflow: delayed_echo_workflow(10),
                     input_mapper: Some(Arc::new(|_| serde_json::json!({"winner": "fast"}))),
                     condition: None,
+                    output_mapper: None,
                 },
                 Stage {
                     name: "slow".into(),
                     workflow: delayed_echo_workflow(2000),
                     input_mapper: Some(Arc::new(|_| serde_json::json!({"winner": "slow"}))),
                     condition: None,
+                    output_mapper: None,
                 },
             ],
             join_strategy: JoinStrategy::FirstCompletes,
@@ -415,12 +426,14 @@ async fn test_parallel_streaming() {
                     workflow: streaming_echo_workflow(),
                     input_mapper: Some(Arc::new(|_| serde_json::json!({"from": "a"}))),
                     condition: None,
+                    output_mapper: None,
                 },
                 Stage {
                     name: "branch-b".into(),
                     workflow: streaming_echo_workflow(),
                     input_mapper: Some(Arc::new(|_| serde_json::json!({"from": "b"}))),
                     condition: None,
+                    output_mapper: None,
                 },
             ],
             join_strategy: JoinStrategy::WaitAll,
@@ -475,12 +488,14 @@ async fn test_pause_between_stages() {
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .stage(Stage {
             name: "stage-2".into(),
             workflow: delayed_echo_workflow(2000),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .build()
         .unwrap();
@@ -506,12 +521,14 @@ async fn test_pause_between_stages() {
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .stage(Stage {
             name: "stage-2".into(),
             workflow: echo_workflow(), // Fast this time
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .build()
         .unwrap();
@@ -544,12 +561,14 @@ async fn test_persist_json_callback() {
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .stage(Stage {
             name: "stage-b".into(),
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .on_persist_json(persist_json)
         .build()
@@ -593,6 +612,7 @@ async fn test_persist_object_callback() {
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .on_persist(persist_fn)
         .build()
@@ -618,6 +638,7 @@ async fn test_no_state_noop() {
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .build()
         .unwrap();
@@ -638,12 +659,14 @@ async fn test_stage_failure_propagates() {
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .stage(Stage {
             name: "bad-stage".into(),
             workflow: failing_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .build()
         .unwrap();
@@ -689,6 +712,7 @@ async fn test_pipeline_resume_validates_pipeline_name() {
             workflow: delayed_echo_workflow(200),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .build()
         .unwrap();
@@ -707,6 +731,7 @@ async fn test_pipeline_resume_validates_pipeline_name() {
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .build()
         .unwrap();
@@ -740,12 +765,14 @@ async fn test_pipeline_resume_validates_stage_names() {
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .stage(Stage {
             name: "step2".into(),
             workflow: delayed_echo_workflow(200),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .build()
         .unwrap();
@@ -767,12 +794,14 @@ async fn test_pipeline_resume_validates_stage_names() {
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .stage(Stage {
             name: "step2".into(),
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .build()
         .unwrap();
@@ -807,12 +836,14 @@ async fn test_pipeline_resume_restores_shared_state() {
             workflow: prefix_workflow("hello-"),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .stage(Stage {
             name: "consumer".into(),
             workflow: delayed_echo_workflow(200),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .build()
         .unwrap();
@@ -838,12 +869,14 @@ async fn test_pipeline_resume_restores_shared_state() {
             workflow: echo_workflow(), // Won't re-run (already completed)
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .stage(Stage {
             name: "consumer".into(),
             workflow: echo_workflow(), // Fast this time
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .build()
         .unwrap();
@@ -876,6 +909,7 @@ async fn pipeline_total_timeout_fires_when_exceeded() {
             workflow: delayed_echo_workflow(500),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .total_timeout(Duration::from_millis(50))
         .build()
@@ -906,6 +940,7 @@ async fn pipeline_total_timeout_does_not_fire_when_pipeline_finishes_first() {
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .total_timeout(Duration::from_secs(5))
         .build()
@@ -930,6 +965,7 @@ async fn pipeline_no_total_timeout_disables_total_timeout() {
             workflow: delayed_echo_workflow(100),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .total_timeout(Duration::from_millis(10))
         .no_total_timeout()
@@ -957,6 +993,7 @@ fn pipeline_builder_retry_config_sets_field() {
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .retry_config(RetryConfig {
             max_retries: 7,
@@ -976,6 +1013,7 @@ fn pipeline_builder_no_retry_sets_max_retries_zero() {
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .no_retry()
         .build()
@@ -1045,6 +1083,7 @@ async fn pipeline_aggregates_usage_events_into_state_and_result() {
             workflow: usage_emitting_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .build()
         .expect("builds");
@@ -1107,6 +1146,7 @@ async fn pipeline_typed_state_struct_round_trips() {
             workflow,
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .build()
         .unwrap();
@@ -1143,12 +1183,14 @@ async fn pipeline_emits_progress_events_for_each_stage() {
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .stage(Stage {
             name: "second".into(),
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .build()
         .unwrap();
@@ -1209,12 +1251,14 @@ async fn pipeline_handler_progress_snapshot_advances() {
             workflow: echo_workflow(),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .stage(Stage {
             name: "slow".into(),
             workflow: delayed_echo_workflow(300),
             input_mapper: None,
             condition: None,
+            output_mapper: None,
         })
         .build()
         .unwrap();
@@ -1294,6 +1338,7 @@ async fn test_loop_until_counter_done_after_five() {
         workflow: counter_increment_workflow(counter.clone()),
         input_mapper: None,
         condition: None,
+        output_mapper: None,
     });
 
     let rounds_hook = rounds.clone();
@@ -1349,6 +1394,7 @@ async fn test_loop_until_max_iterations_cap() {
         workflow: counter_increment_workflow(counter.clone()),
         input_mapper: None,
         condition: None,
+        output_mapper: None,
     });
 
     // `until` never returns Done, so the max_iterations cap stops the loop.
@@ -1373,6 +1419,7 @@ async fn test_loop_until_abort_carries_reason() {
         workflow: echo_workflow(),
         input_mapper: None,
         condition: None,
+        output_mapper: None,
     });
 
     let pipeline = PipelineBuilder::new("loop-abort")
@@ -1402,6 +1449,7 @@ async fn test_loop_rejects_nested_loop() {
         workflow: echo_workflow(),
         input_mapper: None,
         condition: None,
+        output_mapper: None,
     });
     let nested = StageKind::Loop(LoopStage {
         name: "inner-loop".into(),
@@ -1458,4 +1506,190 @@ async fn test_stage_async_three_stage_chain() {
     let final_bool: bool = serde_json::from_value(result.final_output.clone())
         .expect("final output deserializes as bool");
     assert!(final_bool, "final output should be true, got: {:?}", result.final_output);
+}
+
+// ---------------------------------------------------------------------------
+// BLAZEN_IMPROVEMENTS B4 — `Stage::with_typed_state` round-trip
+// ---------------------------------------------------------------------------
+
+#[derive(Default, Clone, serde::Serialize, serde::Deserialize, Debug)]
+struct B4Report {
+    issue_count: u32,
+}
+
+#[derive(Clone, serde::Serialize, serde::Deserialize, Debug)]
+struct B4Fix {
+    label: String,
+}
+
+#[derive(Default, Clone, serde::Serialize, serde::Deserialize, Debug)]
+struct B4State {
+    report: B4Report,
+    fixes: Vec<B4Fix>,
+}
+
+/// A workflow that receives a `B4Report` JSON, fabricates one `B4Fix` per
+/// reported issue, and emits the `Vec<B4Fix>` as its `StopEvent` result.
+fn b4_report_to_fixes_workflow() -> blazen_core::Workflow {
+    let handler: StepFn = Arc::new(|event, _ctx| {
+        Box::pin(async move {
+            let start = event
+                .as_any()
+                .downcast_ref::<StartEvent>()
+                .expect("expected StartEvent");
+            let report: B4Report = serde_json::from_value(start.data.clone())
+                .expect("input deserializes as B4Report");
+            let fixes: Vec<B4Fix> = (0..report.issue_count)
+                .map(|i| B4Fix {
+                    label: format!("fix-{i}"),
+                })
+                .collect();
+            let result = serde_json::to_value(&fixes).unwrap();
+            Ok(StepOutput::Single(Box::new(StopEvent { result })))
+        })
+    });
+
+    let step = StepRegistration {
+        name: "report-to-fixes".into(),
+        accepts: vec![StartEvent::event_type()],
+        emits: vec![StopEvent::event_type()],
+        handler,
+        max_concurrency: 0,
+        semaphore: None,
+        timeout: None,
+        retry_config: None,
+    };
+
+    WorkflowBuilder::new("report-to-fixes")
+        .step(step)
+        .no_timeout()
+        .build()
+        .unwrap()
+}
+
+/// A workflow that receives a fix-count `u32` JSON and echoes it as the stop
+/// value (so we can both deserialize via `output_mapper` and read it as the
+/// pipeline's `final_output`).
+fn b4_fix_count_echo_workflow() -> blazen_core::Workflow {
+    let handler: StepFn = Arc::new(|event, _ctx| {
+        Box::pin(async move {
+            let start = event
+                .as_any()
+                .downcast_ref::<StartEvent>()
+                .expect("expected StartEvent");
+            let n: u32 =
+                serde_json::from_value(start.data.clone()).expect("input deserializes as u32");
+            Ok(StepOutput::Single(Box::new(StopEvent {
+                result: serde_json::json!(n),
+            })))
+        })
+    });
+
+    let step = StepRegistration {
+        name: "fix-count-echo".into(),
+        accepts: vec![StartEvent::event_type()],
+        emits: vec![StopEvent::event_type()],
+        handler,
+        max_concurrency: 0,
+        semaphore: None,
+        timeout: None,
+        retry_config: None,
+    };
+
+    WorkflowBuilder::new("fix-count-echo")
+        .step(step)
+        .no_timeout()
+        .build()
+        .unwrap()
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn pipeline_stage_with_typed_state_round_trip() {
+    // Captures what each stage's `store` saw so we can independently verify
+    // both the producer and the downstream consumer.
+    let observed_fix_count_stage1 = Arc::new(std::sync::Mutex::new(0_usize));
+    let observed_fix_count_stage2 = Arc::new(std::sync::Mutex::new(0_u32));
+
+    // Stage 1: extract `Report` from the typed state and write the resulting
+    // `Vec<Fix>` back into the typed state via the `store` closure. The
+    // extract reads from `state.shared().report` — for the first stage we
+    // seed `report` from the pipeline input below.
+    let s1_observed = Arc::clone(&observed_fix_count_stage1);
+    let stage1 = Stage::<B4State> {
+        name: "produce-fixes".into(),
+        workflow: b4_report_to_fixes_workflow(),
+        input_mapper: None,
+        condition: None,
+        output_mapper: None,
+    }
+    .with_typed_state(
+        |state: &blazen_pipeline::PipelineState<B4State>| state.shared().report.clone(),
+        move |state, fixes: Vec<B4Fix>| {
+            *s1_observed.lock().unwrap() = fixes.len();
+            state.shared_mut().fixes = fixes;
+        },
+    );
+
+    // Stage 2: extract `Vec<Fix>` from typed state via the count, and assert
+    // via the store closure that we observed the same count stage 1 wrote.
+    let s2_observed = Arc::clone(&observed_fix_count_stage2);
+    let stage2 = Stage::<B4State> {
+        name: "consume-fixes".into(),
+        workflow: b4_fix_count_echo_workflow(),
+        input_mapper: None,
+        condition: None,
+        output_mapper: None,
+    }
+    .with_typed_state(
+        |state: &blazen_pipeline::PipelineState<B4State>| {
+            u32::try_from(state.shared().fixes.len()).unwrap()
+        },
+        move |_state, count: u32| {
+            *s2_observed.lock().unwrap() = count;
+        },
+    );
+
+    // Bootstrap the typed `report` field from the pipeline input via a
+    // small seed stage whose own `with_typed_state` reads the pipeline
+    // input and stores it as `state.shared_mut().report`.
+    let seed = Stage::<B4State> {
+        name: "seed-report".into(),
+        workflow: echo_workflow(),
+        input_mapper: None,
+        condition: None,
+        output_mapper: None,
+    }
+    .with_typed_state(
+        |state: &blazen_pipeline::PipelineState<B4State>| state.input().clone(),
+        move |state, report: B4Report| {
+            state.shared_mut().report = report;
+        },
+    );
+
+    let pipeline = PipelineBuilder::<serde_json::Value>::new("b4-typed-state")
+        .with_state::<B4State>()
+        .stage(seed)
+        .stage(stage1)
+        .stage(stage2)
+        .build()
+        .unwrap();
+
+    let h = pipeline.start(serde_json::json!({"issue_count": 3}));
+    let result = h.result().await.expect("pipeline runs cleanly");
+
+    let stage1_wrote = *observed_fix_count_stage1.lock().unwrap();
+    let stage2_saw = *observed_fix_count_stage2.lock().unwrap();
+    assert_eq!(
+        stage1_wrote, 3,
+        "stage 1's store should have written 3 fixes, saw {stage1_wrote}"
+    );
+    assert_eq!(
+        stage2_saw, 3,
+        "stage 2's extract+store should have observed 3 fixes, saw {stage2_saw}"
+    );
+
+    // Final output is the count echoed by `consume-fixes`.
+    let final_count: u32 =
+        serde_json::from_value(result.final_output.clone()).expect("final output is u32");
+    assert_eq!(final_count, 3);
 }

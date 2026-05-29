@@ -205,6 +205,7 @@ impl WasmStage {
                 workflow: core_workflow,
                 input_mapper: input_mapper_fn,
                 condition: condition_fn,
+                output_mapper: None,
             })),
         })
     }
