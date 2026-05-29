@@ -306,7 +306,7 @@ jobs:
 
       - name: Install system deps (macOS)
         if: steps.verify.outputs.completed != 'true' && runner.os == 'macOS'
-        run: brew install cmake ccache
+        run: brew install cmake ccache libomp
 
       - name: Configure CMake to use ccache (non-Windows)
         if: steps.verify.outputs.completed != 'true' && runner.os != 'Windows'
@@ -890,7 +890,7 @@ jobs:
 
       - name: Install system deps (macOS)
         if: steps.verify.outputs.completed != 'true' && runner.os == 'macOS'
-        run: brew install cmake ccache
+        run: brew install cmake ccache libomp
 
       - name: Configure CMake to use ccache (non-Windows)
         if: steps.verify.outputs.completed != 'true' && runner.os != 'Windows'
@@ -1396,7 +1396,7 @@ jobs:
 
       - name: Install system deps (macOS)
         if: steps.verify.outputs.completed != 'true' && runner.os == 'macOS'
-        run: brew install cmake ccache
+        run: brew install cmake ccache libomp
 
       - name: Install Git Bash (Windows)
         if: steps.verify.outputs.completed != 'true' && runner.os == 'Windows'
@@ -1441,6 +1441,20 @@ jobs:
           CARGO_HOME_DIR="${GITHUB_WORKSPACE}/.cargo-home-${{ github.job }}-${{ matrix.target }}"
           mkdir -p "${CARGO_HOME_DIR}"
           echo "CARGO_HOME=${CARGO_HOME_DIR}" >> "$GITHUB_ENV"
+
+      - name: Short CARGO_TARGET_DIR (Windows MAX_PATH)
+        if: steps.verify.outputs.completed != 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # sentencepiece-sys + protobuf-lite generate object paths that
+          # exceed CMake's CMAKE_OBJECT_PATH_MAX=250 when CARGO_TARGET_DIR
+          # sits under the runner workdir (C:\ProgramData\forgejorunner\...).
+          # cl.exe /Fo doesn't honor HKLM LongPathsEnabled either. Pin the
+          # cargo target dir to a short top-level path so generated object
+          # paths stay within the budget.
+          $TargetDir = "C:\b\${{ github.job }}-${{ matrix.target }}"
+          New-Item -Path $TargetDir -ItemType Directory -Force | Out-Null
+          "CARGO_TARGET_DIR=$TargetDir" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Setup Rust
         if: steps.verify.outputs.completed != 'true'
@@ -1702,7 +1716,7 @@ jobs:
 
       - name: Install system deps (macOS)
         if: steps.verify.outputs.completed != 'true' && runner.os == 'macOS'
-        run: brew install cmake ccache
+        run: brew install cmake ccache libomp
 
       - name: Install Git Bash (Windows)
         if: steps.verify.outputs.completed != 'true' && runner.os == 'Windows'
@@ -1747,6 +1761,20 @@ jobs:
           CARGO_HOME_DIR="${GITHUB_WORKSPACE}/.cargo-home-${{ github.job }}-${{ matrix.target }}"
           mkdir -p "${CARGO_HOME_DIR}"
           echo "CARGO_HOME=${CARGO_HOME_DIR}" >> "$GITHUB_ENV"
+
+      - name: Short CARGO_TARGET_DIR (Windows MAX_PATH)
+        if: steps.verify.outputs.completed != 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          # sentencepiece-sys + protobuf-lite generate object paths that
+          # exceed CMake's CMAKE_OBJECT_PATH_MAX=250 when CARGO_TARGET_DIR
+          # sits under the runner workdir (C:\ProgramData\forgejorunner\...).
+          # cl.exe /Fo doesn't honor HKLM LongPathsEnabled either. Pin the
+          # cargo target dir to a short top-level path so generated object
+          # paths stay within the budget.
+          $TargetDir = "C:\b\${{ github.job }}-${{ matrix.target }}"
+          New-Item -Path $TargetDir -ItemType Directory -Force | Out-Null
+          "CARGO_TARGET_DIR=$TargetDir" | Out-File -FilePath $env:GITHUB_ENV -Append
 
       - name: Setup Rust
         if: steps.verify.outputs.completed != 'true'
@@ -1933,7 +1961,7 @@ jobs:
 
       - name: Install system deps
         if: steps.verify.outputs.completed != 'true'
-        run: brew install cmake
+        run: brew install cmake libomp
 
       - name: Build per-arch static libs
         if: steps.verify.outputs.completed != 'true'
