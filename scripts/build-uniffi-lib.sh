@@ -65,7 +65,14 @@ SCRATCH_DIR="$(mktemp -d -p "$SCRATCH_ROOT" build.XXXXXX)"
 cleanup() { rm -rf "$SCRATCH_DIR"; }
 trap cleanup EXIT
 
-FEATURES="${BLAZEN_UNIFFI_FEATURES:-}"
+# Default to the same feature set that `regen-bindings.sh` uses for the
+# uniffi-bindgen scaffolding build, so the prebuilt lib exposes every symbol
+# the generated foreign bindings reference. The NC-licensed providers
+# (Spark/Bark/F5/FasterWhisper/WhisperStreaming/TripoSR/ThreeDCompat) are
+# part of the regen set but are not in the crate's `local-all` umbrella, so
+# without this default the lib link-fails when consumers build a binding
+# that calls into those providers.
+FEATURES="${BLAZEN_UNIFFI_FEATURES:-local-all,audio-tts-spark,audio-tts-bark,audio-tts-f5,audio-stt-faster-whisper,audio-stt-whisper-streaming,triposr,threed-compat-proxy}"
 PROFILE="${BLAZEN_UNIFFI_PROFILE:-release}"
 INSTALL_CROSS="${BLAZEN_INSTALL_CROSS:-0}"
 
