@@ -142,18 +142,27 @@ pub unsafe extern "C" fn blazen_init_langfuse(
 // OTLP
 // ---------------------------------------------------------------------------
 
-/// Initialize the OpenTelemetry OTLP (gRPC) trace exporter.
+/// Initialize the OpenTelemetry OTLP trace exporter.
 ///
 /// Installs an `opentelemetry-otlp` exporter as the global tracing
 /// subscriber.
 ///
 /// Arguments:
-///   - `endpoint`: OTLP gRPC endpoint URL (e.g. `"http://localhost:4317"`).
+///   - `endpoint`: OTLP endpoint URL. For HTTP/protobuf use
+///     `"https://collector/v1/traces"`; for gRPC use `"http://collector:4317"`.
 ///   - `service_name`: optional service name reported to the backend; null
 ///     defaults to `"blazen"`.
+///   - `protocol`: wire-level transport. `0` = gRPC (tonic), `1` =
+///     HTTP/binary-protobuf, any negative value = default (HTTP/protobuf).
+///   - `header_keys` / `header_values`: parallel arrays of `header_count`
+///     NUL-terminated UTF-8 strings forming the auth/routing header pairs.
+///     Pass null arrays with `header_count == 0` for no headers. Headers are
+///     honored on HTTP and dropped with a warning on gRPC.
+///   - `header_count`: number of entries in `header_keys` / `header_values`.
 ///
 /// Returns `0` on success, `-1` on failure (writing the inner error to
-/// `*out_err`), or `-2` when `endpoint` is null / not valid UTF-8.
+/// `*out_err`), or `-2` when `endpoint`, a header key, or a header value is
+/// null / not valid UTF-8.
 ///
 /// # Safety
 ///
@@ -161,13 +170,20 @@ pub unsafe extern "C" fn blazen_init_langfuse(
 ///   live for the duration of the call.
 /// - `service_name` must be null OR a valid NUL-terminated UTF-8 buffer
 ///   that remains live for the duration of the call.
+/// - `header_keys` / `header_values` must each be null OR point to
+///   `header_count` valid `*const c_char` slots, each a NUL-terminated UTF-8
+///   buffer live for the duration of the call.
 /// - `out_err` must be null OR a writable pointer to a `*mut BlazenError`
 ///   slot.
-#[cfg(feature = "otlp")]
+#[cfg(any(feature = "otlp", feature = "otlp-http"))]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_init_otlp(
     endpoint: *const c_char,
     service_name: *const c_char,
+    protocol: i32,
+    header_keys: *const *const c_char,
+    header_values: *const *const c_char,
+    header_count: usize,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
     // SAFETY: caller upholds the NUL-termination + lifetime contract on `endpoint`.
@@ -186,7 +202,44 @@ pub unsafe extern "C" fn blazen_init_otlp(
         }
     };
 
-    match blazen_uniffi::telemetry::init_otlp(endpoint_str.to_owned(), service_name_opt) {
+    let protocol_opt = match protocol {
+        0 => Some(blazen_uniffi::telemetry::OtlpProtocol::Grpc),
+        1 => Some(blazen_uniffi::telemetry::OtlpProtocol::HttpProto),
+        _ => None,
+    };
+
+    let headers_opt = if header_count == 0 || header_keys.is_null() || header_values.is_null() {
+        None
+    } else {
+        let mut map = std::collections::HashMap::with_capacity(header_count);
+        for i in 0..header_count {
+            // SAFETY: caller guarantees `header_keys` / `header_values` point to
+            // `header_count` valid slots; reading element `i` is in-bounds.
+            let key_ptr = unsafe { *header_keys.add(i) };
+            let val_ptr = unsafe { *header_values.add(i) };
+            // SAFETY: each slot is a NUL-terminated UTF-8 buffer per the contract.
+            let Some(key) = (unsafe { cstr_to_str(key_ptr) }) else {
+                return unsafe {
+                    write_internal_error(out_err, "header key must not be null or non-UTF-8")
+                };
+            };
+            // SAFETY: as above for the value buffer.
+            let Some(val) = (unsafe { cstr_to_str(val_ptr) }) else {
+                return unsafe {
+                    write_internal_error(out_err, "header value must not be null or non-UTF-8")
+                };
+            };
+            map.insert(key.to_owned(), val.to_owned());
+        }
+        Some(map)
+    };
+
+    match blazen_uniffi::telemetry::init_otlp(
+        endpoint_str.to_owned(),
+        service_name_opt,
+        protocol_opt,
+        headers_opt,
+    ) {
         Ok(()) => 0,
         Err(e) => unsafe { write_error(out_err, e) },
     }

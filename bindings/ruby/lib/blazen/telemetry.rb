@@ -37,17 +37,43 @@ module Blazen
 
     # Initializes the OTLP (OpenTelemetry) exporter.
     #
-    # Requires the native library to have been built with the +otlp+
-    # feature; otherwise raises {Blazen::UnsupportedError}.
+    # Requires the native library to have been built with the +otlp+ (gRPC)
+    # or +otlp-http+ feature; otherwise raises {Blazen::UnsupportedError}.
     #
-    # @param endpoint [String] OTLP collector endpoint
+    # @param endpoint [String] OTLP collector endpoint. For HTTP/protobuf use
+    #   +"https://collector/v1/traces"+; for gRPC use +"http://collector:4317"+.
     # @param service_name [String, nil] service name to tag spans with
+    # @param protocol [Symbol, String, nil] wire transport: +:http_proto+
+    #   (default) or +:grpc+
+    # @param headers [Hash{String=>String}, nil] auth/routing headers
+    #   (e.g. +{ "Authorization" => "Bearer ..." }+). Honored on HTTP and
+    #   dropped with a warning on gRPC.
     # @return [void]
-    def init_otlp(endpoint:, service_name: nil)
+    def init_otlp(endpoint:, service_name: nil, protocol: nil, headers: nil)
       out_err = ::FFI::MemoryPointer.new(:pointer)
+      protocol_code =
+        case protocol
+        when :grpc, "grpc" then 0
+        when :http_proto, "http_proto", :http, "http" then 1
+        else -1
+        end
+
       Blazen::FFI.with_cstring(endpoint.to_s) do |ep|
         Blazen::FFI.with_cstring(service_name) do |sn|
-          Blazen::FFI.blazen_init_otlp(ep, sn, out_err)
+          if headers.nil? || headers.empty?
+            Blazen::FFI.blazen_init_otlp(ep, sn, protocol_code, nil, nil, 0, out_err)
+          else
+            pairs    = headers.to_a
+            key_ptrs = pairs.map { |k, _| ::FFI::MemoryPointer.from_string(k.to_s) }
+            val_ptrs = pairs.map { |_, v| ::FFI::MemoryPointer.from_string(v.to_s) }
+            keys_arr = ::FFI::MemoryPointer.new(:pointer, pairs.length)
+            vals_arr = ::FFI::MemoryPointer.new(:pointer, pairs.length)
+            keys_arr.write_array_of_pointer(key_ptrs)
+            vals_arr.write_array_of_pointer(val_ptrs)
+            Blazen::FFI.blazen_init_otlp(
+              ep, sn, protocol_code, keys_arr, vals_arr, pairs.length, out_err
+            )
+          end
         end
       end
       Blazen::FFI.check_error!(out_err)

@@ -1,43 +1,66 @@
 //! Node binding for the OpenTelemetry OTLP exporter.
 //!
-//! The underlying [`blazen_telemetry::init_otlp`] takes a config struct
-//! with an endpoint and a service name, and installs a global tracing
-//! subscriber that exports spans over OTLP/gRPC. The service version and
-//! header fields surfaced here are accepted for forward compatibility
-//! and may be wired through once the upstream config gains them; today
-//! they are recorded but not forwarded.
+//! Mirrors the Python and `UniFFI` surfaces: an `OtlpConfig` record selects
+//! between gRPC (`Grpc`) and HTTP/protobuf (`HttpProto`, default) transports,
+//! and forwards optional auth headers. Headers are honored on HTTP; gRPC
+//! exports drop them with a `tracing::warn!` because Blazen does not carry a
+//! direct `tonic` dep for metadata-map construction.
 
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
 use std::collections::HashMap;
 
-use blazen_telemetry::OtlpConfig;
+use blazen_telemetry::{OtlpConfig, OtlpProtocol};
 
 use crate::error::to_napi_error;
+
+/// OTLP wire-level transport.
+#[napi(string_enum, js_name = "OtlpProtocol")]
+pub enum JsOtlpProtocol {
+    /// gRPC over tonic. Requires the `otlp` Cargo feature.
+    Grpc,
+    /// HTTP with binary protobuf payload. Requires the `otlp-http` Cargo
+    /// feature.
+    HttpProto,
+}
+
+impl From<JsOtlpProtocol> for OtlpProtocol {
+    fn from(p: JsOtlpProtocol) -> Self {
+        match p {
+            JsOtlpProtocol::Grpc => OtlpProtocol::Grpc,
+            JsOtlpProtocol::HttpProto => OtlpProtocol::HttpProto,
+        }
+    }
+}
 
 /// Configuration for the OTLP exporter.
 ///
 /// ```javascript
 /// initOtlp({
-///   endpoint: "http://localhost:4317",
+///   endpoint: "https://otel.example.com/v1/traces",
 ///   serviceName: "my-service",
-///   serviceVersion: "1.0.0",
-///   headers: { "x-api-key": "secret" },
+///   protocol: "HttpProto",
+///   headers: { Authorization: "Bearer xxx" },
 /// });
 /// ```
 #[napi(object, js_name = "OtlpConfig")]
 pub struct JsOtlpConfig {
-    /// The OTLP endpoint URL (e.g. `"http://localhost:4317"`).
+    /// The OTLP endpoint URL.
+    ///
+    /// For gRPC: `"http://localhost:4317"`.
+    /// For HTTP: `"https://collector/v1/traces"`.
     pub endpoint: String,
     /// The service name reported to the backend.
     #[napi(js_name = "serviceName")]
     pub service_name: String,
-    /// Service version reported to the backend (recorded for forward
-    /// compatibility; not yet forwarded by the underlying exporter).
+    /// Wire-level transport. Defaults to `HttpProto`.
+    pub protocol: Option<JsOtlpProtocol>,
+    /// Service version (recorded for forward compatibility; not yet attached
+    /// as a resource attribute by the underlying exporter).
     #[napi(js_name = "serviceVersion")]
     pub service_version: Option<String>,
-    /// Additional headers to attach to OTLP requests (recorded for forward
-    /// compatibility; not yet forwarded by the underlying exporter).
+    /// Auth / routing headers attached to OTLP requests. Honored on HTTP;
+    /// dropped with a warning on gRPC.
     pub headers: Option<HashMap<String, String>>,
 }
 
@@ -46,6 +69,8 @@ impl From<JsOtlpConfig> for OtlpConfig {
         Self {
             endpoint: c.endpoint,
             service_name: c.service_name,
+            protocol: c.protocol.map(Into::into).unwrap_or_default(),
+            headers: c.headers,
         }
     }
 }

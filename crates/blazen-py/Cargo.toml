@@ -104,9 +104,10 @@ tract = ["dep:blazen-embed-tract"]
 # ORT-backed embedding backend (faster than tract on x86_64/aarch64 where ORT
 # ships prebuilts; target-gated optional dep so musl builds skip it).
 fastembed = ["blazen-llm/embed", "dep:blazen-embed-fastembed"]
-local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "tts", "tiktoken", "distributed", "otlp", "prometheus", "langfuse", "audio-music-musicgen", "audio-music-audiogen", "audio-music-stable-audio", "audio-vc-rvc", "training"]
+local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "tts", "tiktoken", "distributed", "otlp", "otlp-http", "prometheus", "langfuse", "audio-music-musicgen", "audio-music-audiogen", "audio-music-stable-audio", "audio-vc-rvc", "training"]
 # Telemetry exporters
 otlp = ["blazen-telemetry/otlp"]
+otlp-http = ["blazen-telemetry/otlp-http"]
 prometheus = ["blazen-telemetry/prometheus"]
 langfuse = ["blazen-telemetry/langfuse"]
 # Distributed workflow types (RemoteWorkflowRequest/Response, PeerClient ABC)

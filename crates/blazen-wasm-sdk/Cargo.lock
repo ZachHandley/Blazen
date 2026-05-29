@@ -508,6 +508,7 @@ name = "blazen-pipeline"
 version = "0.0.0-dev"
 dependencies = [
  "anyhow",
+ "async-trait",
  "blazen-core",
  "blazen-events",
  "blazen-llm",

@@ -14307,18 +14307,27 @@ int32_t blazen_init_langfuse(const char *public_key,
                              BlazenError **out_err);
 
 /**
- * Initialize the OpenTelemetry OTLP (gRPC) trace exporter.
+ * Initialize the OpenTelemetry OTLP trace exporter.
  *
  * Installs an `opentelemetry-otlp` exporter as the global tracing
  * subscriber.
  *
  * Arguments:
- *   - `endpoint`: OTLP gRPC endpoint URL (e.g. `"http://localhost:4317"`).
+ *   - `endpoint`: OTLP endpoint URL. For HTTP/protobuf use
+ *     `"https://collector/v1/traces"`; for gRPC use `"http://collector:4317"`.
  *   - `service_name`: optional service name reported to the backend; null
  *     defaults to `"blazen"`.
+ *   - `protocol`: wire-level transport. `0` = gRPC (tonic), `1` =
+ *     HTTP/binary-protobuf, any negative value = default (HTTP/protobuf).
+ *   - `header_keys` / `header_values`: parallel arrays of `header_count`
+ *     NUL-terminated UTF-8 strings forming the auth/routing header pairs.
+ *     Pass null arrays with `header_count == 0` for no headers. Headers are
+ *     honored on HTTP and dropped with a warning on gRPC.
+ *   - `header_count`: number of entries in `header_keys` / `header_values`.
  *
  * Returns `0` on success, `-1` on failure (writing the inner error to
- * `*out_err`), or `-2` when `endpoint` is null / not valid UTF-8.
+ * `*out_err`), or `-2` when `endpoint`, a header key, or a header value is
+ * null / not valid UTF-8.
  *
  * # Safety
  *
@@ -14326,10 +14335,20 @@ int32_t blazen_init_langfuse(const char *public_key,
  *   live for the duration of the call.
  * - `service_name` must be null OR a valid NUL-terminated UTF-8 buffer
  *   that remains live for the duration of the call.
+ * - `header_keys` / `header_values` must each be null OR point to
+ *   `header_count` valid `*const c_char` slots, each a NUL-terminated UTF-8
+ *   buffer live for the duration of the call.
  * - `out_err` must be null OR a writable pointer to a `*mut BlazenError`
  *   slot.
  */
- int32_t blazen_init_otlp(const char *endpoint, const char *service_name, BlazenError **out_err);
+
+int32_t blazen_init_otlp(const char *endpoint,
+                         const char *service_name,
+                         int32_t protocol,
+                         const char *const *header_keys,
+                         const char *const *header_values,
+                         uintptr_t header_count,
+                         BlazenError **out_err);
 
 /**
  * Initialize the Prometheus metrics exporter and start its HTTP listener.

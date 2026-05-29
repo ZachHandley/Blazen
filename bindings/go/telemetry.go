@@ -113,25 +113,60 @@ func InitLangfuse(publicKey, secretKey, host string) error {
 	return wrapErr(uniffiblazen.InitLangfuse(publicKey, secretKey, optString(host)))
 }
 
-// InitOTLP configures the OpenTelemetry OTLP (gRPC/tonic) trace exporter
-// and installs it as the global tracing subscriber stack.
+// OtlpProtocol selects the OTLP wire-level transport.
 //
-// endpoint is the OTLP gRPC collector URL (e.g. "http://localhost:4317").
-// serviceName is what shows up in the trace UI; pass "" to use the
-// default ("blazen").
+// OtlpProtocolHttpProto (HTTP / binary-protobuf) is the default — it
+// traverses public HTTPS / CDN infrastructure cleanly and is what every
+// managed OTLP collector exposes. OtlpProtocolGrpc (tonic) is preferred for
+// mesh-bound collectors but requires h2c upstream config on most reverse
+// proxies, and requires the otlp feature in the prebuilt lib.
+type OtlpProtocol = uniffiblazen.OtlpProtocol
+
+const (
+	// OtlpProtocolGrpc exports over gRPC/tonic.
+	OtlpProtocolGrpc = uniffiblazen.OtlpProtocolGrpc
+	// OtlpProtocolHttpProto exports over HTTP/binary-protobuf (default).
+	OtlpProtocolHttpProto = uniffiblazen.OtlpProtocolHttpProto
+)
+
+// InitOTLP configures the OpenTelemetry OTLP trace exporter over
+// HTTP/binary-protobuf (the default transport) and installs it as the
+// global tracing subscriber stack.
 //
-// Upstream's OtlpConfig does not currently accept per-request headers —
-// if your backend needs an Authorization header (Honeycomb, Datadog,
-// Grafana Cloud, etc.), set it via the OTEL_EXPORTER_OTLP_HEADERS
-// environment variable, which the opentelemetry-otlp crate reads at
-// exporter-build time.
+// endpoint is the OTLP collector URL (e.g.
+// "https://otel.example.com/v1/traces"). serviceName is what shows up in
+// the trace UI; pass "" to use the default ("blazen").
 //
-// Returns [*UnsupportedError] if the otlp feature wasn't compiled into
-// the embedded blazen-uniffi, or [*InternalError] if the OTLP exporter
-// or tracer provider cannot be constructed.
+// For gRPC transport or to attach auth headers, use [InitOTLPWithOptions].
+//
+// Returns [*UnsupportedError] if the otlp-http feature wasn't compiled into
+// the embedded blazen-uniffi, or [*InternalError] if the OTLP exporter or
+// tracer provider cannot be constructed.
 func InitOTLP(endpoint, serviceName string) error {
 	ensureInit()
-	return wrapErr(uniffiblazen.InitOtlp(endpoint, optString(serviceName)))
+	return wrapErr(uniffiblazen.InitOtlp(endpoint, optString(serviceName), nil, nil))
+}
+
+// InitOTLPWithOptions configures the OpenTelemetry OTLP trace exporter with
+// an explicit transport protocol and optional auth/routing headers, then
+// installs it as the global tracing subscriber stack.
+//
+// endpoint is the OTLP collector URL. serviceName is the trace-UI service
+// name; pass "" for the default ("blazen"). protocol picks gRPC vs HTTP.
+// headers (e.g. {"Authorization": "Bearer ..."}) are honored on HTTP and
+// dropped with a warning on gRPC — use HTTP for header-based auth. Pass nil
+// for no headers.
+//
+// Returns [*UnsupportedError] if the requested protocol's feature wasn't
+// compiled into the embedded blazen-uniffi, or [*InternalError] if the OTLP
+// exporter or tracer provider cannot be constructed.
+func InitOTLPWithOptions(endpoint, serviceName string, protocol OtlpProtocol, headers map[string]string) error {
+	ensureInit()
+	var hdrs *map[string]string
+	if headers != nil {
+		hdrs = &headers
+	}
+	return wrapErr(uniffiblazen.InitOtlp(endpoint, optString(serviceName), &protocol, hdrs))
 }
 
 // InitPrometheus starts a Prometheus scrape endpoint at listenAddress

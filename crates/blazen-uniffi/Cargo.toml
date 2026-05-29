@@ -127,6 +127,7 @@ local-all = [
     "tiktoken",
     "distributed",
     "otlp",
+    "otlp-http",
     "prometheus",
     "langfuse",
     "hf-loader",
@@ -171,6 +172,7 @@ triposr = [
 
 # Telemetry exporters
 otlp = ["blazen-telemetry/otlp"]
+otlp-http = ["blazen-telemetry/otlp-http"]
 prometheus = ["blazen-telemetry/prometheus"]
 langfuse = ["blazen-telemetry/langfuse"]
 

@@ -4795,7 +4795,7 @@ void uniffi_blazen_uniffi_fn_func_init_langfuse(RustBuffer public_key, RustBuffe
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_INIT_OTLP
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_INIT_OTLP
-void uniffi_blazen_uniffi_fn_func_init_otlp(RustBuffer endpoint, RustBuffer service_name, RustCallStatus *out_status
+void uniffi_blazen_uniffi_fn_func_init_otlp(RustBuffer endpoint, RustBuffer service_name, RustBuffer protocol, RustBuffer headers, RustCallStatus *out_status
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_INIT_PROMETHEUS

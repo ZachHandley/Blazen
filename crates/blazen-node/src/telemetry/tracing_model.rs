@@ -17,7 +17,7 @@ use napi::bindgen_prelude::*;
 use napi_derive::napi;
 
 use blazen_llm::{BlazenError, Model, ModelRequest, ModelResponse, StreamChunk};
-use blazen_telemetry::TracingModel;
+use blazen_telemetry::{TracingConfig, TracingModel};
 
 use crate::providers::model::JsModel;
 
@@ -60,23 +60,32 @@ impl JsModel {
     /// structured `tracing` span around every `complete` and `stream`
     /// call.
     ///
-    /// `name` is recorded on the span as the `provider` field. It is
+    /// `name` is recorded on the span as the `provider` field plus the
+    /// `OpenInference` / `gen_ai.*` aliases (`gen_ai.system`, etc.). It is
     /// leaked into a `&'static str` because the underlying span macro
     /// captures it by reference for the process lifetime; this is
     /// intentional and bounded by the small set of distinct provider
     /// names a typical application uses.
     ///
+    /// `captureMessages` (default `false`) opts into recording the raw
+    /// prompt + completion text as `llm.input_messages` /
+    /// `llm.output_messages` for Phoenix eval-grade ingest. Leave off for
+    /// privacy-sensitive deployments.
+    ///
     /// ```javascript
     /// const traced = Model.openai({ apiKey }).withTracing("openai");
+    /// const evalGrade = Model.openai({ apiKey }).withTracing("openai", true);
     /// ```
     #[napi(js_name = "withTracing")]
-    pub fn with_tracing(&self, name: String) -> Result<JsModel> {
+    pub fn with_tracing(&self, name: String, capture_messages: Option<bool>) -> Result<JsModel> {
         let inner = self.inner.as_ref().ok_or_else(|| {
             napi::Error::from_reason("withTracing() is not supported on subclassed Model instances")
         })?;
         let static_name: &'static str = Box::leak(name.into_boxed_str());
         let adapter = ArcModel(Arc::clone(inner));
-        let traced = TracingModel::new(adapter, static_name);
+        let config =
+            TracingConfig::default().with_message_capture(capture_messages.unwrap_or(false));
+        let traced = TracingModel::new(adapter, static_name, config);
         Ok(JsModel {
             inner: Some(Arc::new(traced)),
             local_model: self.local_model.clone(),

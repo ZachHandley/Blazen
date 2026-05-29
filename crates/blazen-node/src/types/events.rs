@@ -302,15 +302,21 @@ impl Default for JsAgentConfig {
 ///   `toolName`, `toolCallId`, and `arguments` are populated.
 /// - `"toolResult"` -- a tool execution completed. `iteration`, `toolName`,
 ///   and `result` are populated.
+/// - `"toolError"` -- a tool execution failed and the error was fed back to
+///   the model as a `tool_result` so it can retry (the run is NOT aborted).
+///   `iteration`, `toolName`, `result` (the `{"error": ...}` payload), and
+///   `error` are populated.
 /// - `"iterationComplete"` -- the model produced a response. `iteration`
 ///   and `hadToolCalls` are populated.
 #[napi(object, js_name = "AgentEvent")]
 pub struct JsAgentEvent {
-    /// Discriminant: `"toolCalled"`, `"toolResult"`, or `"iterationComplete"`.
+    /// Discriminant: `"toolCalled"`, `"toolResult"`, `"toolError"`, or
+    /// `"iterationComplete"`.
     pub kind: String,
     /// Iteration index (0-based).
     pub iteration: u32,
-    /// Tool name. Populated for `"toolCalled"` and `"toolResult"`.
+    /// Tool name. Populated for `"toolCalled"`, `"toolResult"`, and
+    /// `"toolError"`.
     #[napi(js_name = "toolName")]
     pub tool_name: Option<String>,
     /// Tool call ID. Populated for `"toolCalled"`.
@@ -318,8 +324,13 @@ pub struct JsAgentEvent {
     pub tool_call_id: Option<String>,
     /// Tool arguments. Populated for `"toolCalled"`.
     pub arguments: Option<serde_json::Value>,
-    /// Tool result payload. Populated for `"toolResult"`.
+    /// Tool result payload. Populated for `"toolResult"`, and for
+    /// `"toolError"` (where it holds the `{"error": ...}` payload sent to the
+    /// model).
     pub result: Option<serde_json::Value>,
+    /// Error message. Populated only for `"toolError"` -- the failure that was
+    /// fed back to the model as a `tool_result` so it could retry.
+    pub error: Option<String>,
     /// Whether this iteration contained tool calls. Populated for
     /// `"iterationComplete"`.
     #[napi(js_name = "hadToolCalls")]
@@ -341,6 +352,7 @@ impl JsAgentEvent {
                 tool_call_id: Some(tool_call.id),
                 arguments: Some(tool_call.arguments),
                 result: None,
+                error: None,
                 had_tool_calls: None,
             },
             blazen_llm::AgentEvent::ToolResult {
@@ -354,6 +366,22 @@ impl JsAgentEvent {
                 tool_call_id: None,
                 arguments: None,
                 result: Some(result),
+                error: None,
+                had_tool_calls: None,
+            },
+            blazen_llm::AgentEvent::ToolError {
+                iteration,
+                tool_name,
+                result,
+                error,
+            } => Self {
+                kind: "toolError".to_owned(),
+                iteration,
+                tool_name: Some(tool_name),
+                tool_call_id: None,
+                arguments: None,
+                result: Some(result),
+                error: Some(error),
                 had_tool_calls: None,
             },
             blazen_llm::AgentEvent::IterationComplete {
@@ -366,6 +394,7 @@ impl JsAgentEvent {
                 tool_call_id: None,
                 arguments: None,
                 result: None,
+                error: None,
                 had_tool_calls: Some(had_tool_calls),
             },
         }

@@ -4,6 +4,9 @@ import UniFFIBlazen
 /// One flattened slot of a workflow execution history.
 public typealias WorkflowHistoryEntry = UniFFIBlazen.WorkflowHistoryEntry
 
+/// OTLP wire-level transport (`.grpc` or `.httpProto`).
+public typealias OtlpProtocol = UniFFIBlazen.OtlpProtocol
+
 /// Telemetry exporter lifecycle helpers.
 ///
 /// Each `init*` here is feature-gated in the underlying native lib —
@@ -28,11 +31,25 @@ public enum Telemetry {
         )
     }
 
-    /// Initialise the OpenTelemetry OTLP (gRPC/tonic) trace exporter.
-    /// `endpoint` is the OTLP gRPC URL (e.g. `"http://localhost:4317"`);
-    /// `serviceName` defaults to `"blazen"`.
-    public static func initOtlp(endpoint: String, serviceName: String? = nil) throws {
-        try UniFFIBlazen.initOtlp(endpoint: endpoint, serviceName: serviceName)
+    /// Initialise the OpenTelemetry OTLP trace exporter.
+    ///
+    /// `endpoint` is the OTLP collector URL (HTTP: `"https://collector/v1/traces"`,
+    /// gRPC: `"http://collector:4317"`). `serviceName` defaults to `"blazen"`.
+    /// `protocol` defaults to `.httpProto` (HTTP/binary-protobuf); pass `.grpc`
+    /// for tonic. `headers` (e.g. `["Authorization": "Bearer ..."]`) are honored
+    /// on HTTP and dropped with a warning on gRPC — use HTTP for header-based auth.
+    public static func initOtlp(
+        endpoint: String,
+        serviceName: String? = nil,
+        `protocol`: OtlpProtocol = .httpProto,
+        headers: [String: String]? = nil
+    ) throws {
+        try UniFFIBlazen.initOtlp(
+            endpoint: endpoint,
+            serviceName: serviceName,
+            protocol: `protocol`,
+            headers: headers
+        )
     }
 
     /// Initialise the Prometheus metrics exporter and start the HTTP

@@ -3,7 +3,7 @@
 pub mod history;
 pub mod tracing_model;
 
-#[cfg(feature = "otlp")]
+#[cfg(any(feature = "otlp", feature = "otlp-http"))]
 pub mod otlp;
 
 #[cfg(feature = "prometheus")]
@@ -15,8 +15,8 @@ pub mod langfuse;
 pub use history::{PyHistoryEvent, PyHistoryEventKind, PyPauseReason, PyWorkflowHistory};
 pub use tracing_model::wrap_with_tracing;
 
-#[cfg(feature = "otlp")]
-pub use otlp::{PyOtlpConfig, init_otlp};
+#[cfg(any(feature = "otlp", feature = "otlp-http"))]
+pub use otlp::{PyOtlpConfig, PyOtlpProtocol, init_otlp};
 
 #[cfg(feature = "prometheus")]
 pub use prometheus::init_prometheus;

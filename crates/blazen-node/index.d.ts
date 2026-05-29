@@ -3247,17 +3247,24 @@ export declare class Model {
    * structured `tracing` span around every `complete` and `stream`
    * call.
    *
-   * `name` is recorded on the span as the `provider` field. It is
+   * `name` is recorded on the span as the `provider` field plus the
+   * `OpenInference` / `gen_ai.*` aliases (`gen_ai.system`, etc.). It is
    * leaked into a `&'static str` because the underlying span macro
    * captures it by reference for the process lifetime; this is
    * intentional and bounded by the small set of distinct provider
    * names a typical application uses.
    *
+   * `captureMessages` (default `false`) opts into recording the raw
+   * prompt + completion text as `llm.input_messages` /
+   * `llm.output_messages` for Phoenix eval-grade ingest. Leave off for
+   * privacy-sensitive deployments.
+   *
    * ```javascript
    * const traced = Model.openai({ apiKey }).withTracing("openai");
+   * const evalGrade = Model.openai({ apiKey }).withTracing("openai", true);
    * ```
    */
-  withTracing(name: string): Model
+  withTracing(name: string, captureMessages?: boolean | undefined | null): Model
 }
 export type JsModel = Model
 
@@ -3669,9 +3676,6 @@ export declare class ModelManager {
    * Throws on empty repo id, gated/missing repo, PEFT-adapter-only
    * repo (use [`Self::load_adapter`] instead), missing backend
    * feature, or any provider construction failure.
-   */
-  loadFromHf(id: string, repo: string, options?: JsHfLoadOptions | undefined | null): Promise<string>
-  /**
    * Mount a PEFT-format `LoRA` adapter onto a registered model.
    *
    * `adapterDir` must contain the canonical PEFT layout
@@ -3699,6 +3703,20 @@ export declare class ModelManager {
    * Throws if the model is not registered.
    */
   listAdapters(modelId: string): Promise<Array<JsAdapterStatus>>
+  /**
+   * Load a model from Hugging Face by repo id.
+   *
+   * Inspects the repo's siblings, picks a backend (mistral.rs /
+   * candle / llama.cpp) per the rules documented on
+   * [`blazen_manager::hf_loader::choose_backend`], computes a memory
+   * estimate from the sibling sizes, and registers the model under
+   * `id`. The model starts unloaded — call [`Self::load`] or
+   * [`Self::ensure_loaded`] to materialize it.
+   *
+   * Returns the chosen backend as a lower-case string
+   * (`"mistralrs"` / `"candle"` / `"llamacpp"`).
+   */
+  loadFromHf(id: string, repo: string, options?: JsHfLoadOptions | undefined | null): Promise<string>
   /**
    * Train a `LoRA` adapter end-to-end on the configured base model.
    *
@@ -6775,22 +6793,41 @@ export interface AgentConfig {
  *   `toolName`, `toolCallId`, and `arguments` are populated.
  * - `"toolResult"` -- a tool execution completed. `iteration`, `toolName`,
  *   and `result` are populated.
+ * - `"toolError"` -- a tool execution failed and the error was fed back to
+ *   the model as a `tool_result` so it can retry (the run is NOT aborted).
+ *   `iteration`, `toolName`, `result` (the `{"error": ...}` payload), and
+ *   `error` are populated.
  * - `"iterationComplete"` -- the model produced a response. `iteration`
  *   and `hadToolCalls` are populated.
  */
 export interface AgentEvent {
-  /** Discriminant: `"toolCalled"`, `"toolResult"`, or `"iterationComplete"`. */
+  /**
+   * Discriminant: `"toolCalled"`, `"toolResult"`, `"toolError"`, or
+   * `"iterationComplete"`.
+   */
   kind: string
   /** Iteration index (0-based). */
   iteration: number
-  /** Tool name. Populated for `"toolCalled"` and `"toolResult"`. */
+  /**
+   * Tool name. Populated for `"toolCalled"`, `"toolResult"`, and
+   * `"toolError"`.
+   */
   toolName?: string
   /** Tool call ID. Populated for `"toolCalled"`. */
   toolCallId?: string
   /** Tool arguments. Populated for `"toolCalled"`. */
   arguments?: any
-  /** Tool result payload. Populated for `"toolResult"`. */
+  /**
+   * Tool result payload. Populated for `"toolResult"`, and for
+   * `"toolError"` (where it holds the `{"error": ...}` payload sent to the
+   * model).
+   */
   result?: any
+  /**
+   * Error message. Populated only for `"toolError"` -- the failure that was
+   * fed back to the model as a `tool_result` so it could retry.
+   */
+  error?: string
   /**
    * Whether this iteration contained tool calls. Populated for
    * `"iterationComplete"`.
@@ -9884,28 +9921,46 @@ export declare function newUsageEvent(provider: string, model: string, runId: st
  *
  * ```javascript
  * initOtlp({
- *   endpoint: "http://localhost:4317",
+ *   endpoint: "https://otel.example.com/v1/traces",
  *   serviceName: "my-service",
- *   serviceVersion: "1.0.0",
- *   headers: { "x-api-key": "secret" },
+ *   protocol: "HttpProto",
+ *   headers: { Authorization: "Bearer xxx" },
  * });
  * ```
  */
 export interface OtlpConfig {
-  /** The OTLP endpoint URL (e.g. `"http://localhost:4317"`). */
+  /**
+   * The OTLP endpoint URL.
+   *
+   * For gRPC: `"http://localhost:4317"`.
+   * For HTTP: `"https://collector/v1/traces"`.
+   */
   endpoint: string
   /** The service name reported to the backend. */
   serviceName: string
+  /** Wire-level transport. Defaults to `HttpProto`. */
+  protocol?: OtlpProtocol
   /**
-   * Service version reported to the backend (recorded for forward
-   * compatibility; not yet forwarded by the underlying exporter).
+   * Service version (recorded for forward compatibility; not yet attached
+   * as a resource attribute by the underlying exporter).
    */
   serviceVersion?: string
   /**
-   * Additional headers to attach to OTLP requests (recorded for forward
-   * compatibility; not yet forwarded by the underlying exporter).
+   * Auth / routing headers attached to OTLP requests. Honored on HTTP;
+   * dropped with a warning on gRPC.
    */
   headers?: Record<string, string>
+}
+
+/** OTLP wire-level transport. */
+export declare const enum OtlpProtocol {
+  /** gRPC over tonic. Requires the `otlp` Cargo feature. */
+  Grpc = 'Grpc',
+  /**
+   * HTTP with binary protobuf payload. Requires the `otlp-http` Cargo
+   * feature.
+   */
+  HttpProto = 'HttpProto'
 }
 
 /**

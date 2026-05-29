@@ -31256,6 +31256,88 @@ public func FfiConverterTypeModelPool_lower(_ value: ModelPool) -> RustBuffer {
 
 // Note that we don't yet support `indirect` for enums.
 // See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
+/**
+ * OTLP wire-level transport.
+ *
+ * `HttpProto` (HTTP / binary-protobuf) is the default — it traverses public
+ * HTTPS / CDN infrastructure cleanly and is what every managed OTLP collector
+ * exposes. `Grpc` (tonic) is preferred for mesh-bound collectors but requires
+ * h2c upstream config on most reverse proxies.
+ */
+
+public enum OtlpProtocol: Equatable, Hashable {
+    
+    /**
+     * gRPC over tonic. Requires the `otlp` Cargo feature in the prebuilt lib.
+     */
+    case grpc
+    /**
+     * HTTP with binary protobuf payload. Requires the `otlp-http` Cargo
+     * feature in the prebuilt lib.
+     */
+    case httpProto
+
+
+
+
+
+}
+
+#if compiler(>=6)
+extension OtlpProtocol: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeOtlpProtocol: FfiConverterRustBuffer {
+    typealias SwiftType = OtlpProtocol
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> OtlpProtocol {
+        let variant: Int32 = try readInt(&buf)
+        switch variant {
+        
+        case 1: return .grpc
+        
+        case 2: return .httpProto
+        
+        default: throw UniffiInternalError.unexpectedEnumCase
+        }
+    }
+
+    public static func write(_ value: OtlpProtocol, into buf: inout [UInt8]) {
+        switch value {
+        
+        
+        case .grpc:
+            writeInt(&buf, Int32(1))
+        
+        
+        case .httpProto:
+            writeInt(&buf, Int32(2))
+        
+        }
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOtlpProtocol_lift(_ buf: RustBuffer) throws -> OtlpProtocol {
+    return try FfiConverterTypeOtlpProtocol.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeOtlpProtocol_lower(_ value: OtlpProtocol) -> RustBuffer {
+    return FfiConverterTypeOtlpProtocol.lower(value)
+}
+
+
+// Note that we don't yet support `indirect` for enums.
+// See https://github.com/mozilla/uniffi-rs/issues/396 for further discussion.
 
 public enum SchedulerKindEnum: Equatable, Hashable {
     
@@ -31898,6 +31980,54 @@ fileprivate struct FfiConverterOptionTypeHfBackendHint: FfiConverterRustBuffer {
         switch try readInt(&buf) as Int8 {
         case 0: return nil
         case 1: return try FfiConverterTypeHfBackendHint.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionTypeOtlpProtocol: FfiConverterRustBuffer {
+    typealias SwiftType = OtlpProtocol?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeOtlpProtocol.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeOtlpProtocol.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+fileprivate struct FfiConverterOptionDictionaryStringString: FfiConverterRustBuffer {
+    typealias SwiftType = [String: String]?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterDictionaryStringString.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterDictionaryStringString.read(from: &buf)
         default: throw UniffiInternalError.unexpectedOptionalTag
         }
     }
@@ -33877,29 +34007,32 @@ public func initLangfuse(publicKey: String, secretKey: String, host: String?)thr
 }
 }
 /**
- * Initialize the OpenTelemetry OTLP (gRPC/tonic) trace exporter and install
- * it as the global `tracing` subscriber stack.
+ * Initialize the OpenTelemetry OTLP trace exporter and install it as the
+ * global `tracing` subscriber stack.
  *
  * Arguments:
- * - `endpoint`: OTLP gRPC endpoint URL (e.g. `"http://localhost:4317"`).
+ * - `endpoint`: OTLP endpoint URL. For HTTP/protobuf use
+ * `"https://collector/v1/traces"`; for gRPC use `"http://collector:4317"`.
  * - `service_name`: service name reported to the backend; defaults to
  * `"blazen"` when `None`.
- *
- * Upstream's [`blazen_telemetry::OtlpConfig`] does not currently accept
- * per-request headers — if your backend needs an `Authorization` header
- * (Honeycomb, Datadog, Grafana Cloud, etc.), set it via the
- * `OTEL_EXPORTER_OTLP_HEADERS` environment variable, which the
- * `opentelemetry-otlp` crate reads at exporter-build time.
+ * - `protocol`: wire-level transport; defaults to
+ * [`OtlpProtocol::HttpProto`] when `None`.
+ * - `headers`: optional auth / routing headers (e.g. `Authorization`,
+ * `x-honeycomb-team`). Honored on HTTP; dropped with a warning on gRPC —
+ * use HTTP for header-based auth.
  *
  * # Errors
  *
- * Returns [`BlazenError::Internal`] if the OTLP exporter or tracer provider
- * cannot be constructed.
+ * Returns [`BlazenError::Internal`] if the requested protocol's feature is
+ * not compiled into the prebuilt lib, or if the OTLP exporter or tracer
+ * provider cannot be constructed.
  */
-public func initOtlp(endpoint: String, serviceName: String?)throws   {try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+public func initOtlp(endpoint: String, serviceName: String?, `protocol`: OtlpProtocol?, headers: [String: String]?)throws   {try rustCallWithError(FfiConverterTypeBlazenError_lift) {
     uniffi_blazen_uniffi_fn_func_init_otlp(
         FfiConverterString.lower(endpoint),
-        FfiConverterOptionString.lower(serviceName),$0
+        FfiConverterOptionString.lower(serviceName),
+        FfiConverterOptionTypeOtlpProtocol.lower(`protocol`),
+        FfiConverterOptionDictionaryStringString.lower(headers),$0
     )
 }
 }
@@ -34195,7 +34328,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_func_init_langfuse() != 16496) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_func_init_otlp() != 38653) {
+    if (uniffi_blazen_uniffi_checksum_func_init_otlp() != 38123) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_func_init_prometheus() != 34029) {

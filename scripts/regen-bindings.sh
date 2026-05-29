@@ -275,7 +275,16 @@ regen_kotlin() {
     # Without ktlint, the emitted file is unformatted and disagrees with the
     # committed (formatted) version, causing CI's `git diff --exit-code` to
     # fail. CI installs ktlint in the audit-bindings job to match local devs.
-    "$UNIFFI_BINDGEN" generate \
+    #
+    # The generated blazen.kt is ~49k lines. The system ktlint launcher
+    # (/usr/bin/ktlint) hard-codes `-Xmx512m`, which GC-thrashes for ~15min
+    # on a file that large. `_JAVA_OPTIONS` is read by the JVM *after* the
+    # command-line flags and wins the `-Xmx` tie-break, so it raises the heap
+    # without patching the system launcher. uniffi-bindgen spawns ktlint as a
+    # child process, which inherits this env. Override BLAZEN_KTLINT_XMX to
+    # tune (e.g. on a memory-constrained CI runner).
+    local ktlint_xmx="${BLAZEN_KTLINT_XMX:-4g}"
+    _JAVA_OPTIONS="-Xmx${ktlint_xmx}" "$UNIFFI_BINDGEN" generate \
         --library "$LIB_PATH" \
         --language kotlin \
         --config "$CFG" \

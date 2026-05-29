@@ -993,7 +993,7 @@ func uniffiCheckChecksums() {
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_func_init_otlp()
 		})
-		if checksum != 38653 {
+		if checksum != 38123 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_func_init_otlp: UniFFI API checksum mismatch")
 		}
@@ -32364,6 +32364,51 @@ func (_ FfiDestroyerModelPool) Destroy(value ModelPool) {
 	value.Destroy()
 }
 
+// OTLP wire-level transport.
+//
+// `HttpProto` (HTTP / binary-protobuf) is the default — it traverses public
+// HTTPS / CDN infrastructure cleanly and is what every managed OTLP collector
+// exposes. `Grpc` (tonic) is preferred for mesh-bound collectors but requires
+// h2c upstream config on most reverse proxies.
+type OtlpProtocol uint
+
+const (
+	// gRPC over tonic. Requires the `otlp` Cargo feature in the prebuilt lib.
+	OtlpProtocolGrpc OtlpProtocol = 1
+	// HTTP with binary protobuf payload. Requires the `otlp-http` Cargo
+	// feature in the prebuilt lib.
+	OtlpProtocolHttpProto OtlpProtocol = 2
+)
+
+type FfiConverterOtlpProtocol struct{}
+
+var FfiConverterOtlpProtocolINSTANCE = FfiConverterOtlpProtocol{}
+
+func (c FfiConverterOtlpProtocol) Lift(rb RustBufferI) OtlpProtocol {
+	return LiftFromRustBuffer[OtlpProtocol](c, rb)
+}
+
+func (c FfiConverterOtlpProtocol) Lower(value OtlpProtocol) C.RustBuffer {
+	return LowerIntoRustBuffer[OtlpProtocol](c, value)
+}
+
+func (c FfiConverterOtlpProtocol) LowerExternal(value OtlpProtocol) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[OtlpProtocol](c, value))
+}
+func (FfiConverterOtlpProtocol) Read(reader io.Reader) OtlpProtocol {
+	id := readInt32(reader)
+	return OtlpProtocol(id)
+}
+
+func (FfiConverterOtlpProtocol) Write(writer io.Writer, value OtlpProtocol) {
+	writeInt32(writer, int32(value))
+}
+
+type FfiDestroyerOtlpProtocol struct{}
+
+func (_ FfiDestroyerOtlpProtocol) Destroy(value OtlpProtocol) {
+}
+
 type SchedulerKindEnum uint
 
 const (
@@ -33257,6 +33302,88 @@ type FfiDestroyerOptionalHfBackendHint struct{}
 func (_ FfiDestroyerOptionalHfBackendHint) Destroy(value *HfBackendHint) {
 	if value != nil {
 		FfiDestroyerHfBackendHint{}.Destroy(*value)
+	}
+}
+
+type FfiConverterOptionalOtlpProtocol struct{}
+
+var FfiConverterOptionalOtlpProtocolINSTANCE = FfiConverterOptionalOtlpProtocol{}
+
+func (c FfiConverterOptionalOtlpProtocol) Lift(rb RustBufferI) *OtlpProtocol {
+	return LiftFromRustBuffer[*OtlpProtocol](c, rb)
+}
+
+func (_ FfiConverterOptionalOtlpProtocol) Read(reader io.Reader) *OtlpProtocol {
+	if readInt8(reader) == 0 {
+		return nil
+	}
+	temp := FfiConverterOtlpProtocolINSTANCE.Read(reader)
+	return &temp
+}
+
+func (c FfiConverterOptionalOtlpProtocol) Lower(value *OtlpProtocol) C.RustBuffer {
+	return LowerIntoRustBuffer[*OtlpProtocol](c, value)
+}
+
+func (c FfiConverterOptionalOtlpProtocol) LowerExternal(value *OtlpProtocol) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[*OtlpProtocol](c, value))
+}
+
+func (_ FfiConverterOptionalOtlpProtocol) Write(writer io.Writer, value *OtlpProtocol) {
+	if value == nil {
+		writeInt8(writer, 0)
+	} else {
+		writeInt8(writer, 1)
+		FfiConverterOtlpProtocolINSTANCE.Write(writer, *value)
+	}
+}
+
+type FfiDestroyerOptionalOtlpProtocol struct{}
+
+func (_ FfiDestroyerOptionalOtlpProtocol) Destroy(value *OtlpProtocol) {
+	if value != nil {
+		FfiDestroyerOtlpProtocol{}.Destroy(*value)
+	}
+}
+
+type FfiConverterOptionalMapStringString struct{}
+
+var FfiConverterOptionalMapStringStringINSTANCE = FfiConverterOptionalMapStringString{}
+
+func (c FfiConverterOptionalMapStringString) Lift(rb RustBufferI) *map[string]string {
+	return LiftFromRustBuffer[*map[string]string](c, rb)
+}
+
+func (_ FfiConverterOptionalMapStringString) Read(reader io.Reader) *map[string]string {
+	if readInt8(reader) == 0 {
+		return nil
+	}
+	temp := FfiConverterMapStringStringINSTANCE.Read(reader)
+	return &temp
+}
+
+func (c FfiConverterOptionalMapStringString) Lower(value *map[string]string) C.RustBuffer {
+	return LowerIntoRustBuffer[*map[string]string](c, value)
+}
+
+func (c FfiConverterOptionalMapStringString) LowerExternal(value *map[string]string) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[*map[string]string](c, value))
+}
+
+func (_ FfiConverterOptionalMapStringString) Write(writer io.Writer, value *map[string]string) {
+	if value == nil {
+		writeInt8(writer, 0)
+	} else {
+		writeInt8(writer, 1)
+		FfiConverterMapStringStringINSTANCE.Write(writer, *value)
+	}
+}
+
+type FfiDestroyerOptionalMapStringString struct{}
+
+func (_ FfiDestroyerOptionalMapStringString) Destroy(value *map[string]string) {
+	if value != nil {
+		FfiDestroyerMapStringString{}.Destroy(*value)
 	}
 }
 
@@ -36139,27 +36266,28 @@ func InitLangfuse(publicKey string, secretKey string, host *string) error {
 	return _uniffiErr.AsError()
 }
 
-// Initialize the OpenTelemetry OTLP (gRPC/tonic) trace exporter and install
-// it as the global `tracing` subscriber stack.
+// Initialize the OpenTelemetry OTLP trace exporter and install it as the
+// global `tracing` subscriber stack.
 //
 // Arguments:
-// - `endpoint`: OTLP gRPC endpoint URL (e.g. `"http://localhost:4317"`).
+// - `endpoint`: OTLP endpoint URL. For HTTP/protobuf use
+// `"https://collector/v1/traces"`; for gRPC use `"http://collector:4317"`.
 // - `service_name`: service name reported to the backend; defaults to
 // `"blazen"` when `None`.
-//
-// Upstream's [`blazen_telemetry::OtlpConfig`] does not currently accept
-// per-request headers — if your backend needs an `Authorization` header
-// (Honeycomb, Datadog, Grafana Cloud, etc.), set it via the
-// `OTEL_EXPORTER_OTLP_HEADERS` environment variable, which the
-// `opentelemetry-otlp` crate reads at exporter-build time.
+// - `protocol`: wire-level transport; defaults to
+// [`OtlpProtocol::HttpProto`] when `None`.
+// - `headers`: optional auth / routing headers (e.g. `Authorization`,
+// `x-honeycomb-team`). Honored on HTTP; dropped with a warning on gRPC —
+// use HTTP for header-based auth.
 //
 // # Errors
 //
-// Returns [`BlazenError::Internal`] if the OTLP exporter or tracer provider
-// cannot be constructed.
-func InitOtlp(endpoint string, serviceName *string) error {
+// Returns [`BlazenError::Internal`] if the requested protocol's feature is
+// not compiled into the prebuilt lib, or if the OTLP exporter or tracer
+// provider cannot be constructed.
+func InitOtlp(endpoint string, serviceName *string, protocol *OtlpProtocol, headers *map[string]string) error {
 	_, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) bool {
-		C.uniffi_blazen_uniffi_fn_func_init_otlp(FfiConverterStringINSTANCE.Lower(endpoint), FfiConverterOptionalStringINSTANCE.Lower(serviceName), _uniffiStatus)
+		C.uniffi_blazen_uniffi_fn_func_init_otlp(FfiConverterStringINSTANCE.Lower(endpoint), FfiConverterOptionalStringINSTANCE.Lower(serviceName), FfiConverterOptionalOtlpProtocolINSTANCE.Lower(protocol), FfiConverterOptionalMapStringStringINSTANCE.Lower(headers), _uniffiStatus)
 		return false
 	})
 	return _uniffiErr.AsError()

@@ -38,11 +38,10 @@ impl WasmOtlpConfig {
     #[wasm_bindgen(constructor)]
     #[must_use]
     pub fn new(endpoint: String, service_name: String) -> Self {
+        // WASM always exports over HTTP/protobuf (tonic does not compile to
+        // wasm32), so the protocol field is left at its `HttpProto` default.
         Self {
-            inner: OtlpConfig {
-                endpoint,
-                service_name,
-            },
+            inner: OtlpConfig::new(endpoint, service_name),
         }
     }
 
@@ -58,6 +57,28 @@ impl WasmOtlpConfig {
     #[must_use]
     pub fn service_name(&self) -> String {
         self.inner.service_name.clone()
+    }
+
+    /// Set auth / routing headers attached to every OTLP/HTTP request.
+    ///
+    /// Pass a plain JS object of string → string pairs, e.g.
+    /// `cfg.setHeaders({ Authorization: "Bearer xxx" })`. Pass `undefined`
+    /// or `null` to clear.
+    ///
+    /// # Errors
+    ///
+    /// Returns a JS error if `headers` is not a string → string object.
+    #[wasm_bindgen(js_name = "setHeaders")]
+    pub fn set_headers(&mut self, headers: JsValue) -> Result<(), JsValue> {
+        if headers.is_undefined() || headers.is_null() {
+            self.inner.headers = None;
+            return Ok(());
+        }
+        let map: std::collections::HashMap<String, String> =
+            serde_wasm_bindgen::from_value(headers)
+                .map_err(|e| JsValue::from_str(&format!("[BlazenError] setHeaders: {e}")))?;
+        self.inner.headers = Some(map);
+        Ok(())
     }
 }
 

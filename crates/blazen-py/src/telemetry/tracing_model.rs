@@ -12,7 +12,7 @@ use pyo3_stub_gen::derive::gen_stub_pyfunction;
 use tokio_stream::Stream;
 
 use blazen_llm::{BlazenError, Model, ModelRequest, ModelResponse, ProviderConfig, StreamChunk};
-use blazen_telemetry::TracingModel;
+use blazen_telemetry::{TracingConfig, TracingModel};
 
 use crate::providers::PyModel;
 use crate::providers::model::arc_from_bound;
@@ -56,7 +56,8 @@ impl Model for ArcModel {
 ///
 /// Each call to `complete()` or `stream()` is instrumented with an
 /// `info_span!` carrying provider name, model id, token usage, duration,
-/// and finish reason.
+/// finish reason, and OpenInference + ``gen_ai.*`` aliases for eval-grade
+/// ingest by Phoenix Arize and PostHog AI.
 ///
 /// Args:
 ///     model: The Model to wrap.
@@ -64,16 +65,28 @@ impl Model for ArcModel {
 ///         Note: the underlying Rust type requires a `'static` lifetime,
 ///         so the provided string is leaked for the lifetime of the
 ///         process. Use a small, stable set of labels.
+///     capture_messages: If True, the raw prompt messages and completion
+///         text are serialized to JSON and recorded on the span as
+///         ``llm.input_messages`` / ``llm.output_messages``. Defaults to
+///         False — privacy-safe. Phoenix's eval-grade surfaces
+///         (faithfulness, RAG hit rate, schema-compliance) need this
+///         enabled.
 ///
 /// Returns:
 ///     A new Model that emits tracing spans on every call.
 #[gen_stub_pyfunction]
 #[pyfunction]
-pub fn wrap_with_tracing(model: Bound<'_, PyModel>, provider_name: String) -> PyModel {
+#[pyo3(signature = (model, provider_name, capture_messages=false))]
+pub fn wrap_with_tracing(
+    model: Bound<'_, PyModel>,
+    provider_name: String,
+    capture_messages: bool,
+) -> PyModel {
     let local_model = model.borrow().local_model.clone();
     let inner = arc_from_bound(&model);
     let leaked: &'static str = Box::leak(provider_name.into_boxed_str());
-    let wrapped = TracingModel::new(ArcModel(inner), leaked);
+    let config = TracingConfig::default().with_message_capture(capture_messages);
+    let wrapped = TracingModel::new(ArcModel(inner), leaked, config);
     PyModel {
         inner: Some(Arc::new(wrapped)),
         local_model,

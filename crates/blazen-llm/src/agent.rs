@@ -271,6 +271,17 @@ pub enum AgentEvent {
         tool_name: String,
         result: serde_json::Value,
     },
+    /// A tool execution failed. The error was fed back to the model as a
+    /// `tool_result` message (so the model can read it and retry) rather than
+    /// aborting the run. Carries the same shape as [`AgentEvent::ToolResult`]
+    /// — `result` holds the `{"error": ...}` payload that was sent to the
+    /// model — plus `error`, the `BlazenError` display string.
+    ToolError {
+        iteration: u32,
+        tool_name: String,
+        result: serde_json::Value,
+        error: String,
+    },
     /// An iteration completed (model responded).
     IterationComplete {
         iteration: u32,
@@ -437,7 +448,9 @@ pub async fn run_agent_with_callback(
             ));
         }
 
-        // Execute each tool call and add results.
+        // Execute each tool call and add results. Tool errors are fed back to
+        // the model as tool_result messages (not propagated), so this never
+        // fails the run.
         execute_tool_calls(
             &response.tool_calls,
             &all_tools,
@@ -446,7 +459,7 @@ pub async fn run_agent_with_callback(
             &on_event,
             config.tool_concurrency,
         )
-        .await?;
+        .await;
 
         on_event(AgentEvent::IterationComplete {
             iteration,
@@ -565,16 +578,7 @@ async fn execute_tool_calls(
     iteration: u32,
     on_event: &(impl Fn(AgentEvent) + Send + Sync),
     tool_concurrency: usize,
-) -> Result<(), BlazenError> {
-    // Validate all tool names up front so we fail fast before executing any.
-    let resolved_tools: Vec<Arc<dyn Tool>> = tool_calls
-        .iter()
-        .map(|tc| {
-            find_tool(all_tools, &tc.name)
-                .ok_or_else(|| BlazenError::tool_error(format!("unknown tool: {}", tc.name)))
-        })
-        .collect::<Result<Vec<_>, _>>()?;
-
+) {
     // Fire ToolCalled events for every tool before we start execution.
     for tc in tool_calls {
         on_event(AgentEvent::ToolCalled {
@@ -591,14 +595,24 @@ async fn execute_tool_calls(
     };
 
     // Execute all tool calls concurrently, preserving order via `join_all`.
+    // Tool resolution happens per-call: an unknown tool name (a model
+    // hallucination) produces a recoverable error that is fed back to the
+    // model as a tool_result — just like an arg-deserialization or handler
+    // error — rather than aborting the whole run.
     let futures: Vec<_> = tool_calls
         .iter()
-        .zip(resolved_tools.iter())
-        .map(|(tc, tool)| {
-            let tool = Arc::clone(tool);
+        .map(|tc| {
+            let resolved = find_tool(all_tools, &tc.name);
             let args = tc.arguments.clone();
             let sem = semaphore.clone();
+            let tool_name = tc.name.clone();
             async move {
+                let Some(tool) = resolved else {
+                    let available = all_tool_names(all_tools);
+                    return Err(BlazenError::tool_error(format!(
+                        "unknown tool '{tool_name}'; available tools: [{available}]"
+                    )));
+                };
                 // Acquire a permit when concurrency is bounded.
                 let _permit = match sem {
                     Some(ref s) => Some(s.acquire().await.expect("semaphore closed")),
@@ -611,20 +625,46 @@ async fn execute_tool_calls(
 
     let results = futures_util::future::join_all(futures).await;
 
-    // Process results in the original order.
+    // Process results in the original order. A tool error is turned into a
+    // tool_result message carrying an `{"error": ...}` payload and fed back to
+    // the model so it can read the failure and retry — mirroring the
+    // Anthropic / OpenAI tool-use loops. The run is never aborted on a
+    // recoverable tool error.
     for (tc, result) in tool_calls.iter().zip(results) {
-        let output = result?;
-
-        on_event(AgentEvent::ToolResult {
-            iteration,
-            tool_name: tc.name.clone(),
-            result: output.data.clone(),
-        });
-
-        messages.push(ChatMessage::tool_result(&tc.id, &tc.name, output));
+        match result {
+            Ok(output) => {
+                on_event(AgentEvent::ToolResult {
+                    iteration,
+                    tool_name: tc.name.clone(),
+                    result: output.data.clone(),
+                });
+                messages.push(ChatMessage::tool_result(&tc.id, &tc.name, output));
+            }
+            Err(e) => {
+                let payload = serde_json::json!({ "error": e.to_string() });
+                on_event(AgentEvent::ToolError {
+                    iteration,
+                    tool_name: tc.name.clone(),
+                    result: payload.clone(),
+                    error: e.to_string(),
+                });
+                messages.push(ChatMessage::tool_result(
+                    &tc.id,
+                    &tc.name,
+                    ToolOutput::new(payload),
+                ));
+            }
+        }
     }
+}
 
-    Ok(())
+/// Comma-joined list of every registered tool's name, for error messages.
+fn all_tool_names(tools: &[Arc<dyn Tool>]) -> String {
+    tools
+        .iter()
+        .map(|t| t.definition().name)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn find_tool(tools: &[Arc<dyn Tool>], name: &str) -> Option<Arc<dyn Tool>> {

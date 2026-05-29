@@ -88,30 +88,64 @@ pub fn init_langfuse(
 // OTLP
 // ---------------------------------------------------------------------------
 
-/// Initialize the OpenTelemetry OTLP (gRPC/tonic) trace exporter and install
-/// it as the global `tracing` subscriber stack.
+/// OTLP wire-level transport.
+///
+/// `HttpProto` (HTTP / binary-protobuf) is the default — it traverses public
+/// HTTPS / CDN infrastructure cleanly and is what every managed OTLP collector
+/// exposes. `Grpc` (tonic) is preferred for mesh-bound collectors but requires
+/// h2c upstream config on most reverse proxies.
+#[cfg(any(feature = "otlp", feature = "otlp-http"))]
+#[derive(Debug, Clone, Copy, uniffi::Enum)]
+pub enum OtlpProtocol {
+    /// gRPC over tonic. Requires the `otlp` Cargo feature in the prebuilt lib.
+    Grpc,
+    /// HTTP with binary protobuf payload. Requires the `otlp-http` Cargo
+    /// feature in the prebuilt lib.
+    HttpProto,
+}
+
+#[cfg(any(feature = "otlp", feature = "otlp-http"))]
+impl From<OtlpProtocol> for blazen_telemetry::OtlpProtocol {
+    fn from(p: OtlpProtocol) -> Self {
+        match p {
+            OtlpProtocol::Grpc => blazen_telemetry::OtlpProtocol::Grpc,
+            OtlpProtocol::HttpProto => blazen_telemetry::OtlpProtocol::HttpProto,
+        }
+    }
+}
+
+/// Initialize the OpenTelemetry OTLP trace exporter and install it as the
+/// global `tracing` subscriber stack.
 ///
 /// Arguments:
-///   - `endpoint`: OTLP gRPC endpoint URL (e.g. `"http://localhost:4317"`).
+///   - `endpoint`: OTLP endpoint URL. For HTTP/protobuf use
+///     `"https://collector/v1/traces"`; for gRPC use `"http://collector:4317"`.
 ///   - `service_name`: service name reported to the backend; defaults to
 ///     `"blazen"` when `None`.
-///
-/// Upstream's [`blazen_telemetry::OtlpConfig`] does not currently accept
-/// per-request headers — if your backend needs an `Authorization` header
-/// (Honeycomb, Datadog, Grafana Cloud, etc.), set it via the
-/// `OTEL_EXPORTER_OTLP_HEADERS` environment variable, which the
-/// `opentelemetry-otlp` crate reads at exporter-build time.
+///   - `protocol`: wire-level transport; defaults to
+///     [`OtlpProtocol::HttpProto`] when `None`.
+///   - `headers`: optional auth / routing headers (e.g. `Authorization`,
+///     `x-honeycomb-team`). Honored on HTTP; dropped with a warning on gRPC —
+///     use HTTP for header-based auth.
 ///
 /// # Errors
 ///
-/// Returns [`BlazenError::Internal`] if the OTLP exporter or tracer provider
-/// cannot be constructed.
-#[cfg(feature = "otlp")]
+/// Returns [`BlazenError::Internal`] if the requested protocol's feature is
+/// not compiled into the prebuilt lib, or if the OTLP exporter or tracer
+/// provider cannot be constructed.
+#[cfg(any(feature = "otlp", feature = "otlp-http"))]
 #[uniffi::export]
-pub fn init_otlp(endpoint: String, service_name: Option<String>) -> BlazenResult<()> {
+pub fn init_otlp(
+    endpoint: String,
+    service_name: Option<String>,
+    protocol: Option<OtlpProtocol>,
+    headers: Option<std::collections::HashMap<String, String>>,
+) -> BlazenResult<()> {
     let config = blazen_telemetry::OtlpConfig {
         endpoint,
         service_name: service_name.unwrap_or_else(|| "blazen".to_string()),
+        protocol: protocol.map(Into::into).unwrap_or_default(),
+        headers,
     };
 
     blazen_telemetry::init_otlp(config).map_err(|e| BlazenError::Internal {

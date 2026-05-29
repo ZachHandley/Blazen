@@ -712,9 +712,11 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?)?;
 
     // Telemetry -- OTLP exporter (feature-gated)
-    #[cfg(feature = "otlp")]
+    #[cfg(any(feature = "otlp", feature = "otlp-http"))]
     m.add_class::<telemetry::otlp::PyOtlpConfig>()?;
-    #[cfg(feature = "otlp")]
+    #[cfg(any(feature = "otlp", feature = "otlp-http"))]
+    m.add_class::<telemetry::otlp::PyOtlpProtocol>()?;
+    #[cfg(any(feature = "otlp", feature = "otlp-http"))]
     m.add_function(wrap_pyfunction!(telemetry::otlp::init_otlp, m)?)?;
 
     // Telemetry -- Prometheus exporter (feature-gated)

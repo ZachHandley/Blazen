@@ -11,6 +11,8 @@
 //!   because those impls are `!Send` on wasm32 and break the trait's
 //!   `Send + Sync` bound at compile time.
 
+use std::collections::HashMap;
+
 #[cfg(any(feature = "otlp", feature = "otlp-http"))]
 use opentelemetry::global;
 #[cfg(any(feature = "otlp", feature = "otlp-http"))]
@@ -61,6 +63,23 @@ mod native_reqwest_client {
     }
 }
 
+/// Wire-level OTLP transport protocol.
+///
+/// `HttpProto` (HTTP/binary-protobuf) is the default — it traverses CDN/proxy
+/// infrastructure cleanly and is the protocol every public-HTTPS OTLP
+/// collector exposes. `Grpc` (tonic) is preferred for direct mesh-bound
+/// collectors but requires h2c upstream config on most reverse proxies.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum OtlpProtocol {
+    /// gRPC over tonic. Requires the `otlp` Cargo feature.
+    Grpc,
+    /// HTTP with binary protobuf payload. Requires the `otlp-http` Cargo
+    /// feature.
+    #[default]
+    HttpProto,
+}
+
 /// Configuration for the OTLP exporter.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OtlpConfig {
@@ -71,23 +90,120 @@ pub struct OtlpConfig {
     pub endpoint: String,
     /// The service name reported to the backend.
     pub service_name: String,
+    /// Transport protocol. Defaults to [`OtlpProtocol::HttpProto`].
+    #[serde(default)]
+    pub protocol: OtlpProtocol,
+    /// Optional extra request headers (e.g. `Authorization`, `x-honeycomb-team`).
+    ///
+    /// For HTTP/protobuf the headers are attached verbatim. For gRPC the
+    /// keys must be valid HTTP/2 metadata keys (lower-case ASCII); invalid
+    /// keys are silently skipped with a `tracing::warn!`.
+    #[serde(default)]
+    pub headers: Option<HashMap<String, String>>,
 }
 
-/// Initialize the OTLP trace exporter using gRPC (tonic) and install it as the
-/// global tracing subscriber layer.
+impl OtlpConfig {
+    /// Construct a new `OtlpConfig` with the default protocol
+    /// ([`OtlpProtocol::HttpProto`]) and no extra headers.
+    #[must_use]
+    pub fn new(endpoint: impl Into<String>, service_name: impl Into<String>) -> Self {
+        Self {
+            endpoint: endpoint.into(),
+            service_name: service_name.into(),
+            protocol: OtlpProtocol::default(),
+            headers: None,
+        }
+    }
+
+    /// Set the transport protocol.
+    #[must_use]
+    pub fn with_protocol(mut self, protocol: OtlpProtocol) -> Self {
+        self.protocol = protocol;
+        self
+    }
+
+    /// Set request headers.
+    #[must_use]
+    pub fn with_headers(mut self, headers: HashMap<String, String>) -> Self {
+        self.headers = Some(headers);
+        self
+    }
+}
+
+/// Initialize the OTLP trace exporter and install it as the global tracing
+/// subscriber layer.
 ///
-/// This sets up:
-/// 1. An OTLP gRPC (tonic) span exporter pointed at `config.endpoint`
-/// 2. A `SdkTracerProvider` with batch export and the configured service name
-/// 3. A `tracing_opentelemetry` layer bridging `tracing` spans to OpenTelemetry
-/// 4. A combined subscriber with both the `OTel` layer and a `fmt` layer
+/// Dispatches on `config.protocol`:
+/// - [`OtlpProtocol::Grpc`] → tonic gRPC exporter (requires the `otlp` Cargo
+///   feature).
+/// - [`OtlpProtocol::HttpProto`] → HTTP/binary-protobuf exporter (requires the
+///   `otlp-http` Cargo feature).
+///
+/// Default is [`OtlpProtocol::HttpProto`] — public-HTTPS OTLP collectors
+/// traverse CDN/proxy infrastructure cleanly.
+///
+/// `config.headers` is honored on both transports for auth (e.g. Honeycomb
+/// `x-honeycomb-team`, OTLP/HTTP `Authorization: Basic ...`). gRPC metadata
+/// keys must be valid HTTP/2 lower-case ASCII; invalid keys are skipped with
+/// a `tracing::warn!`.
+///
+/// # Errors
+///
+/// Returns an error if Blazen was not built with the requested protocol's
+/// feature, or if the OTLP exporter or tracer provider cannot be created.
+#[cfg(any(feature = "otlp", feature = "otlp-http"))]
+pub fn init_otlp(config: OtlpConfig) -> Result<(), Box<dyn std::error::Error>> {
+    match config.protocol {
+        OtlpProtocol::Grpc => {
+            #[cfg(feature = "otlp")]
+            {
+                init_otlp_grpc(config)
+            }
+            #[cfg(not(feature = "otlp"))]
+            {
+                let _ = config;
+                Err(
+                    "Blazen was built without the `otlp` (gRPC) feature; rebuild with --features otlp or set protocol = http_proto"
+                        .into(),
+                )
+            }
+        }
+        OtlpProtocol::HttpProto => {
+            #[cfg(feature = "otlp-http")]
+            {
+                init_otlp_http(config)
+            }
+            #[cfg(not(feature = "otlp-http"))]
+            {
+                let _ = config;
+                Err(
+                    "Blazen was built without the `otlp-http` feature; rebuild with --features otlp-http or set protocol = grpc"
+                        .into(),
+                )
+            }
+        }
+    }
+}
+
+/// Build an OTLP gRPC (tonic) exporter and install it as the global tracing
+/// subscriber layer.
+///
+/// `config.headers` is currently ignored on the gRPC path — wiring tonic
+/// `MetadataMap` requires a direct `tonic` dependency we don't carry. For
+/// header-based auth (Honeycomb, Grafana Cloud, etc.) use
+/// [`OtlpProtocol::HttpProto`] instead.
 ///
 /// # Errors
 ///
 /// Returns an error if the OTLP exporter or tracer provider cannot be created.
 #[cfg(feature = "otlp")]
-pub fn init_otlp(config: OtlpConfig) -> Result<(), Box<dyn std::error::Error>> {
-    // 1. Build the OTLP gRPC span exporter via tonic transport
+fn init_otlp_grpc(config: OtlpConfig) -> Result<(), Box<dyn std::error::Error>> {
+    if config.headers.as_ref().is_some_and(|h| !h.is_empty()) {
+        tracing::warn!(
+            "OtlpConfig.headers is set but Blazen's gRPC exporter does not forward headers; use OtlpProtocol::HttpProto for header-based auth"
+        );
+    }
+
     let exporter = SpanExporter::builder()
         .with_tonic()
         .with_endpoint(&config.endpoint)
@@ -100,11 +216,9 @@ pub fn init_otlp(config: OtlpConfig) -> Result<(), Box<dyn std::error::Error>> {
 /// Initialize the OTLP trace exporter using HTTP (binary protobuf) and install
 /// it as the global tracing subscriber layer.
 ///
-/// This sets up:
-/// 1. An OTLP HTTP/protobuf span exporter pointed at `config.endpoint`
-/// 2. A `SdkTracerProvider` with batch export and the configured service name
-/// 3. A `tracing_opentelemetry` layer bridging `tracing` spans to OpenTelemetry
-/// 4. A combined subscriber with both the `OTel` layer and a `fmt` layer
+/// Prefer [`init_otlp`] with `OtlpProtocol::HttpProto` for new code; this
+/// entrypoint stays public so the WASM SDK (which cannot link tonic) can call
+/// it directly without going through the dispatch shim.
 ///
 /// # Errors
 ///
@@ -132,10 +246,15 @@ pub fn init_otlp_http(config: OtlpConfig) -> Result<(), Box<dyn std::error::Erro
         native_reqwest_client::ReqwestHttpClient(reqwest::Client::new()),
     );
 
-    let exporter = builder
+    let mut builder = builder
         .with_endpoint(&config.endpoint)
-        .with_protocol(opentelemetry_otlp::Protocol::HttpBinary)
-        .build()?;
+        .with_protocol(opentelemetry_otlp::Protocol::HttpBinary);
+
+    if let Some(headers) = config.headers {
+        builder = builder.with_headers(headers);
+    }
+
+    let exporter = builder.build()?;
 
     install_provider(exporter, config.service_name);
     Ok(())

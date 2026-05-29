@@ -135,6 +135,21 @@ pub enum WasmAgentEvent {
         /// JSON-encoded tool result.
         result: serde_json::Value,
     },
+    /// A tool execution failed; the error was fed back to the model as a
+    /// tool_result so it can retry (the run is NOT aborted). Mirrors
+    /// `ToolResult` (`result` holds the `{"error": ...}` payload) plus
+    /// `error`, the failure message.
+    #[serde(rename_all = "camelCase")]
+    ToolError {
+        /// Iteration number in which the tool failed.
+        iteration: u32,
+        /// Name of the tool that failed.
+        tool_name: String,
+        /// The `{"error": ...}` payload that was fed back to the model.
+        result: serde_json::Value,
+        /// The failure message.
+        error: String,
+    },
     /// A model iteration completed.
     #[serde(rename_all = "camelCase")]
     IterationComplete {
@@ -163,6 +178,17 @@ impl From<AgentEvent> for WasmAgentEvent {
                 iteration,
                 tool_name,
                 result,
+            },
+            AgentEvent::ToolError {
+                iteration,
+                tool_name,
+                result,
+                error,
+            } => Self::ToolError {
+                iteration,
+                tool_name,
+                result,
+                error,
             },
             AgentEvent::IterationComplete {
                 iteration,

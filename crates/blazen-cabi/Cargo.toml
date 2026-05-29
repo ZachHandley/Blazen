@@ -81,6 +81,7 @@ local-all = [
     "tiktoken",
     "distributed",
     "otlp",
+    "otlp-http",
     "prometheus",
     "langfuse",
     "hf-loader",
@@ -111,6 +112,7 @@ threed-compat-proxy = ["blazen-uniffi/threed-compat-proxy"]
 triposr = ["blazen-uniffi/triposr"]
 
 otlp = ["blazen-uniffi/otlp"]
+otlp-http = ["blazen-uniffi/otlp-http"]
 prometheus = ["blazen-uniffi/prometheus"]
 langfuse = ["blazen-uniffi/langfuse"]
 # Hugging Face metadata probe used by ModelManager::load_from_hf. Forwards to

@@ -31,7 +31,6 @@ __all__ = [
     "BackgroundRemovalProvider",
     "BackgroundRemovalProviderDefaults",
     "BackgroundRemovalRequest",
-    "BaseProvider",
     "BaseProviderDefaults",
     "BatchConfig",
     "BatchResult",
@@ -158,6 +157,7 @@ __all__ = [
     "LlamaCppOptions",
     "LlamaCppProvider",
     "LlmPayload",
+    "LlmProviderDefaults",
     "LocalModel",
     "LoraConfig",
     "MediaError",
@@ -206,6 +206,7 @@ __all__ = [
     "OptimConfig",
     "OrpoConfig",
     "OtlpConfig",
+    "OtlpProtocol",
     "ParallelStage",
     "ParallelSubWorkflowsStep",
     "PauseReason",
@@ -577,8 +578,8 @@ class AgentEvent:
     @property
     def kind(self) -> builtins.str:
         r"""
-        Variant tag: ``"tool_called"``, ``"tool_result"``, or
-        ``"iteration_complete"``.
+        Variant tag: ``"tool_called"``, ``"tool_result"``, ``"tool_error"``,
+        or ``"iteration_complete"``.
         """
     @property
     def iteration(self) -> builtins.int:
@@ -593,12 +594,22 @@ class AgentEvent:
     @property
     def tool_name(self) -> typing.Optional[builtins.str]:
         r"""
-        The tool name carried by ``ToolResult`` events. ``None`` otherwise.
+        The tool name carried by ``ToolResult`` and ``ToolError`` events.
+        ``None`` otherwise.
         """
     @property
     def result(self) -> typing.Optional[typing.Any]:
         r"""
-        The tool result value for ``ToolResult`` events. ``None`` otherwise.
+        The result value for ``ToolResult`` events, or the ``{"error": ...}``
+        payload that was fed back to the model for ``ToolError`` events.
+        ``None`` otherwise.
+        """
+    @property
+    def error(self) -> typing.Optional[builtins.str]:
+        r"""
+        The error message for ``ToolError`` events (the failure that was fed
+        back to the model as a tool_result so it could retry). ``None`` for all
+        other event kinds.
         """
     @property
     def had_tool_calls(self) -> typing.Optional[builtins.bool]:
@@ -1207,103 +1218,6 @@ class BackgroundRemovalRequest:
     def model(self) -> typing.Optional[builtins.str]: ...
     def __new__(cls, *, image_url: builtins.str, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> BackgroundRemovalRequest: ...
     def __repr__(self) -> builtins.str: ...
-
-class BaseProvider:
-    r"""
-    Wraps any [`Model`] with instance-level defaults that are
-    applied to every ``complete()`` / ``stream()`` call before delegation.
-    
-    Phase A exposes the structural builder surface so foreign-language
-    bindings, audits, and Phase D subclass wiring have something to bind
-    against. The defaults bag is propagated verbatim; full hook dispatch
-    arrives in Phase B.
-    
-    Example:
-        >>> from blazen import BaseProvider, Model
-        >>> inner = Model.openai()
-        >>> provider = (
-        ...     BaseProvider(inner)
-        ...     .with_system_prompt("be terse")
-        ...     .with_response_format({"type": "json_object"})
-        ... )
-    """
-    @property
-    def defaults(self) -> ProviderDefaults:
-        r"""
-        The currently configured defaults.
-        """
-    @property
-    def model_id(self) -> builtins.str:
-        r"""
-        The wrapped completion model's ``model_id``.
-        """
-    @property
-    def provider_id(self) -> typing.Optional[builtins.str]:
-        r"""
-        The wrapped completion model's ``provider_id``, if it exposes one.
-        
-        Returns ``None`` for built-in providers that don't expose a
-        ``provider_id`` attribute (the inner ``Model`` trait has no
-        ``provider_id`` method --- it lives on the compute-side
-        ``ComputeProvider`` trait).
-        """
-    @property
-    def inner(self) -> Model:
-        r"""
-        Return a fresh handle to the wrapped completion model.
-        """
-    def __new__(cls, inner: Model, defaults: typing.Optional[ProviderDefaults] = None) -> BaseProvider:
-        r"""
-        Wrap a [`Model`] with instance-level defaults.
-        
-        Args:
-            inner: Any [`Model`] (built-in factory or subclass).
-            defaults: Optional [`ProviderDefaults`]; defaults to
-                an empty bag.
-        """
-    def with_system_prompt(self, system_prompt: builtins.str) -> BaseProvider:
-        r"""
-        Return a clone with ``system_prompt`` set on the completion defaults.
-        """
-    def with_tools(self, tools: typing.Sequence[ToolDefinition]) -> BaseProvider:
-        r"""
-        Return a clone with the default tool list replaced.
-        """
-    def with_response_format(self, response_format: typing.Any) -> BaseProvider:
-        r"""
-        Return a clone with the default ``response_format`` replaced.
-        """
-    def with_before_request(self, hook: typing.Any) -> BaseProvider:
-        r"""
-        Return a clone with the universal JSON-level ``before_request`` hook
-        set on the embedded base defaults.
-        """
-    def with_before_model(self, hook: typing.Any) -> BaseProvider:
-        r"""
-        Return a clone with the typed ``before_model`` hook set.
-        """
-    def with_defaults(self, defaults: ProviderDefaults) -> BaseProvider:
-        r"""
-        Return a clone with the entire defaults bag replaced.
-        """
-    def __repr__(self) -> builtins.str: ...
-    async def extract(self, schema: typing.Any, messages: typing.Sequence[ChatMessage]) -> typing.Any:
-        r"""
-        Typed structured extraction.
-        
-        Calls ``complete()`` with a ``response_format`` derived from the
-        supplied pydantic model's ``model_json_schema()`` and returns
-        ``schema.model_validate(parsed_json_content)``.
-        
-        Args:
-            schema: A pydantic ``BaseModel`` subclass (the class, not an
-                instance). The class must expose ``model_json_schema()`` and
-                ``model_validate()`` (pydantic v2 convention).
-            messages: A list of [`ChatMessage`] objects forming the prompt.
-        
-        Returns:
-            A coroutine resolving to an instance of ``schema``.
-        """
 
 class BaseProviderDefaults:
     r"""
@@ -3035,7 +2949,7 @@ class ControlPlaneWorkerConfig:
         """
     def __repr__(self) -> builtins.str: ...
 
-class CustomProvider(BaseProvider):
+class CustomProvider(LlmProviderDefaults):
     r"""
     A user-defined Blazen provider.
     
@@ -3090,7 +3004,7 @@ class CustomProvider(BaseProvider):
         r"""
         The provider id used for logging (e.g. ``"elevenlabs"``).
         """
-    def __new__(cls, provider_id: builtins.str, protocol: typing.Optional[ApiProtocol] = None) -> tuple[CustomProvider, BaseProvider]:
+    def __new__(cls, provider_id: builtins.str, protocol: typing.Optional[ApiProtocol] = None) -> tuple[CustomProvider, LlmProviderDefaults]:
         r"""
         Construct a [`CustomProvider`].
         
@@ -5970,6 +5884,103 @@ class LlmPayload:
         """
     def __repr__(self) -> builtins.str: ...
 
+class LlmProviderDefaults:
+    r"""
+    Wraps any [`Model`] with instance-level defaults that are
+    applied to every ``complete()`` / ``stream()`` call before delegation.
+    
+    Phase A exposes the structural builder surface so foreign-language
+    bindings, audits, and Phase D subclass wiring have something to bind
+    against. The defaults bag is propagated verbatim; full hook dispatch
+    arrives in Phase B.
+    
+    Example:
+        >>> from blazen import LlmProviderDefaults, Model
+        >>> inner = Model.openai()
+        >>> provider = (
+        ...     LlmProviderDefaults(inner)
+        ...     .with_system_prompt("be terse")
+        ...     .with_response_format({"type": "json_object"})
+        ... )
+    """
+    @property
+    def defaults(self) -> ProviderDefaults:
+        r"""
+        The currently configured defaults.
+        """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        The wrapped completion model's ``model_id``.
+        """
+    @property
+    def provider_id(self) -> typing.Optional[builtins.str]:
+        r"""
+        The wrapped completion model's ``provider_id``, if it exposes one.
+        
+        Returns ``None`` for built-in providers that don't expose a
+        ``provider_id`` attribute (the inner ``Model`` trait has no
+        ``provider_id`` method --- it lives on the compute-side
+        ``ComputeProvider`` trait).
+        """
+    @property
+    def inner(self) -> Model:
+        r"""
+        Return a fresh handle to the wrapped completion model.
+        """
+    def __new__(cls, inner: Model, defaults: typing.Optional[ProviderDefaults] = None) -> LlmProviderDefaults:
+        r"""
+        Wrap a [`Model`] with instance-level defaults.
+        
+        Args:
+            inner: Any [`Model`] (built-in factory or subclass).
+            defaults: Optional [`ProviderDefaults`]; defaults to
+                an empty bag.
+        """
+    def with_system_prompt(self, system_prompt: builtins.str) -> LlmProviderDefaults:
+        r"""
+        Return a clone with ``system_prompt`` set on the completion defaults.
+        """
+    def with_tools(self, tools: typing.Sequence[ToolDefinition]) -> LlmProviderDefaults:
+        r"""
+        Return a clone with the default tool list replaced.
+        """
+    def with_response_format(self, response_format: typing.Any) -> LlmProviderDefaults:
+        r"""
+        Return a clone with the default ``response_format`` replaced.
+        """
+    def with_before_request(self, hook: typing.Any) -> LlmProviderDefaults:
+        r"""
+        Return a clone with the universal JSON-level ``before_request`` hook
+        set on the embedded base defaults.
+        """
+    def with_before_model(self, hook: typing.Any) -> LlmProviderDefaults:
+        r"""
+        Return a clone with the typed ``before_model`` hook set.
+        """
+    def with_defaults(self, defaults: ProviderDefaults) -> LlmProviderDefaults:
+        r"""
+        Return a clone with the entire defaults bag replaced.
+        """
+    def __repr__(self) -> builtins.str: ...
+    async def extract(self, schema: typing.Any, messages: typing.Sequence[ChatMessage]) -> typing.Any:
+        r"""
+        Typed structured extraction.
+        
+        Calls ``complete()`` with a ``response_format`` derived from the
+        supplied pydantic model's ``model_json_schema()`` and returns
+        ``schema.model_validate(parsed_json_content)``.
+        
+        Args:
+            schema: A pydantic ``BaseModel`` subclass (the class, not an
+                instance). The class must expose ``model_json_schema()`` and
+                ``model_validate()`` (pydantic v2 convention).
+            messages: A list of [`ChatMessage`] objects forming the prompt.
+        
+        Returns:
+            A coroutine resolving to an instance of ``schema``.
+        """
+
 class LocalModel:
     r"""
     Subclassable ABC mirroring [`blazen_llm::traits::LocalModel`].
@@ -8604,8 +8615,13 @@ class OtlpConfig:
     Configuration for the OpenTelemetry OTLP exporter.
     
     Example:
-        >>> from blazen import OtlpConfig, init_otlp
-        >>> cfg = OtlpConfig(endpoint="http://localhost:4317", service_name="my-app")
+        >>> from blazen import OtlpConfig, OtlpProtocol, init_otlp
+        >>> cfg = OtlpConfig(
+        ...     endpoint="https://otel.example.com/v1/traces",
+        ...     service_name="my-app",
+        ...     protocol=OtlpProtocol.HttpProto,
+        ...     headers={"Authorization": "Bearer xxx"},
+        ... )
         >>> init_otlp(cfg)
     """
     @property
@@ -8616,13 +8632,27 @@ class OtlpConfig:
     def service_name(self) -> builtins.str: ...
     @service_name.setter
     def service_name(self, value: builtins.str) -> None: ...
-    def __new__(cls, *, endpoint: builtins.str, service_name: builtins.str) -> OtlpConfig:
+    @property
+    def protocol(self) -> OtlpProtocol: ...
+    @protocol.setter
+    def protocol(self, value: OtlpProtocol) -> None: ...
+    @property
+    def headers(self) -> typing.Optional[builtins.dict[builtins.str, builtins.str]]: ...
+    @headers.setter
+    def headers(self, value: typing.Optional[typing.Mapping[builtins.str, builtins.str]]) -> None: ...
+    def __new__(cls, *, endpoint: builtins.str, service_name: builtins.str, protocol: typing.Optional[OtlpProtocol] = None, headers: typing.Optional[typing.Mapping[builtins.str, builtins.str]] = None) -> OtlpConfig:
         r"""
         Create a new OTLP configuration.
         
         Args:
-            endpoint: The OTLP gRPC endpoint URL (e.g. ``"http://localhost:4317"``).
+            endpoint: The OTLP endpoint URL. For HTTP/protobuf use
+                ``"https://collector/v1/traces"``; for gRPC use
+                ``"http://collector:4317"``.
             service_name: The service name reported to the backend.
+            protocol: Wire-level transport. Defaults to
+                ``OtlpProtocol.HttpProto``.
+            headers: Optional auth / routing headers. Honored on HTTP;
+                currently ignored on gRPC (use HTTP for header-based auth).
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -14166,6 +14196,19 @@ class MixedPrecision(enum.Enum):
     BF16 = ...
 
 @typing.final
+class OtlpProtocol(enum.Enum):
+    r"""
+    OTLP wire-level transport.
+    
+    ``HTTP_PROTO`` (HTTP / binary-protobuf) is the default — it traverses
+    public HTTPS / CDN infrastructure cleanly and is what every managed OTLP
+    collector exposes. ``GRPC`` (tonic) is preferred for mesh-bound collectors
+    but requires h2c upstream config on most reverse proxies.
+    """
+    Grpc = ...
+    HttpProto = ...
+
+@typing.final
 class PauseReason(enum.Enum):
     r"""
     Reason a workflow was paused.
@@ -14639,9 +14682,10 @@ def init_otlp(config: OtlpConfig) -> None:
     Initialize the OTLP trace exporter and install it as the global tracing
     subscriber layer.
     
-    Sets up an OTLP gRPC span exporter pointed at ``config.endpoint`` and
-    installs a combined ``tracing`` subscriber (env-filter + OTel layer +
-    fmt layer). Call this once at process startup, before any traced work.
+    Dispatches on ``config.protocol``: ``HTTP_PROTO`` uses the HTTP/binary-
+    protobuf exporter (requires the ``otlp-http`` Cargo feature); ``GRPC``
+    uses tonic (requires the ``otlp`` Cargo feature). Call this once at
+    process startup, before any traced work.
     """
 
 def init_prometheus(port: builtins.int) -> None:
@@ -14937,13 +14981,14 @@ def video_input(name: builtins.str, description: builtins.str) -> typing.Any:
     Schema declaring a single required video input.
     """
 
-def wrap_with_tracing(model: Model, provider_name: builtins.str) -> Model:
+def wrap_with_tracing(model: Model, provider_name: builtins.str, capture_messages: builtins.bool = False) -> Model:
     r"""
     Wrap a `Model` with a tracing decorator.
     
     Each call to `complete()` or `stream()` is instrumented with an
     `info_span!` carrying provider name, model id, token usage, duration,
-    and finish reason.
+    finish reason, and OpenInference + ``gen_ai.*`` aliases for eval-grade
+    ingest by Phoenix Arize and PostHog AI.
     
     Args:
         model: The Model to wrap.
@@ -14951,6 +14996,12 @@ def wrap_with_tracing(model: Model, provider_name: builtins.str) -> Model:
             Note: the underlying Rust type requires a `'static` lifetime,
             so the provided string is leaked for the lifetime of the
             process. Use a small, stable set of labels.
+        capture_messages: If True, the raw prompt messages and completion
+            text are serialized to JSON and recorded on the span as
+            ``llm.input_messages`` / ``llm.output_messages``. Defaults to
+            False — privacy-safe. Phoenix's eval-grade surfaces
+            (faithfulness, RAG hit rate, schema-compliance) need this
+            enabled.
     
     Returns:
         A new Model that emits tracing spans on every call.

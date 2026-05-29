@@ -463,13 +463,14 @@ pub struct PyAgentEvent {
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyAgentEvent {
-    /// Variant tag: ``"tool_called"``, ``"tool_result"``, or
-    /// ``"iteration_complete"``.
+    /// Variant tag: ``"tool_called"``, ``"tool_result"``, ``"tool_error"``,
+    /// or ``"iteration_complete"``.
     #[getter]
     fn kind(&self) -> &'static str {
         match &self.inner {
             RustAgentEvent::ToolCalled { .. } => "tool_called",
             RustAgentEvent::ToolResult { .. } => "tool_result",
+            RustAgentEvent::ToolError { .. } => "tool_error",
             RustAgentEvent::IterationComplete { .. } => "iteration_complete",
         }
     }
@@ -480,6 +481,7 @@ impl PyAgentEvent {
         match &self.inner {
             RustAgentEvent::ToolCalled { iteration, .. }
             | RustAgentEvent::ToolResult { iteration, .. }
+            | RustAgentEvent::ToolError { iteration, .. }
             | RustAgentEvent::IterationComplete { iteration, .. } => *iteration,
         }
     }
@@ -494,24 +496,41 @@ impl PyAgentEvent {
         }
     }
 
-    /// The tool name carried by ``ToolResult`` events. ``None`` otherwise.
+    /// The tool name carried by ``ToolResult`` and ``ToolError`` events.
+    /// ``None`` otherwise.
     #[getter]
     fn tool_name(&self) -> Option<&str> {
-        if let RustAgentEvent::ToolResult { tool_name, .. } = &self.inner {
-            Some(tool_name)
-        } else {
-            None
+        match &self.inner {
+            RustAgentEvent::ToolResult { tool_name, .. }
+            | RustAgentEvent::ToolError { tool_name, .. } => Some(tool_name),
+            _ => None,
         }
     }
 
-    /// The tool result value for ``ToolResult`` events. ``None`` otherwise.
+    /// The result value for ``ToolResult`` events, or the ``{"error": ...}``
+    /// payload that was fed back to the model for ``ToolError`` events.
+    /// ``None`` otherwise.
     #[getter]
     #[gen_stub(override_return_type(type_repr = "typing.Optional[typing.Any]", imports = ("typing",)))]
     fn result(&self, py: Python<'_>) -> PyResult<Option<Py<PyAny>>> {
-        if let RustAgentEvent::ToolResult { result, .. } = &self.inner {
-            Ok(Some(crate::convert::json_to_py(py, result)?))
+        match &self.inner {
+            RustAgentEvent::ToolResult { result, .. }
+            | RustAgentEvent::ToolError { result, .. } => {
+                Ok(Some(crate::convert::json_to_py(py, result)?))
+            }
+            _ => Ok(None),
+        }
+    }
+
+    /// The error message for ``ToolError`` events (the failure that was fed
+    /// back to the model as a tool_result so it could retry). ``None`` for all
+    /// other event kinds.
+    #[getter]
+    fn error(&self) -> Option<&str> {
+        if let RustAgentEvent::ToolError { error, .. } = &self.inner {
+            Some(error)
         } else {
-            Ok(None)
+            None
         }
     }
 

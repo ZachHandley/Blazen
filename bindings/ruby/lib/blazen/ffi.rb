@@ -1368,7 +1368,7 @@ module Blazen
     attach_function :blazen_init_langfuse,
                     [:pointer, :pointer, :pointer, :pointer], :int32
     attach_function :blazen_init_otlp,
-                    [:pointer, :pointer, :pointer], :int32
+                    [:pointer, :pointer, :int32, :pointer, :pointer, :size_t, :pointer], :int32
     attach_function :blazen_init_prometheus,
                     [:pointer, :pointer], :int32
 

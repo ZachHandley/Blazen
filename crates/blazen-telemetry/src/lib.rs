@@ -30,7 +30,7 @@ pub mod error;
 
 // Re-exports
 #[cfg(feature = "spans")]
-pub use spans::TracingModel;
+pub use spans::{TracingConfig, TracingModel};
 
 #[cfg(feature = "langfuse")]
 pub use error::TelemetryError;
@@ -39,10 +39,7 @@ pub use error::TelemetryError;
 pub use history::{HistoryEvent, HistoryEventKind, PauseReason, WorkflowHistory};
 
 #[cfg(any(feature = "otlp", feature = "otlp-http"))]
-pub use exporters::otlp::OtlpConfig;
-
-#[cfg(feature = "otlp")]
-pub use exporters::otlp::init_otlp;
+pub use exporters::otlp::{OtlpConfig, OtlpProtocol, init_otlp};
 
 #[cfg(feature = "otlp-http")]
 pub use exporters::otlp::init_otlp_http;
