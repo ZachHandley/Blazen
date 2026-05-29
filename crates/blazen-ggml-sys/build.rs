@@ -34,6 +34,17 @@ fn main() {
     cfg.define("GGML_BUILD_EXAMPLES", "OFF");
     cfg.define("GGML_BUILD_TESTS", "OFF");
 
+    if target.contains("msvc") {
+        // Force the dynamic CRT (/MD). The ort-sys prebuilt and Rust's cdylib
+        // default are /MD; the cmake C++ libs otherwise build /MT, which
+        // collides at link time (LNK2038 RuntimeLibrary mismatch + LNK2005
+        // duplicate std::locale symbols). CMP0091=NEW is required because these
+        // CMakeLists predate the abstraction and would otherwise ignore the var.
+        cfg.define("CMAKE_POLICY_DEFAULT_CMP0091", "NEW");
+        cfg.define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreadedDLL");
+        cfg.static_crt(false);
+    }
+
     // The vendored ggml header has been patched to set GGML_MAX_NAME=128
     // (instead of the upstream default 64) so stable-diffusion.cpp — which
     // requires the constant to be at least 128 — can find_package this

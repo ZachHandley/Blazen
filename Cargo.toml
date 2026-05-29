@@ -293,3 +293,15 @@ diffusion-rs-sys = { path = "crates/blazen-diffusion-sys" }
 # Cargo.toml: makes `system-ggml` pull in `dep:blazen-ggml-sys`. Third of
 # three ggml duplications eliminated.
 llama-cpp-sys-2 = { path = "crates/blazen-llama-cpp-sys-2" }
+
+# Blazen patch of esaxx-rs 0.1.10. Upstream's build.rs hardcodes
+# `.static_crt(true)` (/MT) on both linux+windows and macOS arms.
+# Rust's MSVC default for cdylib targets is /MD, as is the pyke ort-sys
+# prebuilt and every cmake-driven -sys crate. The hardcoded /MT was
+# producing LNK2038 'RuntimeLibrary' mismatch on Windows MSVC for every
+# cdylib consumer of tokenizers' `esaxx_fast` feature (transitively via
+# ct2rs / fastembed-rs / candle-core's tokenizers default-features). The
+# patch simply drops the `.static_crt(true)` calls so cc-rs honors
+# CARGO_CFG_TARGET_FEATURE crt-static like every other cc-rs crate.
+# See vendor/esaxx-rs/build.rs.
+esaxx-rs = { path = "vendor/esaxx-rs" }

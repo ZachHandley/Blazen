@@ -214,6 +214,18 @@ fn main() {
         println!("cargo:rustc-link-lib=advapi32");
     }
 
+    if target.contains("msvc") {
+        // Force the dynamic CRT (/MD). The ort-sys prebuilt and Rust's cdylib
+        // default are /MD; whisper.cpp otherwise builds /MT, which collides at
+        // link time (LNK2038 RuntimeLibrary mismatch + LNK2005 duplicate
+        // std::locale symbols in whisper.obj). CMP0091=NEW is required because
+        // whisper.cpp's CMakeLists predates the abstraction and would otherwise
+        // ignore CMAKE_MSVC_RUNTIME_LIBRARY.
+        config.define("CMAKE_POLICY_DEFAULT_CMP0091", "NEW");
+        config.define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreadedDLL");
+        config.static_crt(false);
+    }
+
     if cfg!(feature = "coreml") {
         config.define("WHISPER_COREML", "ON");
         config.define("WHISPER_COREML_ALLOW_FALLBACK", "1");

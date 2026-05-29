@@ -67,6 +67,15 @@ fn main() {
         config.define("CMAKE_C_COMPILER", "cl.exe");
         config.define("CMAKE_CXX_COMPILER", "cl.exe");
         config.define("CMAKE_CXX_FLAGS", "'/bigobj'");
+        // Force the dynamic CRT (/MD). The ort-sys prebuilt and Rust's cdylib
+        // default are /MD; stable-diffusion.cpp otherwise builds /MT, which
+        // collides at link time (LNK2038 RuntimeLibrary mismatch + LNK2005
+        // duplicate std::locale symbols). CMP0091=NEW is required because the
+        // CMakeLists predates the abstraction and would otherwise ignore the
+        // runtime-library var.
+        config.define("CMAKE_POLICY_DEFAULT_CMP0091", "NEW");
+        config.define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreadedDLL");
+        config.static_crt(false);
     }
     config
         .profile("Release")

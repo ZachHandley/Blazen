@@ -653,6 +653,18 @@ fn main() {
 
     config.static_crt(static_crt);
 
+    if matches!(target_os, TargetOs::Windows(WindowsVariant::Msvc)) && !static_crt {
+        // Force the dynamic CRT (/MD). The ort-sys prebuilt and Rust's cdylib
+        // default are /MD; llama.cpp otherwise builds /MT, which collides at
+        // link time (LNK2038 RuntimeLibrary mismatch + LNK2005 duplicate
+        // std::locale symbols in llama-adapter.obj). static_crt(false) alone is
+        // insufficient — llama.cpp's CMakeLists leaves CMP0091 at OLD, so it
+        // ignores CMAKE_MSVC_RUNTIME_LIBRARY unless the policy is forced NEW.
+        // Skipped when LLAMA_STATIC_CRT=1 explicitly opts into /MT.
+        config.define("CMAKE_POLICY_DEFAULT_CMP0091", "NEW");
+        config.define("CMAKE_MSVC_RUNTIME_LIBRARY", "MultiThreadedDLL");
+    }
+
     if matches!(target_os, TargetOs::Android) {
         if cfg!(feature = "shared-stdcxx") && cfg!(feature = "static-stdcxx") {
             panic!("Features 'shared-stdcxx' and 'static-stdcxx' are mutually exclusive");
