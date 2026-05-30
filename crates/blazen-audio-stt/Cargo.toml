@@ -32,21 +32,25 @@ tract-onnx = { workspace = true, optional = true }
 whisper-rs = { version = "0.16", default-features = false, optional = true }
 
 # `ct2rs` (Rust bindings to CTranslate2) builds & links CTranslate2's C++
-# source. As of `ct2rs` 0.9.18 that build feeds `-mavx512f`/`-mavx`/`-mfma`
-# to the compiler for the target triple; Apple clang rejects those options
-# for `x86_64-apple-macosx` (`error: unsupported option '-mavx512f' for
-# target 'x86_64-apple-macosx'`), so the crate cannot cross-compile to
-# `x86_64-apple-darwin` from an Apple-silicon host.
+# source (and pulls `sentencepiece-sys`, another cmake/C++ build). It does
+# not build on two of our artifact targets:
+#   - `x86_64-apple-darwin`: ct2rs 0.9.18 feeds `-mavx512f`/`-mavx`/`-mfma`
+#     to the compiler; Apple clang rejects those for `x86_64-apple-macosx`
+#     (`error: unsupported option '-mavx512f'`), so it cannot cross-compile
+#     from an Apple-silicon host.
+#   - `x86_64-pc-windows-msvc`: `sentencepiece-sys`'s cmake/MSVC build fails
+#     (`cmake --build … sentencepiece-sys … exit code 1`), breaking the
+#     uniffi/cabi windows artifacts.
 #
-# We therefore target-gate `ct2rs` OUT of `x86_64-apple-darwin` and compile
-# the `faster_whisper` backend to a runtime stub there (see
+# We therefore target-gate `ct2rs` OUT of both triples and compile the
+# `faster_whisper` backend to a runtime stub there (see
 # `src/backends/faster_whisper/decoder_stub.rs`), mirroring the precedent in
 # `blazen-embed-fastembed` for ORT. The public `FasterWhisperBackend` /
 # `FasterWhisperConfig` types — and the uniffi/cabi symbol surface that
 # depends on them — exist identically on every target; only the underlying
 # CTranslate2 inference is replaced by an `SttError::Unsupported` stub on
-# `x86_64-apple-darwin`.
-[target.'cfg(not(all(target_arch = "x86_64", target_os = "macos")))'.dependencies]
+# those two triples.
+[target.'cfg(not(any(all(target_arch = "x86_64", target_os = "macos"), all(target_arch = "x86_64", target_os = "windows"))))'.dependencies]
 ct2rs = { version = "0.9.18", features = ["whisper"], optional = true }
 
 [features]

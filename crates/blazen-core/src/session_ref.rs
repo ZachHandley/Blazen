@@ -598,7 +598,7 @@ impl SessionRefRegistry {
         // cap mirrors the old standalone `remote_refs` map. A re-insert
         // under an existing remote key is an upsert and does not count
         // against capacity.
-        if !g.get(&key).is_some_and(|e| e.remote.is_some())
+        if g.get(&key).is_none_or(|e| e.remote.is_none())
             && g.values().filter(|e| e.remote.is_some()).count() >= MAX_SESSION_REFS_PER_RUN
         {
             return Err(SessionRefError::CapacityExceeded {
@@ -678,6 +678,11 @@ impl SessionRefRegistry {
     /// Counts every entry in the unified map (live, serializable-bytes,
     /// and pure-remote) so a `drain` after remote-only inserts still
     /// reports them as cleared.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `native_sync` mutex is poisoned (a prior holder
+    /// panicked while holding it) — unreachable in normal operation.
     pub async fn drain(&self) -> usize {
         let mut g = self.inner.write().await;
         let n = g.len();
@@ -717,6 +722,11 @@ impl SessionRefRegistry {
     /// Phase 0.5 — `true` means the calling [`crate::Context`] owns
     /// this registry (it was constructed via [`crate::Context::new`]
     /// rather than [`crate::Context::new_with_session_refs`]).
+    ///
+    /// # Panics
+    ///
+    /// Panics if the `native_sync` mutex is poisoned (a prior holder
+    /// panicked while holding it) — unreachable in normal operation.
     pub async fn clear_on_context_drop(&self, owns_registry: bool) -> usize {
         // Snapshot the keys that need to go under a read lock so we
         // can release it before taking the write lock to remove them.

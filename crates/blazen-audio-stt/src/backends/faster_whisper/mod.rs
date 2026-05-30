@@ -53,18 +53,29 @@ mod pipeline;
 mod tokenizer;
 mod weights;
 
-// `decoder` wraps `ct2rs` (CTranslate2). On `x86_64-apple-darwin` `ct2rs`
-// is gated out (it can't cross-compile — the CTranslate2 build emits
-// `-mavx512f`/`-mavx`/`-mfma`, which Apple clang rejects for
-// `x86_64-apple-macosx`), so we compile a surface-identical runtime stub
+// `decoder` wraps `ct2rs` (CTranslate2). On `x86_64-apple-darwin` and
+// `x86_64-pc-windows-msvc` `ct2rs` is gated out (it can't build there —
+// the CTranslate2 build emits `-mavx512f`/`-mavx`/`-mfma` which Apple clang
+// rejects for `x86_64-apple-macosx`, and `sentencepiece-sys`'s cmake/MSVC
+// build fails on windows), so we compile a surface-identical runtime stub
 // (`decoder_stub`) in its place — mirroring the `blazen-embed-fastembed`
 // ORT precedent. Both arms expose the same `decoder` module path so the
 // re-export and the sibling modules (`pipeline`, this `mod`) are unchanged.
-#[cfg(not(all(target_arch = "x86_64", target_os = "macos")))]
+// Keep this predicate in lockstep with the `ct2rs` target-gate in Cargo.toml.
+#[cfg(not(any(
+    all(target_arch = "x86_64", target_os = "macos"),
+    all(target_arch = "x86_64", target_os = "windows")
+)))]
 mod decoder;
-#[cfg(all(target_arch = "x86_64", target_os = "macos"))]
+#[cfg(any(
+    all(target_arch = "x86_64", target_os = "macos"),
+    all(target_arch = "x86_64", target_os = "windows")
+))]
 mod decoder_stub;
-#[cfg(all(target_arch = "x86_64", target_os = "macos"))]
+#[cfg(any(
+    all(target_arch = "x86_64", target_os = "macos"),
+    all(target_arch = "x86_64", target_os = "windows")
+))]
 use decoder_stub as decoder;
 
 // Re-export the Wave F.2.1 audio preprocessing surface so it is reachable
@@ -570,10 +581,14 @@ mod tests {
     /// symbol, ABI mismatch, build failure), this test refuses to
     /// link and the failure surfaces at compile / load time rather
     /// than buried in the first transcription call.
-    // `ct2rs` is gated out on `x86_64-apple-darwin` (the decoder compiles to
-    // a stub there — see the `decoder` module cfg above), so the link probe
-    // only exists on targets that actually link CTranslate2.
-    #[cfg(not(all(target_arch = "x86_64", target_os = "macos")))]
+    // `ct2rs` is gated out on `x86_64-apple-darwin` and
+    // `x86_64-pc-windows-msvc` (the decoder compiles to a stub there — see the
+    // `decoder` module cfg above), so the link probe only exists on targets
+    // that actually link CTranslate2.
+    #[cfg(not(any(
+        all(target_arch = "x86_64", target_os = "macos"),
+        all(target_arch = "x86_64", target_os = "windows")
+    )))]
     #[test]
     fn link_probe_ct2rs_loads_successfully() {
         use ct2rs::sys::get_log_level;

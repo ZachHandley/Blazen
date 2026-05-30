@@ -85,6 +85,10 @@ impl PyStepWrapper {
     /// Convert this wrapper into a [`StepRegistration`](blazen_core::StepRegistration)
     /// that can be added to a [`WorkflowBuilder`](blazen_core::WorkflowBuilder),
     /// using the provided task locals for async Python function calls.
+    // One cohesive bridge: builds the sync + async step closures plus the
+    // native-passthrough outbound path. Splitting it would scatter the
+    // shared captures across helpers for no real readability win.
+    #[allow(clippy::too_many_lines)]
     pub fn to_registration_with_locals(
         &self,
         locals: pyo3_async_runtimes::TaskLocals,

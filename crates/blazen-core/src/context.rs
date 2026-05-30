@@ -343,6 +343,12 @@ impl Context {
     /// The object is NOT serialized and will NOT survive snapshots or
     /// pause/resume. Use this for DB connections, file handles, and other
     /// resources that must be shared across steps within a single run.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the session-ref registry is at capacity
+    /// (`MAX_SESSION_REFS_PER_RUN`) — a runaway-guard a well-behaved
+    /// workflow never reaches.
     pub async fn set_object<T: Any + Send + Sync + 'static>(&self, key: &str, value: T) {
         // Fold the former string-keyed `objects` bag into the unified
         // session-ref store. The live value is inserted under

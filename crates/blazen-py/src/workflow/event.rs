@@ -323,19 +323,19 @@ pub fn any_event_to_py_event(event: &dyn AnyEvent) -> PyEvent {
         // as an `Arc<Py<PyAny>>`. Recover the ORIGINAL object and hand it
         // straight back to this step — preserving object identity and any
         // non-JSON attributes — instead of rebuilding a `PyEvent` from JSON.
-        if let Some(handle) = dynamic.native_handle() {
-            if let Ok(py_handle) = handle.downcast::<Py<PyAny>>() {
-                let native = Python::attach(|py| py_handle.clone_ref(py));
-                return PyEvent {
-                    event_type: dynamic.event_type.clone(),
-                    // `data` is non-authoritative when `native` is Some; keep
-                    // a JSON snapshot so callers that bypass the live object
-                    // (attribute reads, to_dict, snapshot) still work.
-                    data: dynamic.to_json(),
-                    session_refs,
-                    native: Some(native),
-                };
-            }
+        if let Some(handle) = dynamic.native_handle()
+            && let Ok(py_handle) = handle.downcast::<Py<PyAny>>()
+        {
+            let native = Python::attach(|py| py_handle.clone_ref(py));
+            return PyEvent {
+                event_type: dynamic.event_type.clone(),
+                // `data` is non-authoritative when `native` is Some; keep
+                // a JSON snapshot so callers that bypass the live object
+                // (attribute reads, to_dict, snapshot) still work.
+                data: dynamic.to_json(),
+                session_refs,
+                native: Some(native),
+            };
         }
         return PyEvent {
             event_type: dynamic.event_type.clone(),

@@ -495,10 +495,14 @@ impl DynamicEvent {
 
 impl Debug for DynamicEvent {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // `native` (a `dyn Any` handle) and `cached_json` (an internal lazy
+        // cache) are intentionally omitted — neither is meaningfully Debuggable
+        // and both are derived state. `finish_non_exhaustive()` records that
+        // (and satisfies clippy::missing_fields_in_debug under `-D warnings`).
         f.debug_struct("DynamicEvent")
             .field("event_type", &self.event_type)
             .field("data", &self.data)
-            .finish()
+            .finish_non_exhaustive()
     }
 }
 
