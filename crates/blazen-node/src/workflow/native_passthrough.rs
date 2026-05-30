@@ -402,8 +402,7 @@ mod tests {
     #[test]
     fn strip_removes_only_the_marker_key() {
         let key = RegistryKey::new();
-        let stamped =
-            stamp_native_ref(serde_json::json!({ "type": "E", "keep": true }), key);
+        let stamped = stamp_native_ref(serde_json::json!({ "type": "E", "keep": true }), key);
         let cleaned = strip_native_ref(stamped);
         assert_eq!(cleaned["type"], "E");
         assert_eq!(cleaned["keep"], true);

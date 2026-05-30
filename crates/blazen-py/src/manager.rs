@@ -2279,7 +2279,9 @@ mod training {
             lambda_weight: f32,
         ) -> PyResult<Self> {
             if !lambda_weight.is_finite() || lambda_weight < 0.0 {
-                return Err(PyValueError::new_err("OrpoConfig.lambda_weight must be >= 0"));
+                return Err(PyValueError::new_err(
+                    "OrpoConfig.lambda_weight must be >= 0",
+                ));
             }
             Ok(Self {
                 core,

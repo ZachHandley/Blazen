@@ -288,9 +288,7 @@ impl Workflow {
 /// Await a core [`CoreWorkflowHandler`] to completion and convert it into the
 /// wire-format [`WorkflowResult`]. Shared by [`Workflow::run`] and
 /// [`WorkflowHandler::result`] so both produce an identical result object.
-async fn core_handler_to_wire_result(
-    handler: CoreWorkflowHandler,
-) -> BlazenResult<WorkflowResult> {
+async fn core_handler_to_wire_result(handler: CoreWorkflowHandler) -> BlazenResult<WorkflowResult> {
     let result = handler.result().await.map_err(BlazenError::from)?;
     Ok(WorkflowResult {
         event: any_event_to_wire(&*result.event),
@@ -360,9 +358,8 @@ pub struct WorkflowHandler {
     initial_stream: parking_lot::Mutex<Option<PinnedEventStream>>,
 }
 
-type PinnedEventStream = std::pin::Pin<
-    Box<dyn tokio_stream::Stream<Item = Box<dyn AnyEvent>> + Send + Unpin>,
->;
+type PinnedEventStream =
+    std::pin::Pin<Box<dyn tokio_stream::Stream<Item = Box<dyn AnyEvent>> + Send + Unpin>>;
 
 impl WorkflowHandler {
     /// Wrap a fresh core [`CoreWorkflowHandler`], capturing its pre-subscribed

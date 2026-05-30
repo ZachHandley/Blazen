@@ -392,11 +392,11 @@ fn infer_accepts_from_hints(py: Python<'_>, func: &Py<PyAny>) -> Vec<String> {
 #[gen_stub_pyfunction(
     python_overload = r#"
     @typing.overload
-    def step(func: typing.Callable[[Context, Event], typing.Any]) -> _StepWrapper:
+    def step(func: typing.Callable[[Context, E], typing.Any]) -> _StepWrapper:
         ...
 
     @typing.overload
-    def step(func: None = None, *, accepts: typing.Optional[typing.Sequence[builtins.str]] = None, emits: typing.Optional[typing.Sequence[builtins.str]] = None, max_concurrency: builtins.int = 0) -> typing.Callable[[typing.Callable[[Context, Event], typing.Any]], _StepWrapper]:
+    def step(func: None = None, *, accepts: typing.Optional[typing.Sequence[builtins.str]] = None, emits: typing.Optional[typing.Sequence[builtins.str]] = None, max_concurrency: builtins.int = 0) -> typing.Callable[[typing.Callable[[Context, E], typing.Any]], _StepWrapper]:
         ...
     "#,
     no_default_overload = true

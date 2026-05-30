@@ -68,10 +68,12 @@ pub(crate) async fn handler_to_py_result(
     let cost_total_usd = wf_result.cost_total_usd;
 
     let registry_for_event = Arc::clone(&session_refs);
-    let py_event = with_session_registry(registry_for_event, async move {
-        any_event_to_py_event(&*event)
-    })
-    .await;
+    let py_event =
+        with_session_registry(
+            registry_for_event,
+            async move { any_event_to_py_event(&*event) },
+        )
+        .await;
     Python::attach(|py| {
         let py_event = Py::new(py, py_event)?;
         Ok(PyWorkflowResult::new_with_usage(

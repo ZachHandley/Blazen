@@ -22,9 +22,7 @@ use tokio_stream::StreamExt;
 use super::context::JsContext;
 use super::event::{any_event_to_js_value, any_event_to_step_json, js_value_to_any_event};
 use super::handler::JsWorkflowHandler;
-use super::native_passthrough::{
-    StepEventArg, StepEventReturn, register_native_event,
-};
+use super::native_passthrough::{StepEventArg, StepEventReturn, register_native_event};
 use super::session_ref_serializable::{DESERIALIZER_FN, intern_type_tag};
 use crate::error::workflow_error_to_napi;
 #[cfg(not(target_os = "wasi"))]
@@ -1236,10 +1234,8 @@ fn make_step_registration(step: &JsStepRegistration) -> blazen_core::StepRegistr
                     // registry, `StepEventArg::to_napi_value` substitutes the
                     // original JS object so the handler sees the same instance
                     // the previous step returned.
-                    let js_event = StepEventArg::new(
-                        any_event_to_step_json(&*event),
-                        Arc::clone(&registry),
-                    );
+                    let js_event =
+                        StepEventArg::new(any_event_to_step_json(&*event), Arc::clone(&registry));
 
                     // Call the JavaScript handler function.
                     // ThreadsafeFunction::call_async returns a Future that resolves
@@ -1260,12 +1256,11 @@ fn make_step_registration(step: &JsStepRegistration) -> blazen_core::StepRegistr
                     // next step recovers identity.
                     match result {
                         StepEventReturn::None => Ok(blazen_core::StepOutput::None),
-                        StepEventReturn::JsonOnly(json) => {
-                            Ok(blazen_core::StepOutput::Single(js_value_to_any_event(&json)))
-                        }
+                        StepEventReturn::JsonOnly(json) => Ok(blazen_core::StepOutput::Single(
+                            js_value_to_any_event(&json),
+                        )),
                         StepEventReturn::Single { json, native } => {
-                            let stamped =
-                                register_native_event(&registry, json, native).await;
+                            let stamped = register_native_event(&registry, json, native).await;
                             Ok(blazen_core::StepOutput::Single(js_value_to_any_event(
                                 &stamped,
                             )))
@@ -1274,8 +1269,7 @@ fn make_step_registration(step: &JsStepRegistration) -> blazen_core::StepRegistr
                             let mut events: Vec<Box<dyn AnyEvent>> =
                                 Vec::with_capacity(items.len());
                             for (json, native) in items {
-                                let stamped =
-                                    register_native_event(&registry, json, native).await;
+                                let stamped = register_native_event(&registry, json, native).await;
                                 events.push(js_value_to_any_event(&stamped));
                             }
                             Ok(blazen_core::StepOutput::Multiple(events))

@@ -483,10 +483,7 @@ impl DynamicEvent {
     /// and reference the registry key from the event payload via the
     /// `{"__blazen_session_ref__": "<uuid>"}` marker instead.
     #[must_use]
-    pub fn with_native(
-        event_type: impl Into<String>,
-        native: Arc<dyn Any + Send + Sync>,
-    ) -> Self {
+    pub fn with_native(event_type: impl Into<String>, native: Arc<dyn Any + Send + Sync>) -> Self {
         Self {
             event_type: event_type.into(),
             data: serde_json::Value::Null,

@@ -6,6 +6,7 @@ import enum
 import os
 import pathlib
 import typing
+E = typing.TypeVar("E", bound="Event")
 __all__ = [
     "ActiveWorkflowSnapshot",
     "AdapterStatus",
@@ -2818,11 +2819,11 @@ class ControlPlaneClient:
             ``assigned_to``, ``last_event_at_ms``, ``output``,
             ``error``).
         """
-    async def cancel_workflow(self, run_id: builtins.str) -> dict:
+    async def cancel_workflow(self, run_id: builtins.str) -> dict[str, typing.Any]:
         r"""
         Cancel an in-flight run.
         """
-    async def describe_workflow(self, run_id: builtins.str) -> dict:
+    async def describe_workflow(self, run_id: builtins.str) -> dict[str, typing.Any]:
         r"""
         Look up the current state of a run.
         """
@@ -8315,7 +8316,7 @@ class NoopUsageEmitter(UsageEmitter):
     Useful as a default when no downstream observer is wired up.
     """
     def __new__(cls) -> tuple[NoopUsageEmitter, UsageEmitter]: ...
-    def emit(self, _event: typing.Any) -> None:
+    def emit(self, _event: UsageEvent) -> None:
         r"""
         No-op emit; the event is discarded.
         """
@@ -10808,7 +10809,7 @@ class StepOutput:
         r"""
         Whether this output has no events (the ``None`` variant).
         """
-    def events(self) -> list:
+    def events(self) -> list[Event]:
         r"""
         Return all events carried by this output.
         
@@ -11658,7 +11659,7 @@ class ToolDef:
         JSON-schema parameters dict describing the tool's arguments.
         """
     @property
-    def handler(self) -> typing.Any:
+    def handler(self) -> typing.Callable:
         r"""
         The Python callable that implements the tool.
         """
@@ -12406,7 +12407,7 @@ class TypedTool:
     @property
     def parameters(self) -> dict[str, typing.Any]: ...
     @property
-    def handler(self) -> typing.Any: ...
+    def handler(self) -> typing.Callable: ...
     def __new__(cls, *, name: builtins.str, description: builtins.str, args_model: type, handler: typing.Any, is_exit: builtins.bool = False) -> TypedTool:
         r"""
         Build a TypedTool.
@@ -12493,7 +12494,7 @@ class UsageEmitter:
         Subclass-friendly `__init__` no-op so `super().__init__()` chains
         don't fall through to `object.__init__` and raise ``TypeError``.
         """
-    def emit(self, _event: typing.Any) -> None:
+    def emit(self, _event: UsageEvent) -> None:
         r"""
         Sink a single `UsageEvent`. Subclasses override this method.
         """
@@ -14980,10 +14981,10 @@ def simhash_to_hex(value: builtins.int) -> builtins.str:
     """
 
 @typing.overload
-def step(func: typing.Callable[[Context, Event], typing.Any]) -> _StepWrapper: ...
+def step(func: typing.Callable[[Context, E], typing.Any]) -> _StepWrapper: ...
 
 @typing.overload
-def step(func: None = None, *, accepts: typing.Optional[typing.Sequence[builtins.str]] = None, emits: typing.Optional[typing.Sequence[builtins.str]] = None, max_concurrency: builtins.int = 0) -> typing.Callable[[typing.Callable[[Context, Event], typing.Any]], _StepWrapper]: ...
+def step(func: None = None, *, accepts: typing.Optional[typing.Sequence[builtins.str]] = None, emits: typing.Optional[typing.Sequence[builtins.str]] = None, max_concurrency: builtins.int = 0) -> typing.Callable[[typing.Callable[[Context, E], typing.Any]], _StepWrapper]: ...
 
 def three_d_input(name: builtins.str, description: builtins.str) -> typing.Any:
     r"""

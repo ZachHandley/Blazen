@@ -702,10 +702,10 @@ fn dispatch_python_deserializer(value: serde_json::Value) -> Option<Box<dyn AnyE
         let bound = json_obj.bind(py);
         let result = callable.call1(py, (bound,)).ok()?;
         let py_event: PyEvent = result.extract(py).ok()?;
-        Some(Box::new(DynamicEvent::from_json(
-            py_event.event_type,
-            py_event.data,
-        )) as Box<dyn AnyEvent>)
+        Some(
+            Box::new(DynamicEvent::from_json(py_event.event_type, py_event.data))
+                as Box<dyn AnyEvent>,
+        )
     })
 }
 
@@ -786,10 +786,8 @@ mod tests {
 
     #[test]
     fn dynamic_event_roundtrip() {
-        let evt = DynamicEvent::from_json(
-            "MyEvent".to_owned(),
-            serde_json::json!({"key": "value"}),
-        );
+        let evt =
+            DynamicEvent::from_json("MyEvent".to_owned(), serde_json::json!({"key": "value"}));
         let json = Event::to_json(&evt);
         // DynamicEvent::to_json() now returns the flat data directly.
         assert_eq!(json["key"], "value");

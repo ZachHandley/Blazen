@@ -57,6 +57,7 @@ fn main() {
     let processed = rewrite_coroutine_to_async(&content);
     let processed = inject_exception_stubs(&processed);
     let processed = inject_module_aliases(&processed);
+    let processed = inject_step_typevar(&processed);
     fs::write(&pyi_path, &processed).expect("failed to write blazen.pyi");
 
     assert_no_bodyless_defs(&processed);
@@ -163,6 +164,36 @@ fn inject_module_aliases(content: &str) -> String {
     }
 
     format!("{}{}", with_all.trim_end(), block)
+}
+
+/// Inject the `E` step TypeVar bound to the `Event` base class.
+///
+/// `pyo3-stub-gen` has no notion of generic `TypeVar`s, so the module-level
+/// `E = typing.TypeVar("E", bound="Event")` declaration used by the typed
+/// step/handler signatures must be injected by hand. It is inserted directly
+/// after the generated `import typing` line in the header imports block
+/// (import builtins / import enum / import os / import pathlib / import typing).
+///
+/// The bound is a quoted forward reference (`"Event"`) so the TypeVar can be
+/// declared before the `Event` class is defined — class-definition ordering in
+/// the generated stub is therefore irrelevant. The TypeVar is intentionally
+/// NOT added to `__all__`: TypeVars are implementation detail of the typed
+/// signatures, not re-exported public symbols.
+#[cfg(not(feature = "extension-module"))]
+fn inject_step_typevar(content: &str) -> String {
+    const IMPORT_TYPING: &str = "import typing\n";
+    const TYPEVAR_DECL: &str = "E = typing.TypeVar(\"E\", bound=\"Event\")\n";
+
+    let Some(pos) = content.find(IMPORT_TYPING) else {
+        return content.to_string();
+    };
+    let insert_at = pos + IMPORT_TYPING.len();
+
+    let mut result = String::with_capacity(content.len() + TYPEVAR_DECL.len());
+    result.push_str(&content[..insert_at]);
+    result.push_str(TYPEVAR_DECL);
+    result.push_str(&content[insert_at..]);
+    result
 }
 
 /// Inject stub declarations for the 10 Blazen exception classes.

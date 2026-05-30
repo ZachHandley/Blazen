@@ -139,7 +139,7 @@ impl PyControlPlaneClient {
 
     /// Cancel an in-flight run.
     #[gen_stub(override_return_type(
-        type_repr = "typing.Coroutine[typing.Any, typing.Any, dict]",
+        type_repr = "typing.Coroutine[typing.Any, typing.Any, dict[str, typing.Any]]",
         imports = ("typing",)
     ))]
     fn cancel_workflow<'py>(&self, py: Python<'py>, run_id: String) -> PyResult<Bound<'py, PyAny>> {
@@ -156,7 +156,7 @@ impl PyControlPlaneClient {
 
     /// Look up the current state of a run.
     #[gen_stub(override_return_type(
-        type_repr = "typing.Coroutine[typing.Any, typing.Any, dict]",
+        type_repr = "typing.Coroutine[typing.Any, typing.Any, dict[str, typing.Any]]",
         imports = ("typing",)
     ))]
     fn describe_workflow<'py>(

@@ -57,7 +57,13 @@ impl PyUsageEmitter {
     fn __init__(&self) {}
 
     /// Sink a single `UsageEvent`. Subclasses override this method.
-    fn emit(&self, _event: &Bound<'_, PyAny>) -> PyResult<()> {
+    fn emit(
+        &self,
+        #[gen_stub(override_type(type_repr = "UsageEvent", imports = ()))] _event: &Bound<
+            '_,
+            PyAny,
+        >,
+    ) -> PyResult<()> {
         Err(pyo3::exceptions::PyNotImplementedError::new_err(
             "subclass must override emit()",
         ))
@@ -85,7 +91,14 @@ impl PyNoopUsageEmitter {
     }
 
     /// No-op emit; the event is discarded.
-    fn emit(&self, _event: &Bound<'_, PyAny>) {}
+    fn emit(
+        &self,
+        #[gen_stub(override_type(type_repr = "UsageEvent", imports = ()))] _event: &Bound<
+            '_,
+            PyAny,
+        >,
+    ) {
+    }
 
     fn __repr__(&self) -> &'static str {
         "NoopUsageEmitter()"

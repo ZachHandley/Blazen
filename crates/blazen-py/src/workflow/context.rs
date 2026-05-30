@@ -127,10 +127,8 @@ impl PyContext {
     /// Args:
     ///     event: The event to send.
     fn send_event(&self, _py: Python<'_>, event: PyRef<'_, PyEvent>) {
-        let dynamic = blazen_events::DynamicEvent::from_json(
-            event.event_type.clone(),
-            event.data.clone(),
-        );
+        let dynamic =
+            blazen_events::DynamicEvent::from_json(event.event_type.clone(), event.data.clone());
         drop(event);
         let inner = self.inner.clone();
         block_on_context(async {
@@ -147,10 +145,8 @@ impl PyContext {
     /// Args:
     ///     event: The event to publish to the stream.
     fn write_event_to_stream(&self, _py: Python<'_>, event: PyRef<'_, PyEvent>) {
-        let dynamic = blazen_events::DynamicEvent::from_json(
-            event.event_type.clone(),
-            event.data.clone(),
-        );
+        let dynamic =
+            blazen_events::DynamicEvent::from_json(event.event_type.clone(), event.data.clone());
         drop(event);
         let inner = self.inner.clone();
         block_on_context(async {

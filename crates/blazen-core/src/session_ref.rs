@@ -546,7 +546,13 @@ impl SessionRefRegistry {
         &self,
         key: RegistryKey,
     ) -> Option<Arc<dyn SessionRefSerializable>> {
-        match self.inner.read().await.get(&key).and_then(|e| e.serializable.as_ref()) {
+        match self
+            .inner
+            .read()
+            .await
+            .get(&key)
+            .and_then(|e| e.serializable.as_ref())
+        {
             Some(SerializableLane::Trait(t)) => Some(t.clone()),
             _ => None,
         }
@@ -615,13 +621,21 @@ impl SessionRefRegistry {
     /// Look up a remote-ref descriptor. Returns `None` if `key` is not
     /// a remote ref (it may still be a local ref — check `get_any`).
     pub async fn get_remote(&self, key: RegistryKey) -> Option<RemoteRefDescriptor> {
-        self.inner.read().await.get(&key).and_then(|e| e.remote.clone())
+        self.inner
+            .read()
+            .await
+            .get(&key)
+            .and_then(|e| e.remote.clone())
     }
 
     /// Returns `true` if `key` carries a remote descriptor (regardless
     /// of whether it has also been materialized into the live lane).
     pub async fn is_remote(&self, key: RegistryKey) -> bool {
-        self.inner.read().await.get(&key).is_some_and(|e| e.remote.is_some())
+        self.inner
+            .read()
+            .await
+            .get(&key)
+            .is_some_and(|e| e.remote.is_some())
     }
 
     /// Iterate all remote-ref descriptors currently tracked.
@@ -636,12 +650,21 @@ impl SessionRefRegistry {
 
     /// Look up the type-erased entry. Bindings call this and downcast.
     pub async fn get_any(&self, key: RegistryKey) -> Option<AnyArc> {
-        self.inner.read().await.get(&key).and_then(|e| e.live.clone())
+        self.inner
+            .read()
+            .await
+            .get(&key)
+            .and_then(|e| e.live.clone())
     }
 
     /// Look up and downcast to a concrete `Arc<T>`.
     pub async fn get<T: Any + Send + Sync + 'static>(&self, key: RegistryKey) -> Option<Arc<T>> {
-        let any = self.inner.read().await.get(&key).and_then(|e| e.live.clone())?;
+        let any = self
+            .inner
+            .read()
+            .await
+            .get(&key)
+            .and_then(|e| e.live.clone())?;
         Arc::downcast::<T>(any).ok()
     }
 
@@ -717,10 +740,7 @@ impl SessionRefRegistry {
         let mut count = 0;
         {
             let mut g = self.inner.write().await;
-            let mut native = self
-                .native_sync
-                .lock()
-                .expect("native_sync mutex poisoned");
+            let mut native = self.native_sync.lock().expect("native_sync mutex poisoned");
             for key in to_remove {
                 // Remove the whole unified entry. Count the entry itself
                 // (not just its live half) so pure serializable-bytes
@@ -752,12 +772,7 @@ impl SessionRefRegistry {
 
     /// Whether the registry has any entries carrying a live value.
     pub async fn is_empty(&self) -> bool {
-        !self
-            .inner
-            .read()
-            .await
-            .values()
-            .any(|e| e.live.is_some())
+        !self.inner.read().await.values().any(|e| e.live.is_some())
     }
 
     /// Iterate every key whose entry carries a live value. Used by the
@@ -1154,7 +1169,10 @@ mod tests {
         let key = reg.insert_native_sync(Arc::new(99_u64)).await.unwrap();
 
         // Resolvable synchronously (no await) AND visible in the async map.
-        assert_eq!(*reg.get_native_sync(key).unwrap().downcast::<u64>().unwrap(), 99);
+        assert_eq!(
+            *reg.get_native_sync(key).unwrap().downcast::<u64>().unwrap(),
+            99
+        );
         assert!(reg.get_any(key).await.is_some());
         assert_eq!(reg.len().await, 1);
     }
@@ -2129,7 +2147,10 @@ mod tests {
 
         let mut current = key;
         for _ in 0..5 {
-            let got = reg.get::<Tracker>(current).await.expect("live entry present");
+            let got = reg
+                .get::<Tracker>(current)
+                .await
+                .expect("live entry present");
             assert!(
                 Arc::ptr_eq(&got, &original),
                 "identity must survive the hop (no copy)"

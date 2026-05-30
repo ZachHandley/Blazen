@@ -655,7 +655,12 @@ impl Context {
                     .into_iter()
                     .map(|json| {
                         blazen_events::try_deserialize_event(&type_key, &json).unwrap_or_else(
-                            || Box::new(blazen_events::DynamicEvent::from_json(type_key.clone(), json)),
+                            || {
+                                Box::new(blazen_events::DynamicEvent::from_json(
+                                    type_key.clone(),
+                                    json,
+                                ))
+                            },
                         )
                     })
                     .collect();

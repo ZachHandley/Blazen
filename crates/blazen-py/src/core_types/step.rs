@@ -113,6 +113,7 @@ impl PyStepOutput {
     ///
     /// Empty for ``"none"``; length 1 for ``"single"``; length N for
     /// ``"multiple"``.
+    #[gen_stub(override_return_type(type_repr = "list[Event]", imports = ()))]
     fn events<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyList>> {
         let list = PyList::empty(py);
         for ev in &self.events {

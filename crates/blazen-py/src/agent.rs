@@ -212,6 +212,7 @@ impl PyToolDef {
 
     /// The Python callable that implements the tool.
     #[getter]
+    #[gen_stub(override_return_type(type_repr = "typing.Callable", imports = ("typing",)))]
     fn handler(&self, py: Python<'_>) -> Py<PyAny> {
         self.handler.clone_ref(py)
     }
