@@ -15,7 +15,6 @@ blazen-model-cache = { workspace = true, optional = true }
 candle-core = { workspace = true, optional = true }
 candle-nn = { workspace = true, optional = true }
 candle-transformers = { workspace = true, optional = true }
-ct2rs = { version = "0.9.18", features = ["whisper"], optional = true }
 futures-core.workspace = true
 futures-util.workspace = true
 hf-hub = { workspace = true, features = ["ureq"], optional = true }
@@ -31,6 +30,24 @@ tract-onnx = { workspace = true, optional = true }
 # below, which are intentionally NO-OP at the library level — see the
 # `cuda`/`metal`/`coreml` feature comments.
 whisper-rs = { version = "0.16", default-features = false, optional = true }
+
+# `ct2rs` (Rust bindings to CTranslate2) builds & links CTranslate2's C++
+# source. As of `ct2rs` 0.9.18 that build feeds `-mavx512f`/`-mavx`/`-mfma`
+# to the compiler for the target triple; Apple clang rejects those options
+# for `x86_64-apple-macosx` (`error: unsupported option '-mavx512f' for
+# target 'x86_64-apple-macosx'`), so the crate cannot cross-compile to
+# `x86_64-apple-darwin` from an Apple-silicon host.
+#
+# We therefore target-gate `ct2rs` OUT of `x86_64-apple-darwin` and compile
+# the `faster_whisper` backend to a runtime stub there (see
+# `src/backends/faster_whisper/decoder_stub.rs`), mirroring the precedent in
+# `blazen-embed-fastembed` for ORT. The public `FasterWhisperBackend` /
+# `FasterWhisperConfig` types — and the uniffi/cabi symbol surface that
+# depends on them — exist identically on every target; only the underlying
+# CTranslate2 inference is replaced by an `SttError::Unsupported` stub on
+# `x86_64-apple-darwin`.
+[target.'cfg(not(all(target_arch = "x86_64", target_os = "macos")))'.dependencies]
+ct2rs = { version = "0.9.18", features = ["whisper"], optional = true }
 
 [features]
 default = []
