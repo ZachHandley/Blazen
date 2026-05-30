@@ -93,6 +93,11 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     // Version
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
 
+    // Install the native-event serializer hook so live Python event objects
+    // (passed step-to-step via `DynamicEvent::with_native`) can be lazily
+    // materialized to JSON at snapshot time. Idempotent; first call wins.
+    workflow::event::install_native_serializer();
+
     // Foundation event types (from `blazen-events`)
     m.add_class::<events::PyModality>()?;
     m.add_class::<events::PyUsageEvent>()?;

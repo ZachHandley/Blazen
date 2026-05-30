@@ -358,7 +358,8 @@ impl WasmContext {
     /// canonical shape used by step handlers) or a plain string treated as
     /// the event type with an empty payload.
     #[wasm_bindgen(js_name = "sendEvent")]
-    pub fn send_event(&self, event: JsValue) -> Result<(), JsValue> {
+    pub fn send_event(&self, event: crate::workflow::WorkflowEventTs) -> Result<(), JsValue> {
+        let event: JsValue = event.into();
         let dynamic = js_to_dynamic_event(&event)?;
         let inner = self.inner.clone();
         block_on_local(async move {
@@ -373,7 +374,11 @@ impl WasmContext {
     /// event is delivered ONLY to subscribers of the streaming channel — it
     /// does NOT route through the internal step registry.
     #[wasm_bindgen(js_name = "writeEventToStream")]
-    pub fn write_event_to_stream(&self, event: JsValue) -> Result<(), JsValue> {
+    pub fn write_event_to_stream(
+        &self,
+        event: crate::workflow::WorkflowEventTs,
+    ) -> Result<(), JsValue> {
+        let event: JsValue = event.into();
         let dynamic = js_to_dynamic_event(&event)?;
         let inner = self.inner.clone();
         block_on_local(async move {
@@ -518,7 +523,11 @@ fn js_to_dynamic_event(event: &JsValue) -> Result<blazen_events::DynamicEvent, J
         ));
     }
 
-    // Object with a `type` discriminator.
+    // Object with a `type` discriminator. Park the live `JsValue` in the
+    // JS-value store and wrap it in a native-backed `DynamicEvent` (via
+    // `js_native::stash_js_event`) so an object emitted with
+    // `ctx.sendEvent(liveObj)` keeps its identity when the receiving step's
+    // handler is invoked — same passthrough as a step's return value.
     if event.is_object() {
         let type_val = js_sys::Reflect::get(event, &JsValue::from_str("type"))
             .map_err(|e| JsValue::from_str(&format!("sendEvent: cannot read .type: {e:?}")))?;
@@ -526,10 +535,12 @@ fn js_to_dynamic_event(event: &JsValue) -> Result<blazen_events::DynamicEvent, J
             .as_string()
             .ok_or_else(|| JsValue::from_str("sendEvent: event.type must be a string"))?;
 
-        let data: serde_json::Value = serde_wasm_bindgen::from_value(event.clone())
-            .map_err(|e| JsValue::from_str(&format!("sendEvent: payload not JSON: {e}")))?;
-
-        return Ok(blazen_events::DynamicEvent::from_json(event_type, data));
+        // `stash_js_object` parks the live `JsValue` and takes a best-effort
+        // (lossy) JSON snapshot internally, so an object carrying non-JSON
+        // members (functions etc.) is accepted and keeps its identity for
+        // the receiving step — rather than being rejected by a strict JSON
+        // conversion.
+        return Ok(crate::js_native::stash_js_object(event_type, event.clone()));
     }
 
     Err(JsValue::from_str(

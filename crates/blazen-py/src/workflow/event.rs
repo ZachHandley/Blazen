@@ -41,7 +41,7 @@ fn with_event_registry<R>(reg: Option<&Arc<SessionRefRegistry>>, f: impl FnOnce(
 /// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "Event", subclass, from_py_object)]
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PyEvent {
     /// The event type name (e.g. `"AnalyzeEvent"`).
     #[pyo3(get, set)]
@@ -54,6 +54,35 @@ pub struct PyEvent {
     /// has been dropped (e.g. when the user reads `result.result`
     /// after `await handler.result()` returns).
     pub(crate) session_refs: Option<Arc<SessionRefRegistry>>,
+    /// Live Python object backing this event, when one is available.
+    ///
+    /// Populated by [`any_event_to_py_event`] when the inbound
+    /// [`DynamicEvent`] carries a native handle (a `Py<PyAny>` stashed by a
+    /// prior step via [`DynamicEvent::with_native`]). When `Some`, the step
+    /// receives the *original* Python object that the previous step returned
+    /// — preserving object identity and any non-JSON-serializable attributes
+    /// — instead of a fresh `PyEvent` rebuilt from JSON.
+    ///
+    /// This slot is NOT exposed to Python; it is an internal passthrough lane.
+    pub(crate) native: Option<Py<PyAny>>,
+}
+
+impl Clone for PyEvent {
+    fn clone(&self) -> Self {
+        // `Py<PyAny>` is not `Clone` directly (it needs the GIL to bump the
+        // refcount), so clone the native handle via `clone_ref` under an
+        // attached interpreter. All other fields are plain `Clone`.
+        let native = self
+            .native
+            .as_ref()
+            .map(|obj| Python::attach(|py| obj.clone_ref(py)));
+        Self {
+            event_type: self.event_type.clone(),
+            data: self.data.clone(),
+            session_refs: self.session_refs.clone(),
+            native,
+        }
+    }
 }
 
 #[gen_stub_pymethods]
@@ -91,6 +120,7 @@ impl PyEvent {
             event_type,
             data,
             session_refs: current_session_registry(),
+            native: None,
         })
     }
 
@@ -201,6 +231,7 @@ impl PyStartEvent {
                 event_type: "blazen::StartEvent".to_owned(),
                 data,
                 session_refs: current_session_registry(),
+                native: None,
             },
         ))
     }
@@ -236,6 +267,7 @@ impl PyStopEvent {
                 event_type: "blazen::StopEvent".to_owned(),
                 data,
                 session_refs: current_session_registry(),
+                native: None,
             },
         ))
     }
@@ -253,21 +285,23 @@ impl PyStopEvent {
 /// markers carried by the event payload.
 pub fn any_event_to_py_event(event: &dyn AnyEvent) -> PyEvent {
     let event_type = event.event_type_id().to_owned();
-    let json = event.to_json();
     let session_refs = current_session_registry();
 
     // If the event is a StartEvent, extract the "data" field.
     if event_type == "blazen::StartEvent" {
+        let json = event.to_json();
         let data = json.get("data").cloned().unwrap_or(serde_json::Value::Null);
         return PyEvent {
             event_type,
             data,
             session_refs,
+            native: None,
         };
     }
 
     // If the event is a StopEvent, wrap "result" in the data.
     if event_type == "blazen::StopEvent" {
+        let json = event.to_json();
         let result = json
             .get("result")
             .cloned()
@@ -278,28 +312,60 @@ pub fn any_event_to_py_event(event: &dyn AnyEvent) -> PyEvent {
             event_type,
             data: serde_json::Value::Object(map),
             session_refs,
+            native: None,
         };
     }
 
     // If it's a DynamicEvent, extract event_type and data directly.
     if let Some(dynamic) = event.as_any().downcast_ref::<DynamicEvent>() {
+        // NATIVE PASSTHROUGH (inbound): if a prior step returned a live
+        // Python event object, it was stashed via `DynamicEvent::with_native`
+        // as an `Arc<Py<PyAny>>`. Recover the ORIGINAL object and hand it
+        // straight back to this step — preserving object identity and any
+        // non-JSON attributes — instead of rebuilding a `PyEvent` from JSON.
+        if let Some(handle) = dynamic.native_handle() {
+            if let Ok(py_handle) = handle.downcast::<Py<PyAny>>() {
+                let native = Python::attach(|py| py_handle.clone_ref(py));
+                return PyEvent {
+                    event_type: dynamic.event_type.clone(),
+                    // `data` is non-authoritative when `native` is Some; keep
+                    // a JSON snapshot so callers that bypass the live object
+                    // (attribute reads, to_dict, snapshot) still work.
+                    data: dynamic.to_json(),
+                    session_refs,
+                    native: Some(native),
+                };
+            }
+        }
         return PyEvent {
             event_type: dynamic.event_type.clone(),
             data: dynamic.data.clone(),
             session_refs,
+            native: None,
         };
     }
 
     // Fallback: use the full JSON as data.
     PyEvent {
         event_type,
-        data: json,
+        data: event.to_json(),
         session_refs,
+        native: None,
     }
 }
 
 /// Convert a [`PyEvent`] to a `Box<dyn AnyEvent>`.
-pub fn py_event_to_any_event(event: &PyEvent) -> Box<dyn AnyEvent> {
+///
+/// `native` is the live Python object the step actually returned (the
+/// `Bound<PyAny>` it handed back), if available. For non-built-in event types
+/// this object is stashed on the resulting [`DynamicEvent`] via
+/// [`DynamicEvent::with_native`] so the NEXT step receives the original object
+/// — preserving identity and any non-JSON attributes — rather than a value
+/// rebuilt from JSON. `Py<PyAny>` is `Send + Sync + 'static`, satisfying the
+/// `with_native` bound; it is dropped (not errored) across a snapshot/resume
+/// boundary, at which point JSON computed lazily by the registered
+/// [`register_native_serializer`] hook takes over.
+pub fn py_event_to_any_event(event: &PyEvent, native: Option<Py<PyAny>>) -> Box<dyn AnyEvent> {
     // Check for built-in event types and convert to their concrete Rust types.
     if event.event_type == "blazen::StartEvent" {
         return Box::new(blazen_events::StartEvent {
@@ -316,11 +382,49 @@ pub fn py_event_to_any_event(event: &PyEvent) -> Box<dyn AnyEvent> {
         return Box::new(blazen_events::StopEvent { result });
     }
 
-    // For all other event types, use DynamicEvent.
+    // For all other event types, use DynamicEvent. When we have the live
+    // returned object, stash it as a native handle so it survives intact to
+    // the next step; otherwise fall back to the eager-JSON form.
+    if let Some(obj) = native {
+        return Box::new(DynamicEvent::with_native(
+            event.event_type.clone(),
+            Arc::new(obj) as Arc<dyn std::any::Any + Send + Sync>,
+        ));
+    }
+
     Box::new(DynamicEvent::from_json(
         event.event_type.clone(),
         event.data.clone(),
     ))
+}
+
+// ---------------------------------------------------------------------------
+// Native serializer hook
+// ---------------------------------------------------------------------------
+
+/// Serialize a live Python event object (a `Py<PyAny>` stashed via
+/// [`DynamicEvent::with_native`]) into its JSON payload.
+///
+/// Registered process-wide with [`blazen_events::register_native_serializer`]
+/// at module init. Invoked lazily by [`DynamicEvent::to_json`] when a
+/// native-backed event must be materialized to JSON — at snapshot time, when
+/// crossing back to a JSON-only sink, or for attribute reads on a
+/// snapshot-derived event.
+///
+/// Returns `None` if the handle is not an `Arc<Py<PyAny>>` (e.g. a different
+/// binding's native type), in which case `DynamicEvent` falls back to its
+/// stored `data`.
+fn py_native_to_json(handle: &Arc<dyn std::any::Any + Send + Sync>) -> Option<serde_json::Value> {
+    let obj = handle.downcast_ref::<Py<PyAny>>()?;
+    Python::attach(|py| {
+        let bound = obj.bind(py);
+        // The stashed object is whatever the step returned. Extract the
+        // PyEvent view (works for `Event` and its subclasses) and read its
+        // JSON data. Resolve session-ref markers under the captured registry
+        // so nested live objects serialize as `__blazen_session_ref__` keys.
+        let py_event: PyEvent = bound.extract().ok()?;
+        Some(py_event.data)
+    })
 }
 
 // ---------------------------------------------------------------------------
@@ -440,7 +544,13 @@ impl PyEventEnvelope {
 
 /// Build a [`blazen_events::EventEnvelope`] from a [`PyEventEnvelope`].
 pub fn py_envelope_to_envelope(env: &PyEventEnvelope) -> EventEnvelope {
-    EventEnvelope::new(py_event_to_any_event(&env.event), env.source_step.clone())
+    // The envelope carries a `PyEvent` snapshot (no live returned object),
+    // so we pass `None` for the native handle and serialize from JSON.
+    let native = Python::attach(|py| env.event.native.as_ref().map(|n| n.clone_ref(py)));
+    EventEnvelope::new(
+        py_event_to_any_event(&env.event, native),
+        env.source_step.clone(),
+    )
 }
 
 // ---------------------------------------------------------------------------
@@ -550,6 +660,17 @@ impl PyInputResponseEvent {
             response: self.response.clone(),
         }
     }
+}
+
+/// Install the Python native-event serializer hook process-wide.
+///
+/// Called once from the `#[pymodule]` initializer so that any
+/// [`DynamicEvent`] carrying a live `Py<PyAny>` (stashed by
+/// [`py_event_to_any_event`]) can be lazily materialized to JSON at snapshot
+/// time via [`py_native_to_json`]. Subsequent calls are no-ops (first
+/// registration wins), matching [`blazen_events::register_native_serializer`].
+pub fn install_native_serializer() {
+    blazen_events::register_native_serializer(py_native_to_json);
 }
 
 // ---------------------------------------------------------------------------

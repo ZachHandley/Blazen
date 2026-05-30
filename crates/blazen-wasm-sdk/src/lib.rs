@@ -41,6 +41,7 @@ pub mod handler;
 pub mod http_client;
 pub mod js_embedding;
 pub mod js_model;
+pub mod js_native;
 pub mod manager;
 pub mod memory;
 pub mod memory_types;
@@ -103,4 +104,9 @@ export type MediaSource = ImageSource;
 #[cfg_attr(not(test), wasm_bindgen(start))]
 pub fn init() {
     console_error_panic_hook::set_once();
+    // Register the native-event serializer so JS-backed `DynamicEvent`s
+    // (events whose live `JsValue` is parked in the `js_native` store) can
+    // materialise their JSON snapshot on the serialize / snapshot lane.
+    // Idempotent: the first registration wins.
+    js_native::register();
 }

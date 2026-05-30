@@ -251,7 +251,10 @@ impl JsWorkflowHandler {
     /// before the event loop spawned, so the very first step's events
     /// are captured. Subsequent calls subscribe a fresh stream that
     /// starts from the current point in time.
-    #[napi(js_name = "streamEvents")]
+    #[napi(
+        js_name = "streamEvents",
+        ts_args_type = "onEvent: (event: Event) => void"
+    )]
     pub async fn stream_events(&self, on_event: StreamCallbackTsfn) -> Result<()> {
         // Prefer the pre-subscribed stream (captured in `new()` before the
         // event loop spawn) for the first call; that's the only way events
@@ -336,7 +339,9 @@ fn make_result(result: &blazen_core::WorkflowResult) -> JsWorkflowResult {
             .cloned()
             .unwrap_or(serde_json::Value::Null)
     } else {
-        json
+        // Strip any internal live-object passthrough marker so it never
+        // surfaces in the user-facing result payload.
+        super::native_passthrough::strip_native_ref(json)
     };
 
     JsWorkflowResult {

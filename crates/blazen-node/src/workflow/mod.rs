@@ -4,6 +4,7 @@ pub mod context;
 pub mod event;
 pub mod events_typed;
 pub mod handler;
+pub mod native_passthrough;
 pub mod session_ref;
 pub mod session_ref_convert;
 pub mod session_ref_serializable;

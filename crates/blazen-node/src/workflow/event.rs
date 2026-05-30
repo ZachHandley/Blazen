@@ -48,11 +48,23 @@ pub fn js_value_to_any_event(value: &serde_json::Value) -> Box<dyn AnyEvent> {
     Box::new(DynamicEvent::from_json(event_type, data))
 }
 
-/// Convert a boxed [`AnyEvent`] to a JavaScript-friendly `serde_json::Value`.
+/// Convert a boxed [`AnyEvent`] to a JavaScript-friendly `serde_json::Value`
+/// for user-facing surfaces (final results, streaming callbacks).
 ///
 /// The returned JSON object always has a `"type"` field and additional data
-/// fields.
+/// fields. Any internal live-object passthrough marker
+/// ([`super::native_passthrough::NATIVE_REF_TAG`]) is stripped so it never
+/// leaks into user code.
 pub fn any_event_to_js_value(event: &dyn AnyEvent) -> serde_json::Value {
+    super::native_passthrough::strip_native_ref(any_event_to_step_json(event))
+}
+
+/// Convert a boxed [`AnyEvent`] to JSON for the **step-handler inbound**
+/// path, preserving the live-object passthrough marker
+/// ([`super::native_passthrough::NATIVE_REF_TAG`]) so
+/// [`super::native_passthrough::StepEventArg`] can recover the original JS
+/// object and pass the same instance to the next handler.
+pub fn any_event_to_step_json(event: &dyn AnyEvent) -> serde_json::Value {
     let event_type = event.event_type_id().to_owned();
     let json = event.to_json();
 

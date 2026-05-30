@@ -68,8 +68,7 @@ async def test_single_step_echo():
         return StopEvent(result=ev.to_dict())
 
     wf = Workflow("echo", [echo])
-    handler = await wf.run(message="hello")
-    result = await handler.result()
+    result = await wf.run(message="hello")
 
     assert result.event_type == "blazen::StopEvent"
     assert result.result["message"] == "hello"
@@ -87,8 +86,7 @@ async def test_single_step_echo_sync():
         return StopEvent(result=ev.to_dict())
 
     wf = Workflow("echo-sync", [echo])
-    handler = await wf.run(message="hello")
-    result = await handler.result()
+    result = await wf.run(message="hello")
 
     assert result.event_type == "blazen::StopEvent"
     assert result.result["message"] == "hello"
@@ -110,8 +108,7 @@ async def test_multi_step_pipeline():
         return StopEvent(result={"text": ev.text, "length": ev.length})
 
     wf = Workflow("pipeline", [analyze, finalize])
-    handler = await wf.run(message="hello world")
-    result = await handler.result()
+    result = await wf.run(message="hello world")
 
     assert result.result["text"] == "hello world"
     assert result.result["length"] == 11
@@ -135,8 +132,7 @@ async def test_context_set_get():
         return StopEvent(result={"counter": val})
 
     wf = Workflow("ctx-test", [setter, getter])
-    handler = await wf.run()
-    result = await handler.result()
+    result = await wf.run()
 
     assert result.result["counter"] == 42
 
@@ -157,8 +153,7 @@ async def test_context_run_id():
         return StopEvent(result={"run_id": rid})
 
     wf = Workflow("run-id-test", [capture_id])
-    handler = await wf.run()
-    result = await handler.result()
+    result = await wf.run()
 
     rid = result.result["run_id"]
     assert isinstance(rid, str)
@@ -183,7 +178,7 @@ async def test_streaming():
         return StopEvent(result={"done": True})
 
     wf = Workflow("stream-test", [producer])
-    handler = await wf.run()
+    handler = await wf.run_with_handler()
 
     collected = []
     async for event in handler.stream_events():
@@ -220,8 +215,7 @@ async def test_step_returns_list():
         return StopEvent(result={"branch": "b"})
 
     wf = Workflow("fan-out", [fan_out, handle_a, handle_b])
-    handler = await wf.run()
-    result = await handler.result()
+    result = await wf.run()
 
     # One of the two branches wins.
     assert result.result["branch"] in ("a", "b")
@@ -246,8 +240,7 @@ async def test_step_returns_none():
         return StopEvent(result={"processed": processed})
 
     wf = Workflow("none-test", [side_effect, finisher])
-    handler = await wf.run()
-    result = await handler.result()
+    result = await wf.run()
 
     assert result.result["processed"] is True
 
@@ -271,8 +264,7 @@ async def test_context_bytes_roundtrip():
         return StopEvent(result={"data": list(val)})
 
     wf = Workflow("bytes-roundtrip", [setter, getter])
-    handler = await wf.run()
-    result = await handler.result()
+    result = await wf.run()
 
     assert result.result["data"] == [0, 1, 2]
 
@@ -295,8 +287,7 @@ async def test_context_complex_json():
         return StopEvent(result=val)
 
     wf = Workflow("complex-json", [setter, getter])
-    handler = await wf.run()
-    result = await handler.result()
+    result = await wf.run()
 
     assert result.result == {"nested": [1, 2.5, None, True, "str"]}
 
@@ -326,8 +317,7 @@ async def test_context_pickle_roundtrip():
         return StopEvent(result={"name": val.name, "score": val.score})
 
     wf = Workflow("pickle-roundtrip", [setter, getter])
-    handler = await wf.run()
-    result = await handler.result()
+    result = await wf.run()
 
     assert result.result["name"] == "test"
     assert abs(result.result["score"] - 3.14) < 1e-9
@@ -351,8 +341,7 @@ async def test_context_set_bytes_get_bytes():
         return StopEvent(result={"data": list(val)})
 
     wf = Workflow("set-bytes-get-bytes", [setter, getter])
-    handler = await wf.run()
-    result = await handler.result()
+    result = await wf.run()
 
     assert result.result["data"] == [0xFF, 0xFE]
 
@@ -376,8 +365,7 @@ async def test_context_overwrite():
         return StopEvent(result={"value": val})
 
     wf = Workflow("overwrite", [setter, getter])
-    handler = await wf.run()
-    result = await handler.result()
+    result = await wf.run()
 
     assert result.result["value"] == "hello"
 
@@ -413,8 +401,7 @@ async def test_context_buffer_not_mangled():
         )
 
     wf = Workflow("buffer-not-mangled", [setter, getter])
-    handler = await wf.run()
-    result = await handler.result()
+    result = await wf.run()
 
     assert result.result["ba_is_bytes"] is True
     assert result.result["ba_data"] == [0xAA, 0xBB]
@@ -453,8 +440,7 @@ async def test_context_get_default():
         )
 
     wf = Workflow("get-default", [setter, getter])
-    handler = await wf.run()
-    result = await handler.result()
+    result = await wf.run()
 
     assert result.result["missing_default"] == 99
     assert result.result["present_default"] == 42
@@ -481,6 +467,5 @@ async def test_state_namespace_getitem_strict():
         return StopEvent(result={"raised": raised})
 
     wf = Workflow("getitem-strict", [s])
-    handler = await wf.run()
-    result = await handler.result()
+    result = await wf.run()
     assert result.result["raised"] is True

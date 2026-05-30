@@ -109,6 +109,59 @@ const workersDtsPath = new URL('../blazen.workers.d.ts', import.meta.url)
 }
 
 // ---------------------------------------------------------------------------
+// Section 1c: the `Event` interface — the typed event surface flowing
+// through workflow step handlers, `ctx.sendEvent` / `writeEventToStream`,
+// `StepOutput.single` / `multiple`, and the streaming callbacks.
+// ---------------------------------------------------------------------------
+//
+// The Rust side carries events as `serde_json::Value` across the napi
+// boundary (a JS object with a `type` discriminant plus arbitrary payload
+// fields), so napi-rs cannot name a struct for it. The `#[napi(ts_args_type
+// = "... : Event")]` overrides on `addStep`, `runStreaming`,
+// `streamEvents`, `Context.sendEvent`, `Context.writeEventToStream`, and
+// `StepOutput.single` / `multiple` all reference this `Event` name; we
+// declare it here.
+//
+// `type` is the only structurally-required field (it routes the event to
+// matching steps); every other property is genuinely-arbitrary user JSON,
+// so the index signature is intentionally `any`. The two built-in events
+// (`StartEvent` payload spread, `StopEvent` carrying `result`) are unioned
+// in for editor hints without forbidding custom event shapes.
+{
+  const current = readFileSync(dtsPath, 'utf8')
+  const sentinel = '// --- post-build: Event interface (workflow step surface) ---'
+  if (!current.includes(sentinel)) {
+    const decls = [
+      '/**',
+      ' * An event flowing through a {@link Workflow}. Every event is a plain',
+      ' * object whose `type` string routes it to the steps that declared it in',
+      ' * their `eventTypes`. All other fields are arbitrary user payload.',
+      ' *',
+      ' * Returned from / passed to step handlers (`addStep`), emitted via',
+      ' * `ctx.sendEvent` / `ctx.writeEventToStream`, wrapped by',
+      ' * `StepOutput.single` / `StepOutput.multiple`, and delivered to the',
+      ' * `streamEvents` / `runStreaming` callbacks.',
+      ' *',
+      ' * Object identity is preserved across step hops: the exact object a',
+      ' * handler returns is the same object the next matching handler',
+      ' * receives (methods, class prototype, and non-JSON fields included).',
+      ' */',
+      'export interface Event {',
+      '  /** Event type discriminant used for step routing, e.g. `"blazen::StartEvent"`. */',
+      '  type: string',
+      '  /** Result payload carried by `blazen::StopEvent`. */',
+      '  result?: any',
+      '  /** Arbitrary user payload fields. */',
+      '  [key: string]: any',
+      '}',
+    ]
+    const banner = `\n${sentinel}\n`
+    const block = `${current.endsWith('\n') ? '' : '\n'}${banner}${decls.join('\n')}\n`
+    appendFileSync(dtsPath, block)
+  }
+}
+
+// ---------------------------------------------------------------------------
 // Section 2b: cjs-module-lexer hints for runtime-registered error classes
 // ---------------------------------------------------------------------------
 //
@@ -455,6 +508,10 @@ const {
     'd.ts: content helpers': has(
       finalDts,
       '// --- post-build: ContentBody / ContentHint helper types ---',
+    ),
+    'd.ts: Event interface': has(
+      finalDts,
+      '// --- post-build: Event interface (workflow step surface) ---',
     ),
     'js: error-class esm hints': has(
       finalJs,

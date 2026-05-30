@@ -138,11 +138,11 @@ async def fact_check(ctx: Context, ev: Event) -> StopEvent:
 async def main() -> None:
     wf = Workflow("qa-fact-check", [ask_question, fact_check])
 
-    handler = await wf.run(
+    # `run()` resolves directly to a WorkflowResult.
+    result = await wf.run(
         question="What is the speed of light in a vacuum, in meters per second?"
     )
-    result = await handler.result()
-    data = result.to_dict()["result"]
+    data = result.result
 
     print()
     print("=" * 60)

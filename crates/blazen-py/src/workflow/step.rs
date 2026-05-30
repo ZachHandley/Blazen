@@ -67,8 +67,8 @@ impl PyStepWrapper {
     fn __call__<'py>(
         &self,
         py: Python<'py>,
-        ctx: &Bound<'py, PyAny>,
-        event: &Bound<'py, PyAny>,
+        #[gen_stub(override_type(type_repr = "Context"))] ctx: &Bound<'py, PyAny>,
+        #[gen_stub(override_type(type_repr = "Event"))] event: &Bound<'py, PyAny>,
     ) -> PyResult<Py<PyAny>> {
         self.func.call1(py, (ctx, event))
     }
@@ -130,7 +130,14 @@ impl PyStepWrapper {
                     with_session_registry(registry, async move {
                         // Convert Rust event to PyEvent (inside the Tokio
                         // scope so input markers from prior steps resolve).
-                        let py_event = any_event_to_py_event(&*event);
+                        let mut py_event = any_event_to_py_event(&*event);
+
+                        // NATIVE PASSTHROUGH (inbound): if the event carries a
+                        // live Python object stashed by the prior step, hand
+                        // that ORIGINAL object to the user function — preserving
+                        // identity and non-JSON attributes. Otherwise build a
+                        // fresh `Event` instance from the (JSON) `py_event`.
+                        let native_obj = py_event.native.take();
 
                         // Call the Python function
                         let py_result: Py<PyAny> = if is_async {
@@ -140,7 +147,10 @@ impl PyStepWrapper {
                             // asyncio Task before the user body runs.
                             let coroutine: Py<PyAny> =
                                 Python::attach(|py| -> PyResult<Py<PyAny>> {
-                                    let py_event_obj = Py::new(py, py_event)?;
+                                    let py_event_obj: Py<PyAny> = match native_obj {
+                                        Some(obj) => obj,
+                                        None => Py::new(py, py_event)?.into_any(),
+                                    };
                                     let py_ctx_obj = Py::new(py, py_ctx)?;
                                     let user_coro = func.call1(py, (py_ctx_obj, py_event_obj))?;
                                     let handle = Py::new(
@@ -187,7 +197,10 @@ impl PyStepWrapper {
                             // calls into more Python code that constructs
                             // events.
                             Python::attach(|py| -> PyResult<Py<PyAny>> {
-                                let py_event_obj = Py::new(py, py_event)?;
+                                let py_event_obj: Py<PyAny> = match native_obj {
+                                    Some(obj) => obj,
+                                    None => Py::new(py, py_event)?.into_any(),
+                                };
                                 let py_ctx_obj = Py::new(py, py_ctx)?;
                                 with_python_session_registry(
                                     py,
@@ -246,7 +259,10 @@ fn py_result_to_step_output(
                     source: Box::new(BlazenPyError::Workflow(e.to_string())),
                 })?
                 .clone();
-            events.push(py_event_to_any_event(&ev.borrow()));
+            // Stash the live returned object so the next step receives it
+            // intact (native passthrough), not a JSON rebuild.
+            let native = Some(item.clone().unbind());
+            events.push(py_event_to_any_event(&ev.borrow(), native));
         }
         return Ok(blazen_core::StepOutput::Multiple(events));
     }
@@ -261,7 +277,11 @@ fn py_result_to_step_output(
         })?
         .clone();
     let ev = ev_bound.borrow();
-    Ok(blazen_core::StepOutput::Single(py_event_to_any_event(&ev)))
+    // Stash the live returned object for native passthrough to the next step.
+    let native = Some(bound.clone().unbind());
+    Ok(blazen_core::StepOutput::Single(py_event_to_any_event(
+        &ev, native,
+    )))
 }
 
 // ---------------------------------------------------------------------------
@@ -369,7 +389,18 @@ fn infer_accepts_from_hints(py: Python<'_>, func: &Py<PyAny>) -> Vec<String> {
     }
 }
 
-#[gen_stub_pyfunction]
+#[gen_stub_pyfunction(
+    python_overload = r#"
+    @typing.overload
+    def step(func: typing.Callable[[Context, Event], typing.Any]) -> _StepWrapper:
+        ...
+
+    @typing.overload
+    def step(func: None = None, *, accepts: typing.Optional[typing.Sequence[builtins.str]] = None, emits: typing.Optional[typing.Sequence[builtins.str]] = None, max_concurrency: builtins.int = 0) -> typing.Callable[[typing.Callable[[Context, Event], typing.Any]], _StepWrapper]:
+        ...
+    "#,
+    no_default_overload = true
+)]
 #[pyfunction]
 #[pyo3(signature = (func=None, *, accepts=None, emits=None, max_concurrency=0))]
 pub fn step(

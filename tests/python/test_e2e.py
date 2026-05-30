@@ -60,7 +60,7 @@ async def test_pause_and_resume_in_place():
         return StopEvent(result={"done": True})
 
     wf = Workflow("pause-resume", [slow_step])
-    handler = await wf.run()
+    handler = await wf.run_with_handler()
 
     # Let the step start and write context
     await asyncio.sleep(0.05)
@@ -84,7 +84,7 @@ async def test_snapshot_captures_state():
         return StopEvent(result={"done": True})
 
     wf = Workflow("snapshot-test", [setter])
-    handler = await wf.run()
+    handler = await wf.run_with_handler()
 
     await asyncio.sleep(0.05)
     await handler.pause()
@@ -120,7 +120,7 @@ async def test_snapshot_json_is_valid_and_resumable():
         return StopEvent(result={"done": True})
 
     wf = Workflow("snapshot-roundtrip", [persistent_step])
-    handler = await wf.run()
+    handler = await wf.run_with_handler()
 
     await asyncio.sleep(0.1)
     await handler.pause()
@@ -166,7 +166,7 @@ async def test_human_in_the_loop():
         return StopEvent(result={"response": ev.response})
 
     wf = Workflow("hitl-test", [ask_step, process_response])
-    handler = await wf.run()
+    handler = await wf.run_with_handler()
 
     # Give time for the InputRequestEvent to be emitted and auto-pause
     await asyncio.sleep(0.2)
@@ -340,10 +340,10 @@ async def test_step_error_propagates():
         raise RuntimeError(msg)
 
     wf = Workflow("error-test", [bad_step])
-    handler = await wf.run()
 
+    # `run()` awaits the result internally, so the step failure surfaces here.
     with pytest.raises(Exception, match="intentional test failure"):
-        await handler.result()
+        await wf.run()
 
 
 @pytest.mark.asyncio
@@ -356,10 +356,10 @@ async def test_timeout_python():
         return StopEvent(result={})
 
     wf = Workflow("timeout-test", [slow], timeout=0.1)
-    handler = await wf.run()
 
+    # `run()` awaits the result internally, so the timeout surfaces here.
     with pytest.raises(Exception, match="(?i)timeout|timed out"):
-        await handler.result()
+        await wf.run()
 
 
 # =========================================================================
@@ -377,7 +377,7 @@ async def test_handler_abort():
         return StopEvent(result={})
 
     wf = Workflow("abort-test", [long_step])
-    handler = await wf.run()
+    handler = await wf.run_with_handler()
 
     await asyncio.sleep(0.05)
     await handler.abort()

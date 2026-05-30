@@ -13307,7 +13307,7 @@ class Workflow:
                 `__blazen_serialize__` / `__blazen_deserialize__`
                 protocol on value classes.
         """
-    async def run(self, **kwargs: typing.Any) -> WorkflowHandler:
+    async def run(self, **kwargs: typing.Any) -> WorkflowResult:
         r"""
         Execute the workflow with a JSON payload.
         
@@ -13318,10 +13318,36 @@ class Workflow:
             input: A dict of data to pass as the start event payload.
         
         Returns:
+            The :class:`WorkflowResult` produced by the workflow.
+        
+        Example:
+            >>> result = await wf.run(prompt="Hello!")
+            >>> print(result.result)
+        
+        Note:
+            This awaits the workflow to completion and resolves directly to
+            the result. To pause, resume, or stream intermediate events, use
+            :meth:`run_with_handler` instead, which returns a
+            :class:`WorkflowHandler`.
+        """
+    async def run_with_handler(self, **kwargs: typing.Any) -> WorkflowHandler:
+        r"""
+        Execute the workflow and return a :class:`WorkflowHandler` for
+        pausing, resuming, or streaming intermediate events.
+        
+        Use this instead of :meth:`run` when you need control over the
+        running workflow rather than just its final result.
+        
+        Args:
+            input: A dict of data to pass as the start event payload.
+        
+        Returns:
             A `WorkflowHandler` for awaiting results or streaming events.
         
         Example:
-            >>> handler = await wf.run({"prompt": "Hello!"})
+            >>> handler = await wf.run_with_handler(prompt="Hello!")
+            >>> async for event in handler.stream_events():
+            ...     print(event.event_type)
             >>> result = await handler.result()
         """
     @staticmethod
@@ -14014,7 +14040,7 @@ class _StepWrapper:
         r"""
         Maximum concurrency (0 = unlimited).
         """
-    def __call__(self, ctx: typing.Any, event: typing.Any) -> typing.Any:
+    def __call__(self, ctx: Context, event: Event) -> typing.Any:
         r"""
         Call the underlying function (makes the wrapper callable like the
         original function for testing convenience).
@@ -14953,7 +14979,11 @@ def simhash_to_hex(value: builtins.int) -> builtins.str:
         OverflowError: If `value` does not fit in 128 bits.
     """
 
-def step(func: typing.Optional[typing.Any] = None, *, accepts: typing.Optional[typing.Sequence[builtins.str]] = None, emits: typing.Optional[typing.Sequence[builtins.str]] = None, max_concurrency: builtins.int = 0) -> typing.Any: ...
+@typing.overload
+def step(func: typing.Callable[[Context, Event], typing.Any]) -> _StepWrapper: ...
+
+@typing.overload
+def step(func: None = None, *, accepts: typing.Optional[typing.Sequence[builtins.str]] = None, emits: typing.Optional[typing.Sequence[builtins.str]] = None, max_concurrency: builtins.int = 0) -> typing.Callable[[typing.Callable[[Context, Event], typing.Any]], _StepWrapper]: ...
 
 def three_d_input(name: builtins.str, description: builtins.str) -> typing.Any:
     r"""

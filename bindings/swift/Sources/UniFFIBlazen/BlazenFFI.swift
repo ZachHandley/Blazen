@@ -21565,6 +21565,10 @@ public protocol WorkflowProtocol: AnyObject, Sendable {
      * Run the workflow to completion with the given JSON input as the
      * `StartEvent` payload. Blocks (in Go) / suspends (in Swift/Kotlin)
      * until the workflow emits its `StopEvent` (or fails).
+     *
+     * This is the result-only shorthand. For streaming intermediate events,
+     * pausing, snapshotting, or human-in-the-loop input, use
+     * [`run_with_handler`](Self::run_with_handler) instead.
      */
     func run(inputJson: String) async throws  -> WorkflowResult
     
@@ -21576,6 +21580,27 @@ public protocol WorkflowProtocol: AnyObject, Sendable {
      * running services.
      */
     func runBlocking(inputJson: String) throws  -> WorkflowResult
+    
+    /**
+     * Run the workflow and return a live [`WorkflowHandler`] instead of
+     * blocking for the final result.
+     *
+     * The returned handler exposes the full control surface — stream
+     * intermediate events to a foreign [`WorkflowEventSink`], `pause` /
+     * `resume_in_place`, `snapshot`, `respond_to_input` for human-in-the-
+     * loop, `abort`, and running `usage_total` / `cost_total_usd` — plus
+     * `result()` to await the terminal event. This mirrors the
+     * `run_with_handler` surface in the Python / Node / WASM bindings.
+     */
+    func runWithHandler(inputJson: String) async throws  -> WorkflowHandler
+    
+    /**
+     * Synchronous variant of [`run_with_handler`](Self::run_with_handler) —
+     * blocks the current thread on the shared Tokio runtime while the
+     * workflow is launched, then returns the live handler. The workflow
+     * keeps running on the shared runtime after this returns.
+     */
+    func runWithHandlerBlocking(inputJson: String) throws  -> WorkflowHandler
     
     /**
      * Names of all registered steps, in registration order.
@@ -21643,6 +21668,10 @@ open class Workflow: WorkflowProtocol, @unchecked Sendable {
      * Run the workflow to completion with the given JSON input as the
      * `StartEvent` payload. Blocks (in Go) / suspends (in Swift/Kotlin)
      * until the workflow emits its `StopEvent` (or fails).
+     *
+     * This is the result-only shorthand. For streaming intermediate events,
+     * pausing, snapshotting, or human-in-the-loop input, use
+     * [`run_with_handler`](Self::run_with_handler) instead.
      */
 open func run(inputJson: String)async throws  -> WorkflowResult  {
     return
@@ -21671,6 +21700,49 @@ open func run(inputJson: String)async throws  -> WorkflowResult  {
 open func runBlocking(inputJson: String)throws  -> WorkflowResult  {
     return try  FfiConverterTypeWorkflowResult_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
     uniffi_blazen_uniffi_fn_method_workflow_run_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(inputJson),$0
+    )
+})
+}
+    
+    /**
+     * Run the workflow and return a live [`WorkflowHandler`] instead of
+     * blocking for the final result.
+     *
+     * The returned handler exposes the full control surface — stream
+     * intermediate events to a foreign [`WorkflowEventSink`], `pause` /
+     * `resume_in_place`, `snapshot`, `respond_to_input` for human-in-the-
+     * loop, `abort`, and running `usage_total` / `cost_total_usd` — plus
+     * `result()` to await the terminal event. This mirrors the
+     * `run_with_handler` surface in the Python / Node / WASM bindings.
+     */
+open func runWithHandler(inputJson: String)async throws  -> WorkflowHandler  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_workflow_run_with_handler(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(inputJson)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_u64,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_u64,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_u64,
+            liftFunc: FfiConverterTypeWorkflowHandler_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`run_with_handler`](Self::run_with_handler) —
+     * blocks the current thread on the shared Tokio runtime while the
+     * workflow is launched, then returns the live handler. The workflow
+     * keeps running on the shared runtime after this returns.
+     */
+open func runWithHandlerBlocking(inputJson: String)throws  -> WorkflowHandler  {
+    return try  FfiConverterTypeWorkflowHandler_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_workflow_run_with_handler_blocking(
             self.uniffiCloneHandle(),
         FfiConverterString.lower(inputJson),$0
     )
@@ -21942,6 +22014,757 @@ public func FfiConverterTypeWorkflowBuilder_lift(_ handle: UInt64) throws -> Wor
 #endif
 public func FfiConverterTypeWorkflowBuilder_lower(_ value: WorkflowBuilder) -> UInt64 {
     return FfiConverterTypeWorkflowBuilder.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Foreign-implementable sink for intermediate workflow events.
+ *
+ * UniFFI's async-iterator support across Go, Swift, Kotlin, and Ruby is
+ * uneven, so streaming uses a *foreign-callable sink trait* (mirroring
+ * [`CompletionStreamSink`](crate::streaming::CompletionStreamSink)) rather
+ * than an async iterator. Each foreign-language idiomatic wrapper adapts the
+ * callbacks into its host streaming type:
+ *
+ * - Go: `on_event` pushes to a `chan Event`
+ * - Swift: callbacks build an `AsyncStream<Event>`
+ * - Kotlin: callbacks emit into a `Flow<Event>`
+ * - Ruby: callbacks yield to an `Enumerator::Lazy`
+ *
+ * Steps publish to the stream via
+ * `ctx.write_event_to_stream(...)`. The pump invokes [`on_event`](Self::on_event)
+ * for each event in order, then exactly one [`on_close`](Self::on_close) when
+ * the workflow completes (the internal `"blazen::StreamEnd"` sentinel is
+ * consumed and never forwarded).
+ */
+public protocol WorkflowEventSink: AnyObject, Sendable {
+    
+    /**
+     * One intermediate event arrived from a step.
+     */
+    func onEvent(event: Event) 
+    
+    /**
+     * The stream ended — the workflow reached a terminal state (or the
+     * subscription was cancelled). Fires exactly once.
+     */
+    func onClose() 
+    
+}
+/**
+ * Foreign-implementable sink for intermediate workflow events.
+ *
+ * UniFFI's async-iterator support across Go, Swift, Kotlin, and Ruby is
+ * uneven, so streaming uses a *foreign-callable sink trait* (mirroring
+ * [`CompletionStreamSink`](crate::streaming::CompletionStreamSink)) rather
+ * than an async iterator. Each foreign-language idiomatic wrapper adapts the
+ * callbacks into its host streaming type:
+ *
+ * - Go: `on_event` pushes to a `chan Event`
+ * - Swift: callbacks build an `AsyncStream<Event>`
+ * - Kotlin: callbacks emit into a `Flow<Event>`
+ * - Ruby: callbacks yield to an `Enumerator::Lazy`
+ *
+ * Steps publish to the stream via
+ * `ctx.write_event_to_stream(...)`. The pump invokes [`on_event`](Self::on_event)
+ * for each event in order, then exactly one [`on_close`](Self::on_close) when
+ * the workflow completes (the internal `"blazen::StreamEnd"` sentinel is
+ * consumed and never forwarded).
+ */
+open class WorkflowEventSinkImpl: WorkflowEventSink, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_workfloweventsink(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_workfloweventsink(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * One intermediate event arrived from a step.
+     */
+open func onEvent(event: Event)  {try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_workfloweventsink_on_event(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeEvent_lower(event),$0
+    )
+}
+}
+    
+    /**
+     * The stream ended — the workflow reached a terminal state (or the
+     * subscription was cancelled). Fires exactly once.
+     */
+open func onClose()  {try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_workfloweventsink_on_close(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfaceWorkflowEventSink {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfaceWorkflowEventSink = UniffiVTableCallbackInterfaceWorkflowEventSink(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypeWorkflowEventSink.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface WorkflowEventSink: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypeWorkflowEventSink.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface WorkflowEventSink: handle missing in uniffiClone")
+            }
+        },
+        onEvent: { (
+            uniffiHandle: UInt64,
+            event: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeWorkflowEventSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onEvent(
+                     event: try FfiConverterTypeEvent_lift(event)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        onClose: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypeWorkflowEventSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onClose(
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfaceWorkflowEventSink> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfaceWorkflowEventSink>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitWorkflowEventSink() {
+    uniffi_blazen_uniffi_fn_init_callback_vtable_workfloweventsink(UniffiCallbackInterfaceWorkflowEventSink.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWorkflowEventSink: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<WorkflowEventSink>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = WorkflowEventSink
+
+    public static func lift(_ handle: UInt64) throws -> WorkflowEventSink {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return WorkflowEventSinkImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: WorkflowEventSink) -> UInt64 {
+         if let rustImpl = value as? WorkflowEventSinkImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WorkflowEventSink {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: WorkflowEventSink, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWorkflowEventSink_lift(_ handle: UInt64) throws -> WorkflowEventSink {
+    return try FfiConverterTypeWorkflowEventSink.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWorkflowEventSink_lower(_ value: WorkflowEventSink) -> UInt64 {
+    return FfiConverterTypeWorkflowEventSink.lower(value)
+}
+
+
+
+
+
+
+/**
+ * A live handle to a running workflow.
+ *
+ * Returned by [`Workflow::run_with_handler`]. Provides:
+ *
+ * **Consumption (consumes the handler):**
+ * - [`result`](Self::result) — await the final [`WorkflowResult`].
+ *
+ * **Streaming (borrows the handler):**
+ * - [`stream_events`](Self::stream_events) — pump intermediate events to a
+ * foreign [`WorkflowEventSink`]. Returns immediately; the pump runs on the
+ * shared Tokio runtime until the workflow completes.
+ *
+ * **Control (borrows the handler, may be called repeatedly):**
+ * - [`pause`](Self::pause) / [`resume_in_place`](Self::resume_in_place)
+ * - [`snapshot`](Self::snapshot) — capture resumable state as a JSON string
+ * - [`respond_to_input`](Self::respond_to_input) — human-in-the-loop
+ * - [`abort`](Self::abort)
+ * - [`usage_total`](Self::usage_total) / [`cost_total_usd`](Self::cost_total_usd)
+ */
+public protocol WorkflowHandlerProtocol: AnyObject, Sendable {
+    
+    /**
+     * Tear down the event loop. Any pending `result()` resolves with a
+     * workflow error.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the event loop has already exited.
+     */
+    func abort() async throws 
+    
+    /**
+     * Snapshot the running aggregate cost in USD for this run.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+    func costTotalUsd() async throws  -> Double
+    
+    /**
+     * Park the event loop after the current step. The loop stays alive and
+     * responsive to `resume_in_place`, `snapshot`, `respond_to_input`, and
+     * `abort`.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the event loop has already exited.
+     */
+    func pause() async throws 
+    
+    /**
+     * Deliver a human-in-the-loop response to a workflow that auto-parked on
+     * an `InputRequestEvent`. The loop unparks and routes the response.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed or
+     * `response.response_json` is not valid JSON; [`BlazenError::Workflow`]
+     * if the event loop has already exited.
+     */
+    func respondToInput(response: InputResponse) async throws 
+    
+    /**
+     * Await the final workflow result, consuming the handler.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the run failed.
+     */
+    func result() async throws  -> WorkflowResult
+    
+    /**
+     * Resume a parked event loop.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the event loop has already exited.
+     */
+    func resumeInPlace() async throws 
+    
+    /**
+     * Capture a resumable [`crate::persist::WorkflowCheckpoint`]-compatible
+     * snapshot of the current workflow state, encoded as a JSON string.
+     *
+     * For a quiescent snapshot (no in-flight steps), call [`pause`](Self::pause)
+     * first, then `snapshot()`, then optionally [`resume_in_place`](Self::resume_in_place)
+     * or [`abort`](Self::abort).
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the event loop has already exited.
+     */
+    func snapshot() async throws  -> String
+    
+    /**
+     * Pump intermediate events to `sink` until the workflow completes.
+     *
+     * Returns immediately; the pump runs on the shared Tokio runtime. The
+     * first call consumes the pre-subscribed initial stream (so no events are
+     * lost between `run_with_handler` and this call); subsequent calls
+     * subscribe from the current point in time. `sink.on_close()` fires
+     * exactly once when the stream ends.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+    func streamEvents(sink: WorkflowEventSink) async throws 
+    
+    /**
+     * Snapshot the running aggregate [`TokenUsage`] for this run. Safe to
+     * call at any point; matches `WorkflowResult` totals once `result()`
+     * completes.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+    func usageTotal() async throws  -> TokenUsage
+    
+}
+/**
+ * A live handle to a running workflow.
+ *
+ * Returned by [`Workflow::run_with_handler`]. Provides:
+ *
+ * **Consumption (consumes the handler):**
+ * - [`result`](Self::result) — await the final [`WorkflowResult`].
+ *
+ * **Streaming (borrows the handler):**
+ * - [`stream_events`](Self::stream_events) — pump intermediate events to a
+ * foreign [`WorkflowEventSink`]. Returns immediately; the pump runs on the
+ * shared Tokio runtime until the workflow completes.
+ *
+ * **Control (borrows the handler, may be called repeatedly):**
+ * - [`pause`](Self::pause) / [`resume_in_place`](Self::resume_in_place)
+ * - [`snapshot`](Self::snapshot) — capture resumable state as a JSON string
+ * - [`respond_to_input`](Self::respond_to_input) — human-in-the-loop
+ * - [`abort`](Self::abort)
+ * - [`usage_total`](Self::usage_total) / [`cost_total_usd`](Self::cost_total_usd)
+ */
+open class WorkflowHandler: WorkflowHandlerProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_workflowhandler(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_workflowhandler(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Tear down the event loop. Any pending `result()` resolves with a
+     * workflow error.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the event loop has already exited.
+     */
+open func abort()async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_workflowhandler_abort(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Snapshot the running aggregate cost in USD for this run.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+open func costTotalUsd()async throws  -> Double  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_workflowhandler_cost_total_usd(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_f64,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_f64,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_f64,
+            liftFunc: FfiConverterDouble.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Park the event loop after the current step. The loop stays alive and
+     * responsive to `resume_in_place`, `snapshot`, `respond_to_input`, and
+     * `abort`.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the event loop has already exited.
+     */
+open func pause()async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_workflowhandler_pause(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Deliver a human-in-the-loop response to a workflow that auto-parked on
+     * an `InputRequestEvent`. The loop unparks and routes the response.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed or
+     * `response.response_json` is not valid JSON; [`BlazenError::Workflow`]
+     * if the event loop has already exited.
+     */
+open func respondToInput(response: InputResponse)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_workflowhandler_respond_to_input(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeInputResponse_lower(response)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Await the final workflow result, consuming the handler.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the run failed.
+     */
+open func result()async throws  -> WorkflowResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_workflowhandler_result(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeWorkflowResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Resume a parked event loop.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the event loop has already exited.
+     */
+open func resumeInPlace()async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_workflowhandler_resume_in_place(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Capture a resumable [`crate::persist::WorkflowCheckpoint`]-compatible
+     * snapshot of the current workflow state, encoded as a JSON string.
+     *
+     * For a quiescent snapshot (no in-flight steps), call [`pause`](Self::pause)
+     * first, then `snapshot()`, then optionally [`resume_in_place`](Self::resume_in_place)
+     * or [`abort`](Self::abort).
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the event loop has already exited.
+     */
+open func snapshot()async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_workflowhandler_snapshot(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Pump intermediate events to `sink` until the workflow completes.
+     *
+     * Returns immediately; the pump runs on the shared Tokio runtime. The
+     * first call consumes the pre-subscribed initial stream (so no events are
+     * lost between `run_with_handler` and this call); subsequent calls
+     * subscribe from the current point in time. `sink.on_close()` fires
+     * exactly once when the stream ends.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+open func streamEvents(sink: WorkflowEventSink)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_workflowhandler_stream_events(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeWorkflowEventSink_lower(sink)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Snapshot the running aggregate [`TokenUsage`] for this run. Safe to
+     * call at any point; matches `WorkflowResult` totals once `result()`
+     * completes.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+open func usageTotal()async throws  -> TokenUsage  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_workflowhandler_usage_total(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTokenUsage_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeWorkflowHandler: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = WorkflowHandler
+
+    public static func lift(_ handle: UInt64) throws -> WorkflowHandler {
+        return WorkflowHandler(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: WorkflowHandler) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> WorkflowHandler {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: WorkflowHandler, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWorkflowHandler_lift(_ handle: UInt64) throws -> WorkflowHandler {
+    return try FfiConverterTypeWorkflowHandler.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeWorkflowHandler_lower(_ value: WorkflowHandler) -> UInt64 {
+    return FfiConverterTypeWorkflowHandler.lower(value)
 }
 
 
@@ -24741,6 +25564,80 @@ public func FfiConverterTypeImageUpscaleProviderDefaults_lift(_ buf: RustBuffer)
 #endif
 public func FfiConverterTypeImageUpscaleProviderDefaults_lower(_ value: ImageUpscaleProviderDefaults) -> RustBuffer {
     return FfiConverterTypeImageUpscaleProviderDefaults.lower(value)
+}
+
+
+/**
+ * A human-in-the-loop response delivered to a workflow that auto-parked on an
+ * `InputRequestEvent` (event type `"blazen::InputRequestEvent"`).
+ *
+ * `request_id` must match the `request_id` carried by the
+ * `InputRequestEvent` the workflow emitted; `response_json` is the JSON-
+ * encoded answer handed back to the waiting step.
+ */
+public struct InputResponse: Equatable, Hashable {
+    /**
+     * Matches the `request_id` of the `InputRequestEvent` being answered.
+     */
+    public var requestId: String
+    /**
+     * JSON-encoded answer delivered to the parked step.
+     */
+    public var responseJson: String
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Matches the `request_id` of the `InputRequestEvent` being answered.
+         */requestId: String, 
+        /**
+         * JSON-encoded answer delivered to the parked step.
+         */responseJson: String) {
+        self.requestId = requestId
+        self.responseJson = responseJson
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension InputResponse: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeInputResponse: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> InputResponse {
+        return
+            try InputResponse(
+                requestId: FfiConverterString.read(from: &buf), 
+                responseJson: FfiConverterString.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: InputResponse, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.requestId, into: &buf)
+        FfiConverterString.write(value.responseJson, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInputResponse_lift(_ buf: RustBuffer) throws -> InputResponse {
+    return try FfiConverterTypeInputResponse.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeInputResponse_lower(_ value: InputResponse) -> RustBuffer {
+    return FfiConverterTypeInputResponse.lower(value)
 }
 
 
@@ -35249,10 +36146,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_stephandler_invoke() != 11814) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_workflow_run() != 12733) {
+    if (uniffi_blazen_uniffi_checksum_method_workflow_run() != 21911) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_workflow_run_blocking() != 64927) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_workflow_run_with_handler() != 11645) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_workflow_run_with_handler_blocking() != 29405) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_workflow_step_names() != 3893) {
@@ -35268,6 +36171,39 @@ private let initializationResult: InitializationResult = {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_workflowbuilder_timeout_ms() != 61492) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_workfloweventsink_on_event() != 13382) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_workfloweventsink_on_close() != 63246) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_workflowhandler_abort() != 33951) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_workflowhandler_cost_total_usd() != 27844) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_workflowhandler_pause() != 47534) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_workflowhandler_respond_to_input() != 27626) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_workflowhandler_result() != 65464) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_workflowhandler_resume_in_place() != 61059) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_workflowhandler_snapshot() != 40446) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_workflowhandler_stream_events() != 13752) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_workflowhandler_usage_total() != 60937) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_constructor_agent_new() != 56586) {
@@ -35476,6 +36412,7 @@ private let initializationResult: InitializationResult = {
     uniffiCallbackInitStepHandler()
     uniffiCallbackInitToolHandler()
     uniffiCallbackInitVcStreamSink()
+    uniffiCallbackInitWorkflowEventSink()
     return InitializationResult.ok
 }()
 

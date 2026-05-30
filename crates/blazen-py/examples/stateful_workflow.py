@@ -85,8 +85,8 @@ async def query(ctx: Context, ev: Event) -> StopEvent:
 async def main() -> None:
     wf = Workflow("stateful-example", [setup, query])
 
-    handler = await wf.run()
-    result = await handler.result()
+    # `run()` resolves directly to a WorkflowResult.
+    result = await wf.run()
 
     returned_conn = result.result
     print(f"  [final]  result is sqlite3.Connection? {isinstance(returned_conn, sqlite3.Connection)}")

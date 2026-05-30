@@ -20,8 +20,11 @@ use napi_derive::napi;
 use tokio_stream::StreamExt;
 
 use super::context::JsContext;
-use super::event::{any_event_to_js_value, js_value_to_any_event};
+use super::event::{any_event_to_js_value, any_event_to_step_json, js_value_to_any_event};
 use super::handler::JsWorkflowHandler;
+use super::native_passthrough::{
+    StepEventArg, StepEventReturn, register_native_event,
+};
 use super::session_ref_serializable::{DESERIALIZER_FN, intern_type_tag};
 use crate::error::workflow_error_to_napi;
 #[cfg(not(target_os = "wasi"))]
@@ -110,9 +113,9 @@ impl From<CoreSessionPausePolicy> for JsSessionPausePolicy {
 /// `Weak = true` unrefs the TSFN so it does not prevent Node.js from exiting
 /// once the workflow completes and the result Promise resolves.
 type StepHandlerTsfn = ThreadsafeFunction<
-    FnArgs<(serde_json::Value, JsContext)>,
-    Promise<serde_json::Value>,
-    FnArgs<(serde_json::Value, JsContext)>,
+    FnArgs<(StepEventArg, JsContext)>,
+    Promise<StepEventReturn>,
+    FnArgs<(StepEventArg, JsContext)>,
     Status,
     false,
     true,
@@ -460,7 +463,10 @@ impl JsWorkflow {
     /// - `eventTypes`: Array of event type strings this step handles.
     /// - `handler`: Async function `(event, ctx) => Event` that processes
     ///   events and returns the next event.
-    #[napi(js_name = "addStep")]
+    #[napi(
+        js_name = "addStep",
+        ts_args_type = "name: string, eventTypes: Array<string>, handler: (event: Event, ctx: Context) => Event | Event[] | null | void | Promise<Event | Event[] | null | void>"
+    )]
     pub fn add_step(
         &mut self,
         name: String,
@@ -510,7 +516,10 @@ impl JsWorkflow {
     /// `ctx.writeEventToStream()` from within step handlers.
     ///
     /// Returns the final result when the workflow completes.
-    #[napi(js_name = "runStreaming")]
+    #[napi(
+        js_name = "runStreaming",
+        ts_args_type = "input: any, onEvent: (event: Event) => void"
+    )]
     pub async fn run_streaming(
         &self,
         input: serde_json::Value,
@@ -843,7 +852,10 @@ impl JsWorkflowBuilder {
     /// Append a step. The step's `handler` is an `async (event, ctx)`
     /// JavaScript function; the workflow engine routes events whose
     /// `type` matches one of `eventTypes` to it.
-    #[napi(js_name = "addStep")]
+    #[napi(
+        js_name = "addStep",
+        ts_args_type = "name: string, eventTypes: Array<string>, handler: (event: Event, ctx: Context) => Event | Event[] | null | void | Promise<Event | Event[] | null | void>"
+    )]
     pub fn add_step(
         &self,
         name: String,
@@ -1206,18 +1218,33 @@ fn make_step_registration(step: &JsStepRegistration) -> blazen_core::StepRegistr
             Box::pin(async move {
                 // Install the session-ref registry as a Tokio task_local so
                 // that `current_session_registry()` returns `Some` inside the
-                // JS step handler (mirrors the Python binding's wrapper).
+                // JS step handler (mirrors the Python binding's wrapper). We
+                // also keep a direct `Arc` clone (`registry`) because the
+                // live-object passthrough must reach the registry from the v8
+                // main thread, where the task-local is NOT visible (see
+                // `StepEventArg`).
                 let registry = ctx.session_refs_arc().await;
+                let registry_for_arg = Arc::clone(&registry);
                 let js_ctx = JsContext::new(ctx);
 
                 blazen_core::session_ref::with_session_registry(registry, async move {
-                    // Convert the Rust event to a JS-friendly JSON value.
-                    let js_event = any_event_to_js_value(&*event);
+                    let registry = registry_for_arg;
+
+                    // Convert the Rust event to the JS-friendly argument. If the
+                    // inbound event JSON carries a live-object marker
+                    // (`__blazen_native_ref__`) that still resolves in the
+                    // registry, `StepEventArg::to_napi_value` substitutes the
+                    // original JS object so the handler sees the same instance
+                    // the previous step returned.
+                    let js_event = StepEventArg::new(
+                        any_event_to_step_json(&*event),
+                        Arc::clone(&registry),
+                    );
 
                     // Call the JavaScript handler function.
                     // ThreadsafeFunction::call_async returns a Future that resolves
-                    // to the JS function's return value (serde_json::Value).
-                    let result_value: serde_json::Value = tsfn
+                    // to the JS function's return value (StepEventReturn).
+                    let result: StepEventReturn = tsfn
                         .call_async_catch(FnArgs::from((js_event, js_ctx)))
                         .await
                         .map_err(|e: napi::Error| {
@@ -1228,21 +1255,32 @@ fn make_step_registration(step: &JsStepRegistration) -> blazen_core::StepRegistr
                             blazen_core::WorkflowError::Context(e.to_string())
                         })?;
 
-                    // Convert the JS return value back to a Rust event.
-                    if result_value.is_null() {
-                        return Ok(blazen_core::StepOutput::None);
+                    // Convert the JS return value back to Rust event(s),
+                    // pinning live JS objects in the unified registry so the
+                    // next step recovers identity.
+                    match result {
+                        StepEventReturn::None => Ok(blazen_core::StepOutput::None),
+                        StepEventReturn::JsonOnly(json) => {
+                            Ok(blazen_core::StepOutput::Single(js_value_to_any_event(&json)))
+                        }
+                        StepEventReturn::Single { json, native } => {
+                            let stamped =
+                                register_native_event(&registry, json, native).await;
+                            Ok(blazen_core::StepOutput::Single(js_value_to_any_event(
+                                &stamped,
+                            )))
+                        }
+                        StepEventReturn::Multiple(items) => {
+                            let mut events: Vec<Box<dyn AnyEvent>> =
+                                Vec::with_capacity(items.len());
+                            for (json, native) in items {
+                                let stamped =
+                                    register_native_event(&registry, json, native).await;
+                                events.push(js_value_to_any_event(&stamped));
+                            }
+                            Ok(blazen_core::StepOutput::Multiple(events))
+                        }
                     }
-
-                    // Check if it's an array (multiple events).
-                    if let serde_json::Value::Array(arr) = &result_value {
-                        let events: Vec<Box<dyn AnyEvent>> =
-                            arr.iter().map(js_value_to_any_event).collect();
-                        return Ok(blazen_core::StepOutput::Multiple(events));
-                    }
-
-                    // Single event.
-                    let event = js_value_to_any_event(&result_value);
-                    Ok(blazen_core::StepOutput::Single(event))
                 })
                 .await
             })
@@ -1277,7 +1315,9 @@ fn make_result(result: &blazen_core::WorkflowResult) -> JsWorkflowResult {
             .cloned()
             .unwrap_or(serde_json::Value::Null)
     } else {
-        json
+        // Strip any internal live-object passthrough marker so it never
+        // surfaces in the user-facing result payload.
+        super::native_passthrough::strip_native_ref(json)
     };
 
     JsWorkflowResult {

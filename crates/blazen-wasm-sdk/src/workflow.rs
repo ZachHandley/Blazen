@@ -34,6 +34,83 @@ use serde::Serialize;
 use wasm_bindgen::prelude::*;
 
 // ---------------------------------------------------------------------------
+// TypeScript surface for the workflow event / step-handler types
+// ---------------------------------------------------------------------------
+//
+// wasm-bindgen emits `any` for every bare `JsValue` parameter / return and a
+// bare `Function` for every `js_sys::Function`. The typed newtypes below
+// (paired with the `typescript_custom_section` declarations) replace those
+// with the real `WorkflowEvent` / `StepHandler` / `string[]` shapes on the
+// generated `.d.ts` surface while staying `JsValue` / `Function` on the Rust
+// side. `input` / `run` payloads remain `any` on purpose — they carry
+// genuinely-arbitrary user JSON.
+
+#[wasm_bindgen(typescript_custom_section)]
+const TS_WORKFLOW_EVENT_TYPES: &str = r#"
+/**
+ * A workflow event crossing the JS boundary.
+ *
+ * Every event is a plain object carrying a `type` discriminator (the routing
+ * key, e.g. `"StartEvent"` / `"StopEvent"` / a custom event name) plus an
+ * arbitrary JSON payload. A live object returned by one step keeps its
+ * identity when handed to the next step's handler (see the `js_native`
+ * module), so the value a handler receives may be the *same* object a prior
+ * handler returned — including non-JSON members.
+ */
+export interface WorkflowEvent {
+    /** Routing discriminator: the event type name. */
+    type: string;
+    /** Arbitrary event payload. */
+    [key: string]: unknown;
+}
+
+/**
+ * A workflow step handler.
+ *
+ * Receives the inbound `event` and the live workflow `Context`, and returns
+ * the next event (an object with a `type` field), `null` / `undefined` to
+ * end the workflow, or a `Promise` resolving to either. Returning an object
+ * with `type: "StopEvent"` (its `result` field becomes the workflow result)
+ * also terminates the run.
+ */
+export type StepHandler = (
+    event: WorkflowEvent,
+    context: Context,
+) => WorkflowEvent | null | undefined | Promise<WorkflowEvent | null | undefined>;
+
+/**
+ * Callback invoked for each event published by the engine during
+ * `runStreaming`. Receives one `{ event_type, data }` envelope per event.
+ */
+export type StreamEventCallback = (event: { event_type: string; data: unknown }) => void;
+"#;
+
+// Typed `JsValue` / `Function` newtypes. These surface in the generated
+// `.d.ts` as the named TS types declared above while remaining `JsValue` /
+// `js_sys::Function` on the Rust side. `From`/`Into` glue is provided by
+// wasm-bindgen for the `extern "C"` types automatically.
+#[wasm_bindgen]
+extern "C" {
+    /// Strongly-typed alias surfacing as `string[]` — the event-type list
+    /// accepted by `addStep`.
+    #[wasm_bindgen(typescript_type = "string[]")]
+    pub type EventTypesTs;
+
+    /// Strongly-typed alias surfacing as `StepHandler`.
+    #[wasm_bindgen(typescript_type = "StepHandler")]
+    pub type StepHandlerTs;
+
+    /// Strongly-typed alias surfacing as `WorkflowEvent` — the event object
+    /// accepted by `Context.sendEvent` / `Context.writeEventToStream`.
+    #[wasm_bindgen(typescript_type = "WorkflowEvent")]
+    pub type WorkflowEventTs;
+
+    /// Strongly-typed alias surfacing as `StreamEventCallback`.
+    #[wasm_bindgen(typescript_type = "StreamEventCallback")]
+    pub type StreamEventCallbackTs;
+}
+
+// ---------------------------------------------------------------------------
 // WasmWorkflow
 // ---------------------------------------------------------------------------
 
@@ -204,25 +281,11 @@ impl WasmWorkflow {
     pub fn add_step(
         &mut self,
         name: &str,
-        event_types: JsValue,
-        handler: js_sys::Function,
+        event_types: EventTypesTs,
+        handler: StepHandlerTs,
     ) -> Result<(), JsValue> {
-        let types_array = js_sys::Array::from(&event_types);
-        let mut event_types_vec = Vec::with_capacity(types_array.length() as usize);
-        for i in 0..types_array.length() {
-            let t = types_array
-                .get(i)
-                .as_string()
-                .ok_or_else(|| JsValue::from_str("event_types must be an array of strings"))?;
-            event_types_vec.push(t);
-        }
-
-        self.pending_steps.push(PendingStep {
-            name: name.to_owned(),
-            event_types: event_types_vec,
-            handler,
-        });
-
+        self.pending_steps
+            .push(parse_pending_step(name, event_types, handler)?);
         Ok(())
     }
 
@@ -502,8 +565,16 @@ impl WasmWorkflow {
     pub async fn run_streaming(
         &mut self,
         input: JsValue,
-        callback: js_sys::Function,
+        callback: StreamEventCallbackTs,
     ) -> Result<JsValue, JsValue> {
+        // The typed-alias callback is a `JsValue` newtype on the Rust side;
+        // reinterpret it as the underlying callable so it can be invoked per
+        // stream event below.
+        let callback_js: JsValue = callback.into();
+        let callback: js_sys::Function = callback_js
+            .dyn_into()
+            .map_err(|_| JsValue::from_str("callback must be a function"))?;
+
         let mut builder = self
             .builder
             .take()
@@ -911,25 +982,11 @@ impl WasmWorkflowBuilder {
     pub fn add_step(
         mut self,
         name: &str,
-        event_types: JsValue,
-        handler: js_sys::Function,
+        event_types: EventTypesTs,
+        handler: StepHandlerTs,
     ) -> Result<WasmWorkflowBuilder, JsValue> {
-        let types_array = js_sys::Array::from(&event_types);
-        let mut event_types_vec = Vec::with_capacity(types_array.length() as usize);
-        for i in 0..types_array.length() {
-            let t = types_array
-                .get(i)
-                .as_string()
-                .ok_or_else(|| JsValue::from_str("event_types must be an array of strings"))?;
-            event_types_vec.push(t);
-        }
-
-        self.pending_steps.push(PendingStep {
-            name: name.to_owned(),
-            event_types: event_types_vec,
-            handler,
-        });
-
+        self.pending_steps
+            .push(parse_pending_step(name, event_types, handler)?);
         Ok(self)
     }
 
@@ -1104,15 +1161,58 @@ fn marshal_to_js<T: Serialize + ?Sized>(value: &T) -> Result<JsValue, JsValue> {
         .map_err(|e| JsValue::from_str(&format!("marshal failed: {e}")))
 }
 
-/// Marshal a type-erased event into a `JsValue` shaped as the event's JSON
-/// representation. Used to feed each step's JS callback the same `{ ...data }`
-/// shape regardless of whether the underlying event is a static
-/// `#[derive(Event)]` struct or a [`DynamicEvent`].
+/// Marshal a type-erased event into a `JsValue` for a step's JS callback.
+///
+/// Delegates to [`crate::js_native::marshal_event_to_js`], which is
+/// identity-preserving: if the event carries a live [`crate::js_native::JsHandle`]
+/// whose `JsValue` is still resident in the JS-value store, the **original**
+/// object is handed back so JS object identity survives the Rust↔JS hop.
+/// Otherwise the event's JSON form is marshalled to a fresh JS object,
+/// matching the legacy behaviour for plain JSON events.
 fn marshal_event_to_js(event: &dyn AnyEvent) -> Result<JsValue, WorkflowError> {
-    let json = event.to_json();
-    let serializer = serde_wasm_bindgen::Serializer::new().serialize_maps_as_objects(true);
-    json.serialize(&serializer)
-        .map_err(|e| WorkflowError::Context(format!("event marshal failed: {e}")))
+    crate::js_native::marshal_event_to_js(event)
+        .map_err(|e| WorkflowError::Context(format!("event marshal failed: {e:?}")))
+}
+
+/// Build a [`PendingStep`] from the typed `addStep` arguments shared by
+/// [`WasmWorkflow::add_step`] and [`WasmWorkflowBuilder::add_step`].
+///
+/// `event_types` is the `string[]` typed alias (surfaced as `EventTypesTs`);
+/// `handler` is the `StepHandler` typed alias (surfaced as `StepHandlerTs`).
+/// Both are `JsValue` newtypes on the Rust side — `event_types` is parsed
+/// into a `Vec<String>` and `handler` is reinterpreted as the underlying
+/// [`js_sys::Function`].
+///
+/// # Errors
+///
+/// Returns a `JsValue` error if `event_types` is not an array of strings or
+/// `handler` is not a function.
+fn parse_pending_step(
+    name: &str,
+    event_types: EventTypesTs,
+    handler: StepHandlerTs,
+) -> Result<PendingStep, JsValue> {
+    let event_types_js: JsValue = event_types.into();
+    let types_array = js_sys::Array::from(&event_types_js);
+    let mut event_types_vec = Vec::with_capacity(types_array.length() as usize);
+    for i in 0..types_array.length() {
+        let t = types_array
+            .get(i)
+            .as_string()
+            .ok_or_else(|| JsValue::from_str("event_types must be an array of strings"))?;
+        event_types_vec.push(t);
+    }
+
+    let handler_js: JsValue = handler.into();
+    let handler: js_sys::Function = handler_js
+        .dyn_into()
+        .map_err(|_| JsValue::from_str("handler must be a function"))?;
+
+    Ok(PendingStep {
+        name: name.to_owned(),
+        event_types: event_types_vec,
+        handler,
+    })
 }
 
 /// Parse a JS-supplied policy string into a [`SessionPausePolicy`].
@@ -1242,36 +1342,28 @@ async fn dispatch_js_step(
     // 5. Marshal the resolved value back into an event for the engine.
     // `null` / `undefined` means "no further events" — the engine treats
     // `StepOutput::None` as a terminal step, matching the documented JS
-    // contract on `addStep`.
-    if resolved_js.is_null() || resolved_js.is_undefined() {
-        return Ok(StepOutput::None);
-    }
-
-    let event_obj: serde_json::Value =
-        serde_wasm_bindgen::from_value(resolved_js).map_err(|e| {
-            WorkflowError::Context(format!(
-                "JS step handler '{step_name}' return value not JSON-serializable: {e}"
-            ))
-        })?;
-
-    let event_type = event_obj
-        .get("type")
-        .and_then(|v| v.as_str())
-        .ok_or_else(|| {
-            WorkflowError::Context(format!(
-                "JS step handler '{step_name}' return value missing 'type' field"
-            ))
+    // contract on `addStep`. Non-terminal values are routed through
+    // `js_native::parse_js_return`, which parks the live `JsValue` in the
+    // JS-value store and wraps it in a native-backed `DynamicEvent` so the
+    // returned object's identity survives the hop to the next step.
+    let Some((event_type, snapshot, dynamic)) =
+        crate::js_native::parse_js_return(resolved_js).map_err(|e| {
+            WorkflowError::Context(format!("JS step handler '{step_name}' {e}"))
         })?
-        .to_owned();
+    else {
+        return Ok(StepOutput::None);
+    };
 
     // Special-case StopEvent so the engine's terminal-event detection
     // recognises it. The canonical native StopEvent carries a single
     // `result` field, so route the JS object's `result` (or `data`, for
-    // symmetry with the marshal-back path) into it.
+    // symmetry with the marshal-back path) into it. Terminal events do not
+    // need live-identity passthrough — the workflow ends here — so we read
+    // from the JSON snapshot and drop the parked `JsHandle`.
     if event_type == "StopEvent" {
-        let stop_payload = event_obj
+        let stop_payload = snapshot
             .get("result")
-            .or_else(|| event_obj.get("data"))
+            .or_else(|| snapshot.get("data"))
             .cloned()
             .unwrap_or(serde_json::Value::Null);
         let stop_evt = StopEvent {
@@ -1281,8 +1373,8 @@ async fn dispatch_js_step(
     }
 
     // For all other event types the engine routes via interned
-    // `event_type_id`, so a `DynamicEvent` is the right carrier.
-    let dynamic = DynamicEvent::from_json(event_type, event_obj);
+    // `event_type_id`. `dynamic` is a native-backed `DynamicEvent` carrying
+    // the live `JsValue`, so the next step receives the *same* object.
     Ok(StepOutput::Single(Box::new(dynamic)))
 }
 

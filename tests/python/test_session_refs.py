@@ -70,8 +70,7 @@ async def test_class_instance_identity_preserved() -> None:
     async def s(ctx: Context, ev: StartEvent) -> StopEvent:
         return StopEvent(result=original)
 
-    handler = await Workflow("identity", [s]).run()
-    result = await handler.result()
+    result = await Workflow("identity", [s]).run()
 
     assert result.result is original
     assert result.result.n == 42
@@ -87,8 +86,7 @@ async def test_lambda_round_trip() -> None:
     async def s(ctx: Context, ev: StartEvent) -> StopEvent:
         return StopEvent(result=lambda x: x * 2)
 
-    handler = await Workflow("lambda", [s]).run()
-    result = await handler.result()
+    result = await Workflow("lambda", [s]).run()
 
     assert callable(result.result)
     assert result.result(21) == 42
@@ -107,8 +105,7 @@ async def test_sqlite_connection_round_trip() -> None:
         conn.execute("INSERT INTO t VALUES ('answer', 42)")
         return StopEvent(result=conn)
 
-    handler = await Workflow("sqlite", [s]).run()
-    result = await handler.result()
+    result = await Workflow("sqlite", [s]).run()
 
     cur = result.result.execute("SELECT v FROM t WHERE k = 'answer'")
     (value,) = cur.fetchone()
@@ -134,8 +131,7 @@ async def test_multi_step_live_ref_handoff() -> None:
         # `ev.payload` should be the same object the producer returned.
         return StopEvent(result=ev.payload)
 
-    handler = await Workflow("handoff", [producer, consumer]).run()
-    result = await handler.result()
+    result = await Workflow("handoff", [producer, consumer]).run()
 
     assert result.result is sentinel
 
@@ -170,15 +166,13 @@ async def test_sub_workflow_session_ref() -> None:
 
     @step
     async def outer_step(ctx: Context, ev: StartEvent) -> StopEvent:
-        inner_handler = await inner_wf.run()
-        inner_result = await inner_handler.result()
+        inner_result = await inner_wf.run()
         # The inner result contains the sentinel — identity preserved.
         assert inner_result.result is sentinel
         # Re-emit it so the outer result carries it too.
         return StopEvent(result=inner_result.result)
 
-    outer_handler = await Workflow("outer", [outer_step]).run()
-    outer_result = await outer_handler.result()
+    outer_result = await Workflow("outer", [outer_step]).run()
 
     # The sentinel object survives the parent→child→parent round-trip.
     assert outer_result.result is sentinel
@@ -206,14 +200,12 @@ async def test_sub_workflow_session_ref_with_lambda() -> None:
 
     @step
     async def outer_step(ctx: Context, ev: StartEvent) -> StopEvent:
-        inner_handler = await inner_wf.run()
-        inner_result = await inner_handler.result()
+        inner_result = await inner_wf.run()
         # Same identity across the boundary.
         assert inner_result.result is handler_fn
         return StopEvent(result=inner_result.result)
 
-    outer_handler = await Workflow("outer-lambda", [outer_step]).run()
-    outer_result = await outer_handler.result()
+    outer_result = await Workflow("outer-lambda", [outer_step]).run()
 
     # The lambda survived and is the exact same object.
     assert outer_result.result is handler_fn
@@ -240,8 +232,7 @@ async def test_dataclass_identity_preserved() -> None:
     async def s(ctx: Context, ev: StartEvent) -> StopEvent:
         return StopEvent(result=original)
 
-    handler = await Workflow("dc", [s]).run()
-    result = await handler.result()
+    result = await Workflow("dc", [s]).run()
 
     assert result.result is original
     assert result.result.name == "alice"
@@ -273,8 +264,7 @@ async def test_json_values_unchanged() -> None:
     async def s(ctx: Context, ev: StartEvent) -> StopEvent:
         return StopEvent(result={"answer": 42, "items": [1, 2, 3]})
 
-    handler = await Workflow("json", [s]).run()
-    result = await handler.result()
+    result = await Workflow("json", [s]).run()
 
     assert result.result == {"answer": 42, "items": [1, 2, 3]}
     assert isinstance(result.result, dict)
@@ -305,8 +295,7 @@ async def test_namespaces_route_independently() -> None:
             }
         )
 
-    handler = await Workflow("split", [s]).run()
-    result = await handler.result()
+    result = await Workflow("split", [s]).run()
 
     assert result.result == {"count": 5, "has_conn": True}
 
@@ -322,8 +311,7 @@ async def test_session_namespace_identity_preserved() -> None:
         retrieved = ctx.session.get("marker")
         return StopEvent(result={"identity": retrieved is sentinel})
 
-    handler = await Workflow("session-id", [s]).run()
-    result = await handler.result()
+    result = await Workflow("session-id", [s]).run()
 
     assert result.result == {"identity": True}
 
@@ -344,8 +332,7 @@ async def test_state_namespace_dict_protocol() -> None:
             }
         )
 
-    handler = await Workflow("state-dict", [s]).run()
-    result = await handler.result()
+    result = await Workflow("state-dict", [s]).run()
 
     assert result.result == {"x": 10, "y_in": True, "z_in": False}
 
@@ -362,8 +349,7 @@ async def test_session_namespace_remove() -> None:
         after = ctx.session.has("tmp")
         return StopEvent(result={"before": before, "after": after})
 
-    handler = await Workflow("session-rm", [s]).run()
-    result = await handler.result()
+    result = await Workflow("session-rm", [s]).run()
 
     assert result.result == {"before": True, "after": False}
 
@@ -384,7 +370,7 @@ async def test_streamed_event_preserves_identity() -> None:
         ctx.write_event_to_stream(TickEvent(payload=sentinel))
         return StopEvent(result={"done": True})
 
-    handler = await Workflow("stream", [s]).run()
+    handler = await Workflow("stream", [s]).run_with_handler()
     seen: list[object] = []
 
     async def collect() -> None:
@@ -446,8 +432,7 @@ async def test_serializable_live_run_identity_preserved() -> None:
         [s],
         session_pause_policy=SessionPausePolicy.PickleOrSerialize,
     )
-    handler = await wf.run()
-    result = await handler.result()
+    result = await wf.run()
 
     assert result.result is blob
     assert result.result.n == 42
@@ -481,7 +466,7 @@ async def test_serializable_snapshot_contains_serialized_payload() -> None:
         [producer],
         session_pause_policy=SessionPausePolicy.PickleOrSerialize,
     )
-    handler = await wf.run()
+    handler = await wf.run_with_handler()
     # Give the producer a moment to enter its sleep so the blob is
     # already in the registry when we pause.
     await asyncio.sleep(0.1)
@@ -549,7 +534,7 @@ async def test_serializable_resume_reconstructs_payload() -> None:
         [producer],
         session_pause_policy=SessionPausePolicy.PickleOrSerialize,
     )
-    handler = await wf.run()
+    handler = await wf.run_with_handler()
     await asyncio.sleep(0.1)
     await handler.pause()
     snap_json = await handler.snapshot()
@@ -597,7 +582,7 @@ async def test_serializable_resume_raises_on_unknown_type_tag() -> None:
         [producer],
         session_pause_policy=SessionPausePolicy.PickleOrSerialize,
     )
-    handler = await wf.run()
+    handler = await wf.run_with_handler()
     await asyncio.sleep(0.1)
     await handler.pause()
     snap_json = await handler.snapshot()
@@ -654,8 +639,7 @@ async def test_serializable_broken_serialize_falls_back_to_live_ref() -> None:
         [s],
         session_pause_policy=SessionPausePolicy.PickleOrError,
     )
-    handler = await wf.run()
-    result = await handler.result()
+    result = await wf.run()
 
     assert result.result is blob
     assert result.result.n == 99

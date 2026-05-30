@@ -33,6 +33,10 @@ console.log(result); // { greeting: "Hello, Zach!" }
 
 The `StartEvent` is the engine's built-in entry point and is interned as `"blazen::StartEvent"`. Returning an object with `type: "StopEvent"` ends the workflow; its `result` field is the value `run()` resolves to.
 
+Event objects are now strongly typed across the boundary: `addStep`'s `event_types` parameter is `string[]` and the handler is a `StepHandler` (`(event: WorkflowEvent, ctx: Context) => WorkflowEvent | null | Promise<WorkflowEvent | null>`); `ctx.sendEvent` / `ctx.writeEventToStream` accept a `WorkflowEvent`. The `WorkflowEvent`, `StepHandler`, and `StreamEventCallback` types are exported from the package.
+
+**Live object identity is preserved step-to-step.** An object a step handler returns reaches the next step's handler as the *same* JavaScript object — including non-JSON members such as functions, `Map`s, class instances, or DOM/model handles — rather than a JSON-flattened copy. The engine parks the live value on the JS heap (keyed by a small id) and threads it through as a native-backed event; only when an event must be serialized (a workflow snapshot, or a value streamed to an external observer) is a JSON snapshot taken via the registered native serializer. `ctx.sendEvent(liveObject)` keeps identity the same way.
+
 ## Cloudflare Workers
 
 A working end-to-end example lives at [`../../examples/cloudflare-worker/`](../../examples/cloudflare-worker/). The minimum:

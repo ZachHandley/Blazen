@@ -33,7 +33,7 @@
 
 use blazen_wasm_sdk::memory::{WasmInMemoryBackend, WasmMemory};
 use blazen_wasm_sdk::pipeline::{WasmPipeline, WasmPipelineBuilder, WasmStage};
-use blazen_wasm_sdk::workflow::WasmWorkflow;
+use blazen_wasm_sdk::workflow::{EventTypesTs, StepHandlerTs, WasmWorkflow};
 use js_sys::Array;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_test::{wasm_bindgen_test, wasm_bindgen_test_configure};
@@ -46,20 +46,24 @@ wasm_bindgen_test_configure!(run_in_node_experimental);
 // The pipeline engine awaits whatever the JS function returns; for shape
 // wiring we hand back a synchronous plain object with the
 // `blazen::StopEvent` discriminator that the dispatch layer recognises.
-fn make_stop_step_handler(payload_json: &'static str) -> js_sys::Function {
+fn make_stop_step_handler(payload_json: &'static str) -> StepHandlerTs {
     let body = format!("return {{ type: 'blazen::StopEvent', result: {payload_json} }};");
     // Two-arg signature matches the `(event, ctx)` calling convention the
-    // workflow engine uses for step handlers.
-    js_sys::Function::new_with_args("event, ctx", &body)
+    // workflow engine uses for step handlers. `add_step` now takes the typed
+    // `StepHandlerTs` newtype, so reinterpret the function into it (it is a
+    // `JsValue` newtype on the Rust side).
+    let func = js_sys::Function::new_with_args("event, ctx", &body);
+    JsValue::from(func).unchecked_into()
 }
 
 // Build a JS array containing a single event-type string. The
 // `Workflow.addStep` binding expects a JS array of strings, so a Rust
-// `Vec<&str>` would not deserialise — we hand it an actual `js_sys::Array`.
-fn event_types_array(event_type: &str) -> JsValue {
+// `Vec<&str>` would not deserialise — we hand it an actual `js_sys::Array`,
+// reinterpreted as the typed `EventTypesTs` newtype `add_step` now accepts.
+fn event_types_array(event_type: &str) -> EventTypesTs {
     let arr = Array::new();
     arr.push(&JsValue::from_str(event_type));
-    arr.into()
+    JsValue::from(arr).unchecked_into()
 }
 
 #[wasm_bindgen_test]

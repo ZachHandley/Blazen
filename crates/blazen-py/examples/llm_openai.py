@@ -183,17 +183,17 @@ async def main() -> None:
     wf = Workflow("content-pipeline", [generate_outline, write_draft, review])
 
     topic = "Why Rust-powered Python libraries are the future of performance"
-    handler = await wf.run(topic=topic)
-    result = await handler.result()
-    output = result.to_dict()
+    # `run()` resolves directly to a WorkflowResult.
+    result = await wf.run(topic=topic)
+    output = result.result
 
     # Print summary.
     print("=" * 60)
     print("CONTENT PIPELINE COMPLETE")
     print("=" * 60)
 
-    usage = output["result"]["total_usage"]
-    print(f"Topic:              {output['result']['topic']}")
+    usage = output["total_usage"]
+    print(f"Topic:              {output['topic']}")
     print(f"Prompt tokens:      {usage['prompt_tokens']}")
     print(f"Completion tokens:  {usage['completion_tokens']}")
     print(f"Total tokens:       {usage['total_tokens']}")

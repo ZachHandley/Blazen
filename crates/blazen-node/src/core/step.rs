@@ -69,7 +69,7 @@ pub struct JsStepOutput {
 #[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 impl JsStepOutput {
     /// Construct a single-event output.
-    #[napi(factory)]
+    #[napi(factory, ts_args_type = "event: Event")]
     pub fn single(event: serde_json::Value) -> Self {
         Self {
             kind: JsStepOutputKind::Single,
@@ -78,7 +78,7 @@ impl JsStepOutput {
     }
 
     /// Construct a fan-out output from an array of events.
-    #[napi(factory)]
+    #[napi(factory, ts_args_type = "events: Array<Event>")]
     pub fn multiple(events: Vec<serde_json::Value>) -> Self {
         Self {
             kind: JsStepOutputKind::Multiple,

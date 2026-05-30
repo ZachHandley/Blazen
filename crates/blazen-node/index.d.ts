@@ -993,7 +993,7 @@ export declare class Context {
    * The event will be routed to any step whose `eventTypes` list includes
    * its event type. The event object must have a `type` field.
    */
-  sendEvent(event: any): Promise<void>
+  sendEvent(event: Event): Promise<void>
   /**
    * Publish an event to the external broadcast stream.
    *
@@ -1001,7 +1001,7 @@ export declare class Context {
    * Unlike `sendEvent`, this does NOT route the event through the
    * internal step registry.
    */
-  writeEventToStream(event: any): Promise<void>
+  writeEventToStream(event: Event): Promise<void>
   /**
    * Store raw binary data under the given key.
    *
@@ -4357,7 +4357,7 @@ export declare class PipelineHandler {
    * The callback `(eventJson) => void` is invoked for each `PipelineEvent`;
    * `eventJson` is a JS object with shape `{ stageName, branchName, workflowRunId, event }`.
    */
-  streamEvents(onEvent: StreamCallbackTsfn): Promise<void>
+  streamEvents(onEvent: (event: { stageName: string; branchName: string; workflowRunId: string; event: Event }) => void): Promise<void>
 }
 export type JsPipelineHandler = PipelineHandler
 
@@ -5302,9 +5302,9 @@ export type JsStepDeserializerRegistry = StepDeserializerRegistry
  */
 export declare class StepOutput {
   /** Construct a single-event output. */
-  static single(event: any): StepOutput
+  static single(event: Event): StepOutput
   /** Construct a fan-out output from an array of events. */
-  static multiple(events: Array<any>): StepOutput
+  static multiple(events: Array<Event>): StepOutput
   /** Construct a no-output result (side-effect only). */
   static none(): StepOutput
   /** Active variant tag. */
@@ -6290,7 +6290,7 @@ export declare class Workflow {
    * - `handler`: Async function `(event, ctx) => Event` that processes
    *   events and returns the next event.
    */
-  addStep(name: string, eventTypes: Array<string>, handler: StepHandlerTsfn): void
+  addStep(name: string, eventTypes: Array<string>, handler: (event: Event, ctx: Context) => Event | Event[] | null | void | Promise<Event | Event[] | null | void>): void
   /**
    * Set the workflow timeout in seconds.
    *
@@ -6312,7 +6312,7 @@ export declare class Workflow {
    *
    * Returns the final result when the workflow completes.
    */
-  runStreaming(input: any, onEvent: StreamCallbackTsfn): Promise<JsWorkflowResult>
+  runStreaming(input: any, onEvent: (event: Event) => void): Promise<JsWorkflowResult>
   /**
    * Run the workflow and return a handler object.
    *
@@ -6415,7 +6415,7 @@ export declare class WorkflowBuilder {
    * JavaScript function; the workflow engine routes events whose
    * `type` matches one of `eventTypes` to it.
    */
-  addStep(name: string, eventTypes: Array<string>, handler: StepHandlerTsfn): this
+  addStep(name: string, eventTypes: Array<string>, handler: (event: Event, ctx: Context) => Event | Event[] | null | void | Promise<Event | Event[] | null | void>): this
   /**
    * Set the workflow timeout in seconds. A non-positive value
    * disables the timeout (equivalent to [`Self::no_timeout`]).
@@ -6601,7 +6601,7 @@ export declare class WorkflowHandler {
    * are captured. Subsequent calls subscribe a fresh stream that
    * starts from the current point in time.
    */
-  streamEvents(onEvent: StreamCallbackTsfn): Promise<void>
+  streamEvents(onEvent: (event: Event) => void): Promise<void>
 }
 export type JsWorkflowHandler = WorkflowHandler
 
@@ -10859,6 +10859,30 @@ export interface ContentHint {
   kind?: ContentKind | null
   displayName?: string | null
   byteSize?: number | null
+}
+
+// --- post-build: Event interface (workflow step surface) ---
+/**
+ * An event flowing through a {@link Workflow}. Every event is a plain
+ * object whose `type` string routes it to the steps that declared it in
+ * their `eventTypes`. All other fields are arbitrary user payload.
+ *
+ * Returned from / passed to step handlers (`addStep`), emitted via
+ * `ctx.sendEvent` / `ctx.writeEventToStream`, wrapped by
+ * `StepOutput.single` / `StepOutput.multiple`, and delivered to the
+ * `streamEvents` / `runStreaming` callbacks.
+ *
+ * Object identity is preserved across step hops: the exact object a
+ * handler returns is the same object the next matching handler
+ * receives (methods, class prototype, and non-JSON fields included).
+ */
+export interface Event {
+  /** Event type discriminant used for step routing, e.g. `"blazen::StartEvent"`. */
+  type: string
+  /** Result payload carried by `blazen::StopEvent`. */
+  result?: any
+  /** Arbitrary user payload fields. */
+  [key: string]: any
 }
 
 // --- post-build: typed error classes ---

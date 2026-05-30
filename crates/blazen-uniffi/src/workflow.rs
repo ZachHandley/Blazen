@@ -36,12 +36,17 @@
 
 use std::sync::Arc;
 
+use tokio::sync::Mutex as AsyncMutex;
+use tokio_stream::StreamExt;
+
 use crate::errors::{BlazenError, BlazenResult};
+use crate::llm::TokenUsage;
 use crate::runtime::runtime;
 
 use blazen_core::{
     Context as CoreContext, StepOutput as CoreStepOutput, StepRegistration,
     Workflow as CoreWorkflow, WorkflowBuilder as CoreWorkflowBuilder,
+    WorkflowHandler as CoreWorkflowHandler,
 };
 use blazen_events::{AnyEvent, DynamicEvent, StartEvent, StopEvent, intern_event_type};
 
@@ -83,6 +88,20 @@ pub struct WorkflowResult {
     pub total_output_tokens: u64,
     /// Total cost in USD across the run, if pricing data was available.
     pub total_cost_usd: f64,
+}
+
+/// A human-in-the-loop response delivered to a workflow that auto-parked on an
+/// `InputRequestEvent` (event type `"blazen::InputRequestEvent"`).
+///
+/// `request_id` must match the `request_id` carried by the
+/// `InputRequestEvent` the workflow emitted; `response_json` is the JSON-
+/// encoded answer handed back to the waiting step.
+#[derive(Debug, Clone, uniffi::Record)]
+pub struct InputResponse {
+    /// Matches the `request_id` of the `InputRequestEvent` being answered.
+    pub request_id: String,
+    /// JSON-encoded answer delivered to the parked step.
+    pub response_json: String,
 }
 
 // ---------------------------------------------------------------------------
@@ -206,18 +225,32 @@ impl Workflow {
     /// Run the workflow to completion with the given JSON input as the
     /// `StartEvent` payload. Blocks (in Go) / suspends (in Swift/Kotlin)
     /// until the workflow emits its `StopEvent` (or fails).
+    ///
+    /// This is the result-only shorthand. For streaming intermediate events,
+    /// pausing, snapshotting, or human-in-the-loop input, use
+    /// [`run_with_handler`](Self::run_with_handler) instead.
     pub async fn run(self: Arc<Self>, input_json: String) -> BlazenResult<WorkflowResult> {
         let input: serde_json::Value = serde_json::from_str(&input_json)?;
         let handler = self.inner.run(input).await.map_err(BlazenError::from)?;
-        let usage = handler.usage_total().await;
-        let cost = handler.cost_total_usd().await;
-        let result = handler.result().await.map_err(BlazenError::from)?;
-        Ok(WorkflowResult {
-            event: any_event_to_wire(&*result.event),
-            total_input_tokens: u64::from(usage.prompt_tokens),
-            total_output_tokens: u64::from(usage.completion_tokens),
-            total_cost_usd: cost,
-        })
+        core_handler_to_wire_result(handler).await
+    }
+
+    /// Run the workflow and return a live [`WorkflowHandler`] instead of
+    /// blocking for the final result.
+    ///
+    /// The returned handler exposes the full control surface — stream
+    /// intermediate events to a foreign [`WorkflowEventSink`], `pause` /
+    /// `resume_in_place`, `snapshot`, `respond_to_input` for human-in-the-
+    /// loop, `abort`, and running `usage_total` / `cost_total_usd` — plus
+    /// `result()` to await the terminal event. This mirrors the
+    /// `run_with_handler` surface in the Python / Node / WASM bindings.
+    pub async fn run_with_handler(
+        self: Arc<Self>,
+        input_json: String,
+    ) -> BlazenResult<Arc<WorkflowHandler>> {
+        let input: serde_json::Value = serde_json::from_str(&input_json)?;
+        let handler = self.inner.run(input).await.map_err(BlazenError::from)?;
+        Ok(WorkflowHandler::new(handler))
     }
 
     /// Names of all registered steps, in registration order.
@@ -237,6 +270,283 @@ impl Workflow {
     pub fn run_blocking(self: Arc<Self>, input_json: String) -> BlazenResult<WorkflowResult> {
         let this = Arc::clone(&self);
         runtime().block_on(async move { this.run(input_json).await })
+    }
+
+    /// Synchronous variant of [`run_with_handler`](Self::run_with_handler) —
+    /// blocks the current thread on the shared Tokio runtime while the
+    /// workflow is launched, then returns the live handler. The workflow
+    /// keeps running on the shared runtime after this returns.
+    pub fn run_with_handler_blocking(
+        self: Arc<Self>,
+        input_json: String,
+    ) -> BlazenResult<Arc<WorkflowHandler>> {
+        let this = Arc::clone(&self);
+        runtime().block_on(async move { this.run_with_handler(input_json).await })
+    }
+}
+
+/// Await a core [`CoreWorkflowHandler`] to completion and convert it into the
+/// wire-format [`WorkflowResult`]. Shared by [`Workflow::run`] and
+/// [`WorkflowHandler::result`] so both produce an identical result object.
+async fn core_handler_to_wire_result(
+    handler: CoreWorkflowHandler,
+) -> BlazenResult<WorkflowResult> {
+    let result = handler.result().await.map_err(BlazenError::from)?;
+    Ok(WorkflowResult {
+        event: any_event_to_wire(&*result.event),
+        total_input_tokens: u64::from(result.usage_total.prompt_tokens),
+        total_output_tokens: u64::from(result.usage_total.completion_tokens),
+        total_cost_usd: result.cost_total_usd,
+    })
+}
+
+// ---------------------------------------------------------------------------
+// Streaming sink + live handler
+// ---------------------------------------------------------------------------
+
+/// Foreign-implementable sink for intermediate workflow events.
+///
+/// UniFFI's async-iterator support across Go, Swift, Kotlin, and Ruby is
+/// uneven, so streaming uses a *foreign-callable sink trait* (mirroring
+/// [`CompletionStreamSink`](crate::streaming::CompletionStreamSink)) rather
+/// than an async iterator. Each foreign-language idiomatic wrapper adapts the
+/// callbacks into its host streaming type:
+///
+/// - Go: `on_event` pushes to a `chan Event`
+/// - Swift: callbacks build an `AsyncStream<Event>`
+/// - Kotlin: callbacks emit into a `Flow<Event>`
+/// - Ruby: callbacks yield to an `Enumerator::Lazy`
+///
+/// Steps publish to the stream via
+/// `ctx.write_event_to_stream(...)`. The pump invokes [`on_event`](Self::on_event)
+/// for each event in order, then exactly one [`on_close`](Self::on_close) when
+/// the workflow completes (the internal `"blazen::StreamEnd"` sentinel is
+/// consumed and never forwarded).
+#[uniffi::export(with_foreign)]
+pub trait WorkflowEventSink: Send + Sync {
+    /// One intermediate event arrived from a step.
+    fn on_event(&self, event: Event);
+    /// The stream ended — the workflow reached a terminal state (or the
+    /// subscription was cancelled). Fires exactly once.
+    fn on_close(&self);
+}
+
+/// A live handle to a running workflow.
+///
+/// Returned by [`Workflow::run_with_handler`]. Provides:
+///
+/// **Consumption (consumes the handler):**
+/// - [`result`](Self::result) — await the final [`WorkflowResult`].
+///
+/// **Streaming (borrows the handler):**
+/// - [`stream_events`](Self::stream_events) — pump intermediate events to a
+///   foreign [`WorkflowEventSink`]. Returns immediately; the pump runs on the
+///   shared Tokio runtime until the workflow completes.
+///
+/// **Control (borrows the handler, may be called repeatedly):**
+/// - [`pause`](Self::pause) / [`resume_in_place`](Self::resume_in_place)
+/// - [`snapshot`](Self::snapshot) — capture resumable state as a JSON string
+/// - [`respond_to_input`](Self::respond_to_input) — human-in-the-loop
+/// - [`abort`](Self::abort)
+/// - [`usage_total`](Self::usage_total) / [`cost_total_usd`](Self::cost_total_usd)
+#[derive(uniffi::Object)]
+pub struct WorkflowHandler {
+    /// `Option` because [`result`](Self::result) consumes the inner handler.
+    /// `AsyncMutex` so the control methods can borrow it across `.await`.
+    inner: Arc<AsyncMutex<Option<CoreWorkflowHandler>>>,
+    /// Pre-subscribed initial stream, taken at construction so events
+    /// published before [`stream_events`](Self::stream_events) is called are
+    /// not lost. Consumed on the first `stream_events` call.
+    initial_stream: parking_lot::Mutex<Option<PinnedEventStream>>,
+}
+
+type PinnedEventStream = std::pin::Pin<
+    Box<dyn tokio_stream::Stream<Item = Box<dyn AnyEvent>> + Send + Unpin>,
+>;
+
+impl WorkflowHandler {
+    /// Wrap a fresh core [`CoreWorkflowHandler`], capturing its pre-subscribed
+    /// initial stream so the first `stream_events` subscriber sees every event
+    /// from the very first step.
+    fn new(mut handler: CoreWorkflowHandler) -> Arc<Self> {
+        let initial_stream: Option<PinnedEventStream> = handler
+            .take_initial_stream()
+            .map(|s| Box::pin(s) as PinnedEventStream);
+        Arc::new(Self {
+            inner: Arc::new(AsyncMutex::new(Some(handler))),
+            initial_stream: parking_lot::Mutex::new(initial_stream),
+        })
+    }
+
+    /// Borrow the inner handler for a control operation, erroring if it was
+    /// already consumed by [`result`](Self::result).
+    async fn with_handler<T>(
+        &self,
+        f: impl FnOnce(&CoreWorkflowHandler) -> Result<T, BlazenError>,
+    ) -> BlazenResult<T> {
+        let guard = self.inner.lock().await;
+        let handler = guard.as_ref().ok_or(BlazenError::Validation {
+            message: "WorkflowHandler already consumed by result()".into(),
+        })?;
+        f(handler)
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl WorkflowHandler {
+    /// Await the final workflow result, consuming the handler.
+    ///
+    /// # Errors
+    /// [`BlazenError::Validation`] if the handler was already consumed;
+    /// [`BlazenError::Workflow`] if the run failed.
+    pub async fn result(self: Arc<Self>) -> BlazenResult<WorkflowResult> {
+        let handler = {
+            let mut guard = self.inner.lock().await;
+            guard.take().ok_or(BlazenError::Validation {
+                message: "WorkflowHandler already consumed by result()".into(),
+            })?
+        };
+        core_handler_to_wire_result(handler).await
+    }
+
+    /// Pump intermediate events to `sink` until the workflow completes.
+    ///
+    /// Returns immediately; the pump runs on the shared Tokio runtime. The
+    /// first call consumes the pre-subscribed initial stream (so no events are
+    /// lost between `run_with_handler` and this call); subsequent calls
+    /// subscribe from the current point in time. `sink.on_close()` fires
+    /// exactly once when the stream ends.
+    ///
+    /// # Errors
+    /// [`BlazenError::Validation`] if the handler was already consumed.
+    pub async fn stream_events(
+        self: Arc<Self>,
+        sink: Arc<dyn WorkflowEventSink>,
+    ) -> BlazenResult<()> {
+        // Prefer the pre-subscribed initial stream on the first call so the
+        // very first step's events are not raced; fall back to a fresh
+        // subscription for later subscribers. Take from the (sync) parking_lot
+        // mutex and drop its guard BEFORE any `.await` so the returned future
+        // stays `Send`.
+        let initial = self.initial_stream.lock().take();
+        let stream: PinnedEventStream = match initial {
+            Some(s) => s,
+            None => {
+                let guard = self.inner.lock().await;
+                let handler = guard.as_ref().ok_or(BlazenError::Validation {
+                    message: "WorkflowHandler already consumed by result()".into(),
+                })?;
+                Box::pin(handler.stream_events()) as PinnedEventStream
+            }
+        };
+        tokio::spawn(async move {
+            let mut stream = stream;
+            while let Some(event) = stream.next().await {
+                // The event loop sends a sentinel to mark stream end; consume
+                // it and stop rather than forwarding it to foreign code.
+                if event.event_type_id() == "blazen::StreamEnd" {
+                    break;
+                }
+                sink.on_event(any_event_to_wire(&*event));
+            }
+            sink.on_close();
+        });
+        Ok(())
+    }
+
+    /// Capture a resumable [`crate::persist::WorkflowCheckpoint`]-compatible
+    /// snapshot of the current workflow state, encoded as a JSON string.
+    ///
+    /// For a quiescent snapshot (no in-flight steps), call [`pause`](Self::pause)
+    /// first, then `snapshot()`, then optionally [`resume_in_place`](Self::resume_in_place)
+    /// or [`abort`](Self::abort).
+    ///
+    /// # Errors
+    /// [`BlazenError::Validation`] if the handler was already consumed;
+    /// [`BlazenError::Workflow`] if the event loop has already exited.
+    pub async fn snapshot(self: Arc<Self>) -> BlazenResult<String> {
+        let guard = self.inner.lock().await;
+        let handler = guard.as_ref().ok_or(BlazenError::Validation {
+            message: "WorkflowHandler already consumed by result()".into(),
+        })?;
+        let snap = handler.snapshot().await.map_err(BlazenError::from)?;
+        snap.to_json().map_err(BlazenError::from)
+    }
+
+    /// Snapshot the running aggregate [`TokenUsage`] for this run. Safe to
+    /// call at any point; matches `WorkflowResult` totals once `result()`
+    /// completes.
+    ///
+    /// # Errors
+    /// [`BlazenError::Validation`] if the handler was already consumed.
+    pub async fn usage_total(self: Arc<Self>) -> BlazenResult<TokenUsage> {
+        let guard = self.inner.lock().await;
+        let handler = guard.as_ref().ok_or(BlazenError::Validation {
+            message: "WorkflowHandler already consumed by result()".into(),
+        })?;
+        Ok(TokenUsage::from(handler.usage_total().await))
+    }
+
+    /// Snapshot the running aggregate cost in USD for this run.
+    ///
+    /// # Errors
+    /// [`BlazenError::Validation`] if the handler was already consumed.
+    pub async fn cost_total_usd(self: Arc<Self>) -> BlazenResult<f64> {
+        let guard = self.inner.lock().await;
+        let handler = guard.as_ref().ok_or(BlazenError::Validation {
+            message: "WorkflowHandler already consumed by result()".into(),
+        })?;
+        Ok(handler.cost_total_usd().await)
+    }
+
+    /// Park the event loop after the current step. The loop stays alive and
+    /// responsive to `resume_in_place`, `snapshot`, `respond_to_input`, and
+    /// `abort`.
+    ///
+    /// # Errors
+    /// [`BlazenError::Validation`] if the handler was already consumed;
+    /// [`BlazenError::Workflow`] if the event loop has already exited.
+    pub async fn pause(self: Arc<Self>) -> BlazenResult<()> {
+        self.with_handler(|h| h.pause().map_err(BlazenError::from))
+            .await
+    }
+
+    /// Resume a parked event loop.
+    ///
+    /// # Errors
+    /// [`BlazenError::Validation`] if the handler was already consumed;
+    /// [`BlazenError::Workflow`] if the event loop has already exited.
+    pub async fn resume_in_place(self: Arc<Self>) -> BlazenResult<()> {
+        self.with_handler(|h| h.resume_in_place().map_err(BlazenError::from))
+            .await
+    }
+
+    /// Deliver a human-in-the-loop response to a workflow that auto-parked on
+    /// an `InputRequestEvent`. The loop unparks and routes the response.
+    ///
+    /// # Errors
+    /// [`BlazenError::Validation`] if the handler was already consumed or
+    /// `response.response_json` is not valid JSON; [`BlazenError::Workflow`]
+    /// if the event loop has already exited.
+    pub async fn respond_to_input(self: Arc<Self>, response: InputResponse) -> BlazenResult<()> {
+        let parsed: serde_json::Value = serde_json::from_str(&response.response_json)?;
+        let core_response = blazen_events::InputResponseEvent {
+            request_id: response.request_id,
+            response: parsed,
+        };
+        self.with_handler(move |h| h.respond_to_input(core_response).map_err(BlazenError::from))
+            .await
+    }
+
+    /// Tear down the event loop. Any pending `result()` resolves with a
+    /// workflow error.
+    ///
+    /// # Errors
+    /// [`BlazenError::Validation`] if the handler was already consumed;
+    /// [`BlazenError::Workflow`] if the event loop has already exited.
+    pub async fn abort(self: Arc<Self>) -> BlazenResult<()> {
+        self.with_handler(|h| h.abort().map_err(BlazenError::from))
+            .await
     }
 }
 

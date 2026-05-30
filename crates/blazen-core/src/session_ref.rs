@@ -214,6 +214,21 @@ pub struct SessionRefRegistry {
     /// live lane, the serializable lane, or both, plus lifetime and
     /// remote metadata.
     inner: RwLock<HashMap<RegistryKey, RegistryEntry>>,
+    /// Synchronous fast-lane mirror used by bindings that must resolve a
+    /// live ref from a **non-async** context (e.g. the napi `ToNapiValue`
+    /// conversion that builds a JS step-handler argument, which runs on
+    /// the v8 main thread where awaiting the async [`RwLock`] above is not
+    /// possible).
+    ///
+    /// This is **not** a parallel store: it is a `std::sync::Mutex`
+    /// secondary index inside the *same* `SessionRefRegistry` holding the
+    /// *same* `Arc`s that the async [`Self::inner`] map holds. Entries are
+    /// mirrored here on [`Self::insert_native_sync`] and removed on
+    /// [`Self::remove_native_sync`], `drain`, and context-drop purges so
+    /// the two views never diverge. Only the live-JS-object passthrough
+    /// path (`blazen-node` / `blazen-wasm-sdk`) uses it; all other lanes
+    /// go through the async map exclusively.
+    native_sync: std::sync::Mutex<HashMap<RegistryKey, AnyArc>>,
 }
 
 impl std::fmt::Debug for SessionRefRegistry {
@@ -273,6 +288,69 @@ impl SessionRefRegistry {
             },
         );
         Ok(key)
+    }
+
+    /// Insert a live ref AND mirror it into the synchronous native
+    /// fast-lane so it can be resolved later from a non-async context via
+    /// [`Self::get_native_sync`].
+    ///
+    /// Used by the live-JS-object passthrough bridge in `blazen-node` /
+    /// `blazen-wasm-sdk`: the value is stored in the async [`Self::inner`]
+    /// map (so snapshot / pause / lifetime accounting treats it like any
+    /// other live ref) **and** in the sync mirror (so the inbound
+    /// `ToNapiValue` conversion can hand the same JS object back without
+    /// awaiting). Both views hold the same `Arc`.
+    ///
+    /// # Errors
+    /// Returns [`SessionRefError::CapacityExceeded`] if the registry already
+    /// holds [`MAX_SESSION_REFS_PER_RUN`] entries.
+    ///
+    /// # Panics
+    /// Panics only if the internal native-lane mutex is poisoned (i.e. a
+    /// thread previously panicked while holding it), which cannot happen in
+    /// normal operation.
+    pub async fn insert_native_sync(&self, value: AnyArc) -> Result<RegistryKey, SessionRefError> {
+        let key = self
+            .insert_arc_with_lifetime(Arc::clone(&value), RefLifetime::default())
+            .await?;
+        self.native_sync
+            .lock()
+            .expect("native_sync mutex poisoned")
+            .insert(key, value);
+        Ok(key)
+    }
+
+    /// Synchronously resolve a live ref previously stored via
+    /// [`Self::insert_native_sync`]. Returns `None` if the key is unknown
+    /// or has already been removed.
+    ///
+    /// This intentionally does **not** touch the async [`Self::inner`]
+    /// `RwLock`, so it is safe to call from the v8 main thread inside a
+    /// napi `ToNapiValue` conversion where awaiting would deadlock.
+    ///
+    /// # Panics
+    /// Panics only if the internal native-lane mutex is poisoned.
+    #[must_use]
+    pub fn get_native_sync(&self, key: RegistryKey) -> Option<AnyArc> {
+        self.native_sync
+            .lock()
+            .expect("native_sync mutex poisoned")
+            .get(&key)
+            .cloned()
+    }
+
+    /// Synchronously remove a native-lane entry (mirror only). The async
+    /// [`Self::inner`] entry, if still present, is left to the normal
+    /// context-drop / drain purge; callers that need both gone should also
+    /// call [`Self::remove`]. Returns the removed `Arc` if present.
+    ///
+    /// # Panics
+    /// Panics only if the internal native-lane mutex is poisoned.
+    pub fn remove_native_sync(&self, key: RegistryKey) -> Option<AnyArc> {
+        self.native_sync
+            .lock()
+            .expect("native_sync mutex poisoned")
+            .remove(&key)
     }
 
     /// Insert any `Send + Sync + 'static` value, wrapping it in an `Arc` for
@@ -581,6 +659,10 @@ impl SessionRefRegistry {
         let mut g = self.inner.write().await;
         let n = g.len();
         g.clear();
+        self.native_sync
+            .lock()
+            .expect("native_sync mutex poisoned")
+            .clear();
         n
     }
 
@@ -635,6 +717,10 @@ impl SessionRefRegistry {
         let mut count = 0;
         {
             let mut g = self.inner.write().await;
+            let mut native = self
+                .native_sync
+                .lock()
+                .expect("native_sync mutex poisoned");
             for key in to_remove {
                 // Remove the whole unified entry. Count the entry itself
                 // (not just its live half) so pure serializable-bytes
@@ -642,6 +728,8 @@ impl SessionRefRegistry {
                 if g.remove(&key).is_some() {
                     count += 1;
                 }
+                // Keep the sync native fast-lane mirror in lockstep.
+                native.remove(&key);
             }
         }
         count
@@ -1058,6 +1146,37 @@ mod tests {
         let key = reg.insert(42_i32).await.unwrap();
         let got = reg.get::<i32>(key).await.unwrap();
         assert_eq!(*got, 42);
+    }
+
+    #[tokio::test]
+    async fn native_sync_lane_mirrors_async_map() {
+        let reg = SessionRefRegistry::new();
+        let key = reg.insert_native_sync(Arc::new(99_u64)).await.unwrap();
+
+        // Resolvable synchronously (no await) AND visible in the async map.
+        assert_eq!(*reg.get_native_sync(key).unwrap().downcast::<u64>().unwrap(), 99);
+        assert!(reg.get_any(key).await.is_some());
+        assert_eq!(reg.len().await, 1);
+    }
+
+    #[tokio::test]
+    async fn drain_clears_native_sync_lane() {
+        let reg = SessionRefRegistry::new();
+        let key = reg.insert_native_sync(Arc::new(1_u8)).await.unwrap();
+        assert_eq!(reg.drain().await, 1);
+        assert!(reg.get_native_sync(key).is_none());
+        assert!(reg.get_any(key).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn context_drop_purge_clears_native_sync_lane() {
+        let reg = SessionRefRegistry::new();
+        // Default lifetime is UntilContextDrop, purged when owns_registry.
+        let key = reg.insert_native_sync(Arc::new(5_i16)).await.unwrap();
+        let purged = reg.clear_on_context_drop(true).await;
+        assert_eq!(purged, 1);
+        assert!(reg.get_native_sync(key).is_none());
+        assert!(reg.get_any(key).await.is_none());
     }
 
     #[tokio::test]

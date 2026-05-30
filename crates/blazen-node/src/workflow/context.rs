@@ -111,7 +111,7 @@ impl JsContext {
     ///
     /// The event will be routed to any step whose `eventTypes` list includes
     /// its event type. The event object must have a `type` field.
-    #[napi(js_name = "sendEvent")]
+    #[napi(js_name = "sendEvent", ts_args_type = "event: Event")]
     pub async fn send_event(&self, event: serde_json::Value) -> Result<()> {
         let any_event = js_value_to_any_event(&event);
 
@@ -128,7 +128,7 @@ impl JsContext {
     /// Consumers that subscribed via streaming will receive this event.
     /// Unlike `sendEvent`, this does NOT route the event through the
     /// internal step registry.
-    #[napi(js_name = "writeEventToStream")]
+    #[napi(js_name = "writeEventToStream", ts_args_type = "event: Event")]
     pub async fn write_event_to_stream(&self, event: serde_json::Value) -> Result<()> {
         let any_event = js_value_to_any_event(&event);
 

@@ -125,7 +125,10 @@ impl JsPipelineHandler {
     /// Subscribe to intermediate events from pipeline stages.
     /// The callback `(eventJson) => void` is invoked for each `PipelineEvent`;
     /// `eventJson` is a JS object with shape `{ stageName, branchName, workflowRunId, event }`.
-    #[napi(js_name = "streamEvents")]
+    #[napi(
+        js_name = "streamEvents",
+        ts_args_type = "onEvent: (event: { stageName: string; branchName: string; workflowRunId: string; event: Event }) => void"
+    )]
     pub async fn stream_events(&self, on_event: StreamCallbackTsfn) -> Result<()> {
         let guard = self.inner.lock().await;
         let handler = guard.as_ref().ok_or_else(|| {

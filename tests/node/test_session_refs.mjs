@@ -1,20 +1,127 @@
 /**
- * Regression tests for the Node state/session namespace API.
+ * Regression tests for the Node state/session namespace API and for the
+ * live-JS-object passthrough that preserves class-instance identity across
+ * workflow step hops.
  *
- * These mirror the Python `test_session_refs.py` parity surface, with
- * the important caveat that the Node bindings do NOT currently
- * preserve JS class-instance identity through event payloads or the
- * session namespace — values are routed through `serde_json::Value`
- * because napi-rs's `Reference<T>` is not `Send` (its `Drop` must run
- * on the v8 main thread), so a cross-thread live-ref registry would
- * need a different threading model. The session namespace therefore
- * focuses on its *functional* distinction from state: session values
- * are excluded from snapshots, state values are not.
+ * These mirror the Python `test_session_refs.py` parity surface. JS object
+ * identity IS preserved through event payloads: the object a step returns
+ * is the same object the next matching step receives, with its prototype,
+ * methods, and non-JSON fields intact. This is implemented via the unified
+ * `SessionRefRegistry` + a `__blazen_native_ref__` marker — the live object
+ * stays on the v8 heap (napi's `Reference<T>` is `!Send`), and only the
+ * registry-key UUID crosses into Rust (see
+ * `crates/blazen-node/src/workflow/native_passthrough.rs`).
+ *
+ * The session namespace also has a *functional* distinction from state:
+ * session values are excluded from snapshots, state values are not.
  */
 
 import test from "ava";
 
 import { Workflow } from "../../crates/blazen-node/index.js";
+
+// =========================================================================
+// Live-JS-object identity passthrough across step hops
+// =========================================================================
+
+test("identity passthrough · class instance survives a step hop with identity, prototype, and mutations", async (t) => {
+  class Sentinel {
+    constructor(v) {
+      this.v = v;
+      this.touched = [];
+    }
+    greet() {
+      return `hi ${this.v}`;
+    }
+  }
+
+  let firstObj = null;
+  const wf = new Workflow("identity");
+
+  wf.addStep("make", ["blazen::StartEvent"], async (event) => {
+    const s = new Sentinel(event.who);
+    s.touched.push("make");
+    firstObj = s;
+    return { type: "MidEvent", payload: s };
+  });
+
+  wf.addStep("consume", ["MidEvent"], async (event) => {
+    // The nested live object is the SAME instance the previous step made.
+    event.payload.touched.push("consume");
+    return {
+      type: "blazen::StopEvent",
+      result: {
+        sameInstance: event.payload === firstObj,
+        isSentinel: event.payload instanceof Sentinel,
+        greet: event.payload.greet(),
+        touched: event.payload.touched,
+      },
+    };
+  });
+
+  const result = await wf.run({ who: "world" });
+  t.is(result.data.sameInstance, true);
+  t.is(result.data.isSentinel, true);
+  t.is(result.data.greet, "hi world");
+  t.deepEqual(result.data.touched, ["make", "consume"]);
+  // The mutation made in the consuming step is visible on the original.
+  t.deepEqual(firstObj.touched, ["make", "consume"]);
+});
+
+test("identity passthrough · fan-out preserves identity for each event, including own-property methods", async (t) => {
+  const wf = new Workflow("fan");
+  wf.addStep("fan", ["blazen::StartEvent"], async () => {
+    // `live.method` is an OWN property (a function) — not JSON-serializable.
+    // The live object must still survive even though its JSON projection
+    // cannot represent the function.
+    const a = { type: "T", tag: "a", live: { method: () => 1 } };
+    const b = { type: "T", tag: "b", live: { method: () => 2 } };
+    return [a, b];
+  });
+
+  const seen = [];
+  wf.addStep("collect", ["T"], async (event) => {
+    seen.push(event.live.method());
+    if (seen.length === 2) {
+      return {
+        type: "blazen::StopEvent",
+        result: { seen: seen.slice().sort((x, y) => x - y) },
+      };
+    }
+    return null;
+  });
+
+  const result = await wf.run({});
+  t.deepEqual(result.data.seen, [1, 2]);
+});
+
+test("identity passthrough · internal native-ref marker never leaks into events or results", async (t) => {
+  const wf = new Workflow("leak");
+  let midKeys = null;
+  let midHadMarker = null;
+
+  wf.addStep("a", ["blazen::StartEvent"], async (event) => {
+    return { type: "Mid", n: event.n + 1 };
+  });
+  wf.addStep("b", ["Mid"], async (event) => {
+    midKeys = Object.keys(event);
+    midHadMarker = Object.prototype.hasOwnProperty.call(
+      event,
+      "__blazen_native_ref__",
+    );
+    return { type: "blazen::StopEvent", result: { n: event.n } };
+  });
+
+  const result = await wf.run({ n: 1 });
+  t.is(result.data.n, 2);
+  t.is(midHadMarker, false);
+  t.deepEqual(midKeys.sort(), ["n", "type"]);
+  // The marker must not surface on the result payload either.
+  t.is(
+    Object.prototype.hasOwnProperty.call(result.data, "__blazen_native_ref__"),
+    false,
+  );
+});
 
 // =========================================================================
 // ctx.state namespace

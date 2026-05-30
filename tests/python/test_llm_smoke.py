@@ -58,8 +58,7 @@ async def test_openrouter_in_workflow():
         return StopEvent(result={"answer": response["content"]})
 
     wf = Workflow("llm-smoke", [ask_llm])
-    handler = await wf.run(question="What is 3+3?")
-    result = await handler.result()
+    result = await wf.run(question="What is 3+3?")
 
     assert result.result["answer"] is not None
     assert "6" in result.result["answer"]

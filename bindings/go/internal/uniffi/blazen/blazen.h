@@ -1448,6 +1448,34 @@ static void call_UniffiCallbackInterfaceStepHandlerMethod0(
 
 
 #endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_WORKFLOW_EVENT_SINK_METHOD0
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_WORKFLOW_EVENT_SINK_METHOD0
+typedef void (*UniffiCallbackInterfaceWorkflowEventSinkMethod0)(uint64_t uniffi_handle, RustBuffer event, void* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceWorkflowEventSinkMethod0(
+				UniffiCallbackInterfaceWorkflowEventSinkMethod0 cb, uint64_t uniffi_handle, RustBuffer event, void* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, event, uniffi_out_return, callStatus );
+}
+
+
+#endif
+#ifndef UNIFFI_FFIDEF_CALLBACK_INTERFACE_WORKFLOW_EVENT_SINK_METHOD1
+#define UNIFFI_FFIDEF_CALLBACK_INTERFACE_WORKFLOW_EVENT_SINK_METHOD1
+typedef void (*UniffiCallbackInterfaceWorkflowEventSinkMethod1)(uint64_t uniffi_handle, void* uniffi_out_return, RustCallStatus* callStatus );
+
+// Making function static workaround:
+// https://github.com/golang/go/issues/11263
+static void call_UniffiCallbackInterfaceWorkflowEventSinkMethod1(
+				UniffiCallbackInterfaceWorkflowEventSinkMethod1 cb, uint64_t uniffi_handle, void* uniffi_out_return, RustCallStatus* callStatus )
+{
+	return cb(uniffi_handle, uniffi_out_return, callStatus );
+}
+
+
+#endif
 #ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_TOOL_HANDLER
 #define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_TOOL_HANDLER
 typedef struct UniffiVTableCallbackInterfaceToolHandler {
@@ -1675,6 +1703,16 @@ typedef struct UniffiVTableCallbackInterfaceStepHandler {
     UniffiCallbackInterfaceClone uniffiClone;
     UniffiCallbackInterfaceStepHandlerMethod0 invoke;
 } UniffiVTableCallbackInterfaceStepHandler;
+
+#endif
+#ifndef UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_WORKFLOW_EVENT_SINK
+#define UNIFFI_FFIDEF_V_TABLE_CALLBACK_INTERFACE_WORKFLOW_EVENT_SINK
+typedef struct UniffiVTableCallbackInterfaceWorkflowEventSink {
+    UniffiCallbackInterfaceFree uniffiFree;
+    UniffiCallbackInterfaceClone uniffiClone;
+    UniffiCallbackInterfaceWorkflowEventSinkMethod0 onEvent;
+    UniffiCallbackInterfaceWorkflowEventSinkMethod1 onClose;
+} UniffiVTableCallbackInterfaceWorkflowEventSink;
 
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_AGENT
@@ -4416,6 +4454,16 @@ uint64_t uniffi_blazen_uniffi_fn_method_workflow_run(uint64_t ptr, RustBuffer in
 RustBuffer uniffi_blazen_uniffi_fn_method_workflow_run_blocking(uint64_t ptr, RustBuffer input_json, RustCallStatus *out_status
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOW_RUN_WITH_HANDLER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOW_RUN_WITH_HANDLER
+uint64_t uniffi_blazen_uniffi_fn_method_workflow_run_with_handler(uint64_t ptr, RustBuffer input_json
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOW_RUN_WITH_HANDLER_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOW_RUN_WITH_HANDLER_BLOCKING
+uint64_t uniffi_blazen_uniffi_fn_method_workflow_run_with_handler_blocking(uint64_t ptr, RustBuffer input_json, RustCallStatus *out_status
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOW_STEP_NAMES
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOW_STEP_NAMES
 RustBuffer uniffi_blazen_uniffi_fn_method_workflow_step_names(uint64_t ptr, RustCallStatus *out_status
@@ -4454,6 +4502,86 @@ uint64_t uniffi_blazen_uniffi_fn_method_workflowbuilder_step_timeout_ms(uint64_t
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWBUILDER_TIMEOUT_MS
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWBUILDER_TIMEOUT_MS
 uint64_t uniffi_blazen_uniffi_fn_method_workflowbuilder_timeout_ms(uint64_t ptr, uint64_t millis, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_WORKFLOWEVENTSINK
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_WORKFLOWEVENTSINK
+uint64_t uniffi_blazen_uniffi_fn_clone_workfloweventsink(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_WORKFLOWEVENTSINK
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_WORKFLOWEVENTSINK
+void uniffi_blazen_uniffi_fn_free_workfloweventsink(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_INIT_CALLBACK_VTABLE_WORKFLOWEVENTSINK
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_INIT_CALLBACK_VTABLE_WORKFLOWEVENTSINK
+void uniffi_blazen_uniffi_fn_init_callback_vtable_workfloweventsink(UniffiVTableCallbackInterfaceWorkflowEventSink* vtable
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWEVENTSINK_ON_EVENT
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWEVENTSINK_ON_EVENT
+void uniffi_blazen_uniffi_fn_method_workfloweventsink_on_event(uint64_t ptr, RustBuffer event, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWEVENTSINK_ON_CLOSE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWEVENTSINK_ON_CLOSE
+void uniffi_blazen_uniffi_fn_method_workfloweventsink_on_close(uint64_t ptr, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_WORKFLOWHANDLER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_CLONE_WORKFLOWHANDLER
+uint64_t uniffi_blazen_uniffi_fn_clone_workflowhandler(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_WORKFLOWHANDLER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FREE_WORKFLOWHANDLER
+void uniffi_blazen_uniffi_fn_free_workflowhandler(uint64_t handle, RustCallStatus *out_status
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_ABORT
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_ABORT
+uint64_t uniffi_blazen_uniffi_fn_method_workflowhandler_abort(uint64_t ptr
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_COST_TOTAL_USD
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_COST_TOTAL_USD
+uint64_t uniffi_blazen_uniffi_fn_method_workflowhandler_cost_total_usd(uint64_t ptr
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_PAUSE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_PAUSE
+uint64_t uniffi_blazen_uniffi_fn_method_workflowhandler_pause(uint64_t ptr
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_RESPOND_TO_INPUT
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_RESPOND_TO_INPUT
+uint64_t uniffi_blazen_uniffi_fn_method_workflowhandler_respond_to_input(uint64_t ptr, RustBuffer response
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_RESULT
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_RESULT
+uint64_t uniffi_blazen_uniffi_fn_method_workflowhandler_result(uint64_t ptr
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_RESUME_IN_PLACE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_RESUME_IN_PLACE
+uint64_t uniffi_blazen_uniffi_fn_method_workflowhandler_resume_in_place(uint64_t ptr
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_SNAPSHOT
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_SNAPSHOT
+uint64_t uniffi_blazen_uniffi_fn_method_workflowhandler_snapshot(uint64_t ptr
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_STREAM_EVENTS
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_STREAM_EVENTS
+uint64_t uniffi_blazen_uniffi_fn_method_workflowhandler_stream_events(uint64_t ptr, uint64_t sink
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_USAGE_TOTAL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_METHOD_WORKFLOWHANDLER_USAGE_TOTAL
+uint64_t uniffi_blazen_uniffi_fn_method_workflowhandler_usage_total(uint64_t ptr
 );
 #endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_FN_FUNC_VERSION
@@ -7330,6 +7458,18 @@ uint16_t uniffi_blazen_uniffi_checksum_method_workflow_run_blocking(void
     
 );
 #endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOW_RUN_WITH_HANDLER
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOW_RUN_WITH_HANDLER
+uint16_t uniffi_blazen_uniffi_checksum_method_workflow_run_with_handler(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOW_RUN_WITH_HANDLER_BLOCKING
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOW_RUN_WITH_HANDLER_BLOCKING
+uint16_t uniffi_blazen_uniffi_checksum_method_workflow_run_with_handler_blocking(void
+    
+);
+#endif
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOW_STEP_NAMES
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOW_STEP_NAMES
 uint16_t uniffi_blazen_uniffi_checksum_method_workflow_step_names(void
@@ -7357,6 +7497,72 @@ uint16_t uniffi_blazen_uniffi_checksum_method_workflowbuilder_step_timeout_ms(vo
 #ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWBUILDER_TIMEOUT_MS
 #define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWBUILDER_TIMEOUT_MS
 uint16_t uniffi_blazen_uniffi_checksum_method_workflowbuilder_timeout_ms(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWEVENTSINK_ON_EVENT
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWEVENTSINK_ON_EVENT
+uint16_t uniffi_blazen_uniffi_checksum_method_workfloweventsink_on_event(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWEVENTSINK_ON_CLOSE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWEVENTSINK_ON_CLOSE
+uint16_t uniffi_blazen_uniffi_checksum_method_workfloweventsink_on_close(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_ABORT
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_ABORT
+uint16_t uniffi_blazen_uniffi_checksum_method_workflowhandler_abort(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_COST_TOTAL_USD
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_COST_TOTAL_USD
+uint16_t uniffi_blazen_uniffi_checksum_method_workflowhandler_cost_total_usd(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_PAUSE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_PAUSE
+uint16_t uniffi_blazen_uniffi_checksum_method_workflowhandler_pause(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_RESPOND_TO_INPUT
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_RESPOND_TO_INPUT
+uint16_t uniffi_blazen_uniffi_checksum_method_workflowhandler_respond_to_input(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_RESULT
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_RESULT
+uint16_t uniffi_blazen_uniffi_checksum_method_workflowhandler_result(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_RESUME_IN_PLACE
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_RESUME_IN_PLACE
+uint16_t uniffi_blazen_uniffi_checksum_method_workflowhandler_resume_in_place(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_SNAPSHOT
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_SNAPSHOT
+uint16_t uniffi_blazen_uniffi_checksum_method_workflowhandler_snapshot(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_STREAM_EVENTS
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_STREAM_EVENTS
+uint16_t uniffi_blazen_uniffi_checksum_method_workflowhandler_stream_events(void
+    
+);
+#endif
+#ifndef UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_USAGE_TOTAL
+#define UNIFFI_FFIDEF_UNIFFI_BLAZEN_UNIFFI_CHECKSUM_METHOD_WORKFLOWHANDLER_USAGE_TOTAL
+uint16_t uniffi_blazen_uniffi_checksum_method_workflowhandler_usage_total(void
     
 );
 #endif
@@ -7820,6 +8026,10 @@ uint64_t blazen_uniffi_streaming_cgo_dispatchCallbackInterfaceCompletionStreamSi
  void blazen_uniffi_workflow_cgo_dispatchCallbackInterfaceStepHandlerMethod0(uint64_t uniffi_handle, RustBuffer event, UniffiForeignFutureCompleteRustBuffer uniffi_future_callback, uint64_t uniffi_callback_data, UniffiForeignFutureDroppedCallbackStruct* uniffi_out_dropped_callback);
  void blazen_uniffi_workflow_cgo_dispatchCallbackInterfaceStepHandlerFree(uint64_t handle);
 uint64_t blazen_uniffi_workflow_cgo_dispatchCallbackInterfaceStepHandlerClone(uint64_t handle);
+ void blazen_uniffi_workflow_cgo_dispatchCallbackInterfaceWorkflowEventSinkMethod0(uint64_t uniffi_handle, RustBuffer event, void* uniffi_out_return, RustCallStatus* callStatus );
+ void blazen_uniffi_workflow_cgo_dispatchCallbackInterfaceWorkflowEventSinkMethod1(uint64_t uniffi_handle, void* uniffi_out_return, RustCallStatus* callStatus );
+ void blazen_uniffi_workflow_cgo_dispatchCallbackInterfaceWorkflowEventSinkFree(uint64_t handle);
+uint64_t blazen_uniffi_workflow_cgo_dispatchCallbackInterfaceWorkflowEventSinkClone(uint64_t handle);
 
 void blazen_uniffiFutureContinuationCallback(uint64_t, int8_t);
 void blazen_uniffiFreeGorutine(uint64_t);

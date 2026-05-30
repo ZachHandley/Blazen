@@ -129,7 +129,10 @@ pub use concrete::three_d::{
     AnimateRequest, AnimateResult, PbrMaps, RefineRequest, RefineResult, RefineStats, RigRequest,
     RigResult, TexturizeRequest, TexturizeResult,
 };
-pub use workflow::{Event, StepHandler, StepOutput, Workflow, WorkflowBuilder, WorkflowResult};
+pub use workflow::{
+    Event, InputResponse, StepHandler, StepOutput, Workflow, WorkflowBuilder, WorkflowEventSink,
+    WorkflowHandler, WorkflowResult,
+};
 
 /// Returns the `blazen-uniffi` crate version baked in at compile time.
 ///
