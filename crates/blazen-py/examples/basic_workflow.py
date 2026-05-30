@@ -67,10 +67,8 @@ async def main() -> None:
     wf = Workflow("greeting-pipeline", [parse_input, transform, greet])
 
     # Run the workflow. Keyword arguments become the StartEvent payload.
-    handler = await wf.run(name="Alice", style="formal")
-
-    # Await the final StopEvent.
-    result = await handler.result()
+    # await wf.run(...) now resolves directly to a WorkflowResult.
+    result = await wf.run(name="Alice", style="formal")
 
     print("Workflow complete!")
     print(f"  Result: {result.to_dict()}")

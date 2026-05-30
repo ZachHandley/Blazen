@@ -70,7 +70,7 @@ impl WasmDynamicEvent {
         let data: serde_json::Value = serde_wasm_bindgen::from_value(data)
             .map_err(|e| JsValue::from_str(&format!("invalid event data: {e}")))?;
         Ok(Self {
-            inner: DynamicEvent { event_type, data },
+            inner: DynamicEvent::from_json(event_type, data),
         })
     }
 
@@ -239,10 +239,7 @@ pub fn register_event_deserializer(name: String, callback: js_sys::Function) {
 /// of the engine uses.
 fn native_trampoline(value: serde_json::Value) -> Option<Box<dyn AnyEvent>> {
     let event_type = CURRENT_EVENT_TYPE.with(|slot| slot.borrow().clone())?;
-    Some(Box::new(DynamicEvent {
-        event_type,
-        data: value,
-    }))
+    Some(Box::new(DynamicEvent::from_json(event_type, value)))
 }
 
 /// Attempt to deserialize a JSON string into a JS event object.

@@ -78,10 +78,10 @@ async fn test_e2e_multi_step_dynamic_pipeline() {
                 let start = event.as_any().downcast_ref::<StartEvent>().unwrap().clone();
                 let text = start.data["text"].as_str().unwrap_or_default().to_string();
 
-                Ok(StepOutput::Single(Box::new(DynamicEvent {
-                    event_type: "AnalyzeEvent".to_string(),
-                    data: serde_json::json!({"text": text, "word_count": text.split_whitespace().count()}),
-                })))
+                Ok(StepOutput::Single(Box::new(DynamicEvent::from_json(
+                    "AnalyzeEvent".to_string(),
+                    serde_json::json!({"text": text, "word_count": text.split_whitespace().count()}),
+                ))))
             })
         }),
         max_concurrency: 1,
@@ -100,14 +100,14 @@ async fn test_e2e_multi_step_dynamic_pipeline() {
                 let text = json["text"].as_str().unwrap_or_default();
                 let word_count = json["word_count"].as_u64().unwrap_or(0);
 
-                Ok(StepOutput::Single(Box::new(DynamicEvent {
-                    event_type: "EnrichEvent".to_string(),
-                    data: serde_json::json!({
+                Ok(StepOutput::Single(Box::new(DynamicEvent::from_json(
+                    "EnrichEvent".to_string(),
+                    serde_json::json!({
                         "text": text.to_uppercase(),
                         "word_count": word_count,
                         "enriched": true,
                     }),
-                })))
+                ))))
             })
         }),
         max_concurrency: 1,
@@ -177,15 +177,15 @@ async fn test_e2e_branching_dynamic_events() {
                 let priority = start.data["priority"].as_str().unwrap_or("low");
 
                 if priority == "high" {
-                    Ok(StepOutput::Single(Box::new(DynamicEvent {
-                        event_type: "HighPriority".to_string(),
-                        data: start.data.clone(),
-                    })))
+                    Ok(StepOutput::Single(Box::new(DynamicEvent::from_json(
+                        "HighPriority".to_string(),
+                        start.data.clone(),
+                    ))))
                 } else {
-                    Ok(StepOutput::Single(Box::new(DynamicEvent {
-                        event_type: "LowPriority".to_string(),
-                        data: start.data.clone(),
-                    })))
+                    Ok(StepOutput::Single(Box::new(DynamicEvent::from_json(
+                        "LowPriority".to_string(),
+                        start.data.clone(),
+                    ))))
                 }
             })
         }),
@@ -349,10 +349,10 @@ async fn test_e2e_streaming_events() {
 
                 // Publish progress events to external stream.
                 for i in 0..3 {
-                    ctx.write_event_to_stream(DynamicEvent {
-                        event_type: "Progress".to_string(),
-                        data: serde_json::json!({"step": i}),
-                    })
+                    ctx.write_event_to_stream(DynamicEvent::from_json(
+                        "Progress".to_string(),
+                        serde_json::json!({"step": i}),
+                    ))
                     .await;
                 }
 
@@ -534,14 +534,14 @@ async fn test_e2e_fan_out() {
         handler: Arc::new(|_event: Box<dyn AnyEvent>, _ctx: Context| {
             Box::pin(async move {
                 Ok(StepOutput::Multiple(vec![
-                    Box::new(DynamicEvent {
-                        event_type: "FanA".to_string(),
-                        data: serde_json::json!({"branch": "a"}),
-                    }),
-                    Box::new(DynamicEvent {
-                        event_type: "FanB".to_string(),
-                        data: serde_json::json!({"branch": "b"}),
-                    }),
+                    Box::new(DynamicEvent::from_json(
+                        "FanA".to_string(),
+                        serde_json::json!({"branch": "a"}),
+                    )),
+                    Box::new(DynamicEvent::from_json(
+                        "FanB".to_string(),
+                        serde_json::json!({"branch": "b"}),
+                    )),
                 ]))
             })
         }),

@@ -12,8 +12,11 @@
 
 use std::any::Any;
 use std::fmt::Debug;
+use std::sync::{Arc, OnceLock};
 
 use chrono::{DateTime, Utc};
+use serde::de::{self, Deserializer, MapAccess, Visitor};
+use serde::ser::{SerializeStruct, Serializer};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -53,6 +56,17 @@ pub trait Event: Send + Sync + Debug + Clone + 'static {
     /// Serialize to JSON for cross-language boundaries and persistence.
     #[must_use]
     fn to_json(&self) -> serde_json::Value;
+
+    /// Recover the live, in-memory native handle backing this event, if any.
+    ///
+    /// Most events have no native handle and return `None`. Dynamic events
+    /// produced by foreign language bindings may carry a live object (e.g. a
+    /// `Py<PyAny>`) so the binding can recover the original instance without a
+    /// `DynamicEvent` downcast or a JSON round-trip.
+    #[must_use]
+    fn native_handle(&self) -> Option<Arc<dyn Any + Send + Sync>> {
+        None
+    }
 }
 
 /// Type-erased event for the internal event queue.
@@ -72,6 +86,10 @@ pub trait AnyEvent: Send + Sync + Debug {
     /// Serialize to JSON for cross-language boundaries and persistence.
     #[must_use]
     fn to_json(&self) -> serde_json::Value;
+
+    /// Recover the live, in-memory native handle backing this event, if any.
+    #[must_use]
+    fn native_handle(&self) -> Option<Arc<dyn Any + Send + Sync>>;
 }
 
 // Blanket implementation: anything that is `Event + Serialize` is `AnyEvent`.
@@ -93,6 +111,10 @@ where
 
     fn to_json(&self) -> serde_json::Value {
         Event::to_json(self)
+    }
+
+    fn native_handle(&self) -> Option<Arc<dyn Any + Send + Sync>> {
+        Event::native_handle(self)
     }
 }
 
@@ -375,16 +397,167 @@ pub fn intern_event_type(name: &str) -> &'static str {
 // DynamicEvent
 // ---------------------------------------------------------------------------
 
-/// A type-erased event that carries its type name and payload as JSON.
+/// Function signature for serializing a live native handle to JSON.
+///
+/// Registered once by the language binding (e.g. `blazen-py`) so that
+/// [`DynamicEvent::to_json`] can materialize a native-backed event WITHOUT
+/// `blazen-events` depending on `pyo3` (or any binding crate). Returns `None`
+/// if the handle cannot be serialized, in which case the cached `data` field is
+/// used as a fallback.
+pub type NativeSerializerFn = fn(&Arc<dyn Any + Send + Sync>) -> Option<serde_json::Value>;
+
+/// Process-wide hook used to serialize native event handles lazily.
+static NATIVE_SERIALIZER: OnceLock<NativeSerializerFn> = OnceLock::new();
+
+/// Register the process-wide native serializer hook.
+///
+/// Should be called once during binding initialization. Subsequent calls are
+/// ignored (the first registration wins).
+pub fn register_native_serializer(f: NativeSerializerFn) {
+    let _ = NATIVE_SERIALIZER.set(f);
+}
+
+/// A type-erased event that carries its type name and payload.
 ///
 /// Used to transport events defined in foreign language bindings (Python,
 /// TypeScript) through the Rust workflow engine.
-#[derive(Debug, Clone, Serialize, Deserialize)]
+///
+/// A `DynamicEvent` may be backed by a live native object (`native`) instead of
+/// eagerly-computed JSON. When `native` is `Some`, the `data` field is NOT
+/// authoritative; JSON is computed lazily via [`DynamicEvent::to_json`] and
+/// cached in `cached_json`. When `native` is `None`, `data` is authoritative.
+///
+/// `Clone` is cheap: it bumps the `Arc`s for the native handle and the shared
+/// JSON cache rather than copying the underlying object.
+#[derive(Clone)]
 pub struct DynamicEvent {
     /// The event type identifier (e.g. `"AnalyzeEvent"`).
     pub event_type: String,
-    /// The event data as a JSON object.
+    /// The event data as JSON. Authoritative ONLY when `native` is `None`.
     pub data: serde_json::Value,
+    /// Live in-memory object backing this event (e.g. a `Py<PyAny>`).
+    ///
+    /// Skipped by serde; materialized to JSON lazily via the registered
+    /// [`NativeSerializerFn`].
+    pub native: Option<Arc<dyn Any + Send + Sync>>,
+    /// Lazily-filled JSON cache, computed from `native` on first `to_json`.
+    /// Shared across clones via `Arc`.
+    cached_json: Arc<OnceLock<serde_json::Value>>,
+}
+
+impl DynamicEvent {
+    /// Construct a `DynamicEvent` from an event type and JSON payload.
+    ///
+    /// No native handle is attached; `data` is authoritative.
+    #[must_use]
+    pub fn from_json(event_type: impl Into<String>, data: serde_json::Value) -> Self {
+        Self {
+            event_type: event_type.into(),
+            data,
+            native: None,
+            cached_json: Arc::new(OnceLock::new()),
+        }
+    }
+
+    /// Construct a `DynamicEvent` backed by a live native handle.
+    ///
+    /// `data` is left as `Null`; JSON is computed lazily from `native` on the
+    /// first call to [`DynamicEvent::to_json`].
+    #[must_use]
+    pub fn with_native(
+        event_type: impl Into<String>,
+        native: Arc<dyn Any + Send + Sync>,
+    ) -> Self {
+        Self {
+            event_type: event_type.into(),
+            data: serde_json::Value::Null,
+            native: Some(native),
+            cached_json: Arc::new(OnceLock::new()),
+        }
+    }
+}
+
+impl Debug for DynamicEvent {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DynamicEvent")
+            .field("event_type", &self.event_type)
+            .field("data", &self.data)
+            .finish()
+    }
+}
+
+impl Serialize for DynamicEvent {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        // Materialize native-backed events first so the wire payload is the
+        // real data, not the placeholder `Null`. Wire shape is exactly
+        // {event_type, data}.
+        let data = Event::to_json(self);
+        let mut state = serializer.serialize_struct("DynamicEvent", 2)?;
+        state.serialize_field("event_type", &self.event_type)?;
+        state.serialize_field("data", &data)?;
+        state.end()
+    }
+}
+
+impl<'de> Deserialize<'de> for DynamicEvent {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        #[derive(serde::Deserialize)]
+        #[serde(field_identifier, rename_all = "snake_case")]
+        enum Field {
+            EventType,
+            Data,
+        }
+
+        struct DynamicEventVisitor;
+
+        impl<'de> Visitor<'de> for DynamicEventVisitor {
+            type Value = DynamicEvent;
+
+            fn expecting(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str("struct DynamicEvent with fields event_type and data")
+            }
+
+            fn visit_map<A>(self, mut map: A) -> Result<DynamicEvent, A::Error>
+            where
+                A: MapAccess<'de>,
+            {
+                let mut event_type: Option<String> = None;
+                let mut data: Option<serde_json::Value> = None;
+                while let Some(key) = map.next_key::<Field>()? {
+                    match key {
+                        Field::EventType => {
+                            if event_type.is_some() {
+                                return Err(de::Error::duplicate_field("event_type"));
+                            }
+                            event_type = Some(map.next_value()?);
+                        }
+                        Field::Data => {
+                            if data.is_some() {
+                                return Err(de::Error::duplicate_field("data"));
+                            }
+                            data = Some(map.next_value()?);
+                        }
+                    }
+                }
+                let event_type =
+                    event_type.ok_or_else(|| de::Error::missing_field("event_type"))?;
+                let data = data.ok_or_else(|| de::Error::missing_field("data"))?;
+                Ok(DynamicEvent::from_json(event_type, data))
+            }
+        }
+
+        deserializer.deserialize_struct(
+            "DynamicEvent",
+            &["event_type", "data"],
+            DynamicEventVisitor,
+        )
+    }
 }
 
 impl Event for DynamicEvent {
@@ -411,7 +584,22 @@ impl Event for DynamicEvent {
     }
 
     fn to_json(&self) -> serde_json::Value {
-        self.data.clone()
+        match &self.native {
+            Some(native) => self
+                .cached_json
+                .get_or_init(|| {
+                    NATIVE_SERIALIZER
+                        .get()
+                        .and_then(|f| f(native))
+                        .unwrap_or_else(|| self.data.clone())
+                })
+                .clone(),
+            None => self.data.clone(),
+        }
+    }
+
+    fn native_handle(&self) -> Option<Arc<dyn Any + Send + Sync>> {
+        self.native.clone()
     }
 }
 
@@ -501,10 +689,7 @@ mod tests {
 
     #[test]
     fn dynamic_event_roundtrip() {
-        let evt = DynamicEvent {
-            event_type: "MyEvent".to_owned(),
-            data: serde_json::json!({"key": "value"}),
-        };
+        let evt = DynamicEvent::from_json("MyEvent", serde_json::json!({"key": "value"}));
         let json = Event::to_json(&evt);
         // DynamicEvent::to_json() now returns the flat data directly.
         assert_eq!(json["key"], "value");
@@ -512,10 +697,7 @@ mod tests {
 
     #[test]
     fn dynamic_event_type_id() {
-        let evt = DynamicEvent {
-            event_type: "CustomEvent".to_owned(),
-            data: serde_json::json!({}),
-        };
+        let evt = DynamicEvent::from_json("CustomEvent", serde_json::json!({}));
         assert_eq!(Event::event_type_id(&evt), "CustomEvent");
     }
 

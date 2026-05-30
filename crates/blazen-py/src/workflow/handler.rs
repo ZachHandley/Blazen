@@ -51,6 +51,38 @@ pub struct PyWorkflowHandler {
     session_refs: Arc<SessionRefRegistry>,
 }
 
+/// Convert a consumed core [`WorkflowHandler`] into a [`PyWorkflowResult`].
+///
+/// Shared by `PyWorkflowHandler::result()` and the binding-level
+/// `Workflow.run()` shorthand so both produce an identical result object.
+/// Awaits the handler to completion, then builds the terminal `PyEvent`
+/// inside the run's session-ref scope so `__blazen_session_ref__` markers
+/// in the event payload keep resolving after the future resolves.
+pub(crate) async fn handler_to_py_result(
+    handler: blazen_core::WorkflowHandler,
+) -> PyResult<PyWorkflowResult> {
+    let wf_result = handler.result().await.map_err(BlazenPyError::from)?;
+    let session_refs = wf_result.session_refs;
+    let event = wf_result.event;
+    let usage_total = wf_result.usage_total;
+    let cost_total_usd = wf_result.cost_total_usd;
+
+    let registry_for_event = Arc::clone(&session_refs);
+    let py_event = with_session_registry(registry_for_event, async move {
+        any_event_to_py_event(&*event)
+    })
+    .await;
+    Python::attach(|py| {
+        let py_event = Py::new(py, py_event)?;
+        Ok(PyWorkflowResult::new_with_usage(
+            py_event,
+            session_refs,
+            usage_total,
+            cost_total_usd,
+        ))
+    })
+}
+
 impl PyWorkflowHandler {
     /// Create a new handler wrapping a Rust `WorkflowHandler`.
     ///
@@ -105,34 +137,7 @@ impl PyWorkflowHandler {
                     .take()
                     .ok_or_else(|| BlazenPyError::Workflow("Handler already consumed".to_owned()))?
             };
-
-            let wf_result = handler.result().await.map_err(BlazenPyError::from)?;
-            let session_refs = wf_result.session_refs;
-            let event = wf_result.event;
-            let usage_total = wf_result.usage_total;
-            let cost_total_usd = wf_result.cost_total_usd;
-
-            // Install the registry as the current session-ref scope while we
-            // build the `PyEvent`. `any_event_to_py_event` calls
-            // `current_session_registry()` to capture the Arc into the
-            // returned `PyEvent`, so attribute access (`__getattr__`) keeps
-            // working even after this future resolves.
-            let registry_for_event = Arc::clone(&session_refs);
-            let py_event =
-                with_session_registry(
-                    registry_for_event,
-                    async move { any_event_to_py_event(&*event) },
-                )
-                .await;
-            Python::attach(|py| {
-                let py_event = Py::new(py, py_event)?;
-                Ok(PyWorkflowResult::new_with_usage(
-                    py_event,
-                    session_refs,
-                    usage_total,
-                    cost_total_usd,
-                ))
-            })
+            handler_to_py_result(handler).await
         })
     }
 

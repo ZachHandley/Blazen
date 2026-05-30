@@ -419,10 +419,10 @@ impl Workflow {
             let event: Box<dyn AnyEvent> =
                 blazen_events::try_deserialize_event(&serialized.event_type, &serialized.data)
                     .unwrap_or_else(|| {
-                        Box::new(DynamicEvent {
-                            event_type: serialized.event_type.clone(),
-                            data: serialized.data.clone(),
-                        })
+                        Box::new(DynamicEvent::from_json(
+                            serialized.event_type.clone(),
+                            serialized.data.clone(),
+                        ))
                     });
             let envelope = EventEnvelope::new(event, serialized.source_step.clone());
             event_tx

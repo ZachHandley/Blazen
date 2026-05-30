@@ -66,7 +66,7 @@ impl JsDynamicEvent {
     #[napi(constructor)]
     pub fn new(event_type: String, data: serde_json::Value) -> Self {
         Self {
-            inner: DynamicEvent { event_type, data },
+            inner: DynamicEvent::from_json(event_type, data),
         }
     }
 

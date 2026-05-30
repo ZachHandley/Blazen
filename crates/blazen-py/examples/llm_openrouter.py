@@ -150,9 +150,8 @@ async def main() -> None:
     # 3. Build and run the workflow
     # ------------------------------------------------------------------
     wf = Workflow("poem-pipeline", [generate_poem, summarize])
-    handler = await wf.run(topic="the beauty of open-source software")
+    result = await wf.run(topic="the beauty of open-source software")
 
-    result = await handler.result()
     output = result.to_dict()
 
     # ------------------------------------------------------------------

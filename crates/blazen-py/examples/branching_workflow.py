@@ -95,8 +95,7 @@ async def main():
 
     for text in samples:
         # Kick off the workflow; keyword arguments become StartEvent attributes.
-        handler = await wf.run(text=text)
-        result = await handler.result()
+        result = await wf.run(text=text)
 
         data = result.to_dict()
         branch = data.get("sentiment", "unknown")

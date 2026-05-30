@@ -256,10 +256,10 @@ impl SubWorkflowStep {
             workflow,
             input_mapper: std::sync::Arc::new(|event| event.to_json()),
             output_mapper: std::sync::Arc::new(move |value| {
-                Box::new(blazen_events::DynamicEvent {
-                    event_type: output_event_type_owned.to_string(),
-                    data: value,
-                })
+                Box::new(blazen_events::DynamicEvent::from_json(
+                    output_event_type_owned.to_string(),
+                    value,
+                ))
             }),
             timeout: None,
             retry_config: None,
@@ -361,10 +361,10 @@ impl SubPipelineStep {
             executable,
             input_mapper: Arc::new(|event| event.to_json()),
             output_mapper: Arc::new(move |value| {
-                Box::new(blazen_events::DynamicEvent {
-                    event_type: output_event_type_owned.to_string(),
-                    data: value,
-                })
+                Box::new(blazen_events::DynamicEvent::from_json(
+                    output_event_type_owned.to_string(),
+                    value,
+                ))
             }),
             timeout: None,
             retry_config: None,

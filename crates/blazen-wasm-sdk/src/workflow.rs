@@ -1282,10 +1282,7 @@ async fn dispatch_js_step(
 
     // For all other event types the engine routes via interned
     // `event_type_id`, so a `DynamicEvent` is the right carrier.
-    let dynamic = DynamicEvent {
-        event_type,
-        data: event_obj,
-    };
+    let dynamic = DynamicEvent::from_json(event_type, event_obj);
     Ok(StepOutput::Single(Box::new(dynamic)))
 }
 

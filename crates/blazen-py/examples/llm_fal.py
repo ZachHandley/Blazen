@@ -276,9 +276,7 @@ async def main() -> None:
 
     # Build and run the workflow.
     wf = Workflow("fal-demo", [generate, analyze])
-    handler = await wf.run(prompt="What makes Rust's ownership system unique?")
-
-    result = await handler.result()
+    result = await wf.run(prompt="What makes Rust's ownership system unique?")
     output = result.to_dict()["result"]
 
     print("\n" + "=" * 60)

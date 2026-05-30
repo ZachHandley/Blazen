@@ -155,10 +155,8 @@ async def main() -> None:
     wf = Workflow("rag-pipeline", [parse_query, retrieve, generate])
 
     # Run the workflow with a sample query passed as the StartEvent payload.
-    handler = await wf.run(query="How does Blazen share context between steps?")
-
-    # Await the final result (a StopEvent).
-    result = await handler.result()
+    # await wf.run(...) now resolves directly to a WorkflowResult.
+    result = await wf.run(query="How does Blazen share context between steps?")
     output = result.to_dict()
 
     print("\n" + "=" * 60)

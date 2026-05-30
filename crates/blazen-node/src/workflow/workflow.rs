@@ -722,10 +722,10 @@ fn make_subworkflow_step(sub: &JsSubWorkflowStepInner) -> blazen_core::SubWorkfl
     // Wrap the child workflow's terminal `StopEvent.result` JSON in a
     // generic `DynamicEvent` so the parent step can consume it.
     let output_mapper: blazen_core::SubWorkflowOutputMapper = Arc::new(|json| {
-        Box::new(blazen_events::DynamicEvent {
-            event_type: "blazen::StopEvent".to_owned(),
-            data: serde_json::json!({ "type": "blazen::StopEvent", "result": json }),
-        }) as Box<dyn AnyEvent>
+        Box::new(blazen_events::DynamicEvent::from_json(
+            "blazen::StopEvent".to_owned(),
+            serde_json::json!({ "type": "blazen::StopEvent", "result": json }),
+        )) as Box<dyn AnyEvent>
     });
 
     blazen_core::SubWorkflowStep {

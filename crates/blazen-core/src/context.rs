@@ -643,10 +643,10 @@ impl Context {
     /// Consumers that check for `"blazen::StreamEnd"` can use this to
     /// terminate their iteration.
     pub(crate) async fn signal_stream_end(&self) {
-        self.write_event_to_stream(blazen_events::DynamicEvent {
-            event_type: "blazen::StreamEnd".to_owned(),
-            data: serde_json::Value::Null,
-        })
+        self.write_event_to_stream(blazen_events::DynamicEvent::from_json(
+            "blazen::StreamEnd",
+            serde_json::Value::Null,
+        ))
         .await;
     }
 }

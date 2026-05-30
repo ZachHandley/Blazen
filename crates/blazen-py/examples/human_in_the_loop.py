@@ -121,19 +121,17 @@ async def main() -> None:
     wf = Workflow("human-review", [process_submission, review_submission, finalize])
 
     print("Running workflow (submission that passes review)...")
-    handler = await wf.run(
+    result = await wf.run(
         title="  my first blazen workflow  ",
         body="This is a perfectly reasonable submission with enough words.",
     )
-    result = await handler.result()
     print(f"  Result: {result.to_dict()}\n")
 
     print("Running workflow (submission that fails review)...")
-    handler = await wf.run(
+    result = await wf.run(
         title="short",
         body="Too few",
     )
-    result = await handler.result()
     print(f"  Result: {result.to_dict()}")
 
 

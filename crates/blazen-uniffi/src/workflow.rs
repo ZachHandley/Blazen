@@ -317,9 +317,6 @@ fn wire_event_to_any(ev: Event) -> Box<dyn AnyEvent> {
     match ev.event_type.as_str() {
         "StartEvent" => Box::new(StartEvent { data: parsed }),
         "StopEvent" => Box::new(StopEvent { result: parsed }),
-        other => Box::new(DynamicEvent {
-            event_type: other.to_string(),
-            data: parsed,
-        }),
+        other => Box::new(DynamicEvent::from_json(other.to_string(), parsed)),
     }
 }

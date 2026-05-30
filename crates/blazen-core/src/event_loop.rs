@@ -255,10 +255,10 @@ async fn event_loop_inner(
             if let Some(e) = error {
                 data.insert("error".into(), serde_json::Value::String(e));
             }
-            ctx.write_event_to_stream(DynamicEvent {
-                event_type: "blazen::lifecycle".to_owned(),
-                data: serde_json::Value::Object(data),
-            })
+            ctx.write_event_to_stream(DynamicEvent::from_json(
+                "blazen::lifecycle",
+                serde_json::Value::Object(data),
+            ))
             .await;
         }
     };
@@ -533,13 +533,16 @@ async fn event_loop_inner(
                 if event.as_any().downcast_ref::<StopEvent>().is_some() {
                     event
                 } else if let Some(dynamic) = event.as_any().downcast_ref::<DynamicEvent>() {
-                    // DynamicEvent.data contains the original StopEvent JSON.
-                    match serde_json::from_value::<StopEvent>(dynamic.data.clone()) {
+                    // DynamicEvent carries the original StopEvent payload. Use
+                    // to_json() so native-backed events materialize their JSON.
+                    match serde_json::from_value::<StopEvent>(blazen_events::Event::to_json(
+                        dynamic,
+                    )) {
                         Ok(stop) => Box::new(stop),
                         Err(_) => {
-                            // Fallback: wrap the raw data as the result.
+                            // Fallback: wrap the materialized payload as the result.
                             Box::new(StopEvent {
-                                result: dynamic.data.clone(),
+                                result: blazen_events::Event::to_json(dynamic),
                             })
                         }
                     }
@@ -559,7 +562,9 @@ async fn event_loop_inner(
             let request = if let Some(req) = event.as_any().downcast_ref::<InputRequestEvent>() {
                 req.clone()
             } else if let Some(dynamic) = event.as_any().downcast_ref::<DynamicEvent>() {
-                if let Ok(req) = serde_json::from_value::<InputRequestEvent>(dynamic.data.clone()) {
+                if let Ok(req) = serde_json::from_value::<InputRequestEvent>(
+                    blazen_events::Event::to_json(dynamic),
+                ) {
                     req
                 } else {
                     let _ = result_tx.send(Err(WorkflowError::Context(
@@ -1092,10 +1097,10 @@ fn dispatch_regular_step(
                         "event_type".into(),
                         serde_json::Value::String(event_type.clone()),
                     );
-                    sctx.write_event_to_stream(DynamicEvent {
-                        event_type: "blazen::lifecycle".to_owned(),
-                        data: serde_json::Value::Object(data),
-                    })
+                    sctx.write_event_to_stream(DynamicEvent::from_json(
+                        "blazen::lifecycle",
+                        serde_json::Value::Object(data),
+                    ))
                     .await;
                 }
 
@@ -1168,10 +1173,10 @@ fn dispatch_regular_step(
                                 "duration_ms".into(),
                                 serde_json::Value::Number(duration.into()),
                             );
-                            sctx.write_event_to_stream(DynamicEvent {
-                                event_type: "blazen::lifecycle".to_owned(),
-                                data: serde_json::Value::Object(data),
-                            })
+                            sctx.write_event_to_stream(DynamicEvent::from_json(
+                                "blazen::lifecycle",
+                                serde_json::Value::Object(data),
+                            ))
                             .await;
 
                             emit_workflow_progress(sctx, &progress_counter, &step_name, run_id)
@@ -1216,10 +1221,10 @@ fn dispatch_regular_step(
                                 "duration_ms".into(),
                                 serde_json::Value::Number(duration.into()),
                             );
-                            sctx.write_event_to_stream(DynamicEvent {
-                                event_type: "blazen::lifecycle".to_owned(),
-                                data: serde_json::Value::Object(data),
-                            })
+                            sctx.write_event_to_stream(DynamicEvent::from_json(
+                                "blazen::lifecycle",
+                                serde_json::Value::Object(data),
+                            ))
                             .await;
 
                             emit_workflow_progress(sctx, &progress_counter, &step_name, run_id)
@@ -1266,10 +1271,10 @@ fn dispatch_regular_step(
                                 "duration_ms".into(),
                                 serde_json::Value::Number(duration.into()),
                             );
-                            sctx.write_event_to_stream(DynamicEvent {
-                                event_type: "blazen::lifecycle".to_owned(),
-                                data: serde_json::Value::Object(data),
-                            })
+                            sctx.write_event_to_stream(DynamicEvent::from_json(
+                                "blazen::lifecycle",
+                                serde_json::Value::Object(data),
+                            ))
                             .await;
 
                             emit_workflow_progress(sctx, &progress_counter, &step_name, run_id)
@@ -1316,10 +1321,10 @@ fn dispatch_regular_step(
                                 serde_json::Value::Number(duration.into()),
                             );
                             data.insert("error".into(), serde_json::Value::String(err_str));
-                            sctx.write_event_to_stream(DynamicEvent {
-                                event_type: "blazen::lifecycle".to_owned(),
-                                data: serde_json::Value::Object(data),
-                            })
+                            sctx.write_event_to_stream(DynamicEvent::from_json(
+                                "blazen::lifecycle",
+                                serde_json::Value::Object(data),
+                            ))
                             .await;
                         }
 
@@ -2176,9 +2181,9 @@ async fn publish_lifecycle_event(
     if let Some(e) = error {
         data.insert("error".into(), serde_json::Value::String(e.to_owned()));
     }
-    ctx.write_event_to_stream(DynamicEvent {
-        event_type: "blazen::lifecycle".to_owned(),
-        data: serde_json::Value::Object(data),
-    })
+    ctx.write_event_to_stream(DynamicEvent::from_json(
+        "blazen::lifecycle",
+        serde_json::Value::Object(data),
+    ))
     .await;
 }

@@ -16,7 +16,7 @@ use blazen_core::session_ref::{
 use blazen_core::snapshot::WorkflowSnapshot;
 use blazen_llm::retry::RetryConfig;
 
-use super::handler::PyWorkflowHandler;
+use super::handler::{PyWorkflowHandler, handler_to_py_result};
 use super::step::PyStepWrapper;
 use super::subworkflow::{PyParallelSubWorkflowsStep, PySubWorkflowStep};
 use crate::convert::dict_to_json;
@@ -281,14 +281,71 @@ impl PyWorkflow {
     ///     input: A dict of data to pass as the start event payload.
     ///
     /// Returns:
+    ///     The :class:`WorkflowResult` produced by the workflow.
+    ///
+    /// Example:
+    ///     >>> result = await wf.run(prompt="Hello!")
+    ///     >>> print(result.result)
+    ///
+    /// Note:
+    ///     This awaits the workflow to completion and resolves directly to
+    ///     the result. To pause, resume, or stream intermediate events, use
+    ///     :meth:`run_with_handler` instead, which returns a
+    ///     :class:`WorkflowHandler`.
+    #[pyo3(signature = (**kwargs))]
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, WorkflowResult]", imports = ("typing",)))]
+    fn run<'py>(
+        &self,
+        py: Python<'py>,
+        kwargs: Option<&Bound<'py, PyDict>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let data = if let Some(kw) = kwargs {
+            dict_to_json(kw)?
+        } else {
+            serde_json::Value::Object(serde_json::Map::new())
+        };
+
+        let locals = pyo3_async_runtimes::tokio::get_current_locals(py)?;
+
+        let workflow = self.build_workflow_with_locals(py, locals.clone())?;
+
+        // Capture the parent session-ref registry BEFORE entering the async
+        // block — see `run_with_handler` for the full rationale.
+        let parent_registry = crate::workflow::session_ref::current_session_registry();
+
+        pyo3_async_runtimes::tokio::future_into_py_with_locals(py, locals, async move {
+            let handler = if let Some(parent_registry) = parent_registry {
+                workflow
+                    .run_with_registry(data, parent_registry)
+                    .await
+                    .map_err(BlazenPyError::from)?
+            } else {
+                workflow.run(data).await.map_err(BlazenPyError::from)?
+            };
+            handler_to_py_result(handler).await
+        })
+    }
+
+    /// Execute the workflow and return a :class:`WorkflowHandler` for
+    /// pausing, resuming, or streaming intermediate events.
+    ///
+    /// Use this instead of :meth:`run` when you need control over the
+    /// running workflow rather than just its final result.
+    ///
+    /// Args:
+    ///     input: A dict of data to pass as the start event payload.
+    ///
+    /// Returns:
     ///     A `WorkflowHandler` for awaiting results or streaming events.
     ///
     /// Example:
-    ///     >>> handler = await wf.run({"prompt": "Hello!"})
+    ///     >>> handler = await wf.run_with_handler(prompt="Hello!")
+    ///     >>> async for event in handler.stream_events():
+    ///     ...     print(event.event_type)
     ///     >>> result = await handler.result()
     #[pyo3(signature = (**kwargs))]
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, WorkflowHandler]", imports = ("typing",)))]
-    fn run<'py>(
+    fn run_with_handler<'py>(
         &self,
         py: Python<'py>,
         kwargs: Option<&Bound<'py, PyDict>>,

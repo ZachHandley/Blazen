@@ -81,7 +81,7 @@ async def main():
     wf = Workflow("streaming-demo", [process_items, summarize])
 
     # Kick off the workflow.  Keyword arguments become the StartEvent payload.
-    handler = await wf.run(
+    handler = await wf.run_with_handler(
         items=["alpha", "bravo", "charlie", "delta", "echo"]
     )
 

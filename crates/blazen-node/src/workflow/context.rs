@@ -118,7 +118,7 @@ impl JsContext {
         let event_type = any_event.event_type_id().to_owned();
         let data = any_event.to_json();
 
-        let dynamic = blazen_events::DynamicEvent { event_type, data };
+        let dynamic = blazen_events::DynamicEvent::from_json(event_type, data);
         self.inner.send_event(dynamic).await;
         Ok(())
     }
@@ -135,7 +135,7 @@ impl JsContext {
         let event_type = any_event.event_type_id().to_owned();
         let data = any_event.to_json();
 
-        let dynamic = blazen_events::DynamicEvent { event_type, data };
+        let dynamic = blazen_events::DynamicEvent::from_json(event_type, data);
         self.inner.write_event_to_stream(dynamic).await;
         Ok(())
     }

@@ -45,7 +45,7 @@ pub fn js_value_to_any_event(value: &serde_json::Value) -> Box<dyn AnyEvent> {
     }
 
     // Generic dynamic event.
-    Box::new(DynamicEvent { event_type, data })
+    Box::new(DynamicEvent::from_json(event_type, data))
 }
 
 /// Convert a boxed [`AnyEvent`] to a JavaScript-friendly `serde_json::Value`.

@@ -512,10 +512,10 @@ fn serializable_payload_to_js(type_name: &str, bytes: &[u8]) -> JsValue {
 fn js_to_dynamic_event(event: &JsValue) -> Result<blazen_events::DynamicEvent, JsValue> {
     // Plain string => use as the event type with an empty payload.
     if let Some(s) = event.as_string() {
-        return Ok(blazen_events::DynamicEvent {
-            event_type: s,
-            data: serde_json::Value::Null,
-        });
+        return Ok(blazen_events::DynamicEvent::from_json(
+            s,
+            serde_json::Value::Null,
+        ));
     }
 
     // Object with a `type` discriminator.
@@ -529,7 +529,7 @@ fn js_to_dynamic_event(event: &JsValue) -> Result<blazen_events::DynamicEvent, J
         let data: serde_json::Value = serde_wasm_bindgen::from_value(event.clone())
             .map_err(|e| JsValue::from_str(&format!("sendEvent: payload not JSON: {e}")))?;
 
-        return Ok(blazen_events::DynamicEvent { event_type, data });
+        return Ok(blazen_events::DynamicEvent::from_json(event_type, data));
     }
 
     Err(JsValue::from_str(
