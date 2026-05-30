@@ -156,29 +156,64 @@ pub enum RefLifetime {
     UntilParentFinish,
 }
 
+/// The serializable lane of a [`RegistryEntry`].
+///
+/// Either a trait object that produces bytes on demand (the
+/// [`SessionRefRegistry::insert_serializable`] path) or already-captured
+/// opaque bytes with a type tag (the folded `StateValue::Native` lane —
+/// see [`SessionRefRegistry::insert_serializable_bytes`]). Both variants
+/// are the SERIALIZABLE (survive-snapshot) lane.
+#[derive(Clone)]
+enum SerializableLane {
+    /// Value implements [`SessionRefSerializable`]; bytes are produced
+    /// lazily at snapshot time.
+    Trait(SerializableArc),
+    /// Pre-captured opaque bytes with a type tag — the folded
+    /// `StateValue::Native` lane. `type_tag` is the binding's serializer
+    /// id (e.g. `"py::pickle"`, `"node::structured-clone"`); `data` is
+    /// opaque to the core.
+    Bytes {
+        /// Binding-specific serializer id.
+        type_tag: String,
+        /// Opaque serialized payload.
+        data: Vec<u8>,
+    },
+}
+
+/// One unified registry entry. Carries the LIVE lane, the SERIALIZABLE
+/// lane, or both, plus lifetime/remote metadata.
+///
+/// The two lanes that must both survive:
+/// - LIVE-ONLY: `live` is `Some` and `serializable` is `None`; dropped
+///   (not errored) on snapshot/resume.
+/// - SERIALIZABLE: `serializable` is `Some`; its bytes survive a
+///   snapshot.
+#[derive(Clone)]
+struct RegistryEntry {
+    /// LIVE lane: the in-process `Arc`. `Some` for live-by-default
+    /// entries (folded `Context.objects`, `insert_arc`, `insert`, and
+    /// the live half of an `insert_serializable`). `None` for a
+    /// pure-remote descriptor entry or a pure serializable-bytes entry
+    /// whose live value was never present.
+    live: Option<AnyArc>,
+    /// SERIALIZABLE lane (survive-snapshot). `Some` when the value opted
+    /// into [`SessionRefSerializable`] OR carries pre-serialized bytes
+    /// (the folded `StateValue::Native` lane). Compatible with `live`:
+    /// `insert_serializable` populates BOTH.
+    serializable: Option<SerializableLane>,
+    /// Per-ref purge policy.
+    lifetime: RefLifetime,
+    /// Remote descriptor sidecar.
+    remote: Option<RemoteRefDescriptor>,
+}
+
 /// Per-context registry of live session references.
 #[derive(Default)]
 pub struct SessionRefRegistry {
-    inner: RwLock<HashMap<RegistryKey, AnyArc>>,
-    /// Parallel map of entries that also implement
-    /// [`SessionRefSerializable`]. Written by
-    /// [`SessionRefRegistry::insert_serializable`] and read by the
-    /// snapshot walker when the active [`SessionPausePolicy`] is
-    /// [`SessionPausePolicy::PickleOrSerialize`].
-    serializable: RwLock<HashMap<RegistryKey, SerializableArc>>,
-    /// Parallel map of per-ref [`RefLifetime`] policies. Every entry
-    /// in [`Self::inner`] has a matching entry here; missing values
-    /// are interpreted as [`RefLifetime::default`] for forward
-    /// compatibility, but every insert path populates the map
-    /// explicitly so the lookup is O(1) and infallible.
-    lifetimes: RwLock<HashMap<RegistryKey, RefLifetime>>,
-    /// Sidecar for session refs whose value lives on a remote peer.
-    /// Populated by the peer client layer after a `SubWorkflow`
-    /// response carries a [`RemoteRefDescriptor`]; read by
-    /// binding-layer code when a local lookup for a key hits this map
-    /// instead of the main `inner` storage (triggering a lazy Deref
-    /// RPC).
-    remote_refs: RwLock<HashMap<RegistryKey, RemoteRefDescriptor>>,
+    /// One map of unified entries. Each [`RegistryEntry`] carries the
+    /// live lane, the serializable lane, or both, plus lifetime and
+    /// remote metadata.
+    inner: RwLock<HashMap<RegistryKey, RegistryEntry>>,
 }
 
 impl std::fmt::Debug for SessionRefRegistry {
@@ -228,9 +263,15 @@ impl SessionRefRegistry {
             });
         }
         let key = RegistryKey::new();
-        g.insert(key, value);
-        drop(g);
-        self.lifetimes.write().await.insert(key, lifetime);
+        g.insert(
+            key,
+            RegistryEntry {
+                live: Some(value),
+                serializable: None,
+                lifetime,
+                remote: None,
+            },
+        );
         Ok(key)
     }
 
@@ -291,18 +332,94 @@ impl SessionRefRegistry {
             });
         }
         let key = RegistryKey::new();
-        // Store the concrete Arc<T> in the main `Any` map so
-        // `get::<T>` keeps working for downstream ref resolution.
-        main.insert(key, value.clone() as AnyArc);
-        drop(main);
-        let mut ser = self.serializable.write().await;
-        ser.insert(key, value as SerializableArc);
-        drop(ser);
-        self.lifetimes
-            .write()
-            .await
-            .insert(key, RefLifetime::default());
+        // Store the concrete Arc<T> in the live lane so `get::<T>` keeps
+        // working, AND populate the serializable lane so the snapshot
+        // walker can retrieve the trait object.
+        main.insert(
+            key,
+            RegistryEntry {
+                live: Some(value.clone() as AnyArc),
+                serializable: Some(SerializableLane::Trait(value as SerializableArc)),
+                lifetime: RefLifetime::default(),
+                remote: None,
+            },
+        );
         Ok(key)
+    }
+
+    /// Insert a value that survives snapshots as opaque bytes plus a
+    /// type tag (the folded `StateValue::Native` lane). The entry has NO
+    /// live value — it is pure serializable bytes. Returns the freshly
+    /// minted key.
+    ///
+    /// # Errors
+    /// Returns [`SessionRefError::CapacityExceeded`] if the registry is full.
+    pub async fn insert_serializable_bytes(
+        &self,
+        type_tag: String,
+        data: Vec<u8>,
+        lifetime: RefLifetime,
+    ) -> Result<RegistryKey, SessionRefError> {
+        let mut main = self.inner.write().await;
+        if main.len() >= MAX_SESSION_REFS_PER_RUN {
+            return Err(SessionRefError::CapacityExceeded {
+                cap: MAX_SESSION_REFS_PER_RUN,
+            });
+        }
+        let key = RegistryKey::new();
+        main.insert(
+            key,
+            RegistryEntry {
+                live: None,
+                serializable: Some(SerializableLane::Bytes { type_tag, data }),
+                lifetime,
+                remote: None,
+            },
+        );
+        Ok(key)
+    }
+
+    /// Read back a serializable-bytes entry's `(type_tag, data)`.
+    ///
+    /// Returns `Some` only for a [`SerializableLane::Bytes`] entry (the
+    /// folded `StateValue::Native` lane); `None` for trait-object
+    /// serializable entries, live-only entries, or unknown keys.
+    pub async fn get_serializable_bytes(&self, key: RegistryKey) -> Option<(String, Vec<u8>)> {
+        let g = self.inner.read().await;
+        match g.get(&key).and_then(|e| e.serializable.as_ref()) {
+            Some(SerializableLane::Bytes { type_tag, data }) => {
+                Some((type_tag.clone(), data.clone()))
+            }
+            _ => None,
+        }
+    }
+
+    /// Project a serializable-bytes entry into a [`crate::StateValue`]
+    /// for snapshotting. Returns `Some(StateValue::Native(..))` for a
+    /// [`SerializableLane::Bytes`] entry; `None` otherwise.
+    pub async fn native_state_value(&self, key: RegistryKey) -> Option<crate::value::StateValue> {
+        let g = self.inner.read().await;
+        match g.get(&key).and_then(|e| e.serializable.as_ref()) {
+            Some(SerializableLane::Bytes { data, .. }) => Some(crate::value::StateValue::Native(
+                crate::value::BytesWrapper(data.clone()),
+            )),
+            _ => None,
+        }
+    }
+
+    /// Ingest a [`crate::StateValue::Native`] back into a fresh
+    /// serializable-bytes entry on restore. Returns the freshly minted
+    /// key for a `Native` value (using [`RefLifetime::UntilContextDrop`]);
+    /// `None` for non-`Native` state values.
+    pub async fn insert_native_state_value(
+        &self,
+        sv: &crate::value::StateValue,
+        type_tag: String,
+    ) -> Option<RegistryKey> {
+        let data = sv.as_native()?.to_vec();
+        self.insert_serializable_bytes(type_tag, data, RefLifetime::UntilContextDrop)
+            .await
+            .ok()
     }
 
     /// Insert an already-erased `Arc<dyn SessionRefSerializable>`
@@ -331,15 +448,15 @@ impl SessionRefRegistry {
         // that forwards to the trait object so the main registry can
         // still serve `get_any` lookups.
         let any_arc: AnyArc = Arc::new(SerializableHolder(value.clone()));
-        main.insert(key, any_arc);
-        drop(main);
-        let mut ser = self.serializable.write().await;
-        ser.insert(key, value);
-        drop(ser);
-        self.lifetimes
-            .write()
-            .await
-            .insert(key, RefLifetime::default());
+        main.insert(
+            key,
+            RegistryEntry {
+                live: Some(any_arc),
+                serializable: Some(SerializableLane::Trait(value)),
+                lifetime: RefLifetime::default(),
+                remote: None,
+            },
+        );
         Ok(())
     }
 
@@ -351,20 +468,30 @@ impl SessionRefRegistry {
         &self,
         key: RegistryKey,
     ) -> Option<Arc<dyn SessionRefSerializable>> {
-        self.serializable.read().await.get(&key).cloned()
+        match self.inner.read().await.get(&key).and_then(|e| e.serializable.as_ref()) {
+            Some(SerializableLane::Trait(t)) => Some(t.clone()),
+            _ => None,
+        }
     }
 
-    /// Snapshot every serializable entry currently live in the
-    /// registry. Returns `(key, Arc<dyn SessionRefSerializable>)`
+    /// Snapshot every trait-object serializable entry currently live in
+    /// the registry. Returns `(key, Arc<dyn SessionRefSerializable>)`
     /// pairs so callers can iterate without holding the lock.
+    ///
+    /// Only [`SerializableLane::Trait`] entries are emitted — pure
+    /// serializable-bytes entries (the folded `StateValue::Native` lane)
+    /// are not trait objects and do not participate in this walk.
     pub async fn serializable_entries(
         &self,
     ) -> Vec<(RegistryKey, Arc<dyn SessionRefSerializable>)> {
-        self.serializable
+        self.inner
             .read()
             .await
             .iter()
-            .map(|(k, v)| (*k, v.clone()))
+            .filter_map(|(k, e)| match e.serializable.as_ref() {
+                Some(SerializableLane::Trait(t)) => Some((*k, t.clone())),
+                _ => None,
+            })
             .collect()
     }
 
@@ -382,77 +509,85 @@ impl SessionRefRegistry {
         key: RegistryKey,
         descriptor: RemoteRefDescriptor,
     ) -> Result<(), SessionRefError> {
-        let mut remote = self.remote_refs.write().await;
-        if remote.len() >= MAX_SESSION_REFS_PER_RUN {
+        let mut g = self.inner.write().await;
+        // Count only entries already carrying a remote descriptor so the
+        // cap mirrors the old standalone `remote_refs` map. A re-insert
+        // under an existing remote key is an upsert and does not count
+        // against capacity.
+        if !g.get(&key).is_some_and(|e| e.remote.is_some())
+            && g.values().filter(|e| e.remote.is_some()).count() >= MAX_SESSION_REFS_PER_RUN
+        {
             return Err(SessionRefError::CapacityExceeded {
                 cap: MAX_SESSION_REFS_PER_RUN,
             });
         }
-        remote.insert(key, descriptor);
+        // Upsert: set `.remote` without touching `.live`. A pure-remote
+        // entry has `live: None` so it is not counted by `len`/`keys`.
+        g.entry(key)
+            .or_insert_with(|| RegistryEntry {
+                live: None,
+                serializable: None,
+                lifetime: RefLifetime::default(),
+                remote: None,
+            })
+            .remote = Some(descriptor);
         Ok(())
     }
 
     /// Look up a remote-ref descriptor. Returns `None` if `key` is not
     /// a remote ref (it may still be a local ref — check `get_any`).
     pub async fn get_remote(&self, key: RegistryKey) -> Option<RemoteRefDescriptor> {
-        self.remote_refs.read().await.get(&key).cloned()
+        self.inner.read().await.get(&key).and_then(|e| e.remote.clone())
     }
 
-    /// Returns `true` if `key` exists in the `remote_refs` sidecar
-    /// (regardless of whether it has also been materialized into the
-    /// main `inner` map).
+    /// Returns `true` if `key` carries a remote descriptor (regardless
+    /// of whether it has also been materialized into the live lane).
     pub async fn is_remote(&self, key: RegistryKey) -> bool {
-        self.remote_refs.read().await.contains_key(&key)
+        self.inner.read().await.get(&key).is_some_and(|e| e.remote.is_some())
     }
 
     /// Iterate all remote-ref descriptors currently tracked.
     pub async fn remote_entries(&self) -> Vec<(RegistryKey, RemoteRefDescriptor)> {
-        self.remote_refs
+        self.inner
             .read()
             .await
             .iter()
-            .map(|(k, v)| (*k, v.clone()))
+            .filter_map(|(k, e)| e.remote.clone().map(|d| (*k, d)))
             .collect()
     }
 
     /// Look up the type-erased entry. Bindings call this and downcast.
     pub async fn get_any(&self, key: RegistryKey) -> Option<AnyArc> {
-        self.inner.read().await.get(&key).cloned()
+        self.inner.read().await.get(&key).and_then(|e| e.live.clone())
     }
 
     /// Look up and downcast to a concrete `Arc<T>`.
     pub async fn get<T: Any + Send + Sync + 'static>(&self, key: RegistryKey) -> Option<Arc<T>> {
-        let any = self.inner.read().await.get(&key).cloned()?;
+        let any = self.inner.read().await.get(&key).and_then(|e| e.live.clone())?;
         Arc::downcast::<T>(any).ok()
     }
 
-    /// Remove a single entry, returning the removed value if present.
+    /// Remove a single entry, returning the removed live value if present.
     pub async fn remove(&self, key: RegistryKey) -> Option<AnyArc> {
-        let removed = self.inner.write().await.remove(&key);
-        // Also clear any matching serializable, lifetime, and remote-ref
-        // sidecar entries.
-        self.serializable.write().await.remove(&key);
-        self.lifetimes.write().await.remove(&key);
-        self.remote_refs.write().await.remove(&key);
-        removed
+        self.inner.write().await.remove(&key).and_then(|e| e.live)
     }
 
     /// Drain all entries, returning the number removed.
+    ///
+    /// Counts every entry in the unified map (live, serializable-bytes,
+    /// and pure-remote) so a `drain` after remote-only inserts still
+    /// reports them as cleared.
     pub async fn drain(&self) -> usize {
         let mut g = self.inner.write().await;
         let n = g.len();
         g.clear();
-        drop(g);
-        self.serializable.write().await.clear();
-        self.lifetimes.write().await.clear();
-        self.remote_refs.write().await.clear();
         n
     }
 
     /// Look up the [`RefLifetime`] policy registered for `key`. Returns
     /// `None` if no entry exists under `key`.
     pub async fn lifetime_of(&self, key: RegistryKey) -> Option<RefLifetime> {
-        self.lifetimes.read().await.get(&key).copied()
+        self.inner.read().await.get(&key).map(|e| e.lifetime)
     }
 
     /// Purge all refs whose [`RefLifetime`] policy says they should be
@@ -481,9 +616,9 @@ impl SessionRefRegistry {
         // Snapshot the keys that need to go under a read lock so we
         // can release it before taking the write lock to remove them.
         let to_remove: Vec<RegistryKey> = {
-            let g = self.lifetimes.read().await;
+            let g = self.inner.read().await;
             g.iter()
-                .filter_map(|(k, lt)| match lt {
+                .filter_map(|(k, e)| match e.lifetime {
                     RefLifetime::UntilContextDrop | RefLifetime::UntilParentFinish
                         if owns_registry =>
                     {
@@ -498,29 +633,56 @@ impl SessionRefRegistry {
         };
 
         let mut count = 0;
-        for key in to_remove {
-            // `remove` already cleans all three sidecars.
-            if self.remove(key).await.is_some() {
-                count += 1;
+        {
+            let mut g = self.inner.write().await;
+            for key in to_remove {
+                // Remove the whole unified entry. Count the entry itself
+                // (not just its live half) so pure serializable-bytes
+                // entries under a context-drop lifetime are tallied too.
+                if g.remove(&key).is_some() {
+                    count += 1;
+                }
             }
         }
         count
     }
 
     /// Number of currently live entries (for tests/diagnostics).
+    ///
+    /// Counts only entries that carry a live value — pure-remote
+    /// descriptor entries (`live: None, remote: Some`) are excluded so
+    /// the pause-policy walker treats them the same as the old
+    /// standalone `remote_refs` map.
     pub async fn len(&self) -> usize {
-        self.inner.read().await.len()
+        self.inner
+            .read()
+            .await
+            .values()
+            .filter(|e| e.live.is_some())
+            .count()
     }
 
-    /// Whether the registry has any live entries.
+    /// Whether the registry has any entries carrying a live value.
     pub async fn is_empty(&self) -> bool {
-        self.inner.read().await.is_empty()
+        !self
+            .inner
+            .read()
+            .await
+            .values()
+            .any(|e| e.live.is_some())
     }
 
-    /// Iterate every key currently in the registry. Used by the snapshot
-    /// walker to apply [`SessionPausePolicy`] uniformly.
+    /// Iterate every key whose entry carries a live value. Used by the
+    /// snapshot walker to apply [`SessionPausePolicy`] uniformly.
+    /// Pure-remote descriptor entries are excluded (they hold no live
+    /// value in flight).
     pub async fn keys(&self) -> Vec<RegistryKey> {
-        self.inner.read().await.keys().copied().collect()
+        self.inner
+            .read()
+            .await
+            .iter()
+            .filter_map(|(k, e)| e.live.is_some().then_some(*k))
+            .collect()
     }
 
     /// Create a second [`RegistryKey`] that resolves to the same
@@ -539,41 +701,26 @@ impl SessionRefRegistry {
     /// - [`SessionRefError::CapacityExceeded`] if the registry already
     ///   holds [`MAX_SESSION_REFS_PER_RUN`] entries.
     pub async fn clone_ref(&self, src_key: RegistryKey) -> Result<RegistryKey, SessionRefError> {
-        // Snapshot the source state under short-lived read locks so we
-        // can release them before acquiring the write locks below.
-        let src_any = {
-            let main = self.inner.read().await;
-            main.get(&src_key)
-                .cloned()
-                .ok_or(SessionRefError::KeyNotFound { key: src_key })?
-        };
-        let src_serializable = self.serializable.read().await.get(&src_key).cloned();
-        let src_lifetime = self
-            .lifetimes
-            .read()
-            .await
-            .get(&src_key)
-            .copied()
-            .unwrap_or_default();
-
-        // Now take the write locks and publish the new entry. Insert
-        // the main map first so the capacity check is authoritative —
-        // if we error here the sidecars are still untouched.
         let mut main = self.inner.write().await;
+        // Snapshot the source's lanes (live + serializable + lifetime).
+        // The remote descriptor is NOT copied — a clone is a fresh local
+        // handle, not a second pointer at the remote value.
+        let src = main
+            .get(&src_key)
+            .ok_or(SessionRefError::KeyNotFound { key: src_key })?;
+        let new_entry = RegistryEntry {
+            live: src.live.clone(),
+            serializable: src.serializable.clone(),
+            lifetime: src.lifetime,
+            remote: None,
+        };
         if main.len() >= MAX_SESSION_REFS_PER_RUN {
             return Err(SessionRefError::CapacityExceeded {
                 cap: MAX_SESSION_REFS_PER_RUN,
             });
         }
         let new_key = RegistryKey::new();
-        main.insert(new_key, src_any);
-        drop(main);
-
-        if let Some(ser) = src_serializable {
-            self.serializable.write().await.insert(new_key, ser);
-        }
-        self.lifetimes.write().await.insert(new_key, src_lifetime);
-
+        main.insert(new_key, new_entry);
         Ok(new_key)
     }
 
@@ -618,26 +765,16 @@ impl SessionRefRegistry {
             return Err(SessionRefError::KeyNotFound { key: src_key });
         }
 
-        // Snapshot source state under read locks, then release them
-        // before touching the destination. Holding a read guard on
-        // `self` across an `await` on `dst_registry` is fine in
-        // principle but makes lock ordering harder to reason about, so
-        // we deliberately drop each guard as soon as we've cloned the
-        // data out.
-        let src_any = {
+        // Snapshot the whole source entry under a short-lived read lock,
+        // then release it before touching the destination. The entire
+        // unified entry (live + serializable + lifetime + remote)
+        // migrates with the ref.
+        let src_entry = {
             let main = self.inner.read().await;
             main.get(&src_key)
                 .cloned()
                 .ok_or(SessionRefError::KeyNotFound { key: src_key })?
         };
-        let src_serializable = self.serializable.read().await.get(&src_key).cloned();
-        let src_lifetime = self
-            .lifetimes
-            .read()
-            .await
-            .get(&src_key)
-            .copied()
-            .unwrap_or_default();
 
         // Publish into the destination first so that any capacity
         // failure surfaces *before* we start mutating the source. This
@@ -649,21 +786,11 @@ impl SessionRefRegistry {
                     cap: MAX_SESSION_REFS_PER_RUN,
                 });
             }
-            dst_main.insert(src_key, src_any);
+            dst_main.insert(src_key, src_entry);
         }
-        if let Some(ser) = src_serializable {
-            dst_registry.serializable.write().await.insert(src_key, ser);
-        }
-        dst_registry
-            .lifetimes
-            .write()
-            .await
-            .insert(src_key, src_lifetime);
 
         // Destination is now fully populated — drop the source.
         self.inner.write().await.remove(&src_key);
-        self.serializable.write().await.remove(&src_key);
-        self.lifetimes.write().await.remove(&src_key);
 
         Ok(src_key)
     }
@@ -1475,7 +1602,15 @@ mod tests {
             let mut main = reg.inner.write().await;
             for _ in main.len()..MAX_SESSION_REFS_PER_RUN {
                 let k = RegistryKey::new();
-                main.insert(k, Arc::new(0_i32) as AnyArc);
+                main.insert(
+                    k,
+                    RegistryEntry {
+                        live: Some(Arc::new(0_i32) as AnyArc),
+                        serializable: None,
+                        lifetime: RefLifetime::default(),
+                        remote: None,
+                    },
+                );
             }
         }
         assert_eq!(reg.len().await, MAX_SESSION_REFS_PER_RUN);
@@ -1628,7 +1763,15 @@ mod tests {
             let mut main = dst_reg.inner.write().await;
             for _ in 0..MAX_SESSION_REFS_PER_RUN {
                 let k = RegistryKey::new();
-                main.insert(k, Arc::new(0_i32) as AnyArc);
+                main.insert(
+                    k,
+                    RegistryEntry {
+                        live: Some(Arc::new(0_i32) as AnyArc),
+                        serializable: None,
+                        lifetime: RefLifetime::default(),
+                        remote: None,
+                    },
+                );
             }
         }
 
@@ -1758,11 +1901,16 @@ mod tests {
         // Saturate the remote_refs map directly so the capacity check
         // fires without churning through 10k public-API insert calls.
         {
-            let mut remote = reg.remote_refs.write().await;
+            let mut main = reg.inner.write().await;
             for i in 0..MAX_SESSION_REFS_PER_RUN {
-                remote.insert(
+                main.insert(
                     RegistryKey::new(),
-                    make_descriptor("peer-cap", "tag", i as u64),
+                    RegistryEntry {
+                        live: None,
+                        serializable: None,
+                        lifetime: RefLifetime::default(),
+                        remote: Some(make_descriptor("peer-cap", "tag", i as u64)),
+                    },
                 );
             }
         }
@@ -1799,12 +1947,18 @@ mod tests {
         // key — here we explicitly want the dual-mapping edge case.
         {
             let mut main = reg.inner.write().await;
-            main.insert(key, Arc::new(456_i32) as AnyArc);
+            // The remote descriptor entry already exists under this key;
+            // materializing the value sets the live lane in place without
+            // clobbering the remote descriptor.
+            let entry = main.entry(key).or_insert_with(|| RegistryEntry {
+                live: None,
+                serializable: None,
+                lifetime: RefLifetime::default(),
+                remote: None,
+            });
+            entry.live = Some(Arc::new(456_i32) as AnyArc);
+            entry.lifetime = RefLifetime::default();
         }
-        reg.lifetimes
-            .write()
-            .await
-            .insert(key, RefLifetime::default());
 
         // Local lookup hits the main map.
         let local = reg
@@ -1838,5 +1992,147 @@ mod tests {
         assert!(msg.contains(&key.to_string()));
         assert!(msg.contains("peer-err"));
         assert!(msg.contains("deref_session_ref"));
+    }
+
+    // --------------------------------------------------------------
+    // Unified store: live identity, dropped-not-errored, serializable survival
+    // --------------------------------------------------------------
+
+    /// (a) LIVE identity survives N in-process hops: the same Arc is returned
+    /// after repeated get/clone_ref hops (no deep copy, no JSON).
+    #[tokio::test]
+    async fn live_identity_survives_n_in_process_hops() {
+        use std::sync::atomic::{AtomicUsize, Ordering};
+        struct Tracker(AtomicUsize);
+        let reg = SessionRefRegistry::new();
+        let original = Arc::new(Tracker(AtomicUsize::new(7)));
+        let key = reg.insert_arc(original.clone() as AnyArc).await.unwrap();
+
+        let mut current = key;
+        for _ in 0..5 {
+            let got = reg.get::<Tracker>(current).await.expect("live entry present");
+            assert!(
+                Arc::ptr_eq(&got, &original),
+                "identity must survive the hop (no copy)"
+            );
+            got.0.fetch_add(1, Ordering::Relaxed); // mutate through the shared Arc
+            current = reg.clone_ref(current).await.unwrap(); // next hop = a fresh key, same Arc
+        }
+        // The original sees every mutation → it is genuinely the same object.
+        assert_eq!(original.0.load(Ordering::Relaxed), 7 + 5);
+        let final_got = reg.get::<Tracker>(current).await.unwrap();
+        assert!(Arc::ptr_eq(&final_got, &original));
+    }
+
+    /// (b) Dropped-not-errored across snapshot->restore for the LIVE-ONLY lane:
+    /// a live-only entry is gone after a fresh registry (resume), and the
+    /// lookup returns None rather than erroring.
+    #[tokio::test]
+    async fn live_only_dropped_not_errored_across_snapshot_restore() {
+        let reg = SessionRefRegistry::new();
+        let key = reg.insert(String::from("ephemeral")).await.unwrap();
+        assert!(reg.get::<String>(key).await.is_some());
+
+        // A live-only entry has no serializable lane, so it does not
+        // appear in serializable_entries() and is not rehydrated.
+        let ser = reg.serializable_entries().await;
+        assert!(
+            ser.iter().all(|(k, _)| *k != key),
+            "live-only entry must NOT be in the serializable lane"
+        );
+
+        // Resume = a brand-new registry. The key resolves to None
+        // (dropped), no panic/error.
+        let resumed = SessionRefRegistry::new();
+        assert!(
+            resumed.get::<String>(key).await.is_none(),
+            "dropped, not errored"
+        );
+        assert!(resumed.get_any(key).await.is_none());
+    }
+
+    /// (c) SERIALIZABLE lane survives a snapshot: a SessionRefSerializable
+    /// entry serializes to bytes and rehydrates under the SAME key into a
+    /// fresh registry (the resume path).
+    #[tokio::test]
+    async fn serializable_lane_survives_snapshot() {
+        let reg = SessionRefRegistry::new();
+        let key = reg
+            .insert_serializable(Arc::new(TestSerializable { value: 99 }))
+            .await
+            .unwrap();
+
+        // Snapshot: capture the serializable entry's bytes + tag.
+        let entries = reg.serializable_entries().await;
+        let (snap_key, entry) = entries
+            .iter()
+            .find(|(k, _)| *k == key)
+            .expect("entry present");
+        let tag = entry.blazen_type_tag().to_owned();
+        let bytes = entry.blazen_serialize().unwrap();
+        assert_eq!(bytes, vec![0, 0, 0, 99]);
+
+        // Resume into a fresh registry under the ORIGINAL key.
+        let resumed = SessionRefRegistry::new();
+        let value = i32::from_be_bytes([bytes[0], bytes[1], bytes[2], bytes[3]]);
+        let rehydrated: Arc<dyn SessionRefSerializable> = Arc::new(TestSerializable { value });
+        resumed
+            .insert_serializable_with_key(*snap_key, rehydrated)
+            .await
+            .unwrap();
+
+        // The survive-snapshot lane resolved under the same key.
+        let ser = resumed
+            .get_serializable(key)
+            .await
+            .expect("rehydrated under original key");
+        assert_eq!(ser.blazen_type_tag(), tag);
+        assert_eq!(ser.blazen_serialize().unwrap(), vec![0, 0, 0, 99]);
+        assert!(
+            resumed.get_any(key).await.is_some(),
+            "main map carries the holder post-resume"
+        );
+    }
+
+    /// The folded `StateValue::Native` lane: pure serializable-bytes
+    /// entries survive via the bytes/`StateValue` projection helpers and
+    /// are excluded from `len`/`keys` (no live value in flight).
+    #[tokio::test]
+    async fn serializable_bytes_lane_roundtrips_via_state_value() {
+        use crate::value::StateValue;
+
+        let reg = SessionRefRegistry::new();
+        let key = reg
+            .insert_serializable_bytes(
+                "py::pickle".to_owned(),
+                vec![0x80, 0x04, 0x95],
+                RefLifetime::UntilContextDrop,
+            )
+            .await
+            .unwrap();
+
+        // Pure-bytes entry is NOT counted as a live ref in flight.
+        assert_eq!(reg.len().await, 0);
+        assert!(reg.get_any(key).await.is_none());
+
+        // get_serializable returns None (it is not a trait object).
+        assert!(reg.get_serializable(key).await.is_none());
+
+        // The bytes + tag are readable, and project to StateValue::Native.
+        let (tag, data) = reg.get_serializable_bytes(key).await.unwrap();
+        assert_eq!(tag, "py::pickle");
+        assert_eq!(data, vec![0x80, 0x04, 0x95]);
+        let sv = reg.native_state_value(key).await.unwrap();
+        assert_eq!(sv, StateValue::native(vec![0x80, 0x04, 0x95]));
+
+        // And a StateValue::Native ingests back into a fresh bytes entry.
+        let resumed = SessionRefRegistry::new();
+        let new_key = resumed
+            .insert_native_state_value(&sv, "py::pickle".to_owned())
+            .await
+            .unwrap();
+        let (tag2, data2) = resumed.get_serializable_bytes(new_key).await.unwrap();
+        assert_eq!(tag2, "py::pickle");
+        assert_eq!(data2, vec![0x80, 0x04, 0x95]);
     }
 }

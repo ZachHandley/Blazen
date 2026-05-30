@@ -63,6 +63,17 @@ pub trait Event: Send + Sync + Debug + Clone + 'static {
     /// produced by foreign language bindings may carry a live object (e.g. a
     /// `Py<PyAny>`) so the binding can recover the original instance without a
     /// `DynamicEvent` downcast or a JSON round-trip.
+    ///
+    /// This is the Send-native live lane of the unified session-ref store:
+    /// `Send` natives (e.g. `Py<PyAny>`, which is `Send + Sync + 'static`)
+    /// may be held directly here for in-process identity — the `Arc` rides
+    /// along with each event clone and is simply `None` after a
+    /// snapshot/resume round-trip (dropped, not errored). `!Send` host
+    /// objects (JS/wasm handles bound to their host heap) CANNOT live in an
+    /// `Arc<dyn Any + Send + Sync>`; they must instead be inserted into the
+    /// `SessionRefRegistry` and referenced from the event's JSON payload via
+    /// the `{"__blazen_session_ref__": "<uuid>"}` marker, which resolves
+    /// through the same unified store on the host thread.
     #[must_use]
     fn native_handle(&self) -> Option<Arc<dyn Any + Send + Sync>> {
         None
@@ -463,6 +474,14 @@ impl DynamicEvent {
     ///
     /// `data` is left as `Null`; JSON is computed lazily from `native` on the
     /// first call to [`DynamicEvent::to_json`].
+    ///
+    /// Only `Send + Sync + 'static` natives belong here (e.g. `Py<PyAny>`):
+    /// they are held directly for in-process identity and are dropped — not
+    /// errored — across a snapshot/resume boundary (`native` becomes `None`
+    /// after deserialization). `!Send` host objects (JS/wasm handles) must
+    /// NOT use this constructor; insert them into the `SessionRefRegistry`
+    /// and reference the registry key from the event payload via the
+    /// `{"__blazen_session_ref__": "<uuid>"}` marker instead.
     #[must_use]
     pub fn with_native(
         event_type: impl Into<String>,

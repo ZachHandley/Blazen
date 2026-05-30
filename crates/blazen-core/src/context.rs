@@ -34,14 +34,20 @@ struct ContextInner {
     event_tx: mpsc::UnboundedSender<EventEnvelope>,
     /// Sender side of the external broadcast channel for streaming.
     stream_tx: broadcast::Sender<Box<dyn AnyEvent>>,
-    /// Fan-in accumulator keyed by event type string.
-    collected: HashMap<String, Vec<serde_json::Value>>,
+    /// Fan-in accumulator keyed by event type string. Holds LIVE events
+    /// (not pre-serialized JSON) so native handles survive collection;
+    /// serialization happens lazily only at [`Context::snapshot_collected`].
+    collected: HashMap<String, Vec<Box<dyn AnyEvent>>>,
     /// Arbitrary JSON metadata (e.g. `run_id`, workflow name).
     metadata: HashMap<String, serde_json::Value>,
-    /// Opaque in-process objects (DB connections, file handles, etc.).
-    /// NOT serialized — excluded from snapshots. Bindings store platform-specific
-    /// types here and downcast on retrieval.
-    objects: HashMap<String, Box<dyn Any + Send + Sync>>,
+    /// String-keyed index into [`Self::session_refs`] for objects
+    /// inserted via [`Context::set_object`]. Folds the former
+    /// string-keyed `objects` bag into the unified session-ref store:
+    /// the live value lives in `session_refs` under
+    /// [`crate::session_ref::RefLifetime::UntilContextDrop`] (so it is
+    /// excluded from snapshots and drained on termination exactly as
+    /// before), and this map preserves the string-key API.
+    object_keys: HashMap<String, crate::session_ref::RegistryKey>,
     /// Session-scoped live reference registry. Auto-routed values from
     /// event payloads land here, keyed by Uuid. Excluded from snapshots
     /// in the same way `objects` is.
@@ -111,7 +117,7 @@ impl Context {
                 stream_tx,
                 collected: HashMap::new(),
                 metadata: HashMap::new(),
-                objects: HashMap::new(),
+                object_keys: HashMap::new(),
                 session_refs: Arc::new(crate::session_ref::SessionRefRegistry::new()),
                 session_pause_policy: crate::session_ref::SessionPausePolicy::default(),
                 #[cfg(feature = "distributed")]
@@ -145,7 +151,7 @@ impl Context {
                 stream_tx,
                 collected: HashMap::new(),
                 metadata: HashMap::new(),
-                objects: HashMap::new(),
+                object_keys: HashMap::new(),
                 session_refs,
                 session_pause_policy: crate::session_ref::SessionPausePolicy::default(),
                 #[cfg(feature = "distributed")]
@@ -174,7 +180,7 @@ impl Context {
                 stream_tx,
                 collected: HashMap::new(),
                 metadata: HashMap::new(),
-                objects: HashMap::new(),
+                object_keys: HashMap::new(),
                 session_refs,
                 session_pause_policy: crate::session_ref::SessionPausePolicy::default(),
                 peer_client: Some(peer_client),
@@ -338,8 +344,28 @@ impl Context {
     /// pause/resume. Use this for DB connections, file handles, and other
     /// resources that must be shared across steps within a single run.
     pub async fn set_object<T: Any + Send + Sync + 'static>(&self, key: &str, value: T) {
+        // Fold the former string-keyed `objects` bag into the unified
+        // session-ref store. The live value is inserted under
+        // `UntilContextDrop` (so it is snapshot-excluded and drained on
+        // termination exactly as `objects` was), and `object_keys`
+        // preserves the string-key API.
+        let (refs, old_key) = {
+            let mut inner = self.inner.write().await;
+            let old = inner.object_keys.remove(key);
+            (inner.session_refs.clone(), old)
+        };
+        if let Some(old) = old_key {
+            refs.remove(old).await;
+        }
+        // `insert_with_lifetime` wraps the value in `Arc::new(value)`,
+        // matching the old `Box::new(value)` storage so `get_object::<T>`
+        // downcasts identically.
+        let id = refs
+            .insert_with_lifetime(value, crate::session_ref::RefLifetime::UntilContextDrop)
+            .await
+            .expect("session ref registry capacity exceeded in set_object");
         let mut inner = self.inner.write().await;
-        inner.objects.insert(key.to_owned(), Box::new(value));
+        inner.object_keys.insert(key.to_owned(), id);
     }
 
     /// Retrieve a live in-process object previously stored under `key`.
@@ -347,24 +373,32 @@ impl Context {
     /// Returns `None` if the key does not exist or the stored type does
     /// not match `T`.
     pub async fn get_object<T: Any + Send + Sync + Clone + 'static>(&self, key: &str) -> Option<T> {
-        let inner = self.inner.read().await;
-        inner
-            .objects
-            .get(key)
-            .and_then(|v| v.downcast_ref::<T>())
-            .cloned()
+        let (refs, id) = {
+            let inner = self.inner.read().await;
+            let id = *inner.object_keys.get(key)?;
+            (inner.session_refs.clone(), id)
+        };
+        // `get::<T>` returns `Arc<T>`; clone the inner `T` to match the
+        // old `downcast_ref::<T>().cloned()` semantics.
+        refs.get::<T>(id).await.map(|arc| (*arc).clone())
     }
 
     /// Remove a live in-process object stored under `key`.
     pub async fn remove_object(&self, key: &str) {
-        let mut inner = self.inner.write().await;
-        inner.objects.remove(key);
+        let (refs, id) = {
+            let mut inner = self.inner.write().await;
+            match inner.object_keys.remove(key) {
+                Some(id) => (inner.session_refs.clone(), id),
+                None => return,
+            }
+        };
+        refs.remove(id).await;
     }
 
     /// Check whether an opaque object exists under `key`.
     pub async fn has_object(&self, key: &str) -> bool {
         let inner = self.inner.read().await;
-        inner.objects.contains_key(key)
+        inner.object_keys.contains_key(key)
     }
 
     // -----------------------------------------------------------------
@@ -523,12 +557,19 @@ impl Context {
 
         let collected = inner.collected.entry(type_key).or_default();
         if collected.len() >= expected_count {
-            let drained: Vec<serde_json::Value> = collected.drain(..expected_count).collect();
+            let drained: Vec<Box<dyn AnyEvent>> = collected.drain(..expected_count).collect();
             let mut results = Vec::with_capacity(drained.len());
-            for json_val in drained {
-                if let Ok(concrete) = serde_json::from_value::<E>(json_val) {
+            for ev in drained {
+                // Fast path: live downcast (preserves native identity, no
+                // JSON round-trip).
+                if let Some(concrete) = ev.as_any().downcast_ref::<E>() {
+                    results.push(concrete.clone());
+                } else if let Ok(concrete) = serde_json::from_value::<E>(ev.to_json()) {
+                    // Fallback for post-resume DynamicEvents that wrap E's
+                    // payload.
                     results.push(concrete);
                 }
+                // else: silent drop (preserve current semantics).
             }
             Some(results)
         } else {
@@ -538,13 +579,18 @@ impl Context {
 
     /// Push a type-erased event into the fan-in accumulator.
     ///
-    /// The event is serialized to JSON and stored under its event type
-    /// string (obtained via `AnyEvent::event_type_id`).
+    /// Stores the LIVE event (via `clone_boxed`) under its event type
+    /// string (obtained via `AnyEvent::event_type_id`). Serialization is
+    /// deferred to [`Context::snapshot_collected`], the only place
+    /// collected events are turned into JSON.
     pub(crate) async fn push_collected(&self, event: &dyn AnyEvent) {
         let mut inner = self.inner.write().await;
         let type_key = event.event_type_id().to_owned();
-        let json_val = event.to_json();
-        inner.collected.entry(type_key).or_default().push(json_val);
+        inner
+            .collected
+            .entry(type_key)
+            .or_default()
+            .push(event.clone_boxed());
     }
 
     /// Clear the collection buffer for a specific event type.
@@ -581,17 +627,41 @@ impl Context {
     ///
     /// Useful for checkpointing fan-in state alongside the main state map.
     pub async fn snapshot_collected(&self) -> HashMap<String, Vec<serde_json::Value>> {
+        // THE ONLY place collected events are serialized to JSON.
         let inner = self.inner.read().await;
-        inner.collected.clone()
+        inner
+            .collected
+            .iter()
+            .map(|(k, evs)| (k.clone(), evs.iter().map(|e| e.to_json()).collect()))
+            .collect()
     }
 
     /// Replace the collected events map wholesale.
     ///
     /// Used to restore fan-in state from a previous checkpoint. Any existing
     /// collected events are discarded.
+    ///
+    /// Rebuilds LIVE events from the JSON wire form: each entry is
+    /// reconstructed via [`blazen_events::try_deserialize_event`] (so the
+    /// concrete type's `downcast_ref` keeps working), falling back to a
+    /// [`blazen_events::DynamicEvent`] with `native = None` — the native
+    /// identity is intentionally dropped after resume, NOT errored.
     pub async fn restore_collected(&self, collected: HashMap<String, Vec<serde_json::Value>>) {
         let mut inner = self.inner.write().await;
-        inner.collected = collected;
+        inner.collected = collected
+            .into_iter()
+            .map(|(type_key, jsons)| {
+                let live: Vec<Box<dyn AnyEvent>> = jsons
+                    .into_iter()
+                    .map(|json| {
+                        blazen_events::try_deserialize_event(&type_key, &json).unwrap_or_else(
+                            || Box::new(blazen_events::DynamicEvent::from_json(type_key.clone(), json)),
+                        )
+                    })
+                    .collect();
+                (type_key, live)
+            })
+            .collect();
     }
 
     /// Returns a clone of the metadata map.
@@ -771,6 +841,29 @@ mod tests {
         assert_eq!(events.len(), 2);
         assert_eq!(events[0].data, serde_json::json!(1));
         assert_eq!(events[1].data, serde_json::json!(2));
+    }
+
+    #[tokio::test]
+    async fn collected_downcast_first_then_json_fallback() {
+        use blazen_events::{DynamicEvent, StartEvent};
+        let ctx = test_context();
+        // Ensure the StartEvent deserializer is registered (idempotent).
+        let _ = StartEvent::event_type();
+        // Live StartEvent → downcast-first path.
+        ctx.push_collected(&StartEvent {
+            data: serde_json::json!(1),
+        })
+        .await;
+        // DynamicEvent wrapping a StartEvent payload → JSON-fallback path.
+        ctx.push_collected(&DynamicEvent::from_json(
+            "blazen::StartEvent",
+            serde_json::json!({"data": 2}),
+        ))
+        .await;
+        let got = ctx.collect_events::<StartEvent>(2).await.unwrap();
+        assert_eq!(got.len(), 2);
+        assert_eq!(got[0].data, serde_json::json!(1)); // downcast
+        assert_eq!(got[1].data, serde_json::json!(2)); // json fallback
     }
 
     #[tokio::test]
