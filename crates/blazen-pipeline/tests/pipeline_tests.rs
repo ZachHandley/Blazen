@@ -1679,7 +1679,12 @@ async fn pipeline_stage_with_typed_state_round_trip() {
         .unwrap();
 
     let h = pipeline.start(serde_json::json!({"issue_count": 3}));
-    let result = h.result().await.expect("pipeline runs cleanly");
+    // Watchdog: a regression in the stage event-forward draining can deadlock
+    // `result()` (it once hung CI for 2.6h). Fail fast and named instead.
+    let result = tokio::time::timeout(std::time::Duration::from_secs(30), h.result())
+        .await
+        .expect("pipeline result deadlocked (event-forward drain hang regression?)")
+        .expect("pipeline runs cleanly");
 
     let stage1_wrote = *observed_fix_count_stage1.lock().unwrap();
     let stage2_saw = *observed_fix_count_stage2.lock().unwrap();

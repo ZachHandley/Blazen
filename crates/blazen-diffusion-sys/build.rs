@@ -13,6 +13,51 @@ use fs_extra::dir;
 
 // Inspired by https://github.com/tazz4843/whisper-rs/blob/master/sys/build.rs
 
+// Blazen fork: GPU-backend toolchain auto-detection. When a GPU cargo
+// feature is enabled but the matching SDK/toolchain is absent on the host
+// (e.g. building `cuda`/`hipblas`/`vulkan`/`sycl` on a Mac), gracefully
+// skip that backend with a `cargo:warning=` instead of panicking. When the
+// toolchain IS present, behavior is byte-identical to before.
+//
+// These helpers are only referenced from `#[cfg(feature = "...")]` GPU
+// blocks, so in a default (CPU/Metal) build they go unused — silence the
+// resulting dead_code warning.
+#[allow(dead_code)]
+fn cmd_ok(cmd: &str, arg: &str) -> bool {
+    std::process::Command::new(cmd)
+        .arg(arg)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+#[allow(dead_code)]
+fn any_env_dir(vars: &[&str]) -> bool {
+    vars.iter().any(|v| {
+        std::env::var(v)
+            .map(|p| !p.is_empty() && std::path::Path::new(&p).exists())
+            .unwrap_or(false)
+    })
+}
+#[allow(dead_code)]
+fn cuda_present() -> bool {
+    cmd_ok("nvcc", "--version")
+        || any_env_dir(&["CUDA_PATH", "CUDA_HOME", "CUDA_TOOLKIT_ROOT_DIR"])
+}
+#[allow(dead_code)]
+fn rocm_present() -> bool {
+    cmd_ok("hipcc", "--version")
+        || any_env_dir(&["HIP_PATH", "ROCM_PATH"])
+        || std::path::Path::new("/opt/rocm").exists()
+}
+#[allow(dead_code)]
+fn vulkan_present() -> bool {
+    any_env_dir(&["VULKAN_SDK"]) || cmd_ok("glslc", "--version")
+}
+#[allow(dead_code)]
+fn sycl_present() -> bool {
+    any_env_dir(&["ONEAPI_ROOT"])
+}
+
 fn main() {
     // Link C++ standard library
     let target = env::var("TARGET").unwrap();
@@ -109,7 +154,7 @@ fn main() {
 
     //Enable cmake feature flags
     #[cfg(feature = "cuda")]
-    {
+    if cuda_present() {
         println!("cargo:rerun-if-env-changed=CUDA_PATH");
         println!("cargo:rustc-link-lib=cublas");
         println!("cargo:rustc-link-lib=cudart");
@@ -117,7 +162,10 @@ fn main() {
         println!("cargo:rustc-link-lib=cuda");
 
         if target.contains("msvc") {
-            let cuda_path = PathBuf::from(env::var("CUDA_PATH").unwrap()).join("lib/x64");
+            let cuda_path = PathBuf::from(
+                env::var("CUDA_PATH").expect("CUDA toolchain detected but CUDA_PATH env variable is not set"),
+            )
+            .join("lib/x64");
             println!("cargo:rustc-link-search={}", cuda_path.display());
         } else {
             println!("cargo:rustc-link-lib=culibos");
@@ -131,10 +179,12 @@ fn main() {
         if let Ok(target) = env::var("CUDA_COMPUTE_CAP") {
             config.define("CUDA_COMPUTE_CAP", target);
         }
+    } else {
+        println!("cargo:warning=feature `cuda` enabled but CUDA toolchain not detected — skipping CUDA backend.");
     }
 
     #[cfg(feature = "hipblas")]
-    {
+    if rocm_present() {
         println!("cargo:rerun-if-env-changed=HIP_PATH");
         println!("cargo:rustc-link-lib=hipblas");
         println!("cargo:rustc-link-lib=rocblas");
@@ -162,6 +212,8 @@ fn main() {
             config.define("AMDGPU_TARGETS", &target);
             config.define("GPU_TARGETS", target);
         }
+    } else {
+        println!("cargo:warning=feature `hipblas` enabled but ROCm/HIP toolchain not detected — skipping HIPBLAS backend.");
     }
 
     #[cfg(feature = "metal")]
@@ -173,7 +225,7 @@ fn main() {
     }
 
     #[cfg(feature = "vulkan")]
-    {
+    if vulkan_present() {
         let vulkan_path = env::var("VULKAN_SDK").map(|path| PathBuf::from(path));
         if target.contains("msvc") {
             println!("cargo:rerun-if-env-changed=VULKAN_SDK");
@@ -194,10 +246,12 @@ fn main() {
             println!("cargo:rustc-link-lib=vulkan");
         }
         config.define("SD_VULKAN", "ON");
+    } else {
+        println!("cargo:warning=feature `vulkan` enabled but Vulkan SDK not detected — skipping Vulkan backend.");
     }
 
     #[cfg(feature = "sycl")]
-    {
+    if sycl_present() {
         env::var("ONEAPI_ROOT").expect("Please load the oneAPi environment before building. See https://github.com/ggerganov/llama.cpp/blob/master/docs/backend/SYCL.md");
         let sycl_lib_path = PathBuf::from(env::var("ONEAPI_ROOT").unwrap()).join("mkl/latest/lib");
         println!("cargo:rustc-link-search={}", sycl_lib_path.display());
@@ -229,6 +283,8 @@ fn main() {
             config.define("CMAKE_CXX_COMPILER", "icpx");
         }
         config.define("SD_SYCL", "ON");
+    } else {
+        println!("cargo:warning=feature `sycl` enabled but oneAPI/SYCL toolchain not detected — skipping SYCL backend.");
     }
 
     // Build stable-diffusion
@@ -253,20 +309,33 @@ fn main() {
         println!("cargo:rustc-link-lib=framework=Accelerate");
     }
 
+    // Only emit the backend-specific ggml link line when the backend was
+    // actually enabled above (toolchain present). When a GPU feature is on
+    // but its toolchain was missing, the SD_* cmake flag was skipped and
+    // cmake never built the matching `ggml-<backend>` static lib, so linking
+    // against it would fail — guard with the same `*_present()` check.
     #[cfg(all(feature = "cuda", not(feature = "system-ggml")))]
-    println!("cargo:rustc-link-lib=static=ggml-cuda");
+    if cuda_present() {
+        println!("cargo:rustc-link-lib=static=ggml-cuda");
+    }
 
     #[cfg(all(feature = "hipblas", not(feature = "system-ggml")))]
-    println!("cargo:rustc-link-lib=static=ggml-hip");
+    if rocm_present() {
+        println!("cargo:rustc-link-lib=static=ggml-hip");
+    }
 
     #[cfg(all(feature = "metal", not(feature = "system-ggml")))]
     println!("cargo:rustc-link-lib=static=ggml-metal");
 
     #[cfg(all(feature = "vulkan", not(feature = "system-ggml")))]
-    println!("cargo:rustc-link-lib=static=ggml-vulkan");
+    if vulkan_present() {
+        println!("cargo:rustc-link-lib=static=ggml-vulkan");
+    }
 
     #[cfg(all(feature = "sycl", not(feature = "system-ggml")))]
-    println!("cargo:rustc-link-lib=static=ggml-sycl");
+    if sycl_present() {
+        println!("cargo:rustc-link-lib=static=ggml-sycl");
+    }
 }
 
 fn add_link_search_path(dir: &Path) -> std::io::Result<()> {

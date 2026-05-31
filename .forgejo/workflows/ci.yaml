@@ -171,6 +171,18 @@ jobs:
           else
             echo "fast=false" >> "$GITHUB_OUTPUT"
           fi
+          # [purge] anywhere in the subject forces a FRESH artifact rebuild:
+          # auto-tag dispatches build-artifacts with purge_existing=true, which
+          # deletes the cached `blazen-build` package + ci-status markers for the
+          # version so every target rebuilds from the new sha (no stale cached
+          # artifacts shipped). Use after a fix that must invalidate prior
+          # artifacts. Without it, build-artifacts reuses cached step results.
+          if [[ "$SUBJECT" == *"[purge]"* ]]; then
+            echo "purge=true" >> "$GITHUB_OUTPUT"
+            echo "Detected [purge] — build-artifacts will be dispatched with purge_existing=true."
+          else
+            echo "purge=false" >> "$GITHUB_OUTPUT"
+          fi
           # [vX.Y.Z] anywhere in subject OR body pins the next release
           # version. Feeds resolve-version's highest-priority `version:`
           # input in both the top-level `version` job and `auto-tag`'s
@@ -1439,12 +1451,16 @@ jobs:
           VERSION='${{ steps.pick.outputs.version }}'
           BRANCH='${{ steps.pick.outputs.branch }}'
           REASON='${{ steps.pick.outputs.reason }}'
-          echo "Dispatching build-artifacts for v${VERSION} on ${BRANCH} (reason: ${REASON})"
+          # `[purge]` on the commit (or workflow_dispatch trigger_builds) forces
+          # a fresh rebuild that invalidates cached artifacts for this version.
+          PURGE='${{ needs.detect.outputs.purge }}'
+          [ "$PURGE" = 'true' ] || PURGE='false'
+          echo "Dispatching build-artifacts for v${VERSION} on ${BRANCH} (reason: ${REASON}, purge: ${PURGE})"
           curl -s -X POST \
             -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
             -H "Content-Type: application/json" \
             "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/actions/workflows/build-artifacts.yaml/dispatches" \
-            -d "{\"ref\": \"refs/heads/${BRANCH}\", \"inputs\": {\"version\": \"${VERSION}\"}}"
+            -d "{\"ref\": \"refs/heads/${BRANCH}\", \"inputs\": {\"version\": \"${VERSION}\", \"purge_existing\": \"${PURGE}\"}}"
 
       # Record the build-success cursor for the diff-driven test skip.
       # Subsequent ci.yaml runs at the same version read this marker via

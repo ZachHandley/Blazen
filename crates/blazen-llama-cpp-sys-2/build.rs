@@ -206,6 +206,42 @@ fn is_hidden(e: &DirEntry) -> bool {
         .unwrap_or_default()
 }
 
+// GPU-backend toolchain auto-detection.
+//
+// When a GPU feature (cuda/vulkan/rocm) is enabled but the corresponding SDK is
+// absent on the build host (e.g. building on a Mac), we gracefully skip enabling
+// that backend — degrading to whatever IS present (CPU/Metal) — instead of
+// panicking. When the toolchain IS present, behavior is byte-identical to before.
+fn cmd_ok(cmd: &str, arg: &str) -> bool {
+    Command::new(cmd)
+        .arg(arg)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+fn any_env_dir(vars: &[&str]) -> bool {
+    vars.iter().any(|v| {
+        env::var(v)
+            .map(|p| !p.is_empty() && Path::new(&p).exists())
+            .unwrap_or(false)
+    })
+}
+
+fn cuda_present() -> bool {
+    cmd_ok("nvcc", "--version") || any_env_dir(&["CUDA_PATH", "CUDA_HOME", "CUDA_TOOLKIT_ROOT_DIR"])
+}
+
+fn rocm_present() -> bool {
+    cmd_ok("hipcc", "--version")
+        || any_env_dir(&["HIP_PATH", "ROCM_PATH"])
+        || Path::new("/opt/rocm").exists()
+}
+
+fn vulkan_present() -> bool {
+    any_env_dir(&["VULKAN_SDK"]) || cmd_ok("glslc", "--version")
+}
+
 fn main() {
     println!("cargo:rerun-if-changed=build.rs");
 
@@ -778,49 +814,63 @@ fn main() {
     }
 
     if cfg!(feature = "vulkan") {
-        config.define("GGML_VULKAN", "ON");
-        match target_os {
-            TargetOs::Windows(_) => {
-                let vulkan_path = env::var("VULKAN_SDK").expect(
-                    "Please install Vulkan SDK and ensure that VULKAN_SDK env variable is set",
-                );
-                let vulkan_lib_path = Path::new(&vulkan_path).join("Lib");
-                println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
-                println!("cargo:rustc-link-lib=vulkan-1");
+        if vulkan_present() {
+            config.define("GGML_VULKAN", "ON");
+            match target_os {
+                TargetOs::Windows(_) => {
+                    // The outer vulkan_present() guard means we only get here when a
+                    // Vulkan SDK is detected. Prefer VULKAN_SDK; fall back safely
+                    // rather than panicking if it's set via glslc on PATH instead.
+                    if let Ok(vulkan_path) = env::var("VULKAN_SDK") {
+                        let vulkan_lib_path = Path::new(&vulkan_path).join("Lib");
+                        println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
+                    }
+                    println!("cargo:rustc-link-lib=vulkan-1");
 
-                // workaround for this error: "FileTracker : error FTK1011: could not create the new file tracking log file"
-                // it has to do with MSBuild FileTracker not respecting the path
-                // limit configuration set in the windows registry.
-                // I'm not sure why that's a thing, but this makes my builds work.
-                // (crates that depend on llama-cpp-rs w/ vulkan easily exceed the default PATH_MAX on windows)
-                env::set_var("TrackFileAccess", "false");
-                // since we disabled TrackFileAccess, we can now run into problems with parallel
-                // access to pdb files. /FS solves this.
-                config.cflag("/FS");
-                config.cxxflag("/FS");
-            }
-            TargetOs::Linux => {
-                // If we are not using system provided vulkan SDK, add vulkan libs for linking
-                if let Ok(vulkan_path) = env::var("VULKAN_SDK") {
-                    let vulkan_lib_path = Path::new(&vulkan_path).join("lib");
-                    println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
+                    // workaround for this error: "FileTracker : error FTK1011: could not create the new file tracking log file"
+                    // it has to do with MSBuild FileTracker not respecting the path
+                    // limit configuration set in the windows registry.
+                    // I'm not sure why that's a thing, but this makes my builds work.
+                    // (crates that depend on llama-cpp-rs w/ vulkan easily exceed the default PATH_MAX on windows)
+                    env::set_var("TrackFileAccess", "false");
+                    // since we disabled TrackFileAccess, we can now run into problems with parallel
+                    // access to pdb files. /FS solves this.
+                    config.cflag("/FS");
+                    config.cxxflag("/FS");
                 }
-                println!("cargo:rustc-link-lib=vulkan");
+                TargetOs::Linux => {
+                    // If we are not using system provided vulkan SDK, add vulkan libs for linking
+                    if let Ok(vulkan_path) = env::var("VULKAN_SDK") {
+                        let vulkan_lib_path = Path::new(&vulkan_path).join("lib");
+                        println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
+                    }
+                    println!("cargo:rustc-link-lib=vulkan");
+                }
+                _ => (),
             }
-            _ => (),
+        } else {
+            println!("cargo:warning=feature `vulkan` enabled but no Vulkan SDK (VULKAN_SDK / glslc) detected — skipping Vulkan backend (building CPU/other backends instead).");
         }
     }
 
     if cfg!(feature = "cuda") {
-        config.define("GGML_CUDA", "ON");
+        if cuda_present() {
+            config.define("GGML_CUDA", "ON");
 
-        if cfg!(feature = "cuda-no-vmm") {
-            config.define("GGML_CUDA_NO_VMM", "ON");
+            if cfg!(feature = "cuda-no-vmm") {
+                config.define("GGML_CUDA_NO_VMM", "ON");
+            }
+        } else {
+            println!("cargo:warning=feature `cuda` enabled but no CUDA toolkit (nvcc / CUDA_PATH) detected — skipping CUDA backend (building CPU/other backends instead).");
         }
     }
 
     if cfg!(feature = "rocm") {
-        config.define("GGML_HIP", "ON");
+        if rocm_present() {
+            config.define("GGML_HIP", "ON");
+        } else {
+            println!("cargo:warning=feature `rocm` enabled but no ROCm toolkit (hipcc / ROCM_PATH / /opt/rocm) detected — skipping ROCm backend (building CPU/other backends instead).");
+        }
     }
 
     // Android doesn't have OpenMP support AFAICT and openmp is a default feature. Do this here
@@ -956,7 +1006,7 @@ fn main() {
         }
     }
 
-    if cfg!(feature = "cuda") && !build_shared_libs {
+    if cfg!(feature = "cuda") && cuda_present() && !build_shared_libs {
         // Re-run build script if CUDA_PATH environment variable changes
         println!("cargo:rerun-if-env-changed=CUDA_PATH");
 
@@ -997,7 +1047,7 @@ fn main() {
         }
     }
 
-    if cfg!(feature = "rocm") && !build_shared_libs {
+    if cfg!(feature = "rocm") && rocm_present() && !build_shared_libs {
         // Re-run build script if ROCM_PATH environment variable changes
         println!("cargo:rerun-if-env-changed=ROCM_PATH");
         println!("cargo:rerun-if-env-changed=HIP_PATH");

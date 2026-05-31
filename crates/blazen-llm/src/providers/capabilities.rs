@@ -543,11 +543,44 @@ impl<P: VcProvider + ?Sized> VcProvider for Arc<P> {
     }
 }
 
-// ThreeD
-impl_arc_passthrough!(
-    ThreeDProvider,
-    generate_3d(request: ThreeDRequest) -> Result<ThreeDResult, BlazenError>,
-);
+// ThreeD — the post-processing stages (texturize/rig/refine/animate) are
+// `#[cfg(feature = "threed")]` defaulted methods that don't fit the simple
+// macro shape; hand-expand so `Arc<P>` forwards a provider's overrides instead
+// of silently falling back to the `Unsupported` trait defaults.
+#[async_trait]
+impl<P: ThreeDProvider + ?Sized> ThreeDProvider for Arc<P> {
+    async fn generate_3d(&self, request: ThreeDRequest) -> Result<ThreeDResult, BlazenError> {
+        (**self).generate_3d(request).await
+    }
+    #[cfg(feature = "threed")]
+    async fn texturize(
+        &self,
+        mesh_glb: &[u8],
+        request: TexturizeRequest,
+    ) -> Result<TexturizeResult, BlazenError> {
+        (**self).texturize(mesh_glb, request).await
+    }
+    #[cfg(feature = "threed")]
+    async fn rig(&self, mesh_glb: &[u8], request: RigRequest) -> Result<RigResult, BlazenError> {
+        (**self).rig(mesh_glb, request).await
+    }
+    #[cfg(feature = "threed")]
+    async fn refine(
+        &self,
+        mesh_glb: &[u8],
+        request: RefineRequest,
+    ) -> Result<RefineResult, BlazenError> {
+        (**self).refine(mesh_glb, request).await
+    }
+    #[cfg(feature = "threed")]
+    async fn animate(
+        &self,
+        rigged_glb: &[u8],
+        request: AnimateRequest,
+    ) -> Result<AnimateResult, BlazenError> {
+        (**self).animate(rigged_glb, request).await
+    }
+}
 
 // ImageGen
 impl_arc_passthrough!(

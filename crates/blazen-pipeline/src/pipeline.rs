@@ -971,18 +971,23 @@ where
         .take_result_rx()
         .expect("fresh workflow handler always has a result receiver");
     let handler = Arc::new(handler);
-    active_stage.set_current(Arc::clone(&handler)).await;
 
-    // Subscribe to the workflow's event stream and forward events while
-    // also accumulating UsageEvent totals.
+    // Subscribe to the workflow's event stream BEFORE the `set_current` await
+    // point below: `stream_events()` is a `broadcast::Receiver` that only sees
+    // events sent AFTER it subscribes, and `set_current` yields. Subscribing
+    // first shrinks the window in which a very fast workflow could emit (and we
+    // miss) its `StreamEnd` sentinel. The bounded await on `forward_handle`
+    // further down handles the residual race so we can never hang.
     let stage_name = stage.name.clone();
     let stream_tx_clone = stream_tx.clone();
     let mut wf_stream = handler.stream_events();
 
+    active_stage.set_current(Arc::clone(&handler)).await;
+
     // Forward events in a separate task while awaiting the result.
     // Returns the per-stage usage / cost totals it observed.
     let env_tx_clone = event_envelope_tx.cloned();
-    let forward_handle: JoinHandle<(blazen_llm::types::TokenUsage, f64)> = runtime::spawn({
+    let mut forward_handle: JoinHandle<(blazen_llm::types::TokenUsage, f64)> = runtime::spawn({
         let stage_name = stage_name.clone();
         async move {
             let mut usage = blazen_llm::types::TokenUsage::default();
@@ -1056,8 +1061,27 @@ where
     match wf_result {
         Ok(event) => {
             // Wait for the forwarding task to finish cleanly so we capture
-            // every UsageEvent emitted before the workflow shut down.
-            let (stage_usage, stage_cost) = forward_handle.await.unwrap_or_default();
+            // every UsageEvent emitted before the workflow shut down — but
+            // BOUNDED. The workflow's terminal result already arrived, so its
+            // `StreamEnd` sentinel is imminent. If the forward task never sees
+            // it (a `broadcast` subscribe-after-emit race for trivial
+            // workflows, made unrecoverable because the live `WorkflowHandler`
+            // in `active_stage` keeps a stream `Sender` clone alive so the
+            // receiver never closes), abort rather than hang forever. In that
+            // race the task observed no events anyway, so the usage it would
+            // have reported was already lost — bounding costs nothing extra.
+            let (stage_usage, stage_cost) = if let Ok(joined) =
+                runtime::timeout(Duration::from_secs(3), &mut forward_handle).await
+            {
+                joined.unwrap_or_default()
+            } else {
+                forward_handle.abort();
+                tracing::warn!(
+                    stage = %stage_name,
+                    "event-forward task did not observe StreamEnd; usage totals may be incomplete"
+                );
+                <(blazen_llm::types::TokenUsage, f64)>::default()
+            };
             let output = extract_stop_result(&*event);
             Ok(StageSuccess {
                 output,
@@ -1503,12 +1527,20 @@ where
         }
     }
 
-    // Drain forward handles to harvest per-branch usage / cost totals,
-    // then sum into the parent stage's totals.
+    // Drain forward handles to harvest per-branch usage / cost totals, then
+    // sum into the parent stage's totals. Bounded: every branch already
+    // produced its terminal result above, so its `StreamEnd` is imminent; if a
+    // forwarder never observes it (the broadcast subscribe-after-emit race —
+    // see `run_sequential_stage`), drop it rather than hang the whole pipeline.
     let mut stage_usage = blazen_llm::types::TokenUsage::default();
     let mut stage_cost: f64 = 0.0;
-    for fh in forward_handles {
-        let (u, c) = fh.await.unwrap_or_default();
+    for mut fh in forward_handles {
+        let (u, c) = if let Ok(joined) = runtime::timeout(Duration::from_secs(3), &mut fh).await {
+            joined.unwrap_or_default()
+        } else {
+            fh.abort();
+            <(blazen_llm::types::TokenUsage, f64)>::default()
+        };
         stage_usage.add(&u);
         stage_cost += c;
     }

@@ -1,0 +1,25 @@
+# cargo-nextest configuration.
+#
+# The headline reason this file exists: a HARD terminating timeout. Without it,
+# a hung test runs until the CI runner's job deadline — a deadlocked test once
+# ran 2.6h before the `nvidia` runner killed the whole `Test` step. With a
+# terminating `slow-timeout`, any test still running after `period *
+# terminate-after` is SIGTERM'd, then SIGKILL'd, and reported as a named
+# `TIMEOUT` failure in minutes — never again a multi-hour silent wedge.
+
+[profile.default]
+# Warn at 60s; terminate (and fail) after 5 * 60s = 5 minutes.
+slow-timeout = { period = "60s", terminate-after = 5 }
+
+# Genuinely-heavy tests — real candle inference, neural-audio codec round-trips,
+# diffusion — can legitimately exceed the default under a loaded CI host. Give
+# these packages more headroom (10 minutes) so the terminating timeout never
+# false-kills a slow-but-healthy test. Everything else stays on the tight 5-min
+# default so a true hang dies fast.
+[[profile.default.overrides]]
+filter = 'package(blazen-audio-music) | package(blazen-audio-codec) | package(blazen-audio-stt) | package(blazen-audio-dac-vendored) | package(blazen-image-diffusion) | package(blazen-embed-candle) | package(blazen-llm-candle) | package(blazen-llm-mistralrs) | package(blazen-llm-llamacpp)'
+slow-timeout = { period = "120s", terminate-after = 5 }
+
+# CI uses its own profile name? No — CI invokes the default profile
+# (`cargo nextest run --workspace --all-features`), which reads `[profile.default]`
+# above, so no workflow change is required.

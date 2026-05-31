@@ -11,6 +11,32 @@ use std::fs::File;
 use std::io::{BufRead, BufReader};
 use std::path::PathBuf;
 
+fn cmd_ok(cmd: &str, arg: &str) -> bool {
+    std::process::Command::new(cmd)
+        .arg(arg)
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+fn any_env_dir(vars: &[&str]) -> bool {
+    vars.iter().any(|v| {
+        std::env::var(v)
+            .map(|p| !p.is_empty() && std::path::Path::new(&p).exists())
+            .unwrap_or(false)
+    })
+}
+fn cuda_present() -> bool {
+    cmd_ok("nvcc", "--version") || any_env_dir(&["CUDA_PATH", "CUDA_HOME", "CUDA_TOOLKIT_ROOT_DIR"])
+}
+fn rocm_present() -> bool {
+    cmd_ok("hipcc", "--version")
+        || any_env_dir(&["HIP_PATH", "ROCM_PATH"])
+        || std::path::Path::new("/opt/rocm").exists()
+}
+fn vulkan_present() -> bool {
+    any_env_dir(&["VULKAN_SDK"]) || cmd_ok("glslc", "--version")
+}
+
 fn main() {
     let target = env::var("TARGET").unwrap();
     // Link C++ standard library
@@ -37,7 +63,9 @@ fn main() {
     println!("cargo:rustc-link-lib=static=whisper.coreml");
 
     #[cfg(feature = "openblas")]
-    {
+    if env::var("BLAS_INCLUDE_DIRS").is_err() {
+        println!("cargo:warning=feature `openblas` enabled but BLAS_INCLUDE_DIRS not set — skipping OpenBLAS backend.");
+    } else {
         if let Ok(openblas_path) = env::var("OPENBLAS_PATH") {
             println!(
                 "cargo::rustc-link-search={}",
@@ -51,7 +79,7 @@ fn main() {
         }
     }
     #[cfg(feature = "cuda")]
-    {
+    if cuda_present() {
         println!("cargo:rustc-link-lib=cublas");
         println!("cargo:rustc-link-lib=cudart");
         println!("cargo:rustc-link-lib=cublasLt");
@@ -68,17 +96,21 @@ fn main() {
                 println!("cargo:rustc-link-search=/opt/cuda/lib64/stubs");
             }
         }
+    } else {
+        println!("cargo:warning=feature `cuda` enabled but CUDA toolkit not detected — skipping CUDA backend.");
     }
     #[cfg(feature = "hipblas")]
-    {
-        println!("cargo:rustc-link-lib=hipblas");
-        println!("cargo:rustc-link-lib=rocblas");
-        println!("cargo:rustc-link-lib=amdhip64");
-
+    if !rocm_present() {
+        println!("cargo:warning=feature `hipblas` enabled but ROCm/HIP toolchain not detected — skipping HIP backend.");
+    } else {
         cfg_if::cfg_if! {
             if #[cfg(target_os = "windows")] {
-                panic!("Due to a problem with the last revision of the ROCm 5.7 library, it is not possible to compile the library for the windows environment.\nSee https://github.com/ggerganov/whisper.cpp/issues/2202 for more details.")
+                println!("cargo:warning=feature `hipblas` enabled but ROCm 5.7 cannot be compiled on windows (https://github.com/ggerganov/whisper.cpp/issues/2202) — skipping HIP backend.");
             } else {
+                println!("cargo:rustc-link-lib=hipblas");
+                println!("cargo:rustc-link-lib=rocblas");
+                println!("cargo:rustc-link-lib=amdhip64");
+
                 println!("cargo:rerun-if-env-changed=HIP_PATH");
 
                 let hip_path = match env::var("HIP_PATH") {
@@ -232,58 +264,73 @@ fn main() {
     }
 
     if cfg!(feature = "cuda") {
-        config.define("GGML_CUDA", "ON");
-        config.define("CMAKE_POSITION_INDEPENDENT_CODE", "ON");
-        config.define("CMAKE_CUDA_FLAGS", "-Xcompiler=-fPIC");
+        if cuda_present() {
+            config.define("GGML_CUDA", "ON");
+            config.define("CMAKE_POSITION_INDEPENDENT_CODE", "ON");
+            config.define("CMAKE_CUDA_FLAGS", "-Xcompiler=-fPIC");
+        } else {
+            println!("cargo:warning=feature `cuda` enabled but CUDA toolkit not detected — skipping CUDA backend.");
+        }
     }
 
     if cfg!(feature = "hipblas") {
-        config.define("GGML_HIP", "ON");
-        config.define("CMAKE_C_COMPILER", "hipcc");
-        config.define("CMAKE_CXX_COMPILER", "hipcc");
-        println!("cargo:rerun-if-env-changed=AMDGPU_TARGETS");
-        if let Ok(gpu_targets) = env::var("AMDGPU_TARGETS") {
-            config.define("AMDGPU_TARGETS", gpu_targets);
+        if rocm_present() && !cfg!(windows) {
+            config.define("GGML_HIP", "ON");
+            config.define("CMAKE_C_COMPILER", "hipcc");
+            config.define("CMAKE_CXX_COMPILER", "hipcc");
+            println!("cargo:rerun-if-env-changed=AMDGPU_TARGETS");
+            if let Ok(gpu_targets) = env::var("AMDGPU_TARGETS") {
+                config.define("AMDGPU_TARGETS", gpu_targets);
+            }
+        } else if cfg!(windows) {
+            println!("cargo:warning=feature `hipblas` enabled but ROCm 5.7 cannot be compiled on windows (https://github.com/ggerganov/whisper.cpp/issues/2202) — skipping HIP backend.");
+        } else {
+            println!("cargo:warning=feature `hipblas` enabled but ROCm/HIP toolchain not detected — skipping HIP backend.");
         }
     }
 
     if cfg!(feature = "vulkan") {
-        config.define("GGML_VULKAN", "ON");
-        if cfg!(windows) {
-            println!("cargo:rerun-if-env-changed=VULKAN_SDK");
-            println!("cargo:rustc-link-lib=vulkan-1");
-            let vulkan_path = match env::var("VULKAN_SDK") {
-                Ok(path) => PathBuf::from(path),
-                Err(_) => panic!(
-                    "Please install Vulkan SDK and ensure that VULKAN_SDK env variable is set"
-                ),
-            };
-            let vulkan_lib_path = vulkan_path.join("Lib");
-            println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
-        } else if cfg!(target_os = "macos") {
-            println!("cargo:rerun-if-env-changed=VULKAN_SDK");
-            println!("cargo:rustc-link-lib=vulkan");
-            let vulkan_path = match env::var("VULKAN_SDK") {
-                Ok(path) => PathBuf::from(path),
-                Err(_) => panic!(
-                    "Please install Vulkan SDK and ensure that VULKAN_SDK env variable is set"
-                ),
-            };
-            let vulkan_lib_path = vulkan_path.join("lib");
-            println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
+        if !vulkan_present() {
+            println!("cargo:warning=feature `vulkan` enabled but Vulkan SDK not detected — skipping Vulkan backend.");
         } else {
-            println!("cargo:rustc-link-lib=vulkan");
+            config.define("GGML_VULKAN", "ON");
+            if cfg!(windows) {
+                println!("cargo:rerun-if-env-changed=VULKAN_SDK");
+                println!("cargo:rustc-link-lib=vulkan-1");
+                let vulkan_path = match env::var("VULKAN_SDK") {
+                    Ok(path) => PathBuf::from(path),
+                    Err(_) => panic!(
+                        "Please install Vulkan SDK and ensure that VULKAN_SDK env variable is set"
+                    ),
+                };
+                let vulkan_lib_path = vulkan_path.join("Lib");
+                println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
+            } else if cfg!(target_os = "macos") {
+                println!("cargo:rerun-if-env-changed=VULKAN_SDK");
+                println!("cargo:rustc-link-lib=vulkan");
+                let vulkan_path = match env::var("VULKAN_SDK") {
+                    Ok(path) => PathBuf::from(path),
+                    Err(_) => panic!(
+                        "Please install Vulkan SDK and ensure that VULKAN_SDK env variable is set"
+                    ),
+                };
+                let vulkan_lib_path = vulkan_path.join("lib");
+                println!("cargo:rustc-link-search={}", vulkan_lib_path.display());
+            } else {
+                println!("cargo:rustc-link-lib=vulkan");
+            }
         }
     }
 
     if cfg!(feature = "openblas") {
-        config.define("GGML_BLAS", "ON");
-        config.define("GGML_BLAS_VENDOR", "OpenBLAS");
         if env::var("BLAS_INCLUDE_DIRS").is_err() {
-            panic!("BLAS_INCLUDE_DIRS environment variable must be set when using OpenBLAS");
+            println!("cargo:warning=feature `openblas` enabled but BLAS_INCLUDE_DIRS not set — skipping OpenBLAS backend.");
+        } else {
+            config.define("GGML_BLAS", "ON");
+            config.define("GGML_BLAS_VENDOR", "OpenBLAS");
+            config.define("BLAS_INCLUDE_DIRS", env::var("BLAS_INCLUDE_DIRS").unwrap());
+            println!("cargo:rerun-if-env-changed=BLAS_INCLUDE_DIRS");
         }
-        config.define("BLAS_INCLUDE_DIRS", env::var("BLAS_INCLUDE_DIRS").unwrap());
-        println!("cargo:rerun-if-env-changed=BLAS_INCLUDE_DIRS");
     }
 
     if cfg!(feature = "metal") {
@@ -357,10 +404,12 @@ fn main() {
             println!("cargo:rustc-link-lib=static=ggml-cpu");
         }
     }
-    if cfg!(target_os = "macos") || cfg!(feature = "openblas") {
+    if cfg!(target_os = "macos")
+        || (cfg!(feature = "openblas") && env::var("BLAS_INCLUDE_DIRS").is_ok())
+    {
         println!("cargo:rustc-link-lib=static=ggml-blas");
     }
-    if cfg!(feature = "vulkan") {
+    if cfg!(feature = "vulkan") && vulkan_present() {
         if cfg!(feature = "intel-sycl") {
             println!("cargo:rustc-link-lib=ggml-vulkan");
         } else {
@@ -368,7 +417,7 @@ fn main() {
         }
     }
 
-    if cfg!(feature = "hipblas") {
+    if cfg!(feature = "hipblas") && rocm_present() && !cfg!(windows) {
         println!("cargo:rustc-link-lib=static=ggml-hip");
     }
 
@@ -376,11 +425,11 @@ fn main() {
         println!("cargo:rustc-link-lib=static=ggml-metal");
     }
 
-    if cfg!(feature = "cuda") {
+    if cfg!(feature = "cuda") && cuda_present() {
         println!("cargo:rustc-link-lib=static=ggml-cuda");
     }
 
-    if cfg!(feature = "openblas") {
+    if cfg!(feature = "openblas") && env::var("BLAS_INCLUDE_DIRS").is_ok() {
         println!("cargo:rustc-link-lib=static=ggml-blas");
     }
 
