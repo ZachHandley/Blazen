@@ -55,7 +55,12 @@ local-all = ["local-embeddings", "local-llm", "local-image", "local-audio", "loc
 blazen-events.workspace = true
 blazen-macros.workspace = true
 blazen-core.workspace = true
-blazen-llm = { workspace = true, optional = true }
+# `reqwest` matches the binding crates (blazen-uniffi/node/py): on native, the
+# cloud providers' default HTTP client (and the fal provider's `new`/`from_options`
+# convenience constructors, gated on `any(wasm, reqwest, wasi)`) require it.
+# Without it, enabling the audio-music/vc/tts features (which compile the fal
+# providers) fails to build — surfaced by `cargo test --doc -p blazen --all-features`.
+blazen-llm = { workspace = true, optional = true, features = ["reqwest"] }
 blazen-persist = { workspace = true, optional = true }
 blazen-pipeline = { workspace = true, optional = true }
 blazen-prompts = { workspace = true, optional = true }
