@@ -26,6 +26,7 @@ pub mod session_ref;
 pub mod snapshot;
 pub mod step;
 pub mod step_registry;
+pub mod sub_executable;
 pub mod value;
 pub mod workflow_result;
 
@@ -38,6 +39,7 @@ pub use step::{PyStepOutput, PyStepRegistration};
 pub use step_registry::{
     PyStepDeserializerRegistry, lookup_step_builder, register_step_builder, registered_step_ids,
 };
+pub use sub_executable::{PySubExecutable, PySubExecutableAdapter};
 pub use value::{PyBytesWrapper, PyStateValue};
 pub use workflow_result::PyWorkflowResult;
 

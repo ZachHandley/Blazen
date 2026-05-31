@@ -15,8 +15,42 @@
 //! initOtlp(cfg);
 //! ```
 
-use blazen_telemetry::OtlpConfig;
+use blazen_telemetry::{OtlpConfig, OtlpProtocol};
 use wasm_bindgen::prelude::*;
+
+/// Wire-level OTLP transport protocol.
+///
+/// Mirrors [`blazen_telemetry::OtlpProtocol`]. On `wasm32` only
+/// [`WasmOtlpProtocol::HttpProto`] is functional — the `Grpc` variant is
+/// surfaced for parity with the native bindings but selecting it has no
+/// effect because `tonic` does not compile to `wasm32`; the exporter always
+/// uses HTTP/protobuf transport.
+#[wasm_bindgen(js_name = "OtlpProtocol")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WasmOtlpProtocol {
+    /// gRPC over tonic. Native-only; not functional on `wasm32`.
+    Grpc,
+    /// HTTP with binary protobuf payload. The `wasm32` default.
+    HttpProto,
+}
+
+impl From<WasmOtlpProtocol> for OtlpProtocol {
+    fn from(value: WasmOtlpProtocol) -> Self {
+        match value {
+            WasmOtlpProtocol::Grpc => OtlpProtocol::Grpc,
+            WasmOtlpProtocol::HttpProto => OtlpProtocol::HttpProto,
+        }
+    }
+}
+
+impl From<OtlpProtocol> for WasmOtlpProtocol {
+    fn from(value: OtlpProtocol) -> Self {
+        match value {
+            OtlpProtocol::Grpc => WasmOtlpProtocol::Grpc,
+            OtlpProtocol::HttpProto => WasmOtlpProtocol::HttpProto,
+        }
+    }
+}
 
 /// Configuration for the OTLP trace exporter.
 ///
@@ -57,6 +91,27 @@ impl WasmOtlpConfig {
     #[must_use]
     pub fn service_name(&self) -> String {
         self.inner.service_name.clone()
+    }
+
+    /// The configured transport protocol.
+    ///
+    /// On `wasm32` this is always [`WasmOtlpProtocol::HttpProto`] in practice
+    /// (tonic gRPC does not compile to `wasm32`), but the field is honoured so
+    /// JS callers can inspect / set it for parity with the native bindings.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn protocol(&self) -> WasmOtlpProtocol {
+        self.inner.protocol.into()
+    }
+
+    /// Set the transport protocol.
+    ///
+    /// Selecting [`WasmOtlpProtocol::Grpc`] has no functional effect on
+    /// `wasm32` — the exporter always uses HTTP/protobuf — but it is accepted
+    /// for parity with the native bindings.
+    #[wasm_bindgen(js_name = "withProtocol")]
+    pub fn with_protocol(&mut self, protocol: WasmOtlpProtocol) {
+        self.inner.protocol = protocol.into();
     }
 
     /// Set auth / routing headers attached to every OTLP/HTTP request.

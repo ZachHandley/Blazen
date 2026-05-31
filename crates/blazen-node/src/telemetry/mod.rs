@@ -14,6 +14,7 @@ pub mod prometheus;
 pub mod tracing_model;
 
 pub use history::{JsHistoryEvent, JsHistoryEventKind, JsPauseReason, JsWorkflowHistory};
+pub use tracing_model::JsTracingConfig;
 
 #[cfg(feature = "langfuse")]
 pub use langfuse::{JsLangfuseConfig, init_langfuse};

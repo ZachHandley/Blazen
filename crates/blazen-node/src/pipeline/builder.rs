@@ -12,6 +12,7 @@ use blazen_pipeline::{PipelineError, PipelineSnapshot};
 
 use crate::error::pipeline_error_to_napi;
 use crate::generated::JsRetryConfig;
+use crate::pipeline::loop_stage::JsLoopStage;
 use crate::pipeline::pipeline::JsPipeline;
 use crate::pipeline::snapshot::JsPipelineSnapshot;
 use crate::pipeline::stage::{JsParallelStage, JsStage};
@@ -85,6 +86,25 @@ impl JsPipelineBuilder {
             )
         })?;
         *guard = Some(builder.parallel(core_parallel));
+        Ok(self)
+    }
+
+    /// Append a `LoopStage` to the pipeline.
+    ///
+    /// The loop re-runs its inner stage up to `maxIterations` times (see the
+    /// [`LoopStage`](crate::pipeline::loop_stage::JsLoopStage) docs for the v1
+    /// iteration semantics). The `loopStage` instance is consumed.
+    #[napi(js_name = "loopStage")]
+    pub fn loop_stage(&self, loop_stage: &JsLoopStage) -> Result<&Self> {
+        let core_loop = loop_stage.take()?;
+        let mut guard = self.inner.lock().expect("poisoned");
+        let builder = guard.take().ok_or_else(|| {
+            napi::Error::new(
+                napi::Status::GenericFailure,
+                "PipelineBuilder already consumed (build() was called)",
+            )
+        })?;
+        *guard = Some(builder.loop_stage(core_loop));
         Ok(self)
     }
 

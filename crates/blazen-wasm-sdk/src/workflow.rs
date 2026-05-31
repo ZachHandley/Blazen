@@ -242,6 +242,29 @@ impl WasmWorkflow {
         Ok(())
     }
 
+    /// Register a sub-pipeline step that delegates to a pre-built
+    /// [`crate::sub_executable::WasmSubPipelineStep`].
+    ///
+    /// Mirrors `blazen_core::WorkflowBuilder::add_subpipeline_step`. The step
+    /// embeds any [`SubExecutable`](crate::sub_executable::WasmSubExecutable)
+    /// (most commonly a `Pipeline`) as a child runner inside this workflow.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if the workflow has already been run.
+    #[wasm_bindgen(js_name = "addSubpipelineStep")]
+    pub fn add_subpipeline_step(
+        &mut self,
+        step: &crate::sub_executable::WasmSubPipelineStep,
+    ) -> Result<(), JsValue> {
+        let builder = self
+            .builder
+            .take()
+            .ok_or_else(|| JsValue::from_str("Workflow already run; reuse not supported"))?;
+        self.builder = Some(builder.add_subpipeline_step(step.to_core()));
+        Ok(())
+    }
+
     /// Register a parallel-sub-workflows fan-out step.
     ///
     /// Mirrors `blazen_core::WorkflowBuilder::add_parallel_subworkflows`.

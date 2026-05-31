@@ -26,6 +26,7 @@ pub mod openai_embedding;
 pub mod openrouter;
 pub mod options;
 pub mod perplexity;
+pub mod provider_meta;
 pub mod together;
 pub mod xai;
 
@@ -59,3 +60,4 @@ pub mod tract;
 pub use decorators::{PyCachedModel, PyFallbackModel, PyRetryModel};
 pub use middleware::{PyCacheMiddleware, PyMiddleware, PyMiddlewareStack, PyRetryMiddleware};
 pub use model::PyModel;
+pub use provider_meta::{PyBaseProviderAbc, PyCapabilityKind, PyProviderMetadata};

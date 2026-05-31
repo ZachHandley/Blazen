@@ -285,3 +285,25 @@ pub fn try_deserialize_event(name: String, json_str: String) -> Option<JsValue> 
 pub fn intern_event_type(name: String) -> String {
     blazen_intern_event_type(&name).to_owned()
 }
+
+/// Register the WASM binding's native-event serializer with `blazen-events`.
+///
+/// This installs the process-wide
+/// [`NativeSerializerFn`](blazen_events::NativeSerializerFn) that lets a
+/// JS-backed [`DynamicEvent`](blazen_events::DynamicEvent) (one whose live
+/// `JsValue` is parked in the binding's native-handle store) materialise its
+/// JSON snapshot on the serialize / snapshot lane instead of falling back to
+/// the placeholder `null` payload.
+///
+/// The binding already calls this once automatically from the module
+/// [`init`](crate::init) start hook, so most callers never need to invoke it
+/// directly. It is surfaced as a free function for parity with the other
+/// bindings and for environments (e.g. test harnesses) that suppress the
+/// auto-start hook and want to register the serializer explicitly.
+///
+/// Idempotent: the first registration process-wide wins; subsequent calls are
+/// no-ops.
+#[wasm_bindgen(js_name = "registerNativeSerializer")]
+pub fn register_native_serializer() {
+    crate::js_native::register();
+}

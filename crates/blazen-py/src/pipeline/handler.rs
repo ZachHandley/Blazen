@@ -11,6 +11,8 @@ use crate::events::PyProgressSnapshot;
 use crate::pipeline::error::pipeline_err;
 use crate::pipeline::event::PyPipelineEvent;
 use crate::pipeline::snapshot::{PyPipelineResult, PyPipelineSnapshot};
+use crate::types::PyTokenUsage;
+use crate::workflow::event::PyInputResponseEvent;
 
 /// Handle to a running pipeline.
 ///
@@ -88,6 +90,10 @@ impl PyPipelineHandler {
     }
 
     /// Resume a paused pipeline in place.
+    ///
+    /// Forwards to the active stage's inner workflow(s) so a workflow parked
+    /// on an `InputRequestEvent` (or paused) unparks and continues. A no-op
+    /// between stages, where nothing is parked.
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, None]", imports = ("typing",)))]
     fn resume_in_place<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
@@ -101,10 +107,11 @@ impl PyPipelineHandler {
         })
     }
 
-    /// Capture a snapshot without stopping the pipeline.
+    /// Capture a snapshot of the pipeline's current state without stopping it.
     ///
-    /// Note: this is a stub in the underlying engine and currently raises
-    /// `PipelineError`.
+    /// Live and non-destructive: the pipeline keeps running. The returned
+    /// `PipelineSnapshot` can be passed to `Pipeline.resume(...)`. Mirrors
+    /// `WorkflowHandler.snapshot()`.
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, PipelineSnapshot]", imports = ("typing",)))]
     fn snapshot<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
         let inner = self.inner.clone();
@@ -129,6 +136,90 @@ impl PyPipelineHandler {
             })?;
             handler.abort().map_err(pipeline_err)?;
             Ok(())
+        })
+    }
+
+    /// Deliver a human-in-the-loop response to the active stage's inner
+    /// workflow(s).
+    ///
+    /// For a sequential stage this targets the one in-flight workflow; for a
+    /// parallel stage the response is broadcast to every live branch, where
+    /// the workflow that requested input consumes it and the others ignore a
+    /// response they did not request.
+    ///
+    /// Args:
+    ///     request_id: The ID from the `InputRequestEvent`, or an
+    ///         `InputResponseEvent` carrying both id and response.
+    ///     response: A Python dict/value that will be converted to JSON and
+    ///         delivered to the waiting step. Required when `request_id`
+    ///         is a string; ignored when an `InputResponseEvent` is passed.
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, None]", imports = ("typing",)))]
+    #[pyo3(signature = (request_id, response=None))]
+    fn respond_to_input<'py>(
+        &self,
+        py: Python<'py>,
+        request_id: &Bound<'py, PyAny>,
+        response: Option<&Bound<'py, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let input_response =
+            if let Ok(event) = request_id.extract::<PyRef<'_, PyInputResponseEvent>>() {
+                event.to_rust()
+            } else {
+                let id: String = request_id.extract()?;
+                let resp_obj = response.ok_or_else(|| {
+                    pyo3::exceptions::PyTypeError::new_err(
+                        "respond_to_input: 'response' is required when 'request_id' is a string",
+                    )
+                })?;
+                blazen_events::InputResponseEvent {
+                    request_id: id,
+                    response: crate::convert::py_to_json(py, resp_obj)?,
+                }
+            };
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let guard = inner.lock().await;
+            let handler = guard.as_ref().ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err("Handler already consumed")
+            })?;
+            handler
+                .respond_to_input(input_response)
+                .map_err(pipeline_err)?;
+            Ok(())
+        })
+    }
+
+    /// Snapshot the running aggregate `TokenUsage` for this pipeline run.
+    ///
+    /// Safe to call at any point during or after the run; the value matches
+    /// `PipelineResult.usage_total` once `result()` has been awaited.
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, TokenUsage]", imports = ("typing",)))]
+    fn usage_total<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let guard = inner.lock().await;
+            let handler = guard.as_ref().ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err("Handler already consumed")
+            })?;
+            let usage = handler.usage_total().await;
+            Ok(PyTokenUsage::from(usage))
+        })
+    }
+
+    /// Snapshot the running aggregate cost in USD for this pipeline run.
+    ///
+    /// Sums `UsageEvent::cost_usd` across every emitted usage event. After
+    /// `result()` has returned, the value matches
+    /// `PipelineResult.cost_total_usd`.
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, builtins.float]", imports = ("typing", "builtins")))]
+    fn cost_total_usd<'py>(&self, py: Python<'py>) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let guard = inner.lock().await;
+            let handler = guard.as_ref().ok_or_else(|| {
+                pyo3::exceptions::PyRuntimeError::new_err("Handler already consumed")
+            })?;
+            Ok(handler.cost_total_usd().await)
         })
     }
 

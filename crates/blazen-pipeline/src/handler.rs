@@ -15,8 +15,9 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use blazen_core::SessionRefRegistry;
-use blazen_events::AnyEvent;
-use tokio::sync::{broadcast, mpsc, oneshot};
+use blazen_events::{AnyEvent, InputResponseEvent};
+use blazen_llm::types::TokenUsage;
+use tokio::sync::{Mutex, broadcast, mpsc, oneshot};
 use tokio_stream::StreamExt;
 use tokio_stream::wrappers::BroadcastStream;
 use uuid::Uuid;
@@ -25,18 +26,40 @@ use crate::error::PipelineError;
 use crate::pipeline::ProgressSnapshot;
 use crate::snapshot::{PipelineResult, PipelineSnapshot};
 
+/// Running aggregate of token usage and cost for a pipeline run.
+///
+/// Updated by the executor at stage boundaries (and live, per event, by the
+/// per-stage event forwarders). Exposed via [`PipelineHandler::usage_total`] /
+/// [`PipelineHandler::cost_total_usd`] during the run and surfaced on
+/// [`PipelineResult`] once the run completes.
+#[derive(Debug, Default, Clone)]
+pub(crate) struct UsageTotals {
+    pub usage: TokenUsage,
+    pub cost_usd: f64,
+}
+
 /// Commands sent from the handler to the execution loop via the control channel.
 pub(crate) enum PipelineControl {
-    /// Pause the pipeline. Inner workflow handlers are aborted (via Drop) when
-    /// the stage future is cancelled, and a snapshot is sent back.
+    /// Pause the pipeline. The current stage's inner workflow handler(s) are
+    /// aborted (via Drop) when the stage future is cancelled, and a snapshot
+    /// is sent back.
     Pause,
-    /// Resume a paused pipeline in place. Currently a no-op at the pipeline
-    /// level -- true in-place resume requires keeping stage futures alive,
-    /// which is deferred to a future task.
+    /// Resume the pipeline in place. Forwarded to the active stage's inner
+    /// workflow handler(s) so a workflow parked on an `InputRequestEvent`
+    /// (or paused) unparks. A no-op between stages (nothing is parked).
     Resume,
-    /// Abort the pipeline. Inner workflow handlers are aborted (via Drop) when
-    /// the stage future is cancelled.
+    /// Abort the pipeline. The current stage's inner workflow handler(s) are
+    /// aborted (via Drop) when the stage future is cancelled.
     Abort,
+    /// Capture a [`PipelineSnapshot`] without stopping the loop. The executor
+    /// builds it from the live stage results / state and replies on the
+    /// enclosed oneshot.
+    Snapshot {
+        reply: oneshot::Sender<Result<PipelineSnapshot, PipelineError>>,
+    },
+    /// Forward a human-in-the-loop response to the active stage's inner
+    /// workflow handler(s).
+    RespondToInput { response: InputResponseEvent },
 }
 
 /// An event from a pipeline stage, tagged with provenance metadata.
@@ -101,10 +124,15 @@ pub struct PipelineHandler {
     current_stage: Arc<AtomicUsize>,
     /// Total number of stages on the pipeline. Captured at construction.
     total_stages: u32,
+    /// Running aggregate of token usage and cost. Shared with the executor,
+    /// which folds each completed stage's totals into it (and live per-event
+    /// deltas from the stage forwarders).
+    usage_totals: Arc<Mutex<UsageTotals>>,
 }
 
 impl PipelineHandler {
     /// Create a new handler (crate-internal).
+    #[allow(clippy::too_many_arguments)]
     pub(crate) fn new(
         result_rx: oneshot::Receiver<Result<PipelineResult, PipelineError>>,
         stream_tx: broadcast::Sender<PipelineEvent>,
@@ -113,6 +141,7 @@ impl PipelineHandler {
         session_refs: Arc<SessionRefRegistry>,
         current_stage: Arc<AtomicUsize>,
         total_stages: u32,
+        usage_totals: Arc<Mutex<UsageTotals>>,
     ) -> Self {
         Self {
             result_rx: Some(result_rx),
@@ -122,7 +151,27 @@ impl PipelineHandler {
             session_refs,
             current_stage,
             total_stages,
+            usage_totals,
         }
+    }
+
+    /// Snapshot the current aggregated [`TokenUsage`] for this run.
+    ///
+    /// Safe to call at any point during or after the run. Reflects the
+    /// totals folded in by every completed stage (and any live per-event
+    /// deltas the active stage's forwarder has observed). After
+    /// [`result`](Self::result) has returned, the value matches the
+    /// `usage_total` field on the returned [`PipelineResult`].
+    pub async fn usage_total(&self) -> TokenUsage {
+        self.usage_totals.lock().await.usage.clone()
+    }
+
+    /// Snapshot the current aggregated cost in USD for this run.
+    ///
+    /// After [`result`](Self::result) has returned, the value matches the
+    /// `cost_total_usd` field on the returned [`PipelineResult`].
+    pub async fn cost_total_usd(&self) -> f64 {
+        self.usage_totals.lock().await.cost_usd
     }
 
     /// Snapshot the pipeline's current progress without affecting execution.
@@ -219,12 +268,14 @@ impl PipelineHandler {
         snapshot_rx.await.map_err(|_| PipelineError::ChannelClosed)
     }
 
-    /// Resume a paused pipeline in place.
+    /// Resume the pipeline in place.
     ///
-    /// Currently a no-op at the pipeline level. True in-place resume
-    /// (parking inner workflows without dropping them) requires significant
-    /// restructuring of the stage execution model and is deferred to a
-    /// future task.
+    /// Forwarded to the active stage's inner workflow handler(s) so a
+    /// workflow that auto-parked on an [`InputRequestEvent`] (or was paused)
+    /// unparks and continues. A no-op between stages, where nothing is
+    /// parked.
+    ///
+    /// [`InputRequestEvent`]: blazen_events::InputRequestEvent
     ///
     /// # Errors
     ///
@@ -236,18 +287,40 @@ impl PipelineHandler {
             .map_err(|_| PipelineError::ChannelClosed)
     }
 
-    /// Capture a [`PipelineSnapshot`] without stopping the pipeline.
+    /// Deliver a human-in-the-loop response to the active stage's inner
+    /// workflow, forwarding it to the running [`WorkflowHandler`].
     ///
-    /// Not yet implemented -- returns [`PipelineError::ChannelClosed`].
-    /// A full implementation requires a request/reply oneshot pattern
-    /// similar to `WorkflowHandler::snapshot`.
+    /// For a sequential stage this targets the one in-flight workflow; for a
+    /// parallel stage the response is broadcast to every live branch, where
+    /// the workflow that requested input consumes it and the others ignore a
+    /// response they did not request.
     ///
     /// # Errors
     ///
-    /// Always returns [`PipelineError::ChannelClosed`] (stub).
-    #[allow(clippy::unused_async)]
+    /// Returns [`PipelineError::ChannelClosed`] if the pipeline has
+    /// already terminated.
+    pub fn respond_to_input(&self, response: InputResponseEvent) -> Result<(), PipelineError> {
+        self.control_tx
+            .send(PipelineControl::RespondToInput { response })
+            .map_err(|_| PipelineError::ChannelClosed)
+    }
+
+    /// Capture a [`PipelineSnapshot`] without stopping the pipeline.
+    ///
+    /// Sends a request to the execution loop, which builds a snapshot from
+    /// the current stage results / shared state and replies. The pipeline
+    /// keeps running. Mirrors `WorkflowHandler::snapshot`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`PipelineError::ChannelClosed`] if the pipeline has
+    /// already terminated.
     pub async fn snapshot(&self) -> Result<PipelineSnapshot, PipelineError> {
-        Err(PipelineError::ChannelClosed)
+        let (reply_tx, reply_rx) = oneshot::channel();
+        self.control_tx
+            .send(PipelineControl::Snapshot { reply: reply_tx })
+            .map_err(|_| PipelineError::ChannelClosed)?;
+        reply_rx.await.unwrap_or(Err(PipelineError::ChannelClosed))
     }
 
     /// Abort the running pipeline.

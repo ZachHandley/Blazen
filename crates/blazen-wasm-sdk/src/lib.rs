@@ -23,6 +23,7 @@
 
 pub mod agent;
 pub mod agent_types;
+pub mod audio_backends;
 pub mod batch;
 pub mod byo_backend;
 pub mod capability_providers;
@@ -56,6 +57,7 @@ pub mod pipeline;
 pub mod pricing;
 pub mod providers;
 pub mod session_pause_policy;
+pub mod sub_executable;
 pub mod subworkflow_step;
 pub mod telemetry;
 #[cfg(feature = "threed")]

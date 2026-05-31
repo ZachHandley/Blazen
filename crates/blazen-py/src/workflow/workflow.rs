@@ -21,6 +21,7 @@ use super::step::PyStepWrapper;
 use super::subworkflow::{PyParallelSubWorkflowsStep, PySubWorkflowStep};
 use crate::convert::dict_to_json;
 use crate::error::{BlazenPyError, to_py_result};
+use crate::pipeline::subpipeline::PySubPipelineStep;
 use crate::session_ref_serializable::{DESERIALIZER_FN, intern_type_tag};
 
 // ---------------------------------------------------------------------------
@@ -109,6 +110,12 @@ pub struct PyWorkflow {
     /// Parallel sub-workflow fan-out steps registered via
     /// [`PyWorkflowBuilder::add_parallel_subworkflows`].
     parallel_subworkflow_steps: Vec<Py<PyParallelSubWorkflowsStep>>,
+    /// Sub-pipeline steps registered via
+    /// [`PyWorkflowBuilder::add_subpipeline_step`]. Each embeds a child
+    /// `Pipeline` as a `blazen_core::SubPipelineStep`, materialized lazily
+    /// inside `build_workflow_with_locals` so the embedded pipeline's stage
+    /// step handlers run on the active asyncio loop.
+    subpipeline_steps: Vec<Py<PySubPipelineStep>>,
     timeout: Option<f64>,
     session_pause_policy: PySessionPausePolicy,
     /// Whether to publish lifecycle events on the broadcast stream.
@@ -145,6 +152,7 @@ impl PyWorkflow {
             steps,
             subworkflow_steps: Vec::new(),
             parallel_subworkflow_steps: Vec::new(),
+            subpipeline_steps: Vec::new(),
             timeout,
             session_pause_policy,
             auto_publish_events: true,
@@ -157,6 +165,12 @@ impl PyWorkflow {
     /// [`PyWorkflowBuilder::build`].
     pub(crate) fn set_subworkflow_steps(&mut self, steps: Vec<Py<PySubWorkflowStep>>) {
         self.subworkflow_steps = steps;
+    }
+
+    /// Replace the workflow's sub-pipeline step list. Called from
+    /// [`PyWorkflowBuilder::build`].
+    pub(crate) fn set_subpipeline_steps(&mut self, steps: Vec<Py<PySubPipelineStep>>) {
+        self.subpipeline_steps = steps;
     }
 
     /// Replace the workflow's parallel-sub-workflow step list.
@@ -212,6 +226,11 @@ impl PyWorkflow {
             let core_step = par_ref.to_core(py, locals.clone())?;
             builder = builder.add_parallel_subworkflows(core_step);
         }
+        for sub in &self.subpipeline_steps {
+            let sub_ref = sub.borrow(py);
+            let core_step = sub_ref.to_core(py, locals.clone())?;
+            builder = builder.add_subpipeline_step(core_step);
+        }
         if let Some(t) = self.timeout {
             builder = builder.timeout(Duration::from_secs_f64(t));
         }
@@ -263,6 +282,7 @@ impl PyWorkflow {
             steps: step_refs,
             subworkflow_steps: Vec::new(),
             parallel_subworkflow_steps: Vec::new(),
+            subpipeline_steps: Vec::new(),
             timeout,
             session_pause_policy: session_pause_policy
                 .unwrap_or(PySessionPausePolicy::PickleOrError),

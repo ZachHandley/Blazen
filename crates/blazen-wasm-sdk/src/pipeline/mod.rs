@@ -42,5 +42,7 @@ pub use pipeline::WasmPipeline;
 pub use snapshot::{
     WasmActiveWorkflowSnapshot, WasmPipelineResult, WasmPipelineSnapshot, WasmStageResult,
 };
-pub use stage::{WasmJoinStrategy, WasmParallelStage, WasmStage, WasmStageKind};
+pub use stage::{
+    WasmJoinStrategy, WasmLoopDecision, WasmLoopStage, WasmParallelStage, WasmStage, WasmStageKind,
+};
 pub use state::WasmPipelineState;

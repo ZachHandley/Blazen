@@ -15,7 +15,7 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 use blazen_llm::retry::RetryConfig;
 
 use crate::pipeline::pipeline::PyPipeline;
-use crate::pipeline::stage::{PendingStage, PyParallelStage, PyStage};
+use crate::pipeline::stage::{PendingStage, PyLoopStage, PyParallelStage, PyStage};
 use crate::providers::config::PyRetryConfig;
 
 /// Fluent builder for constructing a [`Pipeline`].
@@ -73,6 +73,13 @@ impl PyPipelineBuilder {
     /// Append a `ParallelStage` (multiple branches) to the pipeline.
     fn parallel(mut slf: PyRefMut<'_, Self>, parallel: Py<PyParallelStage>) -> PyRefMut<'_, Self> {
         slf.pending_stages.push(PendingStage::Parallel(parallel));
+        slf
+    }
+
+    /// Append a `LoopStage` (re-run an inner stage until a predicate stops it)
+    /// to the pipeline.
+    fn loop_stage(mut slf: PyRefMut<'_, Self>, loop_stage: Py<PyLoopStage>) -> PyRefMut<'_, Self> {
+        slf.pending_stages.push(PendingStage::Loop(loop_stage));
         slf
     }
 

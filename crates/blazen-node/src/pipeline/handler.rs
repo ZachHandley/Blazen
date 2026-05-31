@@ -13,6 +13,7 @@ use crate::error::pipeline_error_to_napi;
 use crate::pipeline::progress::JsProgressSnapshot;
 use crate::pipeline::snapshot::{JsPipelineResult, JsPipelineSnapshot};
 use crate::workflow::event::any_event_to_js_value;
+use crate::workflow::events_typed::JsInputResponseEvent;
 
 type StreamCallbackTsfn =
     ThreadsafeFunction<serde_json::Value, Unknown<'static>, serde_json::Value, Status, false, true>;
@@ -107,6 +108,79 @@ impl JsPipelineHandler {
             return Ok(None);
         };
         Ok(Some(handler.progress().into()))
+    }
+
+    /// Respond to an input request from a stage that is paused on an
+    /// `InputRequestEvent`. The response is fanned out to the active
+    /// stage's inner workflow(s). Mirrors
+    /// [`blazen_pipeline::PipelineHandler::respond_to_input`].
+    ///
+    /// The `request_id` must match the `InputRequestEvent.request_id` that
+    /// was published by a step inside the running stage.
+    #[napi(js_name = "respondToInput")]
+    pub async fn respond_to_input(
+        &self,
+        request_id: String,
+        response: serde_json::Value,
+    ) -> Result<()> {
+        let guard = self.inner.lock().await;
+        let handler = guard.as_ref().ok_or_else(|| {
+            napi::Error::new(
+                napi::Status::GenericFailure,
+                "PipelineHandler already consumed",
+            )
+        })?;
+        let input_response = blazen_events::InputResponseEvent {
+            request_id,
+            response,
+        };
+        handler
+            .respond_to_input(input_response)
+            .map_err(pipeline_error_to_napi)
+    }
+
+    /// Respond to an input request using a typed [`JsInputResponseEvent`].
+    ///
+    /// Equivalent to [`Self::respond_to_input`] but accepts the typed
+    /// event object so JS callers can pass a single value already shaped
+    /// like the input-response event they may have built earlier.
+    #[napi(js_name = "respondToInputTyped")]
+    pub async fn respond_to_input_typed(&self, event: JsInputResponseEvent) -> Result<()> {
+        let guard = self.inner.lock().await;
+        let handler = guard.as_ref().ok_or_else(|| {
+            napi::Error::new(
+                napi::Status::GenericFailure,
+                "PipelineHandler already consumed",
+            )
+        })?;
+        handler
+            .respond_to_input(event.into_event())
+            .map_err(pipeline_error_to_napi)
+    }
+
+    /// Aggregated token usage across the pipeline run so far. Mirrors
+    /// [`blazen_pipeline::PipelineHandler::usage_total`]. Returns `null`
+    /// after the handler has been consumed by [`Self::result`].
+    #[napi(js_name = "usageTotal")]
+    pub async fn usage_total(&self) -> Result<Option<crate::types::JsTokenUsageClass>> {
+        let guard = self.inner.lock().await;
+        let Some(handler) = guard.as_ref() else {
+            return Ok(None);
+        };
+        let usage = handler.usage_total().await;
+        Ok(Some(crate::types::JsTokenUsageClass::from(&usage)))
+    }
+
+    /// Aggregated cost in USD across the pipeline run so far. Mirrors
+    /// [`blazen_pipeline::PipelineHandler::cost_total_usd`]. Returns `null`
+    /// after the handler has been consumed by [`Self::result`].
+    #[napi(js_name = "costTotalUsd")]
+    pub async fn cost_total_usd(&self) -> Result<Option<f64>> {
+        let guard = self.inner.lock().await;
+        let Some(handler) = guard.as_ref() else {
+            return Ok(None);
+        };
+        Ok(Some(handler.cost_total_usd().await))
     }
 
     /// Abort the pipeline.

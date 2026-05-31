@@ -20,6 +20,7 @@ serde_json.workspace = true
 tokio = { workspace = true }
 tracing.workspace = true
 thiserror = { workspace = true }
+cudarc = { version = "0.19", default-features = false, features = ["fallback-latest"], optional = true }
 
 # Apple-target deps unconditionally pull metal + accelerate. The `metal` /
 # `accelerate` feature flags exist as no-op markers for cross-platform
@@ -34,7 +35,16 @@ candle-transformers = { workspace = true, optional = true, features = ["metal", 
 default = ["cpu"]
 engine = ["dep:candle-core", "dep:candle-nn", "dep:candle-transformers", "dep:tokenizers", "dep:hf-hub"]
 cpu = ["engine"]
-cuda = ["engine", "candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda"]
+# `dep:cudarc` (with `fallback-latest`) lets `cuda` build WITHOUT nvcc: cudarc's
+# build.rs warns + assumes the latest CUDA instead of panicking, so
+# `cargo {check,clippy} --all-features` works on machines without a CUDA toolkit
+# (macOS, plain CI runners) while real CUDA boxes still build/link normally.
+cuda = ["engine", "candle-core/cuda", "candle-nn/cuda", "candle-transformers/cuda", "dep:cudarc"]
+# `metal`/`accelerate` are intentional no-op markers: on Apple targets the candle
+# deps in the `[target.'cfg(apple)']` block already pull `metal` + `accelerate`,
+# so Apple-Silicon acceleration is always on; on non-Apple targets forwarding
+# `candle-core/metal` cannot compile (objc2/metal-kernels are Apple-only), which
+# would break `--all-features` on linux. Do NOT forward them here.
 metal = ["engine"]
 accelerate = ["engine"]
 

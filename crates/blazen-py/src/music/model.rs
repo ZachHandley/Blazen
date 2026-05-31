@@ -223,6 +223,16 @@ impl PyMusicModel {
         self.sample_rate
     }
 
+    /// Return a type-erased :class:`MusicBackendHandle` wrapping this model's
+    /// backend. The handle shares the same underlying ``Arc<dyn MusicBackend>``
+    /// and forwards ``generate_music`` / ``generate_sfx``.
+    #[gen_stub(override_return_type(type_repr = "MusicBackendHandle"))]
+    fn backend_handle(&self) -> crate::audio_backends::PyMusicBackendHandle {
+        crate::audio_backends::PyMusicBackendHandle {
+            inner: self.inner.clone(),
+        }
+    }
+
     fn __repr__(&self) -> String {
         format!(
             "MusicModel(id={:?}, sample_rate={})",

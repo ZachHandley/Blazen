@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 use async_trait::async_trait;
 use pyo3::prelude::*;
-use pyo3_stub_gen::derive::gen_stub_pyfunction;
+use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
 use tokio_stream::Stream;
 
 use blazen_llm::{BlazenError, Model, ModelRequest, ModelResponse, ProviderConfig, StreamChunk};
@@ -49,6 +49,76 @@ impl Model for ArcModel {
 }
 
 // ---------------------------------------------------------------------------
+// PyTracingConfig
+// ---------------------------------------------------------------------------
+
+/// Runtime configuration for the tracing decorator built by
+/// :func:`wrap_with_tracing`.
+///
+/// Defaults are privacy-safe: token counts, model id, provider, and finish
+/// reason are always recorded, but raw prompt + completion message text are
+/// NOT recorded unless ``capture_messages`` is enabled.
+///
+/// Example:
+///     >>> cfg = TracingConfig(capture_messages=True)
+///     >>> traced = wrap_with_tracing(model, "openai", config=cfg)
+#[gen_stub_pyclass]
+#[pyclass(name = "TracingConfig", from_py_object)]
+#[derive(Clone)]
+pub struct PyTracingConfig {
+    pub(crate) inner: TracingConfig,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyTracingConfig {
+    /// Create a new tracing configuration.
+    ///
+    /// Args:
+    ///     capture_messages: If True, the raw prompt messages and completion
+    ///         text are serialized to JSON and recorded on each span as
+    ///         ``llm.input_messages`` / ``llm.output_messages``. Defaults to
+    ///         False (privacy-safe). Stream calls never capture messages even
+    ///         with this flag enabled.
+    #[new]
+    #[pyo3(signature = (capture_messages=false))]
+    fn new(capture_messages: bool) -> Self {
+        Self {
+            inner: TracingConfig::default().with_message_capture(capture_messages),
+        }
+    }
+
+    /// Whether raw prompt + completion message text is captured on spans.
+    #[getter]
+    fn capture_messages(&self) -> bool {
+        self.inner.capture_messages()
+    }
+
+    #[setter]
+    fn set_capture_messages(&mut self, capture: bool) {
+        self.inner = self.inner.with_message_capture(capture);
+    }
+
+    /// Return a copy with message capture enabled or disabled.
+    fn with_message_capture(&self, capture: bool) -> Self {
+        Self {
+            inner: self.inner.with_message_capture(capture),
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "TracingConfig(capture_messages={})",
+            if self.inner.capture_messages() {
+                "True"
+            } else {
+                "False"
+            }
+        )
+    }
+}
+
+// ---------------------------------------------------------------------------
 // wrap_with_tracing
 // ---------------------------------------------------------------------------
 
@@ -70,22 +140,28 @@ impl Model for ArcModel {
 ///         ``llm.input_messages`` / ``llm.output_messages``. Defaults to
 ///         False — privacy-safe. Phoenix's eval-grade surfaces
 ///         (faithfulness, RAG hit rate, schema-compliance) need this
-///         enabled.
+///         enabled. Ignored when ``config`` is supplied.
+///     config: Optional :class:`TracingConfig`. When provided, it takes
+///         precedence over ``capture_messages``.
 ///
 /// Returns:
 ///     A new Model that emits tracing spans on every call.
 #[gen_stub_pyfunction]
 #[pyfunction]
-#[pyo3(signature = (model, provider_name, capture_messages=false))]
+#[pyo3(signature = (model, provider_name, capture_messages=false, config=None))]
 pub fn wrap_with_tracing(
     model: Bound<'_, PyModel>,
     provider_name: String,
     capture_messages: bool,
+    config: Option<PyTracingConfig>,
 ) -> PyModel {
     let local_model = model.borrow().local_model.clone();
     let inner = arc_from_bound(&model);
     let leaked: &'static str = Box::leak(provider_name.into_boxed_str());
-    let config = TracingConfig::default().with_message_capture(capture_messages);
+    let config = config.map_or_else(
+        || TracingConfig::default().with_message_capture(capture_messages),
+        |c| c.inner,
+    );
     let wrapped = TracingModel::new(ArcModel(inner), leaked, config);
     PyModel {
         inner: Some(Arc::new(wrapped)),

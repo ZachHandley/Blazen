@@ -220,6 +220,18 @@ pub struct Workflow {
     inner: Arc<CoreWorkflow>,
 }
 
+impl Workflow {
+    /// Obtain an owned [`blazen_core::Workflow`] for this handle.
+    ///
+    /// `blazen_core::Workflow` is `Clone` (its step registry is `Arc`-backed),
+    /// so this is a cheap Arc-bump clone. Used by the pipeline builder to feed
+    /// an owned core workflow into a `blazen_pipeline::Stage` without needing
+    /// to reclaim the shared `Arc<CoreWorkflow>`.
+    pub(crate) fn core_workflow(&self) -> CoreWorkflow {
+        (*self.inner).clone()
+    }
+}
+
 #[uniffi::export(async_runtime = "tokio")]
 impl Workflow {
     /// Run the workflow to completion with the given JSON input as the
@@ -594,7 +606,7 @@ fn build_step_registration(
 /// [`Event`] crossed across the FFI. Built-in event types (`StartEvent`,
 /// `StopEvent`, `InputRequestEvent`, etc.) are recognised by downcast;
 /// everything else is serialised via the generic `AnyEvent::to_json` path.
-fn any_event_to_wire(event: &dyn AnyEvent) -> Event {
+pub(crate) fn any_event_to_wire(event: &dyn AnyEvent) -> Event {
     let event_type = event.event_type_id().to_string();
     let data_json = event.to_json().to_string();
     Event {

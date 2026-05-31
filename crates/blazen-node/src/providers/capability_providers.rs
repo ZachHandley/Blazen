@@ -12,6 +12,121 @@
 
 use napi_derive::napi;
 
+use blazen_llm::providers::{CapabilityKind, ProviderMetadata};
+
+// ---------------------------------------------------------------------------
+// CapabilityKind
+// ---------------------------------------------------------------------------
+
+/// The capability a provider serves. Mirrors
+/// [`blazen_llm::providers::CapabilityKind`].
+#[napi(string_enum, js_name = "CapabilityKind")]
+#[derive(Debug, Clone, Copy)]
+pub enum JsCapabilityKind {
+    /// Large language model — chat / completion / streaming.
+    Llm,
+    /// Text-to-speech audio synthesis.
+    Tts,
+    /// Speech-to-text transcription.
+    Stt,
+    /// Text-to-music / text-to-sfx audio generation.
+    Music,
+    /// Voice conversion.
+    Vc,
+    /// 3D mesh generation.
+    ThreeD,
+    /// 2D image generation.
+    ImageGen,
+    /// Vector embedding generation.
+    Embedding,
+    /// Neural audio codec.
+    Codec,
+    /// Background removal on existing images.
+    BackgroundRemoval,
+    /// Video generation.
+    Video,
+}
+
+impl From<JsCapabilityKind> for CapabilityKind {
+    fn from(k: JsCapabilityKind) -> Self {
+        match k {
+            JsCapabilityKind::Llm => CapabilityKind::Llm,
+            JsCapabilityKind::Tts => CapabilityKind::Tts,
+            JsCapabilityKind::Stt => CapabilityKind::Stt,
+            JsCapabilityKind::Music => CapabilityKind::Music,
+            JsCapabilityKind::Vc => CapabilityKind::Vc,
+            JsCapabilityKind::ThreeD => CapabilityKind::ThreeD,
+            JsCapabilityKind::ImageGen => CapabilityKind::ImageGen,
+            JsCapabilityKind::Embedding => CapabilityKind::Embedding,
+            JsCapabilityKind::Codec => CapabilityKind::Codec,
+            JsCapabilityKind::BackgroundRemoval => CapabilityKind::BackgroundRemoval,
+            JsCapabilityKind::Video => CapabilityKind::Video,
+        }
+    }
+}
+
+impl From<CapabilityKind> for JsCapabilityKind {
+    fn from(k: CapabilityKind) -> Self {
+        match k {
+            CapabilityKind::Llm => JsCapabilityKind::Llm,
+            CapabilityKind::Tts => JsCapabilityKind::Tts,
+            CapabilityKind::Stt => JsCapabilityKind::Stt,
+            CapabilityKind::Music => JsCapabilityKind::Music,
+            CapabilityKind::Vc => JsCapabilityKind::Vc,
+            CapabilityKind::ThreeD => JsCapabilityKind::ThreeD,
+            CapabilityKind::ImageGen => JsCapabilityKind::ImageGen,
+            CapabilityKind::Embedding => JsCapabilityKind::Embedding,
+            CapabilityKind::Codec => JsCapabilityKind::Codec,
+            CapabilityKind::BackgroundRemoval => JsCapabilityKind::BackgroundRemoval,
+            CapabilityKind::Video => JsCapabilityKind::Video,
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// ProviderMetadata
+// ---------------------------------------------------------------------------
+
+/// Static metadata describing a provider instance. Mirrors
+/// [`blazen_llm::providers::ProviderMetadata`].
+#[napi(object, js_name = "ProviderMetadata")]
+pub struct JsProviderMetadata {
+    /// Canonical provider identifier — stable across binding surfaces
+    /// (e.g. `"openai"`, `"fal"`, `"spark-tts"`).
+    pub provider_id: String,
+    /// What this provider does.
+    pub capability: JsCapabilityKind,
+    /// Optional human-readable name shown in UIs / logs. Defaults to
+    /// `providerId` when unset.
+    pub display_name: Option<String>,
+    /// Optional version pin — typically the model id / weights revision.
+    pub version: Option<String>,
+}
+
+impl From<JsProviderMetadata> for ProviderMetadata {
+    fn from(m: JsProviderMetadata) -> Self {
+        let mut meta = ProviderMetadata::new(m.provider_id, m.capability.into());
+        if let Some(name) = m.display_name {
+            meta = meta.with_display_name(name);
+        }
+        if let Some(version) = m.version {
+            meta = meta.with_version(version);
+        }
+        meta
+    }
+}
+
+impl From<ProviderMetadata> for JsProviderMetadata {
+    fn from(m: ProviderMetadata) -> Self {
+        Self {
+            provider_id: m.provider_id,
+            capability: m.capability.into(),
+            display_name: m.display_name,
+            version: m.version,
+        }
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Shared config object
 // ---------------------------------------------------------------------------
@@ -303,6 +418,162 @@ capability_provider! {
         }
 
         /// List all available voices.
+        #[napi(js_name = "listVoices")]
+        pub async fn list_voices(&self) -> napi::Result<serde_json::Value> {
+            Err(napi::Error::from_reason(
+                "subclass must override listVoices()",
+            ))
+        }
+
+        /// Delete a previously-cloned voice.
+        #[napi(js_name = "deleteVoice")]
+        pub async fn delete_voice(
+            &self,
+            _voice: serde_json::Value,
+        ) -> napi::Result<serde_json::Value> {
+            Err(napi::Error::from_reason(
+                "subclass must override deleteVoice()",
+            ))
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 8. LLMProvider (canonical capability trait surface)
+// ---------------------------------------------------------------------------
+
+capability_provider! {
+    /// Base class for large-language-model providers.
+    ///
+    /// Mirrors the [`blazen_llm::providers::LLMProvider`] capability trait.
+    /// Subclass and override `complete()` (and optionally `stream()`) to
+    /// implement a custom chat/completion backend.
+    "LLMProvider", JsLLMProvider,
+    extra {
+        /// Non-streaming completion. Receives a `ModelRequest`-shaped object
+        /// and returns a `ModelResponse`-shaped object.
+        #[napi(js_name = "complete")]
+        pub async fn complete(
+            &self,
+            _request: serde_json::Value,
+        ) -> napi::Result<serde_json::Value> {
+            Err(napi::Error::from_reason(
+                "subclass must override complete()",
+            ))
+        }
+
+        /// Streaming completion. Receives a `ModelRequest`-shaped object and
+        /// returns the accumulated stream chunks.
+        #[napi(js_name = "stream")]
+        pub async fn stream(
+            &self,
+            _request: serde_json::Value,
+        ) -> napi::Result<serde_json::Value> {
+            Err(napi::Error::from_reason(
+                "subclass must override stream()",
+            ))
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 9. EmbeddingProvider (canonical capability trait surface)
+// ---------------------------------------------------------------------------
+
+capability_provider! {
+    /// Base class for vector-embedding providers.
+    ///
+    /// Mirrors the [`blazen_llm::providers::EmbeddingProvider`] capability
+    /// trait. Subclass and override `embed()` to implement a custom embedding
+    /// backend.
+    "EmbeddingProvider", JsEmbeddingProvider,
+    extra {
+        /// Embed a batch of texts. Receives an array of strings and returns
+        /// an array of float vectors (one per input).
+        #[napi(js_name = "embed")]
+        pub async fn embed(
+            &self,
+            _texts: serde_json::Value,
+        ) -> napi::Result<serde_json::Value> {
+            Err(napi::Error::from_reason(
+                "subclass must override embed()",
+            ))
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 10. ImageGenProvider (canonical capability trait surface)
+// ---------------------------------------------------------------------------
+
+capability_provider! {
+    /// Base class for 2D image-generation providers.
+    ///
+    /// Mirrors the [`blazen_llm::providers::ImageGenProvider`] capability
+    /// trait. Subclass and override `generateImage()` (and optionally
+    /// `upscaleImage()`) to implement a custom image backend.
+    "ImageGenProvider", JsImageGenProvider,
+    extra {
+        /// Generate images from a text prompt.
+        #[napi(js_name = "generateImage")]
+        pub async fn generate_image(
+            &self,
+            _request: serde_json::Value,
+        ) -> napi::Result<serde_json::Value> {
+            Err(napi::Error::from_reason(
+                "subclass must override generateImage()",
+            ))
+        }
+
+        /// Upscale an existing image.
+        #[napi(js_name = "upscaleImage")]
+        pub async fn upscale_image(
+            &self,
+            _request: serde_json::Value,
+        ) -> napi::Result<serde_json::Value> {
+            Err(napi::Error::from_reason(
+                "subclass must override upscaleImage()",
+            ))
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 11. VcProvider (canonical voice-conversion capability trait surface)
+// ---------------------------------------------------------------------------
+
+capability_provider! {
+    /// Base class for voice-conversion providers.
+    ///
+    /// Mirrors the [`blazen_llm::providers::VcProvider`] capability trait —
+    /// source utterance + target voice → re-voiced audio, plus voice
+    /// cloning. Subclass and override `convertVoice()` (and optionally
+    /// `cloneVoice()`, `listVoices()`, `deleteVoice()`).
+    "VcProvider", JsVcProvider,
+    extra {
+        /// Convert the source utterance into the target voice.
+        #[napi(js_name = "convertVoice")]
+        pub async fn convert_voice(
+            &self,
+            _request: serde_json::Value,
+        ) -> napi::Result<serde_json::Value> {
+            Err(napi::Error::from_reason(
+                "subclass must override convertVoice()",
+            ))
+        }
+
+        /// Clone a voice from reference audio clips.
+        #[napi(js_name = "cloneVoice")]
+        pub async fn clone_voice(
+            &self,
+            _request: serde_json::Value,
+        ) -> napi::Result<serde_json::Value> {
+            Err(napi::Error::from_reason(
+                "subclass must override cloneVoice()",
+            ))
+        }
+
+        /// List all voices known to this provider.
         #[napi(js_name = "listVoices")]
         pub async fn list_voices(&self) -> napi::Result<serde_json::Value> {
             Err(napi::Error::from_reason(

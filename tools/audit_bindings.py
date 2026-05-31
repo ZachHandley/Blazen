@@ -137,6 +137,10 @@ WHITELIST: frozenset[str] = frozenset(
         "SessionRefDeserializerFn",
         "StepBuilderFn",
         "InputHandlerFn",
+        # `Arc<dyn Fn>` closure aliases @ blazen-pipeline/src/stage.rs --
+        # surfaced as callback parameters, never standalone classes.
+        "LoopUntilFn",
+        "RoundCompleteFn",
         # --- Functions taking Arc<dyn HttpClient> trait object -- cannot bind
         # across FFI. The four `*_default*` convenience wrappers in
         # `blazen-llm::pricing_fetcher` use the platform-default client and ARE
@@ -730,6 +734,8 @@ WHITELIST_REASONS: dict[str, str] = {
             "SessionRefDeserializerFn",
             "StepBuilderFn",
             "InputHandlerFn",
+            "LoopUntilFn",
+            "RoundCompleteFn",
             "SubWorkflowInputMapper",
             "SubWorkflowOutputMapper",
             "BeforeRequestHook",

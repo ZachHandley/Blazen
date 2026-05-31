@@ -36,6 +36,7 @@ pub(crate) mod convert;
 pub(crate) mod session_ref_serializable;
 
 pub mod agent;
+pub mod audio_backends;
 pub mod batch;
 pub mod compute;
 pub mod content;
@@ -129,6 +130,10 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     )?)?;
     m.add_function(wrap_pyfunction!(workflow::event::try_deserialize_event, m)?)?;
     m.add_function(wrap_pyfunction!(workflow::event::intern_event_type, m)?)?;
+    m.add_function(wrap_pyfunction!(
+        workflow::event::register_native_serializer,
+        m
+    )?)?;
 
     // Context + state/session namespaces
     m.add_class::<workflow::context::PyContext>()?;
@@ -166,6 +171,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<core_types::PyStepRegistration>()?;
     m.add_class::<core_types::PyWorkflowSnapshot>()?;
     m.add_class::<core_types::PyWorkflowResult>()?;
+    m.add_class::<core_types::PySubExecutable>()?;
     m.add_function(wrap_pyfunction!(
         core_types::step_registry::register_step_builder,
         m
@@ -211,10 +217,13 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<pipeline::PyStageResult>()?;
     m.add_class::<pipeline::PyActiveWorkflowSnapshot>()?;
     m.add_class::<pipeline::PyPipelineState>()?;
+    m.add_class::<pipeline::PySubPipelineStep>()?;
     m.add_class::<pipeline::PyStage>()?;
     m.add_class::<pipeline::PyParallelStage>()?;
     m.add_class::<pipeline::PyJoinStrategy>()?;
     m.add_class::<pipeline::PyStageKind>()?;
+    m.add_class::<pipeline::PyLoopStage>()?;
+    m.add_class::<pipeline::PyLoopDecision>()?;
     pipeline::register_exceptions(m)?;
 
     // Persistence (workflow checkpoint storage)
@@ -605,6 +614,41 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
         m.add_class::<vc::stream::PyVcStream>()?;
     }
 
+    // Audio backend handles + concrete backends. Each is gated behind the
+    // relevant audio feature so a build without the native inference deps
+    // omits the class entirely.
+    #[cfg(any(
+        feature = "whispercpp",
+        feature = "audio-stt-faster-whisper",
+        feature = "audio-stt-whisper-streaming",
+    ))]
+    m.add_class::<audio_backends::PySttBackendHandle>()?;
+    #[cfg(feature = "audio-stt-faster-whisper")]
+    {
+        m.add_class::<audio_backends::PyFasterWhisperBackend>()?;
+        m.add_class::<audio_backends::PyFasterWhisperConfig>()?;
+    }
+    #[cfg(any(
+        feature = "tts",
+        feature = "audio-tts-spark",
+        feature = "audio-tts-bark",
+        feature = "audio-tts-f5",
+    ))]
+    m.add_class::<audio_backends::PyTtsBackendHandle>()?;
+    #[cfg(feature = "audio-tts-spark")]
+    {
+        m.add_class::<audio_backends::PySparkTtsBackend>()?;
+        m.add_class::<audio_backends::PySparkTtsConfig>()?;
+    }
+    #[cfg(any(
+        feature = "audio-music-musicgen",
+        feature = "audio-music-audiogen",
+        feature = "audio-music-stable-audio",
+    ))]
+    m.add_class::<audio_backends::PyMusicBackendHandle>()?;
+    #[cfg(feature = "audio-codec")]
+    m.add_class::<audio_backends::PyCodecBackendHandle>()?;
+
     // Capability providers (subclassable)
     m.add_class::<providers::capability_providers::TTSProvider>()?;
     m.add_class::<providers::capability_providers::MusicProvider>()?;
@@ -613,6 +657,15 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<providers::capability_providers::ThreeDProvider>()?;
     m.add_class::<providers::capability_providers::BackgroundRemovalProvider>()?;
     m.add_class::<providers::capability_providers::VoiceProvider>()?;
+    m.add_class::<providers::capability_providers::LLMProvider>()?;
+    m.add_class::<providers::capability_providers::EmbeddingProvider>()?;
+    m.add_class::<providers::capability_providers::ImageGenProvider>()?;
+    m.add_class::<providers::capability_providers::VcProvider>()?;
+
+    // Provider-root metadata surface + BaseProvider ABC
+    m.add_class::<providers::provider_meta::PyCapabilityKind>()?;
+    m.add_class::<providers::provider_meta::PyProviderMetadata>()?;
+    m.add_class::<providers::provider_meta::PyBaseProviderAbc>()?;
 
     // Model manager
     m.add_class::<manager::PyModelManager>()?;
@@ -711,6 +764,7 @@ fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_class::<telemetry::history::PyPauseReason>()?;
 
     // Telemetry -- tracing-instrumented completion model wrapper
+    m.add_class::<telemetry::tracing_model::PyTracingConfig>()?;
     m.add_function(wrap_pyfunction!(
         telemetry::tracing_model::wrap_with_tracing,
         m

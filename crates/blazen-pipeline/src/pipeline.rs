@@ -8,13 +8,15 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::time::{Duration, Instant};
 
-use blazen_core::SessionRefRegistry;
 use blazen_core::runtime;
 use blazen_core::runtime::{JoinHandle, JoinSet};
-use blazen_events::{AnyEvent, EventEnvelope, ProgressEvent, ProgressKind, StopEvent};
+use blazen_core::{SessionRefRegistry, WorkflowHandler};
+use blazen_events::{
+    AnyEvent, EventEnvelope, InputResponseEvent, ProgressEvent, ProgressKind, StopEvent,
+};
 use blazen_llm::retry::RetryConfig;
 use chrono::Utc;
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::{Mutex, broadcast, mpsc, oneshot};
 use tokio_stream::StreamExt;
 use uuid::Uuid;
 
@@ -22,10 +24,61 @@ use tracing::Instrument;
 
 use crate::builder::{PersistFn, PersistJsonFn};
 use crate::error::PipelineError;
-use crate::handler::{PipelineControl, PipelineEvent, PipelineHandler};
+use crate::handler::{PipelineControl, PipelineEvent, PipelineHandler, UsageTotals};
 use crate::snapshot::{PipelineResult, PipelineSnapshot, StageResult};
 use crate::stage::{JoinStrategy, LoopDecision, LoopStage, ParallelStage, Stage, StageKind};
 use crate::state::PipelineState;
+
+/// Live handles into the currently-executing stage's inner workflow(s), so
+/// pipeline-level control (resume / respond-to-input) can be forwarded to the
+/// active [`WorkflowHandler`](blazen_core::WorkflowHandler)(s) without
+/// consuming them.
+///
+/// A sequential stage registers exactly one handler; a parallel stage
+/// registers one per live branch. The slot is cleared when the stage ends,
+/// dropping the supervisor's `Arc`s so each inner workflow's `Drop` tears the
+/// event loop down if it is still live.
+#[derive(Default)]
+struct ActiveStage {
+    handlers: Mutex<Vec<Arc<WorkflowHandler>>>,
+}
+
+impl ActiveStage {
+    /// Register the (single) inner workflow handler for a starting stage,
+    /// replacing any previously-registered handlers.
+    async fn set_current(&self, handler: Arc<WorkflowHandler>) {
+        let mut guard = self.handlers.lock().await;
+        guard.clear();
+        guard.push(handler);
+    }
+
+    /// Register an additional inner workflow handler (one per parallel branch).
+    async fn push_branch(&self, handler: Arc<WorkflowHandler>) {
+        self.handlers.lock().await.push(handler);
+    }
+
+    /// Drop all registered handlers — called when a stage ends so the inner
+    /// workflow event loops are torn down via `WorkflowHandler::Drop`.
+    async fn clear(&self) {
+        self.handlers.lock().await.clear();
+    }
+
+    /// Forward an in-place resume to every live inner workflow handler.
+    async fn forward_resume(&self) {
+        for h in self.handlers.lock().await.iter() {
+            let _ = h.resume_in_place();
+        }
+    }
+
+    /// Forward a human-in-the-loop response to every live inner workflow
+    /// handler. The workflow that requested input consumes it; the others
+    /// ignore a response they did not request.
+    async fn forward_input(&self, response: &InputResponseEvent) {
+        for h in self.handlers.lock().await.iter() {
+            let _ = h.respond_to_input(response.clone());
+        }
+    }
+}
 
 /// Lightweight, polled view of a running pipeline's progress.
 ///
@@ -177,6 +230,17 @@ where
             u32::try_from(self.stages.len()).expect("pipeline stage count fits in u32");
         let current_stage = Arc::new(AtomicUsize::new(start_index));
 
+        // Shared running usage/cost totals, seeded from any completed stages
+        // carried over on resume so a live `usage_total()` reflects prior work.
+        let mut seeded = UsageTotals::default();
+        for sr in &completed {
+            if let Some(u) = &sr.usage {
+                seeded.usage.add(u);
+            }
+            seeded.cost_usd += sr.cost_usd.unwrap_or(0.0);
+        }
+        let usage_totals = Arc::new(Mutex::new(seeded));
+
         let handler = PipelineHandler::new(
             result_rx,
             stream_tx.clone(),
@@ -185,6 +249,7 @@ where
             Arc::clone(&session_refs),
             Arc::clone(&current_stage),
             total_stages,
+            Arc::clone(&usage_totals),
         );
 
         runtime::spawn(execute_pipeline(
@@ -207,9 +272,24 @@ where
             snapshot_tx,
             session_refs,
             current_stage,
+            usage_totals,
         ));
 
         handler
+    }
+
+    /// Execute the pipeline and await the final result in one call.
+    ///
+    /// Equivalent to `self.start(input).result().await`. For streaming,
+    /// pausing, snapshotting, or human-in-the-loop input, use
+    /// [`Pipeline::start`] and drive the returned [`PipelineHandler`].
+    ///
+    /// # Errors
+    ///
+    /// Returns any [`PipelineError`] the run produces (stage failure,
+    /// timeout, abort, serialization).
+    pub async fn run(self, input: serde_json::Value) -> Result<PipelineResult, PipelineError> {
+        self.start(input).result().await
     }
 
     /// Resume a pipeline from a previously captured snapshot.
@@ -296,6 +376,7 @@ async fn execute_pipeline<S>(
     snapshot_tx: oneshot::Sender<PipelineSnapshot>,
     session_refs: Arc<SessionRefRegistry>,
     current_stage: Arc<AtomicUsize>,
+    usage_totals: Arc<Mutex<UsageTotals>>,
 ) where
     S: Default + Clone + Send + Sync + 'static + serde::Serialize + serde::de::DeserializeOwned,
 {
@@ -353,6 +434,7 @@ async fn execute_pipeline<S>(
     // used by Pause/Abort below.
     let session_refs_for_run = Arc::clone(&session_refs);
     let current_stage_for_run = Arc::clone(&current_stage);
+    let active_stage = Arc::new(ActiveStage::default());
     let run_fut = run_pipeline_loop(
         &pipeline_name,
         &stages,
@@ -369,6 +451,8 @@ async fn execute_pipeline<S>(
         &mut control_rx,
         &session_refs_for_run,
         &current_stage_for_run,
+        &active_stage,
+        &usage_totals,
     );
 
     let outcome = match total_timeout {
@@ -451,6 +535,8 @@ async fn run_pipeline_loop<S>(
     control_rx: &mut mpsc::UnboundedReceiver<PipelineControl>,
     session_refs: &Arc<SessionRefRegistry>,
     current_stage: &Arc<AtomicUsize>,
+    active_stage: &Arc<ActiveStage>,
+    usage_totals: &Arc<Mutex<UsageTotals>>,
 ) -> RunOutcome
 where
     S: Default + Clone + Send + Sync + 'static + serde::Serialize,
@@ -498,8 +584,8 @@ where
             workflow_run_id: Uuid::nil(),
             event: progress_event,
         });
-        // Check for control signals between stages (non-blocking).
-        if let Ok(control) = control_rx.try_recv() {
+        // Drain any control signals that arrived between stages (non-blocking).
+        while let Ok(control) = control_rx.try_recv() {
             match control {
                 PipelineControl::Pause => {
                     let snapshot = build_snapshot(
@@ -513,8 +599,20 @@ where
                     );
                     return RunOutcome::Paused(snapshot);
                 }
-                PipelineControl::Resume => {
-                    // No-op between stages -- we're already running.
+                PipelineControl::Resume | PipelineControl::RespondToInput { .. } => {
+                    // No-op between stages -- nothing is parked / awaiting input.
+                }
+                PipelineControl::Snapshot { reply } => {
+                    let snap = build_snapshot(
+                        pipeline_name,
+                        run_id,
+                        stage_idx,
+                        0,
+                        &stage_results,
+                        &state,
+                        input,
+                    );
+                    let _ = reply.send(Ok(snap));
                 }
                 PipelineControl::Abort => {
                     return RunOutcome::Aborted;
@@ -558,6 +656,7 @@ where
                 stage_idx,
                 &stage_results,
                 input,
+                active_stage,
             )
             .instrument(tracing::info_span!(
                 "pipeline.stage.loop",
@@ -572,7 +671,10 @@ where
             }
         } else {
             // Race stage execution against control signals so pause/abort can
-            // interrupt a running stage.
+            // interrupt a running stage, and snapshot/resume/respond-to-input
+            // can be serviced WITHOUT dropping the in-flight stage. The inner
+            // workflow handler(s) live in `active_stage`, so the stage future
+            // can be polled across control messages without being cancelled.
             let stage_future =
                 async {
                     match stage {
@@ -583,6 +685,7 @@ where
                             event_envelope_tx,
                             timeout_per_stage,
                             session_refs,
+                            active_stage,
                         )
                         .instrument(
                             tracing::info_span!("pipeline.stage.sequential", stage_name = %s.name),
@@ -596,6 +699,7 @@ where
                                 event_envelope_tx,
                                 timeout_per_stage,
                                 session_refs,
+                                active_stage,
                             )
                             .instrument(tracing::info_span!(
                                 "pipeline.stage.parallel",
@@ -607,43 +711,62 @@ where
                         StageKind::Loop(_) => unreachable!("loop stage handled above"),
                     }
                 };
+            let mut stage_future = std::pin::pin!(stage_future);
 
-            tokio::select! {
-                biased;
+            loop {
+                tokio::select! {
+                    biased;
 
-                // Control signal -- takes priority when both are ready.
-                Some(control) = control_rx.recv() => {
-                    match control {
-                        PipelineControl::Pause => {
-                            // The stage future is dropped here, which drops any
-                            // inner WorkflowHandlers. Their Drop impls send Abort
-                            // to the inner workflow event loops, giving clean shutdown.
-                            let snapshot = build_snapshot(
-                                pipeline_name,
-                                run_id,
-                                stage_idx,
-                                0,
-                                &stage_results,
-                                &state,
-                                input,
-                            );
-                            return RunOutcome::Paused(snapshot);
-                        }
-                        PipelineControl::Resume => {
-                            // No-op during stage execution. True in-place resume
-                            // requires keeping the stage future alive, which is
-                            // deferred to a future task.
-                            continue;
-                        }
-                        PipelineControl::Abort => {
-                            // The stage future is dropped here, which drops any
-                            // inner WorkflowHandlers. Their Drop impls send Abort.
-                            return RunOutcome::Aborted;
+                    // Control signal -- takes priority when both are ready.
+                    Some(control) = control_rx.recv() => {
+                        match control {
+                            PipelineControl::Pause => {
+                                // Drop `active_stage`'s handlers; their Drop impls
+                                // send Abort to the inner workflow event loops.
+                                active_stage.clear().await;
+                                let snapshot = build_snapshot(
+                                    pipeline_name,
+                                    run_id,
+                                    stage_idx,
+                                    0,
+                                    &stage_results,
+                                    &state,
+                                    input,
+                                );
+                                return RunOutcome::Paused(snapshot);
+                            }
+                            PipelineControl::Resume => {
+                                // Forward to the active inner workflow(s) so one
+                                // parked on an InputRequestEvent (or paused) unparks.
+                                active_stage.forward_resume().await;
+                            }
+                            PipelineControl::RespondToInput { response } => {
+                                active_stage.forward_input(&response).await;
+                            }
+                            PipelineControl::Snapshot { reply } => {
+                                let snap = build_snapshot(
+                                    pipeline_name,
+                                    run_id,
+                                    stage_idx,
+                                    0,
+                                    &stage_results,
+                                    &state,
+                                    input,
+                                );
+                                let _ = reply.send(Ok(snap));
+                            }
+                            PipelineControl::Abort => {
+                                active_stage.clear().await;
+                                return RunOutcome::Aborted;
+                            }
                         }
                     }
-                }
 
-                result = stage_future => result,
+                    res = &mut stage_future => {
+                        active_stage.clear().await;
+                        break res;
+                    }
+                }
             }
         };
 
@@ -662,6 +785,15 @@ where
                 // Roll per-stage totals into the pipeline-wide totals.
                 state.usage_total.add(&stage_usage);
                 state.cost_total_usd += stage_cost;
+
+                // Mirror the same delta into the shared running totals so a
+                // live `PipelineHandler::usage_total()` reflects completed
+                // stages mid-run.
+                {
+                    let mut totals = usage_totals.lock().await;
+                    totals.usage.add(&stage_usage);
+                    totals.cost_usd += stage_cost;
+                }
 
                 let usage_for_result = if stage_usage == blazen_llm::types::TokenUsage::default() {
                     None
@@ -798,7 +930,7 @@ struct StageSuccess {
 }
 
 /// Run a single sequential stage.
-#[allow(clippy::similar_names)]
+#[allow(clippy::similar_names, clippy::too_many_lines)]
 async fn run_sequential_stage<S>(
     stage: &Stage<S>,
     state: &PipelineState<S>,
@@ -806,6 +938,7 @@ async fn run_sequential_stage<S>(
     event_envelope_tx: Option<&mpsc::UnboundedSender<EventEnvelope>>,
     timeout: Option<Duration>,
     session_refs: &Arc<SessionRefRegistry>,
+    active_stage: &Arc<ActiveStage>,
 ) -> Result<StageSuccess, StageOutcome>
 where
     S: Default + Clone + Send + Sync + 'static,
@@ -825,12 +958,20 @@ where
         state.last_result().clone()
     };
 
-    // Run the workflow with the shared session-ref registry.
-    let handler = stage
+    // Run the workflow with the shared session-ref registry. Detach the
+    // result receiver so the handler can stay alive in `active_stage` for
+    // pipeline-level control forwarding (snapshot / resume / respond-to-input)
+    // while we await the terminal event on the receiver.
+    let mut handler = stage
         .workflow
         .run_with_registry(workflow_input, Arc::clone(session_refs))
         .await
         .map_err(|e| StageOutcome::Failed(PipelineError::Workflow(e)))?;
+    let result_rx = handler
+        .take_result_rx()
+        .expect("fresh workflow handler always has a result receiver");
+    let handler = Arc::new(handler);
+    active_stage.set_current(Arc::clone(&handler)).await;
 
     // Subscribe to the workflow's event stream and forward events while
     // also accumulating UsageEvent totals.
@@ -888,11 +1029,14 @@ where
         }
     });
 
-    // Await the workflow result, optionally with a timeout.
+    // Await the workflow's terminal event via the detached receiver,
+    // optionally with a timeout. The handler stays alive in `active_stage`
+    // so pipeline-level control can be forwarded to it concurrently; the
+    // supervisor clears it once the stage ends.
     #[allow(clippy::single_match_else)]
     let wf_result = if let Some(timeout_dur) = timeout {
-        match runtime::timeout(timeout_dur, handler.result()).await {
-            Ok(r) => r,
+        match runtime::timeout(timeout_dur, result_rx).await {
+            Ok(r) => r.unwrap_or(Err(blazen_core::WorkflowError::ChannelClosed)),
             Err(_) => {
                 forward_handle.abort();
                 return Err(StageOutcome::Failed(PipelineError::StageFailed {
@@ -904,15 +1048,17 @@ where
             }
         }
     } else {
-        handler.result().await
+        result_rx
+            .await
+            .unwrap_or(Err(blazen_core::WorkflowError::ChannelClosed))
     };
 
     match wf_result {
-        Ok(wf_res) => {
+        Ok(event) => {
             // Wait for the forwarding task to finish cleanly so we capture
             // every UsageEvent emitted before the workflow shut down.
             let (stage_usage, stage_cost) = forward_handle.await.unwrap_or_default();
-            let output = extract_stop_result(&*wf_res.event);
+            let output = extract_stop_result(&*event);
             Ok(StageSuccess {
                 output,
                 usage: stage_usage,
@@ -970,6 +1116,7 @@ async fn run_loop_stage<S>(
     stage_idx: usize,
     stage_results: &[StageResult],
     input: &serde_json::Value,
+    active_stage: &Arc<ActiveStage>,
 ) -> LoopOutcome
 where
     S: Default + Clone + Send + Sync + 'static + serde::Serialize,
@@ -996,7 +1143,7 @@ where
         }
 
         // Honor control signals between rounds (non-blocking).
-        if let Ok(control) = control_rx.try_recv() {
+        while let Ok(control) = control_rx.try_recv() {
             match control {
                 PipelineControl::Pause => {
                     let snapshot = build_snapshot(
@@ -1010,13 +1157,26 @@ where
                     );
                     return LoopOutcome::Paused(snapshot);
                 }
-                PipelineControl::Resume => {}
+                PipelineControl::Resume | PipelineControl::RespondToInput { .. } => {}
+                PipelineControl::Snapshot { reply } => {
+                    let snap = build_snapshot(
+                        pipeline_name,
+                        run_id,
+                        stage_idx,
+                        iteration,
+                        stage_results,
+                        state,
+                        input,
+                    );
+                    let _ = reply.send(Ok(snap));
+                }
                 PipelineControl::Abort => return LoopOutcome::Aborted,
             }
         }
 
         // Run the inner stage for this round, racing against control signals
-        // so a pause/abort can interrupt a long-running round.
+        // so pause/abort can interrupt a long-running round while
+        // snapshot/resume/respond-to-input are serviced without dropping it.
         let inner_future = async {
             match loop_stage.inner.as_ref() {
                 StageKind::Sequential(s) => {
@@ -1027,6 +1187,7 @@ where
                         event_envelope_tx,
                         timeout,
                         session_refs,
+                        active_stage,
                     )
                     .await
                 }
@@ -1038,6 +1199,7 @@ where
                         event_envelope_tx,
                         timeout,
                         session_refs,
+                        active_stage,
                     )
                     .await
                 }
@@ -1045,30 +1207,56 @@ where
                 StageKind::Loop(_) => unreachable!("nested loop rejected above"),
             }
         };
+        let round_result = {
+            let mut inner_future = std::pin::pin!(inner_future);
+            loop {
+                tokio::select! {
+                    biased;
 
-        let round_result = tokio::select! {
-            biased;
-
-            Some(control) = control_rx.recv() => {
-                match control {
-                    PipelineControl::Pause => {
-                        let snapshot = build_snapshot(
-                            pipeline_name,
-                            run_id,
-                            stage_idx,
-                            iteration,
-                            stage_results,
-                            state,
-                            input,
-                        );
-                        return LoopOutcome::Paused(snapshot);
+                    Some(control) = control_rx.recv() => {
+                        match control {
+                            PipelineControl::Pause => {
+                                active_stage.clear().await;
+                                let snapshot = build_snapshot(
+                                    pipeline_name,
+                                    run_id,
+                                    stage_idx,
+                                    iteration,
+                                    stage_results,
+                                    state,
+                                    input,
+                                );
+                                return LoopOutcome::Paused(snapshot);
+                            }
+                            PipelineControl::Resume => active_stage.forward_resume().await,
+                            PipelineControl::RespondToInput { response } => {
+                                active_stage.forward_input(&response).await;
+                            }
+                            PipelineControl::Snapshot { reply } => {
+                                let snap = build_snapshot(
+                                    pipeline_name,
+                                    run_id,
+                                    stage_idx,
+                                    iteration,
+                                    stage_results,
+                                    state,
+                                    input,
+                                );
+                                let _ = reply.send(Ok(snap));
+                            }
+                            PipelineControl::Abort => {
+                                active_stage.clear().await;
+                                return LoopOutcome::Aborted;
+                            }
+                        }
                     }
-                    PipelineControl::Resume => continue,
-                    PipelineControl::Abort => return LoopOutcome::Aborted,
+
+                    res = &mut inner_future => {
+                        active_stage.clear().await;
+                        break res;
+                    }
                 }
             }
-
-            result = inner_future => result,
         };
 
         match round_result {
@@ -1128,6 +1316,7 @@ async fn run_parallel_stage<S>(
     event_envelope_tx: Option<&mpsc::UnboundedSender<EventEnvelope>>,
     timeout: Option<Duration>,
     session_refs: &Arc<SessionRefRegistry>,
+    active_stage: &Arc<ActiveStage>,
 ) -> Result<StageSuccess, StageOutcome>
 where
     S: Default + Clone + Send + Sync + 'static,
@@ -1141,6 +1330,7 @@ where
                 event_envelope_tx,
                 timeout,
                 session_refs,
+                active_stage,
             )
             .await
         }
@@ -1152,6 +1342,7 @@ where
                 event_envelope_tx,
                 timeout,
                 session_refs,
+                active_stage,
             )
             .await
         }
@@ -1167,6 +1358,7 @@ async fn run_parallel_wait_all<S>(
     event_envelope_tx: Option<&mpsc::UnboundedSender<EventEnvelope>>,
     timeout: Option<Duration>,
     session_refs: &Arc<SessionRefRegistry>,
+    active_stage: &Arc<ActiveStage>,
 ) -> Result<StageSuccess, StageOutcome>
 where
     S: Default + Clone + Send + Sync + 'static,
@@ -1190,7 +1382,7 @@ where
         let branch_name = branch.name.clone();
         let stage_name = parallel.name.clone();
 
-        let handler = match branch
+        let mut handler = match branch
             .workflow
             .run_with_registry(workflow_input, Arc::clone(session_refs))
             .await
@@ -1207,6 +1399,13 @@ where
                 }));
             }
         };
+        // Detach the result receiver and register the live handler so
+        // pipeline-level control can fan out to every parallel branch.
+        let result_rx = handler
+            .take_result_rx()
+            .expect("fresh workflow handler always has a result receiver");
+        let handler = Arc::new(handler);
+        active_stage.push_branch(Arc::clone(&handler)).await;
 
         // Forward events from this branch and accumulate UsageEvent totals.
         let mut wf_stream = handler.stream_events();
@@ -1218,6 +1417,13 @@ where
             let mut usage = blazen_llm::types::TokenUsage::default();
             let mut cost: f64 = 0.0;
             while let Some(event) = wf_stream.next().await {
+                // Break on the workflow's stream-end sentinel so the forwarder
+                // terminates deterministically even when a step-handler
+                // Context clone keeps a broadcast sender alive past the event
+                // loop's exit. Mirrors the sequential-stage forwarder.
+                if event.event_type_id() == "blazen::StreamEnd" {
+                    break;
+                }
                 if let Some(ue) = event.as_any().downcast_ref::<blazen_events::UsageEvent>() {
                     usage.add(&blazen_llm::types::TokenUsage {
                         prompt_tokens: ue.prompt_tokens,
@@ -1249,13 +1455,18 @@ where
         forward_handles.push(fh);
 
         set.spawn(async move {
+            // Keep the Arc alive for the duration of the await so control
+            // forwarding stays valid until the branch resolves.
+            let _handler = handler;
             let result = if let Some(t) = timeout {
-                match runtime::timeout(t, handler.result()).await {
-                    Ok(r) => r,
+                match runtime::timeout(t, result_rx).await {
+                    Ok(r) => r.unwrap_or(Err(blazen_core::WorkflowError::ChannelClosed)),
                     Err(_) => Err(blazen_core::WorkflowError::Timeout { elapsed: t }),
                 }
             } else {
-                handler.result().await
+                result_rx
+                    .await
+                    .unwrap_or(Err(blazen_core::WorkflowError::ChannelClosed))
             };
             (branch_name, result)
         });
@@ -1265,8 +1476,8 @@ where
     let mut results = serde_json::Map::new();
     while let Some(join_result) = set.join_next().await {
         match join_result {
-            Ok((branch_name, Ok(wf_res))) => {
-                let output = extract_stop_result(&*wf_res.event);
+            Ok((branch_name, Ok(event))) => {
+                let output = extract_stop_result(&*event);
                 results.insert(branch_name, output);
             }
             Ok((branch_name, Err(e))) => {
@@ -1318,6 +1529,7 @@ async fn run_parallel_first_completes<S>(
     event_envelope_tx: Option<&mpsc::UnboundedSender<EventEnvelope>>,
     timeout: Option<Duration>,
     session_refs: &Arc<SessionRefRegistry>,
+    active_stage: &Arc<ActiveStage>,
 ) -> Result<StageSuccess, StageOutcome>
 where
     S: Default + Clone + Send + Sync + 'static,
@@ -1341,7 +1553,7 @@ where
         let branch_name = branch.name.clone();
         let stage_name = parallel.name.clone();
 
-        let handler = match branch
+        let mut handler = match branch
             .workflow
             .run_with_registry(workflow_input, Arc::clone(session_refs))
             .await
@@ -1358,6 +1570,11 @@ where
                 }));
             }
         };
+        let result_rx = handler
+            .take_result_rx()
+            .expect("fresh workflow handler always has a result receiver");
+        let handler = Arc::new(handler);
+        active_stage.push_branch(Arc::clone(&handler)).await;
 
         let mut wf_stream = handler.stream_events();
         let fwd_stage = stage_name;
@@ -1368,6 +1585,13 @@ where
             let mut usage = blazen_llm::types::TokenUsage::default();
             let mut cost: f64 = 0.0;
             while let Some(event) = wf_stream.next().await {
+                // Break on the workflow's stream-end sentinel so the forwarder
+                // terminates deterministically even when a step-handler
+                // Context clone keeps a broadcast sender alive past the event
+                // loop's exit. Mirrors the sequential-stage forwarder.
+                if event.event_type_id() == "blazen::StreamEnd" {
+                    break;
+                }
                 if let Some(ue) = event.as_any().downcast_ref::<blazen_events::UsageEvent>() {
                     usage.add(&blazen_llm::types::TokenUsage {
                         prompt_tokens: ue.prompt_tokens,
@@ -1399,13 +1623,18 @@ where
         forward_handles.push(fh);
 
         set.spawn(async move {
+            // Keep the Arc alive across the await so control forwarding to
+            // this branch remains valid until it resolves.
+            let _handler = handler;
             let result = if let Some(t) = timeout {
-                match runtime::timeout(t, handler.result()).await {
-                    Ok(r) => r,
+                match runtime::timeout(t, result_rx).await {
+                    Ok(r) => r.unwrap_or(Err(blazen_core::WorkflowError::ChannelClosed)),
                     Err(_) => Err(blazen_core::WorkflowError::Timeout { elapsed: t }),
                 }
             } else {
-                handler.result().await
+                result_rx
+                    .await
+                    .unwrap_or(Err(blazen_core::WorkflowError::ChannelClosed))
             };
             (branch_name, result)
         });
@@ -1419,8 +1648,8 @@ where
         set.abort_all();
 
         match join_result {
-            Ok((branch_name, Ok(wf_res))) => {
-                let output = extract_stop_result(&*wf_res.event);
+            Ok((branch_name, Ok(event))) => {
+                let output = extract_stop_result(&*event);
                 let mut result_map = serde_json::Map::new();
                 result_map.insert(branch_name, output);
                 Ok(serde_json::Value::Object(result_map))

@@ -318,3 +318,233 @@ impl WasmParallelStage {
             .ok_or_else(|| JsValue::from_str("ParallelStage already consumed by a Pipeline"))
     }
 }
+
+// ---------------------------------------------------------------------------
+// LoopDecision
+// ---------------------------------------------------------------------------
+
+/// The decision returned by a [`WasmLoopStage`]'s `until` predicate after each
+/// round.
+///
+/// Mirrors [`blazen_pipeline::LoopDecision`]. The Rust variant
+/// [`blazen_pipeline::LoopDecision::Abort`] carries a string reason; because a
+/// `wasm-bindgen` C-style enum can't hold associated data, the JS `until`
+/// callback signals an abort either by returning [`WasmLoopDecision::Abort`]
+/// (with a generic reason) or by returning a plain object
+/// `{ decision: "abort", reason: "..." }` (see
+/// [`build_loop_until`]).
+#[wasm_bindgen(js_name = "LoopDecision")]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum WasmLoopDecision {
+    /// Run the inner stage again (subject to the `maxIterations` cap).
+    Continue,
+    /// Stop looping cleanly; the loop stage succeeds.
+    Done,
+    /// Stop looping with an error.
+    Abort,
+}
+
+/// Coerce a JS `until` callback return value into a
+/// [`blazen_pipeline::LoopDecision`].
+///
+/// Accepts, in order of preference:
+/// - the [`WasmLoopDecision`] enum (marshalled as its numeric discriminant);
+/// - a string `"continue"` / `"done"` / `"abort"` (case-insensitive);
+/// - a plain object `{ decision: "abort", reason: "..." }` for aborts that
+///   carry a reason.
+///
+/// Anything unrecognised (including a thrown / rejected callback) collapses to
+/// [`LoopDecision::Continue`] so a misbehaving predicate keeps iterating up to
+/// the hard `max_iterations` cap rather than silently aborting.
+fn coerce_loop_decision(value: &JsValue) -> blazen_pipeline::LoopDecision {
+    use blazen_pipeline::LoopDecision;
+
+    // Numeric discriminant (the wasm-bindgen enum marshals as a number).
+    if let Some(n) = value.as_f64() {
+        return match n as u32 {
+            x if x == WasmLoopDecision::Done as u32 => LoopDecision::Done,
+            x if x == WasmLoopDecision::Abort as u32 => {
+                LoopDecision::Abort("loop aborted by predicate".to_owned())
+            }
+            _ => LoopDecision::Continue,
+        };
+    }
+
+    // String form.
+    if let Some(s) = value.as_string() {
+        return match s.to_ascii_lowercase().as_str() {
+            "done" => LoopDecision::Done,
+            "abort" => LoopDecision::Abort("loop aborted by predicate".to_owned()),
+            _ => LoopDecision::Continue,
+        };
+    }
+
+    // Object form: `{ decision, reason }`.
+    if value.is_object() {
+        let decision = js_sys::Reflect::get(value, &JsValue::from_str("decision"))
+            .ok()
+            .and_then(|v| v.as_string())
+            .unwrap_or_default();
+        return match decision.to_ascii_lowercase().as_str() {
+            "done" => LoopDecision::Done,
+            "abort" => {
+                let reason = js_sys::Reflect::get(value, &JsValue::from_str("reason"))
+                    .ok()
+                    .and_then(|v| v.as_string())
+                    .unwrap_or_else(|| "loop aborted by predicate".to_owned());
+                LoopDecision::Abort(reason)
+            }
+            _ => LoopDecision::Continue,
+        };
+    }
+
+    LoopDecision::Continue
+}
+
+/// Wrap a JS function as a [`blazen_pipeline::LoopUntilFn`].
+///
+/// The returned closure is invoked synchronously after each round with a
+/// serialized [`WasmPipelineState`] snapshot and the 1-based completed-round
+/// count, and coerces the result via [`coerce_loop_decision`].
+fn build_loop_until(callback: js_sys::Function) -> blazen_pipeline::LoopUntilFn {
+    let wrapper = Arc::new(JsClosure(callback));
+    Arc::new(
+        move |state: &PipelineState, iterations: u32| -> blazen_pipeline::LoopDecision {
+            let snapshot = snapshot_state(state);
+            let state_js = match serde_wasm_bindgen::to_value(&snapshot) {
+                Ok(v) => v,
+                Err(_) => JsValue::NULL,
+            };
+            match wrapper
+                .0
+                .call2(&JsValue::NULL, &state_js, &JsValue::from_f64(f64::from(iterations)))
+            {
+                Ok(result) => coerce_loop_decision(&result),
+                Err(_) => blazen_pipeline::LoopDecision::Continue,
+            }
+        },
+    )
+}
+
+// ---------------------------------------------------------------------------
+// WasmLoopStage
+// ---------------------------------------------------------------------------
+
+/// A loop pipeline stage that re-runs an inner stage until a predicate signals
+/// completion (or a maximum iteration count is reached).
+///
+/// Wraps [`blazen_pipeline::LoopStage`]. The inner stage is a single
+/// [`WasmStage`] (sequential) or [`WasmParallelStage`] (parallel) — nesting
+/// another loop stage is rejected at execution time. As with the other stage
+/// wrappers, the inner stage is consumed at construction, so each `Stage` /
+/// `ParallelStage` instance can be used once.
+///
+/// ```typescript
+/// const inner = new Stage("refine", wf);
+/// const loop = new LoopStage("refine-until-good", 5, inner, undefined, (state, round) => {
+///   return state.input.score >= 0.9 ? LoopDecision.Done : LoopDecision.Continue;
+/// });
+/// const pipeline = new PipelineBuilder("p").loopStage(loop).build();
+/// ```
+#[wasm_bindgen(js_name = "LoopStage")]
+pub struct WasmLoopStage {
+    inner: Mutex<Option<blazen_pipeline::LoopStage>>,
+}
+
+#[wasm_bindgen(js_class = "LoopStage")]
+impl WasmLoopStage {
+    /// Create a new loop stage.
+    ///
+    /// - `name` — human-readable stage name.
+    /// - `max_iterations` — hard cap on the number of rounds. The loop stops
+    ///   after this many rounds even if `until` never returns
+    ///   [`WasmLoopDecision::Done`].
+    /// - `inner` — the sequential [`WasmStage`] to run each round. Consumed at
+    ///   construction.
+    /// - `parallel_inner` — an alternative parallel inner stage
+    ///   ([`WasmParallelStage`]); when supplied it takes precedence over
+    ///   `inner`. Consumed at construction.
+    /// - `until` — a `(state: PipelineState, round: number) => LoopDecision |
+    ///   string | { decision, reason }` JS callable evaluated after each round
+    ///   to decide whether to continue, finish, or abort. When `null`/
+    ///   `undefined` the loop simply runs until `max_iterations` is reached.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if neither `inner` nor `parallel_inner` is
+    /// supplied, or if the supplied inner stage has already been consumed by a
+    /// previous `Pipeline` / stage.
+    #[wasm_bindgen(constructor)]
+    pub fn new(
+        name: String,
+        max_iterations: u32,
+        inner: Option<WasmStage>,
+        parallel_inner: Option<WasmParallelStage>,
+        until: Option<js_sys::Function>,
+    ) -> Result<WasmLoopStage, JsValue> {
+        use blazen_pipeline::StageKind;
+
+        let inner_kind: StageKind = if let Some(parallel) = parallel_inner.as_ref() {
+            StageKind::Parallel(parallel.take()?)
+        } else if let Some(stage) = inner.as_ref() {
+            StageKind::Sequential(stage.take()?)
+        } else {
+            return Err(JsValue::from_str(
+                "LoopStage requires an inner stage (pass a Stage or a ParallelStage)",
+            ));
+        };
+
+        let until_fn: blazen_pipeline::LoopUntilFn = match until {
+            Some(cb) => build_loop_until(cb),
+            // No predicate: always continue until `max_iterations` caps it.
+            None => Arc::new(|_state: &PipelineState, _round: u32| {
+                blazen_pipeline::LoopDecision::Continue
+            }),
+        };
+
+        Ok(Self {
+            inner: Mutex::new(Some(blazen_pipeline::LoopStage {
+                name,
+                max_iterations,
+                inner: Box::new(inner_kind),
+                until: until_fn,
+                on_round_complete: None,
+            })),
+        })
+    }
+
+    /// The loop stage's human-readable name.
+    ///
+    /// Returns an empty string if the stage has already been consumed by a
+    /// `Pipeline`.
+    #[wasm_bindgen(getter)]
+    #[must_use]
+    pub fn name(&self) -> String {
+        let guard = self.inner.lock().expect("poisoned");
+        guard.as_ref().map(|s| s.name.clone()).unwrap_or_default()
+    }
+
+    /// The configured maximum iteration count.
+    ///
+    /// Returns `0` if the stage has already been consumed by a `Pipeline`.
+    #[wasm_bindgen(getter, js_name = "maxIterations")]
+    #[must_use]
+    pub fn max_iterations(&self) -> u32 {
+        let guard = self.inner.lock().expect("poisoned");
+        guard.as_ref().map_or(0, |s| s.max_iterations)
+    }
+}
+
+impl WasmLoopStage {
+    /// Take the underlying [`blazen_pipeline::LoopStage`], consuming this
+    /// `WasmLoopStage` instance.
+    ///
+    /// Returns an error if the stage has already been consumed.
+    pub(crate) fn take(&self) -> Result<blazen_pipeline::LoopStage, JsValue> {
+        self.inner
+            .lock()
+            .expect("poisoned")
+            .take()
+            .ok_or_else(|| JsValue::from_str("LoopStage already consumed by a Pipeline"))
+    }
+}

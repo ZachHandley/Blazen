@@ -15736,28 +15736,34 @@ public func FfiConverterTypePerplexityProvider_lower(_ value: PerplexityProvider
 /**
  * A validated, runnable pipeline.
  *
- * Multiple runs are allowed — invoking [`run`](Self::run) twice in a row
- * is safe and produces independent runs — but the implementation rejects
- * **overlapping** runs on the same handle to avoid surprising aliasing of
- * inner workflow state across concurrent foreign callers.
+ * Wraps the real [`blazen_pipeline::Pipeline`]. Multiple runs are allowed —
+ * invoking [`run`](Self::run) twice in a row is safe and produces
+ * independent runs — but the implementation rejects **overlapping** runs on
+ * the same handle to avoid surprising aliasing of inner workflow state across
+ * concurrent foreign callers.
  */
 public protocol PipelineProtocol: AnyObject, Sendable {
     
     /**
-     * Execute the pipeline to completion. `input_json` is parsed as JSON
-     * and passed as the first stage's `StartEvent` payload; each
-     * subsequent stage receives the previous stage's `StopEvent` result.
+     * Execute the pipeline to completion. `input_json` is parsed as JSON and
+     * passed as the first stage's `StartEvent` payload; each subsequent stage
+     * receives the previous stage's output.
      *
      * Returns a [`WorkflowResult`] whose `event` field is a synthetic
-     * `StopEvent` carrying the final stage output, and whose
-     * `total_*_tokens` / `total_cost_usd` fields are the sum across every
-     * stage's `WorkflowResult`.
+     * `StopEvent` carrying the final stage output, and whose `total_*_tokens`
+     * / `total_cost_usd` fields are the engine's aggregated totals across
+     * every stage.
+     *
+     * This is the result-only shorthand (parity with `Workflow::run`). For
+     * streaming intermediate events, pausing, snapshotting, or human-in-the-
+     * loop input, use [`start`](Self::start) and drive the returned
+     * [`PipelineHandler`].
      */
     func run(inputJson: String) async throws  -> WorkflowResult
     
     /**
-     * Synchronous variant of [`run`](Self::run) — blocks the current
-     * thread on the shared Tokio runtime. Provided for callers that want
+     * Synchronous variant of [`run`](Self::run) — blocks the current thread
+     * on the shared Tokio runtime. Provided for callers that want
      * fire-and-forget usage without engaging their host language's async
      * machinery (Ruby scripts, simple Go `main` functions).
      */
@@ -15769,14 +15775,37 @@ public protocol PipelineProtocol: AnyObject, Sendable {
      */
     func stageNames()  -> [String]
     
+    /**
+     * Run the pipeline and return a live [`PipelineHandler`] instead of
+     * blocking for the final result.
+     *
+     * The returned handler exposes the full control surface — stream
+     * intermediate events to a foreign
+     * [`PipelineEventSink`](crate::pipeline::PipelineEventSink), `pause` /
+     * `resume_in_place`, `snapshot`, `respond_to_input` for human-in-the-loop,
+     * `abort`, `progress`, and running `usage_total` / `cost_total_usd` —
+     * plus `result()` to await the terminal [`WorkflowResult`]. Mirrors
+     * `Workflow::run_with_handler`.
+     */
+    func start(inputJson: String) async throws  -> PipelineHandler
+    
+    /**
+     * Synchronous variant of [`start`](Self::start) — blocks the current
+     * thread on the shared Tokio runtime while the pipeline is launched, then
+     * returns the live handler. The pipeline keeps running on the shared
+     * runtime after this returns.
+     */
+    func startBlocking(inputJson: String) throws  -> PipelineHandler
+    
 }
 /**
  * A validated, runnable pipeline.
  *
- * Multiple runs are allowed — invoking [`run`](Self::run) twice in a row
- * is safe and produces independent runs — but the implementation rejects
- * **overlapping** runs on the same handle to avoid surprising aliasing of
- * inner workflow state across concurrent foreign callers.
+ * Wraps the real [`blazen_pipeline::Pipeline`]. Multiple runs are allowed —
+ * invoking [`run`](Self::run) twice in a row is safe and produces
+ * independent runs — but the implementation rejects **overlapping** runs on
+ * the same handle to avoid surprising aliasing of inner workflow state across
+ * concurrent foreign callers.
  */
 open class Pipeline: PipelineProtocol, @unchecked Sendable {
     fileprivate let handle: UInt64
@@ -15832,14 +15861,19 @@ open class Pipeline: PipelineProtocol, @unchecked Sendable {
 
     
     /**
-     * Execute the pipeline to completion. `input_json` is parsed as JSON
-     * and passed as the first stage's `StartEvent` payload; each
-     * subsequent stage receives the previous stage's `StopEvent` result.
+     * Execute the pipeline to completion. `input_json` is parsed as JSON and
+     * passed as the first stage's `StartEvent` payload; each subsequent stage
+     * receives the previous stage's output.
      *
      * Returns a [`WorkflowResult`] whose `event` field is a synthetic
-     * `StopEvent` carrying the final stage output, and whose
-     * `total_*_tokens` / `total_cost_usd` fields are the sum across every
-     * stage's `WorkflowResult`.
+     * `StopEvent` carrying the final stage output, and whose `total_*_tokens`
+     * / `total_cost_usd` fields are the engine's aggregated totals across
+     * every stage.
+     *
+     * This is the result-only shorthand (parity with `Workflow::run`). For
+     * streaming intermediate events, pausing, snapshotting, or human-in-the-
+     * loop input, use [`start`](Self::start) and drive the returned
+     * [`PipelineHandler`].
      */
 open func run(inputJson: String)async throws  -> WorkflowResult  {
     return
@@ -15859,8 +15893,8 @@ open func run(inputJson: String)async throws  -> WorkflowResult  {
 }
     
     /**
-     * Synchronous variant of [`run`](Self::run) — blocks the current
-     * thread on the shared Tokio runtime. Provided for callers that want
+     * Synchronous variant of [`run`](Self::run) — blocks the current thread
+     * on the shared Tokio runtime. Provided for callers that want
      * fire-and-forget usage without engaging their host language's async
      * machinery (Ruby scripts, simple Go `main` functions).
      */
@@ -15881,6 +15915,50 @@ open func stageNames() -> [String]  {
     return try!  FfiConverterSequenceString.lift(try! rustCall() {
     uniffi_blazen_uniffi_fn_method_pipeline_stage_names(
             self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Run the pipeline and return a live [`PipelineHandler`] instead of
+     * blocking for the final result.
+     *
+     * The returned handler exposes the full control surface — stream
+     * intermediate events to a foreign
+     * [`PipelineEventSink`](crate::pipeline::PipelineEventSink), `pause` /
+     * `resume_in_place`, `snapshot`, `respond_to_input` for human-in-the-loop,
+     * `abort`, `progress`, and running `usage_total` / `cost_total_usd` —
+     * plus `result()` to await the terminal [`WorkflowResult`]. Mirrors
+     * `Workflow::run_with_handler`.
+     */
+open func start(inputJson: String)async throws  -> PipelineHandler  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_pipeline_start(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(inputJson)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_u64,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_u64,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_u64,
+            liftFunc: FfiConverterTypePipelineHandler_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`start`](Self::start) — blocks the current
+     * thread on the shared Tokio runtime while the pipeline is launched, then
+     * returns the live handler. The pipeline keeps running on the shared
+     * runtime after this returns.
+     */
+open func startBlocking(inputJson: String)throws  -> PipelineHandler  {
+    return try  FfiConverterTypePipelineHandler_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_pipeline_start_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(inputJson),$0
     )
 })
 }
@@ -15940,8 +16018,8 @@ public func FfiConverterTypePipeline_lower(_ value: Pipeline) -> UInt64 {
  *
  * Use [`PipelineBuilder::new`] to start, attach workflows via
  * [`add_workflow`](Self::add_workflow) / [`stage`](Self::stage) /
- * [`parallel`](Self::parallel), then call [`build`](Self::build) to
- * validate and produce a runnable [`Pipeline`].
+ * [`parallel`](Self::parallel), then call [`build`](Self::build) to validate
+ * and produce a runnable [`Pipeline`].
  */
 public protocol PipelineBuilderProtocol: AnyObject, Sendable {
     
@@ -15949,17 +16027,16 @@ public protocol PipelineBuilderProtocol: AnyObject, Sendable {
      * Append a sequential workflow stage with an auto-generated stage name
      * of the form `"stage-{N}"` (zero-based).
      *
-     * Use [`stage`](Self::stage) when the stage name matters for
-     * downstream tooling that filters by it.
+     * Use [`stage`](Self::stage) when the stage name matters for downstream
+     * tooling that filters by it.
      */
     func addWorkflow(workflow: Workflow) throws  -> PipelineBuilder
     
     /**
-     * Validate the pipeline definition and produce a runnable
-     * [`Pipeline`].
+     * Validate the pipeline definition and produce a runnable [`Pipeline`].
      *
-     * Fails with [`BlazenError::Validation`] if the pipeline has zero
-     * stages or if any stage names are duplicated.
+     * Fails with [`BlazenError::Validation`] if the pipeline has zero stages
+     * or if any stage names are duplicated.
      */
     func build() throws  -> Pipeline
     
@@ -15967,32 +16044,31 @@ public protocol PipelineBuilderProtocol: AnyObject, Sendable {
      * Append a parallel stage running multiple workflows concurrently.
      *
      * `branch_names` and `workflows` are positionally paired; a length
-     * mismatch yields [`BlazenError::Validation`]. When `wait_all` is
-     * `true` every branch must complete and outputs are collected into a
-     * JSON object keyed by branch name. When `wait_all` is `false` the
-     * pipeline proceeds as soon as the first branch finishes and the
-     * remaining branches are dropped (which aborts their inner workflows
-     * via `WorkflowHandler`'s `Drop` impl).
+     * mismatch yields [`BlazenError::Validation`]. When `wait_all` is `true`
+     * every branch must complete and outputs are collected into a JSON object
+     * keyed by branch name. When `wait_all` is `false` the pipeline proceeds
+     * as soon as the first branch finishes and the remaining branches are
+     * cancelled.
      */
     func parallel(name: String, branchNames: [String], workflows: [Workflow], waitAll: Bool) throws  -> PipelineBuilder
     
     /**
-     * Append a sequential stage with an explicit name. The stage name must
-     * be unique within the pipeline (enforced at [`build`](Self::build)).
+     * Append a sequential stage with an explicit name. The stage name must be
+     * unique within the pipeline (enforced at [`build`](Self::build)).
      */
     func stage(name: String, workflow: Workflow) throws  -> PipelineBuilder
     
     /**
-     * Per-stage timeout in milliseconds. Each stage's workflow gets at
-     * most this long to produce its `StopEvent` before the pipeline
-     * aborts with [`BlazenError::Timeout`].
+     * Per-stage timeout in milliseconds. Each stage's workflow gets at most
+     * this long to produce its `StopEvent` before the pipeline aborts with
+     * [`BlazenError::Timeout`].
      */
     func timeoutPerStageMs(millis: UInt64) throws  -> PipelineBuilder
     
     /**
-     * Total wall-clock timeout for the entire pipeline run, in
-     * milliseconds. The pipeline aborts with [`BlazenError::Timeout`] if
-     * it does not finish within this duration.
+     * Total wall-clock timeout for the entire pipeline run, in milliseconds.
+     * The pipeline aborts with [`BlazenError::Timeout`] if it does not finish
+     * within this duration.
      */
     func totalTimeoutMs(millis: UInt64) throws  -> PipelineBuilder
     
@@ -16002,8 +16078,8 @@ public protocol PipelineBuilderProtocol: AnyObject, Sendable {
  *
  * Use [`PipelineBuilder::new`] to start, attach workflows via
  * [`add_workflow`](Self::add_workflow) / [`stage`](Self::stage) /
- * [`parallel`](Self::parallel), then call [`build`](Self::build) to
- * validate and produce a runnable [`Pipeline`].
+ * [`parallel`](Self::parallel), then call [`build`](Self::build) to validate
+ * and produce a runnable [`Pipeline`].
  */
 open class PipelineBuilder: PipelineBuilderProtocol, @unchecked Sendable {
     fileprivate let handle: UInt64
@@ -16073,8 +16149,8 @@ public convenience init(name: String) {
      * Append a sequential workflow stage with an auto-generated stage name
      * of the form `"stage-{N}"` (zero-based).
      *
-     * Use [`stage`](Self::stage) when the stage name matters for
-     * downstream tooling that filters by it.
+     * Use [`stage`](Self::stage) when the stage name matters for downstream
+     * tooling that filters by it.
      */
 open func addWorkflow(workflow: Workflow)throws  -> PipelineBuilder  {
     return try  FfiConverterTypePipelineBuilder_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
@@ -16086,11 +16162,10 @@ open func addWorkflow(workflow: Workflow)throws  -> PipelineBuilder  {
 }
     
     /**
-     * Validate the pipeline definition and produce a runnable
-     * [`Pipeline`].
+     * Validate the pipeline definition and produce a runnable [`Pipeline`].
      *
-     * Fails with [`BlazenError::Validation`] if the pipeline has zero
-     * stages or if any stage names are duplicated.
+     * Fails with [`BlazenError::Validation`] if the pipeline has zero stages
+     * or if any stage names are duplicated.
      */
 open func build()throws  -> Pipeline  {
     return try  FfiConverterTypePipeline_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
@@ -16104,12 +16179,11 @@ open func build()throws  -> Pipeline  {
      * Append a parallel stage running multiple workflows concurrently.
      *
      * `branch_names` and `workflows` are positionally paired; a length
-     * mismatch yields [`BlazenError::Validation`]. When `wait_all` is
-     * `true` every branch must complete and outputs are collected into a
-     * JSON object keyed by branch name. When `wait_all` is `false` the
-     * pipeline proceeds as soon as the first branch finishes and the
-     * remaining branches are dropped (which aborts their inner workflows
-     * via `WorkflowHandler`'s `Drop` impl).
+     * mismatch yields [`BlazenError::Validation`]. When `wait_all` is `true`
+     * every branch must complete and outputs are collected into a JSON object
+     * keyed by branch name. When `wait_all` is `false` the pipeline proceeds
+     * as soon as the first branch finishes and the remaining branches are
+     * cancelled.
      */
 open func parallel(name: String, branchNames: [String], workflows: [Workflow], waitAll: Bool)throws  -> PipelineBuilder  {
     return try  FfiConverterTypePipelineBuilder_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
@@ -16124,8 +16198,8 @@ open func parallel(name: String, branchNames: [String], workflows: [Workflow], w
 }
     
     /**
-     * Append a sequential stage with an explicit name. The stage name must
-     * be unique within the pipeline (enforced at [`build`](Self::build)).
+     * Append a sequential stage with an explicit name. The stage name must be
+     * unique within the pipeline (enforced at [`build`](Self::build)).
      */
 open func stage(name: String, workflow: Workflow)throws  -> PipelineBuilder  {
     return try  FfiConverterTypePipelineBuilder_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
@@ -16138,9 +16212,9 @@ open func stage(name: String, workflow: Workflow)throws  -> PipelineBuilder  {
 }
     
     /**
-     * Per-stage timeout in milliseconds. Each stage's workflow gets at
-     * most this long to produce its `StopEvent` before the pipeline
-     * aborts with [`BlazenError::Timeout`].
+     * Per-stage timeout in milliseconds. Each stage's workflow gets at most
+     * this long to produce its `StopEvent` before the pipeline aborts with
+     * [`BlazenError::Timeout`].
      */
 open func timeoutPerStageMs(millis: UInt64)throws  -> PipelineBuilder  {
     return try  FfiConverterTypePipelineBuilder_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
@@ -16152,9 +16226,9 @@ open func timeoutPerStageMs(millis: UInt64)throws  -> PipelineBuilder  {
 }
     
     /**
-     * Total wall-clock timeout for the entire pipeline run, in
-     * milliseconds. The pipeline aborts with [`BlazenError::Timeout`] if
-     * it does not finish within this duration.
+     * Total wall-clock timeout for the entire pipeline run, in milliseconds.
+     * The pipeline aborts with [`BlazenError::Timeout`] if it does not finish
+     * within this duration.
      */
 open func totalTimeoutMs(millis: UInt64)throws  -> PipelineBuilder  {
     return try  FfiConverterTypePipelineBuilder_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
@@ -16208,6 +16282,777 @@ public func FfiConverterTypePipelineBuilder_lift(_ handle: UInt64) throws -> Pip
 #endif
 public func FfiConverterTypePipelineBuilder_lower(_ value: PipelineBuilder) -> UInt64 {
     return FfiConverterTypePipelineBuilder.lower(value)
+}
+
+
+
+
+
+
+/**
+ * Foreign-implementable sink for intermediate pipeline events.
+ *
+ * Mirrors [`WorkflowEventSink`](crate::workflow::WorkflowEventSink): UniFFI's
+ * async-iterator support across Go, Swift, Kotlin, and Ruby is uneven, so
+ * streaming uses a foreign-callable sink trait. Each idiomatic wrapper adapts
+ * the callbacks into its host streaming type (Go channel, Swift
+ * `AsyncStream`, Kotlin `Flow`, Ruby `Enumerator::Lazy`).
+ *
+ * The pump invokes [`on_event`](Self::on_event) for each [`PipelineEvent`] in
+ * order, then exactly one [`on_close`](Self::on_close) when the pipeline
+ * completes.
+ */
+public protocol PipelineEventSink: AnyObject, Sendable {
+    
+    /**
+     * One intermediate event arrived from a stage.
+     */
+    func onEvent(event: PipelineEvent) 
+    
+    /**
+     * The stream ended — the pipeline reached a terminal state (or the
+     * subscription was cancelled). Fires exactly once.
+     */
+    func onClose() 
+    
+}
+/**
+ * Foreign-implementable sink for intermediate pipeline events.
+ *
+ * Mirrors [`WorkflowEventSink`](crate::workflow::WorkflowEventSink): UniFFI's
+ * async-iterator support across Go, Swift, Kotlin, and Ruby is uneven, so
+ * streaming uses a foreign-callable sink trait. Each idiomatic wrapper adapts
+ * the callbacks into its host streaming type (Go channel, Swift
+ * `AsyncStream`, Kotlin `Flow`, Ruby `Enumerator::Lazy`).
+ *
+ * The pump invokes [`on_event`](Self::on_event) for each [`PipelineEvent`] in
+ * order, then exactly one [`on_close`](Self::on_close) when the pipeline
+ * completes.
+ */
+open class PipelineEventSinkImpl: PipelineEventSink, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_pipelineeventsink(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_pipelineeventsink(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * One intermediate event arrived from a stage.
+     */
+open func onEvent(event: PipelineEvent)  {try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_pipelineeventsink_on_event(
+            self.uniffiCloneHandle(),
+        FfiConverterTypePipelineEvent_lower(event),$0
+    )
+}
+}
+    
+    /**
+     * The stream ended — the pipeline reached a terminal state (or the
+     * subscription was cancelled). Fires exactly once.
+     */
+open func onClose()  {try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_pipelineeventsink_on_close(
+            self.uniffiCloneHandle(),$0
+    )
+}
+}
+    
+
+    
+}
+
+
+
+// Put the implementation in a struct so we don't pollute the top-level namespace
+fileprivate struct UniffiCallbackInterfacePipelineEventSink {
+
+    // Create the VTable using a series of closures.
+    // Swift automatically converts these into C callback functions.
+    //
+    // Store the vtable directly.
+    static let vtable: UniffiVTableCallbackInterfacePipelineEventSink = UniffiVTableCallbackInterfacePipelineEventSink(
+        uniffiFree: { (uniffiHandle: UInt64) -> () in
+            do {
+                try FfiConverterTypePipelineEventSink.handleMap.remove(handle: uniffiHandle)
+            } catch {
+                print("Uniffi callback interface PipelineEventSink: handle missing in uniffiFree")
+            }
+        },
+        uniffiClone: { (uniffiHandle: UInt64) -> UInt64 in
+            do {
+                return try FfiConverterTypePipelineEventSink.handleMap.clone(handle: uniffiHandle)
+            } catch {
+                fatalError("Uniffi callback interface PipelineEventSink: handle missing in uniffiClone")
+            }
+        },
+        onEvent: { (
+            uniffiHandle: UInt64,
+            event: RustBuffer,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypePipelineEventSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onEvent(
+                     event: try FfiConverterTypePipelineEvent_lift(event)
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        },
+        onClose: { (
+            uniffiHandle: UInt64,
+            uniffiOutReturn: UnsafeMutableRawPointer,
+            uniffiCallStatus: UnsafeMutablePointer<RustCallStatus>
+        ) in
+            let makeCall = {
+                () throws -> () in
+                guard let uniffiObj = try? FfiConverterTypePipelineEventSink.handleMap.get(handle: uniffiHandle) else {
+                    throw UniffiInternalError.unexpectedStaleHandle
+                }
+                return uniffiObj.onClose(
+                )
+            }
+
+            
+            let writeReturn = { () }
+            uniffiTraitInterfaceCall(
+                callStatus: uniffiCallStatus,
+                makeCall: makeCall,
+                writeReturn: writeReturn
+            )
+        }
+    )
+
+    // Rust stores this pointer for future callback invocations, so it must live
+    // for the process lifetime (not just for the init function call).
+    static let vtablePtr: UnsafePointer<UniffiVTableCallbackInterfacePipelineEventSink> = {
+        let ptr = UnsafeMutablePointer<UniffiVTableCallbackInterfacePipelineEventSink>.allocate(capacity: 1)
+        ptr.initialize(to: vtable)
+        return UnsafePointer(ptr)
+    }()
+}
+
+private func uniffiCallbackInitPipelineEventSink() {
+    uniffi_blazen_uniffi_fn_init_callback_vtable_pipelineeventsink(UniffiCallbackInterfacePipelineEventSink.vtablePtr)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePipelineEventSink: FfiConverter {
+    fileprivate static let handleMap = UniffiHandleMap<PipelineEventSink>()
+
+    typealias FfiType = UInt64
+    typealias SwiftType = PipelineEventSink
+
+    public static func lift(_ handle: UInt64) throws -> PipelineEventSink {
+        if ((handle & 1) == 0) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return PipelineEventSinkImpl(unsafeFromHandle: handle)
+        } else {
+            // Swift-generated handle, get the object from the handle map
+            return try handleMap.remove(handle: handle)
+        }
+    }
+
+    public static func lower(_ value: PipelineEventSink) -> UInt64 {
+         if let rustImpl = value as? PipelineEventSinkImpl {
+             // Rust-implemented object.  Clone the handle and return it
+            return rustImpl.uniffiCloneHandle()
+         } else {
+            // Swift object, generate a new vtable handle and return that.
+            return handleMap.insert(obj: value)
+         }
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PipelineEventSink {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: PipelineEventSink, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePipelineEventSink_lift(_ handle: UInt64) throws -> PipelineEventSink {
+    return try FfiConverterTypePipelineEventSink.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePipelineEventSink_lower(_ value: PipelineEventSink) -> UInt64 {
+    return FfiConverterTypePipelineEventSink.lower(value)
+}
+
+
+
+
+
+
+/**
+ * A live handle to a running pipeline.
+ *
+ * Returned by [`Pipeline::start`](crate::pipeline::Pipeline::start). Provides
+ * the same surface as the workflow handler:
+ *
+ * **Consumption (consumes the handler):**
+ * - [`result`](Self::result) — await the final [`WorkflowResult`].
+ * - [`pause`](Self::pause) — park the pipeline and capture a snapshot.
+ *
+ * **Streaming (borrows the handler):**
+ * - [`stream_events`](Self::stream_events) — pump stage events to a foreign
+ * [`PipelineEventSink`].
+ *
+ * **Control (borrows the handler, may be called repeatedly):**
+ * - [`resume_in_place`](Self::resume_in_place) / [`snapshot`](Self::snapshot)
+ * - [`respond_to_input`](Self::respond_to_input) — human-in-the-loop
+ * - [`abort`](Self::abort) / [`progress`](Self::progress)
+ * - [`usage_total`](Self::usage_total) / [`cost_total_usd`](Self::cost_total_usd)
+ */
+public protocol PipelineHandlerProtocol: AnyObject, Sendable {
+    
+    /**
+     * Abort the pipeline. Any pending `result()` resolves with a workflow
+     * error.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the pipeline has already terminated.
+     */
+    func abort() async throws 
+    
+    /**
+     * Snapshot the running aggregate cost in USD for this run.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+    func costTotalUsd() async throws  -> Double
+    
+    /**
+     * Park the pipeline after the current stage and return a snapshot of its
+     * state, consuming the handler.
+     *
+     * The returned snapshot is encoded as a JSON string and can later be used
+     * with `Pipeline.resume` (foreign-side, once exposed) to continue.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the pipeline has already terminated.
+     */
+    func pause() async throws  -> String
+    
+    /**
+     * Best-effort polled view of the pipeline's stage cursor: the 1-based
+     * index of the stage currently executing and the total stage count.
+     * Returns `(current_stage_index, total_stages)`. Returns `None` after the
+     * handler has been consumed.
+     */
+    func progress() async  -> PipelineProgress?
+    
+    /**
+     * Deliver a human-in-the-loop response to the active stage's inner
+     * workflow. For a sequential stage this targets the one in-flight
+     * workflow; for a parallel stage the response is broadcast to every live
+     * branch (the workflow that requested input consumes it, others ignore a
+     * response they did not request).
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed or
+     * `response.response_json` is not valid JSON; [`BlazenError::Workflow`]
+     * if the pipeline has already terminated.
+     */
+    func respondToInput(response: InputResponse) async throws 
+    
+    /**
+     * Await the final pipeline result, consuming the handler.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the run failed.
+     */
+    func result() async throws  -> WorkflowResult
+    
+    /**
+     * Resume the pipeline in place. Forwarded to the active stage's inner
+     * workflow(s) so a workflow parked on an `InputRequestEvent` (or paused)
+     * unparks. A no-op between stages.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the pipeline has already terminated.
+     */
+    func resumeInPlace() async throws 
+    
+    /**
+     * Capture a resumable snapshot of the pipeline's current state without
+     * stopping it, encoded as a JSON string. Mirrors
+     * `WorkflowHandler::snapshot`.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the pipeline has already terminated.
+     */
+    func snapshot() async throws  -> String
+    
+    /**
+     * Pump intermediate stage events to `sink` until the pipeline completes.
+     *
+     * Returns immediately; the pump runs on the shared Tokio runtime. Each
+     * call subscribes from the current point in time. `sink.on_close()` fires
+     * exactly once when the stream ends.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+    func streamEvents(sink: PipelineEventSink) async throws 
+    
+    /**
+     * Snapshot the running aggregate [`TokenUsage`] for this run. Safe to call
+     * at any point; matches `WorkflowResult` totals once `result()` completes.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+    func usageTotal() async throws  -> TokenUsage
+    
+}
+/**
+ * A live handle to a running pipeline.
+ *
+ * Returned by [`Pipeline::start`](crate::pipeline::Pipeline::start). Provides
+ * the same surface as the workflow handler:
+ *
+ * **Consumption (consumes the handler):**
+ * - [`result`](Self::result) — await the final [`WorkflowResult`].
+ * - [`pause`](Self::pause) — park the pipeline and capture a snapshot.
+ *
+ * **Streaming (borrows the handler):**
+ * - [`stream_events`](Self::stream_events) — pump stage events to a foreign
+ * [`PipelineEventSink`].
+ *
+ * **Control (borrows the handler, may be called repeatedly):**
+ * - [`resume_in_place`](Self::resume_in_place) / [`snapshot`](Self::snapshot)
+ * - [`respond_to_input`](Self::respond_to_input) — human-in-the-loop
+ * - [`abort`](Self::abort) / [`progress`](Self::progress)
+ * - [`usage_total`](Self::usage_total) / [`cost_total_usd`](Self::cost_total_usd)
+ */
+open class PipelineHandler: PipelineHandlerProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_pipelinehandler(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_pipelinehandler(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Abort the pipeline. Any pending `result()` resolves with a workflow
+     * error.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the pipeline has already terminated.
+     */
+open func abort()async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_pipelinehandler_abort(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Snapshot the running aggregate cost in USD for this run.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+open func costTotalUsd()async throws  -> Double  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_pipelinehandler_cost_total_usd(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_f64,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_f64,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_f64,
+            liftFunc: FfiConverterDouble.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Park the pipeline after the current stage and return a snapshot of its
+     * state, consuming the handler.
+     *
+     * The returned snapshot is encoded as a JSON string and can later be used
+     * with `Pipeline.resume` (foreign-side, once exposed) to continue.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the pipeline has already terminated.
+     */
+open func pause()async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_pipelinehandler_pause(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Best-effort polled view of the pipeline's stage cursor: the 1-based
+     * index of the stage currently executing and the total stage count.
+     * Returns `(current_stage_index, total_stages)`. Returns `None` after the
+     * handler has been consumed.
+     */
+open func progress()async  -> PipelineProgress?  {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_pipelinehandler_progress(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterOptionTypePipelineProgress.lift,
+            errorHandler: nil
+            
+        )
+}
+    
+    /**
+     * Deliver a human-in-the-loop response to the active stage's inner
+     * workflow. For a sequential stage this targets the one in-flight
+     * workflow; for a parallel stage the response is broadcast to every live
+     * branch (the workflow that requested input consumes it, others ignore a
+     * response they did not request).
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed or
+     * `response.response_json` is not valid JSON; [`BlazenError::Workflow`]
+     * if the pipeline has already terminated.
+     */
+open func respondToInput(response: InputResponse)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_pipelinehandler_respond_to_input(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeInputResponse_lower(response)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Await the final pipeline result, consuming the handler.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the run failed.
+     */
+open func result()async throws  -> WorkflowResult  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_pipelinehandler_result(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeWorkflowResult_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Resume the pipeline in place. Forwarded to the active stage's inner
+     * workflow(s) so a workflow parked on an `InputRequestEvent` (or paused)
+     * unparks. A no-op between stages.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the pipeline has already terminated.
+     */
+open func resumeInPlace()async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_pipelinehandler_resume_in_place(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Capture a resumable snapshot of the pipeline's current state without
+     * stopping it, encoded as a JSON string. Mirrors
+     * `WorkflowHandler::snapshot`.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the pipeline has already terminated.
+     */
+open func snapshot()async throws  -> String  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_pipelinehandler_snapshot(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterString.lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Pump intermediate stage events to `sink` until the pipeline completes.
+     *
+     * Returns immediately; the pump runs on the shared Tokio runtime. Each
+     * call subscribes from the current point in time. `sink.on_close()` fires
+     * exactly once when the stream ends.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+open func streamEvents(sink: PipelineEventSink)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_pipelinehandler_stream_events(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypePipelineEventSink_lower(sink)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Snapshot the running aggregate [`TokenUsage`] for this run. Safe to call
+     * at any point; matches `WorkflowResult` totals once `result()` completes.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+open func usageTotal()async throws  -> TokenUsage  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_pipelinehandler_usage_total(
+                    self.uniffiCloneHandle()
+                    
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeTokenUsage_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePipelineHandler: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = PipelineHandler
+
+    public static func lift(_ handle: UInt64) throws -> PipelineHandler {
+        return PipelineHandler(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: PipelineHandler) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PipelineHandler {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: PipelineHandler, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePipelineHandler_lift(_ handle: UInt64) throws -> PipelineHandler {
+    return try FfiConverterTypePipelineHandler.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePipelineHandler_lower(_ value: PipelineHandler) -> UInt64 {
+    return FfiConverterTypePipelineHandler.lower(value)
 }
 
 
@@ -27371,6 +28216,180 @@ public func FfiConverterTypePersistedEvent_lower(_ value: PersistedEvent) -> Rus
 
 
 /**
+ * An intermediate event emitted by a pipeline stage, tagged with provenance.
+ *
+ * Wraps a workflow-level [`Event`] with the stage name, optional branch name
+ * (for parallel stages), and the workflow run ID that produced it, so foreign
+ * consumers can tell which part of the pipeline emitted each event.
+ */
+public struct PipelineEvent: Equatable, Hashable {
+    /**
+     * Name of the stage that produced this event.
+     */
+    public var stageName: String
+    /**
+     * For parallel stages, the name of the specific branch; `None` for
+     * sequential stages.
+     */
+    public var branchName: String?
+    /**
+     * The workflow run ID (UUID, as a string) that produced this event.
+     */
+    public var workflowRunId: String
+    /**
+     * The underlying workflow event.
+     */
+    public var event: Event
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * Name of the stage that produced this event.
+         */stageName: String, 
+        /**
+         * For parallel stages, the name of the specific branch; `None` for
+         * sequential stages.
+         */branchName: String?, 
+        /**
+         * The workflow run ID (UUID, as a string) that produced this event.
+         */workflowRunId: String, 
+        /**
+         * The underlying workflow event.
+         */event: Event) {
+        self.stageName = stageName
+        self.branchName = branchName
+        self.workflowRunId = workflowRunId
+        self.event = event
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension PipelineEvent: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePipelineEvent: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PipelineEvent {
+        return
+            try PipelineEvent(
+                stageName: FfiConverterString.read(from: &buf), 
+                branchName: FfiConverterOptionString.read(from: &buf), 
+                workflowRunId: FfiConverterString.read(from: &buf), 
+                event: FfiConverterTypeEvent.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PipelineEvent, into buf: inout [UInt8]) {
+        FfiConverterString.write(value.stageName, into: &buf)
+        FfiConverterOptionString.write(value.branchName, into: &buf)
+        FfiConverterString.write(value.workflowRunId, into: &buf)
+        FfiConverterTypeEvent.write(value.event, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePipelineEvent_lift(_ buf: RustBuffer) throws -> PipelineEvent {
+    return try FfiConverterTypePipelineEvent.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePipelineEvent_lower(_ value: PipelineEvent) -> RustBuffer {
+    return FfiConverterTypePipelineEvent.lower(value)
+}
+
+
+/**
+ * Best-effort progress snapshot of a running pipeline.
+ */
+public struct PipelineProgress: Equatable, Hashable {
+    /**
+     * 1-based index of the stage currently executing.
+     */
+    public var currentStageIndex: UInt32
+    /**
+     * Total number of stages in the pipeline.
+     */
+    public var totalStages: UInt32
+    /**
+     * Completion percent in `[0, 100]`.
+     */
+    public var percent: Float
+
+    // Default memberwise initializers are never public by default, so we
+    // declare one manually.
+    public init(
+        /**
+         * 1-based index of the stage currently executing.
+         */currentStageIndex: UInt32, 
+        /**
+         * Total number of stages in the pipeline.
+         */totalStages: UInt32, 
+        /**
+         * Completion percent in `[0, 100]`.
+         */percent: Float) {
+        self.currentStageIndex = currentStageIndex
+        self.totalStages = totalStages
+        self.percent = percent
+    }
+
+    
+
+    
+}
+
+#if compiler(>=6)
+extension PipelineProgress: Sendable {}
+#endif
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypePipelineProgress: FfiConverterRustBuffer {
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> PipelineProgress {
+        return
+            try PipelineProgress(
+                currentStageIndex: FfiConverterUInt32.read(from: &buf), 
+                totalStages: FfiConverterUInt32.read(from: &buf), 
+                percent: FfiConverterFloat.read(from: &buf)
+        )
+    }
+
+    public static func write(_ value: PipelineProgress, into buf: inout [UInt8]) {
+        FfiConverterUInt32.write(value.currentStageIndex, into: &buf)
+        FfiConverterUInt32.write(value.totalStages, into: &buf)
+        FfiConverterFloat.write(value.percent, into: &buf)
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePipelineProgress_lift(_ buf: RustBuffer) throws -> PipelineProgress {
+    return try FfiConverterTypePipelineProgress.lift(buf)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypePipelineProgress_lower(_ value: PipelineProgress) -> RustBuffer {
+    return FfiConverterTypePipelineProgress.lower(value)
+}
+
+
+/**
  * Per-pool budget snapshot returned by [`UniffiModelManager::pools`].
  */
 public struct PoolStatusRecord: Equatable, Hashable {
@@ -32789,6 +33808,30 @@ fileprivate struct FfiConverterOptionTypePbrMaps: FfiConverterRustBuffer {
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypePipelineProgress: FfiConverterRustBuffer {
+    typealias SwiftType = PipelineProgress?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypePipelineProgress.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypePipelineProgress.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeTokenUsage: FfiConverterRustBuffer {
     typealias SwiftType = TokenUsage?
 
@@ -35972,31 +37015,73 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_checkpointstore_save_blocking() != 15819) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_pipeline_run() != 35674) {
+    if (uniffi_blazen_uniffi_checksum_method_pipelinebuilder_add_workflow() != 4019) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_pipeline_run_blocking() != 43680) {
+    if (uniffi_blazen_uniffi_checksum_method_pipelinebuilder_build() != 39385) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_pipeline_stage_names() != 24762) {
+    if (uniffi_blazen_uniffi_checksum_method_pipelinebuilder_parallel() != 62071) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_pipelinebuilder_add_workflow() != 14561) {
+    if (uniffi_blazen_uniffi_checksum_method_pipelinebuilder_stage() != 45438) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_pipelinebuilder_build() != 29058) {
+    if (uniffi_blazen_uniffi_checksum_method_pipelinebuilder_timeout_per_stage_ms() != 10924) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_pipelinebuilder_parallel() != 50044) {
+    if (uniffi_blazen_uniffi_checksum_method_pipelinebuilder_total_timeout_ms() != 34114) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_pipelinebuilder_stage() != 785) {
+    if (uniffi_blazen_uniffi_checksum_method_pipelineeventsink_on_event() != 27289) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_pipelinebuilder_timeout_per_stage_ms() != 11657) {
+    if (uniffi_blazen_uniffi_checksum_method_pipelineeventsink_on_close() != 28840) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_method_pipelinebuilder_total_timeout_ms() != 53032) {
+    if (uniffi_blazen_uniffi_checksum_method_pipelinehandler_abort() != 42327) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_pipelinehandler_cost_total_usd() != 24330) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_pipelinehandler_pause() != 11905) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_pipelinehandler_progress() != 11806) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_pipelinehandler_respond_to_input() != 50381) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_pipelinehandler_result() != 5751) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_pipelinehandler_resume_in_place() != 52009) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_pipelinehandler_snapshot() != 8446) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_pipelinehandler_stream_events() != 53622) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_pipelinehandler_usage_total() != 59474) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_pipeline_run() != 14037) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_pipeline_run_blocking() != 48320) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_pipeline_stage_names() != 28412) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_pipeline_start() != 48386) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_pipeline_start_blocking() != 5390) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_defaults() != 64482) {
@@ -36395,7 +37480,7 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_constructor_peerserver_new() != 57865) {
         return InitializationResult.apiChecksumMismatch
     }
-    if (uniffi_blazen_uniffi_checksum_constructor_pipelinebuilder_new() != 61410) {
+    if (uniffi_blazen_uniffi_checksum_constructor_pipelinebuilder_new() != 16301) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_constructor_workflowbuilder_new() != 14241) {
@@ -36409,6 +37494,7 @@ private let initializationResult: InitializationResult = {
     uniffiCallbackInitForeignLocalModel()
     uniffiCallbackInitForeignTrainingProgress()
     uniffiCallbackInitMusicStreamSink()
+    uniffiCallbackInitPipelineEventSink()
     uniffiCallbackInitStepHandler()
     uniffiCallbackInitToolHandler()
     uniffiCallbackInitVcStreamSink()

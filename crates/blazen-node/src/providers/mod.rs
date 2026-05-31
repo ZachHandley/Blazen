@@ -2,6 +2,7 @@
 
 pub mod anthropic;
 pub mod api_protocol;
+pub mod audio_backends;
 pub mod azure;
 pub mod base;
 pub mod bedrock;
@@ -58,8 +59,9 @@ pub use azure::JsAzureOpenAiProvider;
 pub use base::JsBaseProvider;
 pub use bedrock::JsBedrockProvider;
 pub use capability_providers::{
-    CapabilityProviderConfig, JsBackgroundRemovalProvider, JsImageProvider, JsMusicProvider,
-    JsTTSProvider, JsThreeDProvider, JsVideoProvider, JsVoiceProvider,
+    CapabilityProviderConfig, JsBackgroundRemovalProvider, JsCapabilityKind, JsEmbeddingProvider,
+    JsImageGenProvider, JsImageProvider, JsLLMProvider, JsMusicProvider, JsProviderMetadata,
+    JsTTSProvider, JsThreeDProvider, JsVcProvider, JsVideoProvider, JsVoiceProvider,
 };
 pub use cohere::JsCohereProvider;
 pub use custom::JsCustomProvider;
@@ -123,3 +125,14 @@ pub use tract::{JsTractEmbedModel, JsTractOptions, JsTractResponse};
 pub use tts::{JsTtsModel, JsTtsOptions, JsTtsProvider};
 #[cfg(feature = "whispercpp")]
 pub use whispercpp::JsWhisperCppProvider;
+
+// Audio backend handles + configs (each gated behind its concrete backend
+// feature).
+#[cfg(feature = "audio-codec-encodec")]
+pub use audio_backends::JsCodecBackendHandle;
+#[cfg(feature = "audio-music-musicgen")]
+pub use audio_backends::JsMusicBackendHandle;
+#[cfg(feature = "audio-stt-faster-whisper")]
+pub use audio_backends::{JsFasterWhisperBackend, JsFasterWhisperConfig, JsSttBackendHandle};
+#[cfg(feature = "audio-tts-spark")]
+pub use audio_backends::{JsSparkTtsBackend, JsSparkTtsConfig, JsTtsBackendHandle};

@@ -44,12 +44,14 @@
 //! machinery rather than introducing a parallel store, exactly as the
 //! cross-binding charter requires.
 
+use std::any::Any;
 use std::ptr;
 use std::sync::Arc;
 
 use blazen_core::session_ref::{RegistryKey, SessionRefRegistry};
 use napi::bindgen_prelude::*;
 use napi::sys;
+use napi_derive::napi;
 use serde_json::Value;
 
 /// Reserved JSON key embedded in an event payload to point at a live JS
@@ -134,6 +136,50 @@ impl JsNativeRef {
             let _ = sys::napi_delete_reference(self.env, self.napi_ref);
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Native serializer hook
+// ---------------------------------------------------------------------------
+
+/// Serialize a native event handle to JSON for [`DynamicEvent::to_json`].
+///
+/// Unlike the Python binding — which stashes a live `Py<PyAny>` directly on a
+/// [`DynamicEvent`](blazen_events::DynamicEvent) via `with_native` — the Node
+/// binding never attaches a JS object to an event's `native` slot. napi-rs's
+/// v8 references are not safe to materialize off the main thread, so Node
+/// instead pins live objects in the run's [`SessionRefRegistry`] and stamps a
+/// [`NATIVE_REF_TAG`] marker into the event JSON (see the module docs). The
+/// JSON projection is therefore always authoritative for Node events.
+///
+/// This hook consequently only ever sees handles owned by *other* bindings
+/// (or none at all), so it returns `None` — telling
+/// [`DynamicEvent::to_json`](blazen_events::DynamicEvent) to fall back to the
+/// event's stored `data`. Registering it gives Node API parity with the other
+/// bindings without compromising v8 thread-safety.
+fn node_native_to_json(_handle: &Arc<dyn Any + Send + Sync>) -> Option<Value> {
+    None
+}
+
+/// Install the Node native-event serializer hook process-wide.
+///
+/// Called once from the napi module initializer. Subsequent calls are no-ops
+/// (first registration wins), matching
+/// [`blazen_events::register_native_serializer`].
+pub fn install_native_serializer() {
+    blazen_events::register_native_serializer(node_native_to_json);
+}
+
+/// Register the process-wide native-event serializer hook.
+///
+/// Installs the Node serializer (see [`node_native_to_json`]) used by
+/// [`DynamicEvent.toJson`](blazen_events::DynamicEvent) to lazily materialize
+/// native-backed events. Idempotent — the first registration wins. This is
+/// invoked automatically at module load, but is exposed for API parity with
+/// the other language bindings.
+#[napi(js_name = "registerNativeSerializer")]
+pub fn register_native_serializer() {
+    install_native_serializer();
 }
 
 /// Project a returned JS event value to a routable [`serde_json::Value`].

@@ -32,6 +32,7 @@ __all__ = [
     "BackgroundRemovalProvider",
     "BackgroundRemovalProviderDefaults",
     "BackgroundRemovalRequest",
+    "BaseProvider",
     "BaseProviderDefaults",
     "BatchConfig",
     "BatchResult",
@@ -56,12 +57,14 @@ __all__ = [
     "CandleLlmError",
     "CandleLlmOptions",
     "CandleLlmProvider",
+    "CapabilityKind",
     "ChatMessage",
     "ChatMessageInput",
     "ChatRole",
     "ChatWindow",
     "CheckpointStore",
     "Citation",
+    "CodecBackendHandle",
     "CohereProvider",
     "CompletionStream",
     "Compute",
@@ -91,6 +94,7 @@ __all__ = [
     "DynamicEvent",
     "EmbedOptions",
     "EmbeddingModel",
+    "EmbeddingProvider",
     "EmbeddingProviderDefaults",
     "EmbeddingResponse",
     "EstimateCounter",
@@ -104,6 +108,8 @@ __all__ = [
     "FastEmbedError",
     "FastEmbedModel",
     "FastEmbedOptions",
+    "FasterWhisperBackend",
+    "FasterWhisperConfig",
     "FetchBlobStream",
     "FileContent",
     "FinishReason",
@@ -124,6 +130,7 @@ __all__ = [
     "HttpClientHandle",
     "HttpPeerClient",
     "ImageContent",
+    "ImageGenProvider",
     "ImageGenerationProviderDefaults",
     "ImageModel",
     "ImageProvider",
@@ -147,6 +154,7 @@ __all__ = [
     "JsonlBackend",
     "JsonlDataset",
     "KtoConfig",
+    "LLMProvider",
     "LangfuseConfig",
     "LlamaCppChatMessageInput",
     "LlamaCppChatRole",
@@ -160,6 +168,8 @@ __all__ = [
     "LlmPayload",
     "LlmProviderDefaults",
     "LocalModel",
+    "LoopDecision",
+    "LoopStage",
     "LoraConfig",
     "MediaError",
     "MediaOutput",
@@ -191,6 +201,7 @@ __all__ = [
     "ModelRequest",
     "ModelResponse",
     "ModelStatus",
+    "MusicBackendHandle",
     "MusicChunk",
     "MusicGenError",
     "MusicModel",
@@ -237,6 +248,7 @@ __all__ = [
     "ProviderError",
     "ProviderId",
     "ProviderInfo",
+    "ProviderMetadata",
     "ProviderOptions",
     "Quantization",
     "RateLimitError",
@@ -270,6 +282,8 @@ __all__ = [
     "SessionPausePolicy",
     "SessionRefRegistry",
     "SimpoConfig",
+    "SparkTtsBackend",
+    "SparkTtsConfig",
     "SpeechRequest",
     "Stage",
     "StageKind",
@@ -288,6 +302,9 @@ __all__ = [
     "StreamCompleteStream",
     "StructuredOutput",
     "StructuredResponse",
+    "SttBackendHandle",
+    "SubExecutable",
+    "SubPipelineStep",
     "SubWorkflowRequest",
     "SubWorkflowResponse",
     "SubWorkflowStep",
@@ -308,6 +325,7 @@ __all__ = [
     "ToolDef",
     "ToolDefinition",
     "ToolOutput",
+    "TracingConfig",
     "TractEmbedModel",
     "TractError",
     "TractOptions",
@@ -321,6 +339,7 @@ __all__ = [
     "TranscriptionRequest",
     "TranscriptionResult",
     "TranscriptionSegment",
+    "TtsBackendHandle",
     "TtsError",
     "TtsOptions",
     "TtsProvider",
@@ -337,6 +356,7 @@ __all__ = [
     "ValkeyCheckpointStore",
     "VcChunk",
     "VcModel",
+    "VcProvider",
     "VcStream",
     "VideoContent",
     "VideoProvider",
@@ -395,6 +415,7 @@ __all__ = [
     "refresh_pricing",
     "register_event_deserializer",
     "register_from_model_info",
+    "register_native_serializer",
     "register_pricing",
     "register_step_builder",
     "registered_step_ids",
@@ -1219,6 +1240,39 @@ class BackgroundRemovalRequest:
     def model(self) -> typing.Optional[builtins.str]: ...
     def __new__(cls, *, image_url: builtins.str, model: typing.Optional[builtins.str] = None, parameters: typing.Optional[typing.Any] = None) -> BackgroundRemovalRequest: ...
     def __repr__(self) -> builtins.str: ...
+
+class BaseProvider:
+    r"""
+    Polymorphic root for every Blazen provider, mirroring the Rust
+    :rust:trait:`blazen_llm::providers::BaseProvider` trait.
+    
+    Subclass this (or one of the capability ABCs that conceptually extend it,
+    such as :class:`LLMProvider`) and override ``metadata()`` to return a
+    :class:`ProviderMetadata`. The convenience ``provider_id`` / ``capability``
+    accessors delegate to ``metadata()`` by default.
+    
+    Example:
+        >>> class MyProvider(BaseProvider):
+        ...     def metadata(self):
+        ...         return ProviderMetadata("mine", CapabilityKind.Llm)
+    """
+    def __new__(cls) -> BaseProvider: ...
+    def metadata(self) -> ProviderMetadata:
+        r"""
+        Static metadata describing this provider instance.
+        
+        The default implementation raises ``NotImplementedError``. Override
+        this in a subclass to return a :class:`ProviderMetadata`.
+        """
+    def provider_id(self) -> builtins.str:
+        r"""
+        Canonical provider identifier. Delegates to ``metadata().provider_id``.
+        """
+    def capability(self) -> CapabilityKind:
+        r"""
+        Capability kind this provider serves. Delegates to
+        ``metadata().capability``.
+        """
 
 class BaseProviderDefaults:
     r"""
@@ -2262,6 +2316,33 @@ class Citation:
         `ModelResponse.citations` rather than building them.
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class CodecBackendHandle:
+    r"""
+    Type-erased neural-audio-codec backend handle.
+    
+    Wraps an ``Arc<dyn CodecBackend>`` and forwards ``encode_pcm`` /
+    ``decode_tokens``. Construct one from a concrete codec backend (e.g.
+    via the ``dac`` classmethod, available with the ``audio-codec-dac``
+    feature).
+    """
+    def encode_pcm(self, samples: typing.Sequence[builtins.float], sample_rate: builtins.int) -> typing.Any:
+        r"""
+        Encode a mono PCM ``samples`` buffer at ``sample_rate`` into a flat
+        row-major token stream.
+        """
+    def decode_tokens(self, tokens: typing.Sequence[builtins.int], num_codebooks: builtins.int) -> typing.Any:
+        r"""
+        Decode a flat row-major ``tokens`` stream (with ``num_codebooks``
+        codebooks) back into a mono PCM buffer.
+        """
+    @classmethod
+    def dac(cls) -> CodecBackendHandle:
+        r"""
+        Build a handle backed by the DAC (Descript Audio Codec) backend at
+        44.1 kHz.
+        """
 
 @typing.final
 class CohereProvider:
@@ -3581,6 +3662,52 @@ class EmbeddingModel:
             >>> model = EmbeddingModel.local(options=EmbedOptions(model_name="BGESmallENV15"))
         """
 
+class EmbeddingProvider:
+    r"""
+    Base class for embedding providers.
+    
+    Subclass and override ``embed()`` and ``dimensions()`` to implement a
+    custom embedding backend. Mirrors the Rust
+    :rust:trait:`blazen_llm::providers::EmbeddingProvider` capability trait.
+    """
+    @property
+    def provider_id(self) -> typing.Optional[builtins.str]:
+        r"""
+        The provider identifier.
+        """
+    @property
+    def base_url(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base URL, if set.
+        """
+    @property
+    def memory_estimate_bytes(self) -> typing.Optional[builtins.int]:
+        r"""
+        Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise), if set.
+        """
+    def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> EmbeddingProvider:
+        r"""
+        `__new__` accepting arbitrary positional/keyword args so Python
+        subclasses can use any `__init__` signature. Real configuration
+        happens in `__init__` below.
+        """
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+        r"""
+        Subclass-friendly `__init__`. Mirrors the documented constructor
+        keyword signature and populates ``self.config`` so a Python
+        subclass that calls `super().__init__(provider_id=...)` sees the
+        values it passed (without falling through to `object.__init__`,
+        which would raise ``TypeError``).
+        """
+    def embed(self, texts: typing.Sequence[builtins.str]) -> typing.Any:
+        r"""
+        Embed a batch of texts, returning one vector per input.
+        """
+    def dimensions(self) -> builtins.int:
+        r"""
+        The dimensionality of the embedding vectors this provider emits.
+        """
+
 class EmbeddingProviderDefaults:
     r"""
     Embedding-role defaults. Currently only carries the universal ``base``
@@ -4208,6 +4335,46 @@ class FastEmbedOptions:
             max_batch_size: Maximum batch size for embedding.
             show_download_progress: Show download progress when fetching models.
         """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class FasterWhisperBackend:
+    r"""
+    faster-whisper speech-to-text backend (``CTranslate2``).
+    """
+    @property
+    def id(self) -> builtins.str:
+        r"""
+        The backend's stable id (e.g. ``"faster-whisper:<model_id>"``).
+        """
+    def __new__(cls, config: typing.Optional[FasterWhisperConfig] = None) -> FasterWhisperBackend:
+        r"""
+        Build a backend from the given config (default config when
+        ``config`` is omitted). No weights are loaded until the first
+        ``transcribe`` (or an explicit ``load`` on the handle).
+        """
+    def to_handle(self) -> SttBackendHandle:
+        r"""
+        Wrap this backend in a type-erased :class:`SttBackendHandle`.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class FasterWhisperConfig:
+    r"""
+    Configuration for :class:`FasterWhisperBackend`.
+    
+    Defaults target ``"Systran/faster-whisper-tiny"``; pass ``model_dir``
+    to skip the Hugging Face download and load a pre-fetched
+    ``CTranslate2`` bundle directory.
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    @property
+    def model_dir(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def revision(self) -> typing.Optional[builtins.str]: ...
+    def __new__(cls, model_id: typing.Optional[builtins.str] = None, model_dir: typing.Optional[builtins.str] = None, revision: typing.Optional[builtins.str] = None) -> FasterWhisperConfig: ...
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
@@ -4866,6 +5033,53 @@ class ImageContent:
         """
     def __repr__(self) -> builtins.str: ...
 
+class ImageGenProvider:
+    r"""
+    Base class for image-generation providers.
+    
+    Subclass and override ``generate_image()`` (and optionally
+    ``upscale_image()``) to implement a custom image backend. Mirrors the
+    Rust :rust:trait:`blazen_llm::providers::ImageGenProvider` capability
+    trait.
+    """
+    @property
+    def provider_id(self) -> typing.Optional[builtins.str]:
+        r"""
+        The provider identifier.
+        """
+    @property
+    def base_url(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base URL, if set.
+        """
+    @property
+    def memory_estimate_bytes(self) -> typing.Optional[builtins.int]:
+        r"""
+        Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise), if set.
+        """
+    def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> ImageGenProvider:
+        r"""
+        `__new__` accepting arbitrary positional/keyword args so Python
+        subclasses can use any `__init__` signature. Real configuration
+        happens in `__init__` below.
+        """
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+        r"""
+        Subclass-friendly `__init__`. Mirrors the documented constructor
+        keyword signature and populates ``self.config`` so a Python
+        subclass that calls `super().__init__(provider_id=...)` sees the
+        values it passed (without falling through to `object.__init__`,
+        which would raise ``TypeError``).
+        """
+    def generate_image(self, request: ImageRequest) -> typing.Any:
+        r"""
+        Generate an image from a prompt.
+        """
+    def upscale_image(self, request: UpscaleRequest) -> typing.Any:
+        r"""
+        Upscale an existing image.
+        """
+
 class ImageGenerationProviderDefaults:
     @property
     def base(self) -> BaseProviderDefaults: ...
@@ -5520,6 +5734,52 @@ class KtoConfig:
         Build a KtoConfig.
         """
 
+class LLMProvider:
+    r"""
+    Base class for large-language-model providers.
+    
+    Subclass and override ``complete()`` (and optionally ``stream()``) to
+    implement a custom chat/completion backend. Mirrors the Rust
+    :rust:trait:`blazen_llm::providers::LLMProvider` capability trait.
+    """
+    @property
+    def provider_id(self) -> typing.Optional[builtins.str]:
+        r"""
+        The provider identifier.
+        """
+    @property
+    def base_url(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base URL, if set.
+        """
+    @property
+    def memory_estimate_bytes(self) -> typing.Optional[builtins.int]:
+        r"""
+        Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise), if set.
+        """
+    def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> LLMProvider:
+        r"""
+        `__new__` accepting arbitrary positional/keyword args so Python
+        subclasses can use any `__init__` signature. Real configuration
+        happens in `__init__` below.
+        """
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+        r"""
+        Subclass-friendly `__init__`. Mirrors the documented constructor
+        keyword signature and populates ``self.config`` so a Python
+        subclass that calls `super().__init__(provider_id=...)` sees the
+        values it passed (without falling through to `object.__init__`,
+        which would raise ``TypeError``).
+        """
+    def complete(self, request: ModelRequest) -> typing.Any:
+        r"""
+        Generate a completion for the given request.
+        """
+    def stream(self, request: ModelRequest) -> typing.Any:
+        r"""
+        Stream a completion for the given request.
+        """
+
 @typing.final
 class LangfuseConfig:
     r"""
@@ -6013,6 +6273,105 @@ class LocalModel:
         Return the device this model targets as a string: `'cpu'`, `'cuda:0'`,
         `'metal'`, etc.
         """
+
+@typing.final
+class LoopDecision:
+    r"""
+    The decision returned by a [`LoopStage`]'s ``until`` predicate after each
+    round.
+    
+    Construct one of the three variants via the classmethod factories:
+    
+        >>> LoopDecision.cont()           # run the inner stage again
+        >>> LoopDecision.done()           # stop cleanly; the loop succeeds
+        >>> LoopDecision.abort("reason")  # stop with an error
+    
+    (`cont` is named without a trailing underscore so it reads as
+    ``LoopDecision.cont()``; ``continue`` is a Python keyword.)
+    """
+    @property
+    def is_continue(self) -> builtins.bool:
+        r"""
+        ``True`` if this decision is [`LoopDecision.cont`].
+        """
+    @property
+    def is_done(self) -> builtins.bool:
+        r"""
+        ``True`` if this decision is [`LoopDecision.done`].
+        """
+    @property
+    def abort_reason(self) -> typing.Optional[builtins.str]:
+        r"""
+        The abort reason if this decision is [`LoopDecision.abort`], else
+        ``None``.
+        """
+    @classmethod
+    def cont(cls) -> LoopDecision:
+        r"""
+        Run the inner stage again (subject to the ``max_iterations`` cap).
+        """
+    @classmethod
+    def done(cls) -> LoopDecision:
+        r"""
+        Stop looping cleanly; the loop stage succeeds.
+        """
+    @classmethod
+    def abort(cls, reason: builtins.str) -> LoopDecision:
+        r"""
+        Stop looping with an error carrying the given reason.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class LoopStage:
+    r"""
+    A loop stage that re-runs an inner stage until a predicate signals
+    completion (or a maximum iteration count is reached).
+    
+    The inner stage may be a [`Stage`] or a [`ParallelStage`]; the ``until``
+    predicate is evaluated after each round with the current
+    :class:`PipelineState` and the number of rounds completed so far (1-based),
+    returning a :class:`LoopDecision`.
+    
+    Example:
+        >>> def keep_going(state, rounds):
+        ...     if rounds >= 5:
+        ...         return LoopDecision.done()
+        ...     return LoopDecision.cont()
+        >>>
+        >>> refine = LoopStage(
+        ...     name="refine",
+        ...     max_iterations=10,
+        ...     inner=refine_stage,
+        ...     until=keep_going,
+        ... )
+    """
+    @property
+    def name(self) -> builtins.str:
+        r"""
+        The stage's name.
+        """
+    @property
+    def max_iterations(self) -> builtins.int:
+        r"""
+        The hard cap on the number of rounds.
+        """
+    def __new__(cls, name: builtins.str, max_iterations: builtins.int, inner: typing.Any, until: typing.Any) -> LoopStage:
+        r"""
+        Create a new loop stage.
+        
+        Args:
+            name: Human-readable name for the loop stage (used in results
+                and event provenance).
+            max_iterations: Hard cap on the number of rounds. The loop stops
+                once this many rounds have run even if ``until`` never
+                returns ``LoopDecision.done()``.
+            inner: The inner ``Stage`` or ``ParallelStage`` to run each round.
+            until: Callable ``(state: PipelineState, rounds: int) ->
+                LoopDecision`` evaluated after each round. ``rounds`` is the
+                1-based count of rounds completed so far.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class LoraConfig:
@@ -8093,6 +8452,37 @@ class ModelStatus:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class MusicBackendHandle:
+    r"""
+    Type-erased music / sound-effect backend handle.
+    
+    Wraps an ``Arc<dyn MusicBackend>`` and forwards ``generate_music`` /
+    ``generate_sfx``. Built internally by :class:`MusicModel`; exposed here
+    for parity and direct use.
+    """
+    @property
+    def id(self) -> builtins.str:
+        r"""
+        Stable identifier of the wrapped backend.
+        """
+    @property
+    def provider_kind(self) -> builtins.str:
+        r"""
+        Capability tag of the wrapped backend (e.g. ``"music"``).
+        """
+    def generate_music(self, prompt: builtins.str, duration_seconds: builtins.float) -> typing.Any:
+        r"""
+        Generate music from ``prompt`` of the requested duration.
+        
+        Returns a dict with the generated audio (``bytes``, ``format``,
+        ``sample_rate``, ``channels``, ``duration_seconds``).
+        """
+    def generate_sfx(self, prompt: builtins.str, duration_seconds: builtins.float) -> typing.Any:
+        r"""
+        Generate a sound effect from ``prompt`` of the requested duration.
+        """
+
+@typing.final
 class MusicChunk:
     r"""
     A single PCM audio chunk emitted by a [`PyMusicModel`](super::PyMusicModel).
@@ -8203,6 +8593,12 @@ class MusicModel:
             dtype: Inference dtype — `"f32"` (default) or `"f16"`.
         
         Output sample rate: 44.1 kHz stereo.
+        """
+    def backend_handle(self) -> MusicBackendHandle:
+        r"""
+        Return a type-erased :class:`MusicBackendHandle` wrapping this model's
+        backend. The handle shares the same underlying ``Arc<dyn MusicBackend>``
+        and forwards ``generate_music`` / ``generate_sfx``.
         """
     def __repr__(self) -> builtins.str: ...
     async def generate_music(self, prompt: builtins.str, duration_seconds: builtins.float) -> MusicChunk:
@@ -8862,6 +9258,23 @@ class Pipeline:
     Execute via [`start`](Self::start). Resume from a saved snapshot via
     [`resume`](Self::resume).
     """
+    async def run(self, **kwargs: typing.Any) -> PipelineResult:
+        r"""
+        Execute the pipeline and await its final result.
+        
+        Args:
+            **kwargs: Initial input as keyword arguments. Wrapped into a
+                dict and passed as the pipeline input.
+        
+        Returns:
+            The :class:`PipelineResult` produced by the pipeline.
+        
+        Note:
+            This awaits the pipeline to completion and resolves directly to
+            the result. To pause, resume, stream events, or respond to input
+            requests, use :meth:`start` / :meth:`run_with_handler` instead,
+            which return a :class:`PipelineHandler`.
+        """
     async def start(self, **kwargs: typing.Any) -> PipelineHandler:
         r"""
         Execute the pipeline.
@@ -8873,6 +9286,21 @@ class Pipeline:
         Returns:
             A `PipelineHandler` for awaiting the result, streaming events,
             or pausing.
+        """
+    async def run_with_handler(self, **kwargs: typing.Any) -> PipelineHandler:
+        r"""
+        Execute the pipeline and return a :class:`PipelineHandler` for
+        pausing, resuming, streaming events, or responding to input requests.
+        
+        Alias of :meth:`start`, mirroring `Workflow.run_with_handler`. Use
+        this instead of :meth:`run` when you need control over the running
+        pipeline rather than just its final result.
+        
+        Args:
+            **kwargs: Initial input as keyword arguments.
+        
+        Returns:
+            A `PipelineHandler`.
         """
     async def resume(self, snapshot: PipelineSnapshot) -> PipelineHandler:
         r"""
@@ -8913,6 +9341,11 @@ class PipelineBuilder:
     def parallel(self, parallel: ParallelStage) -> PipelineBuilder:
         r"""
         Append a `ParallelStage` (multiple branches) to the pipeline.
+        """
+    def loop_stage(self, loop_stage: LoopStage) -> PipelineBuilder:
+        r"""
+        Append a `LoopStage` (re-run an inner stage until a predicate stops it)
+        to the pipeline.
         """
     def on_persist(self, callback: typing.Any) -> PipelineBuilder:
         r"""
@@ -9022,17 +9455,54 @@ class PipelineHandler:
     async def resume_in_place(self) -> None:
         r"""
         Resume a paused pipeline in place.
+        
+        Forwards to the active stage's inner workflow(s) so a workflow parked
+        on an `InputRequestEvent` (or paused) unparks and continues. A no-op
+        between stages, where nothing is parked.
         """
     async def snapshot(self) -> PipelineSnapshot:
         r"""
-        Capture a snapshot without stopping the pipeline.
+        Capture a snapshot of the pipeline's current state without stopping it.
         
-        Note: this is a stub in the underlying engine and currently raises
-        `PipelineError`.
+        Live and non-destructive: the pipeline keeps running. The returned
+        `PipelineSnapshot` can be passed to `Pipeline.resume(...)`. Mirrors
+        `WorkflowHandler.snapshot()`.
         """
     async def abort(self) -> None:
         r"""
         Abort the running pipeline.
+        """
+    async def respond_to_input(self, request_id: typing.Any, response: typing.Optional[typing.Any] = None) -> None:
+        r"""
+        Deliver a human-in-the-loop response to the active stage's inner
+        workflow(s).
+        
+        For a sequential stage this targets the one in-flight workflow; for a
+        parallel stage the response is broadcast to every live branch, where
+        the workflow that requested input consumes it and the others ignore a
+        response they did not request.
+        
+        Args:
+            request_id: The ID from the `InputRequestEvent`, or an
+                `InputResponseEvent` carrying both id and response.
+            response: A Python dict/value that will be converted to JSON and
+                delivered to the waiting step. Required when `request_id`
+                is a string; ignored when an `InputResponseEvent` is passed.
+        """
+    async def usage_total(self) -> TokenUsage:
+        r"""
+        Snapshot the running aggregate `TokenUsage` for this pipeline run.
+        
+        Safe to call at any point during or after the run; the value matches
+        `PipelineResult.usage_total` once `result()` has been awaited.
+        """
+    async def cost_total_usd(self) -> builtins.float:
+        r"""
+        Snapshot the running aggregate cost in USD for this pipeline run.
+        
+        Sums `UsageEvent::cost_usd` across every emitted usage event. After
+        `result()` has returned, the value matches
+        `PipelineResult.cost_total_usd`.
         """
     def progress(self) -> typing.Optional[ProgressSnapshot]:
         r"""
@@ -9723,6 +10193,55 @@ class ProviderInfo:
         r"""
         The provider's capability flags as a [`ProviderCapabilities`] object.
         """
+
+@typing.final
+class ProviderMetadata:
+    r"""
+    Static metadata describing a provider instance.
+    
+    Carries the canonical provider id (used for routing, telemetry, billing
+    keys), the capability kind, an optional human-readable display name, and an
+    optional version pin (model id / weights revision).
+    
+    Example:
+        >>> meta = ProviderMetadata("openai", CapabilityKind.Llm,
+        ...                         display_name="OpenAI", version="gpt-4o")
+    """
+    @property
+    def provider_id(self) -> builtins.str:
+        r"""
+        Canonical provider identifier.
+        """
+    @property
+    def capability(self) -> CapabilityKind:
+        r"""
+        What this provider does.
+        """
+    @property
+    def display_name(self) -> typing.Optional[builtins.str]:
+        r"""
+        Optional human-readable display name.
+        """
+    @property
+    def version(self) -> typing.Optional[builtins.str]:
+        r"""
+        Optional version pin (model id / weights revision).
+        """
+    def __new__(cls, provider_id: builtins.str, capability: CapabilityKind, display_name: typing.Optional[builtins.str] = None, version: typing.Optional[builtins.str] = None) -> ProviderMetadata:
+        r"""
+        Build a metadata record.
+        
+        Args:
+            provider_id: Canonical provider identifier (e.g. ``"openai"``).
+            capability: What this provider does.
+            display_name: Optional human-readable name shown in UIs / logs.
+            version: Optional version pin (model id / weights revision).
+        """
+    def display(self) -> builtins.str:
+        r"""
+        The display name when set, otherwise the provider id.
+        """
+    def __repr__(self) -> builtins.str: ...
 
 @typing.final
 class ProviderOptions:
@@ -10530,6 +11049,36 @@ class SimpoConfig:
         """
 
 @typing.final
+class SparkTtsBackend:
+    r"""
+    Spark-TTS text-to-speech backend.
+    """
+    def __new__(cls, config: typing.Optional[SparkTtsConfig] = None) -> SparkTtsBackend:
+        r"""
+        Build a backend from the given config (default config when
+        ``config`` is omitted).
+        """
+    def to_handle(self) -> TtsBackendHandle:
+        r"""
+        Wrap this backend in a type-erased :class:`TtsBackendHandle`.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class SparkTtsConfig:
+    r"""
+    Configuration for :class:`SparkTtsBackend`.
+    """
+    @property
+    def model_id(self) -> builtins.str: ...
+    @property
+    def model_dir(self) -> typing.Optional[builtins.str]: ...
+    @property
+    def revision(self) -> typing.Optional[builtins.str]: ...
+    def __new__(cls, model_id: typing.Optional[builtins.str] = None, model_dir: typing.Optional[builtins.str] = None, revision: typing.Optional[builtins.str] = None) -> SparkTtsConfig: ...
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class SpeechRequest:
     r"""
     Typed wrapper for a text-to-speech request.
@@ -11133,6 +11682,146 @@ class StructuredResponse:
     def __new__(cls, *, data: typing.Any, model: builtins.str, usage: typing.Optional[TokenUsage] = None, cost: typing.Optional[builtins.float] = None, timing: typing.Optional[RequestTiming] = None, metadata: typing.Optional[typing.Any] = None) -> StructuredResponse:
         r"""
         Construct a structured response.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class SttBackendHandle:
+    r"""
+    Type-erased speech-to-text backend handle.
+    
+    Wraps any concrete STT backend (e.g. :class:`FasterWhisperBackend`) and
+    forwards the lifecycle (``load`` / ``unload`` / ``is_loaded``) and
+    ``transcribe`` surface. Build one via a concrete backend's
+    ``to_handle()`` method.
+    """
+    @property
+    def id(self) -> builtins.str:
+        r"""
+        Stable identifier of the wrapped backend.
+        """
+    @property
+    def provider_kind(self) -> builtins.str:
+        r"""
+        Capability tag of the wrapped backend (e.g. ``"stt"``).
+        """
+    def load(self) -> typing.Any:
+        r"""
+        Load the wrapped backend's weights.
+        """
+    def unload(self) -> typing.Any:
+        r"""
+        Unload the wrapped backend, freeing its weights.
+        """
+    def is_loaded(self) -> typing.Any:
+        r"""
+        Whether the wrapped backend is loaded and ready.
+        """
+    def transcribe(self, audio_path: builtins.str, language: typing.Optional[builtins.str] = None) -> typing.Any:
+        r"""
+        Transcribe an audio file at ``audio_path``.
+        
+        Returns a dict with ``text``, ``segments``, and ``language``.
+        """
+
+class SubExecutable:
+    r"""
+    Abstract base class mirroring the [`SubExecutable`] trait.
+    
+    Subclass this from Python and override
+    ``async def execute(self, input, ctx)`` to define a custom child runner
+    that can be embedded inside a parent ``Workflow`` via a
+    :class:`SubPipelineStep`. The method receives the opaque JSON input (as a
+    native Python value) plus the parent :class:`Context`, and must return the
+    terminal result (any JSON-serializable value).
+    
+    Concrete runners (``Workflow`` and ``Pipeline``) implement
+    [`SubExecutable`] on the Rust side and do not go through this shim.
+    
+    Example:
+        >>> class DoubleRunner(SubExecutable):
+        ...     async def execute(self, input, ctx):
+        ...         return {"value": input["value"] * 2}
+    """
+    def __new__(cls) -> SubExecutable: ...
+    def execute(self, input: typing.Any, ctx: Context) -> typing.Any:
+        r"""
+        Run this child executable with the given input and parent context.
+        
+        The default implementation raises ``NotImplementedError``. Override
+        this in a subclass with an ``async def``.
+        
+        Args:
+            input: The opaque input payload (a native Python value).
+            ctx: The parent :class:`Context`.
+        """
+
+@typing.final
+class SubPipelineStep:
+    r"""
+    A workflow step that delegates to a child `Pipeline`.
+    
+    The parent workflow's event loop runs the embedded pipeline via
+    `Pipeline.run()`, converts the triggering event to JSON for the
+    pipeline's input, and wraps the pipeline's `final_output` into a
+    `DynamicEvent` named `"<step_name>::output"` for the parent. This is
+    the pipeline analogue of `SubWorkflowStep`.
+    
+    Example:
+        >>> child = Pipeline.builder("enrich").stage(stage).build()
+        >>> step = SubPipelineStep(
+        ...     name="enrich",
+        ...     accepts=["StartEvent"],
+        ...     emits=["enrich::output"],
+        ...     pipeline=child,
+        ... )
+        >>> wf = Workflow.builder("parent").add_subpipeline_step(step).build()
+    """
+    @property
+    def name(self) -> builtins.str:
+        r"""
+        The step name.
+        """
+    @property
+    def accepts(self) -> builtins.list[builtins.str]:
+        r"""
+        Event type identifiers this step accepts.
+        """
+    @property
+    def emits(self) -> builtins.list[builtins.str]:
+        r"""
+        Event type identifiers this step may emit.
+        """
+    def __new__(cls, name: builtins.str, accepts: typing.Sequence[builtins.str], emits: typing.Sequence[builtins.str], pipeline: Pipeline, timeout: typing.Optional[builtins.float] = None, retry_config: typing.Optional[RetryConfig] = None) -> SubPipelineStep:
+        r"""
+        Create a sub-pipeline step.
+        
+        Args:
+            name: Human-readable name for this step.
+            accepts: Event type identifiers this step accepts.
+            emits: Event type identifiers this step may emit.
+            pipeline: The child `Pipeline` to run as this step.
+            timeout: Optional per-step wall-clock timeout (seconds) for the
+                entire child run. ``None`` inherits the child's own timeout.
+            retry_config: Optional per-step `RetryConfig` applied to the
+                child run as a whole.
+        """
+    @classmethod
+    def from_executable(cls, name: builtins.str, accepts: typing.Sequence[builtins.str], emits: typing.Sequence[builtins.str], executable: typing.Any, timeout: typing.Optional[builtins.float] = None, retry_config: typing.Optional[RetryConfig] = None) -> SubPipelineStep:
+        r"""
+        Build a sub-pipeline step from any `SubExecutable` instance.
+        
+        Use this to embed a custom Python child runner (a `SubExecutable`
+        subclass overriding ``async def execute(self, input, ctx)``) inside a
+        parent workflow, instead of a concrete `Pipeline`.
+        
+        Args:
+            name: Human-readable name for this step.
+            accepts: Event type identifiers this step accepts.
+            emits: Event type identifiers this step may emit.
+            executable: A `SubExecutable` subclass instance to run as this step.
+            timeout: Optional per-step wall-clock timeout (seconds).
+            retry_config: Optional per-step `RetryConfig`.
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -11752,6 +12441,44 @@ class ToolOutput:
     def __repr__(self) -> builtins.str: ...
 
 @typing.final
+class TracingConfig:
+    r"""
+    Runtime configuration for the tracing decorator built by
+    :func:`wrap_with_tracing`.
+    
+    Defaults are privacy-safe: token counts, model id, provider, and finish
+    reason are always recorded, but raw prompt + completion message text are
+    NOT recorded unless ``capture_messages`` is enabled.
+    
+    Example:
+        >>> cfg = TracingConfig(capture_messages=True)
+        >>> traced = wrap_with_tracing(model, "openai", config=cfg)
+    """
+    @property
+    def capture_messages(self) -> builtins.bool:
+        r"""
+        Whether raw prompt + completion message text is captured on spans.
+        """
+    @capture_messages.setter
+    def capture_messages(self, value: builtins.bool) -> None: ...
+    def __new__(cls, capture_messages: builtins.bool = False) -> TracingConfig:
+        r"""
+        Create a new tracing configuration.
+        
+        Args:
+            capture_messages: If True, the raw prompt messages and completion
+                text are serialized to JSON and recorded on each span as
+                ``llm.input_messages`` / ``llm.output_messages``. Defaults to
+                False (privacy-safe). Stream calls never capture messages even
+                with this flag enabled.
+        """
+    def with_message_capture(self, capture: builtins.bool) -> TracingConfig:
+        r"""
+        Return a copy with message capture enabled or disabled.
+        """
+    def __repr__(self) -> builtins.str: ...
+
+@typing.final
 class TractEmbedModel:
     r"""
     A local tract (pure-Rust ONNX) embedding model.
@@ -12277,6 +13004,47 @@ class TranscriptionSegment:
         Speaker label, if diarization was enabled.
         """
     def __repr__(self) -> builtins.str: ...
+
+@typing.final
+class TtsBackendHandle:
+    r"""
+    Type-erased text-to-speech backend handle.
+    
+    Wraps any concrete TTS backend (e.g. :class:`SparkTtsBackend`) and
+    forwards the lifecycle (``load`` / ``unload`` / ``is_loaded``) and
+    ``synthesize`` surface. Build one via a concrete backend's
+    ``to_handle()`` method.
+    """
+    @property
+    def id(self) -> builtins.str:
+        r"""
+        Stable identifier of the wrapped backend.
+        """
+    @property
+    def provider_kind(self) -> builtins.str:
+        r"""
+        Capability tag of the wrapped backend (e.g. ``"tts"``).
+        """
+    def load(self) -> typing.Any:
+        r"""
+        Load the wrapped backend's weights.
+        """
+    def unload(self) -> typing.Any:
+        r"""
+        Unload the wrapped backend, freeing its weights.
+        """
+    def is_loaded(self) -> typing.Any:
+        r"""
+        Whether the wrapped backend is loaded and ready.
+        """
+    def synthesize(self, text: builtins.str, options: typing.Optional[typing.Any] = None) -> typing.Any:
+        r"""
+        Synthesize speech from ``text``.
+        
+        ``options`` is an optional dict matching the ``TtsOptions`` schema.
+        Returns a dict with the generated audio (``bytes``, ``format``,
+        ``sample_rate``, ``channels``, ``duration_seconds``).
+        """
 
 @typing.final
 class TtsOptions:
@@ -12846,6 +13614,52 @@ class VcModel:
         this to a true bidirectional stream over an async iterator of
         source chunks; the current single-utterance variant matches the
         surface exposed by every other binding.
+        """
+
+class VcProvider:
+    r"""
+    Base class for voice-conversion providers.
+    
+    Subclass and override ``convert_voice()`` to re-voice a source
+    utterance with a target voice. Mirrors the Rust
+    :rust:trait:`blazen_llm::providers::VcProvider` capability trait.
+    """
+    @property
+    def provider_id(self) -> typing.Optional[builtins.str]:
+        r"""
+        The provider identifier.
+        """
+    @property
+    def base_url(self) -> typing.Optional[builtins.str]:
+        r"""
+        The base URL, if set.
+        """
+    @property
+    def memory_estimate_bytes(self) -> typing.Optional[builtins.int]:
+        r"""
+        Estimated memory footprint in bytes (host RAM if on CPU, GPU VRAM otherwise), if set.
+        """
+    def __new__(cls, *_args: typing.Any, **_kwargs: typing.Any) -> VcProvider:
+        r"""
+        `__new__` accepting arbitrary positional/keyword args so Python
+        subclasses can use any `__init__` signature. Real configuration
+        happens in `__init__` below.
+        """
+    def __init__(self, *, provider_id: typing.Optional[builtins.str] = None, base_url: typing.Optional[builtins.str] = None, pricing: typing.Optional[ModelPricing] = None, memory_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
+        r"""
+        Subclass-friendly `__init__`. Mirrors the documented constructor
+        keyword signature and populates ``self.config`` so a Python
+        subclass that calls `super().__init__(provider_id=...)` sees the
+        values it passed (without falling through to `object.__init__`,
+        which would raise ``TypeError``).
+        """
+    def convert_voice(self, request: VoiceCloneRequest) -> typing.Any:
+        r"""
+        Convert a source utterance to a target voice.
+        """
+    def clone_voice(self, request: VoiceCloneRequest) -> typing.Any:
+        r"""
+        Clone a voice from reference audio samples.
         """
 
 @typing.final
@@ -13475,6 +14289,14 @@ class WorkflowBuilder:
         
         Mirrors `blazen_core::WorkflowBuilder::add_parallel_subworkflows`.
         """
+    def add_subpipeline_step(self, step: SubPipelineStep) -> WorkflowBuilder:
+        r"""
+        Register a `SubPipelineStep` that delegates to a child pipeline.
+        
+        Mirrors `blazen_core::WorkflowBuilder::add_subpipeline_step`. The
+        embedded pipeline runs to completion as a single step and its
+        `final_output` is surfaced to the parent workflow.
+        """
     def timeout(self, seconds: builtins.float) -> WorkflowBuilder:
         r"""
         Set the maximum execution time for the workflow in seconds.
@@ -14089,6 +14911,62 @@ class CacheStrategy(enum.Enum):
     Auto = ...
 
 @typing.final
+class CapabilityKind(enum.Enum):
+    r"""
+    What a provider does -- the capability it serves.
+    """
+    Llm = ...
+    r"""
+    Large language model -- chat / completion / streaming.
+    """
+    Tts = ...
+    r"""
+    Text-to-speech audio synthesis.
+    """
+    Stt = ...
+    r"""
+    Speech-to-text transcription.
+    """
+    Music = ...
+    r"""
+    Text-to-music / text-to-sfx audio generation.
+    """
+    Vc = ...
+    r"""
+    Voice conversion (source utterance + target voice -> re-voiced audio).
+    """
+    ThreeD = ...
+    r"""
+    3D mesh generation (image-to-3D, text-to-3D).
+    """
+    ImageGen = ...
+    r"""
+    2D image generation (text-to-image, image-to-image, upscale).
+    """
+    Embedding = ...
+    r"""
+    Vector embedding generation (text / image / multi-modal).
+    """
+    Codec = ...
+    r"""
+    Neural audio codec (PCM <-> discrete codebook tokens).
+    """
+    BackgroundRemoval = ...
+    r"""
+    Background removal on existing images.
+    """
+    Video = ...
+    r"""
+    Video generation (text-to-video, image-to-video).
+    """
+
+    def as_str(self) -> builtins.str:
+        r"""
+        Stable lower-snake-case string identifier for this capability.
+        """
+    def __str__(self) -> builtins.str: ...
+
+@typing.final
 class ChatRole(enum.Enum):
     r"""
     Chat message role for mistral.rs inference inputs.
@@ -14381,10 +15259,11 @@ class SessionPausePolicy(enum.Enum):
 @typing.final
 class StageKind(enum.Enum):
     r"""
-    A stage in a pipeline -- either sequential or parallel.
+    A stage in a pipeline -- sequential, parallel, or a loop.
     """
     Sequential = ...
     Parallel = ...
+    Loop = ...
 
 @typing.final
 class TemplateRole(enum.Enum):
@@ -14857,6 +15736,25 @@ def register_from_model_info(info: ModelInfo) -> None:
     nor output cost.
     """
 
+def register_native_serializer() -> None:
+    r"""
+    Register the process-wide native-event serializer hook.
+    
+    The Python binding installs its own native serializer automatically when
+    the module is imported (see the ``#[pymodule]`` initializer), so calling
+    this is normally unnecessary. It is exposed for parity with
+    [`blazen_events::register_native_serializer`] and as an explicit,
+    idempotent way to (re)assert that the hook is installed — subsequent calls
+    are no-ops because the first registration wins.
+    
+    Python usage:
+    ```python
+    import blazen
+    
+    blazen.register_native_serializer()
+    ```
+    """
+
 def register_pricing(model_id: builtins.str, pricing: ModelPricing) -> None:
     r"""
     Register pricing for a model ID.
@@ -15012,7 +15910,7 @@ def video_input(name: builtins.str, description: builtins.str) -> typing.Any:
     Schema declaring a single required video input.
     """
 
-def wrap_with_tracing(model: Model, provider_name: builtins.str, capture_messages: builtins.bool = False) -> Model:
+def wrap_with_tracing(model: Model, provider_name: builtins.str, capture_messages: builtins.bool = False, config: typing.Optional[TracingConfig] = None) -> Model:
     r"""
     Wrap a `Model` with a tracing decorator.
     
@@ -15032,7 +15930,9 @@ def wrap_with_tracing(model: Model, provider_name: builtins.str, capture_message
             ``llm.input_messages`` / ``llm.output_messages``. Defaults to
             False — privacy-safe. Phoenix's eval-grade surfaces
             (faithfulness, RAG hit rate, schema-compliance) need this
-            enabled.
+            enabled. Ignored when ``config`` is supplied.
+        config: Optional :class:`TracingConfig`. When provided, it takes
+            precedence over ``capture_messages``.
     
     Returns:
         A new Model that emits tracing spans on every call.

@@ -10,6 +10,7 @@ use crate::compute::request_types::{
     PyBackgroundRemovalRequest, PyImageRequest, PyMusicRequest, PySpeechRequest, PyThreeDRequest,
     PyUpscaleRequest, PyVideoRequest, PyVoiceCloneRequest,
 };
+use crate::types::model_request::PyModelRequest;
 
 // ---------------------------------------------------------------------------
 // Helper macro
@@ -297,6 +298,133 @@ capability_provider! {
             let _ = voice;
             Err(pyo3::exceptions::PyNotImplementedError::new_err(
                 "subclass must override delete_voice()",
+            ))
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 8. LLMProvider
+// ---------------------------------------------------------------------------
+
+capability_provider! {
+    /// Base class for large-language-model providers.
+    ///
+    /// Subclass and override ``complete()`` (and optionally ``stream()``) to
+    /// implement a custom chat/completion backend. Mirrors the Rust
+    /// :rust:trait:`blazen_llm::providers::LLMProvider` capability trait.
+    "LLMProvider", LLMProvider,
+    extra {
+        /// Generate a completion for the given request.
+        #[pyo3(signature = (request))]
+        fn complete(&self, request: PyRef<'_, PyModelRequest>) -> PyResult<Py<PyAny>> {
+            let _ = request;
+            Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "subclass must override complete()",
+            ))
+        }
+
+        /// Stream a completion for the given request.
+        #[pyo3(signature = (request))]
+        fn stream(&self, request: PyRef<'_, PyModelRequest>) -> PyResult<Py<PyAny>> {
+            let _ = request;
+            Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "subclass must override stream()",
+            ))
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 9. EmbeddingProvider
+// ---------------------------------------------------------------------------
+
+capability_provider! {
+    /// Base class for embedding providers.
+    ///
+    /// Subclass and override ``embed()`` and ``dimensions()`` to implement a
+    /// custom embedding backend. Mirrors the Rust
+    /// :rust:trait:`blazen_llm::providers::EmbeddingProvider` capability trait.
+    "EmbeddingProvider", EmbeddingProvider,
+    extra {
+        /// Embed a batch of texts, returning one vector per input.
+        #[pyo3(signature = (texts))]
+        fn embed(&self, texts: Vec<String>) -> PyResult<Py<PyAny>> {
+            let _ = texts;
+            Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "subclass must override embed()",
+            ))
+        }
+
+        /// The dimensionality of the embedding vectors this provider emits.
+        fn dimensions(&self) -> PyResult<usize> {
+            Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "subclass must override dimensions()",
+            ))
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 10. ImageGenProvider
+// ---------------------------------------------------------------------------
+
+capability_provider! {
+    /// Base class for image-generation providers.
+    ///
+    /// Subclass and override ``generate_image()`` (and optionally
+    /// ``upscale_image()``) to implement a custom image backend. Mirrors the
+    /// Rust :rust:trait:`blazen_llm::providers::ImageGenProvider` capability
+    /// trait.
+    "ImageGenProvider", ImageGenProvider,
+    extra {
+        /// Generate an image from a prompt.
+        #[pyo3(signature = (request))]
+        fn generate_image(&self, request: PyRef<'_, PyImageRequest>) -> PyResult<Py<PyAny>> {
+            let _ = request;
+            Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "subclass must override generate_image()",
+            ))
+        }
+
+        /// Upscale an existing image.
+        #[pyo3(signature = (request))]
+        fn upscale_image(&self, request: PyRef<'_, PyUpscaleRequest>) -> PyResult<Py<PyAny>> {
+            let _ = request;
+            Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "subclass must override upscale_image()",
+            ))
+        }
+    }
+}
+
+// ---------------------------------------------------------------------------
+// 11. VcProvider
+// ---------------------------------------------------------------------------
+
+capability_provider! {
+    /// Base class for voice-conversion providers.
+    ///
+    /// Subclass and override ``convert_voice()`` to re-voice a source
+    /// utterance with a target voice. Mirrors the Rust
+    /// :rust:trait:`blazen_llm::providers::VcProvider` capability trait.
+    "VcProvider", VcProvider,
+    extra {
+        /// Convert a source utterance to a target voice.
+        #[pyo3(signature = (request))]
+        fn convert_voice(&self, request: PyRef<'_, PyVoiceCloneRequest>) -> PyResult<Py<PyAny>> {
+            let _ = request;
+            Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "subclass must override convert_voice()",
+            ))
+        }
+
+        /// Clone a voice from reference audio samples.
+        #[pyo3(signature = (request))]
+        fn clone_voice(&self, request: PyRef<'_, PyVoiceCloneRequest>) -> PyResult<Py<PyAny>> {
+            let _ = request;
+            Err(pyo3::exceptions::PyNotImplementedError::new_err(
+                "subclass must override clone_voice()",
             ))
         }
     }

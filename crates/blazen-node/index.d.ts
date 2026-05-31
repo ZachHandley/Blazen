@@ -834,6 +834,21 @@ export declare class Citation {
 }
 export type JsCitationClass = Citation
 
+/**
+ * Typed handle wrapping an `EnCodec` neural audio codec backend.
+ *
+ * Mirrors [`blazen_llm::CodecBackendHandle`]. Construct it directly to
+ * get a default `facebook/encodec_24khz` handle; weights load lazily on
+ * first encode/decode.
+ */
+export declare class CodecBackendHandle {
+  /** Build a default-configured `EnCodec` codec backend handle. */
+  constructor()
+  /** The wrapped backend's stable identifier. */
+  get id(): string
+}
+export type JsCodecBackendHandle = CodecBackendHandle
+
 /** A Cohere chat completion provider. */
 export declare class CohereProvider {
   /** Create a new Cohere provider. */
@@ -1545,6 +1560,32 @@ export declare class EmbeddingModel {
 export type JsEmbeddingModel = EmbeddingModel
 
 /**
+ * r" Base class for vector-embedding providers.
+ * r"
+ * r" Mirrors the [`blazen_llm::providers::EmbeddingProvider`] capability
+ * r" trait. Subclass and override `embed()` to implement a custom embedding
+ * r" backend.
+ */
+export declare class EmbeddingProvider {
+  constructor(config: CapabilityProviderConfig)
+  /** The provider identifier. */
+  get providerId(): string | null
+  /** The base URL, if set. */
+  get baseUrl(): string | null
+  /**
+   * Estimated memory footprint in bytes (host RAM if the
+   * provider targets the CPU, GPU VRAM otherwise), if set.
+   */
+  get memoryEstimateBytes(): number | null
+  /**
+   * r" Embed a batch of texts. Receives an array of strings and returns
+   * r" an array of float vectors (one per input).
+   */
+  embed(texts: any): Promise<any>
+}
+export type JsEmbeddingProvider = EmbeddingProvider
+
+/**
  * Embedding-role provider defaults. V1 just wraps a
  * [`JsBaseProviderDefaults`].
  */
@@ -1803,6 +1844,26 @@ export declare class FastEmbedModel {
 }
 export type JsFastEmbedModel = FastEmbedModel
 
+/**
+ * The faster-whisper STT backend.
+ *
+ * Mirrors [`blazen_llm::FasterWhisperBackend`]. Construct with an
+ * optional [`FasterWhisperConfig`](JsFasterWhisperConfig); weights load
+ * lazily on first transcription.
+ */
+export declare class FasterWhisperBackend {
+  /**
+   * Build a faster-whisper backend. No weights are loaded until the
+   * first transcription call.
+   */
+  constructor(config?: FasterWhisperConfig | undefined | null)
+  /** The stable backend identifier (`faster-whisper:<model_id>`). */
+  get id(): string
+  /** Wrap this backend in a typed [`SttBackendHandle`]. */
+  intoHandle(): JsSttBackendHandle
+}
+export type JsFasterWhisperBackend = FasterWhisperBackend
+
 /** A Fireworks AI chat completion provider. */
 export declare class FireworksProvider {
   /** Create a new Fireworks provider. */
@@ -2031,6 +2092,31 @@ export declare class ImageGenerationProviderDefaults {
   set before(hook: BeforeRoleTsfn | undefined | null)
 }
 export type JsImageGenerationProviderDefaults = ImageGenerationProviderDefaults
+
+/**
+ * r" Base class for 2D image-generation providers.
+ * r"
+ * r" Mirrors the [`blazen_llm::providers::ImageGenProvider`] capability
+ * r" trait. Subclass and override `generateImage()` (and optionally
+ * r" `upscaleImage()`) to implement a custom image backend.
+ */
+export declare class ImageGenProvider {
+  constructor(config: CapabilityProviderConfig)
+  /** The provider identifier. */
+  get providerId(): string | null
+  /** The base URL, if set. */
+  get baseUrl(): string | null
+  /**
+   * Estimated memory footprint in bytes (host RAM if the
+   * provider targets the CPU, GPU VRAM otherwise), if set.
+   */
+  get memoryEstimateBytes(): number | null
+  /** r" Generate images from a text prompt. */
+  generateImage(request: any): Promise<any>
+  /** r" Upscale an existing image. */
+  upscaleImage(request: any): Promise<any>
+}
+export type JsImageGenProvider = ImageGenProvider
 
 /**
  * Base class for custom image-generation providers.
@@ -2491,6 +2577,37 @@ export declare class LlamaCppProvider {
 export type JsLlamaCppProvider = LlamaCppProvider
 
 /**
+ * r" Base class for large-language-model providers.
+ * r"
+ * r" Mirrors the [`blazen_llm::providers::LLMProvider`] capability trait.
+ * r" Subclass and override `complete()` (and optionally `stream()`) to
+ * r" implement a custom chat/completion backend.
+ */
+export declare class LLMProvider {
+  constructor(config: CapabilityProviderConfig)
+  /** The provider identifier. */
+  get providerId(): string | null
+  /** The base URL, if set. */
+  get baseUrl(): string | null
+  /**
+   * Estimated memory footprint in bytes (host RAM if the
+   * provider targets the CPU, GPU VRAM otherwise), if set.
+   */
+  get memoryEstimateBytes(): number | null
+  /**
+   * r" Non-streaming completion. Receives a `ModelRequest`-shaped object
+   * r" and returns a `ModelResponse`-shaped object.
+   */
+  complete(request: any): Promise<any>
+  /**
+   * r" Streaming completion. Receives a `ModelRequest`-shaped object and
+   * r" returns the accumulated stream chunks.
+   */
+  stream(request: any): Promise<any>
+}
+export type JsLLMProvider = LLMProvider
+
+/**
  * A completion provider wrapper that applies a
  * [`JsProviderDefaults`] to every completion request before
  * delegating to the inner model.
@@ -2643,6 +2760,51 @@ export declare class LocalModel {
   memoryBytes(): Promise<number | null>
 }
 export type JsLocalModel = LocalModel
+
+/**
+ * A pipeline stage that re-runs an inner stage until a hard iteration cap is
+ * reached.
+ *
+ * The inner stage is a [`JsStage`] (sequential) or [`JsParallelStage`]
+ * (parallel); it is consumed at construction time, so the same `Stage` /
+ * `ParallelStage` instance cannot be reused. As noted in the module docs,
+ * the v1 loop runs the inner stage exactly `maxIterations` times.
+ *
+ * ```typescript
+ * const inner = new Stage("refine", wf);
+ * const loop = new LoopStage("refine-loop", 3, inner);
+ * ```
+ */
+export declare class LoopStage {
+  /**
+   * Create a loop stage from a sequential [`JsStage`].
+   *
+   * `maxIterations` is the hard cap on the number of rounds. The inner
+   * stage is consumed at construction time.
+   */
+  constructor(name: string, maxIterations: number, inner: JsStage)
+  /**
+   * Create a loop stage whose inner body is a parallel fan-out stage.
+   *
+   * `maxIterations` is the hard cap on the number of rounds. The inner
+   * parallel stage is consumed at construction time.
+   */
+  static fromParallel(name: string, maxIterations: number, inner: JsParallelStage): LoopStage
+  /**
+   * The loop stage's human-readable name.
+   *
+   * Returns an empty string if the stage has already been consumed by a
+   * `Pipeline`.
+   */
+  get name(): string
+  /**
+   * The hard iteration cap.
+   *
+   * Returns `0` if the stage has already been consumed by a `Pipeline`.
+   */
+  get maxIterations(): number
+}
+export type JsLoopStage = LoopStage
 
 /**
  * A memory store that uses ELID for vector indexing and similarity search.
@@ -3265,6 +3427,21 @@ export declare class Model {
    * ```
    */
   withTracing(name: string, captureMessages?: boolean | undefined | null): Model
+  /**
+   * Wrap this model in a [`TracingModel`] using an explicit
+   * [`TracingConfig`](JsTracingConfig) object.
+   *
+   * Equivalent to [`with_tracing`](Self::with_tracing) but takes the
+   * structured config record (`{ captureMessages?: boolean }`) instead of
+   * a positional boolean. `name` is leaked into a `&'static str` for the
+   * span macro, exactly as in [`with_tracing`](Self::with_tracing).
+   *
+   * ```javascript
+   * const traced = Model.openai({ apiKey })
+   *   .withTracingConfig("openai", { captureMessages: true });
+   * ```
+   */
+  withTracingConfig(name: string, config: TracingConfig): Model
 }
 export type JsModel = Model
 
@@ -3850,6 +4027,21 @@ export declare class ModelRegistry {
 export type JsModelRegistry = ModelRegistry
 
 /**
+ * Typed handle wrapping a `MusicGen` text-to-music backend.
+ *
+ * Mirrors [`blazen_llm::MusicBackendHandle`]. Construct it directly to
+ * get a default-configured `MusicGen` handle; weights load lazily on
+ * first generation.
+ */
+export declare class MusicBackendHandle {
+  /** Build a default-configured `MusicGen` music backend handle. */
+  constructor()
+  /** The wrapped backend's stable identifier. */
+  get id(): string
+}
+export type JsMusicBackendHandle = MusicBackendHandle
+
+/**
  * MusicGen text-to-music + text-to-SFX backend.
  *
  * Use the [`JsMusicgenBackend::create`] factory to construct an instance.
@@ -4256,6 +4448,15 @@ export declare class Pipeline {
    */
   start(input: any): Promise<PipelineHandler>
   /**
+   * Execute the pipeline and await its final result in one call.
+   *
+   * This is the result-shorthand mirror of [`crate::workflow::JsWorkflow::run`]:
+   * equivalent to `(await pipeline.start(input)).result()`, but without
+   * exposing the intermediate handler. Consumes the pipeline -- calling
+   * `run`/`start`/`resume` a second time errors.
+   */
+  run(input: any): Promise<JsPipelineResult>
+  /**
    * Inspect the pipeline-level default retry configuration, if any.
    * Mirrors [`blazen_pipeline::Pipeline::retry_config`] (Wave 2).
    * Returns `null` after the pipeline has been consumed.
@@ -4276,6 +4477,14 @@ export declare class PipelineBuilder {
   stage(stage: JsStage): this
   /** Append a `ParallelStage` to the pipeline. */
   parallel(parallel: JsParallelStage): this
+  /**
+   * Append a `LoopStage` to the pipeline.
+   *
+   * The loop re-runs its inner stage up to `maxIterations` times (see the
+   * [`LoopStage`](crate::pipeline::loop_stage::JsLoopStage) docs for the v1
+   * iteration semantics). The `loopStage` instance is consumed.
+   */
+  loopStage(loopStage: JsLoopStage): this
   /** Set a per-stage timeout in seconds. Each stage's workflow gets this duration. */
   timeoutPerStage(seconds: number): this
   /**
@@ -4350,6 +4559,36 @@ export declare class PipelineHandler {
    * Returns `null` after [`Self::result`] has consumed the handler.
    */
   progress(): Promise<JsProgressSnapshot | null>
+  /**
+   * Respond to an input request from a stage that is paused on an
+   * `InputRequestEvent`. The response is fanned out to the active
+   * stage's inner workflow(s). Mirrors
+   * [`blazen_pipeline::PipelineHandler::respond_to_input`].
+   *
+   * The `request_id` must match the `InputRequestEvent.request_id` that
+   * was published by a step inside the running stage.
+   */
+  respondToInput(requestId: string, response: any): Promise<void>
+  /**
+   * Respond to an input request using a typed [`JsInputResponseEvent`].
+   *
+   * Equivalent to [`Self::respond_to_input`] but accepts the typed
+   * event object so JS callers can pass a single value already shaped
+   * like the input-response event they may have built earlier.
+   */
+  respondToInputTyped(event: JsInputResponseEvent): Promise<void>
+  /**
+   * Aggregated token usage across the pipeline run so far. Mirrors
+   * [`blazen_pipeline::PipelineHandler::usage_total`]. Returns `null`
+   * after the handler has been consumed by [`Self::result`].
+   */
+  usageTotal(): Promise<JsTokenUsageClass | null>
+  /**
+   * Aggregated cost in USD across the pipeline run so far. Mirrors
+   * [`blazen_pipeline::PipelineHandler::cost_total_usd`]. Returns `null`
+   * after the handler has been consumed by [`Self::result`].
+   */
+  costTotalUsd(): Promise<number | null>
   /** Abort the pipeline. */
   abort(): Promise<void>
   /**
@@ -5040,6 +5279,26 @@ export declare class SessionRefRegistry {
 export type JsSessionRefRegistry = SessionRefRegistry
 
 /**
+ * The Spark-TTS backend.
+ *
+ * Mirrors [`blazen_llm::SparkTtsBackend`]. Construct with an optional
+ * [`SparkTtsConfig`](JsSparkTtsConfig); weights load lazily on first
+ * synthesis.
+ */
+export declare class SparkTtsBackend {
+  /**
+   * Build a Spark-TTS backend. No weights are loaded until the first
+   * synthesis call.
+   */
+  constructor(config?: SparkTtsConfig | undefined | null)
+  /** The configured model id. */
+  get modelId(): string
+  /** Wrap this backend in a typed [`TtsBackendHandle`]. */
+  intoHandle(): JsTtsBackendHandle
+}
+export type JsSparkTtsBackend = SparkTtsBackend
+
+/**
  * Stable Audio Open backend.
  *
  * Use the [`JsStableAudioBackend::create`] factory to construct an
@@ -5403,6 +5662,100 @@ export declare class StructuredOutput {
   extract(messages: Array<JsChatMessage>, schema: any): Promise<JsStructuredResponse>
 }
 export type JsStructuredOutput = StructuredOutput
+
+/**
+ * Typed handle wrapping a faster-whisper STT backend.
+ *
+ * Mirrors [`blazen_llm::SttBackendHandle`]. Obtain one from
+ * [`FasterWhisperBackend.intoHandle`](JsFasterWhisperBackend::into_handle).
+ */
+export declare class SttBackendHandle {
+  /** The wrapped backend's stable identifier. */
+  get id(): string
+  /** The wrapped backend's capability tag. */
+  get providerKind(): string
+  /** Load the wrapped backend's weights. */
+  load(): Promise<void>
+}
+export type JsSttBackendHandle = SttBackendHandle
+
+/**
+ * A user-defined child runner embeddable inside a parent `Workflow`.
+ *
+ * Subclass `SubExecutable` and override `execute(input)` to run an opaque
+ * JSON payload to completion, returning the terminal JSON value. The
+ * resulting object can be embedded as a step via `SubPipelineStep`'s
+ * `fromExecutable` factory.
+ *
+ * ```typescript
+ * import { SubExecutable, SubPipelineStep, Workflow } from "blazen";
+ *
+ * class Doubler extends SubExecutable {
+ *   async execute(input) {
+ *     return { value: input.value * 2 };
+ *   }
+ * }
+ *
+ * const step = SubPipelineStep.fromExecutable(
+ *   "double", ["blazen::StartEvent"], ["double::output"], new Doubler(),
+ * );
+ * ```
+ *
+ * Constructing `SubExecutable` directly (without a subclass override)
+ * yields a runner whose `execute` reports an error — override `execute` to
+ * give it behavior.
+ */
+export declare class SubExecutable {
+  /**
+   * Construct a `SubExecutable`.
+   *
+   * When invoked through a JS subclass that overrides `execute`, the
+   * constructor binds that override and dispatches every Rust
+   * [`SubExecutable::execute`](blazen_core::SubExecutable::execute) call
+   * to it. When invoked directly (no override), `execute` reports an
+   * error until overridden.
+   */
+  constructor()
+}
+export type JsSubExecutable = SubExecutable
+
+/**
+ * A workflow step that delegates to a `Pipeline`.
+ *
+ * The child pipeline is cloned (from a built [`Pipeline`](JsPipeline)) at
+ * construction time and stored as an `Arc<dyn SubExecutable>` so this step
+ * instance can be reused across multiple parent workflows.
+ */
+export declare class SubPipelineStep {
+  /**
+   * Create a sub-pipeline step.
+   *
+   * `name` / `accepts` / `emits` describe routing. `inner` is the child
+   * pipeline whose stages are run for each parent dispatch. The inner
+   * pipeline is cloned at construction time, so `inner` must not have
+   * been consumed (by `start`/`run`/`resume`) yet and this step instance
+   * can be reused across builders.
+   */
+  constructor(name: string, accepts: Array<string>, emits: Array<string>, inner: Pipeline, timeoutSecs?: number | undefined | null, retryConfig?: JsRetryConfig | undefined | null)
+  /**
+   * Create a sub-pipeline step from any [`SubExecutable`](JsSubExecutable)
+   * child runner.
+   *
+   * Unlike [`new`](Self::new) (which embeds a built `Pipeline`), this
+   * accepts a user-defined `SubExecutable` subclass instance, letting an
+   * arbitrary JS-implemented child runner be embedded inside a parent
+   * `Workflow`. The executable handle is cloned, so the instance can be
+   * reused across builders.
+   */
+  static fromExecutable(name: string, accepts: Array<string>, emits: Array<string>, executable: SubExecutable, timeoutSecs?: number | undefined | null, retryConfig?: JsRetryConfig | undefined | null): SubPipelineStep
+  /** The step name. */
+  get name(): string
+  /** Event type identifiers this step accepts. */
+  get accepts(): Array<string>
+  /** Event type identifiers this step may emit. */
+  get emits(): Array<string>
+}
+export type JsSubPipelineStep = SubPipelineStep
 
 /**
  * A workflow step that delegates to another `Workflow`.
@@ -5788,6 +6141,18 @@ export declare class TranscriptionProviderDefaults {
 export type JsTranscriptionProviderDefaults = TranscriptionProviderDefaults
 
 /**
+ * Typed handle wrapping a Spark-TTS backend.
+ *
+ * Mirrors [`blazen_llm::TtsBackendHandle`]. Obtain one from
+ * [`SparkTtsBackend.intoHandle`](JsSparkTtsBackend::into_handle).
+ */
+export declare class TtsBackendHandle {
+  /** The wrapped backend's stable identifier. */
+  get id(): string
+}
+export type JsTtsBackendHandle = TtsBackendHandle
+
+/**
  * A local TTS provider backed by `any-tts`.
  *
  * ```javascript
@@ -6083,6 +6448,36 @@ export declare class VcModel {
 export type JsVcModel = VcModel
 
 /**
+ * r" Base class for voice-conversion providers.
+ * r"
+ * r" Mirrors the [`blazen_llm::providers::VcProvider`] capability trait —
+ * r" source utterance + target voice → re-voiced audio, plus voice
+ * r" cloning. Subclass and override `convertVoice()` (and optionally
+ * r" `cloneVoice()`, `listVoices()`, `deleteVoice()`).
+ */
+export declare class VcProvider {
+  constructor(config: CapabilityProviderConfig)
+  /** The provider identifier. */
+  get providerId(): string | null
+  /** The base URL, if set. */
+  get baseUrl(): string | null
+  /**
+   * Estimated memory footprint in bytes (host RAM if the
+   * provider targets the CPU, GPU VRAM otherwise), if set.
+   */
+  get memoryEstimateBytes(): number | null
+  /** r" Convert the source utterance into the target voice. */
+  convertVoice(request: any): Promise<any>
+  /** r" Clone a voice from reference audio clips. */
+  cloneVoice(request: any): Promise<any>
+  /** r" List all voices known to this provider. */
+  listVoices(): Promise<any>
+  /** r" Delete a previously-cloned voice. */
+  deleteVoice(voice: any): Promise<any>
+}
+export type JsVcProvider = VcProvider
+
+/**
  * r" Base class for video generation providers.
  * r"
  * r" Subclass and override `textToVideo()` and `imageToVideo()` to
@@ -6282,6 +6677,28 @@ export declare class Workflow {
    * awkward parallel-arrays signature into a single class instance.
    */
   addParallelSubworkflowsObj(step: ParallelSubWorkflowsStep): void
+  /**
+   * Register a sub-pipeline step that delegates to a `Pipeline`.
+   * Mirrors [`blazen_core::WorkflowBuilder::add_subpipeline_step`] and is
+   * the pipeline analogue of [`Self::add_subworkflow_step`].
+   *
+   * - `name`: human-readable step name.
+   * - `accepts`: array of event type strings this step handles.
+   * - `emits`: array of event type strings this step may emit (informational).
+   * - `inner`: the child `Pipeline` to run (cloned at registration time,
+   *   so it must not have been consumed by `start`/`run`/`resume`).
+   * - `timeoutSecs`: optional wall-clock timeout for the child run.
+   * - `retryConfig`: optional retry policy for the child run.
+   */
+  addSubpipelineStep(name: string, accepts: Array<string>, emits: Array<string>, inner: Pipeline, timeoutSecs?: number | undefined | null, retryConfig?: JsRetryConfig | undefined | null): void
+  /**
+   * Register a pre-built [`SubPipelineStep`] wrapper.
+   *
+   * Object-form of [`Self::add_subpipeline_step`]: the same step instance
+   * can be reused across multiple workflows since its inner child pipeline
+   * is captured in `Arc<dyn SubExecutable>` form at construction time.
+   */
+  addSubpipelineStepObj(step: SubPipelineStep): void
   /**
    * Add a step to the workflow.
    *
@@ -6841,6 +7258,35 @@ export declare function audioInput(name: string, description: string): any
 /** Build a JSON Schema declaring a single required CAD-file-handle input. */
 export declare function cadInput(name: string, description: string): any
 
+/**
+ * The capability a provider serves. Mirrors
+ * [`blazen_llm::providers::CapabilityKind`].
+ */
+export declare const enum CapabilityKind {
+  /** Large language model — chat / completion / streaming. */
+  Llm = 'Llm',
+  /** Text-to-speech audio synthesis. */
+  Tts = 'Tts',
+  /** Speech-to-text transcription. */
+  Stt = 'Stt',
+  /** Text-to-music / text-to-sfx audio generation. */
+  Music = 'Music',
+  /** Voice conversion. */
+  Vc = 'Vc',
+  /** 3D mesh generation. */
+  ThreeD = 'ThreeD',
+  /** 2D image generation. */
+  ImageGen = 'ImageGen',
+  /** Vector embedding generation. */
+  Embedding = 'Embedding',
+  /** Neural audio codec. */
+  Codec = 'Codec',
+  /** Background removal on existing images. */
+  BackgroundRemoval = 'BackgroundRemoval',
+  /** Video generation. */
+  Video = 'Video'
+}
+
 /** Configuration passed to any capability provider constructor. */
 export interface CapabilityProviderConfig {
   /** Short identifier for this provider (e.g. `"elevenlabs"`, `"fal"`). */
@@ -7143,6 +7589,28 @@ export interface EventEnvelope {
  * LLM-generated text. Returns the artifacts in source order.
  */
 export declare function extractInlineArtifacts(content: string): Array<JsArtifact>
+
+/**
+ * Configuration for the faster-whisper (`CTranslate2`) STT backend.
+ *
+ * Mirrors [`blazen_llm::FasterWhisperConfig`]. All fields are optional;
+ * unset fields fall back to the upstream defaults
+ * (`Systran/faster-whisper-tiny`, HF download on first use).
+ */
+export interface FasterWhisperConfig {
+  /** Hugging Face repo id for the `CTranslate2` Whisper bundle. */
+  modelId?: string
+  /**
+   * Local path to a pre-downloaded bundle directory. When unset, the
+   * bundle is fetched from Hugging Face on first transcription.
+   */
+  modelDir?: string
+  /**
+   * Optional Hugging Face Hub revision pin (branch, tag, or commit
+   * SHA).
+   */
+  revision?: string
+}
 
 /**
  * Fetch a single model's pricing from `DEFAULT_MODEL_PRICING_URL_BASE` using
@@ -9721,6 +10189,20 @@ export declare function lookupPricing(modelId: string): JsModelPricing | null
 export declare function lookupStepBuilder(stepId: string): boolean
 
 /**
+ * The decision returned by a loop stage's `until` predicate after each round.
+ *
+ * - `Continue`: run the inner stage again (subject to the `maxIterations`
+ *   cap).
+ * - `Done`: stop looping cleanly; the loop stage succeeds.
+ * - `Abort`: stop looping with an error.
+ */
+export declare const enum LoopDecision {
+  Continue = 'Continue',
+  Done = 'Done',
+  Abort = 'Abort'
+}
+
+/**
  * Tagged-union mirror of [`blazen_llm::types::MessageContent`].
  *
  * `kind` is one of:
@@ -10150,6 +10632,27 @@ export declare const enum ProviderId {
 }
 
 /**
+ * Static metadata describing a provider instance. Mirrors
+ * [`blazen_llm::providers::ProviderMetadata`].
+ */
+export interface ProviderMetadata {
+  /**
+   * Canonical provider identifier — stable across binding surfaces
+   * (e.g. `"openai"`, `"fal"`, `"spark-tts"`).
+   */
+  providerId: string
+  /** What this provider does. */
+  capability: CapabilityKind
+  /**
+   * Optional human-readable name shown in UIs / logs. Defaults to
+   * `providerId` when unset.
+   */
+  displayName?: string
+  /** Optional version pin — typically the model id / weights revision. */
+  version?: string
+}
+
+/**
  * Optional hints attached to a `put` call.
  *
  * Mirrors [`blazen_llm::content::ContentHint`] minus its builder API. Every
@@ -10270,6 +10773,17 @@ export declare function registerEventDeserializer(name: string, deserializer: De
  * (i.e. carry `id`, `provider`, `capabilities`, optional `pricing`, …).
  */
 export declare function registerFromModelInfo(info: any): void
+
+/**
+ * Register the process-wide native-event serializer hook.
+ *
+ * Installs the Node serializer (see [`node_native_to_json`]) used by
+ * [`DynamicEvent.toJson`](blazen_events::DynamicEvent) to lazily materialize
+ * native-backed events. Idempotent — the first registration wins. This is
+ * invoked automatically at module load, but is exposed for API parity with
+ * the other language bindings.
+ */
+export declare function registerNativeSerializer(): void
 
 /**
  * Register (or overwrite) pricing for a model.
@@ -10528,6 +11042,25 @@ export declare function simhashFromHex(hex: string): string
  */
 export declare function simhashToHex(value: string): string
 
+/**
+ * Configuration for the Spark-TTS backend.
+ *
+ * Mirrors [`blazen_llm::SparkTtsConfig`]. All fields are optional; unset
+ * fields fall back to the upstream defaults
+ * (`SparkAudio/Spark-TTS-0.5B`, HF download on first use).
+ */
+export interface SparkTtsConfig {
+  /** Hugging Face repo id for the Spark-TTS bundle. */
+  modelId?: string
+  /**
+   * Pre-resolved bundle directory. When unset, the bundle is
+   * downloaded and cached on first synthesis.
+   */
+  modelDir?: string
+  /** Optional revision (branch / tag / commit SHA) to pin against. */
+  revision?: string
+}
+
 /** Options for constructing a [`JsStartEventClass`] from JavaScript. */
 export interface StartEventOptions {
   /** Arbitrary payload passed into the workflow at start. */
@@ -10705,6 +11238,27 @@ export interface ToolOutput {
    * from `data`.
    */
   llmOverride?: LlmPayload
+}
+
+/**
+ * Runtime configuration for the tracing wrapper installed by
+ * [`JsModel::with_tracing`](JsModel::with_tracing).
+ *
+ * Defaults are privacy-safe: token counts, model id, provider, and finish
+ * reason are always recorded; the raw prompt + completion message text is
+ * captured only when `captureMessages` is `true`.
+ *
+ * ```javascript
+ * const traced = Model.openai({ apiKey }).withTracingConfig({ captureMessages: true });
+ * ```
+ */
+export interface TracingConfig {
+  /**
+   * Capture raw prompt + completion message text as span attributes
+   * (`llm.input_messages` / `llm.output_messages`). Defaults to `false`.
+   * Leave off for privacy-sensitive deployments.
+   */
+  captureMessages?: boolean
 }
 
 /**

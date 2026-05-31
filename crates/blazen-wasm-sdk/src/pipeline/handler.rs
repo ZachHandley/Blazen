@@ -18,6 +18,7 @@ use std::cell::RefCell;
 use std::pin::Pin;
 use std::rc::Rc;
 
+use blazen_events::InputResponseEvent;
 use futures_util::StreamExt;
 use serde::Serialize;
 use wasm_bindgen::prelude::*;
@@ -114,6 +115,11 @@ impl WasmPipelineHandler {
     /// ([`PipelineError`](blazen_pipeline::PipelineError)).
     #[wasm_bindgen]
     pub async fn result(&self) -> Result<WasmPipelineResult, JsValue> {
+        // Give the spawn_local'd executor a chance to make progress before
+        // we park on the result channel. Required for workerd — see
+        // `crate::handler::yield_to_js` for the full explanation.
+        crate::handler::yield_to_js().await;
+
         let handler = self
             .inner
             .borrow_mut()
@@ -145,10 +151,10 @@ impl WasmPipelineHandler {
 
     /// Resume a paused pipeline in place.
     ///
-    /// Currently a no-op at the upstream pipeline level (see
-    /// [`PipelineHandler::resume_in_place`](blazen_pipeline::PipelineHandler::resume_in_place));
-    /// kept on the JS surface so callers can wire it up ahead of upstream
-    /// support landing.
+    /// Forwards to the active stage's inner workflow handler(s) (see
+    /// [`PipelineHandler::resume_in_place`](blazen_pipeline::PipelineHandler::resume_in_place)),
+    /// unparking a stage that auto-parked on an `InputRequestEvent` (or was
+    /// paused). A no-op between stages, where nothing is parked.
     ///
     /// # Errors
     ///
@@ -165,18 +171,23 @@ impl WasmPipelineHandler {
 
     /// Capture a snapshot without stopping the pipeline.
     ///
-    /// Mirrors [`PipelineHandler::snapshot`](blazen_pipeline::PipelineHandler::snapshot),
-    /// which is currently stubbed upstream and always returns
-    /// `ChannelClosed`. Surfaced here for forward-compatibility so JS
-    /// callers can adopt the API now.
+    /// Mirrors [`PipelineHandler::snapshot`](blazen_pipeline::PipelineHandler::snapshot):
+    /// the executor builds a [`PipelineSnapshot`](blazen_pipeline::PipelineSnapshot)
+    /// from the live stage results and shared state and replies, while the
+    /// pipeline keeps running. For a quiescent snapshot, use
+    /// [`pause`](Self::pause) instead.
     ///
     /// # Errors
     ///
-    /// Currently always returns a `JsValue` error wrapping
-    /// [`PipelineError::ChannelClosed`](blazen_pipeline::PipelineError);
-    /// also returns an error if the handler has already been consumed.
+    /// Returns a `JsValue` error if the handler has already been consumed
+    /// or the pipeline has already terminated.
     #[wasm_bindgen]
     pub async fn snapshot(&self) -> Result<WasmPipelineSnapshot, JsValue> {
+        // Yield first so the spawn_local'd executor can advance to a point
+        // where it can service the snapshot control message. See
+        // `crate::handler::yield_to_js` for the workerd-specific rationale.
+        crate::handler::yield_to_js().await;
+
         // `PipelineHandler::snapshot` only borrows `&self`, so take the
         // handler out of its slot for the duration of the `.await` to
         // avoid holding a `RefCell` borrow across the await point
@@ -213,6 +224,108 @@ impl WasmPipelineHandler {
             .as_ref()
             .ok_or_else(|| JsValue::from_str("PipelineHandler already consumed"))?;
         handler.abort().map_err(pipeline_err)
+    }
+
+    /// Deliver a human-in-the-loop response to the active stage's inner
+    /// workflow.
+    ///
+    /// Mirrors [`PipelineHandler::respond_to_input`](blazen_pipeline::PipelineHandler::respond_to_input):
+    /// for a sequential stage this targets the one in-flight workflow; for a
+    /// parallel stage the response is broadcast to every live branch, where
+    /// the workflow that requested input consumes it and the others ignore a
+    /// response they did not request. JS callers pass the matching
+    /// `request_id` (from the original `InputRequestEvent`) and any
+    /// JSON-serialisable response value.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if the handler was already consumed, the
+    /// response payload can't be deserialised, or the pipeline has already
+    /// terminated.
+    #[wasm_bindgen(js_name = "respondToInput")]
+    pub fn respond_to_input(&self, request_id: String, response: JsValue) -> Result<(), JsValue> {
+        let inner = self.inner.borrow();
+        let handler = inner
+            .as_ref()
+            .ok_or_else(|| JsValue::from_str("PipelineHandler already consumed"))?;
+
+        // `undefined` collapses to `null` so callers can omit a payload.
+        let response_json: serde_json::Value = if response.is_undefined() {
+            serde_json::Value::Null
+        } else {
+            serde_wasm_bindgen::from_value(response)
+                .map_err(|e| JsValue::from_str(&format!("invalid response payload: {e}")))?
+        };
+
+        let event = InputResponseEvent {
+            request_id,
+            response: response_json,
+        };
+
+        handler.respond_to_input(event).map_err(pipeline_err)
+    }
+
+    /// Snapshot the pipeline's current aggregated token usage.
+    ///
+    /// Mirrors [`PipelineHandler::usage_total`](blazen_pipeline::PipelineHandler::usage_total).
+    /// Safe to call at any point during or after the run; reflects the
+    /// totals folded in by every completed stage plus live per-event deltas
+    /// from the active stage. After [`result`](Self::result) has returned,
+    /// the value matches the result's `usageTotal` field. Returned as a
+    /// plain JS object (`{ promptTokens, completionTokens, totalTokens, ... }`).
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if the handler was already consumed or
+    /// marshalling fails.
+    #[wasm_bindgen(js_name = "usageTotal")]
+    pub async fn usage_total(&self) -> Result<JsValue, JsValue> {
+        // Yield so the spawn_local'd executor can fold in any pending
+        // stage-boundary usage deltas before we read the aggregate. See
+        // `crate::handler::yield_to_js`.
+        crate::handler::yield_to_js().await;
+
+        // Take the handler out of its slot so we don't hold a `RefCell`
+        // borrow across the `.await`; restore it unconditionally.
+        // Single-threaded wasm makes the empty window unobservable.
+        let handler = self
+            .inner
+            .borrow_mut()
+            .take()
+            .ok_or_else(|| JsValue::from_str("PipelineHandler already consumed"))?;
+
+        let usage = handler.usage_total().await;
+
+        *self.inner.borrow_mut() = Some(handler);
+
+        marshal_to_js(&usage)
+    }
+
+    /// Snapshot the pipeline's current aggregated cost in USD.
+    ///
+    /// Mirrors [`PipelineHandler::cost_total_usd`](blazen_pipeline::PipelineHandler::cost_total_usd).
+    /// After [`result`](Self::result) has returned, the value matches the
+    /// result's `costTotalUsd` field.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if the handler was already consumed.
+    #[wasm_bindgen(js_name = "costTotalUsd")]
+    pub async fn cost_total_usd(&self) -> Result<f64, JsValue> {
+        // Yield so the executor can fold in pending cost deltas first.
+        crate::handler::yield_to_js().await;
+
+        let handler = self
+            .inner
+            .borrow_mut()
+            .take()
+            .ok_or_else(|| JsValue::from_str("PipelineHandler already consumed"))?;
+
+        let cost = handler.cost_total_usd().await;
+
+        *self.inner.borrow_mut() = Some(handler);
+
+        Ok(cost)
     }
 
     /// Snapshot the pipeline's current progress without affecting execution.

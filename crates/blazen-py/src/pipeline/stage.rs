@@ -13,7 +13,10 @@ use std::sync::Arc;
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyclass_enum, gen_stub_pymethods};
 
-use blazen_pipeline::{ConditionFn, InputMapperFn, JoinStrategy, ParallelStage, Stage, StageKind};
+use blazen_pipeline::{
+    ConditionFn, InputMapperFn, JoinStrategy, LoopDecision, LoopStage, LoopUntilFn, ParallelStage,
+    Stage, StageKind,
+};
 
 use crate::convert::{json_to_py, py_to_json};
 use crate::pipeline::state::PyPipelineState;
@@ -35,6 +38,83 @@ impl From<PyJoinStrategy> for JoinStrategy {
         match p {
             PyJoinStrategy::WaitAll => Self::WaitAll,
             PyJoinStrategy::FirstCompletes => Self::FirstCompletes,
+        }
+    }
+}
+
+/// The decision returned by a [`LoopStage`]'s ``until`` predicate after each
+/// round.
+///
+/// Construct one of the three variants via the classmethod factories:
+///
+///     >>> LoopDecision.cont()           # run the inner stage again
+///     >>> LoopDecision.done()           # stop cleanly; the loop succeeds
+///     >>> LoopDecision.abort("reason")  # stop with an error
+///
+/// (`cont` is named without a trailing underscore so it reads as
+/// ``LoopDecision.cont()``; ``continue`` is a Python keyword.)
+#[gen_stub_pyclass]
+#[pyclass(name = "LoopDecision", from_py_object)]
+#[derive(Clone)]
+pub struct PyLoopDecision {
+    pub(crate) inner: LoopDecision,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyLoopDecision {
+    /// Run the inner stage again (subject to the ``max_iterations`` cap).
+    #[classmethod]
+    #[pyo3(name = "cont")]
+    fn cont(_cls: &Bound<'_, pyo3::types::PyType>) -> Self {
+        Self {
+            inner: LoopDecision::Continue,
+        }
+    }
+
+    /// Stop looping cleanly; the loop stage succeeds.
+    #[classmethod]
+    fn done(_cls: &Bound<'_, pyo3::types::PyType>) -> Self {
+        Self {
+            inner: LoopDecision::Done,
+        }
+    }
+
+    /// Stop looping with an error carrying the given reason.
+    #[classmethod]
+    fn abort(_cls: &Bound<'_, pyo3::types::PyType>, reason: String) -> Self {
+        Self {
+            inner: LoopDecision::Abort(reason),
+        }
+    }
+
+    /// ``True`` if this decision is [`LoopDecision.cont`].
+    #[getter]
+    fn is_continue(&self) -> bool {
+        matches!(self.inner, LoopDecision::Continue)
+    }
+
+    /// ``True`` if this decision is [`LoopDecision.done`].
+    #[getter]
+    fn is_done(&self) -> bool {
+        matches!(self.inner, LoopDecision::Done)
+    }
+
+    /// The abort reason if this decision is [`LoopDecision.abort`], else
+    /// ``None``.
+    #[getter]
+    fn abort_reason(&self) -> Option<String> {
+        match &self.inner {
+            LoopDecision::Abort(reason) => Some(reason.clone()),
+            _ => None,
+        }
+    }
+
+    fn __repr__(&self) -> String {
+        match &self.inner {
+            LoopDecision::Continue => "LoopDecision.cont()".to_owned(),
+            LoopDecision::Done => "LoopDecision.done()".to_owned(),
+            LoopDecision::Abort(reason) => format!("LoopDecision.abort({reason:?})"),
         }
     }
 }
@@ -170,13 +250,112 @@ impl PyParallelStage {
     }
 }
 
-/// A stage in a pipeline -- either sequential or parallel.
+/// The inner stage wrapped by a [`LoopStage`] -- either sequential or
+/// parallel.
+pub(crate) enum PyLoopInner {
+    Sequential(Py<PyStage>),
+    Parallel(Py<PyParallelStage>),
+}
+
+/// A loop stage that re-runs an inner stage until a predicate signals
+/// completion (or a maximum iteration count is reached).
+///
+/// The inner stage may be a [`Stage`] or a [`ParallelStage`]; the ``until``
+/// predicate is evaluated after each round with the current
+/// :class:`PipelineState` and the number of rounds completed so far (1-based),
+/// returning a :class:`LoopDecision`.
+///
+/// Example:
+///     >>> def keep_going(state, rounds):
+///     ...     if rounds >= 5:
+///     ...         return LoopDecision.done()
+///     ...     return LoopDecision.cont()
+///     >>>
+///     >>> refine = LoopStage(
+///     ...     name="refine",
+///     ...     max_iterations=10,
+///     ...     inner=refine_stage,
+///     ...     until=keep_going,
+///     ... )
+#[gen_stub_pyclass]
+#[pyclass(name = "LoopStage")]
+pub struct PyLoopStage {
+    pub(crate) name: String,
+    pub(crate) max_iterations: u32,
+    pub(crate) inner: PyLoopInner,
+    pub(crate) until: Py<PyAny>,
+}
+
+#[gen_stub_pymethods]
+#[pymethods]
+impl PyLoopStage {
+    /// Create a new loop stage.
+    ///
+    /// Args:
+    ///     name: Human-readable name for the loop stage (used in results
+    ///         and event provenance).
+    ///     max_iterations: Hard cap on the number of rounds. The loop stops
+    ///         once this many rounds have run even if ``until`` never
+    ///         returns ``LoopDecision.done()``.
+    ///     inner: The inner ``Stage`` or ``ParallelStage`` to run each round.
+    ///     until: Callable ``(state: PipelineState, rounds: int) ->
+    ///         LoopDecision`` evaluated after each round. ``rounds`` is the
+    ///         1-based count of rounds completed so far.
+    #[new]
+    #[pyo3(signature = (name, max_iterations, inner, until))]
+    fn new(
+        py: Python<'_>,
+        name: &str,
+        max_iterations: u32,
+        inner: Py<PyAny>,
+        until: Py<PyAny>,
+    ) -> PyResult<Self> {
+        let bound = inner.bind(py);
+        let inner = if let Ok(stage) = bound.cast::<PyStage>() {
+            PyLoopInner::Sequential(stage.clone().unbind())
+        } else if let Ok(parallel) = bound.cast::<PyParallelStage>() {
+            PyLoopInner::Parallel(parallel.clone().unbind())
+        } else {
+            return Err(pyo3::exceptions::PyTypeError::new_err(
+                "LoopStage `inner` must be a Stage or ParallelStage",
+            ));
+        };
+        Ok(Self {
+            name: name.to_owned(),
+            max_iterations,
+            inner,
+            until,
+        })
+    }
+
+    /// The stage's name.
+    #[getter]
+    fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// The hard cap on the number of rounds.
+    #[getter]
+    fn max_iterations(&self) -> u32 {
+        self.max_iterations
+    }
+
+    fn __repr__(&self) -> String {
+        format!(
+            "LoopStage(name={:?}, max_iterations={})",
+            self.name, self.max_iterations
+        )
+    }
+}
+
+/// A stage in a pipeline -- sequential, parallel, or a loop.
 #[gen_stub_pyclass_enum]
 #[pyclass(name = "StageKind", eq, eq_int, from_py_object)]
 #[derive(Clone, Copy, PartialEq, Eq)]
 pub enum PyStageKind {
     Sequential,
     Parallel,
+    Loop,
 }
 
 // ---------------------------------------------------------------------------
@@ -234,6 +413,7 @@ pub(crate) fn build_rust_parallel_stage(
 pub(crate) enum PendingStage {
     Sequential(Py<PyStage>),
     Parallel(Py<PyParallelStage>),
+    Loop(Py<PyLoopStage>),
 }
 
 impl PendingStage {
@@ -253,8 +433,43 @@ impl PendingStage {
                     py, &parallel, locals,
                 )?))
             }
+            PendingStage::Loop(l) => {
+                let loop_stage = l.borrow(py);
+                Ok(StageKind::Loop(build_rust_loop_stage(
+                    py,
+                    &loop_stage,
+                    locals,
+                )?))
+            }
         }
     }
+}
+
+/// Build a Rust `LoopStage` from a `PyLoopStage`, materializing the inner
+/// stage and bridging the Python `until` callback into a [`LoopUntilFn`].
+pub(crate) fn build_rust_loop_stage(
+    py: Python<'_>,
+    loop_stage: &PyLoopStage,
+    locals: &pyo3_async_runtimes::TaskLocals,
+) -> PyResult<LoopStage> {
+    let inner = match &loop_stage.inner {
+        PyLoopInner::Sequential(s) => {
+            let stage = s.borrow(py);
+            StageKind::Sequential(build_rust_stage(py, &stage, locals)?)
+        }
+        PyLoopInner::Parallel(p) => {
+            let parallel = p.borrow(py);
+            StageKind::Parallel(build_rust_parallel_stage(py, &parallel, locals)?)
+        }
+    };
+    let until = build_loop_until(loop_stage.until.clone_ref(py));
+    Ok(LoopStage {
+        name: loop_stage.name.clone(),
+        max_iterations: loop_stage.max_iterations,
+        inner: Box::new(inner),
+        until,
+        on_round_complete: None,
+    })
 }
 
 #[allow(unsafe_code)]
@@ -296,6 +511,37 @@ fn build_condition(callback: Py<PyAny>) -> ConditionFn {
                 Err(e) => {
                     e.print(py);
                     false
+                }
+            }
+        })
+    })
+}
+
+#[allow(unsafe_code)]
+fn build_loop_until(callback: Py<PyAny>) -> LoopUntilFn {
+    let callback = Arc::new(callback);
+    Arc::new(move |state, rounds| -> LoopDecision {
+        let cb = Arc::clone(&callback);
+        Python::attach(|py| -> LoopDecision {
+            // SAFETY: `state` is a borrowed reference valid for the duration
+            // of this closure call. `PyPipelineState` does not escape the
+            // closure call.
+            let state_view = unsafe { PyPipelineState::from_ref(state) };
+            let Ok(py_state) = Py::new(py, state_view) else {
+                return LoopDecision::Abort(
+                    "failed to construct PipelineState view for loop predicate".to_owned(),
+                );
+            };
+            match cb.call1(py, (py_state, rounds)) {
+                Ok(result) => match result.bind(py).cast::<PyLoopDecision>() {
+                    Ok(decision) => decision.borrow().inner.clone(),
+                    Err(_) => LoopDecision::Abort(
+                        "loop `until` callback did not return a LoopDecision".to_owned(),
+                    ),
+                },
+                Err(e) => {
+                    e.print(py);
+                    LoopDecision::Abort("loop `until` callback raised an exception".to_owned())
                 }
             }
         })

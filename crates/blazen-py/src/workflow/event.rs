@@ -673,6 +673,27 @@ pub fn install_native_serializer() {
     blazen_events::register_native_serializer(py_native_to_json);
 }
 
+/// Register the process-wide native-event serializer hook.
+///
+/// The Python binding installs its own native serializer automatically when
+/// the module is imported (see the ``#[pymodule]`` initializer), so calling
+/// this is normally unnecessary. It is exposed for parity with
+/// [`blazen_events::register_native_serializer`] and as an explicit,
+/// idempotent way to (re)assert that the hook is installed — subsequent calls
+/// are no-ops because the first registration wins.
+///
+/// Python usage:
+/// ```python
+/// import blazen
+///
+/// blazen.register_native_serializer()
+/// ```
+#[gen_stub_pyfunction]
+#[pyfunction]
+pub fn register_native_serializer() {
+    install_native_serializer();
+}
+
 // ---------------------------------------------------------------------------
 // Module-level free functions: deserializer registry / type interning
 // ---------------------------------------------------------------------------

@@ -22,6 +22,7 @@ use blazen_llm::types::{ModelRequest, ToolDefinition};
 
 use crate::chat_message::js_messages_to_vec;
 
+pub mod abc;
 pub mod anthropic;
 pub mod api_protocol;
 pub mod azure;
@@ -36,6 +37,10 @@ pub mod openai;
 pub mod openai_compat;
 pub mod typed_tool;
 
+pub use abc::{
+    WasmBaseProviderAbc, WasmCapabilityKind, WasmEmbeddingProvider, WasmImageGenProvider,
+    WasmLLMProvider, WasmProviderMetadata,
+};
 pub use anthropic::WasmAnthropicProvider;
 pub use api_protocol::WasmApiProtocol;
 pub use azure::WasmAzureOpenAiProvider;

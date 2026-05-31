@@ -3,6 +3,7 @@
 pub mod builder;
 pub mod event;
 pub mod handler;
+pub mod loop_stage;
 #[allow(clippy::module_inception)]
 pub mod pipeline;
 pub mod progress;
@@ -12,6 +13,7 @@ pub mod stage;
 pub use builder::JsPipelineBuilder;
 pub use event::JsPipelineEvent;
 pub use handler::JsPipelineHandler;
+pub use loop_stage::{JsLoopDecision, JsLoopStage};
 pub use pipeline::JsPipeline;
 pub use progress::JsProgressSnapshot;
 pub use snapshot::{JsActiveWorkflowSnapshot, JsPipelineResult, JsPipelineSnapshot, JsStageResult};

@@ -11,6 +11,7 @@ pub mod session_ref;
 pub mod snapshot;
 pub mod step;
 pub mod step_registry;
+pub mod sub_executable;
 pub mod value;
 
 #[cfg(feature = "distributed")]
@@ -22,4 +23,5 @@ pub use step_registry::{
     JsStepDeserializerRegistry, lookup_step_builder_ids, register_step_builder_id,
     registered_step_builder_ids,
 };
+pub use sub_executable::JsSubExecutable;
 pub use value::{JsBytesWrapper, JsStateValue, JsStateValueKind};

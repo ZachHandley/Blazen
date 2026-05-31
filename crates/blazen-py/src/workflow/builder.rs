@@ -17,6 +17,7 @@ use blazen_llm::retry::RetryConfig;
 
 use super::subworkflow::{PyParallelSubWorkflowsStep, PySubWorkflowStep};
 use super::workflow::{PySessionPausePolicy, PyWorkflow};
+use crate::pipeline::subpipeline::PySubPipelineStep;
 use crate::providers::config::PyRetryConfig;
 
 /// Fluent builder for a [`Workflow`].
@@ -39,6 +40,7 @@ pub struct PyWorkflowBuilder {
     pub(crate) steps: Vec<Py<super::step::PyStepWrapper>>,
     pub(crate) subworkflow_steps: Vec<Py<PySubWorkflowStep>>,
     pub(crate) parallel_subworkflow_steps: Vec<Py<PyParallelSubWorkflowsStep>>,
+    pub(crate) subpipeline_steps: Vec<Py<PySubPipelineStep>>,
     pub(crate) timeout: Option<f64>,
     pub(crate) timeout_set: bool,
     pub(crate) session_pause_policy: PySessionPausePolicy,
@@ -67,6 +69,7 @@ impl PyWorkflowBuilder {
             steps: Vec::new(),
             subworkflow_steps: Vec::new(),
             parallel_subworkflow_steps: Vec::new(),
+            subpipeline_steps: Vec::new(),
             timeout: Some(300.0),
             timeout_set: false,
             session_pause_policy: PySessionPausePolicy::PickleOrError,
@@ -114,6 +117,16 @@ impl PyWorkflowBuilder {
         step: Py<PyParallelSubWorkflowsStep>,
     ) -> Py<Self> {
         slf.parallel_subworkflow_steps.push(step);
+        slf.into()
+    }
+
+    /// Register a `SubPipelineStep` that delegates to a child pipeline.
+    ///
+    /// Mirrors `blazen_core::WorkflowBuilder::add_subpipeline_step`. The
+    /// embedded pipeline runs to completion as a single step and its
+    /// `final_output` is surfaced to the parent workflow.
+    fn add_subpipeline_step(mut slf: PyRefMut<'_, Self>, step: Py<PySubPipelineStep>) -> Py<Self> {
+        slf.subpipeline_steps.push(step);
         slf.into()
     }
 
@@ -210,6 +223,7 @@ impl PyWorkflowBuilder {
         if self.steps.is_empty()
             && self.subworkflow_steps.is_empty()
             && self.parallel_subworkflow_steps.is_empty()
+            && self.subpipeline_steps.is_empty()
         {
             return Err(pyo3::exceptions::PyValueError::new_err(
                 "workflow must have at least one step",
@@ -230,6 +244,11 @@ impl PyWorkflowBuilder {
             .iter()
             .map(|s| s.clone_ref(py))
             .collect();
+        let subpipeline_steps: Vec<Py<PySubPipelineStep>> = self
+            .subpipeline_steps
+            .iter()
+            .map(|s| s.clone_ref(py))
+            .collect();
 
         let mut wf = PyWorkflow::from_parts(
             self.name.clone(),
@@ -239,6 +258,7 @@ impl PyWorkflowBuilder {
         );
         wf.set_subworkflow_steps(subworkflow_steps);
         wf.set_parallel_subworkflow_steps(parallel_subworkflow_steps);
+        wf.set_subpipeline_steps(subpipeline_steps);
         wf.set_auto_publish_events(self.auto_publish_events);
         if self.retry_config_set {
             wf.set_retry_config(self.retry_config.clone());

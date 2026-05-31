@@ -68,6 +68,11 @@ fn init() {
         )
         .with_writer(std::io::stderr)
         .try_init();
+
+    // Install the native-event serializer hook so DynamicEvents lazily
+    // materialize to JSON via the registered fallback. First registration
+    // wins; subsequent calls are no-ops.
+    crate::workflow::native_passthrough::install_native_serializer();
 }
 
 /// Returns the version of the blazen library.

@@ -222,6 +222,8 @@ pub struct JsWorkflow {
     /// Parallel sub-workflow fan-outs registered via
     /// [`Self::add_parallel_subworkflows`] (Wave 5).
     parallel_subworkflow_steps: Vec<JsParallelSubWorkflowsInner>,
+    /// Sub-pipeline steps registered via [`Self::add_subpipeline_step`].
+    subpipeline_steps: Vec<JsSubPipelineStepInner>,
     session_pause_policy: JsSessionPausePolicy,
     auto_publish_events: bool,
 }
@@ -247,6 +249,17 @@ struct JsParallelSubWorkflowsInner {
     join_strategy: blazen_core::JoinStrategy,
 }
 
+/// Internal record for a sub-pipeline step pending registration.
+#[derive(Clone)]
+struct JsSubPipelineStepInner {
+    name: String,
+    accepts: Vec<String>,
+    emits: Vec<String>,
+    executable: Arc<dyn blazen_core::SubExecutable>,
+    timeout_secs: Option<f64>,
+    retry_config: Option<blazen_llm::retry::RetryConfig>,
+}
+
 #[napi]
 #[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 impl JsWorkflow {
@@ -260,6 +273,7 @@ impl JsWorkflow {
             retry_config: None,
             subworkflow_steps: Vec::new(),
             parallel_subworkflow_steps: Vec::new(),
+            subpipeline_steps: Vec::new(),
             session_pause_policy: JsSessionPausePolicy::PickleOrError,
             // Mirror the Rust `WorkflowBuilder` default (Wave 7).
             auto_publish_events: true,
@@ -452,6 +466,63 @@ impl JsWorkflow {
                 branches,
                 join_strategy: join_core,
             });
+        Ok(())
+    }
+
+    /// Register a sub-pipeline step that delegates to a `Pipeline`.
+    /// Mirrors [`blazen_core::WorkflowBuilder::add_subpipeline_step`] and is
+    /// the pipeline analogue of [`Self::add_subworkflow_step`].
+    ///
+    /// - `name`: human-readable step name.
+    /// - `accepts`: array of event type strings this step handles.
+    /// - `emits`: array of event type strings this step may emit (informational).
+    /// - `inner`: the child `Pipeline` to run (cloned at registration time,
+    ///   so it must not have been consumed by `start`/`run`/`resume`).
+    /// - `timeoutSecs`: optional wall-clock timeout for the child run.
+    /// - `retryConfig`: optional retry policy for the child run.
+    #[napi(js_name = "addSubpipelineStep")]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn add_subpipeline_step(
+        &mut self,
+        name: String,
+        accepts: Vec<String>,
+        emits: Vec<String>,
+        inner: &crate::pipeline::pipeline::JsPipeline,
+        timeout_secs: Option<f64>,
+        retry_config: Option<crate::generated::JsRetryConfig>,
+    ) -> Result<()> {
+        let pipeline = inner.clone_inner()?;
+        let executable: Arc<dyn blazen_core::SubExecutable> = Arc::new(pipeline);
+        self.subpipeline_steps.push(JsSubPipelineStepInner {
+            name,
+            accepts,
+            emits,
+            executable,
+            timeout_secs,
+            retry_config: retry_config.map(Into::into),
+        });
+        Ok(())
+    }
+
+    /// Register a pre-built [`SubPipelineStep`] wrapper.
+    ///
+    /// Object-form of [`Self::add_subpipeline_step`]: the same step instance
+    /// can be reused across multiple workflows since its inner child pipeline
+    /// is captured in `Arc<dyn SubExecutable>` form at construction time.
+    #[napi(js_name = "addSubpipelineStepObj")]
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn add_subpipeline_step_obj(
+        &mut self,
+        step: &crate::workflow::subpipeline_step::JsSubPipelineStep,
+    ) -> Result<()> {
+        self.subpipeline_steps.push(JsSubPipelineStepInner {
+            name: step.name.clone(),
+            accepts: step.accepts.clone(),
+            emits: step.emits.clone(),
+            executable: Arc::clone(&step.executable),
+            timeout_secs: step.timeout_secs,
+            retry_config: step.retry_config.clone(),
+        });
         Ok(())
     }
 
@@ -709,6 +780,10 @@ impl JsWorkflow {
             builder = builder.add_parallel_subworkflows(make_parallel_subworkflows_step(par));
         }
 
+        for sub in &self.subpipeline_steps {
+            builder = builder.add_subpipeline_step(make_subpipeline_step(sub));
+        }
+
         builder = builder.session_pause_policy(self.session_pause_policy.into());
         builder = builder.auto_publish_events(self.auto_publish_events);
 
@@ -745,6 +820,28 @@ fn make_subworkflow_step(sub: &JsSubWorkflowStepInner) -> blazen_core::SubWorkfl
         timeout: sub.timeout_secs.map(Duration::from_secs_f64),
         retry_config: sub.retry_config.as_ref().map(|c| Arc::new(c.clone())),
     }
+}
+
+fn make_subpipeline_step(sub: &JsSubPipelineStepInner) -> blazen_core::SubPipelineStep {
+    let accepts: Vec<&'static str> = sub.accepts.iter().map(|s| intern_event_type(s)).collect();
+    let emits: Vec<&'static str> = sub.emits.iter().map(|s| intern_event_type(s)).collect();
+
+    // Default JSON-passthrough mappers: the parent event's `to_json()` flows
+    // into the child pipeline, and the child's `final_output` is wrapped in a
+    // `DynamicEvent` named `"<stepName>::output"` for the parent.
+    let mut step = blazen_core::SubPipelineStep::with_json_mappers(
+        sub.name.clone(),
+        accepts,
+        emits,
+        Arc::clone(&sub.executable),
+    );
+    if let Some(secs) = sub.timeout_secs {
+        step = step.with_timeout(Duration::from_secs_f64(secs));
+    }
+    if let Some(cfg) = sub.retry_config.as_ref() {
+        step = step.with_retry_config(cfg.clone());
+    }
+    step
 }
 
 fn make_parallel_subworkflows_step(
@@ -1099,6 +1196,7 @@ impl JsWorkflowBuilder {
             retry_config: state.retry_config,
             subworkflow_steps: Vec::new(),
             parallel_subworkflow_steps: Vec::new(),
+            subpipeline_steps: Vec::new(),
             session_pause_policy: state.session_pause_policy,
             auto_publish_events: state.auto_publish_events,
         })

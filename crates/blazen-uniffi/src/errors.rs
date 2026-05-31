@@ -269,8 +269,19 @@ impl From<blazen_core::WorkflowError> for BlazenError {
 
 impl From<blazen_pipeline::PipelineError> for BlazenError {
     fn from(err: blazen_pipeline::PipelineError) -> Self {
-        Self::Workflow {
-            message: err.to_string(),
+        use blazen_pipeline::PipelineError as P;
+        let message = err.to_string();
+        match err {
+            P::ValidationFailed(_) => Self::Validation { message },
+            P::Timeout { elapsed_ms } => Self::Timeout {
+                message,
+                elapsed_ms,
+            },
+            P::Serialization(_) => Self::Validation { message },
+            P::PersistFailed(_) => Self::Persist { message },
+            // StageFailed / Workflow / Paused / Aborted / ChannelClosed all
+            // surface as workflow-execution failures.
+            _ => Self::Workflow { message },
         }
     }
 }

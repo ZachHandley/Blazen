@@ -11,7 +11,7 @@ use wasm_bindgen::prelude::*;
 
 use crate::pipeline::error::pipeline_err;
 use crate::pipeline::handler::WasmPipelineHandler;
-use crate::pipeline::snapshot::WasmPipelineSnapshot;
+use crate::pipeline::snapshot::{WasmPipelineResult, WasmPipelineSnapshot};
 
 /// A validated, ready-to-run pipeline.
 ///
@@ -33,6 +33,25 @@ impl WasmPipeline {
         Self {
             inner: Mutex::new(Some(pipeline)),
         }
+    }
+
+    /// Clone the inner [`blazen_pipeline::Pipeline`] without consuming this
+    /// handle.
+    ///
+    /// Used to embed a built pipeline as a child runner (e.g. via
+    /// [`SubPipelineStep`](crate::sub_executable::WasmSubPipelineStep)) while
+    /// leaving the original handle runnable.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if the pipeline has already been consumed by
+    /// a `start()` / `resume()` call.
+    pub(crate) fn clone_inner(&self) -> Result<blazen_pipeline::Pipeline, JsValue> {
+        let guard = self.inner.lock().expect("poisoned");
+        guard
+            .as_ref()
+            .cloned()
+            .ok_or_else(|| JsValue::from_str("Pipeline already consumed; cannot reuse as a child"))
     }
 }
 
@@ -72,6 +91,71 @@ impl WasmPipeline {
 
         let handler = pipeline.start(input_json);
         Ok(WasmPipelineHandler::new(handler))
+    }
+
+    /// Build and dispatch the pipeline, returning the live
+    /// [`WasmPipelineHandler`] without awaiting the final result.
+    ///
+    /// Functionally identical to [`start`](Self::start); exposed under the
+    /// JS name `runWithHandler` for naming parity with
+    /// [`Workflow.runWithHandler`](crate::workflow). Use either
+    /// interchangeably.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error under the same conditions as
+    /// [`start`](Self::start): the pipeline was already consumed, or the
+    /// input is not JSON-serialisable.
+    #[wasm_bindgen(js_name = "runWithHandler")]
+    pub async fn run_with_handler(&self, input: JsValue) -> Result<WasmPipelineHandler, JsValue> {
+        self.start(input).await
+    }
+
+    /// Run the pipeline to completion and resolve with the final result.
+    ///
+    /// Result shorthand mirroring [`Pipeline::run`](blazen_pipeline::Pipeline::run)
+    /// and [`Workflow.run`](crate::workflow) — equivalent to
+    /// `start(input).result()`. For streaming, pausing, snapshotting, or
+    /// human-in-the-loop input, use [`start`](Self::start) /
+    /// [`runWithHandler`](Self::run_with_handler) and drive the returned
+    /// [`WasmPipelineHandler`].
+    ///
+    /// Consumes the pipeline; a second `run`/`start`/`resume` call errors.
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if:
+    /// - the pipeline has already been consumed,
+    /// - the input cannot be deserialised as JSON, or
+    /// - the pipeline ran to completion with an error
+    ///   ([`PipelineError`](blazen_pipeline::PipelineError)).
+    #[wasm_bindgen]
+    pub async fn run(&self, input: JsValue) -> Result<WasmPipelineResult, JsValue> {
+        let pipeline = {
+            let mut guard = self.inner.lock().expect("poisoned");
+            guard.take().ok_or_else(|| {
+                JsValue::from_str(
+                    "Pipeline already consumed (start() or resume() was already called)",
+                )
+            })?
+        };
+
+        let input_json: serde_json::Value = if input.is_undefined() || input.is_null() {
+            serde_json::Value::Null
+        } else {
+            serde_wasm_bindgen::from_value(input)
+                .map_err(|e| JsValue::from_str(&format!("input must be JSON-serializable: {e}")))?
+        };
+
+        // Dispatch, then yield before parking on the result channel so the
+        // spawn_local'd executor gets an event-loop turn on workerd. (We
+        // can't call `Pipeline::run` directly — it couples `start().result()`
+        // with no yield in between, which would hang on workerd. See
+        // `crate::handler::yield_to_js`.)
+        let handler = pipeline.start(input_json);
+        crate::handler::yield_to_js().await;
+        let result = handler.result().await.map_err(pipeline_err)?;
+        Ok(WasmPipelineResult::from_inner(result))
     }
 
     /// Resume the pipeline from a previously captured snapshot.

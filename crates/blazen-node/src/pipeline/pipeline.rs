@@ -4,7 +4,7 @@ use napi_derive::napi;
 use crate::error::pipeline_error_to_napi;
 use crate::generated::JsRetryConfig;
 use crate::pipeline::handler::JsPipelineHandler;
-use crate::pipeline::snapshot::JsPipelineSnapshot;
+use crate::pipeline::snapshot::{JsPipelineResult, JsPipelineSnapshot};
 
 /// A validated, ready-to-run pipeline.
 #[napi(js_name = "Pipeline")]
@@ -20,6 +20,22 @@ impl JsPipeline {
         Self {
             inner: std::sync::Mutex::new(Some(pipeline)),
         }
+    }
+
+    /// Clone the inner pipeline without consuming this `JsPipeline`.
+    ///
+    /// Used to embed a built pipeline as a [`crate::workflow::subpipeline_step::JsSubPipelineStep`]
+    /// inside a parent workflow. Errors if the pipeline has already been
+    /// consumed by `start`/`run`/`resume`.
+    pub(crate) fn clone_inner(&self) -> Result<blazen_pipeline::Pipeline> {
+        let guard = self.inner.lock().expect("poisoned");
+        guard.as_ref().cloned().ok_or_else(|| {
+            napi::Error::new(
+                napi::Status::GenericFailure,
+                "Pipeline already consumed (start()/run()/resume() was already called) -- \
+                 construct the SubPipelineStep before running the pipeline",
+            )
+        })
     }
 }
 
@@ -47,6 +63,27 @@ impl JsPipeline {
         };
         let handler = pipeline.start(input);
         Ok(JsPipelineHandler::new(handler))
+    }
+
+    /// Execute the pipeline and await its final result in one call.
+    ///
+    /// This is the result-shorthand mirror of [`crate::workflow::JsWorkflow::run`]:
+    /// equivalent to `(await pipeline.start(input)).result()`, but without
+    /// exposing the intermediate handler. Consumes the pipeline -- calling
+    /// `run`/`start`/`resume` a second time errors.
+    #[napi]
+    pub async fn run(&self, input: serde_json::Value) -> Result<JsPipelineResult> {
+        let pipeline = {
+            let mut guard = self.inner.lock().expect("poisoned");
+            guard.take().ok_or_else(|| {
+                napi::Error::new(
+                    napi::Status::GenericFailure,
+                    "Pipeline already consumed (start() or resume() was already called)",
+                )
+            })?
+        };
+        let result = pipeline.run(input).await.map_err(pipeline_error_to_napi)?;
+        Ok(JsPipelineResult::from_inner(result))
     }
 
     /// Inspect the pipeline-level default retry configuration, if any.

@@ -155,9 +155,15 @@ import re
 from pathlib import Path
 p = Path("bindings/go/internal/uniffi/blazen/blazen.go")
 src = p.read_text()
-# Match: dispatch shim signature with `handle C.RustBuffer` parameter
+# Match: dispatch shim signature with `handle C.RustBuffer` parameter.
+# The `, ?` tolerates BOTH spacings uniffi-bindgen-go emits: sync shims use
+# `C.uint64_t, handle` (space) while ASYNC shims (those taking a
+# UniffiForeignFutureComplete* callback) use `C.uint64_t,handle` (no space).
+# Without the optional space the async shim slipped through unpatched and the
+# `handle := uint64(uniffiHandle)` local shadowed the RustBuffer param,
+# producing a Go compile error (`no new variables on left side of :=`).
 sig_pattern = re.compile(
-    r'(func [A-Za-z0-9_]+_cgo_dispatchCallbackInterface[A-Za-z0-9_]+Method\d+\(uniffiHandle C\.uint64_t, )handle( C\.RustBuffer,)'
+    r'(func [A-Za-z0-9_]+_cgo_dispatchCallbackInterface[A-Za-z0-9_]+Method\d+\(uniffiHandle C\.uint64_t, ?)handle( C\.RustBuffer,)'
 )
 # After renaming the parameter, the body needs `handle` → `adapterHandleBuf`
 # inside the FfiConverter lift call. The original body pattern uses
@@ -218,9 +224,9 @@ new_b = (
 )
 count_a = src.count(old_a)
 count_b = src.count(old_b)
-if count_a != 87:
+if count_a != 89:
     sys.exit(
-        f"ERROR: expected 87 'TODO: this is bad' blocks in blazen.go, found {count_a}. "
+        f"ERROR: expected 89 'TODO: this is bad' blocks in blazen.go, found {count_a}. "
         "Upstream uniffi-bindgen-go codegen likely changed — re-audit and update "
         "the patch in scripts/regen-bindings.sh."
     )

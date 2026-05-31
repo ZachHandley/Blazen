@@ -247,6 +247,32 @@ impl WorkflowHandler {
         Arc::clone(&self.session_refs)
     }
 
+    /// Take the result receiver out of the handler so a supervisor can
+    /// await the terminal event WITHOUT consuming the handler.
+    ///
+    /// This leaves the control / stream / usage surface of the handler
+    /// live, so a supervisor (e.g. the pipeline executor) can keep the
+    /// `WorkflowHandler` alive in an [`Arc`] and forward
+    /// [`pause`](Self::pause) / [`resume_in_place`](Self::resume_in_place) /
+    /// [`snapshot`](Self::snapshot) / [`respond_to_input`](Self::respond_to_input)
+    /// to the running workflow while awaiting its result on the returned
+    /// receiver.
+    ///
+    /// Returns `None` if the receiver was already taken (e.g. by a prior
+    /// call to this method or by [`result`](Self::result)).
+    ///
+    /// Note: a supervisor that drives the result via the returned receiver
+    /// bypasses the cleanup chain that [`result`](Self::result) performs
+    /// (event-loop join + broadcast drain). When the supervisor drops the
+    /// `Arc<WorkflowHandler>`, the handler's [`Drop`] sends `Abort` to tear
+    /// down the inner event loop, which is correct once the terminal event
+    /// has already arrived.
+    pub fn take_result_rx(
+        &mut self,
+    ) -> Option<oneshot::Receiver<Result<Box<dyn AnyEvent>, WorkflowError>>> {
+        self.result_rx.take()
+    }
+
     /// Await the final workflow result.
     ///
     /// Consumes the handler. Returns the terminal event (typically a

@@ -1770,3 +1770,413 @@ async fn test_on_event_envelope_receives_events() {
         );
     }
 }
+
+// ---------------------------------------------------------------------------
+// Handle-parity tests: run() shorthand, live snapshot, resume/respond-to-input,
+// usage aggregation, sub-pipeline await.
+// ---------------------------------------------------------------------------
+
+/// Build a workflow whose single step emits a `UsageEvent` on the stream
+/// (with the given token / cost totals) before echoing the input.
+fn usage_emitting_workflow_n(name: &'static str, tokens: u32, cost: f64) -> blazen_core::Workflow {
+    let handler: StepFn = Arc::new(move |event, ctx| {
+        Box::pin(async move {
+            let start = event
+                .as_any()
+                .downcast_ref::<StartEvent>()
+                .expect("expected StartEvent");
+            ctx.write_event_to_stream(blazen_events::UsageEvent {
+                provider: "test".into(),
+                model: "test-model".into(),
+                modality: blazen_events::Modality::Llm,
+                prompt_tokens: tokens,
+                completion_tokens: 0,
+                total_tokens: tokens,
+                reasoning_tokens: 0,
+                cached_input_tokens: 0,
+                audio_input_tokens: 0,
+                audio_output_tokens: 0,
+                image_count: 0,
+                audio_seconds: 0.0,
+                video_seconds: 0.0,
+                cost_usd: Some(cost),
+                latency_ms: 0,
+                run_id: uuid::Uuid::nil(),
+            })
+            .await;
+            Ok(StepOutput::Single(Box::new(StopEvent {
+                result: start.data.clone(),
+            })))
+        })
+    });
+
+    let step = StepRegistration {
+        name: format!("usage-{name}"),
+        accepts: vec![StartEvent::event_type()],
+        emits: vec![StopEvent::event_type()],
+        handler,
+        max_concurrency: 0,
+        semaphore: None,
+        timeout: None,
+        retry_config: None,
+    };
+
+    WorkflowBuilder::new(name)
+        .step(step)
+        .no_timeout()
+        .build()
+        .unwrap()
+}
+
+/// Build a workflow that auto-parks on an `InputRequestEvent` and, on receiving
+/// the response, echoes the response payload into a `StopEvent`.
+fn input_request_workflow() -> blazen_core::Workflow {
+    use blazen_events::{InputRequestEvent, InputResponseEvent};
+
+    // Step 1: StartEvent -> InputRequestEvent (triggers auto-park).
+    let request: StepFn = Arc::new(|_event, _ctx| {
+        Box::pin(async move {
+            Ok(StepOutput::Single(Box::new(InputRequestEvent {
+                request_id: "pipe-req-1".into(),
+                prompt: "need input".into(),
+                metadata: serde_json::Value::Null,
+            })))
+        })
+    });
+    let request_step = StepRegistration {
+        name: "ask".into(),
+        accepts: vec![StartEvent::event_type()],
+        emits: vec![InputRequestEvent::event_type()],
+        handler: request,
+        max_concurrency: 0,
+        semaphore: None,
+        timeout: None,
+        retry_config: None,
+    };
+
+    // Step 2: InputResponseEvent -> StopEvent (echo the human response).
+    let respond: StepFn = Arc::new(|event, _ctx| {
+        Box::pin(async move {
+            let resp = event
+                .as_any()
+                .downcast_ref::<InputResponseEvent>()
+                .expect("expected InputResponseEvent");
+            Ok(StepOutput::Single(Box::new(StopEvent {
+                result: resp.response.clone(),
+            })))
+        })
+    });
+    let respond_step = StepRegistration {
+        name: "consume".into(),
+        accepts: vec![InputResponseEvent::event_type()],
+        emits: vec![StopEvent::event_type()],
+        handler: respond,
+        max_concurrency: 0,
+        semaphore: None,
+        timeout: None,
+        retry_config: None,
+    };
+
+    WorkflowBuilder::new("input-request")
+        .step(request_step)
+        .step(respond_step)
+        .no_timeout()
+        .build()
+        .unwrap()
+}
+
+#[tokio::test]
+async fn pipeline_run_shorthand_matches_start_result() {
+    let build = || {
+        PipelineBuilder::new("run-shorthand")
+            .stage(Stage {
+                name: "add-prefix".into(),
+                workflow: prefix_workflow("hi-"),
+                input_mapper: None,
+                condition: None,
+                output_mapper: None,
+            })
+            .stage(Stage {
+                name: "add-suffix".into(),
+                workflow: suffix_workflow("-bye"),
+                input_mapper: None,
+                condition: None,
+                output_mapper: None,
+            })
+            .build()
+            .unwrap()
+    };
+
+    let via_start = build()
+        .start(serde_json::json!({"text": "x"}))
+        .result()
+        .await
+        .unwrap();
+    let via_run = build().run(serde_json::json!({"text": "x"})).await.unwrap();
+
+    assert_eq!(via_run.final_output, via_start.final_output);
+    assert_eq!(
+        via_run.final_output,
+        serde_json::json!({"text": "hi-x-bye"})
+    );
+    assert_eq!(via_run.stage_results.len(), 2);
+}
+
+#[tokio::test]
+async fn pipeline_live_snapshot_during_running_stage() {
+    let pipeline = PipelineBuilder::new("live-snapshot")
+        .stage(Stage {
+            name: "fast".into(),
+            workflow: echo_workflow(),
+            input_mapper: None,
+            condition: None,
+            output_mapper: None,
+        })
+        .stage(Stage {
+            name: "slow".into(),
+            workflow: delayed_echo_workflow(1500),
+            input_mapper: None,
+            condition: None,
+            output_mapper: None,
+        })
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!({"value": 7}));
+
+    // Let stage 1 finish and stage 2 begin, then snapshot live.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let snap = handler.snapshot().await.unwrap();
+    assert_eq!(snap.pipeline_name, "live-snapshot");
+    assert_eq!(snap.current_stage_index, 1);
+    assert_eq!(snap.completed_stages.len(), 1);
+    assert_eq!(snap.completed_stages[0].name, "fast");
+
+    // The pipeline must continue to completion -- snapshot is non-destructive.
+    let result = handler.result().await.unwrap();
+    assert_eq!(result.stage_results.len(), 2);
+    assert_eq!(result.final_output, serde_json::json!({"value": 7}));
+}
+
+#[tokio::test]
+async fn pipeline_snapshot_then_resume_roundtrip() {
+    let pipeline = PipelineBuilder::new("snap-resume")
+        .stage(Stage {
+            name: "fast".into(),
+            workflow: echo_workflow(),
+            input_mapper: None,
+            condition: None,
+            output_mapper: None,
+        })
+        .stage(Stage {
+            name: "slow".into(),
+            workflow: delayed_echo_workflow(1500),
+            input_mapper: None,
+            condition: None,
+            output_mapper: None,
+        })
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!({"value": 99}));
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    let snap = handler.snapshot().await.unwrap();
+    assert_eq!(snap.current_stage_index, 1);
+    // Let the original run finish so it does not leak.
+    let _ = handler.result().await;
+
+    // Resume from the captured snapshot on a fresh equivalent pipeline.
+    let pipeline2 = PipelineBuilder::new("snap-resume")
+        .stage(Stage {
+            name: "fast".into(),
+            workflow: echo_workflow(),
+            input_mapper: None,
+            condition: None,
+            output_mapper: None,
+        })
+        .stage(Stage {
+            name: "slow".into(),
+            workflow: echo_workflow(),
+            input_mapper: None,
+            condition: None,
+            output_mapper: None,
+        })
+        .build()
+        .unwrap();
+
+    let resumed = pipeline2.resume(snap).unwrap();
+    let result = resumed.result().await.unwrap();
+    assert_eq!(result.stage_results.len(), 2);
+    assert_eq!(result.final_output, serde_json::json!({"value": 99}));
+}
+
+#[tokio::test]
+async fn pipeline_respond_to_input_forwards_to_inner_workflow() {
+    let pipeline = PipelineBuilder::new("respond-input")
+        .stage(Stage {
+            name: "hitl".into(),
+            workflow: input_request_workflow(),
+            input_mapper: None,
+            condition: None,
+            output_mapper: None,
+        })
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!({"start": true}));
+
+    // Wait for the inner workflow to auto-park on its InputRequestEvent.
+    tokio::time::sleep(Duration::from_millis(200)).await;
+
+    handler
+        .respond_to_input(blazen_events::InputResponseEvent {
+            request_id: "pipe-req-1".into(),
+            response: serde_json::json!({"answer": 42}),
+        })
+        .unwrap();
+
+    let result = tokio::time::timeout(Duration::from_secs(5), handler.result())
+        .await
+        .expect("pipeline should complete after responding to input")
+        .unwrap();
+    assert_eq!(result.final_output, serde_json::json!({"answer": 42}));
+}
+
+#[tokio::test]
+async fn pipeline_usage_total_live_and_final() {
+    let pipeline = PipelineBuilder::new("usage-agg")
+        .stage(Stage {
+            name: "s1".into(),
+            workflow: usage_emitting_workflow_n("u1", 10, 0.01),
+            input_mapper: None,
+            condition: None,
+            output_mapper: None,
+        })
+        .stage(Stage {
+            name: "s2".into(),
+            workflow: usage_emitting_workflow_n("u2", 20, 0.02),
+            input_mapper: None,
+            condition: None,
+            output_mapper: None,
+        })
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!({"text": "go"}));
+
+    // Poll the live running total until both stages have folded their usage in,
+    // proving `usage_total()` aggregates mid-run via the shared accumulator.
+    let mut live_tokens = 0;
+    for _ in 0..200 {
+        live_tokens = handler.usage_total().await.total_tokens;
+        if live_tokens == 30 {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(10)).await;
+    }
+    assert_eq!(live_tokens, 30, "live usage_total should reach 30 mid-run");
+    assert!((handler.cost_total_usd().await - 0.03).abs() < 1e-9);
+
+    // The final result totals match the live running totals.
+    let result = handler.result().await.unwrap();
+    assert_eq!(result.usage_total.total_tokens, 30);
+    assert!((result.cost_total_usd - 0.03).abs() < 1e-9);
+}
+
+#[tokio::test]
+async fn pipeline_abort_during_stage_resolves_aborted() {
+    let pipeline = PipelineBuilder::new("abort-mid")
+        .stage(Stage {
+            name: "slow".into(),
+            workflow: delayed_echo_workflow(2000),
+            input_mapper: None,
+            condition: None,
+            output_mapper: None,
+        })
+        .build()
+        .unwrap();
+
+    let handler = pipeline.start(serde_json::json!({"v": 1}));
+    tokio::time::sleep(Duration::from_millis(150)).await;
+    handler.abort().unwrap();
+
+    let err = handler.result().await.unwrap_err();
+    assert!(matches!(err, PipelineError::Aborted));
+}
+
+#[tokio::test]
+async fn sub_pipeline_step_awaits_final_output() {
+    use blazen_core::SubPipelineStep;
+
+    // Child pipeline: a single echo stage returning its input unchanged. A
+    // sentinel value lets us assert the parent's input flowed through the
+    // sub-pipeline and the child's final output flowed back to the parent.
+    let child = PipelineBuilder::new("child")
+        .stage(Stage {
+            name: "echo".into(),
+            workflow: echo_workflow(),
+            input_mapper: None,
+            condition: None,
+            output_mapper: None,
+        })
+        .build()
+        .unwrap();
+
+    let sub_step = SubPipelineStep::with_json_mappers(
+        "embed-child",
+        vec![StartEvent::event_type()],
+        vec![],
+        Arc::new(child),
+    );
+
+    // Parent workflow embeds the child pipeline as a step and stops with its
+    // final output.
+    let stop_handler: StepFn = Arc::new(|event, _ctx| {
+        Box::pin(async move {
+            Ok(StepOutput::Single(Box::new(StopEvent {
+                result: event.to_json(),
+            })))
+        })
+    });
+    let stop_step = StepRegistration {
+        name: "finish".into(),
+        accepts: vec!["embed-child::output"],
+        emits: vec![StopEvent::event_type()],
+        handler: stop_handler,
+        max_concurrency: 0,
+        semaphore: None,
+        timeout: None,
+        retry_config: None,
+    };
+
+    let parent = WorkflowBuilder::new("parent")
+        .add_subpipeline_step(sub_step)
+        .step(stop_step)
+        .no_timeout()
+        .build()
+        .unwrap();
+
+    let pipeline = PipelineBuilder::new("parent-pipeline")
+        .stage(Stage {
+            name: "with-sub".into(),
+            workflow: parent,
+            input_mapper: None,
+            condition: None,
+            output_mapper: None,
+        })
+        .build()
+        .unwrap();
+
+    let result = pipeline
+        .run(serde_json::json!({"sentinel": "flowed-through"}))
+        .await
+        .unwrap();
+    // The parent's StartEvent JSON is fed to the child pipeline, echoed back,
+    // wrapped by the SubPipelineStep output mapper as a DynamicEvent, and
+    // surfaced by the parent stop step. The sentinel must survive the trip.
+    let final_str = result.final_output.to_string();
+    assert!(
+        final_str.contains("flowed-through"),
+        "expected child final output in parent result, got {final_str}"
+    );
+}

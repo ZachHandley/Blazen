@@ -256,6 +256,112 @@ jobs:
           owner: BlackLeafDigital
           auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
+  lint-portable:
+    name: Lint (portable / Mac, no nvcc)
+    # Portable lint lane that lints the FULL workspace on a non-CUDA macOS
+    # runner without nvcc. `cargo clippy --workspace --all-features` can never
+    # build on a Mac: `--all-features` enables the `cuda` feature, which pulls
+    # `candle-kernels` whose build.rs unconditionally compiles `.cu` PTX via
+    # nvcc (NvccNotFound otherwise — no env var or cudarc feature escapes it).
+    # So this lane runs in two passes: (1) the whole workspace `--all-features`
+    # MINUS the 12 cuda-carrying crates (so `cuda`/nvcc is never enabled), then
+    # (2) those 12 crates each linted with their Mac-safe (metal/cpu/default)
+    # feature set. Together with the nvidia `lint` job above (which is the
+    # authoritative `--all-features` CUDA-inclusive lint), the two lanes cover
+    # 100% of crates+features.
+    runs-on: macos-latest
+    needs: [detect, version]
+    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true'
+    env:
+      MACOSX_DEPLOYMENT_TARGET: "14.0"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ needs.version.outputs.version }}
+          step: ci-lint-portable
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          components: rustfmt, clippy
+          targets: aarch64-apple-darwin
+          sccache: true
+          sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-s3-region: ${{ secrets.S3_REGION }}
+          sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-lint-portable
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Install system deps
+        if: steps.check.outputs.completed != 'true'
+        run: brew install cmake libomp
+
+      - name: Clippy — pass 1 (workspace --all-features, minus cuda crates)
+        if: steps.check.outputs.completed != 'true'
+        # Exclude every crate carrying a `cuda` feature so `--all-features`
+        # never enables `cuda` (which would require nvcc on this Mac).
+        run: |
+          cargo clippy --workspace --all-features \
+            --exclude blazen-llm-candle \
+            --exclude blazen-embed-candle \
+            --exclude blazen-audio-codec \
+            --exclude blazen-audio-music \
+            --exclude blazen-audio-stt \
+            --exclude blazen-audio-dac-vendored \
+            --exclude blazen-llm-mistralrs \
+            --exclude blazen-llm-llamacpp \
+            --exclude blazen-image-diffusion \
+            -- -D warnings
+        # NOTE: the three vendored `*-sys` crates (llama-cpp-sys-2 /
+        # whisper-rs-sys / diffusion-rs-sys) are NOT standalone workspace
+        # members — they're path deps of their wrapper crates and carry
+        # nvcc-requiring `cuda` features of their own. They are never reached
+        # by this pass because their wrappers are excluded above; pass 2 lints
+        # them transitively via the wrappers with the cuda feature off.
+
+      - name: Clippy — pass 2 (cuda crates, Mac-safe metal/cpu feature sets)
+        if: steps.check.outputs.completed != 'true'
+        # Lint each cuda-carrying crate with its non-cuda accel flag (metal/cpu
+        # or default), never the `cuda` feature. The wrapper crates pull in and
+        # compile their vendored `*-sys` deps (llama-cpp-sys-2 via
+        # blazen-llm-llamacpp, whisper-rs-sys via blazen-audio-stt,
+        # diffusion-rs-sys via blazen-image-diffusion) with cuda OFF, so the
+        # sys crates are covered here without needing their own `-p` invocation
+        # (they aren't standalone workspace members and can't be `-p`'d).
+        run: |
+          cargo clippy -p blazen-llm-candle         --features metal -- -D warnings
+          cargo clippy -p blazen-embed-candle       --features metal -- -D warnings
+          cargo clippy -p blazen-audio-dac-vendored --features metal -- -D warnings
+          cargo clippy -p blazen-audio-codec        --features metal,encodec,dac,snac -- -D warnings
+          cargo clippy -p blazen-audio-music        --features metal,musicgen,audiogen,stable-audio -- -D warnings
+          cargo clippy -p blazen-audio-stt          --features metal -- -D warnings
+          cargo clippy -p blazen-llm-mistralrs      --features metal -- -D warnings
+          cargo clippy -p blazen-image-diffusion    --features metal -- -D warnings
+          cargo clippy -p blazen-llm-llamacpp       --features metal -- -D warnings
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ needs.version.outputs.version }}
+          step: ci-lint-portable
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
   test:
     name: Test
     # Same `nvidia` shared-label GPU pool as lint (minibeast + beastpc) —

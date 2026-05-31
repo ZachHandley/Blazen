@@ -17,7 +17,7 @@ use blazen_pipeline::{PersistFn, PersistJsonFn, PipelineError, PipelineSnapshot}
 
 use crate::pipeline::error::pipeline_err;
 use crate::pipeline::pipeline::WasmPipeline;
-use crate::pipeline::stage::{WasmParallelStage, WasmStage};
+use crate::pipeline::stage::{WasmLoopStage, WasmParallelStage, WasmStage};
 
 /// Newtype wrapping a [`js_sys::Function`] persist callback so the
 /// `PersistFn` / `PersistJsonFn` `Send + Sync` bound is satisfied.
@@ -139,6 +139,25 @@ impl WasmPipelineBuilder {
             JsValue::from_str("PipelineBuilder already consumed (build() was called)")
         })?;
         *guard = Some(builder.parallel(core_parallel));
+        Ok(())
+    }
+
+    /// Append a [`LoopStage`](super::stage::WasmLoopStage) to the pipeline.
+    ///
+    /// Consumes the loop stage's underlying [`blazen_pipeline::LoopStage`].
+    ///
+    /// # Errors
+    ///
+    /// Returns a `JsValue` error if the builder has already been consumed
+    /// or the loop stage was already consumed.
+    #[wasm_bindgen(js_name = "loopStage")]
+    pub fn loop_stage(&self, loop_stage: &WasmLoopStage) -> Result<(), JsValue> {
+        let core_loop = loop_stage.take()?;
+        let mut guard = self.inner.lock().expect("poisoned");
+        let builder = guard.take().ok_or_else(|| {
+            JsValue::from_str("PipelineBuilder already consumed (build() was called)")
+        })?;
+        *guard = Some(builder.loop_stage(core_loop));
         Ok(())
     }
 

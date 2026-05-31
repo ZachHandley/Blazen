@@ -636,4 +636,64 @@ impl WasmWorkflowHandler {
     pub fn abort(&self) -> Result<(), JsValue> {
         self.cancel()
     }
+
+    /// Snapshot the workflow's current aggregated token usage.
+    ///
+    /// Mirrors [`WorkflowHandler::usage_total`](blazen_core::WorkflowHandler::usage_total)
+    /// and the pipeline handler's `usageTotal`. Safe to call at any point
+    /// during or after the run; after [`await_result`](Self::await_result)
+    /// has returned, the value matches the result's `usageTotal` field.
+    /// Returned as a plain JS object (`{ promptTokens, completionTokens,
+    /// totalTokens, ... }`).
+    ///
+    /// # Errors
+    ///
+    /// Rejects if the handler was already consumed or marshalling fails.
+    #[wasm_bindgen(js_name = "usageTotal")]
+    pub async fn usage_total(&self) -> Result<JsValue, JsValue> {
+        // Yield so the spawn_local'd event loop can fold in any pending
+        // usage deltas before we read the aggregate. See `yield_to_js`.
+        yield_to_js().await;
+
+        // Take the handler out of its slot for the duration of the await to
+        // avoid holding a `RefCell` borrow across it; restore unconditionally.
+        let handler = self
+            .inner
+            .borrow_mut()
+            .take()
+            .ok_or_else(|| JsValue::from_str("handler already consumed"))?;
+
+        let usage = handler.usage_total().await;
+
+        *self.inner.borrow_mut() = Some(handler);
+
+        marshal_to_js(&usage)
+    }
+
+    /// Snapshot the workflow's current aggregated cost in USD.
+    ///
+    /// Mirrors [`WorkflowHandler::cost_total_usd`](blazen_core::WorkflowHandler::cost_total_usd)
+    /// and the pipeline handler's `costTotalUsd`. After
+    /// [`await_result`](Self::await_result) has returned, the value matches
+    /// the result's `costTotalUsd` field.
+    ///
+    /// # Errors
+    ///
+    /// Rejects if the handler was already consumed.
+    #[wasm_bindgen(js_name = "costTotalUsd")]
+    pub async fn cost_total_usd(&self) -> Result<f64, JsValue> {
+        yield_to_js().await;
+
+        let handler = self
+            .inner
+            .borrow_mut()
+            .take()
+            .ok_or_else(|| JsValue::from_str("handler already consumed"))?;
+
+        let cost = handler.cost_total_usd().await;
+
+        *self.inner.borrow_mut() = Some(handler);
+
+        Ok(cost)
+    }
 }

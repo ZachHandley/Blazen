@@ -1248,6 +1248,23 @@ internal interface UniffiCallbackInterfaceForeignTrainingProgressMethod0 : com.s
     )
 }
 
+internal interface UniffiCallbackInterfacePipelineEventSinkMethod0 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `event`: RustBuffer.ByValue,
+        `uniffiOutReturn`: Pointer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
+internal interface UniffiCallbackInterfacePipelineEventSinkMethod1 : com.sun.jna.Callback {
+    fun callback(
+        `uniffiHandle`: Long,
+        `uniffiOutReturn`: Pointer,
+        uniffiCallStatus: UniffiRustCallStatus,
+    )
+}
+
 internal interface UniffiCallbackInterfaceCustomProviderMethod0 : com.sun.jna.Callback {
     fun callback(
         `uniffiHandle`: Long,
@@ -1958,6 +1975,29 @@ internal open class UniffiVTableCallbackInterfaceForeignTrainingProgress(
         `uniffiFree` = other.`uniffiFree`
         `uniffiClone` = other.`uniffiClone`
         `onEvent` = other.`onEvent`
+    }
+}
+
+@Structure.FieldOrder("uniffiFree", "uniffiClone", "onEvent", "onClose")
+internal open class UniffiVTableCallbackInterfacePipelineEventSink(
+    @JvmField internal var `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+    @JvmField internal var `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+    @JvmField internal var `onEvent`: UniffiCallbackInterfacePipelineEventSinkMethod0? = null,
+    @JvmField internal var `onClose`: UniffiCallbackInterfacePipelineEventSinkMethod1? = null,
+) : Structure() {
+    class UniffiByValue(
+        `uniffiFree`: UniffiCallbackInterfaceFree? = null,
+        `uniffiClone`: UniffiCallbackInterfaceClone? = null,
+        `onEvent`: UniffiCallbackInterfacePipelineEventSinkMethod0? = null,
+        `onClose`: UniffiCallbackInterfacePipelineEventSinkMethod1? = null,
+    ) : UniffiVTableCallbackInterfacePipelineEventSink(`uniffiFree`, `uniffiClone`, `onEvent`, `onClose`),
+        Structure.ByValue
+
+    internal fun uniffiSetValue(other: UniffiVTableCallbackInterfacePipelineEventSink) {
+        `uniffiFree` = other.`uniffiFree`
+        `uniffiClone` = other.`uniffiClone`
+        `onEvent` = other.`onEvent`
+        `onClose` = other.`onClose`
     }
 }
 
@@ -2793,12 +2833,6 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_method_checkpointstore_save_blocking(): Short
 
-    external fun uniffi_blazen_uniffi_checksum_method_pipeline_run(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_pipeline_run_blocking(): Short
-
-    external fun uniffi_blazen_uniffi_checksum_method_pipeline_stage_names(): Short
-
     external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_add_workflow(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_build(): Short
@@ -2810,6 +2844,40 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_timeout_per_stage_ms(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_pipelinebuilder_total_timeout_ms(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelineeventsink_on_event(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelineeventsink_on_close(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelinehandler_abort(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelinehandler_cost_total_usd(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelinehandler_pause(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelinehandler_progress(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelinehandler_respond_to_input(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelinehandler_result(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelinehandler_resume_in_place(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelinehandler_snapshot(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelinehandler_stream_events(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipelinehandler_usage_total(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipeline_run(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipeline_run_blocking(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipeline_stage_names(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipeline_start(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_pipeline_start_blocking(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_defaults(): Short
 
@@ -3097,6 +3165,7 @@ internal object UniffiLib {
         uniffiCallbackInterfaceForeignLocalModel.register(this)
         uniffiCallbackInterfaceForeignTrainingProgress.register(this)
         uniffiCallbackInterfaceMusicStreamSink.register(this)
+        uniffiCallbackInterfacePipelineEventSink.register(this)
         uniffiCallbackInterfaceStepHandler.register(this)
         uniffiCallbackInterfaceToolHandler.register(this)
         uniffiCallbackInterfaceVcStreamSink.register(this)
@@ -5670,32 +5739,6 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
-    external fun uniffi_blazen_uniffi_fn_clone_pipeline(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_free_pipeline(
-        `handle`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): Unit
-
-    external fun uniffi_blazen_uniffi_fn_method_pipeline_run(
-        `ptr`: Long,
-        `inputJson`: RustBuffer.ByValue,
-    ): Long
-
-    external fun uniffi_blazen_uniffi_fn_method_pipeline_run_blocking(
-        `ptr`: Long,
-        `inputJson`: RustBuffer.ByValue,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
-    external fun uniffi_blazen_uniffi_fn_method_pipeline_stage_names(
-        `ptr`: Long,
-        uniffi_out_err: UniffiRustCallStatus,
-    ): RustBuffer.ByValue
-
     external fun uniffi_blazen_uniffi_fn_clone_pipelinebuilder(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
@@ -5747,6 +5790,104 @@ internal object UniffiLib {
     external fun uniffi_blazen_uniffi_fn_method_pipelinebuilder_total_timeout_ms(
         `ptr`: Long,
         `millis`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_clone_pipelineeventsink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_pipelineeventsink(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_init_callback_vtable_pipelineeventsink(
+        `vtable`: UniffiVTableCallbackInterfacePipelineEventSink,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelineeventsink_on_event(
+        `ptr`: Long,
+        `event`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelineeventsink_on_close(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_clone_pipelinehandler(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_pipelinehandler(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelinehandler_abort(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelinehandler_cost_total_usd(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelinehandler_pause(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelinehandler_progress(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelinehandler_respond_to_input(
+        `ptr`: Long,
+        `response`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelinehandler_result(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelinehandler_resume_in_place(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelinehandler_snapshot(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelinehandler_stream_events(
+        `ptr`: Long,
+        `sink`: Long,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipelinehandler_usage_total(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_clone_pipeline(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_pipeline(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_pipeline_run(
+        `ptr`: Long,
+        `inputJson`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipeline_run_blocking(
+        `ptr`: Long,
+        `inputJson`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_pipeline_stage_names(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_pipeline_start(
+        `ptr`: Long,
+        `inputJson`: RustBuffer.ByValue,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_pipeline_start_blocking(
+        `ptr`: Long,
+        `inputJson`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
@@ -7812,31 +7953,73 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_checkpointstore_save_blocking() != 15819.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_pipeline_run() != 35674.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinebuilder_add_workflow() != 4019.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_pipeline_run_blocking() != 43680.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinebuilder_build() != 39385.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_pipeline_stage_names() != 24762.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinebuilder_parallel() != 62071.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinebuilder_add_workflow() != 14561.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinebuilder_stage() != 45438.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinebuilder_build() != 29058.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinebuilder_timeout_per_stage_ms() != 10924.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinebuilder_parallel() != 50044.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinebuilder_total_timeout_ms() != 34114.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinebuilder_stage() != 785.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelineeventsink_on_event() != 27289.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinebuilder_timeout_per_stage_ms() != 11657.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelineeventsink_on_close() != 28840.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinebuilder_total_timeout_ms() != 53032.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinehandler_abort() != 42327.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinehandler_cost_total_usd() != 24330.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinehandler_pause() != 11905.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinehandler_progress() != 11806.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinehandler_respond_to_input() != 50381.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinehandler_result() != 5751.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinehandler_resume_in_place() != 52009.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinehandler_snapshot() != 8446.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinehandler_stream_events() != 53622.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipelinehandler_usage_total() != 59474.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipeline_run() != 14037.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipeline_run_blocking() != 48320.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipeline_stage_names() != 28412.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipeline_start() != 48386.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_pipeline_start_blocking() != 5390.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_llmproviderdefaults_defaults() != 64482.toShort()) {
@@ -8235,7 +8418,7 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_constructor_peerserver_new() != 57865.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_constructor_pipelinebuilder_new() != 61410.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_pipelinebuilder_new() != 16301.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_constructor_workflowbuilder_new() != 14241.toShort()) {
@@ -31849,27 +32032,33 @@ public object FfiConverterTypePerplexityProvider : FfiConverter<PerplexityProvid
 /**
  * A validated, runnable pipeline.
  *
- * Multiple runs are allowed — invoking [`run`](Self::run) twice in a row
- * is safe and produces independent runs — but the implementation rejects
- * **overlapping** runs on the same handle to avoid surprising aliasing of
- * inner workflow state across concurrent foreign callers.
+ * Wraps the real [`blazen_pipeline::Pipeline`]. Multiple runs are allowed —
+ * invoking [`run`](Self::run) twice in a row is safe and produces
+ * independent runs — but the implementation rejects **overlapping** runs on
+ * the same handle to avoid surprising aliasing of inner workflow state across
+ * concurrent foreign callers.
  */
 public interface PipelineInterface {
     /**
-     * Execute the pipeline to completion. `input_json` is parsed as JSON
-     * and passed as the first stage's `StartEvent` payload; each
-     * subsequent stage receives the previous stage's `StopEvent` result.
+     * Execute the pipeline to completion. `input_json` is parsed as JSON and
+     * passed as the first stage's `StartEvent` payload; each subsequent stage
+     * receives the previous stage's output.
      *
      * Returns a [`WorkflowResult`] whose `event` field is a synthetic
-     * `StopEvent` carrying the final stage output, and whose
-     * `total_*_tokens` / `total_cost_usd` fields are the sum across every
-     * stage's `WorkflowResult`.
+     * `StopEvent` carrying the final stage output, and whose `total_*_tokens`
+     * / `total_cost_usd` fields are the engine's aggregated totals across
+     * every stage.
+     *
+     * This is the result-only shorthand (parity with `Workflow::run`). For
+     * streaming intermediate events, pausing, snapshotting, or human-in-the-
+     * loop input, use [`start`](Self::start) and drive the returned
+     * [`PipelineHandler`].
      */
     suspend fun `run`(`inputJson`: kotlin.String): WorkflowResult
 
     /**
-     * Synchronous variant of [`run`](Self::run) — blocks the current
-     * thread on the shared Tokio runtime. Provided for callers that want
+     * Synchronous variant of [`run`](Self::run) — blocks the current thread
+     * on the shared Tokio runtime. Provided for callers that want
      * fire-and-forget usage without engaging their host language's async
      * machinery (Ruby scripts, simple Go `main` functions).
      */
@@ -31881,16 +32070,39 @@ public interface PipelineInterface {
      */
     fun `stageNames`(): List<kotlin.String>
 
+    /**
+     * Run the pipeline and return a live [`PipelineHandler`] instead of
+     * blocking for the final result.
+     *
+     * The returned handler exposes the full control surface — stream
+     * intermediate events to a foreign
+     * [`PipelineEventSink`](crate::pipeline::PipelineEventSink), `pause` /
+     * `resume_in_place`, `snapshot`, `respond_to_input` for human-in-the-loop,
+     * `abort`, `progress`, and running `usage_total` / `cost_total_usd` —
+     * plus `result()` to await the terminal [`WorkflowResult`]. Mirrors
+     * `Workflow::run_with_handler`.
+     */
+    suspend fun `start`(`inputJson`: kotlin.String): PipelineHandler
+
+    /**
+     * Synchronous variant of [`start`](Self::start) — blocks the current
+     * thread on the shared Tokio runtime while the pipeline is launched, then
+     * returns the live handler. The pipeline keeps running on the shared
+     * runtime after this returns.
+     */
+    fun `startBlocking`(`inputJson`: kotlin.String): PipelineHandler
+
     companion object
 }
 
 /**
  * A validated, runnable pipeline.
  *
- * Multiple runs are allowed — invoking [`run`](Self::run) twice in a row
- * is safe and produces independent runs — but the implementation rejects
- * **overlapping** runs on the same handle to avoid surprising aliasing of
- * inner workflow state across concurrent foreign callers.
+ * Wraps the real [`blazen_pipeline::Pipeline`]. Multiple runs are allowed —
+ * invoking [`run`](Self::run) twice in a row is safe and produces
+ * independent runs — but the implementation rejects **overlapping** runs on
+ * the same handle to avoid surprising aliasing of inner workflow state across
+ * concurrent foreign callers.
  */
 open class Pipeline :
     Disposable,
@@ -31992,14 +32204,19 @@ open class Pipeline :
     }
 
     /**
-     * Execute the pipeline to completion. `input_json` is parsed as JSON
-     * and passed as the first stage's `StartEvent` payload; each
-     * subsequent stage receives the previous stage's `StopEvent` result.
+     * Execute the pipeline to completion. `input_json` is parsed as JSON and
+     * passed as the first stage's `StartEvent` payload; each subsequent stage
+     * receives the previous stage's output.
      *
      * Returns a [`WorkflowResult`] whose `event` field is a synthetic
-     * `StopEvent` carrying the final stage output, and whose
-     * `total_*_tokens` / `total_cost_usd` fields are the sum across every
-     * stage's `WorkflowResult`.
+     * `StopEvent` carrying the final stage output, and whose `total_*_tokens`
+     * / `total_cost_usd` fields are the engine's aggregated totals across
+     * every stage.
+     *
+     * This is the result-only shorthand (parity with `Workflow::run`). For
+     * streaming intermediate events, pausing, snapshotting, or human-in-the-
+     * loop input, use [`start`](Self::start) and drive the returned
+     * [`PipelineHandler`].
      */
     @Throws(BlazenException::class)
     @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
@@ -32021,8 +32238,8 @@ open class Pipeline :
         )
 
     /**
-     * Synchronous variant of [`run`](Self::run) — blocks the current
-     * thread on the shared Tokio runtime. Provided for callers that want
+     * Synchronous variant of [`run`](Self::run) — blocks the current thread
+     * on the shared Tokio runtime. Provided for callers that want
      * fire-and-forget usage without engaging their host language's async
      * machinery (Ruby scripts, simple Go `main` functions).
      */
@@ -32050,6 +32267,57 @@ open class Pipeline :
                 uniffiRustCall { _status ->
                     UniffiLib.uniffi_blazen_uniffi_fn_method_pipeline_stage_names(
                         it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * Run the pipeline and return a live [`PipelineHandler`] instead of
+     * blocking for the final result.
+     *
+     * The returned handler exposes the full control surface — stream
+     * intermediate events to a foreign
+     * [`PipelineEventSink`](crate::pipeline::PipelineEventSink), `pause` /
+     * `resume_in_place`, `snapshot`, `respond_to_input` for human-in-the-loop,
+     * `abort`, `progress`, and running `usage_total` / `cost_total_usd` —
+     * plus `result()` to await the terminal [`WorkflowResult`]. Mirrors
+     * `Workflow::run_with_handler`.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `start`(`inputJson`: kotlin.String): PipelineHandler =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_pipeline_start(
+                    uniffiHandle,
+                    FfiConverterString.lower(`inputJson`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_u64(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_u64(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_u64(future) },
+            // lift function
+            { FfiConverterTypePipelineHandler.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Synchronous variant of [`start`](Self::start) — blocks the current
+     * thread on the shared Tokio runtime while the pipeline is launched, then
+     * returns the live handler. The pipeline keeps running on the shared
+     * runtime after this returns.
+     */
+    @Throws(BlazenException::class)
+    override fun `startBlocking`(`inputJson`: kotlin.String): PipelineHandler =
+        FfiConverterTypePipelineHandler.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_pipeline_start_blocking(
+                        it,
+                        FfiConverterString.lower(`inputJson`),
                         _status,
                     )
                 }
@@ -32181,25 +32449,24 @@ public object FfiConverterTypePipeline : FfiConverter<Pipeline, Long> {
  *
  * Use [`PipelineBuilder::new`] to start, attach workflows via
  * [`add_workflow`](Self::add_workflow) / [`stage`](Self::stage) /
- * [`parallel`](Self::parallel), then call [`build`](Self::build) to
- * validate and produce a runnable [`Pipeline`].
+ * [`parallel`](Self::parallel), then call [`build`](Self::build) to validate
+ * and produce a runnable [`Pipeline`].
  */
 public interface PipelineBuilderInterface {
     /**
      * Append a sequential workflow stage with an auto-generated stage name
      * of the form `"stage-{N}"` (zero-based).
      *
-     * Use [`stage`](Self::stage) when the stage name matters for
-     * downstream tooling that filters by it.
+     * Use [`stage`](Self::stage) when the stage name matters for downstream
+     * tooling that filters by it.
      */
     fun `addWorkflow`(`workflow`: Workflow): PipelineBuilder
 
     /**
-     * Validate the pipeline definition and produce a runnable
-     * [`Pipeline`].
+     * Validate the pipeline definition and produce a runnable [`Pipeline`].
      *
-     * Fails with [`BlazenError::Validation`] if the pipeline has zero
-     * stages or if any stage names are duplicated.
+     * Fails with [`BlazenError::Validation`] if the pipeline has zero stages
+     * or if any stage names are duplicated.
      */
     fun `build`(): Pipeline
 
@@ -32207,12 +32474,11 @@ public interface PipelineBuilderInterface {
      * Append a parallel stage running multiple workflows concurrently.
      *
      * `branch_names` and `workflows` are positionally paired; a length
-     * mismatch yields [`BlazenError::Validation`]. When `wait_all` is
-     * `true` every branch must complete and outputs are collected into a
-     * JSON object keyed by branch name. When `wait_all` is `false` the
-     * pipeline proceeds as soon as the first branch finishes and the
-     * remaining branches are dropped (which aborts their inner workflows
-     * via `WorkflowHandler`'s `Drop` impl).
+     * mismatch yields [`BlazenError::Validation`]. When `wait_all` is `true`
+     * every branch must complete and outputs are collected into a JSON object
+     * keyed by branch name. When `wait_all` is `false` the pipeline proceeds
+     * as soon as the first branch finishes and the remaining branches are
+     * cancelled.
      */
     fun `parallel`(
         `name`: kotlin.String,
@@ -32222,8 +32488,8 @@ public interface PipelineBuilderInterface {
     ): PipelineBuilder
 
     /**
-     * Append a sequential stage with an explicit name. The stage name must
-     * be unique within the pipeline (enforced at [`build`](Self::build)).
+     * Append a sequential stage with an explicit name. The stage name must be
+     * unique within the pipeline (enforced at [`build`](Self::build)).
      */
     fun `stage`(
         `name`: kotlin.String,
@@ -32231,16 +32497,16 @@ public interface PipelineBuilderInterface {
     ): PipelineBuilder
 
     /**
-     * Per-stage timeout in milliseconds. Each stage's workflow gets at
-     * most this long to produce its `StopEvent` before the pipeline
-     * aborts with [`BlazenError::Timeout`].
+     * Per-stage timeout in milliseconds. Each stage's workflow gets at most
+     * this long to produce its `StopEvent` before the pipeline aborts with
+     * [`BlazenError::Timeout`].
      */
     fun `timeoutPerStageMs`(`millis`: kotlin.ULong): PipelineBuilder
 
     /**
-     * Total wall-clock timeout for the entire pipeline run, in
-     * milliseconds. The pipeline aborts with [`BlazenError::Timeout`] if
-     * it does not finish within this duration.
+     * Total wall-clock timeout for the entire pipeline run, in milliseconds.
+     * The pipeline aborts with [`BlazenError::Timeout`] if it does not finish
+     * within this duration.
      */
     fun `totalTimeoutMs`(`millis`: kotlin.ULong): PipelineBuilder
 
@@ -32252,8 +32518,8 @@ public interface PipelineBuilderInterface {
  *
  * Use [`PipelineBuilder::new`] to start, attach workflows via
  * [`add_workflow`](Self::add_workflow) / [`stage`](Self::stage) /
- * [`parallel`](Self::parallel), then call [`build`](Self::build) to
- * validate and produce a runnable [`Pipeline`].
+ * [`parallel`](Self::parallel), then call [`build`](Self::build) to validate
+ * and produce a runnable [`Pipeline`].
  */
 open class PipelineBuilder :
     Disposable,
@@ -32369,8 +32635,8 @@ open class PipelineBuilder :
      * Append a sequential workflow stage with an auto-generated stage name
      * of the form `"stage-{N}"` (zero-based).
      *
-     * Use [`stage`](Self::stage) when the stage name matters for
-     * downstream tooling that filters by it.
+     * Use [`stage`](Self::stage) when the stage name matters for downstream
+     * tooling that filters by it.
      */
     @Throws(BlazenException::class)
     override fun `addWorkflow`(`workflow`: Workflow): PipelineBuilder =
@@ -32387,11 +32653,10 @@ open class PipelineBuilder :
         )
 
     /**
-     * Validate the pipeline definition and produce a runnable
-     * [`Pipeline`].
+     * Validate the pipeline definition and produce a runnable [`Pipeline`].
      *
-     * Fails with [`BlazenError::Validation`] if the pipeline has zero
-     * stages or if any stage names are duplicated.
+     * Fails with [`BlazenError::Validation`] if the pipeline has zero stages
+     * or if any stage names are duplicated.
      */
     @Throws(BlazenException::class)
     override fun `build`(): Pipeline =
@@ -32410,12 +32675,11 @@ open class PipelineBuilder :
      * Append a parallel stage running multiple workflows concurrently.
      *
      * `branch_names` and `workflows` are positionally paired; a length
-     * mismatch yields [`BlazenError::Validation`]. When `wait_all` is
-     * `true` every branch must complete and outputs are collected into a
-     * JSON object keyed by branch name. When `wait_all` is `false` the
-     * pipeline proceeds as soon as the first branch finishes and the
-     * remaining branches are dropped (which aborts their inner workflows
-     * via `WorkflowHandler`'s `Drop` impl).
+     * mismatch yields [`BlazenError::Validation`]. When `wait_all` is `true`
+     * every branch must complete and outputs are collected into a JSON object
+     * keyed by branch name. When `wait_all` is `false` the pipeline proceeds
+     * as soon as the first branch finishes and the remaining branches are
+     * cancelled.
      */
     @Throws(BlazenException::class)
     override fun `parallel`(
@@ -32440,8 +32704,8 @@ open class PipelineBuilder :
         )
 
     /**
-     * Append a sequential stage with an explicit name. The stage name must
-     * be unique within the pipeline (enforced at [`build`](Self::build)).
+     * Append a sequential stage with an explicit name. The stage name must be
+     * unique within the pipeline (enforced at [`build`](Self::build)).
      */
     @Throws(BlazenException::class)
     override fun `stage`(
@@ -32462,9 +32726,9 @@ open class PipelineBuilder :
         )
 
     /**
-     * Per-stage timeout in milliseconds. Each stage's workflow gets at
-     * most this long to produce its `StopEvent` before the pipeline
-     * aborts with [`BlazenError::Timeout`].
+     * Per-stage timeout in milliseconds. Each stage's workflow gets at most
+     * this long to produce its `StopEvent` before the pipeline aborts with
+     * [`BlazenError::Timeout`].
      */
     @Throws(BlazenException::class)
     override fun `timeoutPerStageMs`(`millis`: kotlin.ULong): PipelineBuilder =
@@ -32481,9 +32745,9 @@ open class PipelineBuilder :
         )
 
     /**
-     * Total wall-clock timeout for the entire pipeline run, in
-     * milliseconds. The pipeline aborts with [`BlazenError::Timeout`] if
-     * it does not finish within this duration.
+     * Total wall-clock timeout for the entire pipeline run, in milliseconds.
+     * The pipeline aborts with [`BlazenError::Timeout`] if it does not finish
+     * within this duration.
      */
     @Throws(BlazenException::class)
     override fun `totalTimeoutMs`(`millis`: kotlin.ULong): PipelineBuilder =
@@ -32519,6 +32783,1004 @@ public object FfiConverterTypePipelineBuilder : FfiConverter<PipelineBuilder, Lo
 
     override fun write(
         value: PipelineBuilder,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Foreign-implementable sink for intermediate pipeline events.
+ *
+ * Mirrors [`WorkflowEventSink`](crate::workflow::WorkflowEventSink): UniFFI's
+ * async-iterator support across Go, Swift, Kotlin, and Ruby is uneven, so
+ * streaming uses a foreign-callable sink trait. Each idiomatic wrapper adapts
+ * the callbacks into its host streaming type (Go channel, Swift
+ * `AsyncStream`, Kotlin `Flow`, Ruby `Enumerator::Lazy`).
+ *
+ * The pump invokes [`on_event`](Self::on_event) for each [`PipelineEvent`] in
+ * order, then exactly one [`on_close`](Self::on_close) when the pipeline
+ * completes.
+ */
+public interface PipelineEventSink {
+    /**
+     * One intermediate event arrived from a stage.
+     */
+    fun `onEvent`(`event`: PipelineEvent)
+
+    /**
+     * The stream ended — the pipeline reached a terminal state (or the
+     * subscription was cancelled). Fires exactly once.
+     */
+    fun `onClose`()
+
+    companion object
+}
+
+/**
+ * Foreign-implementable sink for intermediate pipeline events.
+ *
+ * Mirrors [`WorkflowEventSink`](crate::workflow::WorkflowEventSink): UniFFI's
+ * async-iterator support across Go, Swift, Kotlin, and Ruby is uneven, so
+ * streaming uses a foreign-callable sink trait. Each idiomatic wrapper adapts
+ * the callbacks into its host streaming type (Go channel, Swift
+ * `AsyncStream`, Kotlin `Flow`, Ruby `Enumerator::Lazy`).
+ *
+ * The pump invokes [`on_event`](Self::on_event) for each [`PipelineEvent`] in
+ * order, then exactly one [`on_close`](Self::on_close) when the pipeline
+ * completes.
+ */
+open class PipelineEventSinkImpl :
+    Disposable,
+    AutoCloseable,
+    PipelineEventSink {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_pipelineeventsink(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_pipelineeventsink(handle, status)
+        }
+    }
+
+    /**
+     * One intermediate event arrived from a stage.
+     */
+    override fun `onEvent`(`event`: PipelineEvent) =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_pipelineeventsink_on_event(
+                    it,
+                    FfiConverterTypePipelineEvent.lower(`event`),
+                    _status,
+                )
+            }
+        }
+
+    /**
+     * The stream ended — the pipeline reached a terminal state (or the
+     * subscription was cancelled). Fires exactly once.
+     */
+    override fun `onClose`() =
+        callWithHandle {
+            uniffiRustCall { _status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_pipelineeventsink_on_close(
+                    it,
+                    _status,
+                )
+            }
+        }
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+// Put the implementation in an object so we don't pollute the top-level namespace
+internal object uniffiCallbackInterfacePipelineEventSink {
+    internal object `onEvent` : UniffiCallbackInterfacePipelineEventSinkMethod0 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `event`: RustBuffer.ByValue,
+            `uniffiOutReturn`: Pointer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypePipelineEventSink.handleMap.get(uniffiHandle)
+            val makeCall = {  uniffiObj.`onEvent`(
+                FfiConverterTypePipelineEvent.lift(`event`),
+            )
+            }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object `onClose` : UniffiCallbackInterfacePipelineEventSinkMethod1 {
+        override fun callback(
+            `uniffiHandle`: Long,
+            `uniffiOutReturn`: Pointer,
+            uniffiCallStatus: UniffiRustCallStatus,
+        ) {
+            val uniffiObj = FfiConverterTypePipelineEventSink.handleMap.get(uniffiHandle)
+            val makeCall = { uniffiObj.`onClose`() }
+            val writeReturn = { _: Unit -> Unit }
+            uniffiTraitInterfaceCall(uniffiCallStatus, makeCall, writeReturn)
+        }
+    }
+
+    internal object uniffiFree : UniffiCallbackInterfaceFree {
+        override fun callback(handle: Long) {
+            FfiConverterTypePipelineEventSink.handleMap.remove(handle)
+        }
+    }
+
+    internal object uniffiClone : UniffiCallbackInterfaceClone {
+        override fun callback(handle: Long): Long = FfiConverterTypePipelineEventSink.handleMap.clone(handle)
+    }
+
+    internal var vtable =
+        UniffiVTableCallbackInterfacePipelineEventSink.UniffiByValue(
+            uniffiFree,
+            uniffiClone,
+            `onEvent`,
+            `onClose`,
+        )
+
+    // Registers the foreign callback with the Rust side.
+    // This method is generated for each callback interface.
+    internal fun register(lib: UniffiLib) {
+        lib.uniffi_blazen_uniffi_fn_init_callback_vtable_pipelineeventsink(vtable)
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePipelineEventSink : FfiConverter<PipelineEventSink, Long> {
+    internal val handleMap = UniffiHandleMap<PipelineEventSink>()
+
+    override fun lower(value: PipelineEventSink): Long {
+        if (value is PipelineEventSinkImpl) {
+            // Rust-implemented object.  Clone the handle and return it
+            return value.uniffiCloneHandle()
+        } else {
+            // Kotlin object, generate a new vtable handle and return that.
+            return handleMap.insert(value)
+        }
+    }
+
+    override fun lift(value: Long): PipelineEventSink {
+        if ((value and 1.toLong()) == 0.toLong()) {
+            // Rust-generated handle, construct a new class that uses the handle to implement the
+            // interface
+            return PipelineEventSinkImpl(UniffiWithHandle, value)
+        } else {
+            // Kotlin-generated handle, get the object from the handle map
+            return handleMap.remove(value)
+        }
+    }
+
+    override fun read(buf: ByteBuffer): PipelineEventSink = lift(buf.getLong())
+
+    override fun allocationSize(value: PipelineEventSink) = 8UL
+
+    override fun write(
+        value: PipelineEventSink,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * A live handle to a running pipeline.
+ *
+ * Returned by [`Pipeline::start`](crate::pipeline::Pipeline::start). Provides
+ * the same surface as the workflow handler:
+ *
+ * **Consumption (consumes the handler):**
+ * - [`result`](Self::result) — await the final [`WorkflowResult`].
+ * - [`pause`](Self::pause) — park the pipeline and capture a snapshot.
+ *
+ * **Streaming (borrows the handler):**
+ * - [`stream_events`](Self::stream_events) — pump stage events to a foreign
+ * [`PipelineEventSink`].
+ *
+ * **Control (borrows the handler, may be called repeatedly):**
+ * - [`resume_in_place`](Self::resume_in_place) / [`snapshot`](Self::snapshot)
+ * - [`respond_to_input`](Self::respond_to_input) — human-in-the-loop
+ * - [`abort`](Self::abort) / [`progress`](Self::progress)
+ * - [`usage_total`](Self::usage_total) / [`cost_total_usd`](Self::cost_total_usd)
+ */
+public interface PipelineHandlerInterface {
+    /**
+     * Abort the pipeline. Any pending `result()` resolves with a workflow
+     * error.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the pipeline has already terminated.
+     */
+    suspend fun `abort`()
+
+    /**
+     * Snapshot the running aggregate cost in USD for this run.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+    suspend fun `costTotalUsd`(): kotlin.Double
+
+    /**
+     * Park the pipeline after the current stage and return a snapshot of its
+     * state, consuming the handler.
+     *
+     * The returned snapshot is encoded as a JSON string and can later be used
+     * with `Pipeline.resume` (foreign-side, once exposed) to continue.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the pipeline has already terminated.
+     */
+    suspend fun `pause`(): kotlin.String
+
+    /**
+     * Best-effort polled view of the pipeline's stage cursor: the 1-based
+     * index of the stage currently executing and the total stage count.
+     * Returns `(current_stage_index, total_stages)`. Returns `None` after the
+     * handler has been consumed.
+     */
+    suspend fun `progress`(): PipelineProgress?
+
+    /**
+     * Deliver a human-in-the-loop response to the active stage's inner
+     * workflow. For a sequential stage this targets the one in-flight
+     * workflow; for a parallel stage the response is broadcast to every live
+     * branch (the workflow that requested input consumes it, others ignore a
+     * response they did not request).
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed or
+     * `response.response_json` is not valid JSON; [`BlazenError::Workflow`]
+     * if the pipeline has already terminated.
+     */
+    suspend fun `respondToInput`(`response`: InputResponse)
+
+    /**
+     * Await the final pipeline result, consuming the handler.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the run failed.
+     */
+    suspend fun `result`(): WorkflowResult
+
+    /**
+     * Resume the pipeline in place. Forwarded to the active stage's inner
+     * workflow(s) so a workflow parked on an `InputRequestEvent` (or paused)
+     * unparks. A no-op between stages.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the pipeline has already terminated.
+     */
+    suspend fun `resumeInPlace`()
+
+    /**
+     * Capture a resumable snapshot of the pipeline's current state without
+     * stopping it, encoded as a JSON string. Mirrors
+     * `WorkflowHandler::snapshot`.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the pipeline has already terminated.
+     */
+    suspend fun `snapshot`(): kotlin.String
+
+    /**
+     * Pump intermediate stage events to `sink` until the pipeline completes.
+     *
+     * Returns immediately; the pump runs on the shared Tokio runtime. Each
+     * call subscribes from the current point in time. `sink.on_close()` fires
+     * exactly once when the stream ends.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+    suspend fun `streamEvents`(`sink`: PipelineEventSink)
+
+    /**
+     * Snapshot the running aggregate [`TokenUsage`] for this run. Safe to call
+     * at any point; matches `WorkflowResult` totals once `result()` completes.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+    suspend fun `usageTotal`(): TokenUsage
+
+    companion object
+}
+
+/**
+ * A live handle to a running pipeline.
+ *
+ * Returned by [`Pipeline::start`](crate::pipeline::Pipeline::start). Provides
+ * the same surface as the workflow handler:
+ *
+ * **Consumption (consumes the handler):**
+ * - [`result`](Self::result) — await the final [`WorkflowResult`].
+ * - [`pause`](Self::pause) — park the pipeline and capture a snapshot.
+ *
+ * **Streaming (borrows the handler):**
+ * - [`stream_events`](Self::stream_events) — pump stage events to a foreign
+ * [`PipelineEventSink`].
+ *
+ * **Control (borrows the handler, may be called repeatedly):**
+ * - [`resume_in_place`](Self::resume_in_place) / [`snapshot`](Self::snapshot)
+ * - [`respond_to_input`](Self::respond_to_input) — human-in-the-loop
+ * - [`abort`](Self::abort) / [`progress`](Self::progress)
+ * - [`usage_total`](Self::usage_total) / [`cost_total_usd`](Self::cost_total_usd)
+ */
+open class PipelineHandler :
+    Disposable,
+    AutoCloseable,
+    PipelineHandlerInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_pipelinehandler(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_pipelinehandler(handle, status)
+        }
+    }
+
+    /**
+     * Abort the pipeline. Any pending `result()` resolves with a workflow
+     * error.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the pipeline has already terminated.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `abort`() =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinehandler_abort(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Snapshot the running aggregate cost in USD for this run.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `costTotalUsd`(): kotlin.Double =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinehandler_cost_total_usd(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_f64(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_f64(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_f64(future) },
+            // lift function
+            { FfiConverterDouble.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Park the pipeline after the current stage and return a snapshot of its
+     * state, consuming the handler.
+     *
+     * The returned snapshot is encoded as a JSON string and can later be used
+     * with `Pipeline.resume` (foreign-side, once exposed) to continue.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the pipeline has already terminated.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `pause`(): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinehandler_pause(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Best-effort polled view of the pipeline's stage cursor: the 1-based
+     * index of the stage currently executing and the total stage count.
+     * Returns `(current_stage_index, total_stages)`. Returns `None` after the
+     * handler has been consumed.
+     */
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `progress`(): PipelineProgress? =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinehandler_progress(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterOptionalTypePipelineProgress.lift(it) },
+            // Error FFI converter
+            UniffiNullRustCallStatusErrorHandler,
+        )
+
+    /**
+     * Deliver a human-in-the-loop response to the active stage's inner
+     * workflow. For a sequential stage this targets the one in-flight
+     * workflow; for a parallel stage the response is broadcast to every live
+     * branch (the workflow that requested input consumes it, others ignore a
+     * response they did not request).
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed or
+     * `response.response_json` is not valid JSON; [`BlazenError::Workflow`]
+     * if the pipeline has already terminated.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `respondToInput`(`response`: InputResponse) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinehandler_respond_to_input(
+                    uniffiHandle,
+                    FfiConverterTypeInputResponse.lower(`response`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Await the final pipeline result, consuming the handler.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the run failed.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `result`(): WorkflowResult =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinehandler_result(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeWorkflowResult.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Resume the pipeline in place. Forwarded to the active stage's inner
+     * workflow(s) so a workflow parked on an `InputRequestEvent` (or paused)
+     * unparks. A no-op between stages.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the pipeline has already terminated.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `resumeInPlace`() =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinehandler_resume_in_place(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Capture a resumable snapshot of the pipeline's current state without
+     * stopping it, encoded as a JSON string. Mirrors
+     * `WorkflowHandler::snapshot`.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed;
+     * [`BlazenError::Workflow`] if the pipeline has already terminated.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `snapshot`(): kotlin.String =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinehandler_snapshot(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterString.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Pump intermediate stage events to `sink` until the pipeline completes.
+     *
+     * Returns immediately; the pump runs on the shared Tokio runtime. Each
+     * call subscribes from the current point in time. `sink.on_close()` fires
+     * exactly once when the stream ends.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `streamEvents`(`sink`: PipelineEventSink) =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinehandler_stream_events(
+                    uniffiHandle,
+                    FfiConverterTypePipelineEventSink.lower(`sink`),
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+            // lift function
+            { Unit },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * Snapshot the running aggregate [`TokenUsage`] for this run. Safe to call
+     * at any point; matches `WorkflowResult` totals once `result()` completes.
+     *
+     * # Errors
+     * [`BlazenError::Validation`] if the handler was already consumed.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `usageTotal`(): TokenUsage =
+        uniffiRustCallAsync(
+            callWithHandle { uniffiHandle ->
+                UniffiLib.uniffi_blazen_uniffi_fn_method_pipelinehandler_usage_total(
+                    uniffiHandle,
+                )
+            },
+            { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_rust_buffer(future, callback, continuation) },
+            { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_rust_buffer(future, continuation) },
+            { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_rust_buffer(future) },
+            // lift function
+            { FfiConverterTypeTokenUsage.lift(it) },
+            // Error FFI converter
+            BlazenException.ErrorHandler,
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePipelineHandler : FfiConverter<PipelineHandler, Long> {
+    override fun lower(value: PipelineHandler): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): PipelineHandler = PipelineHandler(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): PipelineHandler = lift(buf.getLong())
+
+    override fun allocationSize(value: PipelineHandler) = 8UL
+
+    override fun write(
+        value: PipelineHandler,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -45923,6 +47185,114 @@ public object FfiConverterTypePersistedEvent : FfiConverterRustBuffer<PersistedE
 }
 
 /**
+ * An intermediate event emitted by a pipeline stage, tagged with provenance.
+ *
+ * Wraps a workflow-level [`Event`] with the stage name, optional branch name
+ * (for parallel stages), and the workflow run ID that produced it, so foreign
+ * consumers can tell which part of the pipeline emitted each event.
+ */
+data class PipelineEvent(
+    /**
+     * Name of the stage that produced this event.
+     */
+    var `stageName`: kotlin.String,
+    /**
+     * For parallel stages, the name of the specific branch; `None` for
+     * sequential stages.
+     */
+    var `branchName`: kotlin.String?,
+    /**
+     * The workflow run ID (UUID, as a string) that produced this event.
+     */
+    var `workflowRunId`: kotlin.String,
+    /**
+     * The underlying workflow event.
+     */
+    var `event`: Event,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePipelineEvent : FfiConverterRustBuffer<PipelineEvent> {
+    override fun read(buf: ByteBuffer): PipelineEvent =
+        PipelineEvent(
+            FfiConverterString.read(buf),
+            FfiConverterOptionalString.read(buf),
+            FfiConverterString.read(buf),
+            FfiConverterTypeEvent.read(buf),
+        )
+
+    override fun allocationSize(value: PipelineEvent) =
+        (
+            FfiConverterString.allocationSize(value.`stageName`) +
+                FfiConverterOptionalString.allocationSize(value.`branchName`) +
+                FfiConverterString.allocationSize(value.`workflowRunId`) +
+                FfiConverterTypeEvent.allocationSize(value.`event`)
+        )
+
+    override fun write(
+        value: PipelineEvent,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterString.write(value.`stageName`, buf)
+        FfiConverterOptionalString.write(value.`branchName`, buf)
+        FfiConverterString.write(value.`workflowRunId`, buf)
+        FfiConverterTypeEvent.write(value.`event`, buf)
+    }
+}
+
+/**
+ * Best-effort progress snapshot of a running pipeline.
+ */
+data class PipelineProgress(
+    /**
+     * 1-based index of the stage currently executing.
+     */
+    var `currentStageIndex`: kotlin.UInt,
+    /**
+     * Total number of stages in the pipeline.
+     */
+    var `totalStages`: kotlin.UInt,
+    /**
+     * Completion percent in `[0, 100]`.
+     */
+    var `percent`: kotlin.Float,
+) {
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypePipelineProgress : FfiConverterRustBuffer<PipelineProgress> {
+    override fun read(buf: ByteBuffer): PipelineProgress =
+        PipelineProgress(
+            FfiConverterUInt.read(buf),
+            FfiConverterUInt.read(buf),
+            FfiConverterFloat.read(buf),
+        )
+
+    override fun allocationSize(value: PipelineProgress) =
+        (
+            FfiConverterUInt.allocationSize(value.`currentStageIndex`) +
+                FfiConverterUInt.allocationSize(value.`totalStages`) +
+                FfiConverterFloat.allocationSize(value.`percent`)
+        )
+
+    override fun write(
+        value: PipelineProgress,
+        buf: ByteBuffer,
+    ) {
+        FfiConverterUInt.write(value.`currentStageIndex`, buf)
+        FfiConverterUInt.write(value.`totalStages`, buf)
+        FfiConverterFloat.write(value.`percent`, buf)
+    }
+}
+
+/**
  * Per-pool budget snapshot returned by [`UniffiModelManager::pools`].
  */
 data class PoolStatusRecord(
@@ -50226,6 +51596,38 @@ public object FfiConverterOptionalTypePbrMaps : FfiConverterRustBuffer<PbrMaps?>
         } else {
             buf.put(1)
             FfiConverterTypePbrMaps.write(value, buf)
+        }
+    }
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterOptionalTypePipelineProgress : FfiConverterRustBuffer<PipelineProgress?> {
+    override fun read(buf: ByteBuffer): PipelineProgress? {
+        if (buf.get().toInt() == 0) {
+            return null
+        }
+        return FfiConverterTypePipelineProgress.read(buf)
+    }
+
+    override fun allocationSize(value: PipelineProgress?): ULong {
+        if (value == null) {
+            return 1UL
+        } else {
+            return 1UL + FfiConverterTypePipelineProgress.allocationSize(value)
+        }
+    }
+
+    override fun write(
+        value: PipelineProgress?,
+        buf: ByteBuffer,
+    ) {
+        if (value == null) {
+            buf.put(0)
+        } else {
+            buf.put(1)
+            FfiConverterTypePipelineProgress.write(value, buf)
         }
     }
 }
