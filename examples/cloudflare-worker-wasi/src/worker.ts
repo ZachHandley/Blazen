@@ -27,7 +27,11 @@ const wasi = new WASI({
 });
 
 const sharedMemory = new WebAssembly.Memory({
-  initial: 4000,
+  // 256 pages * 64 KiB = 16 MiB initial, growing on demand up to `maximum`.
+  // A Cloudflare Workers isolate caps at 128 MiB, so napi-rs's 4000-page
+  // (~250 MiB) default fails to instantiate (RangeError, CF error 10021).
+  // Matches napi.wasm.initialMemory in crates/blazen-node/package.json.
+  initial: 256,
   maximum: 65536,
   shared: true,
 });
