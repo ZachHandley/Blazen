@@ -48,6 +48,25 @@ import sys
 
 PUBLISHED_WASM_NAME = "@blazen-dev/wasm"
 
+# Matches a single-line inline-table dependency on a sibling `blazen-*` crate,
+# e.g. `blazen-3d-core = { version = "0.6.1", path = "../blazen-3d-core" }`.
+# Group 1 = `name = {`, group 2 = the inline-table body, group 3 = `}`.
+_PATH_DEP_RE = re.compile(r"^(\s*blazen-[a-z0-9-]+\s*=\s*\{)([^}\n]*)(\})", re.M)
+
+
+def _add_forgejo_registry_to_path_deps(text: str) -> str:
+    """Add `, registry = "forgejo"` to direct `blazen-* = { ... path = ... }`
+    deps that lack a registry (skips `workspace = true` and already-tagged deps).
+    """
+
+    def repl(m: "re.Match[str]") -> str:
+        head, body, tail = m.group(1), m.group(2), m.group(3)
+        if "registry" in body or "workspace" in body or "path" not in body:
+            return m.group(0)
+        return f'{head}{body.rstrip()}, registry = "forgejo" {tail}'
+
+    return _PATH_DEP_RE.sub(repl, text)
+
 
 def stamp_default(repo: pathlib.Path, version: str, keep_forgejo_registry: bool = False) -> None:
     # 1. Every Cargo.toml: 0.0.0-dev -> VERSION
@@ -70,6 +89,24 @@ def stamp_default(repo: pathlib.Path, version: str, keep_forgejo_registry: bool 
         root_cargo = repo / "Cargo.toml"
         root_text = root_cargo.read_text()
         root_cargo.write_text(root_text.replace(', registry = "forgejo"', ""))
+    else:
+        # publish-rust path: the 37 root `workspace.dependencies` carry
+        # `registry = "forgejo"`, but inter-crate deps declared DIRECTLY in a
+        # member manifest (e.g. `blazen-3d-core = { version, path }` in
+        # blazen-3d/Cargo.toml) do NOT — so on publish cargo resolves them from
+        # crates.io and fails ("failed to select a version for the requirement
+        # `blazen-3d-core = "^0.6.1"` ... candidate versions found: 0.6.0 ...
+        # location searched: crates.io index"). Inject `registry = "forgejo"`
+        # into every direct `blazen-* = { ... path = ... }` inline-table dep that
+        # lacks it, across every member manifest, so each sibling resolves from
+        # Forgejo. Only runs in keep mode, so the build jobs are unaffected.
+        for cargo in repo.rglob("Cargo.toml"):
+            if "target" in cargo.parts:
+                continue
+            text = cargo.read_text()
+            new = _add_forgejo_registry_to_path_deps(text)
+            if new != text:
+                cargo.write_text(new)
 
     # 3. Node package.json: 0.1.0 -> VERSION (for blazen-node)
     node_pkg = repo / "crates" / "blazen-node" / "package.json"
