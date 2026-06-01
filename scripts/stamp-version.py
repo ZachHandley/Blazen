@@ -4,14 +4,30 @@
 Replaces the per-job `find ... sed -i` dance in .forgejo/workflows/release.yaml.
 Works identically on Linux (GNU sed), macOS (BSD sed), and Windows (no sed).
 
-Default mode (no flags):
+Default mode (no flags) — used by the BUILD jobs (wheels/napi/uniffi/cabi):
     python3 scripts/stamp-version.py <VERSION>
 
     Stamps `0.0.0-dev` -> VERSION across every workspace `Cargo.toml`
-    (excluding `target/`), KEEPS `registry = "forgejo"` on the root
-    `Cargo.toml` inter-crate deps (the workspace publishes to the private
-    Forgejo cargo registry), and bumps the hand-written `package.json` files
-    for `blazen-node`, `blazen-wasm-sdk`, and `blazen-workers-alias`.
+    (excluding `target/`), STRIPS `, registry = "forgejo"` off the root
+    `Cargo.toml` inter-crate deps (leaving plain `version` + `path` deps),
+    and bumps the hand-written `package.json` files for `blazen-node`,
+    `blazen-wasm-sdk`, and `blazen-workers-alias`.
+
+    The strip matters: the cross-build environments (notably the musl
+    wheel/napi containers) do NOT pick up the repo `.cargo/config.toml`
+    that defines the `forgejo` registry, so a `registry = "forgejo"` dep is
+    an unknown registry there and the build fails. Path deps build fine
+    without it. (Observed: run 674 stripped -> musl green; run 678 kept ->
+    all three musl targets failed while gnu/darwin/windows passed.)
+
+Keep-registry mode — used ONLY by the publish-rust job:
+    python3 scripts/stamp-version.py <VERSION> --keep-forgejo-registry
+
+    Same as default but KEEPS `, registry = "forgejo"` so `cargo publish
+    --registry forgejo` resolves each crate's sibling deps from the private
+    Forgejo cargo registry (not crates.io). The publish-rust job runs
+    setup-rust, which configures the forgejo registry + token, so the
+    registry resolves there.
 
 Rename-wasm-pkg mode:
     python3 scripts/stamp-version.py <VERSION> --rename-wasm-pkg
@@ -33,7 +49,7 @@ import sys
 PUBLISHED_WASM_NAME = "@blazen-dev/wasm"
 
 
-def stamp_default(repo: pathlib.Path, version: str) -> None:
+def stamp_default(repo: pathlib.Path, version: str, keep_forgejo_registry: bool = False) -> None:
     # 1. Every Cargo.toml: 0.0.0-dev -> VERSION
     for cargo in repo.rglob("Cargo.toml"):
         if "target" in cargo.parts:
@@ -43,14 +59,17 @@ def stamp_default(repo: pathlib.Path, version: str) -> None:
         if new != text:
             cargo.write_text(new)
 
-    # 2. Root Cargo.toml: KEEP `, registry = "forgejo"` on the inter-crate
-    # workspace deps. We publish the workspace to the private Forgejo cargo
-    # registry (release.yaml publish-rust `registry: forgejo`), so each crate's
-    # dependency on a sibling crate must resolve from Forgejo — not crates.io.
-    # (Stripping it here, as a prior crates.io-targeted flow did, makes
-    # `cargo publish` look for `blazen-events` etc. on public crates.io, which
-    # don't exist there → publish fails. Path deps ignore `registry` for builds,
-    # so keeping it has no effect on the wheel/napi build jobs.)
+    # 2. Root Cargo.toml: STRIP `, registry = "forgejo"` off the inter-crate
+    # workspace deps by default — the cross-build envs (musl wheel/napi
+    # containers) don't see the repo `.cargo/config.toml` that defines the
+    # `forgejo` registry, so the dep is an unknown registry there and the build
+    # fails (run 678: all musl targets failed; run 674, which stripped, passed).
+    # publish-rust passes --keep-forgejo-registry so `cargo publish --registry
+    # forgejo` resolves siblings from Forgejo (it configures the registry+token).
+    if not keep_forgejo_registry:
+        root_cargo = repo / "Cargo.toml"
+        root_text = root_cargo.read_text()
+        root_cargo.write_text(root_text.replace(', registry = "forgejo"', ""))
 
     # 3. Node package.json: 0.1.0 -> VERSION (for blazen-node)
     node_pkg = repo / "crates" / "blazen-node" / "package.json"
@@ -114,6 +133,17 @@ def main() -> None:
             "`wasm-pack build`. Skips all other stamping."
         ),
     )
+    parser.add_argument(
+        "--keep-forgejo-registry",
+        action="store_true",
+        help=(
+            "Keep `, registry = \"forgejo\"` on the root Cargo.toml inter-crate deps "
+            "(default strips it). Pass this ONLY from the publish-rust job so "
+            "`cargo publish --registry forgejo` resolves siblings from Forgejo. "
+            "Build jobs must NOT pass it (their cross-build envs lack the forgejo "
+            "registry config and would fail to resolve the dep)."
+        ),
+    )
     args = parser.parse_args()
 
     repo = pathlib.Path(__file__).resolve().parent.parent
@@ -122,8 +152,9 @@ def main() -> None:
         rename_wasm_pkg(repo, args.version)
         print(f"renamed wasm pkg/package.json: name={PUBLISHED_WASM_NAME} version={args.version}")
     else:
-        stamp_default(repo, args.version)
-        print(f"stamped version={args.version}")
+        stamp_default(repo, args.version, keep_forgejo_registry=args.keep_forgejo_registry)
+        kept = "kept" if args.keep_forgejo_registry else "stripped"
+        print(f"stamped version={args.version} (forgejo registry {kept})")
 
 
 if __name__ == "__main__":

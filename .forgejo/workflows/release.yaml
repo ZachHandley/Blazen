@@ -184,7 +184,11 @@ jobs:
 
       - name: Stamp version
         if: steps.check.outputs.completed != 'true'
-        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
+        # --keep-forgejo-registry: publish-rust is the ONLY job that keeps the
+        # `registry = "forgejo"` dep markers, so `cargo publish --registry
+        # forgejo` resolves siblings from Forgejo. Build jobs strip them (their
+        # cross-build envs lack the forgejo registry config).
+        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }} --keep-forgejo-registry
 
       - name: Publish crates in dependency order
         if: steps.check.outputs.completed != 'true'
