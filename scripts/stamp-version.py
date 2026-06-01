@@ -8,9 +8,10 @@ Default mode (no flags):
     python3 scripts/stamp-version.py <VERSION>
 
     Stamps `0.0.0-dev` -> VERSION across every workspace `Cargo.toml`
-    (excluding `target/`), strips `, registry = "forgejo"` from the root
-    `Cargo.toml`, and bumps the hand-written `package.json` files for
-    `blazen-node`, `blazen-wasm-sdk`, and `blazen-workers-alias`.
+    (excluding `target/`), KEEPS `registry = "forgejo"` on the root
+    `Cargo.toml` inter-crate deps (the workspace publishes to the private
+    Forgejo cargo registry), and bumps the hand-written `package.json` files
+    for `blazen-node`, `blazen-wasm-sdk`, and `blazen-workers-alias`.
 
 Rename-wasm-pkg mode:
     python3 scripts/stamp-version.py <VERSION> --rename-wasm-pkg
@@ -42,10 +43,14 @@ def stamp_default(repo: pathlib.Path, version: str) -> None:
         if new != text:
             cargo.write_text(new)
 
-    # 2. Root Cargo.toml only: strip `, registry = "forgejo"`
-    root_cargo = repo / "Cargo.toml"
-    root_text = root_cargo.read_text()
-    root_cargo.write_text(root_text.replace(', registry = "forgejo"', ""))
+    # 2. Root Cargo.toml: KEEP `, registry = "forgejo"` on the inter-crate
+    # workspace deps. We publish the workspace to the private Forgejo cargo
+    # registry (release.yaml publish-rust `registry: forgejo`), so each crate's
+    # dependency on a sibling crate must resolve from Forgejo — not crates.io.
+    # (Stripping it here, as a prior crates.io-targeted flow did, makes
+    # `cargo publish` look for `blazen-events` etc. on public crates.io, which
+    # don't exist there → publish fails. Path deps ignore `registry` for builds,
+    # so keeping it has no effect on the wheel/napi build jobs.)
 
     # 3. Node package.json: 0.1.0 -> VERSION (for blazen-node)
     node_pkg = repo / "crates" / "blazen-node" / "package.json"

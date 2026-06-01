@@ -191,9 +191,16 @@ jobs:
         uses: https://forge.blackleafdigital.com/Public/actions/cargo-publish-workspace@main
         with:
           version: ${{ needs.version.outputs.version }}
-          registry: crates-io
+          # Publish to the PRIVATE Forgejo cargo registry (named `forgejo` in
+          # .cargo/config.toml + configured by setup-rust above), NOT public
+          # crates.io. The action translates `cargo-token` into
+          # CARGO_REGISTRIES_FORGEJO_TOKEN for a non-`crates-io` registry.
+          # `sparse-index-url` points the idempotency/existence check at the
+          # Forgejo sparse index instead of the crates.io REST API.
+          registry: forgejo
+          sparse-index-url: https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/
           exclude: blazen-py,blazen-node
-          cargo-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+          cargo-token: ${{ secrets.FORGEJO_ACTIONS_TOKEN }}
           max-backoff-seconds: '300'
           max-attempts-per-crate: '5'
 
