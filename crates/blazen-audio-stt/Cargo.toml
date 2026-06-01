@@ -41,16 +41,21 @@ whisper-rs = { version = "0.16", default-features = false, optional = true }
 #   - `x86_64-pc-windows-msvc`: `sentencepiece-sys`'s cmake/MSVC build fails
 #     (`cmake --build … sentencepiece-sys … exit code 1`), breaking the
 #     uniffi/cabi windows artifacts.
+#   - `*-unknown-linux-musl` (`target_env = "musl"`): CTranslate2's vendored
+#     `spdlog` uses glibc-only `struct stat64` / `::fstat64`
+#     (`spdlog/details/os-inl.h`: `'::fstat64' has not been declared`), which
+#     do not exist on musl (musl's `off_t` is always 64-bit), so the C++
+#     build fails — breaking the musl wheel/napi artifacts.
 #
-# We therefore target-gate `ct2rs` OUT of both triples and compile the
+# We therefore target-gate `ct2rs` OUT of those triples and compile the
 # `faster_whisper` backend to a runtime stub there (see
 # `src/backends/faster_whisper/decoder_stub.rs`), mirroring the precedent in
 # `blazen-embed-fastembed` for ORT. The public `FasterWhisperBackend` /
 # `FasterWhisperConfig` types — and the uniffi/cabi symbol surface that
 # depends on them — exist identically on every target; only the underlying
 # CTranslate2 inference is replaced by an `SttError::Unsupported` stub on
-# those two triples.
-[target.'cfg(not(any(all(target_arch = "x86_64", target_os = "macos"), all(target_arch = "x86_64", target_os = "windows"))))'.dependencies]
+# those triples.
+[target.'cfg(not(any(all(target_arch = "x86_64", target_os = "macos"), all(target_arch = "x86_64", target_os = "windows"), target_env = "musl")))'.dependencies]
 ct2rs = { version = "0.9.18", features = ["whisper"], optional = true }
 
 [features]

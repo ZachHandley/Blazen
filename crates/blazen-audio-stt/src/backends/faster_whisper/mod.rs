@@ -64,17 +64,20 @@ mod weights;
 // Keep this predicate in lockstep with the `ct2rs` target-gate in Cargo.toml.
 #[cfg(not(any(
     all(target_arch = "x86_64", target_os = "macos"),
-    all(target_arch = "x86_64", target_os = "windows")
+    all(target_arch = "x86_64", target_os = "windows"),
+    target_env = "musl"
 )))]
 mod decoder;
 #[cfg(any(
     all(target_arch = "x86_64", target_os = "macos"),
-    all(target_arch = "x86_64", target_os = "windows")
+    all(target_arch = "x86_64", target_os = "windows"),
+    target_env = "musl"
 ))]
 mod decoder_stub;
 #[cfg(any(
     all(target_arch = "x86_64", target_os = "macos"),
-    all(target_arch = "x86_64", target_os = "windows")
+    all(target_arch = "x86_64", target_os = "windows"),
+    target_env = "musl"
 ))]
 use decoder_stub as decoder;
 
@@ -581,13 +584,14 @@ mod tests {
     /// symbol, ABI mismatch, build failure), this test refuses to
     /// link and the failure surfaces at compile / load time rather
     /// than buried in the first transcription call.
-    // `ct2rs` is gated out on `x86_64-apple-darwin` and
-    // `x86_64-pc-windows-msvc` (the decoder compiles to a stub there — see the
-    // `decoder` module cfg above), so the link probe only exists on targets
-    // that actually link CTranslate2.
+    // `ct2rs` is gated out on `x86_64-apple-darwin`,
+    // `x86_64-pc-windows-msvc`, and all musl targets (the decoder compiles to
+    // a stub there — see the `decoder` module cfg above), so the link probe
+    // only exists on targets that actually link CTranslate2.
     #[cfg(not(any(
         all(target_arch = "x86_64", target_os = "macos"),
-        all(target_arch = "x86_64", target_os = "windows")
+        all(target_arch = "x86_64", target_os = "windows"),
+        target_env = "musl"
     )))]
     #[test]
     fn link_probe_ct2rs_loads_successfully() {
