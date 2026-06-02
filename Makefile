@@ -51,6 +51,7 @@ KOTLIN_JNA_DIR ?= linux-x86-64
         regen-uniffi regen-cabi regen-all \
         audit-bindings \
         build-uniffi-libs \
+        prune-pypi \
         ci-fast ci-bindings ci-smoke ci \
         tmpdir-info clean \
         _ensure-tmpdir _require-fal-keys
@@ -367,6 +368,21 @@ audit-bindings:
 ## build-uniffi-libs  Build libblazen_uniffi + libblazen_cabi for $(UNIFFI_HOST_TRIPLE)
 build-uniffi-libs:
 	./scripts/build-uniffi-lib.sh $(UNIFFI_HOST_TRIPLE)
+
+# -----------------------------------------------------------------------------
+# Maintenance
+# -----------------------------------------------------------------------------
+
+## prune-pypi         Preview PyPI releases to delete (frees project size quota).
+##                    Dry-run by default. To apply (prompts for password+OTP —
+##                    PyPI 2FA can't be headless, so run this yourself):
+##                      PYPI_CLEANUP_PASSWORD=... make prune-pypi DO_IT=1 PYPI_USER=<user>
+##                    Size-target mode: make prune-pypi TARGET_GB=8
+prune-pypi:
+	python3 scripts/prune-pypi.py \
+	  $(if $(TARGET_GB),--target-gb $(TARGET_GB)) \
+	  $(if $(PYPI_USER),-u $(PYPI_USER)) \
+	  $(if $(DO_IT),--do-it)
 
 # -----------------------------------------------------------------------------
 # Aggregate CI gates
