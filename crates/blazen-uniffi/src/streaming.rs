@@ -149,7 +149,7 @@ pub trait CompletionStreamSink: Send + Sync {
 /// `sink.on_error(...)` exactly once and returns `Ok(())` — keeping the
 /// foreign-language surface symmetric (the sink owns both happy-path and
 /// error-path observation).
-pub(crate) async fn drive_completion_stream(
+pub async fn drive_completion_stream(
     stream: Pin<
         Box<dyn Stream<Item = Result<blazen_llm::StreamChunk, blazen_llm::BlazenError>> + Send>,
     >,

@@ -1512,6 +1512,21 @@ module Blazen
     attach_function :blazen_model_manager_complete,
                     [:pointer, :pointer, :pointer], :pointer
 
+    # Streaming by-name dispatch. Like +complete[_blocking]+ these consume the
+    # request pointer; the vtable's +user_data+ is consumed too (released via
+    # +drop_user_data+ once the stream terminates). Mid-stream errors surface
+    # through the sink's +on_error+; only a start-side failure returns -1
+    # (blocking) / routes through +on_error+ + a unit future (async).
+    attach_function :blazen_model_manager_stream_blocking,
+                    [:pointer, :pointer, :pointer,
+                     BlazenCompletionStreamSinkVTable.by_value, :pointer],
+                    :int32,
+                    blocking: true
+    attach_function :blazen_model_manager_stream,
+                    [:pointer, :pointer, :pointer,
+                     BlazenCompletionStreamSinkVTable.by_value],
+                    :pointer
+
     attach_function :blazen_model_manager_load_blocking,
                     [:pointer, :pointer, :pointer], :int32, blocking: true
     attach_function :blazen_model_manager_load,

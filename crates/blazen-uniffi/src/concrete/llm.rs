@@ -2428,7 +2428,7 @@ pub fn candle_provider_complete_streaming_blocking(
 
 use crate::manager::UniffiModel;
 
-/// Generate the `pub(crate) fn as_model()` accessor + the exported
+/// Generate the `pub fn as_model()` accessor + the exported
 /// `to_model()` constructor for one concrete provider. Hand-expanded per
 /// engine because `#[uniffi::export]` reads pre-expansion tokens.
 macro_rules! impl_as_model {
@@ -2436,7 +2436,13 @@ macro_rules! impl_as_model {
         impl $provider {
             /// Erase the wrapped provider to `Arc<dyn blazen_llm::Model>` for
             /// registration in the unified [`UniffiModelManager`] registry.
-            pub(crate) fn as_model(&self) -> Arc<dyn blazen_llm::Model> {
+            ///
+            /// `pub` (not `pub(crate)`) so the cabi layer
+            /// (`blazen-cabi`'s `BlazenLlmProvider`) can carry the real
+            /// `Arc<dyn Model>` — which streams — alongside the
+            /// capability-erased completion trait, enabling by-name
+            /// streaming through the C-ABI `ModelManager`.
+            pub fn as_model(&self) -> Arc<dyn blazen_llm::Model> {
                 Arc::clone(&self.inner) as Arc<dyn blazen_llm::Model>
             }
         }

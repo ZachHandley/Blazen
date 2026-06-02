@@ -182,7 +182,7 @@ pub unsafe extern "C" fn blazen_complete_batch_blocking(
     };
     // SAFETY: caller has guaranteed `provider` is a live `BlazenLlmProvider`.
     let m = unsafe { &*provider };
-    let inner_provider = Arc::clone(&m.0);
+    let inner_provider = Arc::clone(&m.provider);
 
     let result: Result<InnerBatchResult, InnerError> = runtime().block_on(async move {
         blazen_uniffi::batch::complete_batch(inner_provider, core_requests, max_concurrency).await
@@ -247,7 +247,7 @@ pub unsafe extern "C" fn blazen_complete_batch(
     };
     // SAFETY: caller has guaranteed `provider` is a live `BlazenLlmProvider`.
     let m = unsafe { &*provider };
-    let inner_provider = Arc::clone(&m.0);
+    let inner_provider = Arc::clone(&m.provider);
 
     BlazenFuture::spawn(async move {
         blazen_uniffi::batch::complete_batch(inner_provider, core_requests, max_concurrency).await

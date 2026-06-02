@@ -54,6 +54,7 @@ use crate::manager_records::{
     BlazenPoolStatusList,
 };
 use crate::runtime::runtime;
+use crate::stream_sink::{BlazenCompletionStreamSinkVTable, CStreamSink};
 use crate::string::cstr_to_str;
 
 // ---------------------------------------------------------------------------
@@ -551,6 +552,185 @@ pub unsafe extern "C" fn blazen_model_manager_complete(
             .await
             .map(blazen_uniffi::llm::ModelResponse::from)
             .map_err(into_inner_error)
+    })
+}
+
+/// Synchronously streams a chat completion against the provider registered
+/// under `id`, driving each chunk into the foreign sink described by `vtable`.
+///
+/// Returns `0` once the stream terminates (including streams that fail
+/// mid-flight — those errors are delivered to the sink via `on_error`, not the
+/// return value). Returns `-1` (and writes `*out_err`) only on a start-side
+/// failure that emits no frames: null manager, null/non-UTF-8 `id`,
+/// null/invalid `request`, or a failure to *open* the stream. This mirrors
+/// [`crate::model_client::blazen_modelclient_stream_complete_blocking`] so all
+/// streaming surfaces observe a uniform happy/error split.
+///
+/// **The `request` pointer is consumed** (as with
+/// [`blazen_model_manager_complete_blocking`]): it is reclaimed internally on
+/// every path. Do not also call
+/// [`crate::llm_records::blazen_model_request_free`] on it afterwards.
+///
+/// ## Ownership of `vtable`
+///
+/// `vtable.user_data` is CONSUMED: ownership transfers to the wrapping
+/// [`CStreamSink`], which releases it via `drop_user_data` exactly once on
+/// drop. On every early-return path that aborts BEFORE the sink is
+/// constructed, this function invokes `(vtable.drop_user_data)(vtable.user_data)`
+/// itself (and reclaims `request`) to honour the same contract.
+///
+/// # Safety
+///
+/// `mgr` must be null OR a live [`BlazenModelManager`]. `id` must be a
+/// NUL-terminated UTF-8 buffer valid for the call. `request` must be null OR a
+/// live [`BlazenModelRequest`]; ownership transfers to this function
+/// regardless of outcome. `vtable.user_data` and its four function pointers
+/// must satisfy the [`BlazenCompletionStreamSinkVTable`] contract. `out_err`
+/// is null OR a single-writer destination.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_stream_blocking(
+    mgr: *const BlazenModelManager,
+    id: *const c_char,
+    request: *mut BlazenModelRequest,
+    vtable: BlazenCompletionStreamSinkVTable,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if mgr.is_null() {
+        (vtable.drop_user_data)(vtable.user_data);
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; drop to avoid a leak.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        // SAFETY: out_err contract per the per-fn doc.
+        return unsafe {
+            write_internal_error(out_err, "blazen_model_manager_stream_blocking: null manager")
+        };
+    }
+    if request.is_null() {
+        (vtable.drop_user_data)(vtable.user_data);
+        // SAFETY: out_err contract per the per-fn doc.
+        return unsafe {
+            write_internal_error(out_err, "blazen_model_manager_stream_blocking: null request")
+        };
+    }
+    // SAFETY: out_err + id contracts per the per-fn doc.
+    let Some(id) =
+        (unsafe { borrow_model_id("blazen_model_manager_stream_blocking", id, out_err) })
+    else {
+        (vtable.drop_user_data)(vtable.user_data);
+        // SAFETY: caller transferred ownership of `request`; drop to avoid a leak.
+        drop(unsafe { Box::from_raw(request) });
+        return -1;
+    };
+    // SAFETY: caller has transferred ownership of `request`.
+    let wire_request = unsafe { Box::from_raw(request) }.0;
+    let core_request = match blazen_llm::ModelRequest::try_from(wire_request) {
+        Ok(r) => r,
+        Err(e) => {
+            (vtable.drop_user_data)(vtable.user_data);
+            // SAFETY: out_err contract per the per-fn doc.
+            return unsafe { write_error(out_err, e) };
+        }
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+
+    // From here on, `CStreamSink::drop` is responsible for invoking
+    // `drop_user_data` exactly once.
+    let sink_arc: Arc<dyn blazen_uniffi::streaming::CompletionStreamSink> =
+        Arc::new(CStreamSink::from_vtable(vtable));
+
+    runtime().block_on(async move {
+        let stream = match inner.stream(&id, core_request).await {
+            Ok(s) => s,
+            // No frames emitted yet — report the start-failure through the
+            // `-1` return + `*out_err` (the sink owns only mid-stream errors).
+            // SAFETY: out_err contract per the per-fn doc.
+            Err(e) => return unsafe { write_error(out_err, into_inner_error(e)) },
+        };
+        // `drive_completion_stream` delivers every subsequent chunk/error to
+        // the sink and always resolves to `Ok(())`.
+        let _ = blazen_uniffi::streaming::drive_completion_stream(stream, sink_arc).await;
+        0
+    })
+}
+
+/// Spawns a by-name streaming completion onto the cabi tokio runtime, driving
+/// each chunk into the foreign sink described by `vtable`. Pop the (unit)
+/// result with [`crate::future::blazen_future_take_unit`]. Returns null on an
+/// argument-shape failure (null manager / null or non-UTF-8 `id` / null or
+/// invalid `request`); the `request` pointer is consumed in every case
+/// (dropped on the null/invalid paths to avoid a leak), and on those paths
+/// `vtable.drop_user_data` is invoked before returning.
+///
+/// Unlike the `_blocking` variant, a failure to *open* the stream is reported
+/// through the sink's `on_error` (the future still resolves to unit `Ok`),
+/// matching how the per-engine async `<engine>_provider_complete_streaming`
+/// functions and [`blazen_manager::ModelManager::stream`] surface late vs.
+/// early failures once a future has been handed back.
+///
+/// # Safety
+///
+/// Same as [`blazen_model_manager_stream_blocking`] (minus `out_err`). The
+/// request buffer is taken before this function returns; `vtable.user_data`
+/// transfers to the spawned task's sink.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_stream(
+    mgr: *const BlazenModelManager,
+    id: *const c_char,
+    request: *mut BlazenModelRequest,
+    vtable: BlazenCompletionStreamSinkVTable,
+) -> *mut BlazenFuture {
+    if mgr.is_null() {
+        (vtable.drop_user_data)(vtable.user_data);
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; drop to avoid a leak.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        return std::ptr::null_mut();
+    }
+    if request.is_null() {
+        (vtable.drop_user_data)(vtable.user_data);
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the NUL + lifetime contract on `id`.
+    let Some(id) = (unsafe { cstr_to_str(id) }).map(str::to_owned) else {
+        (vtable.drop_user_data)(vtable.user_data);
+        // SAFETY: caller transferred ownership; drop to avoid a leak.
+        drop(unsafe { Box::from_raw(request) });
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller has transferred ownership of `request`.
+    let wire_request = unsafe { Box::from_raw(request) }.0;
+    let Ok(core_request) = blazen_llm::ModelRequest::try_from(wire_request) else {
+        (vtable.drop_user_data)(vtable.user_data);
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+
+    // From here on, `CStreamSink::drop` is responsible for invoking
+    // `drop_user_data` exactly once.
+    let sink_arc: Arc<dyn blazen_uniffi::streaming::CompletionStreamSink> =
+        Arc::new(CStreamSink::from_vtable(vtable));
+
+    BlazenFuture::spawn(async move {
+        match inner.stream(&id, core_request).await {
+            Ok(stream) => {
+                // Mid-stream chunks/errors flow to the sink; always Ok(()).
+                let _ =
+                    blazen_uniffi::streaming::drive_completion_stream(stream, sink_arc).await;
+            }
+            Err(e) => {
+                // A future was already handed back, so route the start-failure
+                // through the sink (mirroring the per-engine async streams)
+                // rather than failing the unit future.
+                let _ = sink_arc.on_error(into_inner_error(e)).await;
+            }
+        }
+        Ok::<(), InnerError>(())
     })
 }
 

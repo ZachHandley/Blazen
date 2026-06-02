@@ -358,7 +358,7 @@ pub unsafe extern "C" fn blazen_agent_new(
 
     // SAFETY: caller has guaranteed `provider` is a live `BlazenLlmProvider`.
     let provider_handle = unsafe { &*provider };
-    let provider_arc = Arc::clone(&provider_handle.0);
+    let provider_arc = Arc::clone(&provider_handle.provider);
 
     // SAFETY: caller upholds the NUL-terminated UTF-8 contract on
     // `system_prompt` (null is valid and becomes `None`).

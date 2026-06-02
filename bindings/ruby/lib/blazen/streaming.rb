@@ -466,11 +466,15 @@ module Blazen
     # +#as_llm_provider+ (or against a {Blazen::LlmProvider} directly).
     #
     # NOTE: the polymorphic +BlazenLlmProvider *+ opaque does NOT itself
-    # expose a streaming entry point on the cabi side. Callers who hold
-    # only a polymorphic handle must instead use the per-engine
-    # provider's +#stream+ / +#stream_async+ methods (e.g.
-    # +Blazen::OpenAiProvider#stream+) — those route through this
-    # module's {drive_completion} symbol-parameterised core.
+    # expose a *direct* streaming entry point on the cabi side. Callers who
+    # hold only a polymorphic handle must instead either (a) use the
+    # per-engine provider's +#stream+ / +#stream_async+ methods (e.g.
+    # +Blazen::OpenAiProvider#stream+) — those route through this module's
+    # {drive_completion} symbol-parameterised core — or (b) register the
+    # provider into a {Blazen::ModelManager} and stream BY NAME via
+    # {Blazen::ModelManager#stream} (which routes through
+    # {drive_manager_completion}; the manager carries the provider's real
+    # streaming-capable model).
     #
     # When +provider+ is a per-engine class, this convenience wrapper
     # delegates to its +#stream+ / +#stream_async+ method (if defined),
@@ -551,6 +555,55 @@ module Blazen
           Blazen::FFI.check_error!(out_err)
         else
           fut = Blazen::FFI.public_send(sym, ptr, req_ptr, vtable)
+          registered = false
+          raise Blazen::InternalError, "#{sym} returned null" if fut.nil? || fut.null?
+
+          Blazen::FFI.await_future(fut) do |f|
+            out_err = ::FFI::MemoryPointer.new(:pointer)
+            Blazen::FFI.blazen_future_take_unit(f, out_err)
+            Blazen::FFI.check_error!(out_err)
+          end
+        end
+        nil
+      ensure
+        unregister_sink(sink_id) if registered
+      end
+    end
+
+    # Drive a by-name streaming chat completion through +sym+
+    # (+blazen_model_manager_stream[_blocking]+) against a
+    # {Blazen::ModelManager} handle. Mirrors {drive_completion} but threads an
+    # extra +id+ argument (the registered model/provider name) between the
+    # manager handle and the request pointer — matching the cabi signature
+    # +(mgr, id, request, vtable[, out_err])+. +request+ is consumed.
+    #
+    # @param ptr [::FFI::Pointer] live +BlazenModelManager *+ handle
+    # @param id [String, #to_s] registered model/provider name to dispatch to
+    # @param request [Blazen::Llm::ModelRequest] consumed by the call
+    # @param sym [Symbol] cabi streaming entry point
+    # @param blocking [Boolean] +true+ for the blocking variant
+    # @return [void]
+    def drive_manager_completion(ptr, id, request, sym, blocking:,
+                                 on_chunk: nil, on_done: nil, on_error: nil, &block)
+      handlers = build_handlers(on_chunk, on_done, on_error, block)
+      sink_id = register_sink(handlers)
+      registered = true
+
+      begin
+        vtable = build_vtable(sink_id)
+        req_ptr = consume_request!(request)
+
+        if blocking
+          out_err = ::FFI::MemoryPointer.new(:pointer)
+          Blazen::FFI.with_cstring(id.to_s) do |id_ptr|
+            Blazen::FFI.public_send(sym, ptr, id_ptr, req_ptr, vtable, out_err)
+          end
+          registered = false
+          Blazen::FFI.check_error!(out_err)
+        else
+          fut = Blazen::FFI.with_cstring(id.to_s) do |id_ptr|
+            Blazen::FFI.public_send(sym, ptr, id_ptr, req_ptr, vtable)
+          end
           registered = false
           raise Blazen::InternalError, "#{sym} returned null" if fut.nil? || fut.null?
 

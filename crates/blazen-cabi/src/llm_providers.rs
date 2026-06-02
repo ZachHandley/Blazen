@@ -3530,7 +3530,7 @@ pub unsafe extern "C" fn blazen_openai_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3545,7 +3545,7 @@ pub unsafe extern "C" fn blazen_anthropic_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3560,7 +3560,7 @@ pub unsafe extern "C" fn blazen_gemini_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3575,7 +3575,7 @@ pub unsafe extern "C" fn blazen_azure_openai_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3590,7 +3590,7 @@ pub unsafe extern "C" fn blazen_bedrock_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3605,7 +3605,7 @@ pub unsafe extern "C" fn blazen_mistral_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3620,7 +3620,7 @@ pub unsafe extern "C" fn blazen_fireworks_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3635,7 +3635,7 @@ pub unsafe extern "C" fn blazen_deepseek_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3650,7 +3650,7 @@ pub unsafe extern "C" fn blazen_perplexity_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3665,7 +3665,7 @@ pub unsafe extern "C" fn blazen_together_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3680,7 +3680,7 @@ pub unsafe extern "C" fn blazen_groq_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3695,7 +3695,7 @@ pub unsafe extern "C" fn blazen_openrouter_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3710,7 +3710,7 @@ pub unsafe extern "C" fn blazen_cohere_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3725,7 +3725,7 @@ pub unsafe extern "C" fn blazen_xai_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3740,7 +3740,7 @@ pub unsafe extern "C" fn blazen_fal_llm_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3755,7 +3755,7 @@ pub unsafe extern "C" fn blazen_openai_compat_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3770,7 +3770,7 @@ pub unsafe extern "C" fn blazen_ollama_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3785,7 +3785,7 @@ pub unsafe extern "C" fn blazen_lm_studio_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3801,7 +3801,7 @@ pub unsafe extern "C" fn blazen_mistralrs_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3817,7 +3817,7 @@ pub unsafe extern "C" fn blazen_llamacpp_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }
 
 /// # Safety
@@ -3833,5 +3833,5 @@ pub unsafe extern "C" fn blazen_candle_provider_as_llm_provider(
     }
     // SAFETY: caller has guaranteed `handle` is a live handle.
     let h = unsafe { &*handle };
-    BlazenLlmProvider(h.0.clone()).into_ptr()
+    BlazenLlmProvider::new(h.0.clone(), h.0.as_model()).into_ptr()
 }

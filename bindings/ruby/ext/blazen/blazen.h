@@ -625,9 +625,19 @@ typedef struct BlazenKokoroProvider BlazenKokoroProvider;
 typedef struct BlazenLlamaCppProvider BlazenLlamaCppProvider;
 
 /**
- * Opaque wrapper around `Arc<dyn blazen_uniffi::concrete::bases::LlmProvider>`.
+ * Opaque wrapper carrying both the capability-erased completion provider and
+ * the real `Arc<dyn blazen_llm::Model>` for the same concrete engine.
  *
  * Free with [`blazen_llm_provider_free`].
+ *
+ * Why two fields: `provider` is the uniffi completion capability trait
+ * (`complete` only) used by the Agent / batch surfaces; `model` is the full
+ * `blazen_llm::Model` (which also streams). The per-engine
+ * `..._as_llm_provider` C functions populate both from the same concrete
+ * `Arc<<Engine>Provider>` (via its now-`pub` `as_model()` accessor), so a
+ * remote provider registered by name through the C-ABI `ModelManager` can
+ * dispatch BOTH completion and streaming — the stream surface is no longer
+ * lost at the capability-erasure boundary.
  */
 typedef struct BlazenLlmProvider BlazenLlmProvider;
 
@@ -1432,6 +1442,77 @@ typedef struct {
 } BlazenFullFineTuneResult;
 
 /**
+ * Function-pointer vtable a foreign caller fills out to implement
+ * [`CompletionStreamSink`] across the C ABI.
+ *
+ * All three callbacks plus `drop_user_data` are required (no nullable
+ * function pointers). The vtable is consumed by
+ * [`blazen_complete_streaming`] / [`blazen_complete_streaming_blocking`],
+ * which take ownership of `user_data` and the function pointers for the
+ * lifetime of the streaming call. `drop_user_data` runs exactly once when
+ * the wrapping [`CStreamSink`] drops (after the stream has terminated, or on
+ * an early-return failure path before the stream starts).
+ *
+ * ## Thread safety
+ *
+ * The streaming engine schedules callbacks on tokio worker threads which
+ * will generally differ from the thread that registered the sink. The
+ * foreign side guarantees that `user_data` and the function pointers are
+ * safe to invoke from any thread. In Ruby, the `ffi` gem's `FFI::Callback`
+ * reacquires the GVL automatically before invoking the user-provided block;
+ * in Dart, `NativeCallable.listener` marshals back to the isolate event
+ * loop; in native hosts the responsibility falls to the embedder.
+ *
+ * ## Callback contracts
+ *
+ * See the module-level docs for the per-callback ownership rules. In
+ * summary: every pointer passed *into* a callback is caller-owned and the
+ * callback must free it (or consume it into a derivative structure) before
+ * returning. Every pointer the callback writes *out* (`out_err`) becomes
+ * caller-owned and the cabi will free it after consuming.
+ */
+typedef struct {
+    /**
+     * Opaque foreign-side context handed back to each callback. Owned by
+     * this vtable struct; released via `drop_user_data` when the wrapper
+     * drops.
+     */
+    void *user_data;
+    /**
+     * Invoked exactly once when the wrapping `CStreamSink` drops.
+     * Implementations should reclaim and release `user_data`.
+     */
+    void (*drop_user_data)(void *user_data);
+    /**
+     * Receive a single chunk. `chunk` is caller-owned; the callback MUST
+     * free it via `blazen_stream_chunk_free` (or consume it into a
+     * derivative structure). Returns `0` on success or `-1` on failure
+     * (writing a fresh `*mut BlazenError` into `*out_err`). A `-1` aborts
+     * the stream.
+     */
+    int32_t (*on_chunk)(void *user_data, BlazenStreamChunk *chunk, BlazenError **out_err);
+    /**
+     * Receive the terminal completion signal. `finish_reason` is a
+     * caller-owned `*mut c_char` freed via `blazen_string_free`; `usage`
+     * is a caller-owned `*mut BlazenTokenUsage` freed via
+     * `blazen_token_usage_free`. Returns `0` on success or `-1` on
+     * failure (writing a fresh `*mut BlazenError` into `*out_err`).
+     */
+    int32_t (*on_done)(void *user_data,
+                       char *finish_reason,
+                       BlazenTokenUsage *usage,
+                       BlazenError **out_err);
+    /**
+     * Receive a fatal error from the stream. `err` is a caller-owned
+     * `*mut BlazenError` freed via `blazen_error_free`. Returns `0` on
+     * success or `-1` on failure (writing the callback's own error into
+     * `*out_err`). A `-1` from `on_error` is logged via the resulting
+     * `BlazenResult` but does NOT trigger a second `on_error` invocation.
+     */
+    int32_t (*on_error)(void *user_data, BlazenError *err, BlazenError **out_err);
+} BlazenCompletionStreamSinkVTable;
+
+/**
  * `#[repr(C)]` mirror of [`blazen_manager::hf_loader::HfLoadOptions`] for the
  * C ABI. Every pointer field is nullable; integer/byte fields use sentinel
  * values to mean "unset" (see per-field docs).
@@ -1880,77 +1961,6 @@ typedef struct {
     char *master_addr;
     uint16_t master_port;
 } BlazenDistributedConfig;
-
-/**
- * Function-pointer vtable a foreign caller fills out to implement
- * [`CompletionStreamSink`] across the C ABI.
- *
- * All three callbacks plus `drop_user_data` are required (no nullable
- * function pointers). The vtable is consumed by
- * [`blazen_complete_streaming`] / [`blazen_complete_streaming_blocking`],
- * which take ownership of `user_data` and the function pointers for the
- * lifetime of the streaming call. `drop_user_data` runs exactly once when
- * the wrapping [`CStreamSink`] drops (after the stream has terminated, or on
- * an early-return failure path before the stream starts).
- *
- * ## Thread safety
- *
- * The streaming engine schedules callbacks on tokio worker threads which
- * will generally differ from the thread that registered the sink. The
- * foreign side guarantees that `user_data` and the function pointers are
- * safe to invoke from any thread. In Ruby, the `ffi` gem's `FFI::Callback`
- * reacquires the GVL automatically before invoking the user-provided block;
- * in Dart, `NativeCallable.listener` marshals back to the isolate event
- * loop; in native hosts the responsibility falls to the embedder.
- *
- * ## Callback contracts
- *
- * See the module-level docs for the per-callback ownership rules. In
- * summary: every pointer passed *into* a callback is caller-owned and the
- * callback must free it (or consume it into a derivative structure) before
- * returning. Every pointer the callback writes *out* (`out_err`) becomes
- * caller-owned and the cabi will free it after consuming.
- */
-typedef struct {
-    /**
-     * Opaque foreign-side context handed back to each callback. Owned by
-     * this vtable struct; released via `drop_user_data` when the wrapper
-     * drops.
-     */
-    void *user_data;
-    /**
-     * Invoked exactly once when the wrapping `CStreamSink` drops.
-     * Implementations should reclaim and release `user_data`.
-     */
-    void (*drop_user_data)(void *user_data);
-    /**
-     * Receive a single chunk. `chunk` is caller-owned; the callback MUST
-     * free it via `blazen_stream_chunk_free` (or consume it into a
-     * derivative structure). Returns `0` on success or `-1` on failure
-     * (writing a fresh `*mut BlazenError` into `*out_err`). A `-1` aborts
-     * the stream.
-     */
-    int32_t (*on_chunk)(void *user_data, BlazenStreamChunk *chunk, BlazenError **out_err);
-    /**
-     * Receive the terminal completion signal. `finish_reason` is a
-     * caller-owned `*mut c_char` freed via `blazen_string_free`; `usage`
-     * is a caller-owned `*mut BlazenTokenUsage` freed via
-     * `blazen_token_usage_free`. Returns `0` on success or `-1` on
-     * failure (writing a fresh `*mut BlazenError` into `*out_err`).
-     */
-    int32_t (*on_done)(void *user_data,
-                       char *finish_reason,
-                       BlazenTokenUsage *usage,
-                       BlazenError **out_err);
-    /**
-     * Receive a fatal error from the stream. `err` is a caller-owned
-     * `*mut BlazenError` freed via `blazen_error_free`. Returns `0` on
-     * success or `-1` on failure (writing the callback's own error into
-     * `*out_err`). A `-1` from `on_error` is logged via the resulting
-     * `BlazenResult` but does NOT trigger a second `on_error` invocation.
-     */
-    int32_t (*on_error)(void *user_data, BlazenError *err, BlazenError **out_err);
-} BlazenCompletionStreamSinkVTable;
 
 /**
  * Opaque wrapper around [`blazen_llm::providers::openai_compat::OpenAiCompatConfig`].
@@ -9052,6 +9062,74 @@ int32_t blazen_model_manager_complete_blocking(const BlazenModelManager *mgr,
 BlazenFuture *blazen_model_manager_complete(const BlazenModelManager *mgr,
                                             const char *id,
                                             BlazenModelRequest *request);
+
+/**
+ * Synchronously streams a chat completion against the provider registered
+ * under `id`, driving each chunk into the foreign sink described by `vtable`.
+ *
+ * Returns `0` once the stream terminates (including streams that fail
+ * mid-flight — those errors are delivered to the sink via `on_error`, not the
+ * return value). Returns `-1` (and writes `*out_err`) only on a start-side
+ * failure that emits no frames: null manager, null/non-UTF-8 `id`,
+ * null/invalid `request`, or a failure to *open* the stream. This mirrors
+ * [`crate::model_client::blazen_modelclient_stream_complete_blocking`] so all
+ * streaming surfaces observe a uniform happy/error split.
+ *
+ * **The `request` pointer is consumed** (as with
+ * [`blazen_model_manager_complete_blocking`]): it is reclaimed internally on
+ * every path. Do not also call
+ * [`crate::llm_records::blazen_model_request_free`] on it afterwards.
+ *
+ * ## Ownership of `vtable`
+ *
+ * `vtable.user_data` is CONSUMED: ownership transfers to the wrapping
+ * [`CStreamSink`], which releases it via `drop_user_data` exactly once on
+ * drop. On every early-return path that aborts BEFORE the sink is
+ * constructed, this function invokes `(vtable.drop_user_data)(vtable.user_data)`
+ * itself (and reclaims `request`) to honour the same contract.
+ *
+ * # Safety
+ *
+ * `mgr` must be null OR a live [`BlazenModelManager`]. `id` must be a
+ * NUL-terminated UTF-8 buffer valid for the call. `request` must be null OR a
+ * live [`BlazenModelRequest`]; ownership transfers to this function
+ * regardless of outcome. `vtable.user_data` and its four function pointers
+ * must satisfy the [`BlazenCompletionStreamSinkVTable`] contract. `out_err`
+ * is null OR a single-writer destination.
+ */
+
+int32_t blazen_model_manager_stream_blocking(const BlazenModelManager *mgr,
+                                             const char *id,
+                                             BlazenModelRequest *request,
+                                             BlazenCompletionStreamSinkVTable vtable,
+                                             BlazenError **out_err);
+
+/**
+ * Spawns a by-name streaming completion onto the cabi tokio runtime, driving
+ * each chunk into the foreign sink described by `vtable`. Pop the (unit)
+ * result with [`crate::future::blazen_future_take_unit`]. Returns null on an
+ * argument-shape failure (null manager / null or non-UTF-8 `id` / null or
+ * invalid `request`); the `request` pointer is consumed in every case
+ * (dropped on the null/invalid paths to avoid a leak), and on those paths
+ * `vtable.drop_user_data` is invoked before returning.
+ *
+ * Unlike the `_blocking` variant, a failure to *open* the stream is reported
+ * through the sink's `on_error` (the future still resolves to unit `Ok`),
+ * matching how the per-engine async `<engine>_provider_complete_streaming`
+ * functions and [`blazen_manager::ModelManager::stream`] surface late vs.
+ * early failures once a future has been handed back.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_model_manager_stream_blocking`] (minus `out_err`). The
+ * request buffer is taken before this function returns; `vtable.user_data`
+ * transfers to the spawned task's sink.
+ */
+
+BlazenFuture *blazen_model_manager_stream(const BlazenModelManager *mgr,
+                                          const char *id,
+                                          BlazenModelRequest *request,
+                                          BlazenCompletionStreamSinkVTable vtable);
 
 /**
  * Synchronously snapshots the status of every registered model. Returns a

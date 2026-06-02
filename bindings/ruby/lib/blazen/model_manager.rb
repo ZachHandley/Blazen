@@ -647,6 +647,57 @@ module Blazen
       end
     end
 
+    # Streams a chat completion against the provider registered under `id`,
+    # dispatching events to the supplied callbacks (or block).
+    #
+    # Composes with `Fiber.scheduler` when one is active (the spawned future is
+    # awaited via {Blazen::FFI.await_future}); otherwise the calling fiber
+    # blocks on the cabi-side wait. The `request` is consumed by the call.
+    #
+    # Unlike the polymorphic {Blazen::LlmProvider} *direct* handle — which has
+    # no streaming entry point on the cabi side — by-name dispatch DOES stream:
+    # the manager carries the registered provider's real model (which streams),
+    # so {#register} + {#stream} round-trips chunks for any remote engine.
+    #
+    # Either pass explicit per-event handlers via the +on_chunk:+, +on_done:+,
+    # +on_error:+ kwargs, OR pass a single block that receives +(kind, *args)+
+    # (see {Blazen::Streaming.complete} for the block protocol). Mid-stream
+    # failures surface through +on_error+; a start-side failure raises.
+    #
+    # @param id [String] registered model/provider name to dispatch to
+    # @param request [Blazen::Llm::ModelRequest] consumed by the call
+    # @param on_chunk [#call(chunk)]
+    # @param on_done [#call(finish_reason, usage)]
+    # @param on_error [#call(err)]
+    # @yield [kind, *args] block-form alternative to the kwargs
+    # @return [void]
+    def stream(id, request, on_chunk: nil, on_done: nil, on_error: nil, &block)
+      Blazen::Streaming.drive_manager_completion(
+        @ptr, id, request, :blazen_model_manager_stream,
+        blocking: false,
+        on_chunk: on_chunk, on_done: on_done, on_error: on_error, &block
+      )
+    end
+
+    # Synchronous variant of {#stream}. Use when no `Fiber.scheduler` is
+    # available and you explicitly want a blocking call. The `request` is
+    # consumed by the call.
+    #
+    # @param id [String] registered model/provider name to dispatch to
+    # @param request [Blazen::Llm::ModelRequest] consumed by the call
+    # @param on_chunk [#call(chunk)]
+    # @param on_done [#call(finish_reason, usage)]
+    # @param on_error [#call(err)]
+    # @yield [kind, *args] block-form alternative to the kwargs
+    # @return [void]
+    def stream_blocking(id, request, on_chunk: nil, on_done: nil, on_error: nil, &block)
+      Blazen::Streaming.drive_manager_completion(
+        @ptr, id, request, :blazen_model_manager_stream_blocking,
+        blocking: true,
+        on_chunk: on_chunk, on_done: on_done, on_error: on_error, &block
+      )
+    end
+
     # Registers a Ruby-side {LocalModel}-like object with the manager.
     #
     # @raise [Blazen::UnsupportedError] always — the cabi intentionally does
