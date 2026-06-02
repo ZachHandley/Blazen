@@ -128,6 +128,44 @@ I/O shape = new version.
 |---|---|---|
 | `media:ffmpeg:transcode` | 1 | `ffmpeg` shell-out, `-hwaccel` hint per job |
 | `media:ffmpeg:thumbnail` | 1 | `ffmpeg` thumbnail extract |
+| `media:ffmpeg:remux` | 1 | `ffmpeg` container repackage with `-c copy` (no re-encode) |
+
+#### `media:ffmpeg:remux` v1 schema
+
+**Inputs:**
+
+```json
+{
+  "input_url": "https://example.com/source.mkv",
+  "output_path": "/path/to/dest.mp4",
+  "container": "mkv|mp4|mov|webm",
+  "copy_streams": true,
+  "extra_args": ["-map", "0"]
+}
+```
+
+- `input_url` — source media; may be `https://...` or `file:///path/to/source`.
+- `output_path` — destination on the worker filesystem.
+- `container` — target container format (`mkv`, `mp4`, `mov`, `webm`).
+- `copy_streams` — default `true`; when `true` uses `-c copy` (stream copy, no re-encode).
+- `extra_args` — optional raw `ffmpeg` arg passthrough for power users.
+
+**Outputs:**
+
+```json
+{
+  "output_url": "file:///path/to/dest.mp4",
+  "size_bytes": 123456789,
+  "duration_seconds": 1342.5,
+  "format": "mp4",
+  "stream_summary": [
+    { "codec_type": "video", "codec_name": "h264" },
+    { "codec_type": "audio", "codec_name": "aac" }
+  ]
+}
+```
+
+**Notes:** Remux = container repackage with `-c copy` (no re-encode). Use `media:ffmpeg:transcode` for re-encoding.
 
 ### `media:image:*` — image analysis / generation
 
