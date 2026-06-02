@@ -89,6 +89,13 @@ impl BlazenControlPlane for ControlPlaneService {
         super::rpc::handle_drain_worker(&self.shared, request.into_inner()).await
     }
 
+    async fn respond_to_input(
+        &self,
+        request: Request<PostcardRequest>,
+    ) -> Result<Response<PostcardResponse>, Status> {
+        super::rpc::handle_respond_to_input(&self.shared, request.into_inner()).await
+    }
+
     async fn subscribe_run_events(
         &self,
         request: Request<PostcardRequest>,

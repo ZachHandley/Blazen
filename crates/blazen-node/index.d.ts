@@ -110,6 +110,14 @@ export declare class AssignmentContext {
    * string, number, boolean, null).
    */
   emitEvent(eventType: string, data: any): Promise<void>
+  /**
+   * Request input from the orchestrator and await the response.
+   *
+   * `prompt` is shown to the responder; `metadata` is an arbitrary
+   * JSON-serializable payload. `timeoutMs`, when set, bounds the wait.
+   * Resolves with the JSON response value.
+   */
+  requestInput(prompt: string, metadata: any, timeoutMs?: bigint | undefined | null): Promise<any>
 }
 export type JsAssignmentContext = AssignmentContext
 
@@ -1129,6 +1137,8 @@ export declare class ControlPlaneClient {
    * away; otherwise let in-flight runs finish first.
    */
   drainWorker(nodeId: string, immediate: boolean): Promise<void>
+  /** Respond to a pending input request raised by a worker for a run. */
+  respondToInput(runId: string, requestId: string, response: any): Promise<void>
   /**
    * Subscribe to events for a specific run. The returned stream is
    * a JS `AsyncIterableIterator<RunEvent>` (object with both `next`
@@ -1210,6 +1220,8 @@ export declare class ControlPlaneWorkerConfig {
    * predicates.
    */
   withTag(key: string, value: string): this
+  /** Attach a bearer token sent on the worker handshake. */
+  withBearerToken(token: string): this
   /** Override the admission mode declared at handshake. */
   withAdmission(mode: JsAdmissionMode): this
   /** Override the heartbeat cadence (milliseconds). */
@@ -8246,6 +8258,8 @@ export interface JsCitation {
 export interface JsClientConnectOptions {
   /** mTLS configuration. `None` = plaintext. */
   mtls?: JsMtlsOptions
+  /** Bearer token attached to control-plane requests. `None` = anonymous. */
+  bearerToken?: string
 }
 
 export interface JsComputeRequest {

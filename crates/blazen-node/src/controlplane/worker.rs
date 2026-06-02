@@ -104,6 +104,12 @@ impl JsControlPlaneWorkerConfig {
         self.mutate(|c| c.with_tag(key, value))
     }
 
+    /// Attach a bearer token sent on the worker handshake.
+    #[napi(js_name = "withBearerToken")]
+    pub fn with_bearer_token(&self, token: String) -> Result<&Self> {
+        self.mutate(|c| c.with_bearer_token(token))
+    }
+
     /// Override the admission mode declared at handshake.
     #[napi(js_name = "withAdmission")]
     pub fn with_admission(&self, mode: JsAdmissionMode) -> Result<&Self> {
@@ -208,6 +214,25 @@ impl JsAssignmentContext {
     pub async fn emit_event(&self, event_type: String, data: serde_json::Value) -> Result<()> {
         self.inner
             .emit_event(&event_type, data)
+            .await
+            .map_err(controlplane_error_to_napi)
+    }
+
+    /// Request input from the orchestrator and await the response.
+    ///
+    /// `prompt` is shown to the responder; `metadata` is an arbitrary
+    /// JSON-serializable payload. `timeoutMs`, when set, bounds the wait.
+    /// Resolves with the JSON response value.
+    #[napi(js_name = "requestInput")]
+    pub async fn request_input(
+        &self,
+        prompt: String,
+        metadata: serde_json::Value,
+        timeout_ms: Option<BigInt>,
+    ) -> Result<serde_json::Value> {
+        let timeout = timeout_ms.map(|b| b.get_u64().1);
+        self.inner
+            .request_input(&prompt, metadata, timeout)
             .await
             .map_err(controlplane_error_to_napi)
     }

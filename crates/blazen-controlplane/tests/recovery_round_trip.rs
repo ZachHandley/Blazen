@@ -113,7 +113,7 @@ async fn cold_start_recovers_orphaned_inflight() {
     let worker_handle = tokio::spawn(async move { worker.run(EchoHandler).await });
 
     // Poll until the recovered run reaches a terminal state.
-    let client = Client::connect(format!("http://{addr}"), None)
+    let client = Client::connect(format!("http://{addr}"), None, None)
         .await
         .unwrap();
     let deadline = tokio::time::Instant::now() + Duration::from_secs(5);

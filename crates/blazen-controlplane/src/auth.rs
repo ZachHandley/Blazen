@@ -33,6 +33,20 @@ pub fn bearer_metadata_value() -> Option<String> {
     resolve_peer_token().map(|t| format!("Bearer {t}"))
 }
 
+/// Build the `Bearer <token>` value, preferring an explicit `token` and
+/// falling back to `BLAZEN_PEER_TOKEN` from the environment. Returns
+/// `None` if neither is available.
+///
+/// Use this when a caller can supply a token directly (e.g. a JWT minted
+/// per-connection) rather than relying on the process-global env var.
+#[must_use]
+pub fn bearer_metadata_value_with(token: Option<&str>) -> Option<String> {
+    token
+        .map(ToString::to_string)
+        .or_else(resolve_peer_token)
+        .map(|t| format!("Bearer {t}"))
+}
+
 /// Validate a bearer header value against the configured token.
 ///
 /// Returns `Ok(())` when:
@@ -115,6 +129,34 @@ mod tests {
             "match => accept"
         );
         assert_eq!(bearer_metadata_value().as_deref(), Some("Bearer s3cret"));
+
+        // `bearer_metadata_value_with`: an explicit token wins over the
+        // env var.
+        assert_eq!(
+            bearer_metadata_value_with(Some("explicit")).as_deref(),
+            Some("Bearer explicit"),
+            "explicit token should take precedence over env"
+        );
+        // With no explicit token it falls back to the env var.
+        assert_eq!(
+            bearer_metadata_value_with(None).as_deref(),
+            Some("Bearer s3cret"),
+            "None should fall back to BLAZEN_PEER_TOKEN"
+        );
+
+        // With the env var unset: explicit still works, None => None.
+        // SAFETY: see comment.
+        unsafe { std::env::remove_var(PEER_TOKEN_ENV) };
+        assert_eq!(
+            bearer_metadata_value_with(Some("only-explicit")).as_deref(),
+            Some("Bearer only-explicit"),
+            "explicit token works with no env"
+        );
+        assert_eq!(
+            bearer_metadata_value_with(None),
+            None,
+            "no explicit + no env => None"
+        );
 
         // Restore.
         // SAFETY: see comment.

@@ -76,7 +76,7 @@ async fn subscribe_run_events_receives_custom_and_status() {
     tokio::time::sleep(Duration::from_millis(75)).await;
 
     // Orchestrator client.
-    let client = Client::connect(format!("http://{addr}"), None)
+    let client = Client::connect(format!("http://{addr}"), None, None)
         .await
         .unwrap();
 

@@ -89,16 +89,18 @@ impl JsControlPlaneClient {
     /// `{ mtls: { cert, key, ca } }` to use mTLS.
     #[napi(factory)]
     pub async fn connect(endpoint: String, opts: Option<JsClientConnectOptions>) -> Result<Self> {
-        let client = if let Some(mtls) = opts.and_then(|o| o.mtls) {
+        let (mtls, bearer) = opts.map_or((None, None), |o| (o.mtls, o.bearer_token));
+        let client = if let Some(mtls) = mtls {
             Client::with_mtls(
                 endpoint,
                 Path::new(&mtls.cert),
                 Path::new(&mtls.key),
                 Path::new(&mtls.ca),
+                bearer.clone(),
             )
             .await
         } else {
-            Client::connect(endpoint, None).await
+            Client::connect(endpoint, None, bearer).await
         }
         .map_err(controlplane_error_to_napi)?;
         Ok(Self {
@@ -171,6 +173,21 @@ impl JsControlPlaneClient {
     pub async fn drain_worker(&self, node_id: String, immediate: bool) -> Result<()> {
         self.inner
             .drain_worker(node_id, immediate)
+            .await
+            .map_err(controlplane_error_to_napi)
+    }
+
+    /// Respond to a pending input request raised by a worker for a run.
+    #[napi(js_name = "respondToInput")]
+    pub async fn respond_to_input(
+        &self,
+        run_id: String,
+        request_id: String,
+        response: serde_json::Value,
+    ) -> Result<()> {
+        let uuid = parse_run_id(&run_id)?;
+        self.inner
+            .respond_to_input(uuid, request_id, response)
             .await
             .map_err(controlplane_error_to_napi)
     }

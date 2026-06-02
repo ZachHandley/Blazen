@@ -224,9 +224,12 @@ new_b = (
 )
 count_a = src.count(old_a)
 count_b = src.count(old_b)
-if count_a != 89:
+# One block is emitted per uniffi Object's FfiConverter.Lower. Bump this
+# count whenever an Object is added/removed. 2026-06-02: 89 -> 90 with the
+# new `AssignmentContextHandle` Object (control-plane B2 worker context).
+if count_a != 90:
     sys.exit(
-        f"ERROR: expected 89 'TODO: this is bad' blocks in blazen.go, found {count_a}. "
+        f"ERROR: expected 90 'TODO: this is bad' blocks in blazen.go, found {count_a}. "
         "Upstream uniffi-bindgen-go codegen likely changed — re-audit and update "
         "the patch in scripts/regen-bindings.sh."
     )

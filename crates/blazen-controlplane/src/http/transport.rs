@@ -66,7 +66,7 @@ use blazen_core::distributed::{RunStatus, WorkerCapability};
 use crate::auth::validate_bearer;
 use crate::protocol::{
     self, AssignmentEvent, AssignmentResult, AssignmentStatus, CancelRequest, ENVELOPE_VERSION,
-    ServerToWorker, SubmitRequest, Welcome, WorkerHeartbeat, WorkerHello,
+    RespondToInputRequest, ServerToWorker, SubmitRequest, Welcome, WorkerHeartbeat, WorkerHello,
     validate_envelope_version,
 };
 use crate::server::SharedState;
@@ -159,6 +159,10 @@ pub fn router(shared: Arc<SharedState>) -> Router {
         // Orchestrator tier
         .route("/v1/cp/submit", post(orchestrator_submit))
         .route("/v1/cp/cancel", post(orchestrator_cancel))
+        .route(
+            "/v1/cp/respond-to-input",
+            post(orchestrator_respond_to_input),
+        )
         .route("/v1/cp/describe/{run_id}", get(orchestrator_describe))
         .route("/v1/cp/events/{run_id}", get(orchestrator_events_one))
         .route("/v1/cp/events", get(orchestrator_events_all))
@@ -459,6 +463,45 @@ async fn orchestrator_cancel(
     let wire = run_state_to_wire(&snap)
         .map_err(|e| HttpError::Internal(format!("encode run state: {e}")))?;
     PostcardEnvelope::encode(&wire)
+        .map(Json)
+        .map_err(|e| HttpError::Internal(format!("encode envelope: {e}")))
+}
+
+async fn orchestrator_respond_to_input(
+    State(shared): State<Arc<SharedState>>,
+    headers: HeaderMap,
+    Json(envelope): Json<PostcardEnvelope>,
+) -> Result<Json<PostcardEnvelope>, HttpError> {
+    check_auth(&headers)?;
+    let req: RespondToInputRequest = envelope.decode()?;
+    validate_envelope_version(req.envelope_version)
+        .map_err(|e| HttpError::FailedPrecondition(e.to_string()))?;
+    let Some(snap) = shared.queue.describe(req.run_id) else {
+        return Err(HttpError::NotFound(format!("unknown run {}", req.run_id)));
+    };
+    if let Some(ref node_id) = snap.assigned_to
+        && let Some(session_id) = shared.registry.session_for_node(node_id)
+        && let Some(handle) = shared.registry.get(session_id)
+    {
+        let response = protocol::InputResponse {
+            envelope_version: ENVELOPE_VERSION,
+            run_id: req.run_id,
+            request_id: req.request_id,
+            response_json: req.response_json,
+        };
+        handle
+            .outbound
+            .send(ServerToWorker::InputResponse(response))
+            .await
+            .map_err(|_| {
+                HttpError::FailedPrecondition("run not assigned to a live worker".into())
+            })?;
+    } else {
+        return Err(HttpError::FailedPrecondition(
+            "run not assigned to a live worker".into(),
+        ));
+    }
+    PostcardEnvelope::encode(&())
         .map(Json)
         .map_err(|e| HttpError::Internal(format!("encode envelope: {e}")))
 }

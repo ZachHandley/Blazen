@@ -210,15 +210,20 @@ pub struct BlazenControlPlaneClient {
 /// does not currently expose explicit TLS configuration — that landed
 /// only in the higher-level `UniFFI` / `PyO3` / `napi` bindings.
 ///
+/// `bearer_token` is an optional bearer token attached to every RPC.
+/// Pass null for no token (`None`).
+///
 /// # Safety
 ///
 /// `endpoint` must be a valid NUL-terminated UTF-8 buffer that remains
-/// live for the duration of the call. `out_client` is null OR a
-/// destination for one `*mut BlazenControlPlaneClient` write. `out_err`
-/// is null OR a destination for one `*mut BlazenError` write.
+/// live for the duration of the call. `bearer_token` is null OR a valid
+/// NUL-terminated UTF-8 buffer. `out_client` is null OR a destination
+/// for one `*mut BlazenControlPlaneClient` write. `out_err` is null OR a
+/// destination for one `*mut BlazenError` write.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_controlplane_client_connect_blocking(
     endpoint: *const c_char,
+    bearer_token: *const c_char,
     out_client: *mut *mut BlazenControlPlaneClient,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
@@ -232,7 +237,19 @@ pub unsafe extern "C" fn blazen_controlplane_client_connect_blocking(
         // SAFETY: out_err upholds the function contract.
         None => return unsafe { write_internal_error(out_err, "endpoint not valid UTF-8") },
     };
-    match runtime().block_on(async move { InnerClient::connect(endpoint, None).await }) {
+    // SAFETY: caller upholds NUL + lifetime on `bearer_token` (may be null).
+    let bearer = if bearer_token.is_null() {
+        None
+    } else {
+        match unsafe { cstr_to_str(bearer_token) } {
+            Some(s) => Some(s.to_owned()),
+            // SAFETY: out_err upholds the function contract.
+            None => {
+                return unsafe { write_internal_error(out_err, "bearer_token not valid UTF-8") };
+            }
+        }
+    };
+    match runtime().block_on(async move { InnerClient::connect(endpoint, None, bearer).await }) {
         Ok(client) => {
             if !out_client.is_null() {
                 // SAFETY: out_client upholds the function contract.
@@ -252,16 +269,21 @@ pub unsafe extern "C" fn blazen_controlplane_client_connect_blocking(
 /// handle. Resolves to `*mut BlazenControlPlaneClient` — pop with
 /// [`blazen_future_take_controlplane_client`].
 ///
-/// Returns null on null input or non-UTF-8 endpoint.
+/// `bearer_token` is an optional bearer token attached to every RPC.
+/// Pass null for no token (`None`).
+///
+/// Returns null on null input or non-UTF-8 endpoint / bearer token.
 ///
 /// # Safety
 ///
 /// `endpoint` must be a valid NUL-terminated UTF-8 buffer that remains
 /// live for the duration of the call (its contents are copied before
-/// this function returns).
+/// this function returns). `bearer_token` is null OR a valid
+/// NUL-terminated UTF-8 buffer (copied before return).
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_controlplane_client_connect(
     endpoint: *const c_char,
+    bearer_token: *const c_char,
 ) -> *mut BlazenFuture {
     if endpoint.is_null() {
         return std::ptr::null_mut();
@@ -271,8 +293,17 @@ pub unsafe extern "C" fn blazen_controlplane_client_connect(
         Some(s) => s.to_owned(),
         None => return std::ptr::null_mut(),
     };
+    // SAFETY: caller upholds NUL + lifetime on `bearer_token` (may be null).
+    let bearer = if bearer_token.is_null() {
+        None
+    } else {
+        match unsafe { cstr_to_str(bearer_token) } {
+            Some(s) => Some(s.to_owned()),
+            None => return std::ptr::null_mut(),
+        }
+    };
     BlazenFuture::spawn(async move {
-        InnerClient::connect(endpoint, None)
+        InnerClient::connect(endpoint, None, bearer)
             .await
             .map(|client| BlazenControlPlaneClient { inner: client })
             .map_err(InnerError::from)
@@ -514,6 +545,119 @@ pub unsafe extern "C" fn blazen_controlplane_client_cancel_workflow(
 }
 
 // ---------------------------------------------------------------------------
+// respond_to_input
+// ---------------------------------------------------------------------------
+
+/// Synchronously answer an outstanding `input.request` raised by a
+/// running assignment. `run_id` is the run that raised the request,
+/// `request_id` is the id carried in the `input.request` event payload,
+/// and `response_json` is the JSON value handed back to the worker's
+/// pending `request_input` call. Returns `0` on success / `-1` on
+/// failure (writing the error to `out_err`).
+///
+/// # Safety
+///
+/// `client` must be a valid pointer. `run_id` must be a valid
+/// NUL-terminated UTF-8 buffer (a hyphenated UUID rendering).
+/// `request_id` must be a valid NUL-terminated UTF-8 buffer.
+/// `response_json` must be a valid NUL-terminated UTF-8 buffer
+/// containing a JSON value.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_controlplane_client_respond_to_input_blocking(
+    client: *const BlazenControlPlaneClient,
+    run_id: *const c_char,
+    request_id: *const c_char,
+    response_json: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if client.is_null() || run_id.is_null() || request_id.is_null() || response_json.is_null() {
+        // SAFETY: out_err upholds the function contract.
+        return unsafe { write_internal_error(out_err, "null pointer argument") };
+    }
+    // SAFETY: caller has guaranteed `client` is a live pointer.
+    let client = unsafe { &*client };
+    // SAFETY: caller upholds NUL + lifetime on `run_id`.
+    let Some(uuid) = (unsafe { parse_uuid(run_id) }) else {
+        // SAFETY: out_err upholds the function contract.
+        return unsafe { write_internal_error(out_err, "run_id is not a valid UUID") };
+    };
+    // SAFETY: caller upholds NUL + lifetime on `request_id`.
+    let request_id = match unsafe { cstr_to_str(request_id) } {
+        Some(s) => s.to_owned(),
+        // SAFETY: out_err upholds the function contract.
+        None => return unsafe { write_internal_error(out_err, "request_id not valid UTF-8") },
+    };
+    // SAFETY: caller upholds NUL + lifetime on `response_json`.
+    let Some(response_str) = (unsafe { cstr_to_str(response_json) }) else {
+        // SAFETY: out_err upholds the function contract.
+        return unsafe { write_internal_error(out_err, "response_json not valid UTF-8") };
+    };
+    let response: serde_json::Value = match serde_json::from_str(response_str) {
+        Ok(v) => v,
+        // SAFETY: out_err upholds the function contract.
+        Err(e) => {
+            return unsafe {
+                write_internal_error(out_err, &format!("response_json not valid JSON: {e}"))
+            };
+        }
+    };
+    let inner = client.inner.clone();
+    match runtime()
+        .block_on(async move { inner.respond_to_input(uuid, request_id, response).await })
+    {
+        Ok(()) => 0,
+        // SAFETY: out_err upholds the function contract.
+        Err(e) => unsafe { write_error(out_err, InnerError::from(e)) },
+    }
+}
+
+/// Async `respond_to_input`. Resolves to unit; pop with
+/// `blazen_future_take_unit` (defined in `persist.rs`). Returns null on
+/// null input, non-UTF-8 args, an invalid UUID, or malformed
+/// `response_json`.
+///
+/// # Safety
+///
+/// Same as [`blazen_controlplane_client_respond_to_input_blocking`];
+/// the contents of `run_id`, `request_id`, and `response_json` are
+/// copied/parsed before this function returns.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_controlplane_client_respond_to_input(
+    client: *const BlazenControlPlaneClient,
+    run_id: *const c_char,
+    request_id: *const c_char,
+    response_json: *const c_char,
+) -> *mut BlazenFuture {
+    if client.is_null() || run_id.is_null() || request_id.is_null() || response_json.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller has guaranteed `client` is a live pointer.
+    let client = unsafe { &*client };
+    // SAFETY: caller upholds NUL + lifetime on `run_id`.
+    let Some(uuid) = (unsafe { parse_uuid(run_id) }) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller upholds NUL + lifetime on `request_id`.
+    let Some(request_id) = (unsafe { cstr_to_str(request_id) }).map(str::to_owned) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller upholds NUL + lifetime on `response_json`.
+    let Some(response_str) = (unsafe { cstr_to_str(response_json) }) else {
+        return std::ptr::null_mut();
+    };
+    let Ok(response) = serde_json::from_str::<serde_json::Value>(response_str) else {
+        return std::ptr::null_mut();
+    };
+    let inner = client.inner.clone();
+    BlazenFuture::spawn(async move {
+        inner
+            .respond_to_input(uuid, request_id, response)
+            .await
+            .map_err(InnerError::from)
+    })
+}
+
+// ---------------------------------------------------------------------------
 // describe_workflow
 // ---------------------------------------------------------------------------
 
@@ -713,6 +857,173 @@ pub unsafe extern "C" fn blazen_controlplane_client_drain_worker(
 }
 
 // ===========================================================================
+// AssignmentContext — opaque handle exposing emit_event / request_input
+// ===========================================================================
+
+/// Opaque handle wrapping a [`blazen_controlplane::worker::AssignmentContext`]
+/// for the duration of a single `handle` callback. The cabi hands a
+/// `*const BlazenAssignmentContext` to the vtable's `handle` thunk; the
+/// foreign side may call [`blazen_assignment_context_emit_event`] and
+/// [`blazen_assignment_context_request_input`] on it.
+///
+/// ## Lifetime
+///
+/// The pointer is BORROWED — it is only valid for the duration of the
+/// `handle` call. The foreign side MUST NOT retain it past the call's
+/// return. There is no free function: the cabi owns the handle.
+pub struct BlazenAssignmentContext {
+    inner: Arc<AssignmentContext>,
+}
+
+/// Emit a non-terminal event from the running assignment. `data_json`
+/// is an optional JSON value (null / empty → JSON `null`). Returns `0`
+/// on success / `-1` on failure (writing the error to `out_err`).
+///
+/// Blocks the calling thread on the cabi tokio runtime. Safe to call
+/// from inside the `handle` callback, which the cabi runs on a
+/// `spawn_blocking` thread.
+///
+/// # Safety
+///
+/// `ctx` must be a valid `*const BlazenAssignmentContext` handed to the
+/// vtable's `handle` callback and live for the duration of this call.
+/// `event_type` must be a valid NUL-terminated UTF-8 buffer.
+/// `data_json` is null OR a valid NUL-terminated UTF-8 buffer. `out_err`
+/// upholds the standard out-pointer contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_assignment_context_emit_event(
+    ctx: *const BlazenAssignmentContext,
+    event_type: *const c_char,
+    data_json: *const c_char,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if ctx.is_null() || event_type.is_null() {
+        // SAFETY: out_err upholds the function contract.
+        return unsafe { write_internal_error(out_err, "null pointer argument") };
+    }
+    // SAFETY: caller has guaranteed `ctx` is a live pointer.
+    let ctx = unsafe { &*ctx };
+    // SAFETY: caller upholds NUL + lifetime on `event_type`.
+    let event_type = match unsafe { cstr_to_str(event_type) } {
+        Some(s) => s.to_owned(),
+        // SAFETY: out_err upholds the function contract.
+        None => return unsafe { write_internal_error(out_err, "event_type not valid UTF-8") },
+    };
+    // SAFETY: caller upholds NUL + lifetime on `data_json` (may be null).
+    let data = match unsafe { decode_optional_json(data_json) } {
+        Ok(v) => v,
+        // SAFETY: out_err upholds the function contract.
+        Err(msg) => return unsafe { write_internal_error(out_err, &msg) },
+    };
+    let inner = Arc::clone(&ctx.inner);
+    match runtime().block_on(async move { inner.emit_event(&event_type, data).await }) {
+        Ok(()) => 0,
+        // SAFETY: out_err upholds the function contract.
+        Err(e) => unsafe { write_error(out_err, InnerError::from(e)) },
+    }
+}
+
+/// Raise an `input.request` and block until the orchestrator answers.
+/// `metadata_json` is an optional JSON value (null / empty → JSON
+/// `null`). `timeout_ms` of `0` means no timeout (`None`). On success
+/// returns `0` and writes a caller-owned `*mut c_char` (the answer
+/// serialised as JSON, freeable via [`crate::string::blazen_string_free`])
+/// into `out_json`; on failure returns `-1` and writes the error to
+/// `out_err`.
+///
+/// Blocks the calling thread on the cabi tokio runtime. Safe to call
+/// from inside the `handle` callback, which the cabi runs on a
+/// `spawn_blocking` thread.
+///
+/// # Safety
+///
+/// `ctx` must be a valid `*const BlazenAssignmentContext` handed to the
+/// vtable's `handle` callback and live for the duration of this call.
+/// `prompt` must be a valid NUL-terminated UTF-8 buffer. `metadata_json`
+/// is null OR a valid NUL-terminated UTF-8 buffer. `out_json` is null OR
+/// a destination for one `*mut c_char` write. `out_err` upholds the
+/// standard out-pointer contract.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_assignment_context_request_input(
+    ctx: *const BlazenAssignmentContext,
+    prompt: *const c_char,
+    metadata_json: *const c_char,
+    timeout_ms: u64,
+    out_json: *mut *mut c_char,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if ctx.is_null() || prompt.is_null() {
+        // SAFETY: out_err upholds the function contract.
+        return unsafe { write_internal_error(out_err, "null pointer argument") };
+    }
+    // SAFETY: caller has guaranteed `ctx` is a live pointer.
+    let ctx = unsafe { &*ctx };
+    // SAFETY: caller upholds NUL + lifetime on `prompt`.
+    let prompt = match unsafe { cstr_to_str(prompt) } {
+        Some(s) => s.to_owned(),
+        // SAFETY: out_err upholds the function contract.
+        None => return unsafe { write_internal_error(out_err, "prompt not valid UTF-8") },
+    };
+    // SAFETY: caller upholds NUL + lifetime on `metadata_json` (may be null).
+    let metadata = match unsafe { decode_optional_json(metadata_json) } {
+        Ok(v) => v,
+        // SAFETY: out_err upholds the function contract.
+        Err(msg) => return unsafe { write_internal_error(out_err, &msg) },
+    };
+    let timeout = if timeout_ms == 0 {
+        None
+    } else {
+        Some(timeout_ms)
+    };
+    let inner = Arc::clone(&ctx.inner);
+    match runtime().block_on(async move { inner.request_input(&prompt, metadata, timeout).await }) {
+        Ok(value) => {
+            let serialized = match serde_json::to_string(&value) {
+                Ok(s) => s,
+                // SAFETY: out_err upholds the function contract.
+                Err(e) => {
+                    return unsafe {
+                        write_internal_error(out_err, &format!("encode input response: {e}"))
+                    };
+                }
+            };
+            if !out_json.is_null() {
+                // SAFETY: out_json upholds the function contract. The
+                // allocation is freeable via `blazen_string_free`.
+                unsafe {
+                    *out_json = crate::string::alloc_cstring(&serialized);
+                }
+            }
+            0
+        }
+        // SAFETY: out_err upholds the function contract.
+        Err(e) => unsafe { write_error(out_err, InnerError::from(e)) },
+    }
+}
+
+/// Decode an optional NUL-terminated UTF-8 JSON buffer into a
+/// [`serde_json::Value`]. Null / empty / whitespace-only → `Value::Null`.
+/// Returns `Err(message)` on non-UTF-8 or malformed JSON.
+///
+/// # Safety
+///
+/// `ptr` must be null OR a NUL-terminated UTF-8 buffer that remains
+/// valid for the duration of the call.
+unsafe fn decode_optional_json(ptr: *const c_char) -> Result<serde_json::Value, String> {
+    if ptr.is_null() {
+        return Ok(serde_json::Value::Null);
+    }
+    // SAFETY: caller upholds the NUL + lifetime contract.
+    let Some(s) = (unsafe { cstr_to_str(ptr) }) else {
+        return Err("JSON argument not valid UTF-8".to_string());
+    };
+    if s.trim().is_empty() {
+        return Ok(serde_json::Value::Null);
+    }
+    serde_json::from_str(s).map_err(|e| format!("JSON argument not valid JSON: {e}"))
+}
+
+// ===========================================================================
 // AssignmentHandler vtable
 // ===========================================================================
 
@@ -733,6 +1044,12 @@ pub unsafe extern "C" fn blazen_controlplane_client_drain_worker(
 ///   UTF-8 strings (`run_id`, `workflow_name`, `input_json`). The
 ///   callback MUST NOT free them — the cabi frees them after the
 ///   callback returns.
+/// - The `handle` callback also receives a borrowed
+///   `*const BlazenAssignmentContext` (`ctx`) valid ONLY for the
+///   duration of the call. The callback may invoke
+///   [`blazen_assignment_context_emit_event`] /
+///   [`blazen_assignment_context_request_input`] on it but MUST NOT
+///   retain the pointer past return.
 /// - On success (`return == 0`), the callback writes a caller-owned
 ///   `*mut c_char` (heap-allocated UTF-8 JSON, freeable via
 ///   [`crate::string::blazen_string_free`]) into `out_json`. Pass
@@ -745,12 +1062,15 @@ pub struct BlazenAssignmentHandlerVTable {
     pub user_data: *mut c_void,
     /// Release `user_data`. Called exactly once on drop.
     pub drop_user_data: extern "C" fn(user_data: *mut c_void),
-    /// Run an assignment. See struct-level docs for ownership.
+    /// Run an assignment. See struct-level docs for ownership. `ctx` is
+    /// a borrowed `*const BlazenAssignmentContext` valid only for the
+    /// duration of the call.
     pub handle: extern "C" fn(
         user_data: *mut c_void,
         run_id: *const c_char,
         workflow_name: *const c_char,
         input_json: *const c_char,
+        ctx: *const BlazenAssignmentContext,
         out_json: *mut *mut c_char,
         out_err: *mut *mut BlazenError,
     ) -> i32,
@@ -790,7 +1110,7 @@ impl AssignmentHandler for CAssignmentHandler {
     async fn handle(
         &self,
         assignment: Assignment,
-        _ctx: AssignmentContext,
+        ctx: AssignmentContext,
     ) -> Result<serde_json::Value, AssignmentFailure> {
         // Decode the assignment's binary input_json into a UTF-8 string
         // so the foreign callback can parse it. Any error here surfaces
@@ -837,6 +1157,16 @@ impl AssignmentHandler for CAssignmentHandler {
         let user_data_addr = self.vtable.user_data as usize;
         let handle_fn = self.vtable.handle;
 
+        // Wrap the AssignmentContext in an Arc so the foreign callback
+        // can call emit_event / request_input on it for the duration of
+        // the handle call. `AssignmentContext` is `Send + Sync` (its
+        // fields are all `Arc`/`Uuid`/`CancellationToken`), so moving
+        // the `Arc` into the `spawn_blocking` closure is sound. The
+        // handle is constructed on the blocking thread and a borrowed
+        // pointer is passed into the vtable; it is dropped when the
+        // closure returns, so the foreign side must not retain it.
+        let ctx_arc = Arc::new(ctx);
+
         // SAFETY: foreign side guarantees thread-safe access to
         // user_data (see vtable docs). The handle function pointer is
         // `extern "C" fn`, which is `Copy + Send + Sync`.
@@ -849,6 +1179,9 @@ impl AssignmentHandler for CAssignmentHandler {
         // references exist).
         let join = tokio::task::spawn_blocking(move || -> (i32, usize, usize) {
             let user_data = user_data_addr as *mut c_void;
+            let ctx_handle = BlazenAssignmentContext {
+                inner: Arc::clone(&ctx_arc),
+            };
             let mut out_json: *mut c_char = std::ptr::null_mut();
             let mut out_err: *mut BlazenError = std::ptr::null_mut();
             let rc = handle_fn(
@@ -856,9 +1189,13 @@ impl AssignmentHandler for CAssignmentHandler {
                 run_id.as_ptr(),
                 workflow_name.as_ptr(),
                 input_json.as_ptr(),
+                &raw const ctx_handle,
                 &raw mut out_json,
                 &raw mut out_err,
             );
+            // `ctx_handle` (and the borrowed pointer the foreign side
+            // received) becomes invalid here.
+            drop(ctx_handle);
             (rc, out_json as usize, out_err as usize)
         })
         .await;
@@ -977,6 +1314,9 @@ pub struct BlazenControlPlaneWorker {
 /// `tags_json` is an optional JSON object mapping `key` -> `value`
 /// strings. Pass null for no tags.
 ///
+/// `bearer_token` is an optional bearer token attached to every RPC the
+/// worker makes. Pass null for no token (`None`).
+///
 /// On success (`return == 0`), writes a caller-owned
 /// `*mut BlazenControlPlaneWorker` to `out_worker`. On failure,
 /// writes an error to `out_err` AND releases `vtable.user_data` via
@@ -986,11 +1326,11 @@ pub struct BlazenControlPlaneWorker {
 /// # Safety
 ///
 /// `endpoint`, `node_id` must be valid NUL-terminated UTF-8 buffers.
-/// `capabilities_json` and `tags_json` are null OR valid NUL-terminated
-/// UTF-8 buffers. `vtable.user_data` and `vtable.drop_user_data` /
-/// `vtable.handle` / `vtable.on_cancel` / `vtable.on_drain` must form a
-/// coherent thread-safe vtable (see [`BlazenAssignmentHandlerVTable`]
-/// docs).
+/// `capabilities_json`, `tags_json`, and `bearer_token` are null OR
+/// valid NUL-terminated UTF-8 buffers. `vtable.user_data` and
+/// `vtable.drop_user_data` / `vtable.handle` / `vtable.on_cancel` /
+/// `vtable.on_drain` must form a coherent thread-safe vtable (see
+/// [`BlazenAssignmentHandlerVTable`] docs).
 #[allow(clippy::too_many_arguments)]
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_controlplane_worker_new_blocking(
@@ -1000,6 +1340,7 @@ pub unsafe extern "C" fn blazen_controlplane_worker_new_blocking(
     tags_json: *const c_char,
     admission_mode: u32,
     admission_param: u64,
+    bearer_token: *const c_char,
     vtable: BlazenAssignmentHandlerVTable,
     out_worker: *mut *mut BlazenControlPlaneWorker,
     out_err: *mut *mut BlazenError,
@@ -1047,6 +1388,18 @@ pub unsafe extern "C" fn blazen_controlplane_worker_new_blocking(
             write_internal_error(out_err, "tags_json must be a JSON object of string->string")
         };
     };
+    // SAFETY: caller upholds NUL + lifetime on `bearer_token` (may be null).
+    let bearer = if bearer_token.is_null() {
+        None
+    } else {
+        // SAFETY: caller upholds NUL + lifetime on `bearer_token`.
+        let Some(s) = (unsafe { cstr_to_str(bearer_token) }) else {
+            release_vtable();
+            // SAFETY: out_err upholds the function contract.
+            return unsafe { write_internal_error(out_err, "bearer_token not valid UTF-8") };
+        };
+        Some(s.to_owned())
+    };
 
     let admission = build_admission(admission_mode, admission_param);
 
@@ -1058,6 +1411,9 @@ pub unsafe extern "C" fn blazen_controlplane_worker_new_blocking(
         config = config.with_tag(k, v);
     }
     config = config.with_admission(admission);
+    if let Some(t) = bearer {
+        config = config.with_bearer_token(t);
+    }
 
     let worker_inner = match InnerWorker::connect(config) {
         Ok(w) => w,
@@ -1327,12 +1683,16 @@ unsafe fn parse_mtls_paths(
 /// on disk. Same shape as
 /// [`blazen_controlplane_client_connect_blocking`].
 ///
+/// `bearer_token` is an optional bearer token attached to every RPC.
+/// Pass null for no token (`None`).
+///
 /// # Safety
 ///
 /// `endpoint`, `cert_path`, `key_path`, and `ca_path` must each be a
 /// valid NUL-terminated UTF-8 buffer that remains live for the
-/// duration of the call. `out_client` is null OR a destination for one
-/// `*mut BlazenControlPlaneClient` write. `out_err` is null OR a
+/// duration of the call. `bearer_token` is null OR a valid
+/// NUL-terminated UTF-8 buffer. `out_client` is null OR a destination
+/// for one `*mut BlazenControlPlaneClient` write. `out_err` is null OR a
 /// destination for one `*mut BlazenError` write.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_controlplane_client_connect_with_mtls_blocking(
@@ -1340,6 +1700,7 @@ pub unsafe extern "C" fn blazen_controlplane_client_connect_with_mtls_blocking(
     cert_path: *const c_char,
     key_path: *const c_char,
     ca_path: *const c_char,
+    bearer_token: *const c_char,
     out_client: *mut *mut BlazenControlPlaneClient,
     out_err: *mut *mut BlazenError,
 ) -> i32 {
@@ -1353,6 +1714,18 @@ pub unsafe extern "C" fn blazen_controlplane_client_connect_with_mtls_blocking(
         // SAFETY: out_err upholds the function contract.
         None => return unsafe { write_internal_error(out_err, "endpoint not valid UTF-8") },
     };
+    // SAFETY: caller upholds NUL + lifetime on `bearer_token` (may be null).
+    let bearer = if bearer_token.is_null() {
+        None
+    } else {
+        match unsafe { cstr_to_str(bearer_token) } {
+            Some(s) => Some(s.to_owned()),
+            // SAFETY: out_err upholds the function contract.
+            None => {
+                return unsafe { write_internal_error(out_err, "bearer_token not valid UTF-8") };
+            }
+        }
+    };
     // SAFETY: caller upholds NUL + lifetime on each PEM-path arg.
     let Some((cert, key, ca)) =
         (unsafe { parse_mtls_paths(cert_path, key_path, ca_path, out_err) })
@@ -1360,7 +1733,7 @@ pub unsafe extern "C" fn blazen_controlplane_client_connect_with_mtls_blocking(
         return -1;
     };
     match runtime()
-        .block_on(async move { InnerClient::with_mtls(endpoint, &cert, &key, &ca).await })
+        .block_on(async move { InnerClient::with_mtls(endpoint, &cert, &key, &ca, bearer).await })
     {
         Ok(client) => {
             if !out_client.is_null() {
@@ -1384,18 +1757,23 @@ pub unsafe extern "C" fn blazen_controlplane_client_connect_with_mtls_blocking(
 /// [`blazen_future_take_controlplane_client`]. Returns null on null
 /// input or non-UTF-8 paths.
 ///
+/// `bearer_token` is an optional bearer token attached to every RPC.
+/// Pass null for no token (`None`).
+///
 /// # Safety
 ///
 /// Same as
 /// [`blazen_controlplane_client_connect_with_mtls_blocking`]; the
-/// contents of each path buffer are copied before this function
-/// returns.
+/// contents of each path buffer (and `bearer_token`) are copied before
+/// this function returns. `bearer_token` is null OR a valid
+/// NUL-terminated UTF-8 buffer.
 #[unsafe(no_mangle)]
 pub unsafe extern "C" fn blazen_controlplane_client_connect_with_mtls(
     endpoint: *const c_char,
     cert_path: *const c_char,
     key_path: *const c_char,
     ca_path: *const c_char,
+    bearer_token: *const c_char,
 ) -> *mut BlazenFuture {
     if endpoint.is_null() || cert_path.is_null() || key_path.is_null() || ca_path.is_null() {
         return std::ptr::null_mut();
@@ -1416,8 +1794,17 @@ pub unsafe extern "C" fn blazen_controlplane_client_connect_with_mtls(
     let Some(ca) = (unsafe { cstr_to_str(ca_path) }).map(PathBuf::from) else {
         return std::ptr::null_mut();
     };
+    // SAFETY: caller upholds NUL + lifetime on `bearer_token` (may be null).
+    let bearer = if bearer_token.is_null() {
+        None
+    } else {
+        match unsafe { cstr_to_str(bearer_token) } {
+            Some(s) => Some(s.to_owned()),
+            None => return std::ptr::null_mut(),
+        }
+    };
     BlazenFuture::spawn(async move {
-        InnerClient::with_mtls(endpoint, &cert, &key, &ca)
+        InnerClient::with_mtls(endpoint, &cert, &key, &ca, bearer)
             .await
             .map(|client| BlazenControlPlaneClient { inner: client })
             .map_err(InnerError::from)
@@ -1431,12 +1818,15 @@ pub unsafe extern "C" fn blazen_controlplane_client_connect_with_mtls(
 /// unchanged — `vtable.user_data` is released via
 /// `vtable.drop_user_data` on every failure path.
 ///
+/// `bearer_token` is an optional bearer token attached to every RPC the
+/// worker makes. Pass null for no token (`None`).
+///
 /// # Safety
 ///
 /// `endpoint`, `node_id`, `cert_path`, `key_path`, and `ca_path` must
-/// each be valid NUL-terminated UTF-8 buffers. `capabilities_json` and
-/// `tags_json` are null OR valid NUL-terminated UTF-8 buffers. The
-/// vtable must satisfy the contracts documented on
+/// each be valid NUL-terminated UTF-8 buffers. `capabilities_json`,
+/// `tags_json`, and `bearer_token` are null OR valid NUL-terminated
+/// UTF-8 buffers. The vtable must satisfy the contracts documented on
 /// [`BlazenAssignmentHandlerVTable`].
 #[allow(clippy::too_many_arguments)]
 #[unsafe(no_mangle)]
@@ -1450,6 +1840,7 @@ pub unsafe extern "C" fn blazen_controlplane_worker_new_with_mtls_blocking(
     cert_path: *const c_char,
     key_path: *const c_char,
     ca_path: *const c_char,
+    bearer_token: *const c_char,
     vtable: BlazenAssignmentHandlerVTable,
     out_worker: *mut *mut BlazenControlPlaneWorker,
     out_err: *mut *mut BlazenError,
@@ -1497,6 +1888,18 @@ pub unsafe extern "C" fn blazen_controlplane_worker_new_with_mtls_blocking(
             write_internal_error(out_err, "tags_json must be a JSON object of string->string")
         };
     };
+    // SAFETY: caller upholds NUL + lifetime on `bearer_token` (may be null).
+    let bearer = if bearer_token.is_null() {
+        None
+    } else {
+        // SAFETY: caller upholds NUL + lifetime on `bearer_token`.
+        let Some(s) = (unsafe { cstr_to_str(bearer_token) }) else {
+            release_vtable();
+            // SAFETY: out_err upholds the function contract.
+            return unsafe { write_internal_error(out_err, "bearer_token not valid UTF-8") };
+        };
+        Some(s.to_owned())
+    };
     // SAFETY: caller upholds NUL + lifetime on each PEM-path arg.
     let Some((cert, key, ca)) =
         (unsafe { parse_mtls_paths(cert_path, key_path, ca_path, out_err) })
@@ -1515,6 +1918,9 @@ pub unsafe extern "C" fn blazen_controlplane_worker_new_with_mtls_blocking(
         config = config.with_tag(k, v);
     }
     config = config.with_admission(admission);
+    if let Some(t) = bearer {
+        config = config.with_bearer_token(t);
+    }
     config = match config.with_mtls(&cert, &key, &ca) {
         Ok(c) => c,
         Err(e) => {

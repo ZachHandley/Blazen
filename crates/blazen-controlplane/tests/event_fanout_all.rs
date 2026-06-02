@@ -76,7 +76,7 @@ async fn subscribe_all_filters_by_required_tags() {
     // Give both workers time to register before submitting.
     tokio::time::sleep(Duration::from_millis(150)).await;
 
-    let client = Client::connect(format!("http://{addr}"), None)
+    let client = Client::connect(format!("http://{addr}"), None, None)
         .await
         .unwrap();
 

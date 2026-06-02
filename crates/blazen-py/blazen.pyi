@@ -922,6 +922,23 @@ class AssignmentContext:
             ControlPlaneError: If the worker's outbound channel is closed
                 (the session has disconnected).
         """
+    async def request_input(self, prompt: builtins.str, metadata: typing.Optional[typing.Any] = None, *, timeout_ms: typing.Optional[builtins.int] = None) -> typing.Any:
+        r"""
+        Request input from the orchestrator and await the response. The
+        returned coroutine resolves to the JSON value supplied via
+        `ControlPlaneClient.respond_to_input`.
+        
+        Args:
+            prompt: Human-readable prompt describing the requested input.
+            metadata: A JSON-serializable payload carried alongside the
+                prompt. ``None`` is allowed.
+            timeout_ms: Optional timeout in milliseconds. When elapsed,
+                the request fails with a ``ControlPlaneError``.
+        
+        Raises:
+            ControlPlaneError: If the worker's outbound channel is closed,
+                the request times out, or the run terminates first.
+        """
     def __repr__(self) -> builtins.str: ...
 
 class AssignmentHandler:
@@ -2874,7 +2891,7 @@ class ControlPlaneClient:
     [`PyControlPlaneClient::connect`].
     """
     @classmethod
-    async def connect(cls, endpoint: builtins.str, *, mtls: typing.Optional[tuple[builtins.str, builtins.str, builtins.str]] = None) -> ControlPlaneClient:
+    async def connect(cls, endpoint: builtins.str, *, mtls: typing.Optional[tuple[builtins.str, builtins.str, builtins.str]] = None, bearer_token: typing.Optional[builtins.str] = None) -> ControlPlaneClient:
         r"""
         Open a connection to the control plane at ``endpoint``.
         
@@ -2903,6 +2920,18 @@ class ControlPlaneClient:
     async def cancel_workflow(self, run_id: builtins.str) -> dict[str, typing.Any]:
         r"""
         Cancel an in-flight run.
+        """
+    async def respond_to_input(self, run_id: builtins.str, request_id: builtins.str, response: typing.Optional[typing.Any]) -> None:
+        r"""
+        Respond to a pending input request raised by a running
+        assignment via `AssignmentContext.request_input`.
+        
+        Args:
+            run_id: UUID string of the run that issued the request.
+            request_id: The request identifier carried in the
+                ``input.request`` event.
+            response: A JSON-serializable payload delivered to the
+                waiting handler. ``None`` is allowed.
         """
     async def describe_workflow(self, run_id: builtins.str) -> dict[str, typing.Any]:
         r"""
@@ -3012,6 +3041,11 @@ class ControlPlaneWorkerConfig:
     def with_tag(self, key: builtins.str, value: builtins.str) -> ControlPlaneWorkerConfig:
         r"""
         Insert a single ``key=value`` tag.
+        """
+    def with_bearer_token(self, token: builtins.str) -> ControlPlaneWorkerConfig:
+        r"""
+        Attach a bearer token presented to the control plane at
+        handshake for authentication.
         """
     def with_admission(self, admission: AdmissionMode) -> ControlPlaneWorkerConfig:
         r"""

@@ -51,7 +51,7 @@ impl PyControlPlaneClient {
     ///         materials fail to load, or the TCP/HTTP-2 handshake
     ///         fails.
     #[classmethod]
-    #[pyo3(signature = (endpoint, *, mtls=None))]
+    #[pyo3(signature = (endpoint, *, mtls=None, bearer_token=None))]
     #[gen_stub(override_return_type(
         type_repr = "typing.Coroutine[typing.Any, typing.Any, ControlPlaneClient]",
         imports = ("typing",)
@@ -61,6 +61,7 @@ impl PyControlPlaneClient {
         py: Python<'py>,
         endpoint: String,
         mtls: Option<(String, String, String)>,
+        bearer_token: Option<String>,
     ) -> PyResult<Bound<'py, PyAny>> {
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             let client = match mtls {
@@ -69,10 +70,13 @@ impl PyControlPlaneClient {
                     &PathBuf::from(cert),
                     &PathBuf::from(key),
                     &PathBuf::from(ca),
+                    bearer_token.clone(),
                 )
                 .await
                 .map_err(cp_err)?,
-                None => Client::connect(endpoint, None).await.map_err(cp_err)?,
+                None => Client::connect(endpoint, None, bearer_token)
+                    .await
+                    .map_err(cp_err)?,
             };
             Ok(Self { inner: client })
         })
@@ -151,6 +155,40 @@ impl PyControlPlaneClient {
                 .await
                 .map_err(workflow_err_to_py)?;
             Python::attach(|py| Ok(snapshot_to_pydict(py, &snap)?.into_any().unbind()))
+        })
+    }
+
+    /// Respond to a pending input request raised by a running
+    /// assignment via `AssignmentContext.request_input`.
+    ///
+    /// Args:
+    ///     run_id: UUID string of the run that issued the request.
+    ///     request_id: The request identifier carried in the
+    ///         ``input.request`` event.
+    ///     response: A JSON-serializable payload delivered to the
+    ///         waiting handler. ``None`` is allowed.
+    #[gen_stub(override_return_type(
+        type_repr = "typing.Coroutine[typing.Any, typing.Any, None]",
+        imports = ("typing",)
+    ))]
+    fn respond_to_input<'py>(
+        &self,
+        py: Python<'py>,
+        run_id: String,
+        request_id: String,
+        response: Option<&Bound<'_, PyAny>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let uuid = parse_run_id(&run_id)?;
+        let response_json = match response {
+            Some(value) if !value.is_none() => py_to_json(py, value)?,
+            _ => serde_json::Value::Null,
+        };
+        let client = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            client
+                .respond_to_input(uuid, request_id, response_json)
+                .await
+                .map_err(cp_err)
         })
     }
 

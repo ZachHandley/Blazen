@@ -38,7 +38,7 @@ use blazen_core::distributed as core;
 ///   forward-compatible. Bump this constant and update
 ///   [`crate::error::ControlPlaneError::EnvelopeVersion`] handling on
 ///   the server side.
-pub const ENVELOPE_VERSION: u32 = 1;
+pub const ENVELOPE_VERSION: u32 = 2;
 
 /// Returns `Err` if `got` is greater than [`ENVELOPE_VERSION`] (i.e.
 /// the payload was produced by a newer build of blazen-controlplane
@@ -358,6 +358,27 @@ pub struct DrainInstruction {
     pub immediate: bool,
 }
 
+/// Server→worker delivery of an answer to an earlier `input.request`
+/// event raised by a running assignment via
+/// [`AssignmentContext::request_input`](crate::worker::AssignmentContext::request_input).
+///
+/// The `request_id` correlates this response with the pending request the
+/// worker is blocked on. `response_json` is the JSON-encoded answer (see
+/// the module-level docs for why we use `Vec<u8>` instead of
+/// `serde_json::Value`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InputResponse {
+    /// Envelope version of this payload. See [`ENVELOPE_VERSION`].
+    pub envelope_version: u32,
+    /// Identifier of the run whose assignment raised the input request.
+    pub run_id: Uuid,
+    /// Correlation id echoed from the `input.request` event payload.
+    pub request_id: String,
+    /// JSON-encoded answer handed back to the worker's pending request.
+    #[serde(with = "serde_bytes")]
+    pub response_json: Vec<u8>,
+}
+
 /// Offer sent during Reactive admission negotiation. Worker must respond
 /// with [`OfferDecision`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -388,6 +409,12 @@ pub enum ServerToWorker {
         /// Human-readable reason for the rejection.
         reason: String,
     },
+    /// Answer to an `input.request` raised by a running assignment.
+    ///
+    /// Appended after [`Reject`] so existing variant indices are
+    /// preserved — older workers (envelope v1) never receive this frame,
+    /// and postcard decode of older payloads is unaffected.
+    InputResponse(InputResponse),
 }
 
 // ---------------------------------------------------------------------------
@@ -475,6 +502,22 @@ pub struct CancelRequest {
     pub envelope_version: u32,
     /// Identifier of the run to cancel.
     pub run_id: Uuid,
+}
+
+/// Orchestrator request to answer an outstanding `input.request` raised
+/// by an in-flight assignment. Routed to the worker currently assigned
+/// the run, delivered as a [`ServerToWorker::InputResponse`] frame.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RespondToInputRequest {
+    /// Envelope version of this payload. See [`ENVELOPE_VERSION`].
+    pub envelope_version: u32,
+    /// Identifier of the run whose assignment is awaiting input.
+    pub run_id: Uuid,
+    /// Correlation id from the `input.request` event payload.
+    pub request_id: String,
+    /// JSON-encoded answer to forward to the worker.
+    #[serde(with = "serde_bytes")]
+    pub response_json: Vec<u8>,
 }
 
 /// Orchestrator request to describe a single run's current state.
