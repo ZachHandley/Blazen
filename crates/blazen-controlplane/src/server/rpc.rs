@@ -14,8 +14,8 @@ use tonic::{Response, Status};
 use crate::pb::{PostcardRequest, PostcardResponse};
 use crate::protocol::{
     self, CancelRequest, DescribeRequest, DrainWorkerRequest, ENVELOPE_VERSION, ListWorkersRequest,
-    ListWorkersResponse, RunStateSnapshotWire, RunStatusWire, ServerToWorker, SubmitRequest,
-    WorkerInfoWire, validate_envelope_version,
+    ListWorkersResponse, RespondToInputRequest, RunStateSnapshotWire, RunStatusWire,
+    ServerToWorker, SubmitRequest, WorkerInfoWire, validate_envelope_version,
 };
 
 use super::SharedState;
@@ -150,6 +150,55 @@ pub async fn handle_cancel_workflow(
     let wire =
         run_state_to_wire(&snap).map_err(|e| Status::internal(format!("encode run state: {e}")))?;
     encode_resp(&wire)
+}
+
+/// Handle a `RespondToInput` unary RPC.
+///
+/// Looks up the run, resolves the worker currently assigned to it, and
+/// pushes a [`ServerToWorker::InputResponse`] frame down that worker's
+/// outbound channel (which feeds both the gRPC bidi stream and the HTTP
+/// SSE stream). Acks with an empty payload.
+///
+/// # Errors
+///
+/// - `INVALID_ARGUMENT` if the request fails to decode.
+/// - `FAILED_PRECONDITION` if the envelope version is unsupported, or the
+///   run is not currently assigned to a live worker.
+/// - `NOT_FOUND` if no run with this `run_id` is tracked.
+pub async fn handle_respond_to_input(
+    shared: &Arc<SharedState>,
+    request: PostcardRequest,
+) -> Result<Response<PostcardResponse>, Status> {
+    let req: RespondToInputRequest = decode(&request.postcard_payload)
+        .map_err(|e| Status::invalid_argument(format!("decode RespondToInputRequest: {e}")))?;
+    validate_envelope_version(req.envelope_version)
+        .map_err(|e| Status::failed_precondition(e.to_string()))?;
+
+    let Some(snap) = shared.queue.describe(req.run_id) else {
+        return Err(Status::not_found(format!("unknown run {}", req.run_id)));
+    };
+
+    if let Some(ref node_id) = snap.assigned_to
+        && let Some(session_id) = shared.registry.session_for_node(node_id)
+        && let Some(handle) = shared.registry.get(session_id)
+    {
+        let response = protocol::InputResponse {
+            envelope_version: ENVELOPE_VERSION,
+            run_id: req.run_id,
+            request_id: req.request_id,
+            response_json: req.response_json,
+        };
+        handle
+            .outbound
+            .send(ServerToWorker::InputResponse(response))
+            .await
+            .map_err(|_| Status::failed_precondition("run not assigned to a live worker"))?;
+        encode_resp(&())
+    } else {
+        Err(Status::failed_precondition(
+            "run not assigned to a live worker",
+        ))
+    }
 }
 
 /// Handle a `DescribeWorkflow` unary RPC.

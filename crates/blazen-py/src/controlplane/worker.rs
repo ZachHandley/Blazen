@@ -99,6 +99,14 @@ impl PyControlPlaneWorkerConfig {
         }
     }
 
+    /// Attach a bearer token presented to the control plane at
+    /// handshake for authentication.
+    fn with_bearer_token(&self, token: String) -> Self {
+        Self {
+            inner: self.inner.clone().with_bearer_token(token),
+        }
+    }
+
     /// Override the admission mode.
     fn with_admission(&self, admission: PyAdmissionMode) -> Self {
         Self {
@@ -207,6 +215,46 @@ impl PyAssignmentContext {
         let ctx = Arc::clone(&self.inner);
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             ctx.emit_event(&event_type, data_json).await.map_err(cp_err)
+        })
+    }
+
+    /// Request input from the orchestrator and await the response. The
+    /// returned coroutine resolves to the JSON value supplied via
+    /// `ControlPlaneClient.respond_to_input`.
+    ///
+    /// Args:
+    ///     prompt: Human-readable prompt describing the requested input.
+    ///     metadata: A JSON-serializable payload carried alongside the
+    ///         prompt. ``None`` is allowed.
+    ///     timeout_ms: Optional timeout in milliseconds. When elapsed,
+    ///         the request fails with a ``ControlPlaneError``.
+    ///
+    /// Raises:
+    ///     ControlPlaneError: If the worker's outbound channel is closed,
+    ///         the request times out, or the run terminates first.
+    #[pyo3(signature = (prompt, metadata=None, *, timeout_ms=None))]
+    #[gen_stub(override_return_type(
+        type_repr = "typing.Coroutine[typing.Any, typing.Any, typing.Any]",
+        imports = ("typing",)
+    ))]
+    fn request_input<'py>(
+        &self,
+        py: Python<'py>,
+        prompt: String,
+        metadata: Option<&Bound<'_, PyAny>>,
+        timeout_ms: Option<u64>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let data_json = match metadata {
+            Some(value) if !value.is_none() => py_to_json(py, value)?,
+            _ => serde_json::Value::Null,
+        };
+        let ctx = Arc::clone(&self.inner);
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let response = ctx
+                .request_input(&prompt, data_json, timeout_ms)
+                .await
+                .map_err(cp_err)?;
+            Python::attach(|py| json_to_py(py, &response))
         })
     }
 

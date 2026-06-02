@@ -298,6 +298,21 @@ typedef struct BlazenAgentResult BlazenAgentResult;
 typedef struct BlazenAnthropicProvider BlazenAnthropicProvider;
 
 /**
+ * Opaque handle wrapping a [`blazen_controlplane::worker::AssignmentContext`]
+ * for the duration of a single `handle` callback. The cabi hands a
+ * `*const BlazenAssignmentContext` to the vtable's `handle` thunk; the
+ * foreign side may call [`blazen_assignment_context_emit_event`] and
+ * [`blazen_assignment_context_request_input`] on it.
+ *
+ * ## Lifetime
+ *
+ * The pointer is BORROWED — it is only valid for the duration of the
+ * `handle` call. The foreign side MUST NOT retain it past the call's
+ * return. There is no free function: the cabi owns the handle.
+ */
+typedef struct BlazenAssignmentContext BlazenAssignmentContext;
+
+/**
  * Opaque handle wrapping
  * `Arc<blazen_uniffi::concrete::music::AudioGenProvider>`.
  */
@@ -1266,6 +1281,12 @@ typedef struct {
  *   UTF-8 strings (`run_id`, `workflow_name`, `input_json`). The
  *   callback MUST NOT free them — the cabi frees them after the
  *   callback returns.
+ * - The `handle` callback also receives a borrowed
+ *   `*const BlazenAssignmentContext` (`ctx`) valid ONLY for the
+ *   duration of the call. The callback may invoke
+ *   [`blazen_assignment_context_emit_event`] /
+ *   [`blazen_assignment_context_request_input`] on it but MUST NOT
+ *   retain the pointer past return.
  * - On success (`return == 0`), the callback writes a caller-owned
  *   `*mut c_char` (heap-allocated UTF-8 JSON, freeable via
  *   [`crate::string::blazen_string_free`]) into `out_json`. Pass
@@ -1283,12 +1304,15 @@ typedef struct {
      */
     void (*drop_user_data)(void *user_data);
     /**
-     * Run an assignment. See struct-level docs for ownership.
+     * Run an assignment. See struct-level docs for ownership. `ctx` is
+     * a borrowed `*const BlazenAssignmentContext` valid only for the
+     * duration of the call.
      */
     int32_t (*handle)(void *user_data,
                       const char *run_id,
                       const char *workflow_name,
                       const char *input_json,
+                      const BlazenAssignmentContext *ctx,
                       char **out_json,
                       BlazenError **out_err);
     /**
@@ -4932,15 +4956,20 @@ BlazenVoiceHandleArray *blazen_voice_handle_array_from_json(const char *json,
  * does not currently expose explicit TLS configuration — that landed
  * only in the higher-level `UniFFI` / `PyO3` / `napi` bindings.
  *
+ * `bearer_token` is an optional bearer token attached to every RPC.
+ * Pass null for no token (`None`).
+ *
  * # Safety
  *
  * `endpoint` must be a valid NUL-terminated UTF-8 buffer that remains
- * live for the duration of the call. `out_client` is null OR a
- * destination for one `*mut BlazenControlPlaneClient` write. `out_err`
- * is null OR a destination for one `*mut BlazenError` write.
+ * live for the duration of the call. `bearer_token` is null OR a valid
+ * NUL-terminated UTF-8 buffer. `out_client` is null OR a destination
+ * for one `*mut BlazenControlPlaneClient` write. `out_err` is null OR a
+ * destination for one `*mut BlazenError` write.
  */
 
 int32_t blazen_controlplane_client_connect_blocking(const char *endpoint,
+                                                    const char *bearer_token,
                                                     BlazenControlPlaneClient **out_client,
                                                     BlazenError **out_err);
 
@@ -4949,15 +4978,19 @@ int32_t blazen_controlplane_client_connect_blocking(const char *endpoint,
  * handle. Resolves to `*mut BlazenControlPlaneClient` — pop with
  * [`blazen_future_take_controlplane_client`].
  *
- * Returns null on null input or non-UTF-8 endpoint.
+ * `bearer_token` is an optional bearer token attached to every RPC.
+ * Pass null for no token (`None`).
+ *
+ * Returns null on null input or non-UTF-8 endpoint / bearer token.
  *
  * # Safety
  *
  * `endpoint` must be a valid NUL-terminated UTF-8 buffer that remains
  * live for the duration of the call (its contents are copied before
- * this function returns).
+ * this function returns). `bearer_token` is null OR a valid
+ * NUL-terminated UTF-8 buffer (copied before return).
  */
- BlazenFuture *blazen_controlplane_client_connect(const char *endpoint);
+ BlazenFuture *blazen_controlplane_client_connect(const char *endpoint, const char *bearer_token);
 
 /**
  * Frees a `BlazenControlPlaneClient` handle. No-op on null.
@@ -5037,6 +5070,47 @@ BlazenFuture *blazen_controlplane_client_cancel_workflow(const BlazenControlPlan
                                                          const char *run_id);
 
 /**
+ * Synchronously answer an outstanding `input.request` raised by a
+ * running assignment. `run_id` is the run that raised the request,
+ * `request_id` is the id carried in the `input.request` event payload,
+ * and `response_json` is the JSON value handed back to the worker's
+ * pending `request_input` call. Returns `0` on success / `-1` on
+ * failure (writing the error to `out_err`).
+ *
+ * # Safety
+ *
+ * `client` must be a valid pointer. `run_id` must be a valid
+ * NUL-terminated UTF-8 buffer (a hyphenated UUID rendering).
+ * `request_id` must be a valid NUL-terminated UTF-8 buffer.
+ * `response_json` must be a valid NUL-terminated UTF-8 buffer
+ * containing a JSON value.
+ */
+
+int32_t blazen_controlplane_client_respond_to_input_blocking(const BlazenControlPlaneClient *client,
+                                                             const char *run_id,
+                                                             const char *request_id,
+                                                             const char *response_json,
+                                                             BlazenError **out_err);
+
+/**
+ * Async `respond_to_input`. Resolves to unit; pop with
+ * `blazen_future_take_unit` (defined in `persist.rs`). Returns null on
+ * null input, non-UTF-8 args, an invalid UUID, or malformed
+ * `response_json`.
+ *
+ * # Safety
+ *
+ * Same as [`blazen_controlplane_client_respond_to_input_blocking`];
+ * the contents of `run_id`, `request_id`, and `response_json` are
+ * copied/parsed before this function returns.
+ */
+
+BlazenFuture *blazen_controlplane_client_respond_to_input(const BlazenControlPlaneClient *client,
+                                                          const char *run_id,
+                                                          const char *request_id,
+                                                          const char *response_json);
+
+/**
  * Synchronously describe a run. Same shape as cancel.
  *
  * # Safety
@@ -5114,6 +5188,59 @@ BlazenFuture *blazen_controlplane_client_drain_worker(const BlazenControlPlaneCl
                                                       bool immediate);
 
 /**
+ * Emit a non-terminal event from the running assignment. `data_json`
+ * is an optional JSON value (null / empty → JSON `null`). Returns `0`
+ * on success / `-1` on failure (writing the error to `out_err`).
+ *
+ * Blocks the calling thread on the cabi tokio runtime. Safe to call
+ * from inside the `handle` callback, which the cabi runs on a
+ * `spawn_blocking` thread.
+ *
+ * # Safety
+ *
+ * `ctx` must be a valid `*const BlazenAssignmentContext` handed to the
+ * vtable's `handle` callback and live for the duration of this call.
+ * `event_type` must be a valid NUL-terminated UTF-8 buffer.
+ * `data_json` is null OR a valid NUL-terminated UTF-8 buffer. `out_err`
+ * upholds the standard out-pointer contract.
+ */
+
+int32_t blazen_assignment_context_emit_event(const BlazenAssignmentContext *ctx,
+                                             const char *event_type,
+                                             const char *data_json,
+                                             BlazenError **out_err);
+
+/**
+ * Raise an `input.request` and block until the orchestrator answers.
+ * `metadata_json` is an optional JSON value (null / empty → JSON
+ * `null`). `timeout_ms` of `0` means no timeout (`None`). On success
+ * returns `0` and writes a caller-owned `*mut c_char` (the answer
+ * serialised as JSON, freeable via [`crate::string::blazen_string_free`])
+ * into `out_json`; on failure returns `-1` and writes the error to
+ * `out_err`.
+ *
+ * Blocks the calling thread on the cabi tokio runtime. Safe to call
+ * from inside the `handle` callback, which the cabi runs on a
+ * `spawn_blocking` thread.
+ *
+ * # Safety
+ *
+ * `ctx` must be a valid `*const BlazenAssignmentContext` handed to the
+ * vtable's `handle` callback and live for the duration of this call.
+ * `prompt` must be a valid NUL-terminated UTF-8 buffer. `metadata_json`
+ * is null OR a valid NUL-terminated UTF-8 buffer. `out_json` is null OR
+ * a destination for one `*mut c_char` write. `out_err` upholds the
+ * standard out-pointer contract.
+ */
+
+int32_t blazen_assignment_context_request_input(const BlazenAssignmentContext *ctx,
+                                                const char *prompt,
+                                                const char *metadata_json,
+                                                uint64_t timeout_ms,
+                                                char **out_json,
+                                                BlazenError **out_err);
+
+/**
  * Synchronously construct (and validate) a new worker. Does NOT open
  * a network connection — that happens inside
  * [`blazen_controlplane_worker_run_blocking`] /
@@ -5134,6 +5261,9 @@ BlazenFuture *blazen_controlplane_client_drain_worker(const BlazenControlPlaneCl
  * `tags_json` is an optional JSON object mapping `key` -> `value`
  * strings. Pass null for no tags.
  *
+ * `bearer_token` is an optional bearer token attached to every RPC the
+ * worker makes. Pass null for no token (`None`).
+ *
  * On success (`return == 0`), writes a caller-owned
  * `*mut BlazenControlPlaneWorker` to `out_worker`. On failure,
  * writes an error to `out_err` AND releases `vtable.user_data` via
@@ -5143,11 +5273,11 @@ BlazenFuture *blazen_controlplane_client_drain_worker(const BlazenControlPlaneCl
  * # Safety
  *
  * `endpoint`, `node_id` must be valid NUL-terminated UTF-8 buffers.
- * `capabilities_json` and `tags_json` are null OR valid NUL-terminated
- * UTF-8 buffers. `vtable.user_data` and `vtable.drop_user_data` /
- * `vtable.handle` / `vtable.on_cancel` / `vtable.on_drain` must form a
- * coherent thread-safe vtable (see [`BlazenAssignmentHandlerVTable`]
- * docs).
+ * `capabilities_json`, `tags_json`, and `bearer_token` are null OR
+ * valid NUL-terminated UTF-8 buffers. `vtable.user_data` and
+ * `vtable.drop_user_data` / `vtable.handle` / `vtable.on_cancel` /
+ * `vtable.on_drain` must form a coherent thread-safe vtable (see
+ * [`BlazenAssignmentHandlerVTable`] docs).
  */
 
 int32_t blazen_controlplane_worker_new_blocking(const char *endpoint,
@@ -5156,6 +5286,7 @@ int32_t blazen_controlplane_worker_new_blocking(const char *endpoint,
                                                 const char *tags_json,
                                                 uint32_t admission_mode,
                                                 uint64_t admission_param,
+                                                const char *bearer_token,
                                                 BlazenAssignmentHandlerVTable vtable,
                                                 BlazenControlPlaneWorker **out_worker,
                                                 BlazenError **out_err);
@@ -5217,12 +5348,16 @@ int32_t blazen_controlplane_worker_run_blocking(const BlazenControlPlaneWorker *
  * on disk. Same shape as
  * [`blazen_controlplane_client_connect_blocking`].
  *
+ * `bearer_token` is an optional bearer token attached to every RPC.
+ * Pass null for no token (`None`).
+ *
  * # Safety
  *
  * `endpoint`, `cert_path`, `key_path`, and `ca_path` must each be a
  * valid NUL-terminated UTF-8 buffer that remains live for the
- * duration of the call. `out_client` is null OR a destination for one
- * `*mut BlazenControlPlaneClient` write. `out_err` is null OR a
+ * duration of the call. `bearer_token` is null OR a valid
+ * NUL-terminated UTF-8 buffer. `out_client` is null OR a destination
+ * for one `*mut BlazenControlPlaneClient` write. `out_err` is null OR a
  * destination for one `*mut BlazenError` write.
  */
 
@@ -5230,6 +5365,7 @@ int32_t blazen_controlplane_client_connect_with_mtls_blocking(const char *endpoi
                                                               const char *cert_path,
                                                               const char *key_path,
                                                               const char *ca_path,
+                                                              const char *bearer_token,
                                                               BlazenControlPlaneClient **out_client,
                                                               BlazenError **out_err);
 
@@ -5241,18 +5377,23 @@ int32_t blazen_controlplane_client_connect_with_mtls_blocking(const char *endpoi
  * [`blazen_future_take_controlplane_client`]. Returns null on null
  * input or non-UTF-8 paths.
  *
+ * `bearer_token` is an optional bearer token attached to every RPC.
+ * Pass null for no token (`None`).
+ *
  * # Safety
  *
  * Same as
  * [`blazen_controlplane_client_connect_with_mtls_blocking`]; the
- * contents of each path buffer are copied before this function
- * returns.
+ * contents of each path buffer (and `bearer_token`) are copied before
+ * this function returns. `bearer_token` is null OR a valid
+ * NUL-terminated UTF-8 buffer.
  */
 
 BlazenFuture *blazen_controlplane_client_connect_with_mtls(const char *endpoint,
                                                            const char *cert_path,
                                                            const char *key_path,
-                                                           const char *ca_path);
+                                                           const char *ca_path,
+                                                           const char *bearer_token);
 
 /**
  * Synchronously construct (and validate) a new worker with mTLS
@@ -5262,12 +5403,15 @@ BlazenFuture *blazen_controlplane_client_connect_with_mtls(const char *endpoint,
  * unchanged — `vtable.user_data` is released via
  * `vtable.drop_user_data` on every failure path.
  *
+ * `bearer_token` is an optional bearer token attached to every RPC the
+ * worker makes. Pass null for no token (`None`).
+ *
  * # Safety
  *
  * `endpoint`, `node_id`, `cert_path`, `key_path`, and `ca_path` must
- * each be valid NUL-terminated UTF-8 buffers. `capabilities_json` and
- * `tags_json` are null OR valid NUL-terminated UTF-8 buffers. The
- * vtable must satisfy the contracts documented on
+ * each be valid NUL-terminated UTF-8 buffers. `capabilities_json`,
+ * `tags_json`, and `bearer_token` are null OR valid NUL-terminated
+ * UTF-8 buffers. The vtable must satisfy the contracts documented on
  * [`BlazenAssignmentHandlerVTable`].
  */
 
@@ -5280,6 +5424,7 @@ int32_t blazen_controlplane_worker_new_with_mtls_blocking(const char *endpoint,
                                                           const char *cert_path,
                                                           const char *key_path,
                                                           const char *ca_path,
+                                                          const char *bearer_token,
                                                           BlazenAssignmentHandlerVTable vtable,
                                                           BlazenControlPlaneWorker **out_worker,
                                                           BlazenError **out_err);

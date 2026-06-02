@@ -1116,6 +1116,7 @@ internal interface UniffiCallbackInterfaceControlPlaneAssignmentHandlerMethod0 :
         `runId`: RustBuffer.ByValue,
         `workflowName`: RustBuffer.ByValue,
         `inputJson`: RustBuffer.ByValue,
+        `ctx`: Long,
         `uniffiOutReturn`: RustBuffer,
         uniffiCallStatus: UniffiRustCallStatus,
     )
@@ -2667,6 +2668,12 @@ internal object IntegrityCheckingUniffiLib {
 
     external fun uniffi_blazen_uniffi_checksum_method_rvcprovider_list_target_voices_blocking(): Short
 
+    external fun uniffi_blazen_uniffi_checksum_method_assignmentcontexthandle_emit_event(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_assignmentcontexthandle_request_input(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_assignmentcontexthandle_run_id(): Short
+
     external fun uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_on_cancel(): Short
@@ -2680,6 +2687,8 @@ internal object IntegrityCheckingUniffiLib {
     external fun uniffi_blazen_uniffi_checksum_method_controlplaneclient_drain_worker(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_controlplaneclient_list_workers(): Short
+
+    external fun uniffi_blazen_uniffi_checksum_method_controlplaneclient_respond_to_input(): Short
 
     external fun uniffi_blazen_uniffi_checksum_method_controlplaneclient_submit_workflow(): Short
 
@@ -5062,6 +5071,36 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
+    external fun uniffi_blazen_uniffi_fn_clone_assignmentcontexthandle(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Long
+
+    external fun uniffi_blazen_uniffi_fn_free_assignmentcontexthandle(
+        `handle`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_assignmentcontexthandle_emit_event(
+        `ptr`: Long,
+        `eventType`: RustBuffer.ByValue,
+        `dataJson`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): Unit
+
+    external fun uniffi_blazen_uniffi_fn_method_assignmentcontexthandle_request_input(
+        `ptr`: Long,
+        `prompt`: RustBuffer.ByValue,
+        `metadataJson`: RustBuffer.ByValue,
+        `timeoutMs`: RustBuffer.ByValue,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
+    external fun uniffi_blazen_uniffi_fn_method_assignmentcontexthandle_run_id(
+        `ptr`: Long,
+        uniffi_out_err: UniffiRustCallStatus,
+    ): RustBuffer.ByValue
+
     external fun uniffi_blazen_uniffi_fn_clone_controlplaneassignmenthandler(
         `handle`: Long,
         uniffi_out_err: UniffiRustCallStatus,
@@ -5081,6 +5120,7 @@ internal object UniffiLib {
         `runId`: RustBuffer.ByValue,
         `workflowName`: RustBuffer.ByValue,
         `inputJson`: RustBuffer.ByValue,
+        `ctx`: Long,
         uniffi_out_err: UniffiRustCallStatus,
     ): RustBuffer.ByValue
 
@@ -5106,10 +5146,14 @@ internal object UniffiLib {
         uniffi_out_err: UniffiRustCallStatus,
     ): Unit
 
-    external fun uniffi_blazen_uniffi_fn_constructor_controlplaneclient_connect(`endpoint`: RustBuffer.ByValue): Long
+    external fun uniffi_blazen_uniffi_fn_constructor_controlplaneclient_connect(
+        `endpoint`: RustBuffer.ByValue,
+        `bearerToken`: RustBuffer.ByValue,
+    ): Long
 
     external fun uniffi_blazen_uniffi_fn_constructor_controlplaneclient_connect_blocking(
         `endpoint`: RustBuffer.ByValue,
+        `bearerToken`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
@@ -5130,6 +5174,13 @@ internal object UniffiLib {
     ): Long
 
     external fun uniffi_blazen_uniffi_fn_method_controlplaneclient_list_workers(`ptr`: Long): Long
+
+    external fun uniffi_blazen_uniffi_fn_method_controlplaneclient_respond_to_input(
+        `ptr`: Long,
+        `runId`: RustBuffer.ByValue,
+        `requestId`: RustBuffer.ByValue,
+        `responseJson`: RustBuffer.ByValue,
+    ): Long
 
     external fun uniffi_blazen_uniffi_fn_method_controlplaneclient_submit_workflow(
         `ptr`: Long,
@@ -5202,6 +5253,7 @@ internal object UniffiLib {
         `endpoint`: RustBuffer.ByValue,
         `nodeId`: RustBuffer.ByValue,
         `capabilities`: RustBuffer.ByValue,
+        `bearerToken`: RustBuffer.ByValue,
         uniffi_out_err: UniffiRustCallStatus,
     ): Long
 
@@ -7704,7 +7756,16 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_method_rvcprovider_list_target_voices_blocking() != 56818.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle() != 640.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_method_assignmentcontexthandle_emit_event() != 38726.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_assignmentcontexthandle_request_input() != 29487.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_assignmentcontexthandle_run_id() != 55953.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle() != 64253.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_on_cancel() != 36399.toShort()) {
@@ -7723,6 +7784,9 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_controlplaneclient_list_workers() != 315.toShort()) {
+        throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
+    }
+    if (lib.uniffi_blazen_uniffi_checksum_method_controlplaneclient_respond_to_input() != 44308.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_method_controlplaneclient_submit_workflow() != 23792.toShort()) {
@@ -8379,13 +8443,13 @@ private fun uniffiCheckApiChecksums(lib: IntegrityCheckingUniffiLib) {
     if (lib.uniffi_blazen_uniffi_checksum_constructor_rvcprovider_new() != 51672.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_constructor_controlplaneclient_connect() != 13355.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_controlplaneclient_connect() != 41710.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_constructor_controlplaneclient_connect_blocking() != 65181.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_controlplaneclient_connect_blocking() != 8729.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
-    if (lib.uniffi_blazen_uniffi_checksum_constructor_controlplaneworker_new_blocking() != 22162.toShort()) {
+    if (lib.uniffi_blazen_uniffi_checksum_constructor_controlplaneworker_new_blocking() != 62220.toShort()) {
         throw RuntimeException("UniFFI API checksum mismatch: try cleaning and rebuilding your project")
     }
     if (lib.uniffi_blazen_uniffi_checksum_constructor_uniffimodelmanager_new() != 31159.toShort()) {
@@ -9622,6 +9686,373 @@ public object FfiConverterTypeAnthropicProvider : FfiConverter<AnthropicProvider
 
     override fun write(
         value: AnthropicProvider,
+        buf: ByteBuffer,
+    ) {
+        buf.putLong(lower(value))
+    }
+}
+
+// This template implements a class for working with a Rust struct via a handle
+// to the live Rust struct on the other side of the FFI.
+//
+// There's some subtlety here, because we have to be careful not to operate on a Rust
+// struct after it has been dropped, and because we must expose a public API for freeing
+// theq Kotlin wrapper object in lieu of reliable finalizers. The core requirements are:
+//
+//   * Each instance holds an opaque handle to the underlying Rust struct.
+//     Method calls need to read this handle from the object's state and pass it in to
+//     the Rust FFI.
+//
+//   * When an instance is no longer needed, its handle should be passed to a
+//     special destructor function provided by the Rust FFI, which will drop the
+//     underlying Rust struct.
+//
+//   * Given an instance, calling code is expected to call the special
+//     `destroy` method in order to free it after use, either by calling it explicitly
+//     or by using a higher-level helper like the `use` method. Failing to do so risks
+//     leaking the underlying Rust struct.
+//
+//   * We can't assume that calling code will do the right thing, and must be prepared
+//     to handle Kotlin method calls executing concurrently with or even after a call to
+//     `destroy`, and to handle multiple (possibly concurrent!) calls to `destroy`.
+//
+//   * We must never allow Rust code to operate on the underlying Rust struct after
+//     the destructor has been called, and must never call the destructor more than once.
+//     Doing so may trigger memory unsafety.
+//
+//   * To mitigate many of the risks of leaking memory and use-after-free unsafety, a `Cleaner`
+//     is implemented to call the destructor when the Kotlin object becomes unreachable.
+//     This is done in a background thread. This is not a panacea, and client code should be aware that
+//      1. the thread may starve if some there are objects that have poorly performing
+//     `drop` methods or do significant work in their `drop` methods.
+//      2. the thread is shared across the whole library. This can be tuned by using `android_cleaner = true`,
+//         or `android = true` in the [`kotlin` section of the `uniffi.toml` file](https://mozilla.github.io/uniffi-rs/kotlin/configuration.html).
+//
+// If we try to implement this with mutual exclusion on access to the handle, there is the
+// possibility of a race between a method call and a concurrent call to `destroy`:
+//
+//    * Thread A starts a method call, reads the value of the handle, but is interrupted
+//      before it can pass the handle over the FFI to Rust.
+//    * Thread B calls `destroy` and frees the underlying Rust struct.
+//    * Thread A resumes, passing the already-read handle value to Rust and triggering
+//      a use-after-free.
+//
+// One possible solution would be to use a `ReadWriteLock`, with each method call taking
+// a read lock (and thus allowed to run concurrently) and the special `destroy` method
+// taking a write lock (and thus blocking on live method calls). However, we aim not to
+// generate methods with any hidden blocking semantics, and a `destroy` method that might
+// block if called incorrectly seems to meet that bar.
+//
+// So, we achieve our goals by giving each instance an associated `AtomicLong` counter to track
+// the number of in-flight method calls, and an `AtomicBoolean` flag to indicate whether `destroy`
+// has been called. These are updated according to the following rules:
+//
+//    * The initial value of the counter is 1, indicating a live object with no in-flight calls.
+//      The initial value for the flag is false.
+//
+//    * At the start of each method call, we atomically check the counter.
+//      If it is 0 then the underlying Rust struct has already been destroyed and the call is aborted.
+//      If it is nonzero them we atomically increment it by 1 and proceed with the method call.
+//
+//    * At the end of each method call, we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+//    * When `destroy` is called, we atomically flip the flag from false to true.
+//      If the flag was already true we silently fail.
+//      Otherwise we atomically decrement and check the counter.
+//      If it has reached zero then we destroy the underlying Rust struct.
+//
+// Astute readers may observe that this all sounds very similar to the way that Rust's `Arc<T>` works,
+// and indeed it is, with the addition of a flag to guard against multiple calls to `destroy`.
+//
+// The overall effect is that the underlying Rust struct is destroyed only when `destroy` has been
+// called *and* all in-flight method calls have completed, avoiding violating any of the expectations
+// of the underlying Rust code.
+//
+// This makes a cleaner a better alternative to _not_ calling `destroy()` as
+// and when the object is finished with, but the abstraction is not perfect: if the Rust object's `drop`
+// method is slow, and/or there are many objects to cleanup, and it's on a low end Android device, then the cleaner
+// thread may be starved, and the app will leak memory.
+//
+// In this case, `destroy`ing manually may be a better solution.
+//
+// The cleaner can live side by side with the manual calling of `destroy`. In the order of responsiveness, uniffi objects
+// with Rust peers are reclaimed:
+//
+// 1. By calling the `destroy` method of the object, which calls `rustObject.free()`. If that doesn't happen:
+// 2. When the object becomes unreachable, AND the Cleaner thread gets to call `rustObject.free()`. If the thread is starved then:
+// 3. The memory is reclaimed when the process terminates.
+//
+// [1] https://stackoverflow.com/questions/24376768/can-java-finalize-an-object-when-it-is-still-in-scope/24380219
+//
+
+/**
+ * Foreign-facing handle to the per-assignment
+ * [`blazen_controlplane::AssignmentContext`].
+ *
+ * Handed to [`ControlPlaneAssignmentHandler::handle`] so the foreign
+ * handler can emit progress events and request human/operator input
+ * mid-assignment. All methods are **synchronous** on the foreign side:
+ * they block the calling (handler) thread on the shared Tokio runtime
+ * until the underlying async operation resolves. This is safe because
+ * the foreign `handle` callback runs on a [`tokio::task::spawn_blocking`]
+ * thread — outside the async executor — so `runtime().block_on` does not
+ * re-enter a running runtime.
+ */
+public interface AssignmentContextHandleInterface {
+    /**
+     * Emit a non-terminal progress event from the running assignment.
+     *
+     * `data_json` is the event payload as a JSON-encoded string; an empty
+     * string is treated as JSON `null`.
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::Validation`] if `data_json` is non-empty but
+     * not valid JSON; [`BlazenError::Peer`] (`kind = "ControlPlace*"`) if
+     * the worker's outbound channel is closed.
+     */
+    fun `emitEvent`(
+        `eventType`: kotlin.String,
+        `dataJson`: kotlin.String,
+    )
+
+    /**
+     * Raise an `input.request` and block until the orchestrator answers
+     * (or the assignment is cancelled / `timeout_ms` elapses).
+     *
+     * `metadata_json` is an arbitrary JSON-encoded payload attached to
+     * the request; an empty string is treated as JSON `null`. Returns the
+     * orchestrator's answer as a JSON-encoded string.
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::Validation`] if `metadata_json` is non-empty
+     * but not valid JSON, or if the answer cannot be re-encoded;
+     * [`BlazenError::Peer`] for transport / cancellation / timeout.
+     */
+    fun `requestInput`(
+        `prompt`: kotlin.String,
+        `metadataJson`: kotlin.String,
+        `timeoutMs`: kotlin.ULong?,
+    ): kotlin.String
+
+    /**
+     * The run identifier this assignment belongs to (UUID string).
+     */
+    fun `runId`(): kotlin.String
+
+    companion object
+}
+
+/**
+ * Foreign-facing handle to the per-assignment
+ * [`blazen_controlplane::AssignmentContext`].
+ *
+ * Handed to [`ControlPlaneAssignmentHandler::handle`] so the foreign
+ * handler can emit progress events and request human/operator input
+ * mid-assignment. All methods are **synchronous** on the foreign side:
+ * they block the calling (handler) thread on the shared Tokio runtime
+ * until the underlying async operation resolves. This is safe because
+ * the foreign `handle` callback runs on a [`tokio::task::spawn_blocking`]
+ * thread — outside the async executor — so `runtime().block_on` does not
+ * re-enter a running runtime.
+ */
+open class AssignmentContextHandle :
+    Disposable,
+    AutoCloseable,
+    AssignmentContextHandleInterface {
+    /**
+     * @suppress
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(withHandle: UniffiWithHandle, handle: Long) {
+        this.handle = handle
+        this.cleanable = UniffiLib.CLEANER.register(this, UniffiCleanAction(handle))
+    }
+
+    /**
+     * @suppress
+     *
+     * This constructor can be used to instantiate a fake object. Only used for tests. Any
+     * attempt to actually use an object constructed this way will fail as there is no
+     * connected Rust object.
+     */
+    @Suppress("UNUSED_PARAMETER")
+    constructor(noHandle: NoHandle) {
+        this.handle = 0
+        this.cleanable = null
+    }
+
+    protected val handle: Long
+    protected val cleanable: UniffiCleaner.Cleanable?
+
+    private val wasDestroyed = AtomicBoolean(false)
+    private val callCounter = AtomicLong(1)
+
+    override fun destroy() {
+        // Only allow a single call to this method.
+        // TODO: maybe we should log a warning if called more than once?
+        if (this.wasDestroyed.compareAndSet(false, true)) {
+            // This decrement always matches the initial count of 1 given at creation time.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    @Synchronized
+    override fun close() {
+        this.destroy()
+    }
+
+    internal inline fun <R> callWithHandle(block: (handle: Long) -> R): R {
+        // Check and increment the call counter, to keep the object alive.
+        // This needs a compare-and-set retry loop in case of concurrent updates.
+        do {
+            val c = this.callCounter.get()
+            if (c == 0L) {
+                throw IllegalStateException("${this.javaClass.simpleName} object has already been destroyed")
+            }
+            if (c == Long.MAX_VALUE) {
+                throw IllegalStateException("${this.javaClass.simpleName} call counter would overflow")
+            }
+        } while (!this.callCounter.compareAndSet(c, c + 1L))
+        // Now we can safely do the method call without the handle being freed concurrently.
+        try {
+            return block(this.uniffiCloneHandle())
+        } finally {
+            // This decrement always matches the increment we performed above.
+            if (this.callCounter.decrementAndGet() == 0L) {
+                cleanable?.clean()
+            }
+        }
+    }
+
+    // Use a static inner class instead of a closure so as not to accidentally
+    // capture `this` as part of the cleanable's action.
+    private class UniffiCleanAction(
+        private val handle: Long,
+    ) : Runnable {
+        override fun run() {
+            if (handle == 0.toLong()) {
+                // Fake object created with `NoHandle`, don't try to free.
+                return
+            }
+            uniffiRustCall { status ->
+                UniffiLib.uniffi_blazen_uniffi_fn_free_assignmentcontexthandle(handle, status)
+            }
+        }
+    }
+
+    /**
+     * @suppress
+     */
+    fun uniffiCloneHandle(): Long {
+        if (handle == 0.toLong()) {
+            throw InternalException("uniffiCloneHandle() called on NoHandle object")
+        }
+        return uniffiRustCall { status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_clone_assignmentcontexthandle(handle, status)
+        }
+    }
+
+    /**
+     * Emit a non-terminal progress event from the running assignment.
+     *
+     * `data_json` is the event payload as a JSON-encoded string; an empty
+     * string is treated as JSON `null`.
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::Validation`] if `data_json` is non-empty but
+     * not valid JSON; [`BlazenError::Peer`] (`kind = "ControlPlace*"`) if
+     * the worker's outbound channel is closed.
+     */
+    @Throws(BlazenException::class)
+    override fun `emitEvent`(
+        `eventType`: kotlin.String,
+        `dataJson`: kotlin.String,
+    ) = callWithHandle {
+        uniffiRustCallWithError(BlazenException) { _status ->
+            UniffiLib.uniffi_blazen_uniffi_fn_method_assignmentcontexthandle_emit_event(
+                it,
+                FfiConverterString.lower(`eventType`),
+                FfiConverterString.lower(`dataJson`),
+                _status,
+            )
+        }
+    }
+
+    /**
+     * Raise an `input.request` and block until the orchestrator answers
+     * (or the assignment is cancelled / `timeout_ms` elapses).
+     *
+     * `metadata_json` is an arbitrary JSON-encoded payload attached to
+     * the request; an empty string is treated as JSON `null`. Returns the
+     * orchestrator's answer as a JSON-encoded string.
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::Validation`] if `metadata_json` is non-empty
+     * but not valid JSON, or if the answer cannot be re-encoded;
+     * [`BlazenError::Peer`] for transport / cancellation / timeout.
+     */
+    @Throws(BlazenException::class)
+    override fun `requestInput`(
+        `prompt`: kotlin.String,
+        `metadataJson`: kotlin.String,
+        `timeoutMs`: kotlin.ULong?,
+    ): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCallWithError(BlazenException) { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_assignmentcontexthandle_request_input(
+                        it,
+                        FfiConverterString.lower(`prompt`),
+                        FfiConverterString.lower(`metadataJson`),
+                        FfiConverterOptionalULong.lower(`timeoutMs`),
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * The run identifier this assignment belongs to (UUID string).
+     */
+    override fun `runId`(): kotlin.String =
+        FfiConverterString.lift(
+            callWithHandle {
+                uniffiRustCall { _status ->
+                    UniffiLib.uniffi_blazen_uniffi_fn_method_assignmentcontexthandle_run_id(
+                        it,
+                        _status,
+                    )
+                }
+            },
+        )
+
+    /**
+     * @suppress
+     */
+    companion object
+}
+
+/**
+ * @suppress
+ */
+public object FfiConverterTypeAssignmentContextHandle : FfiConverter<AssignmentContextHandle, Long> {
+    override fun lower(value: AssignmentContextHandle): Long = value.uniffiCloneHandle()
+
+    override fun lift(value: Long): AssignmentContextHandle = AssignmentContextHandle(UniffiWithHandle, value)
+
+    override fun read(buf: ByteBuffer): AssignmentContextHandle = lift(buf.getLong())
+
+    override fun allocationSize(value: AssignmentContextHandle) = 8UL
+
+    override fun write(
+        value: AssignmentContextHandle,
         buf: ByteBuffer,
     ) {
         buf.putLong(lower(value))
@@ -13953,6 +14384,7 @@ public interface ControlPlaneAssignmentHandler {
         `runId`: kotlin.String,
         `workflowName`: kotlin.String,
         `inputJson`: kotlin.String,
+        `ctx`: AssignmentContextHandle,
     ): kotlin.String
 
     /**
@@ -14101,6 +14533,7 @@ open class ControlPlaneAssignmentHandlerImpl :
         `runId`: kotlin.String,
         `workflowName`: kotlin.String,
         `inputJson`: kotlin.String,
+        `ctx`: AssignmentContextHandle,
     ): kotlin.String =
         FfiConverterString.lift(
             callWithHandle {
@@ -14110,6 +14543,7 @@ open class ControlPlaneAssignmentHandlerImpl :
                         FfiConverterString.lower(`runId`),
                         FfiConverterString.lower(`workflowName`),
                         FfiConverterString.lower(`inputJson`),
+                        FfiConverterTypeAssignmentContextHandle.lower(`ctx`),
                         _status,
                     )
                 }
@@ -14161,6 +14595,7 @@ internal object uniffiCallbackInterfaceControlPlaneAssignmentHandler {
             `runId`: RustBuffer.ByValue,
             `workflowName`: RustBuffer.ByValue,
             `inputJson`: RustBuffer.ByValue,
+            `ctx`: Long,
             `uniffiOutReturn`: RustBuffer,
             uniffiCallStatus: UniffiRustCallStatus,
         ) {
@@ -14169,6 +14604,7 @@ internal object uniffiCallbackInterfaceControlPlaneAssignmentHandler {
                 FfiConverterString.lift(`runId`),
                 FfiConverterString.lift(`workflowName`),
                 FfiConverterString.lift(`inputJson`),
+                FfiConverterTypeAssignmentContextHandle.lift(`ctx`),
             )
             }
             val writeReturn = { value: kotlin.String -> uniffiOutReturn.setValue(FfiConverterString.lower(value)) }
@@ -14429,6 +14865,26 @@ public interface ControlPlaneClientInterface {
     suspend fun `listWorkers`(): List<ControlPlaneWorkerInfo>
 
     /**
+     * Answer an outstanding `input.request` raised by a running
+     * assignment.
+     *
+     * `request_id` is the value carried in the `input.request` event's
+     * payload; `response_json` is the JSON-encoded value handed back to
+     * the worker's pending [`AssignmentContextHandle::request_input`].
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::Validation`] if `run_id` is not a valid UUID
+     * or `response_json` is not valid JSON; [`BlazenError::Peer`]
+     * (`kind = "ControlPlane*"`) for RPC failures.
+     */
+    suspend fun `respondToInput`(
+        `runId`: kotlin.String,
+        `requestId`: kotlin.String,
+        `responseJson`: kotlin.String,
+    )
+
+    /**
      * Submit a workflow to the control plane.
      *
      * Returns the initial [`ControlPlaneRunStateSnapshot`] (status will
@@ -14684,6 +15140,44 @@ open class ControlPlaneClient :
         )
 
     /**
+     * Answer an outstanding `input.request` raised by a running
+     * assignment.
+     *
+     * `request_id` is the value carried in the `input.request` event's
+     * payload; `response_json` is the JSON-encoded value handed back to
+     * the worker's pending [`AssignmentContextHandle::request_input`].
+     *
+     * # Errors
+     *
+     * Returns [`BlazenError::Validation`] if `run_id` is not a valid UUID
+     * or `response_json` is not valid JSON; [`BlazenError::Peer`]
+     * (`kind = "ControlPlane*"`) for RPC failures.
+     */
+    @Throws(BlazenException::class)
+    @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
+    override suspend fun `respondToInput`(
+        `runId`: kotlin.String,
+        `requestId`: kotlin.String,
+        `responseJson`: kotlin.String,
+    ) = uniffiRustCallAsync(
+        callWithHandle { uniffiHandle ->
+            UniffiLib.uniffi_blazen_uniffi_fn_method_controlplaneclient_respond_to_input(
+                uniffiHandle,
+                FfiConverterString.lower(`runId`),
+                FfiConverterString.lower(`requestId`),
+                FfiConverterString.lower(`responseJson`),
+            )
+        },
+        { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_void(future, callback, continuation) },
+        { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_void(future, continuation) },
+        { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_void(future) },
+        // lift function
+        { Unit },
+        // Error FFI converter
+        BlazenException.ErrorHandler,
+    )
+
+    /**
      * Submit a workflow to the control plane.
      *
      * Returns the initial [`ControlPlaneRunStateSnapshot`] (status will
@@ -14762,9 +15256,15 @@ open class ControlPlaneClient :
          */
         @Throws(BlazenException::class)
         @Suppress("ASSIGNED_BUT_NEVER_ACCESSED_VARIABLE")
-        suspend fun `connect`(`endpoint`: kotlin.String): ControlPlaneClient =
+        suspend fun `connect`(
+            `endpoint`: kotlin.String,
+            `bearerToken`: kotlin.String?,
+        ): ControlPlaneClient =
             uniffiRustCallAsync(
-                UniffiLib.uniffi_blazen_uniffi_fn_constructor_controlplaneclient_connect(FfiConverterString.lower(`endpoint`)),
+                UniffiLib.uniffi_blazen_uniffi_fn_constructor_controlplaneclient_connect(
+                    FfiConverterString.lower(`endpoint`),
+                    FfiConverterOptionalString.lower(`bearerToken`),
+                ),
                 { future, callback, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_poll_u64(future, callback, continuation) },
                 { future, continuation -> UniffiLib.ffi_blazen_uniffi_rust_future_complete_u64(future, continuation) },
                 { future -> UniffiLib.ffi_blazen_uniffi_rust_future_free_u64(future) },
@@ -14784,11 +15284,15 @@ open class ControlPlaneClient :
          * the endpoint URI is invalid or the handshake fails.
          */
         @Throws(BlazenException::class)
-        fun `connectBlocking`(`endpoint`: kotlin.String): ControlPlaneClient =
+        fun `connectBlocking`(
+            `endpoint`: kotlin.String,
+            `bearerToken`: kotlin.String?,
+        ): ControlPlaneClient =
             FfiConverterTypeControlPlaneClient.lift(
                 uniffiRustCallWithError(BlazenException) { _status ->
                     UniffiLib.uniffi_blazen_uniffi_fn_constructor_controlplaneclient_connect_blocking(
                         FfiConverterString.lower(`endpoint`),
+                        FfiConverterOptionalString.lower(`bearerToken`),
                         _status,
                     )
                 },
@@ -15779,6 +16283,7 @@ open class ControlPlaneWorker :
             `endpoint`: kotlin.String,
             `nodeId`: kotlin.String,
             `capabilities`: List<ControlPlaneWorkerCapability>,
+            `bearerToken`: kotlin.String?,
         ): ControlPlaneWorker =
             FfiConverterTypeControlPlaneWorker.lift(
                 uniffiRustCallWithError(BlazenException) { _status ->
@@ -15786,6 +16291,7 @@ open class ControlPlaneWorker :
                         FfiConverterString.lower(`endpoint`),
                         FfiConverterString.lower(`nodeId`),
                         FfiConverterSequenceTypeControlPlaneWorkerCapability.lower(`capabilities`),
+                        FfiConverterOptionalString.lower(`bearerToken`),
                         _status,
                     )
                 },

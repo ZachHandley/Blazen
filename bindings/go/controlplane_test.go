@@ -65,7 +65,7 @@ func TestControlPlaneRecordTypesConstruct(t *testing.T) {
 // of the FFI without needing a server.
 func TestControlPlaneClientConnectRejectsBadEndpoint(t *testing.T) {
 	ensureInit()
-	_, err := uniffiblazen.ControlPlaneClientConnectBlocking("not a uri")
+	_, err := uniffiblazen.ControlPlaneClientConnectBlocking("not a uri", nil)
 	if err == nil {
 		t.Fatal("expected bad endpoint to be rejected")
 	}
@@ -87,6 +87,7 @@ func TestControlPlaneWorkerConstructValidatesEndpoint(t *testing.T) {
 		[]uniffiblazen.ControlPlaneWorkerCapability{
 			{Kind: "workflow:hello", Version: 1},
 		},
+		nil,
 	)
 	if err == nil {
 		t.Fatal("expected bad endpoint URI to be rejected")

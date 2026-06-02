@@ -57,7 +57,7 @@ use async_trait::async_trait;
 use dashmap::DashMap;
 use futures_util::StreamExt;
 use serde_json::Value;
-use tokio::sync::{Mutex, mpsc};
+use tokio::sync::{Mutex, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio_stream::wrappers::ReceiverStream;
 use tokio_util::sync::CancellationToken;
@@ -111,6 +111,10 @@ pub struct WorkerConfig {
     pub tls: Option<ClientTlsConfig>,
     /// Reconnect / retry policy for the bidi stream.
     pub retry: RetryPolicy,
+    /// Explicit bearer token sent as `authorization: Bearer <token>` on
+    /// the handshake. When `None`, falls back to `BLAZEN_PEER_TOKEN` from
+    /// the environment.
+    pub bearer_token: Option<String>,
 }
 
 impl WorkerConfig {
@@ -128,6 +132,7 @@ impl WorkerConfig {
             envelope_versions: vec![ENVELOPE_VERSION],
             tls: None,
             retry: RetryPolicy::default(),
+            bearer_token: None,
         }
     }
 
@@ -142,6 +147,14 @@ impl WorkerConfig {
     #[must_use]
     pub fn with_tag(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.tags.insert(key.into(), value.into());
+        self
+    }
+
+    /// Set an explicit bearer token for the handshake. Takes precedence
+    /// over `BLAZEN_PEER_TOKEN`.
+    #[must_use]
+    pub fn with_bearer_token(mut self, token: impl Into<String>) -> Self {
+        self.bearer_token = Some(token.into());
         self
     }
 
@@ -311,6 +324,11 @@ pub struct AssignmentContext {
     sink: Arc<WorkerOutbox>,
     run_id: Uuid,
     cancel: CancellationToken,
+    /// Per-worker map of outstanding input requests, keyed by
+    /// `request_id`. The inbound pump fulfils the matching oneshot when a
+    /// [`ServerToWorker::InputResponse`](crate::protocol::ServerToWorker::InputResponse)
+    /// frame arrives. Shared (cloned `Arc`) with [`WorkerState`].
+    pending: Arc<DashMap<String, oneshot::Sender<Value>>>,
 }
 
 impl AssignmentContext {
@@ -334,6 +352,73 @@ impl AssignmentContext {
             .emit_event(self.run_id, event)
             .await
             .map_err(|e| ControlPlaneError::Transport(e.to_string()))
+    }
+
+    /// Raise an `input.request` and block until the orchestrator answers
+    /// via `respond_to_input` (or the assignment is cancelled / the
+    /// optional `timeout_ms` elapses).
+    ///
+    /// Emits an `"input.request"` [`AssignmentEvent`](crate::protocol::AssignmentEvent)
+    /// carrying `{request_id, prompt, metadata}`, then awaits the matching
+    /// [`ServerToWorker::InputResponse`](crate::protocol::ServerToWorker::InputResponse)
+    /// frame. The returned [`Value`] is the JSON the orchestrator passed
+    /// back.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ControlPlaneError::Transport`] if the event cannot be
+    /// emitted, the assignment is cancelled while waiting, the worker
+    /// disconnects, or `timeout_ms` elapses with no answer.
+    pub async fn request_input(
+        &self,
+        prompt: &str,
+        metadata: Value,
+        timeout_ms: Option<u64>,
+    ) -> Result<Value, ControlPlaneError> {
+        let request_id = Uuid::new_v4().to_string();
+        let (tx, rx) = oneshot::channel();
+        self.pending.insert(request_id.clone(), tx);
+
+        // If emitting fails, drop the pending entry before returning.
+        if let Err(e) = self
+            .emit_event(
+                "input.request",
+                serde_json::json!({
+                    "request_id": request_id,
+                    "prompt": prompt,
+                    "metadata": metadata,
+                }),
+            )
+            .await
+        {
+            self.pending.remove(&request_id);
+            return Err(e);
+        }
+
+        let recv = async {
+            tokio::select! {
+                () = self.cancel.cancelled() => {
+                    Err(ControlPlaneError::Transport("cancelled awaiting input".into()))
+                }
+                v = rx => {
+                    v.map_err(|_| ControlPlaneError::Transport("input channel dropped".into()))
+                }
+            }
+        };
+        let result = match timeout_ms {
+            Some(ms) => tokio::time::timeout(Duration::from_millis(ms), recv)
+                .await
+                .unwrap_or_else(|_| {
+                    Err(ControlPlaneError::Transport(
+                        "timed out awaiting input".into(),
+                    ))
+                }),
+            None => recv.await,
+        };
+        if result.is_err() {
+            self.pending.remove(&request_id);
+        }
+        result
     }
 
     /// Cancellation token tied to this run. The handler can `.await`
@@ -450,6 +535,11 @@ struct WorkerState {
     /// Per-run cancellation tokens. Inserted on Assignment dispatch,
     /// fired by Cancel or Drain immediate, removed on completion.
     running: DashMap<Uuid, CancellationToken>,
+    /// Outstanding `request_input` calls keyed by `request_id`. Inserted
+    /// by [`AssignmentContext::request_input`], fulfilled by the inbound
+    /// pump on a [`ServerToWorker::InputResponse`](crate::protocol::ServerToWorker::InputResponse).
+    /// `Arc` so each [`AssignmentContext`] shares the same map.
+    pending_inputs: Arc<DashMap<String, oneshot::Sender<Value>>>,
     /// Shutdown signal for the whole worker — drops the inbound pump,
     /// heartbeat ticker, and outbound channel.
     shutdown: CancellationToken,
@@ -460,6 +550,7 @@ impl WorkerState {
         Self {
             in_flight: AtomicU32::new(0),
             running: DashMap::new(),
+            pending_inputs: Arc::new(DashMap::new()),
             shutdown: CancellationToken::new(),
         }
     }
@@ -692,7 +783,8 @@ impl Worker {
         })?;
 
         let mut req = Request::new(req_stream);
-        if let Some(bearer) = auth::bearer_metadata_value() {
+        if let Some(bearer) = auth::bearer_metadata_value_with(self.config.bearer_token.as_deref())
+        {
             let value = bearer
                 .parse::<tonic::metadata::MetadataValue<_>>()
                 .map_err(|e| {
@@ -888,6 +980,18 @@ impl Worker {
                 }
                 handler.on_drain(d.immediate).await;
             }
+            ServerToWorker::InputResponse(r) => {
+                if let Some((_, tx)) = self.state.pending_inputs.remove(&r.request_id) {
+                    let value = serde_json::from_slice(&r.response_json).unwrap_or(Value::Null);
+                    let _ = tx.send(value);
+                } else {
+                    tracing::debug!(
+                        request_id = %r.request_id,
+                        run_id = %r.run_id,
+                        "received InputResponse with no pending request (late/duplicate?)",
+                    );
+                }
+            }
         }
     }
 
@@ -914,6 +1018,7 @@ impl Worker {
                 sink: outbox_for_ctx,
                 run_id,
                 cancel: token.clone(),
+                pending: Arc::clone(&state.pending_inputs),
             };
             let handler_fut = handler.handle(assignment, ctx);
 

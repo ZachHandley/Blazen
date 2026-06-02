@@ -58,7 +58,7 @@ async fn with_store_memory_round_trip() {
     let worker_handle = tokio::spawn(async move { worker.run(EchoHandler).await });
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    let client = Client::connect(format!("http://{addr}"), None)
+    let client = Client::connect(format!("http://{addr}"), None, None)
         .await
         .unwrap();
     let snap = client

@@ -307,6 +307,91 @@ impl ControlPlaneSubmitRequest {
 }
 
 // ===========================================================================
+// AssignmentContext handle
+// ===========================================================================
+
+/// Foreign-facing handle to the per-assignment
+/// [`blazen_controlplane::AssignmentContext`].
+///
+/// Handed to [`ControlPlaneAssignmentHandler::handle`] so the foreign
+/// handler can emit progress events and request human/operator input
+/// mid-assignment. All methods are **synchronous** on the foreign side:
+/// they block the calling (handler) thread on the shared Tokio runtime
+/// until the underlying async operation resolves. This is safe because
+/// the foreign `handle` callback runs on a [`tokio::task::spawn_blocking`]
+/// thread — outside the async executor — so `runtime().block_on` does not
+/// re-enter a running runtime.
+#[derive(uniffi::Object)]
+pub struct AssignmentContextHandle {
+    inner: Arc<AssignmentContext>,
+}
+
+#[uniffi::export]
+impl AssignmentContextHandle {
+    /// The run identifier this assignment belongs to (UUID string).
+    #[must_use]
+    pub fn run_id(&self) -> String {
+        self.inner.run_id().to_string()
+    }
+
+    /// Emit a non-terminal progress event from the running assignment.
+    ///
+    /// `data_json` is the event payload as a JSON-encoded string; an empty
+    /// string is treated as JSON `null`.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BlazenError::Validation`] if `data_json` is non-empty but
+    /// not valid JSON; [`BlazenError::Peer`] (`kind = "ControlPlace*"`) if
+    /// the worker's outbound channel is closed.
+    pub fn emit_event(&self, event_type: String, data_json: String) -> BlazenResult<()> {
+        let data: serde_json::Value = if data_json.is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::from_str(&data_json).map_err(|e| BlazenError::Validation {
+                message: format!("invalid data_json: {e}"),
+            })?
+        };
+        runtime()
+            .block_on(self.inner.emit_event(&event_type, data))
+            .map_err(BlazenError::from)
+    }
+
+    /// Raise an `input.request` and block until the orchestrator answers
+    /// (or the assignment is cancelled / `timeout_ms` elapses).
+    ///
+    /// `metadata_json` is an arbitrary JSON-encoded payload attached to
+    /// the request; an empty string is treated as JSON `null`. Returns the
+    /// orchestrator's answer as a JSON-encoded string.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BlazenError::Validation`] if `metadata_json` is non-empty
+    /// but not valid JSON, or if the answer cannot be re-encoded;
+    /// [`BlazenError::Peer`] for transport / cancellation / timeout.
+    pub fn request_input(
+        &self,
+        prompt: String,
+        metadata_json: String,
+        timeout_ms: Option<u64>,
+    ) -> BlazenResult<String> {
+        let metadata: serde_json::Value = if metadata_json.is_empty() {
+            serde_json::Value::Null
+        } else {
+            serde_json::from_str(&metadata_json).map_err(|e| BlazenError::Validation {
+                message: format!("invalid metadata_json: {e}"),
+            })?
+        };
+        let resp = runtime()
+            .block_on(self.inner.request_input(&prompt, metadata, timeout_ms))
+            .map_err(BlazenError::from)?;
+        serde_json::to_string(&resp).map_err(|e| BlazenError::Validation {
+            message: format!("encode response: {e}"),
+        })
+    }
+}
+
+// ===========================================================================
 // Callback interfaces
 // ===========================================================================
 
@@ -339,6 +424,7 @@ pub trait ControlPlaneAssignmentHandler: Send + Sync {
         run_id: String,
         workflow_name: String,
         input_json: String,
+        ctx: Arc<AssignmentContextHandle>,
     ) -> Result<String, BlazenError>;
 
     /// Called when the server cancels an in-flight run. Foreign code
@@ -406,9 +492,12 @@ impl ControlPlaneClient {
     /// Returns [`BlazenError::ControlPlane`] (`kind = "Transport"`) if
     /// the endpoint URI is invalid or the handshake fails.
     #[uniffi::constructor]
-    pub fn connect_blocking(endpoint: String) -> BlazenResult<Arc<Self>> {
+    pub fn connect_blocking(
+        endpoint: String,
+        bearer_token: Option<String>,
+    ) -> BlazenResult<Arc<Self>> {
         let inner = runtime()
-            .block_on(async move { CoreClient::connect(endpoint, None).await })
+            .block_on(async move { CoreClient::connect(endpoint, None, bearer_token).await })
             .map_err(BlazenError::from)?;
         Ok(Arc::new(Self {
             inner: Arc::new(inner),
@@ -425,8 +514,11 @@ impl ControlPlaneClient {
     ///
     /// Same as [`ControlPlaneClient::connect_blocking`].
     #[uniffi::constructor]
-    pub async fn connect(endpoint: String) -> BlazenResult<Arc<Self>> {
-        let inner = CoreClient::connect(endpoint, None)
+    pub async fn connect(
+        endpoint: String,
+        bearer_token: Option<String>,
+    ) -> BlazenResult<Arc<Self>> {
+        let inner = CoreClient::connect(endpoint, None, bearer_token)
             .await
             .map_err(BlazenError::from)?;
         Ok(Arc::new(Self {
@@ -584,6 +676,35 @@ impl ControlPlaneClient {
         });
         Ok(Arc::new(ControlPlaneSubscription { cancel }))
     }
+
+    /// Answer an outstanding `input.request` raised by a running
+    /// assignment.
+    ///
+    /// `request_id` is the value carried in the `input.request` event's
+    /// payload; `response_json` is the JSON-encoded value handed back to
+    /// the worker's pending [`AssignmentContextHandle::request_input`].
+    ///
+    /// # Errors
+    ///
+    /// Returns [`BlazenError::Validation`] if `run_id` is not a valid UUID
+    /// or `response_json` is not valid JSON; [`BlazenError::Peer`]
+    /// (`kind = "ControlPlane*"`) for RPC failures.
+    pub async fn respond_to_input(
+        self: Arc<Self>,
+        run_id: String,
+        request_id: String,
+        response_json: String,
+    ) -> BlazenResult<()> {
+        let id = parse_run_id(&run_id)?;
+        let response: serde_json::Value =
+            serde_json::from_str(&response_json).map_err(|e| BlazenError::Validation {
+                message: format!("invalid response_json: {e}"),
+            })?;
+        self.inner
+            .respond_to_input(id, request_id, response)
+            .await
+            .map_err(BlazenError::from)
+    }
 }
 
 /// Handle to an active run-event subscription. Drop the handle or call
@@ -639,10 +760,14 @@ impl ControlPlaneWorker {
         endpoint: String,
         node_id: String,
         capabilities: Vec<ControlPlaneWorkerCapability>,
+        bearer_token: Option<String>,
     ) -> BlazenResult<Arc<Self>> {
         let mut config = WorkerConfig::new(endpoint, node_id);
         for cap in &capabilities {
             config = config.with_capability(cap.into());
+        }
+        if let Some(t) = bearer_token {
+            config = config.with_bearer_token(t);
         }
         let worker = CoreWorker::connect(config).map_err(BlazenError::from)?;
         Ok(Arc::new(Self {
@@ -721,7 +846,7 @@ impl AssignmentHandler for AssignmentHandlerAdapter {
     async fn handle(
         &self,
         assignment: Assignment,
-        _ctx: AssignmentContext,
+        ctx: AssignmentContext,
     ) -> Result<Value, AssignmentFailure> {
         let run_id = assignment.run_id.to_string();
         let workflow_name = assignment.workflow_name.clone();
@@ -733,11 +858,18 @@ impl AssignmentHandler for AssignmentHandlerAdapter {
                 )));
             }
         };
+        // The upstream `AssignmentHandler::handle` hands us the context by
+        // value; wrap it so the foreign handler can drive `emit_event` /
+        // `request_input` against it through the synchronous handle.
+        let handle = Arc::new(AssignmentContextHandle {
+            inner: Arc::new(ctx),
+        });
         let handler = Arc::clone(&self.inner);
-        let result =
-            tokio::task::spawn_blocking(move || handler.handle(run_id, workflow_name, input_json))
-                .await
-                .map_err(|e| AssignmentFailure::new(format!("foreign handler join failed: {e}")))?;
+        let result = tokio::task::spawn_blocking(move || {
+            handler.handle(run_id, workflow_name, input_json, Arc::clone(&handle))
+        })
+        .await
+        .map_err(|e| AssignmentFailure::new(format!("foreign handler join failed: {e}")))?;
         match result {
             Ok(raw) => {
                 if raw.is_empty() {

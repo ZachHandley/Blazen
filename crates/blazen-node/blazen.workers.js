@@ -55,6 +55,11 @@ const __wasi = new __WASI({ version: 'preview1' })
 const __emnapiContext = __emnapiGetDefaultContext()
 
 const __sharedMemory = new WebAssembly.Memory({
+  // 256 pages * 64 KiB = 16 MiB initial (grows on demand up to `maximum`).
+  // napi-rs's default is 4000 pages (~250 MiB), which exceeds a Cloudflare
+  // Workers isolate's 128 MiB cap and fails to instantiate (RangeError CF
+  // 10021). Keep this in lockstep with napi.wasm.initialMemory in package.json
+  // (which controls the napi-generated blazen.wasi*.{cjs,js}).
   initial: 256,
   maximum: 65536,
   shared: true,

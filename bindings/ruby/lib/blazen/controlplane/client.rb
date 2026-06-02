@@ -23,15 +23,19 @@ module Blazen
       #
       # @param endpoint [String] gRPC endpoint URI such as
       #   +"http://cp.example.com:7445"+ or +"https://cp.example.com"+
+      # @param bearer_token [String, nil] optional bearer token attached
+      #   to every RPC (+nil+ = no token)
       # @return [Client]
       # @raise [Blazen::Error] when the endpoint URI is invalid or the
       #   TCP/HTTP-2 handshake fails
       # @raise [Blazen::UnsupportedError] when the +distributed+ feature
       #   is missing from the loaded native library
-      def self.connect(endpoint)
+      def self.connect(endpoint, bearer_token: nil)
         ControlPlane.ensure_available!
         fut = Blazen::FFI.with_cstring(endpoint.to_s) do |ep|
-          Blazen::FFI.blazen_controlplane_client_connect(ep)
+          Blazen::FFI.with_cstring(bearer_token&.to_s) do |bt|
+            Blazen::FFI.blazen_controlplane_client_connect(ep, bt)
+          end
         end
         if fut.nil? || fut.null?
           raise Blazen::ValidationError, "blazen_controlplane_client_connect returned a null future"
@@ -49,13 +53,16 @@ module Blazen
       # Blocking-thread variant of {.connect}.
       #
       # @param endpoint [String]
+      # @param bearer_token [String, nil] optional bearer token (+nil+ = none)
       # @return [Client]
-      def self.connect_blocking(endpoint)
+      def self.connect_blocking(endpoint, bearer_token: nil)
         ControlPlane.ensure_available!
         out_client = ::FFI::MemoryPointer.new(:pointer)
         out_err    = ::FFI::MemoryPointer.new(:pointer)
         Blazen::FFI.with_cstring(endpoint.to_s) do |ep|
-          Blazen::FFI.blazen_controlplane_client_connect_blocking(ep, out_client, out_err)
+          Blazen::FFI.with_cstring(bearer_token&.to_s) do |bt|
+            Blazen::FFI.blazen_controlplane_client_connect_blocking(ep, bt, out_client, out_err)
+          end
         end
         Blazen::FFI.check_error!(out_err)
         new(out_client.read_pointer)
@@ -69,16 +76,19 @@ module Blazen
       # @param cert_path [String] path to the PEM-encoded client cert
       # @param key_path [String] path to the PEM-encoded client private key
       # @param ca_path [String] path to the PEM-encoded CA bundle
+      # @param bearer_token [String, nil] optional bearer token (+nil+ = none)
       # @return [Client]
       # @raise [Blazen::Error] when any PEM file is missing / unparseable,
       #   the TLS config is rejected, or the handshake fails
-      def self.connect_with_mtls(endpoint, cert_path:, key_path:, ca_path:)
+      def self.connect_with_mtls(endpoint, cert_path:, key_path:, ca_path:, bearer_token: nil)
         ControlPlane.ensure_available!
         fut = Blazen::FFI.with_cstring(endpoint.to_s) do |ep|
           Blazen::FFI.with_cstring(cert_path.to_s) do |cp|
             Blazen::FFI.with_cstring(key_path.to_s) do |kp|
               Blazen::FFI.with_cstring(ca_path.to_s) do |ca|
-                Blazen::FFI.blazen_controlplane_client_connect_with_mtls(ep, cp, kp, ca)
+                Blazen::FFI.with_cstring(bearer_token&.to_s) do |bt|
+                  Blazen::FFI.blazen_controlplane_client_connect_with_mtls(ep, cp, kp, ca, bt)
+                end
               end
             end
           end
@@ -103,8 +113,9 @@ module Blazen
       # @param cert_path [String]
       # @param key_path [String]
       # @param ca_path [String]
+      # @param bearer_token [String, nil] optional bearer token (+nil+ = none)
       # @return [Client]
-      def self.connect_with_mtls_blocking(endpoint, cert_path:, key_path:, ca_path:)
+      def self.connect_with_mtls_blocking(endpoint, cert_path:, key_path:, ca_path:, bearer_token: nil)
         ControlPlane.ensure_available!
         out_client = ::FFI::MemoryPointer.new(:pointer)
         out_err    = ::FFI::MemoryPointer.new(:pointer)
@@ -112,9 +123,11 @@ module Blazen
           Blazen::FFI.with_cstring(cert_path.to_s) do |cp|
             Blazen::FFI.with_cstring(key_path.to_s) do |kp|
               Blazen::FFI.with_cstring(ca_path.to_s) do |ca|
-                Blazen::FFI.blazen_controlplane_client_connect_with_mtls_blocking(
-                  ep, cp, kp, ca, out_client, out_err,
-                )
+                Blazen::FFI.with_cstring(bearer_token&.to_s) do |bt|
+                  Blazen::FFI.blazen_controlplane_client_connect_with_mtls_blocking(
+                    ep, cp, kp, ca, bt, out_client, out_err,
+                  )
+                end
               end
             end
           end
@@ -268,6 +281,38 @@ module Blazen
         end
         if fut.nil? || fut.null?
           raise Blazen::ValidationError, "blazen_controlplane_client_drain_worker returned a null future"
+        end
+
+        out_err = ::FFI::MemoryPointer.new(:pointer)
+        Blazen::FFI.await_future(fut) do |f|
+          Blazen::FFI.blazen_future_take_unit(f, out_err)
+        end
+        Blazen::FFI.check_error!(out_err)
+        nil
+      end
+
+      # Answer an outstanding +input.request+ raised by a running
+      # assignment (via {AssignmentContext#request_input}).
+      #
+      # @param run_id [String] hyphenated UUID of the run that raised
+      #   the request
+      # @param request_id [String] the +request_id+ carried in the
+      #   +input.request+ event's payload
+      # @param response [Object] JSON-serialisable value handed back to
+      #   the worker's pending +request_input+ call
+      # @return [void]
+      def respond_to_input(run_id, request_id, response)
+        response_json = JSON.generate(response)
+        fut = Blazen::FFI.with_cstring(run_id.to_s) do |rid|
+          Blazen::FFI.with_cstring(request_id.to_s) do |req|
+            Blazen::FFI.with_cstring(response_json) do |rj|
+              Blazen::FFI.blazen_controlplane_client_respond_to_input(@ptr, rid, req, rj)
+            end
+          end
+        end
+        if fut.nil? || fut.null?
+          raise Blazen::ValidationError,
+                "blazen_controlplane_client_respond_to_input returned a null future"
         end
 
         out_err = ::FFI::MemoryPointer.new(:pointer)

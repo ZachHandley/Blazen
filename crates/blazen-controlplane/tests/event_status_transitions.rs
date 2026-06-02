@@ -128,7 +128,7 @@ async fn status_completed_event_arrives_in_order() {
     let worker_handle = tokio::spawn(async move { worker.run(EchoOkHandler).await });
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    let client = Client::connect(format!("http://{addr}"), None)
+    let client = Client::connect(format!("http://{addr}"), None, None)
         .await
         .expect("client connect");
 
@@ -206,7 +206,7 @@ async fn status_failed_event_arrives() {
     let worker_handle = tokio::spawn(async move { worker.run(FailingHandler).await });
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    let client = Client::connect(format!("http://{addr}"), None)
+    let client = Client::connect(format!("http://{addr}"), None, None)
         .await
         .expect("client connect");
 
@@ -286,7 +286,7 @@ async fn status_cancelled_event_arrives() {
     let worker_handle = tokio::spawn(async move { worker.run(handler).await });
     tokio::time::sleep(Duration::from_millis(50)).await;
 
-    let client = Client::connect(format!("http://{addr}"), None)
+    let client = Client::connect(format!("http://{addr}"), None, None)
         .await
         .expect("client connect");
 

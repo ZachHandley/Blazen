@@ -75,7 +75,7 @@ final class ControlPlaneTests: XCTestCase {
     /// The blocking client constructor surfaces a transport error when
     /// handed a malformed endpoint URI.
     func testClientConnectBlockingRejectsBadEndpoint() {
-        XCTAssertThrowsError(try ControlPlaneClient.connectBlocking(endpoint: "not a uri")) { err in
+        XCTAssertThrowsError(try ControlPlaneClient.connectBlocking(endpoint: "not a uri", bearerToken: nil)) { err in
             // Any thrown error is acceptable here; we just need to be
             // sure the FFI surface didn't return a half-built handle.
             _ = err
@@ -91,7 +91,8 @@ final class ControlPlaneTests: XCTestCase {
                 nodeId: "node-test",
                 capabilities: [
                     ControlPlaneWorkerCapability(kind: "workflow:hello", version: 1),
-                ]
+                ],
+                bearerToken: nil
             )
         ) { err in
             _ = err

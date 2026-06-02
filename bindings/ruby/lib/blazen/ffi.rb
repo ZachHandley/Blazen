@@ -1042,8 +1042,11 @@ module Blazen
 
     # AssignmentHandler vtable callbacks
     callback :assignment_handler_drop_user_data, [:pointer], :void
+    # Signature: (user_data, run_id, workflow_name, input_json, ctx,
+    # out_json, out_err) -> int32. +ctx+ is a borrowed
+    # +*const BlazenAssignmentContext+ valid only for the call's duration.
     callback :assignment_handler_handle,
-             [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer],
+             [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer, :pointer],
              :int32
     callback :assignment_handler_on_cancel, [:pointer, :pointer], :void
     callback :assignment_handler_on_drain, [:pointer, :bool], :void
@@ -1078,17 +1081,23 @@ module Blazen
     end
 
     # Client lifecycle
+    # Signature (blocking): (endpoint, bearer_token, out_client, out_err).
     attach_function :blazen_controlplane_client_connect_blocking,
-                    [:pointer, :pointer, :pointer], :int32,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
                     blocking: true
+    # Signature (async): (endpoint, bearer_token) -> *future.
     attach_function :blazen_controlplane_client_connect,
-                    [:pointer], :pointer
+                    [:pointer, :pointer], :pointer
+    # Signature (blocking): (endpoint, cert, key, ca, bearer_token,
+    # out_client, out_err).
     attach_function :blazen_controlplane_client_connect_with_mtls_blocking,
-                    [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer],
+                    [:pointer, :pointer, :pointer, :pointer, :pointer,
+                     :pointer, :pointer],
                     :int32,
                     blocking: true
+    # Signature (async): (endpoint, cert, key, ca, bearer_token) -> *future.
     attach_function :blazen_controlplane_client_connect_with_mtls,
-                    [:pointer, :pointer, :pointer, :pointer], :pointer
+                    [:pointer, :pointer, :pointer, :pointer, :pointer], :pointer
     attach_function :blazen_controlplane_client_free, [:pointer], :void
 
     # Workflow lifecycle RPCs
@@ -1124,18 +1133,34 @@ module Blazen
     attach_function :blazen_controlplane_client_drain_worker,
                     [:pointer, :pointer, :bool], :pointer
 
+    # respond_to_input — answer an outstanding +input.request+.
+    # Signature (blocking): (client, run_id, request_id, response_json,
+    # out_err).
+    attach_function :blazen_controlplane_client_respond_to_input_blocking,
+                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    # Signature (async): (client, run_id, request_id, response_json)
+    # -> *future (resolves to unit; pop with +blazen_future_take_unit+).
+    attach_function :blazen_controlplane_client_respond_to_input,
+                    [:pointer, :pointer, :pointer, :pointer], :pointer
+
     # Worker lifecycle
+    # Signature: (endpoint, node_id, capabilities_json, tags_json,
+    # admission_mode, admission_param, bearer_token, vtable, out_worker,
+    # out_err).
     attach_function :blazen_controlplane_worker_new_blocking,
                     [:pointer, :pointer, :pointer, :pointer,
-                     :uint32, :uint64,
+                     :uint32, :uint64, :pointer,
                      BlazenAssignmentHandlerVTable.by_value,
                      :pointer, :pointer],
                     :int32,
                     blocking: true
+    # Signature: (..., cert, key, ca, bearer_token, vtable, out_worker,
+    # out_err).
     attach_function :blazen_controlplane_worker_new_with_mtls_blocking,
                     [:pointer, :pointer, :pointer, :pointer,
                      :uint32, :uint64,
-                     :pointer, :pointer, :pointer,
+                     :pointer, :pointer, :pointer, :pointer,
                      BlazenAssignmentHandlerVTable.by_value,
                      :pointer, :pointer],
                     :int32,
@@ -1164,6 +1189,19 @@ module Blazen
                     [:pointer], :void
     attach_function :blazen_controlplane_subscription_free,
                     [:pointer], :void
+
+    # AssignmentContext — borrowed handle handed to the assignment
+    # handler's +handle+ callback. Only valid for the call's duration.
+    # Signature: (ctx, event_type, data_json, out_err) -> int32.
+    attach_function :blazen_assignment_context_emit_event,
+                    [:pointer, :pointer, :pointer, :pointer], :int32,
+                    blocking: true
+    # Signature: (ctx, prompt, metadata_json, timeout_ms, out_json,
+    # out_err) -> int32. +timeout_ms+ of 0 means no timeout.
+    attach_function :blazen_assignment_context_request_input,
+                    [:pointer, :pointer, :pointer, :uint64, :pointer, :pointer],
+                    :int32,
+                    blocking: true
 
     # ModelClient — lightweight client for the model-serving control plane
     # (the `blazen-controlplane` gRPC `BlazenModelServer`). Only the

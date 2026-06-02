@@ -54,14 +54,17 @@ module Blazen
       # @param handler [Object, nil] optional handler instance with
       #   +#handle+ / optional +#on_cancel+ / +#on_drain+. Mutually
       #   exclusive with passing a block.
-      # @yield [Hash] block form of the handler — receives the
-      #   assignment hash and returns its output
+      # @param bearer_token [String, nil] optional bearer token attached
+      #   to every RPC the worker makes (+nil+ = no token)
+      # @yield [Hash, AssignmentContext] block form of the handler —
+      #   receives the assignment hash (and, optionally, an
+      #   {AssignmentContext} as a second argument) and returns its output
       # @return [Worker]
       # @raise [Blazen::Error] when the endpoint URI cannot be parsed
       # @raise [ArgumentError] when neither block nor handler is given
       def initialize(endpoint:, node_id:, capabilities: [], tags: {},
                      admission: :fixed, admission_param: 0,
-                     mtls: nil, handler: nil, &block)
+                     mtls: nil, handler: nil, bearer_token: nil, &block)
         ControlPlane.ensure_available!
 
         if handler.nil? && block.nil?
@@ -101,12 +104,12 @@ module Blazen
           self.class.validate_mtls!(mtls)
           invoke_new_with_mtls_blocking(
             endpoint, node_id, capabilities_json, tags_json,
-            admission_mode, admission_param, mtls, vtable, out_worker, out_err,
+            admission_mode, admission_param, mtls, bearer_token, vtable, out_worker, out_err,
           )
         else
           invoke_new_blocking(
             endpoint, node_id, capabilities_json, tags_json,
-            admission_mode, admission_param, vtable, out_worker, out_err,
+            admission_mode, admission_param, bearer_token, vtable, out_worker, out_err,
           )
         end
         Blazen::FFI.check_error!(out_err)
@@ -197,17 +200,19 @@ module Blazen
       # appropriate +with_cstring+ nesting. Splitting this out keeps
       # {#initialize} flat enough to also dispatch the mTLS variant.
       def invoke_new_blocking(endpoint, node_id, capabilities_json, tags_json,
-                              admission_mode, admission_param, vtable,
+                              admission_mode, admission_param, bearer_token, vtable,
                               out_worker, out_err)
         Blazen::FFI.with_cstring(endpoint.to_s) do |ep|
           Blazen::FFI.with_cstring(node_id.to_s) do |nid|
             Blazen::FFI.with_cstring(capabilities_json) do |cj|
               Blazen::FFI.with_cstring(tags_json) do |tj|
-                Blazen::FFI.blazen_controlplane_worker_new_blocking(
-                  ep, nid, cj, tj,
-                  admission_mode, admission_param,
-                  vtable, out_worker, out_err,
-                )
+                Blazen::FFI.with_cstring(bearer_token&.to_s) do |bt|
+                  Blazen::FFI.blazen_controlplane_worker_new_blocking(
+                    ep, nid, cj, tj,
+                    admission_mode, admission_param, bt,
+                    vtable, out_worker, out_err,
+                  )
+                end
               end
             end
           end
@@ -217,7 +222,7 @@ module Blazen
       # mTLS variant of {#invoke_new_blocking}. Adds the three PEM
       # path arguments without ballooning {#initialize}'s nesting.
       def invoke_new_with_mtls_blocking(endpoint, node_id, capabilities_json, tags_json,
-                                        admission_mode, admission_param, mtls, vtable,
+                                        admission_mode, admission_param, mtls, bearer_token, vtable,
                                         out_worker, out_err)
         Blazen::FFI.with_cstring(endpoint.to_s) do |ep|
           Blazen::FFI.with_cstring(node_id.to_s) do |nid|
@@ -226,12 +231,14 @@ module Blazen
                 Blazen::FFI.with_cstring(mtls[:cert_path].to_s) do |cp|
                   Blazen::FFI.with_cstring(mtls[:key_path].to_s) do |kp|
                     Blazen::FFI.with_cstring(mtls[:ca_path].to_s) do |ca|
-                      Blazen::FFI.blazen_controlplane_worker_new_with_mtls_blocking(
-                        ep, nid, cj, tj,
-                        admission_mode, admission_param,
-                        cp, kp, ca,
-                        vtable, out_worker, out_err,
-                      )
+                      Blazen::FFI.with_cstring(bearer_token&.to_s) do |bt|
+                        Blazen::FFI.blazen_controlplane_worker_new_with_mtls_blocking(
+                          ep, nid, cj, tj,
+                          admission_mode, admission_param,
+                          cp, kp, ca, bt,
+                          vtable, out_worker, out_err,
+                        )
+                      end
                     end
                   end
                 end
@@ -271,9 +278,9 @@ module Blazen
 
         handle = ::FFI::Function.new(
           :int32,
-          [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer],
-        ) do |_user_data, run_id_ptr, workflow_ptr, input_ptr, out_json, out_err|
-          dispatch_handle(handler, run_id_ptr, workflow_ptr, input_ptr, out_json, out_err)
+          [:pointer, :pointer, :pointer, :pointer, :pointer, :pointer, :pointer],
+        ) do |_user_data, run_id_ptr, workflow_ptr, input_ptr, ctx_ptr, out_json, out_err|
+          dispatch_handle(handler, run_id_ptr, workflow_ptr, input_ptr, ctx_ptr, out_json, out_err)
         end
 
         on_cancel = ::FFI::Function.new(:void, [:pointer, :pointer]) do |_user_data, run_id_ptr|
@@ -292,7 +299,7 @@ module Blazen
         }
       end
 
-      def dispatch_handle(handler, run_id_ptr, workflow_ptr, input_ptr, out_json, out_err)
+      def dispatch_handle(handler, run_id_ptr, workflow_ptr, input_ptr, ctx_ptr, out_json, out_err)
         run_id    = run_id_ptr.read_string.force_encoding(Encoding::UTF_8)
         workflow  = workflow_ptr.read_string.force_encoding(Encoding::UTF_8)
         input_raw = input_ptr.read_string.force_encoding(Encoding::UTF_8)
@@ -304,7 +311,11 @@ module Blazen
           input:         input,
         }
 
-        output = handler.handle(assignment)
+        # The context pointer is BORROWED — valid only for the duration
+        # of this callback. The AssignmentContext wrapper must NOT be
+        # retained past this method's return.
+        context = AssignmentContext.new(ctx_ptr)
+        output  = invoke_handler(handler, assignment, context)
         output_json = JSON.generate(output)
         # Mint the output buffer via +blazen_string_alloc+ so the
         # cabi can reclaim it via +CString::from_raw+ on the same
@@ -329,6 +340,22 @@ module Blazen
         -1
       end
 
+      # Invoke the handler's +#handle+ with the assignment, passing the
+      # {AssignmentContext} as a second argument when the handler's
+      # +#handle+ accepts it. Handlers (and blocks) that only take a
+      # single +assignment+ argument keep working unchanged.
+      def invoke_handler(handler, assignment, context)
+        meth = handler.method(:handle)
+        # arity 1 (or 0/negative-but-not-accepting-2): legacy single-arg form.
+        # arity >= 2 or splat (< -1): pass the context too.
+        arity = meth.arity
+        if arity == 1 || arity.zero?
+          handler.handle(assignment)
+        else
+          handler.handle(assignment, context)
+        end
+      end
+
       def dispatch_on_cancel(handler, run_id_ptr)
         return unless handler.respond_to?(:on_cancel)
 
@@ -349,7 +376,10 @@ module Blazen
       end
 
       # Adapts a block to the +#handle+ protocol so the dispatcher
-      # can call into either form uniformly.
+      # can call into either form uniformly. The block may accept one
+      # argument (+assignment+) or two (+assignment, context+); the
+      # extra {AssignmentContext} argument is only forwarded when the
+      # block's arity asks for it.
       #
       # @api private
       class BlockHandler
@@ -357,8 +387,81 @@ module Blazen
           @block = block
         end
 
-        def handle(assignment)
-          @block.call(assignment)
+        def handle(assignment, context = nil)
+          arity = @block.arity
+          if arity == 1 || arity.zero?
+            @block.call(assignment)
+          else
+            @block.call(assignment, context)
+          end
+        end
+      end
+
+      # Borrowed handle to a +blazen-controlplane+ +AssignmentContext+,
+      # passed to the handler's +#handle+ for the duration of a single
+      # assignment. Lets a running assignment emit intermediate events
+      # and request human/orchestrator input.
+      #
+      # WARNING: the underlying pointer is only valid for the duration
+      # of the +#handle+ call. Do NOT retain this object (or call its
+      # methods) after +#handle+ returns.
+      class AssignmentContext
+        # @param ptr [::FFI::Pointer] borrowed +BlazenAssignmentContext*+
+        def initialize(ptr)
+          @ptr = ptr
+        end
+
+        # Emit a non-terminal event from the running assignment.
+        #
+        # @param event_type [String]
+        # @param data [Object, nil] JSON-serialisable payload
+        #   (+nil+ → JSON +null+)
+        # @return [void]
+        # @raise [Blazen::Error] when the worker's outbound channel is closed
+        def emit_event(event_type, data = nil)
+          data_json = JSON.generate(data)
+          out_err = ::FFI::MemoryPointer.new(:pointer)
+          Blazen::FFI.with_cstring(event_type.to_s) do |et|
+            Blazen::FFI.with_cstring(data_json) do |dj|
+              Blazen::FFI.blazen_assignment_context_emit_event(@ptr, et, dj, out_err)
+            end
+          end
+          Blazen::FFI.check_error!(out_err)
+          nil
+        end
+
+        # Raise an +input.request+ and block until the orchestrator
+        # answers (via {Client#respond_to_input}), the assignment is
+        # cancelled, or the optional timeout elapses.
+        #
+        # @param prompt [String]
+        # @param metadata [Object, nil] JSON-serialisable metadata
+        #   (+nil+ → JSON +null+)
+        # @param timeout_ms [Integer, nil] optional timeout in
+        #   milliseconds (+nil+ = no timeout)
+        # @return [Object] the decoded JSON value the orchestrator
+        #   handed back
+        # @raise [Blazen::Error] when the request fails, is cancelled,
+        #   or times out
+        def request_input(prompt, metadata = nil, timeout_ms: nil)
+          metadata_json = JSON.generate(metadata)
+          timeout = timeout_ms.nil? ? 0 : Integer(timeout_ms)
+          out_json = ::FFI::MemoryPointer.new(:pointer)
+          out_err  = ::FFI::MemoryPointer.new(:pointer)
+          Blazen::FFI.with_cstring(prompt.to_s) do |pr|
+            Blazen::FFI.with_cstring(metadata_json) do |md|
+              Blazen::FFI.blazen_assignment_context_request_input(
+                @ptr, pr, md, timeout, out_json, out_err,
+              )
+            end
+          end
+          Blazen::FFI.check_error!(out_err)
+          ptr = out_json.read_pointer
+          return nil if ptr.nil? || ptr.null?
+
+          raw = ptr.read_string.force_encoding(Encoding::UTF_8)
+          Blazen::FFI.blazen_string_free(ptr)
+          JSON.parse(raw)
         end
       end
     end

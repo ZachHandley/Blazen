@@ -43,7 +43,7 @@
 //! ```
 
 use std::cell::RefCell;
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::rc::Rc;
 use std::sync::Arc;
 
@@ -58,8 +58,9 @@ use web_sys::EventSource;
 
 use blazen_controlplane::protocol::{
     self, AdmissionModeWire, AssignmentEvent, AssignmentResult, AssignmentStatus, CancelRequest,
-    CapabilityWire, ENVELOPE_VERSION, ResourceHintWire, RunEventWire, RunStateSnapshotWire,
-    RunStatusWire, ServerToWorker, SubmitRequest, Welcome, WorkerHeartbeat, WorkerHello,
+    CapabilityWire, ENVELOPE_VERSION, RespondToInputRequest, ResourceHintWire, RunEventWire,
+    RunStateSnapshotWire, RunStatusWire, ServerToWorker, SubmitRequest, Welcome, WorkerHeartbeat,
+    WorkerHello,
 };
 use blazen_llm::FetchHttpClient;
 use blazen_llm::http::{HttpClient, HttpRequest, HttpResponse};
@@ -697,6 +698,44 @@ impl WasmControlPlaneClient {
         }))
     }
 
+    /// Answer an outstanding `input.request` raised by an in-flight
+    /// assignment (the B2 input-request round-trip). `runId` identifies
+    /// the run awaiting input, `requestId` is the correlation id echoed
+    /// from the `input.request` event payload, and `response` is any
+    /// JSON-serializable value forwarded to the worker's pending request.
+    ///
+    /// Resolves with `undefined` once the control plane accepts the
+    /// response (the gateway pushes it to the worker over SSE as a
+    /// `ServerToWorker::InputResponse` frame).
+    #[wasm_bindgen(js_name = "respondToInput")]
+    pub fn respond_to_input(
+        &self,
+        run_id: String,
+        request_id: String,
+        response: JsValue,
+    ) -> js_sys::Promise {
+        let endpoint = self.endpoint.clone();
+        let token = self.bearer_token.clone();
+        let http = Arc::clone(&self.http);
+        future_to_promise(SendFuture(async move {
+            let uuid = Uuid::parse_str(&run_id)
+                .map_err(|e| JsValue::from_str(&format!("invalid run_id UUID: {e}")))?;
+            let value: serde_json::Value = serde_wasm_bindgen::from_value(response)
+                .map_err(|e| JsValue::from_str(&format!("decode response value: {e}")))?;
+            let response_json = serde_json::to_vec(&value)
+                .map_err(|e| JsValue::from_str(&format!("encode response JSON: {e}")))?;
+            let payload = RespondToInputRequest {
+                envelope_version: ENVELOPE_VERSION,
+                run_id: uuid,
+                request_id,
+                response_json,
+            };
+            let url = join_url(&endpoint, "/v1/cp/respond-to-input");
+            post_envelope(&http, url, token.as_deref(), &payload, "respond-to-input").await?;
+            Ok(JsValue::UNDEFINED)
+        }))
+    }
+
     /// Look up the current state of a run. Returns a
     /// `Promise<RunStateSnapshot>`.
     #[wasm_bindgen(js_name = "describeWorkflow")]
@@ -811,6 +850,24 @@ unsafe impl Sync for WasmControlPlaneWorker {}
 struct WorkerState {
     subscription: Option<WasmControlPlaneSubscription>,
     closed: bool,
+    /// Outstanding `request_input` calls awaiting a server
+    /// `InputResponse` frame, keyed by `request_id`. The B2
+    /// input-request round-trip resolves/rejects these from the worker
+    /// SSE `onmessage` closure.
+    pending_inputs: HashMap<String, PendingInput>,
+}
+
+/// State for a single in-flight `request_input` call. Holds the JS
+/// `Promise` resolve/reject callbacks plus the `setTimeout` id (if a
+/// timeout was requested) so the SSE arrival path can clear the timer.
+struct PendingInput {
+    /// `resolve(value)` of the Promise returned by `request_input`.
+    resolve: js_sys::Function,
+    /// `setTimeout` handle to cancel when the response arrives first.
+    timeout_id: Option<f64>,
+    /// Storage for the timeout closure so it outlives the timer; dropped
+    /// when the entry is removed.
+    _timeout_closure: Option<Closure<dyn FnMut()>>,
 }
 
 #[wasm_bindgen(js_class = "ControlPlaneWorker")]
@@ -870,6 +927,7 @@ impl WasmControlPlaneWorker {
                 state: Rc::new(RefCell::new(WorkerState {
                     subscription: None,
                     closed: false,
+                    pending_inputs: HashMap::new(),
                 })),
             };
             Ok(JsValue::from(worker))
@@ -906,6 +964,7 @@ impl WasmControlPlaneWorker {
                 session_id.clone(),
                 token.clone(),
                 Arc::clone(&http),
+                Rc::clone(&state),
             );
             let on_error = Closure::wrap(Box::new(move |_evt: web_sys::Event| {
                 *done_flag_err.borrow_mut() = true;
@@ -953,17 +1012,144 @@ impl WasmControlPlaneWorker {
                 .map_err(|e| JsValue::from_str(&format!("invalid run_id: {e}")))?;
             #[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
             let ts = timestamp_ms.max(0.0) as u64;
-            let payload = AssignmentEvent {
-                envelope_version: ENVELOPE_VERSION,
-                run_id: uuid,
+            post_worker_event_at(
+                &http,
+                &endpoint,
+                &session_id,
+                token.as_deref(),
+                uuid,
                 event_type,
                 data_json,
-                timestamp_ms: ts,
-            };
-            let url = join_url(&endpoint, &format!("/v1/cp/worker/{session_id}/event"));
-            post_envelope(&http, url, token.as_deref(), &payload, "event").await?;
+                ts,
+            )
+            .await?;
             Ok(JsValue::UNDEFINED)
         }))
+    }
+
+    /// Raise an `input.request` from a running assignment and block on
+    /// the orchestrator's answer (the B2 input-request round-trip).
+    ///
+    /// This:
+    /// 1. generates a `request_id` (UUID v4),
+    /// 2. emits an `input.request` [`AssignmentEvent`] up to the control
+    ///    plane carrying `{ requestId, prompt, metadata }`,
+    /// 3. returns a `Promise` that resolves with the decoded JSON answer
+    ///    once the matching [`ServerToWorker::InputResponse`] frame
+    ///    arrives over the worker SSE stream.
+    ///
+    /// If `timeoutMs` is provided the Promise rejects after that many
+    /// milliseconds if no response has arrived; the pending entry is
+    /// dropped so a late response is ignored.
+    #[wasm_bindgen(js_name = "requestInput")]
+    pub fn request_input(
+        &self,
+        run_id: String,
+        prompt: String,
+        metadata: JsValue,
+        timeout_ms: Option<f64>,
+    ) -> js_sys::Promise {
+        let endpoint = self.endpoint.clone();
+        let session_id = self.session_id.clone();
+        let token = self.bearer_token.clone();
+        let http = Arc::clone(&self.http);
+        let state = Rc::clone(&self.state);
+
+        // Parse run_id and the metadata value up front so construction
+        // errors reject synchronously (mirrors the early-return style of
+        // the unary methods).
+        let uuid = match Uuid::parse_str(&run_id) {
+            Ok(u) => u,
+            Err(e) => {
+                return js_sys::Promise::reject(&JsValue::from_str(&format!(
+                    "invalid run_id UUID: {e}"
+                )));
+            }
+        };
+        let metadata_value: serde_json::Value = if metadata.is_undefined() || metadata.is_null() {
+            serde_json::Value::Null
+        } else {
+            match serde_wasm_bindgen::from_value(metadata) {
+                Ok(v) => v,
+                Err(e) => {
+                    return js_sys::Promise::reject(&JsValue::from_str(&format!(
+                        "decode metadata: {e}"
+                    )));
+                }
+            }
+        };
+
+        let request_id = Uuid::new_v4().to_string();
+
+        // Build the Promise the caller awaits. We capture its
+        // resolve/reject callbacks into the pending map keyed by
+        // request_id; the SSE InputResponse arm (or the timeout) fires
+        // them later.
+        let request_id_for_exec = request_id.clone();
+        js_sys::Promise::new(&mut move |resolve, reject| {
+            // Register the pending entry, wiring an optional timeout that
+            // rejects + evicts the entry if the answer never arrives.
+            let timeout_entry = timeout_ms.and_then(|ms| {
+                install_input_timeout(&state, &request_id_for_exec, &reject, ms)
+            });
+            let (timeout_id, timeout_closure) = match timeout_entry {
+                Some((id, cb)) => (Some(id), Some(cb)),
+                None => (None, None),
+            };
+            state.borrow_mut().pending_inputs.insert(
+                request_id_for_exec.clone(),
+                PendingInput {
+                    resolve: resolve.clone(),
+                    timeout_id,
+                    _timeout_closure: timeout_closure,
+                },
+            );
+
+            // Emit the input.request event. If the POST fails, reject the
+            // Promise and drop the pending entry so the caller isn't
+            // wedged.
+            let endpoint = endpoint.clone();
+            let session_id = session_id.clone();
+            let token = token.clone();
+            let http = Arc::clone(&http);
+            let state = Rc::clone(&state);
+            let request_id = request_id_for_exec.clone();
+            let prompt = prompt.clone();
+            let metadata_value = metadata_value.clone();
+            let reject = reject.clone();
+            wasm_bindgen_futures::spawn_local(async move {
+                let data = serde_json::json!({
+                    "request_id": request_id,
+                    "prompt": prompt,
+                    "metadata": metadata_value,
+                });
+                let data_json = match serde_json::to_vec(&data) {
+                    Ok(b) => b,
+                    Err(e) => {
+                        evict_and_reject(
+                            &state,
+                            &request_id,
+                            &reject,
+                            &JsValue::from_str(&format!("encode input.request payload: {e}")),
+                        );
+                        return;
+                    }
+                };
+                if let Err(e) = post_worker_event(
+                    &http,
+                    &endpoint,
+                    &session_id,
+                    token.as_deref(),
+                    uuid,
+                    "input.request",
+                    data_json,
+                )
+                .await
+                {
+                    evict_and_reject(&state, &request_id, &reject, &e);
+                }
+            });
+        })
     }
 
     /// POST a heartbeat. `inFlight` reflects how many assignments are
@@ -1071,6 +1257,7 @@ fn build_worker_message_closure(
     session_id: String,
     token: Option<String>,
     http: Arc<dyn HttpClient>,
+    state: Rc<RefCell<WorkerState>>,
 ) -> Closure<dyn FnMut(web_sys::MessageEvent)> {
     Closure::wrap(Box::new(move |evt: web_sys::MessageEvent| {
         let Some(raw) = evt.data().as_string() else {
@@ -1094,6 +1281,9 @@ fn build_worker_message_closure(
                     Arc::clone(&http),
                 );
             }
+            ServerToWorker::InputResponse(resp) => {
+                resolve_input_response(&state, &resp);
+            }
             ServerToWorker::Cancel(_)
             | ServerToWorker::Drain(_)
             | ServerToWorker::Welcome(_)
@@ -1108,6 +1298,154 @@ fn build_worker_message_closure(
             }
         }
     }) as Box<dyn FnMut(web_sys::MessageEvent)>)
+}
+
+/// Resolve the pending [`WasmControlPlaneWorker::request_input`] Promise
+/// that matches an incoming [`ServerToWorker::InputResponse`] frame.
+/// Decodes the JSON answer bytes to a `JsValue`, clears any pending
+/// timeout, and invokes the stored `resolve` callback. Unknown
+/// `request_id`s (e.g. a late response after a timeout already evicted
+/// the entry) are ignored.
+fn resolve_input_response(state: &Rc<RefCell<WorkerState>>, resp: &protocol::InputResponse) {
+    let Some(pending) = state.borrow_mut().pending_inputs.remove(&resp.request_id) else {
+        return;
+    };
+    if let Some(id) = pending.timeout_id {
+        clear_timeout(id);
+    }
+    let value: serde_json::Value = if resp.response_json.is_empty() {
+        serde_json::Value::Null
+    } else {
+        serde_json::from_slice(&resp.response_json).unwrap_or(serde_json::Value::Null)
+    };
+    let js_val = serde_wasm_bindgen::to_value(&value).unwrap_or(JsValue::NULL);
+    let _ = pending.resolve.call1(&JsValue::NULL, &js_val);
+    // `pending` (and its `_timeout_closure`) drops here, freeing the
+    // timeout closure now that the timer has been cleared.
+}
+
+/// POST an [`AssignmentEvent`] to the worker event endpoint. Shared by
+/// [`WasmControlPlaneWorker::emit_event`] and the B2 `request_input`
+/// path. `timestamp_ms` is the caller-supplied event time.
+#[allow(clippy::too_many_arguments)]
+async fn post_worker_event_at(
+    http: &Arc<dyn HttpClient>,
+    endpoint: &str,
+    session_id: &str,
+    token: Option<&str>,
+    run_id: Uuid,
+    event_type: String,
+    data_json: Vec<u8>,
+    timestamp_ms: u64,
+) -> Result<(), JsValue> {
+    let payload = AssignmentEvent {
+        envelope_version: ENVELOPE_VERSION,
+        run_id,
+        event_type,
+        data_json,
+        timestamp_ms,
+    };
+    let url = join_url(endpoint, &format!("/v1/cp/worker/{session_id}/event"));
+    post_envelope(http, url, token, &payload, "event").await?;
+    Ok(())
+}
+
+/// Like [`post_worker_event_at`] but stamps the event with the current
+/// wall-clock time. Used by the B2 `request_input` emit path.
+#[allow(clippy::too_many_arguments)]
+async fn post_worker_event(
+    http: &Arc<dyn HttpClient>,
+    endpoint: &str,
+    session_id: &str,
+    token: Option<&str>,
+    run_id: Uuid,
+    event_type: &str,
+    data_json: Vec<u8>,
+) -> Result<(), JsValue> {
+    post_worker_event_at(
+        http,
+        endpoint,
+        session_id,
+        token,
+        run_id,
+        event_type.to_owned(),
+        data_json,
+        now_ms(),
+    )
+    .await
+}
+
+/// Current wall-clock time in milliseconds since the Unix epoch, read
+/// from JS `Date.now()`.
+#[allow(clippy::cast_sign_loss, clippy::cast_possible_truncation)]
+fn now_ms() -> u64 {
+    js_sys::Date::now().max(0.0) as u64
+}
+
+/// Remove a pending input entry and reject its Promise. Used when the
+/// `input.request` emit fails or its payload can't be encoded.
+fn evict_and_reject(
+    state: &Rc<RefCell<WorkerState>>,
+    request_id: &str,
+    reject: &js_sys::Function,
+    err: &JsValue,
+) {
+    if let Some(pending) = state.borrow_mut().pending_inputs.remove(request_id) {
+        if let Some(id) = pending.timeout_id {
+            clear_timeout(id);
+        }
+    }
+    let _ = reject.call1(&JsValue::NULL, err);
+}
+
+/// Install a `setTimeout` that rejects the pending `request_input`
+/// Promise and evicts its entry after `ms` milliseconds. Returns the
+/// timeout id (so the resolve path can cancel it) plus the closure to
+/// keep alive. Returns `None` if `setTimeout` is unavailable.
+fn install_input_timeout(
+    state: &Rc<RefCell<WorkerState>>,
+    request_id: &str,
+    reject: &js_sys::Function,
+    ms: f64,
+) -> Option<(f64, Closure<dyn FnMut()>)> {
+    let global = js_sys::global();
+    let set_timeout = js_sys::Reflect::get(&global, &JsValue::from_str("setTimeout"))
+        .ok()
+        .and_then(|v| v.dyn_into::<js_sys::Function>().ok())?;
+
+    let state = Rc::clone(state);
+    let reject = reject.clone();
+    let request_id_owned = request_id.to_owned();
+    let cb = Closure::wrap(Box::new(move || {
+        // Drop the pending entry (without re-clearing this fired timer)
+        // and reject the awaiting Promise.
+        let _ = state.borrow_mut().pending_inputs.remove(&request_id_owned);
+        let _ = reject.call1(
+            &JsValue::NULL,
+            &JsValue::from_str("request_input timed out waiting for InputResponse"),
+        );
+    }) as Box<dyn FnMut()>);
+
+    let id = set_timeout
+        .call2(
+            &JsValue::NULL,
+            cb.as_ref().unchecked_ref(),
+            &JsValue::from_f64(ms),
+        )
+        .ok()
+        .and_then(|v| v.as_f64())?;
+    Some((id, cb))
+}
+
+/// Cancel a `setTimeout` previously created by [`install_input_timeout`].
+fn clear_timeout(id: f64) {
+    let global = js_sys::global();
+    if let Some(clear) = js_sys::Reflect::get(&global, &JsValue::from_str("clearTimeout"))
+        .ok()
+        .and_then(|v| v.dyn_into::<js_sys::Function>().ok())
+    {
+        let _ = clear.call1(&JsValue::NULL, &JsValue::from_f64(id));
+    }
 }
 
 /// Spawn the assignment handler for one incoming `Assignment` frame.

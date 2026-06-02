@@ -21,6 +21,7 @@ service BlazenControlPlane {
   rpc DescribeWorkflow(PostcardRequest) returns (PostcardResponse);
   rpc SubscribeRunEvents(PostcardRequest) returns (stream PostcardResponse);
   rpc SubscribeAll(PostcardRequest) returns (stream PostcardResponse);
+  rpc RespondToInput(PostcardRequest) returns (PostcardResponse);
 
   // -------- Admin / introspection --------
   rpc ListWorkers(PostcardRequest) returns (PostcardResponse);

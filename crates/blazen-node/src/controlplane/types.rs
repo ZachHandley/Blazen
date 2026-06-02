@@ -333,6 +333,8 @@ pub struct JsMtlsOptions {
 pub struct JsClientConnectOptions {
     /// mTLS configuration. `None` = plaintext.
     pub mtls: Option<JsMtlsOptions>,
+    /// Bearer token attached to control-plane requests. `None` = anonymous.
+    pub bearer_token: Option<String>,
 }
 
 // ---------------------------------------------------------------------------

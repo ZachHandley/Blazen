@@ -36,6 +36,7 @@ use std::time::Duration;
 
 use async_trait::async_trait;
 use futures_util::StreamExt;
+use serde_json::Value;
 use tokio::sync::Mutex;
 use tonic::Request;
 use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
@@ -52,8 +53,8 @@ use crate::error::ControlPlaneError;
 use crate::pb;
 use crate::protocol::{
     CancelRequest, DescribeRequest, DrainWorkerRequest, ENVELOPE_VERSION, ListWorkersRequest,
-    ListWorkersResponse, RunEventWire, RunStateSnapshotWire, SubmitRequest, SubscribeAllRequest,
-    SubscribeRunRequest,
+    ListWorkersResponse, RespondToInputRequest, RunEventWire, RunStateSnapshotWire, SubmitRequest,
+    SubscribeAllRequest, SubscribeRunRequest,
 };
 
 type GrpcClient = pb::blazen_control_plane_client::BlazenControlPlaneClient<Channel>;
@@ -67,12 +68,16 @@ type GrpcClient = pb::blazen_control_plane_client::BlazenControlPlaneClient<Chan
 #[derive(Clone)]
 pub struct Client {
     inner: Arc<Mutex<GrpcClient>>,
+    /// Explicit bearer token injected on every RPC. When `None`, falls
+    /// back to `BLAZEN_PEER_TOKEN` from the environment.
+    bearer: Option<String>,
 }
 
 impl Client {
     /// Open a connection to the control plane at `endpoint`. Pass
-    /// `tls = None` for plaintext (still uses the bearer token from
-    /// `BLAZEN_PEER_TOKEN` if set).
+    /// `tls = None` for plaintext, and `bearer_token = None` to fall back
+    /// to `BLAZEN_PEER_TOKEN` from the environment (an explicit
+    /// `Some(token)` takes precedence and is injected on every RPC).
     ///
     /// # Errors
     ///
@@ -83,6 +88,7 @@ impl Client {
     pub async fn connect(
         endpoint: impl Into<String>,
         tls: Option<ClientTlsConfig>,
+        bearer_token: Option<String>,
     ) -> Result<Self, ControlPlaneError> {
         let endpoint_str = endpoint.into();
         let mut endpoint = Endpoint::from_shared(endpoint_str)
@@ -102,6 +108,7 @@ impl Client {
         let client = GrpcClient::new(channel);
         Ok(Self {
             inner: Arc::new(Mutex::new(client)),
+            bearer: bearer_token,
         })
     }
 
@@ -119,10 +126,11 @@ impl Client {
         cert_pem: &Path,
         key_pem: &Path,
         ca_pem: &Path,
+        bearer_token: Option<String>,
     ) -> Result<Self, ControlPlaneError> {
         let tls = crate::tls::load_client_tls(cert_pem, key_pem, ca_pem)
             .map_err(|e| ControlPlaneError::Tls(e.to_string()))?;
-        Self::connect(endpoint, Some(tls)).await
+        Self::connect(endpoint, Some(tls), bearer_token).await
     }
 
     /// Send a [`DrainInstruction`] to the named worker.
@@ -144,12 +152,51 @@ impl Client {
         };
         let req = encode_request_cp(&wire)?;
         let mut req_tonic = Request::new(req);
-        inject_bearer_cp(&mut req_tonic)?;
+        inject_bearer_cp(&mut req_tonic, self.bearer.as_deref())?;
         let _ = self
             .inner
             .lock()
             .await
             .drain_worker(req_tonic)
+            .await
+            .map_err(|s| ControlPlaneError::Transport(s.to_string()))?;
+        Ok(())
+    }
+
+    /// Answer an outstanding `input.request` raised by a running
+    /// assignment. The `request_id` is the one carried in the
+    /// `input.request` event's payload; `response` is the JSON value
+    /// handed back to the worker's pending
+    /// [`AssignmentContext::request_input`](crate::worker::AssignmentContext::request_input).
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ControlPlaneError::Transport`] for RPC failures, and
+    /// surfaces the server-side `NotFound` (unknown run) /
+    /// `FailedPrecondition` (run not assigned to a live worker) as
+    /// `Transport`.
+    pub async fn respond_to_input(
+        &self,
+        run_id: Uuid,
+        request_id: String,
+        response: Value,
+    ) -> Result<(), ControlPlaneError> {
+        let response_json = serde_json::to_vec(&response)
+            .map_err(|e| ControlPlaneError::Transport(format!("encode input response: {e}")))?;
+        let wire = RespondToInputRequest {
+            envelope_version: ENVELOPE_VERSION,
+            run_id,
+            request_id,
+            response_json,
+        };
+        let req = encode_request_cp(&wire)?;
+        let mut req_tonic = Request::new(req);
+        inject_bearer_cp(&mut req_tonic, self.bearer.as_deref())?;
+        let _ = self
+            .inner
+            .lock()
+            .await
+            .respond_to_input(req_tonic)
             .await
             .map_err(|s| ControlPlaneError::Transport(s.to_string()))?;
         Ok(())
@@ -177,7 +224,7 @@ impl Client {
         };
         let req = encode_request_cp(&wire)?;
         let mut req_tonic = Request::new(req);
-        inject_bearer_cp(&mut req_tonic)?;
+        inject_bearer_cp(&mut req_tonic, self.bearer.as_deref())?;
         let streaming = self
             .inner
             .lock()
@@ -199,7 +246,7 @@ impl OrchestratorClient for Client {
         let wire = SubmitRequest::from_core(&request)?;
         let req = encode_request_wf(&wire)?;
         let mut req_tonic = Request::new(req);
-        inject_bearer_wf(&mut req_tonic)?;
+        inject_bearer_wf(&mut req_tonic, self.bearer.as_deref())?;
         let resp = self
             .inner
             .lock()
@@ -218,7 +265,7 @@ impl OrchestratorClient for Client {
         };
         let req = encode_request_wf(&wire)?;
         let mut req_tonic = Request::new(req);
-        inject_bearer_wf(&mut req_tonic)?;
+        inject_bearer_wf(&mut req_tonic, self.bearer.as_deref())?;
         let resp = self
             .inner
             .lock()
@@ -237,7 +284,7 @@ impl OrchestratorClient for Client {
         };
         let req = encode_request_wf(&wire)?;
         let mut req_tonic = Request::new(req);
-        inject_bearer_wf(&mut req_tonic)?;
+        inject_bearer_wf(&mut req_tonic, self.bearer.as_deref())?;
         let resp = self
             .inner
             .lock()
@@ -259,7 +306,7 @@ impl OrchestratorClient for Client {
         };
         let req = encode_request_wf(&wire)?;
         let mut req_tonic = Request::new(req);
-        inject_bearer_wf(&mut req_tonic)?;
+        inject_bearer_wf(&mut req_tonic, self.bearer.as_deref())?;
         let streaming = self
             .inner
             .lock()
@@ -277,7 +324,7 @@ impl OrchestratorClient for Client {
         };
         let req = encode_request_wf(&wire)?;
         let mut req_tonic = Request::new(req);
-        inject_bearer_wf(&mut req_tonic)?;
+        inject_bearer_wf(&mut req_tonic, self.bearer.as_deref())?;
         let resp = self
             .inner
             .lock()
@@ -323,9 +370,13 @@ fn decode_wf<T: serde::de::DeserializeOwned>(bytes: &[u8]) -> Result<T, Workflow
 }
 
 /// Inject the `authorization: Bearer <token>` metadata header on a
-/// request when `BLAZEN_PEER_TOKEN` is set. No-op otherwise.
-fn inject_bearer_cp<T>(req: &mut Request<T>) -> Result<(), ControlPlaneError> {
-    if let Some(bearer) = auth::bearer_metadata_value() {
+/// request, preferring the explicit `bearer` and falling back to
+/// `BLAZEN_PEER_TOKEN`. No-op when neither is set.
+fn inject_bearer_cp<T>(
+    req: &mut Request<T>,
+    bearer: Option<&str>,
+) -> Result<(), ControlPlaneError> {
+    if let Some(bearer) = auth::bearer_metadata_value_with(bearer) {
         let value = bearer
             .parse::<tonic::metadata::MetadataValue<_>>()
             .map_err(|e| {
@@ -337,8 +388,8 @@ fn inject_bearer_cp<T>(req: &mut Request<T>) -> Result<(), ControlPlaneError> {
 }
 
 /// `WorkflowError` flavour of [`inject_bearer_cp`].
-fn inject_bearer_wf<T>(req: &mut Request<T>) -> Result<(), WorkflowError> {
-    if let Some(bearer) = auth::bearer_metadata_value() {
+fn inject_bearer_wf<T>(req: &mut Request<T>, bearer: Option<&str>) -> Result<(), WorkflowError> {
+    if let Some(bearer) = auth::bearer_metadata_value_with(bearer) {
         let value = bearer
             .parse::<tonic::metadata::MetadataValue<_>>()
             .map_err(|e| WorkflowError::Other(anyhow::anyhow!("invalid bearer header: {e}")))?;
@@ -381,7 +432,7 @@ mod tests {
 
     #[tokio::test]
     async fn connect_rejects_bad_endpoint() {
-        match Client::connect("not a uri", None).await {
+        match Client::connect("not a uri", None, None).await {
             Ok(_) => panic!("expected bad endpoint to be rejected"),
             Err(e) => assert!(
                 matches!(e, ControlPlaneError::Transport(_)),

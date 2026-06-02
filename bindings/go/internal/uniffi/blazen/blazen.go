@@ -2487,9 +2487,36 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_assignmentcontexthandle_emit_event()
+		})
+		if checksum != 38726 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_assignmentcontexthandle_emit_event: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_assignmentcontexthandle_request_input()
+		})
+		if checksum != 29487 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_assignmentcontexthandle_request_input: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_assignmentcontexthandle_run_id()
+		})
+		if checksum != 55953 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_assignmentcontexthandle_run_id: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle()
 		})
-		if checksum != 640 {
+		if checksum != 64253 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplaneassignmenthandler_handle: UniFFI API checksum mismatch")
 		}
@@ -2546,6 +2573,15 @@ func uniffiCheckChecksums() {
 		if checksum != 315 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplaneclient_list_workers: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_controlplaneclient_respond_to_input()
+		})
+		if checksum != 44308 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_controlplaneclient_respond_to_input: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -4514,7 +4550,7 @@ func uniffiCheckChecksums() {
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_constructor_controlplaneclient_connect()
 		})
-		if checksum != 13355 {
+		if checksum != 41710 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_controlplaneclient_connect: UniFFI API checksum mismatch")
 		}
@@ -4523,7 +4559,7 @@ func uniffiCheckChecksums() {
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_constructor_controlplaneclient_connect_blocking()
 		})
-		if checksum != 65181 {
+		if checksum != 8729 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_controlplaneclient_connect_blocking: UniFFI API checksum mismatch")
 		}
@@ -4532,7 +4568,7 @@ func uniffiCheckChecksums() {
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_constructor_controlplaneworker_new_blocking()
 		})
-		if checksum != 22162 {
+		if checksum != 62220 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_constructor_controlplaneworker_new_blocking: UniFFI API checksum mismatch")
 		}
@@ -5290,6 +5326,180 @@ func LowerToExternalAnthropicProvider(value *AnthropicProvider) uint64 {
 type FfiDestroyerAnthropicProvider struct{}
 
 func (_ FfiDestroyerAnthropicProvider) Destroy(value *AnthropicProvider) {
+	value.Destroy()
+}
+
+// Foreign-facing handle to the per-assignment
+// [`blazen_controlplane::AssignmentContext`].
+//
+// Handed to [`ControlPlaneAssignmentHandler::handle`] so the foreign
+// handler can emit progress events and request human/operator input
+// mid-assignment. All methods are **synchronous** on the foreign side:
+// they block the calling (handler) thread on the shared Tokio runtime
+// until the underlying async operation resolves. This is safe because
+// the foreign `handle` callback runs on a [`tokio::task::spawn_blocking`]
+// thread — outside the async executor — so `runtime().block_on` does not
+// re-enter a running runtime.
+type AssignmentContextHandleInterface interface {
+	// Emit a non-terminal progress event from the running assignment.
+	//
+	// `data_json` is the event payload as a JSON-encoded string; an empty
+	// string is treated as JSON `null`.
+	//
+	// # Errors
+	//
+	// Returns [`BlazenError::Validation`] if `data_json` is non-empty but
+	// not valid JSON; [`BlazenError::Peer`] (`kind = "ControlPlace*"`) if
+	// the worker's outbound channel is closed.
+	EmitEvent(eventType string, dataJson string) error
+	// Raise an `input.request` and block until the orchestrator answers
+	// (or the assignment is cancelled / `timeout_ms` elapses).
+	//
+	// `metadata_json` is an arbitrary JSON-encoded payload attached to
+	// the request; an empty string is treated as JSON `null`. Returns the
+	// orchestrator's answer as a JSON-encoded string.
+	//
+	// # Errors
+	//
+	// Returns [`BlazenError::Validation`] if `metadata_json` is non-empty
+	// but not valid JSON, or if the answer cannot be re-encoded;
+	// [`BlazenError::Peer`] for transport / cancellation / timeout.
+	RequestInput(prompt string, metadataJson string, timeoutMs *uint64) (string, error)
+	// The run identifier this assignment belongs to (UUID string).
+	RunId() string
+}
+
+// Foreign-facing handle to the per-assignment
+// [`blazen_controlplane::AssignmentContext`].
+//
+// Handed to [`ControlPlaneAssignmentHandler::handle`] so the foreign
+// handler can emit progress events and request human/operator input
+// mid-assignment. All methods are **synchronous** on the foreign side:
+// they block the calling (handler) thread on the shared Tokio runtime
+// until the underlying async operation resolves. This is safe because
+// the foreign `handle` callback runs on a [`tokio::task::spawn_blocking`]
+// thread — outside the async executor — so `runtime().block_on` does not
+// re-enter a running runtime.
+type AssignmentContextHandle struct {
+	ffiObject FfiObject
+}
+
+// Emit a non-terminal progress event from the running assignment.
+//
+// `data_json` is the event payload as a JSON-encoded string; an empty
+// string is treated as JSON `null`.
+//
+// # Errors
+//
+// Returns [`BlazenError::Validation`] if `data_json` is non-empty but
+// not valid JSON; [`BlazenError::Peer`] (`kind = "ControlPlace*"`) if
+// the worker's outbound channel is closed.
+func (_self *AssignmentContextHandle) EmitEvent(eventType string, dataJson string) error {
+	_pointer := _self.ffiObject.incrementPointer("*AssignmentContextHandle")
+	defer _self.ffiObject.decrementPointer()
+	_, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) bool {
+		C.uniffi_blazen_uniffi_fn_method_assignmentcontexthandle_emit_event(
+			_pointer, FfiConverterStringINSTANCE.Lower(eventType), FfiConverterStringINSTANCE.Lower(dataJson), _uniffiStatus)
+		return false
+	})
+	return _uniffiErr.AsError()
+}
+
+// Raise an `input.request` and block until the orchestrator answers
+// (or the assignment is cancelled / `timeout_ms` elapses).
+//
+// `metadata_json` is an arbitrary JSON-encoded payload attached to
+// the request; an empty string is treated as JSON `null`. Returns the
+// orchestrator's answer as a JSON-encoded string.
+//
+// # Errors
+//
+// Returns [`BlazenError::Validation`] if `metadata_json` is non-empty
+// but not valid JSON, or if the answer cannot be re-encoded;
+// [`BlazenError::Peer`] for transport / cancellation / timeout.
+func (_self *AssignmentContextHandle) RequestInput(prompt string, metadataJson string, timeoutMs *uint64) (string, error) {
+	_pointer := _self.ffiObject.incrementPointer("*AssignmentContextHandle")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_assignmentcontexthandle_request_input(
+				_pointer, FfiConverterStringINSTANCE.Lower(prompt), FfiConverterStringINSTANCE.Lower(metadataJson), FfiConverterOptionalUint64INSTANCE.Lower(timeoutMs), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue string
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterStringINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// The run identifier this assignment belongs to (UUID string).
+func (_self *AssignmentContextHandle) RunId() string {
+	_pointer := _self.ffiObject.incrementPointer("*AssignmentContextHandle")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterStringINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_assignmentcontexthandle_run_id(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+func (object *AssignmentContextHandle) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterAssignmentContextHandle struct{}
+
+var FfiConverterAssignmentContextHandleINSTANCE = FfiConverterAssignmentContextHandle{}
+
+func (c FfiConverterAssignmentContextHandle) Lift(handle C.uint64_t) *AssignmentContextHandle {
+	result := &AssignmentContextHandle{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_assignmentcontexthandle(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_assignmentcontexthandle(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*AssignmentContextHandle).Destroy)
+	return result
+}
+
+func (c FfiConverterAssignmentContextHandle) Read(reader io.Reader) *AssignmentContextHandle {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterAssignmentContextHandle) Lower(value *AssignmentContextHandle) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*AssignmentContextHandle")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterAssignmentContextHandle) Write(writer io.Writer, value *AssignmentContextHandle) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalAssignmentContextHandle(handle uint64) *AssignmentContextHandle {
+	return FfiConverterAssignmentContextHandleINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalAssignmentContextHandle(value *AssignmentContextHandle) uint64 {
+	return uint64(FfiConverterAssignmentContextHandleINSTANCE.Lower(value))
+}
+
+type FfiDestroyerAssignmentContextHandle struct{}
+
+func (_ FfiDestroyerAssignmentContextHandle) Destroy(value *AssignmentContextHandle) {
 	value.Destroy()
 }
 
@@ -7792,7 +8002,7 @@ type ControlPlaneAssignmentHandler interface {
 	//
 	// Use [`BlazenError::Tool`] for handler-side errors, or
 	// [`BlazenError::Workflow`] for workflow-level failures.
-	Handle(runId string, workflowName string, inputJson string) (string, error)
+	Handle(runId string, workflowName string, inputJson string, ctx *AssignmentContextHandle) (string, error)
 	// Called when the server cancels an in-flight run. Foreign code
 	// should treat this as a notification; the underlying Rust worker
 	// has already fired the per-run cancellation token.
@@ -7828,13 +8038,13 @@ type ControlPlaneAssignmentHandlerImpl struct {
 //
 // Use [`BlazenError::Tool`] for handler-side errors, or
 // [`BlazenError::Workflow`] for workflow-level failures.
-func (_self *ControlPlaneAssignmentHandlerImpl) Handle(runId string, workflowName string, inputJson string) (string, error) {
+func (_self *ControlPlaneAssignmentHandlerImpl) Handle(runId string, workflowName string, inputJson string, ctx *AssignmentContextHandle) (string, error) {
 	_pointer := _self.ffiObject.incrementPointer("ControlPlaneAssignmentHandler")
 	defer _self.ffiObject.decrementPointer()
 	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
 		return GoRustBuffer{
 			inner: C.uniffi_blazen_uniffi_fn_method_controlplaneassignmenthandler_handle(
-				_pointer, FfiConverterStringINSTANCE.Lower(runId), FfiConverterStringINSTANCE.Lower(workflowName), FfiConverterStringINSTANCE.Lower(inputJson), _uniffiStatus),
+				_pointer, FfiConverterStringINSTANCE.Lower(runId), FfiConverterStringINSTANCE.Lower(workflowName), FfiConverterStringINSTANCE.Lower(inputJson), FfiConverterAssignmentContextHandleINSTANCE.Lower(ctx), _uniffiStatus),
 		}
 	})
 	if _uniffiErr != nil {
@@ -7951,7 +8161,7 @@ func (_ FfiDestroyerControlPlaneAssignmentHandler) Destroy(value ControlPlaneAss
 }
 
 //export blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerMethod0
-func blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerMethod0(uniffiHandle C.uint64_t, runId C.RustBuffer, workflowName C.RustBuffer, inputJson C.RustBuffer, uniffiOutReturn *C.RustBuffer, callStatus *C.RustCallStatus) {
+func blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignmentHandlerMethod0(uniffiHandle C.uint64_t, runId C.RustBuffer, workflowName C.RustBuffer, inputJson C.RustBuffer, ctx C.uint64_t, uniffiOutReturn *C.RustBuffer, callStatus *C.RustCallStatus) {
 	handle := uint64(uniffiHandle)
 	uniffiObj, ok := FfiConverterControlPlaneAssignmentHandlerINSTANCE.handleMap.tryGet(handle)
 	if !ok {
@@ -7969,6 +8179,7 @@ func blazen_uniffi_controlplane_cgo_dispatchCallbackInterfaceControlPlaneAssignm
 			FfiConverterStringINSTANCE.Lift(GoRustBuffer{
 				inner: inputJson,
 			}),
+			FfiConverterAssignmentContextHandleINSTANCE.Lift(ctx),
 		)
 
 	if err != nil {
@@ -8082,6 +8293,19 @@ type ControlPlaneClientInterface interface {
 	//
 	// Returns [`BlazenError::Workflow`] for server-side errors.
 	ListWorkers() ([]ControlPlaneWorkerInfo, error)
+	// Answer an outstanding `input.request` raised by a running
+	// assignment.
+	//
+	// `request_id` is the value carried in the `input.request` event's
+	// payload; `response_json` is the JSON-encoded value handed back to
+	// the worker's pending [`AssignmentContextHandle::request_input`].
+	//
+	// # Errors
+	//
+	// Returns [`BlazenError::Validation`] if `run_id` is not a valid UUID
+	// or `response_json` is not valid JSON; [`BlazenError::Peer`]
+	// (`kind = "ControlPlane*"`) for RPC failures.
+	RespondToInput(runId string, requestId string, responseJson string) error
 	// Submit a workflow to the control plane.
 	//
 	// Returns the initial [`ControlPlaneRunStateSnapshot`] (status will
@@ -8125,7 +8349,7 @@ type ControlPlaneClient struct {
 // # Errors
 //
 // Same as [`ControlPlaneClient::connect_blocking`].
-func ControlPlaneClientConnect(endpoint string) (*ControlPlaneClient, error) {
+func ControlPlaneClientConnect(endpoint string, bearerToken *string) (*ControlPlaneClient, error) {
 	res, err := uniffiRustCallAsync[*BlazenError](
 		FfiConverterBlazenErrorINSTANCE,
 		// completeFn
@@ -8137,7 +8361,7 @@ func ControlPlaneClientConnect(endpoint string) (*ControlPlaneClient, error) {
 		func(ffi C.uint64_t) *ControlPlaneClient {
 			return FfiConverterControlPlaneClientINSTANCE.Lift(ffi)
 		},
-		C.uniffi_blazen_uniffi_fn_constructor_controlplaneclient_connect(FfiConverterStringINSTANCE.Lower(endpoint)),
+		C.uniffi_blazen_uniffi_fn_constructor_controlplaneclient_connect(FfiConverterStringINSTANCE.Lower(endpoint), FfiConverterOptionalStringINSTANCE.Lower(bearerToken)),
 		// pollFn
 		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
 			C.ffi_blazen_uniffi_rust_future_poll_u64(handle, continuation, data)
@@ -8162,9 +8386,9 @@ func ControlPlaneClientConnect(endpoint string) (*ControlPlaneClient, error) {
 //
 // Returns [`BlazenError::ControlPlane`] (`kind = "Transport"`) if
 // the endpoint URI is invalid or the handshake fails.
-func ControlPlaneClientConnectBlocking(endpoint string) (*ControlPlaneClient, error) {
+func ControlPlaneClientConnectBlocking(endpoint string, bearerToken *string) (*ControlPlaneClient, error) {
 	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
-		return C.uniffi_blazen_uniffi_fn_constructor_controlplaneclient_connect_blocking(FfiConverterStringINSTANCE.Lower(endpoint), _uniffiStatus)
+		return C.uniffi_blazen_uniffi_fn_constructor_controlplaneclient_connect_blocking(FfiConverterStringINSTANCE.Lower(endpoint), FfiConverterOptionalStringINSTANCE.Lower(bearerToken), _uniffiStatus)
 	})
 	if _uniffiErr != nil {
 		var _uniffiDefaultValue *ControlPlaneClient
@@ -8333,6 +8557,49 @@ func (_self *ControlPlaneClient) ListWorkers() ([]ControlPlaneWorkerInfo, error)
 	}
 
 	return res, err
+}
+
+// Answer an outstanding `input.request` raised by a running
+// assignment.
+//
+// `request_id` is the value carried in the `input.request` event's
+// payload; `response_json` is the JSON-encoded value handed back to
+// the worker's pending [`AssignmentContextHandle::request_input`].
+//
+// # Errors
+//
+// Returns [`BlazenError::Validation`] if `run_id` is not a valid UUID
+// or `response_json` is not valid JSON; [`BlazenError::Peer`]
+// (`kind = "ControlPlane*"`) for RPC failures.
+func (_self *ControlPlaneClient) RespondToInput(runId string, requestId string, responseJson string) error {
+	_pointer := _self.ffiObject.incrementPointer("*ControlPlaneClient")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_controlplaneclient_respond_to_input(
+			_pointer, FfiConverterStringINSTANCE.Lower(runId), FfiConverterStringINSTANCE.Lower(requestId), FfiConverterStringINSTANCE.Lower(responseJson)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
 }
 
 // Submit a workflow to the control plane.
@@ -8836,9 +9103,9 @@ type ControlPlaneWorker struct {
 //
 // Returns [`BlazenError::ControlPlane`] (`kind = "Transport"`) if
 // `endpoint` cannot be parsed as a URI.
-func ControlPlaneWorkerNewBlocking(endpoint string, nodeId string, capabilities []ControlPlaneWorkerCapability) (*ControlPlaneWorker, error) {
+func ControlPlaneWorkerNewBlocking(endpoint string, nodeId string, capabilities []ControlPlaneWorkerCapability, bearerToken *string) (*ControlPlaneWorker, error) {
 	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
-		return C.uniffi_blazen_uniffi_fn_constructor_controlplaneworker_new_blocking(FfiConverterStringINSTANCE.Lower(endpoint), FfiConverterStringINSTANCE.Lower(nodeId), FfiConverterSequenceControlPlaneWorkerCapabilityINSTANCE.Lower(capabilities), _uniffiStatus)
+		return C.uniffi_blazen_uniffi_fn_constructor_controlplaneworker_new_blocking(FfiConverterStringINSTANCE.Lower(endpoint), FfiConverterStringINSTANCE.Lower(nodeId), FfiConverterSequenceControlPlaneWorkerCapabilityINSTANCE.Lower(capabilities), FfiConverterOptionalStringINSTANCE.Lower(bearerToken), _uniffiStatus)
 	})
 	if _uniffiErr != nil {
 		var _uniffiDefaultValue *ControlPlaneWorker

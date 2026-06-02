@@ -85,7 +85,7 @@ class ControlPlaneTest {
     @Test
     fun `client blocking constructor surfaces transport error on bad URI`() {
         val err = assertThrows(BlazenException::class.java) {
-            ControlPlaneClient.connectBlocking("not a uri")
+            ControlPlaneClient.connectBlocking("not a uri", bearerToken = null)
         }
         assertNotNull(err)
         val msg = (err.message ?: "").lowercase()
@@ -104,6 +104,7 @@ class ControlPlaneTest {
                 capabilities = listOf(
                     ControlPlaneWorkerCapability("workflow:hello", 1u),
                 ),
+                bearerToken = null,
             )
         }
         assertNotNull(err)
