@@ -8,6 +8,8 @@ order: 7
 
 The WASM SDK supports the same middleware patterns as the Node.js SDK. Each decorator method returns a **new** `Model`, keeping the original unchanged.
 
+> The decorator chain (`withRetry()` / `withCache()` / `withFallback()`) lives on the generic `Model` type, so this guide uses the `Model.openai(...)` / `Model.openrouter(...)` factories. For a plain completion you construct a provider directly — `new OpenAiProvider({ apiKey: 'sk-...' })` — and call `.complete([...])` on it (call `.toModel()` first if you want to feed it into the decorator chain); reach for the `Model.x(...)` shorthand when you want the composable middleware surface shown below.
+
 ## Retry
 
 Wrap a model with automatic retry on transient failures. The WASM `withRetry()` takes an optional `maxRetries` number (default 3).

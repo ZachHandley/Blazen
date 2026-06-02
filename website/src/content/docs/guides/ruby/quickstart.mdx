@@ -120,6 +120,38 @@ puts "tokens in=#{response.usage.prompt_tokens} out=#{response.usage.completion_
 
 `Blazen::Llm.model_request` consumes the messages array -- once you pass a `ChatMessage` in, do not reuse the same wrapper for a second request. Build a fresh one each time.
 
+## Scaling up with ModelManager
+
+Constructing a provider and calling `complete_blocking` directly is the right default. When you start juggling several models, `Blazen::ModelManager` is the **unified registry**: register providers (local *and* remote) under names, then dispatch by name with `complete(id, request)`. Remote providers own no local weights, so they register with a `0` estimate and never count against a memory budget.
+
+```ruby
+require 'blazen'
+
+Blazen.init
+
+manager = Blazen::ModelManager.new
+
+# Register remote providers under names. Each Blazen::Providers.<name> result
+# responds to #as_llm_provider, which the manager files for by-name dispatch.
+manager.register('fast', Blazen::Providers.openai(
+  api_key: ENV.fetch('OPENAI_API_KEY'),
+  model: 'gpt-4o-mini',
+))
+manager.register('smart', Blazen::Providers.anthropic(
+  api_key: ENV.fetch('ANTHROPIC_API_KEY'),
+))
+
+request = Blazen::Llm.model_request(
+  messages: [Blazen::Llm.user('Write a haiku about Ruby blocks.')],
+  max_tokens: 256,
+)
+
+response = manager.complete_blocking('fast', request)
+puts response.content
+```
+
+For local models, `register` also takes a `memory_estimate_bytes:` footprint and the manager evicts the least-recently-used model in the same pool when a load would exceed its budget. See the [Local Inference](/guides/local-inference/) guide for the budgeting details.
+
 ## Lifecycle
 
 The binding has a small lifecycle surface:

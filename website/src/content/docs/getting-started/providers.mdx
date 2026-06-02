@@ -1,0 +1,192 @@
+---
+title: "Models & Providers"
+description: "The canonical way to construct LLM providers and dispatch across many with ModelManager"
+section: "getting-started"
+order: 4
+---
+
+Blazen talks to LLMs through **providers** — OpenAI, Anthropic, fal.ai, Groq, OpenRouter, and 15+ more, plus local in-process backends (mistral.rs, llama.cpp, candle). Every provider implements the same `Model` interface: build a list of `ChatMessage`s, call `complete()` (or `stream()`), and read back a typed `ModelResponse`. Switching providers is a one-line change.
+
+There are two tiers to the API. Reach for Tier 1 by default; graduate to Tier 2 when you're juggling several models.
+
+## Tier 1 — construct a provider, call `.complete()`
+
+Instantiate the provider you want and call it directly. This is the headline pattern and covers the majority of use cases.
+
+```python
+from blazen import OpenAiProvider, ProviderOptions, ChatMessage
+
+model = OpenAiProvider(options=ProviderOptions(api_key="sk-..."))
+
+resp = await model.complete([ChatMessage.user("Hello")])
+print(resp.content)
+```
+
+```typescript
+import { OpenAiProvider, ChatMessage } from "blazen";
+
+const model = OpenAiProvider.create({ apiKey: "sk-..." });
+
+const resp = await model.complete([ChatMessage.user("Hello")]);
+console.log(resp.content);
+```
+
+```rust
+use blazen_llm::{Model, ModelRequest, ChatMessage};
+use blazen_llm::providers::openai::OpenAiProvider;
+
+let model = OpenAiProvider::new("sk-...");
+
+let resp = model
+    .complete(ModelRequest::new(vec![ChatMessage::user("Hello")]))
+    .await?;
+println!("{}", resp.content.unwrap_or_default());
+```
+
+Every provider has its own class — swap `OpenAiProvider` for `AnthropicProvider`, `FalProvider`, `GroqProvider`, `OpenRouterProvider`, and so on. Anthropic and fal take provider-specific options:
+
+```python
+from blazen import AnthropicProvider, FalProvider, FalOptions, ProviderOptions, ChatMessage
+
+claude = AnthropicProvider(options=ProviderOptions(api_key="sk-ant-..."))
+fal = FalProvider(options=FalOptions(api_key="fal-..."))
+
+resp = await claude.complete([ChatMessage.user("Hello")])
+```
+
+```typescript
+import { AnthropicProvider, FalProvider, ChatMessage } from "blazen";
+
+const claude = AnthropicProvider.create({ apiKey: "sk-ant-..." });
+const fal = FalProvider.create({ apiKey: "fal-..." });
+
+const resp = await claude.complete([ChatMessage.user("Hello")]);
+```
+
+```rust
+use blazen_llm::{Model, ModelRequest, ChatMessage};
+use blazen_llm::providers::anthropic::AnthropicProvider;
+use blazen_llm::providers::fal::FalProvider;
+
+let claude = AnthropicProvider::new("sk-ant-...");
+let fal = FalProvider::new("fal-...");
+
+let resp = claude
+    .complete(ModelRequest::new(vec![ChatMessage::user("Hello")]))
+    .await?;
+```
+
+Omit the API key (or the whole options object) and Blazen reads the provider's conventional environment variable — `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `FAL_KEY`, and so on.
+
+### Streaming
+
+Every provider streams too. The Python and Rust surfaces yield chunks via async iteration; Node and WASM take an `onChunk` callback.
+
+```python
+async for chunk in model.stream([ChatMessage.user("Count to five")]):
+    print(chunk.delta, end="")
+```
+
+```typescript
+await model.stream([ChatMessage.user("Count to five")], (chunk) => {
+  if (chunk.delta) process.stdout.write(chunk.delta);
+});
+```
+
+## Tier 2 — many providers, one `ModelManager`
+
+When an app grows past a single model — a fast cheap one for routing, a smart expensive one for the hard turns, a local model for offline work — register them all in a single `ModelManager` and dispatch by name. This is a multi-provider registry inspired by LlamaIndex's model-settings pattern: name your models once, then refer to them by name everywhere.
+
+`register` is the unified entry point. It accepts **both** remote providers (which dispatch straight through and never count against a memory budget) **and** local in-process backends (which additionally participate in load/unload lifecycle with per-pool LRU eviction). Once registered:
+
+- `complete(id, messages)` runs a completion against the named provider.
+- `stream(id, messages, onChunk)` streams against it.
+- `get(id)` hands back the provider instance so you can call it, pass it around, or compose it (e.g. wrap several in a fallback).
+
+```python
+from blazen import ModelManager, FalProvider, FalOptions, AnthropicProvider, ProviderOptions, ChatMessage
+
+mgr = ModelManager()
+await mgr.register("fast", FalProvider(options=FalOptions(api_key="fal-...")))
+await mgr.register("smart", AnthropicProvider(options=ProviderOptions(api_key="sk-ant-...")))
+
+resp = await mgr.complete("fast", [ChatMessage.user("Hello")])
+
+# Fetch an instance back to use or compose directly:
+smart = await mgr.get("smart")
+detailed = await smart.complete([ChatMessage.user("Explain in depth")])
+```
+
+```typescript
+import { ModelManager, FalProvider, AnthropicProvider, ChatMessage } from "blazen";
+
+const mgr = new ModelManager();
+await mgr.register("fast", FalProvider.create({ apiKey: "fal-..." }));
+await mgr.register("smart", AnthropicProvider.create({ apiKey: "sk-ant-..." }));
+
+const resp = await mgr.complete("fast", [ChatMessage.user("Hello")]);
+
+// Fetch an instance back to use or compose directly:
+const smart = await mgr.get("smart");
+const detailed = await smart.complete([ChatMessage.user("Explain in depth")]);
+```
+
+```rust
+use std::sync::Arc;
+use blazen_manager::ModelManager;
+use blazen_llm::{ChatMessage, ModelRequest};
+use blazen_llm::providers::anthropic::AnthropicProvider;
+use blazen_llm::providers::fal::FalProvider;
+
+let mgr = ModelManager::with_budgets_gb(64.0, 24.0);
+// `None` (no local lifecycle) + `0` bytes: remote providers own no local weights.
+mgr.register_provider("fast", Arc::new(FalProvider::new("fal-...")), None, 0).await;
+mgr.register_provider("smart", Arc::new(AnthropicProvider::new("sk-ant-...")), None, 0).await;
+
+let resp = mgr
+    .complete("fast", ModelRequest::new(vec![ChatMessage::user("Hello")]))
+    .await?;
+
+// Fetch the instance back to use or compose directly:
+let smart = mgr.get("smart").await.expect("registered");
+```
+
+In the WASM SDK, `register` takes a generic `Model` plus a memory estimate — convert a provider instance with `provider.toModel()` and pass `0` for remote providers:
+
+```typescript
+import { ModelManager, FalProvider, AnthropicProvider, ChatMessage } from "@blazen-dev/wasm";
+
+const mgr = new ModelManager(0);
+await mgr.register("fast", new FalProvider({ apiKey: "fal-..." }).toModel(), 0);
+await mgr.register("smart", new AnthropicProvider({ apiKey: "sk-ant-..." }).toModel(), 0);
+
+const resp = await mgr.complete("fast", [ChatMessage.user("Hello")]);
+```
+
+Because remote and local providers share the registry, you can mix a hosted API and a local GGUF model under the same manager and route between them by name — the manager handles loading, eviction, and budget accounting for the local entries while remote entries dispatch straight through.
+
+## Shorthand: `Model.openai(...)`
+
+Each provider also has a matching static factory on `Model` — `Model.openai(...)`, `Model.anthropic(...)`, `Model.fal(...)`, `Model.groq(...)`, and so on. Both surfaces wrap the exact same Rust provider, so they're interchangeable; the factory is just an alternate constructor some people find tidier.
+
+```python
+from blazen import Model, ProviderOptions, ChatMessage
+
+model = Model.openai(options=ProviderOptions(api_key="sk-..."))   # same as OpenAiProvider(...)
+resp = await model.complete([ChatMessage.user("Hello")])
+```
+
+```typescript
+import { Model, ChatMessage } from "blazen";
+
+const model = Model.openai({ apiKey: "sk-..." });   // same as OpenAiProvider.create(...)
+const resp = await model.complete([ChatMessage.user("Hello")]);
+```
+
+In the WASM SDK the `Model.x()` factories are zero-argument and read keys from environment variables (`Model.openai()` → `OPENAI_API_KEY`); use the provider constructor (`new OpenAiProvider({ apiKey })`) when you need to pass an explicit key.
+
+## See also
+
+- [Media Generation](/guides/media-generation/) — images, video, audio, and 3D via `FalProvider` and native backends
+- [Batch Completions](/guides/batch-processing/) — run many prompts concurrently
+- [Custom Providers](/guides/custom-providers/) — wrap your own backend behind the `Model` interface

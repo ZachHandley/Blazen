@@ -114,6 +114,19 @@ pub struct PyModel {
     pub(crate) config: Option<blazen_llm::ProviderConfig>,
 }
 
+impl PyModel {
+    /// Wrap a bare `Arc<dyn Model>` (e.g. one fetched back out of a
+    /// [`ModelManager`](blazen_manager::ModelManager) by name) as a `Model`
+    /// handle for the Python side.
+    pub(crate) fn from_inner(inner: Arc<dyn Model>) -> Self {
+        Self {
+            inner: Some(inner),
+            local_model: None,
+            config: None,
+        }
+    }
+}
+
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyModel {

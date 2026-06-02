@@ -203,6 +203,31 @@ fmt.Println(emb.Dimensions())  // model's native dimensionality
 
 The returned `EmbeddingResponse.Embeddings` is a `[][]float64` -- one vector per input string, in input order. `Dimensions()` reports the model's vector size as a `uint32`, useful for sizing a downstream vector store.
 
+## Scaling up with ModelManager
+
+Constructing a model with a factory and calling `Complete` on it directly is the right default. When you start running several **local** models side by side, `blazen.ModelManager` tracks per-pool memory budgets (host RAM and GPU VRAM as separate buckets) and evicts the least-recently-used model **in the same pool** when a new load would exceed that pool's budget. Register each local model with an estimated footprint via `RegisterLocal`, then `Load` / `EnsureLoaded` as needed:
+
+```go
+manager := blazen.NewModelManagerWithBudgetsGB(64, 24) // 64 GB CPU, 24 GB GPU
+defer manager.Close()
+
+// Register a local model with its estimated footprint, then load it.
+// RegisterLocal charges the estimate against the pool derived from the
+// model's Device(); a load that would blow the budget evicts the LRU
+// model in the same pool first.
+if err := manager.RegisterLocal(ctx, "llm", localModel, 8*1024*1024*1024); err != nil {
+    return err
+}
+if err := manager.EnsureLoaded(ctx, "llm"); err != nil {
+    return err
+}
+
+used, _ := manager.UsedBytes(ctx, "gpu:0")
+fmt.Printf("gpu:0 in use: %d bytes\n", used)
+```
+
+`ModelManager` is the same unified registry exposed across every Blazen binding; see the cross-language [Local Inference](/guides/local-inference/) guide for the budgeting model and how it also holds remote providers by name in the other bindings.
+
 ## Streaming
 
 For incremental token delivery, use `blazen.Stream(ctx, model, req)`. The streaming surface is documented in detail on the [Streaming page](/guides/go/streaming/).

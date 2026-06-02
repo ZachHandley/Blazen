@@ -129,19 +129,21 @@ asyncio.run(main())
 
 ## LLM Integration
 
-Blazen includes a built-in multi-provider LLM client. All providers share the same `Model` / `ChatMessage` interface. Responses are returned as typed `ModelResponse` objects.
+Blazen includes a built-in multi-provider LLM client. All providers share the same `ChatMessage` / `ModelResponse` interface — construct one and call `.complete()`.
 
-### ChatMessage, Role, and ModelResponse
+### Tier 1: construct a provider, call `.complete()`
 
 ```python
-import os
-from blazen import Model, ChatMessage, Role, ModelResponse, ProviderOptions
+from blazen import OpenAiProvider, ProviderOptions, ChatMessage, ModelResponse
 
-model = Model.openrouter(options=ProviderOptions(api_key=os.environ["OPENROUTER_API_KEY"], model="openai/gpt-4o"))
+model = OpenAiProvider(options=ProviderOptions(api_key="sk-..."))
+# also: AnthropicProvider, GroqProvider, OpenRouterProvider, FalProvider, ...
+# omit options to read the key from the provider's env var (OPENAI_API_KEY, ...)
+
 response: ModelResponse = await model.complete([
     ChatMessage.system("You are helpful."),
     ChatMessage.user("What is 2+2?"),
-], temperature=0.7, max_tokens=256)
+])
 
 # Typed attribute access
 print(response.content)        # "4"
@@ -153,6 +155,23 @@ print(response.usage)          # TokenUsage with .prompt_tokens, .completion_tok
 # Dict-style access also works for backwards compatibility
 print(response["content"])
 ```
+
+### Tier 2: register many providers in one `ModelManager`
+
+Scaling past a single model? Register providers — **local and remote** — under names in one manager and dispatch by name. Fetch an instance back with `get()` to pass around or compose:
+
+```python
+from blazen import ModelManager, FalProvider, FalOptions, AnthropicProvider, ProviderOptions, ChatMessage
+
+mgr = ModelManager()
+await mgr.register("fast", FalProvider(options=FalOptions(api_key="fal-...")))
+await mgr.register("smart", AnthropicProvider(options=ProviderOptions(api_key="sk-ant-...")))
+
+response = await mgr.complete("fast", [ChatMessage.user("What is 2+2?")])
+smart = await mgr.get("smart")     # the AnthropicProvider, to call or compose directly
+```
+
+> Shorthand: `Model.openai(...)`, `Model.anthropic(...)`, `Model.fal(...)`, etc. are optional static factories that build the same providers — both surfaces wrap the same Rust provider, so use whichever reads better.
 
 ### Role Enum
 

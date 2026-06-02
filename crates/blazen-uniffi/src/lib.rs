@@ -88,7 +88,7 @@ pub use llm::{
 pub use local_model::{
     AdapterHandleRecord, AdapterOptionsRecord, AdapterStatusRecord, ForeignLocalModel,
 };
-pub use manager::{ModelStatusRecord, PoolStatusRecord, UniffiModelManager};
+pub use manager::{ModelStatusRecord, PoolStatusRecord, UniffiModel, UniffiModelManager};
 #[cfg(feature = "distributed")]
 pub use model_client::{ModelClient, ModelClientStatusRecord, ModelPool, StatusRecord};
 #[cfg(feature = "distributed")]

@@ -546,6 +546,107 @@ module Blazen
       mgr
     end
 
+    # Registers a remote LLM provider under `id` so it can be dispatched by
+    # name with {#complete} / {#complete_blocking}.
+    #
+    # `provider` is any per-engine provider object (e.g.
+    # +Blazen::Providers.openai(...)+, +Blazen::Providers.anthropic(...)+) or a
+    # polymorphic {Blazen::LlmProvider}. The manager files it for by-name
+    # dispatch; remote providers own no local weights, so they never count
+    # against a memory budget (pass `memory_estimate_bytes: 0`, the default).
+    #
+    # @param id [String] dispatch handle to register the provider under
+    # @param provider [Blazen::LlmProvider, #as_llm_provider] a provider that
+    #   responds to +#as_llm_provider+ (every +Blazen::Providers.<name>+
+    #   factory result does)
+    # @param memory_estimate_bytes [Integer] bookkeeping only for remote
+    #   providers; defaults to 0
+    # @return [void]
+    # @raise [ArgumentError] if `provider` does not respond to
+    #   +#as_llm_provider+
+    def register(id, provider, memory_estimate_bytes: 0)
+      unless provider.respond_to?(:as_llm_provider)
+        raise ArgumentError,
+              "provider must respond to #as_llm_provider " \
+              "(e.g. a Blazen::Providers.<name> result or a Blazen::LlmProvider); " \
+              "got #{provider.class}"
+      end
+
+      llm = provider.as_llm_provider
+      # Keep the polymorphic handle alive for the duration of the call. The
+      # cabi clones the inner Arc, so the registration outlives `llm`, but we
+      # must not let GC free `llm` before register_remote reads its pointer.
+      Blazen::FFI.with_cstring(id.to_s) do |id_ptr|
+        out_err = ::FFI::MemoryPointer.new(:pointer)
+        Blazen::FFI.blazen_model_manager_register_remote(
+          @ptr, id_ptr, llm.handle, Integer(memory_estimate_bytes), out_err,
+        )
+        Blazen::FFI.check_error!(out_err)
+      end
+      nil
+    end
+
+    # Runs a chat completion against the provider registered under `id`.
+    #
+    # Composes with `Fiber.scheduler` when one is active (via
+    # {Blazen::FFI.await_future}); otherwise blocks the calling thread on the
+    # cabi-side wait. The `request` is consumed by the call.
+    #
+    # @param id [String]
+    # @param request [Blazen::Llm::ModelRequest]
+    # @return [Blazen::Llm::ModelResponse]
+    def complete(id, request)
+      unless request.is_a?(Blazen::Llm::ModelRequest)
+        raise ArgumentError, "request must be a Blazen::Llm::ModelRequest"
+      end
+      unless Blazen::FFI.respond_to?(:blazen_future_take_model_response)
+        raise Blazen::UnsupportedError,
+              "blazen cabi does not export blazen_future_take_model_response; " \
+              "use #complete_blocking instead"
+      end
+
+      Blazen::FFI.with_cstring(id.to_s) do |id_ptr|
+        req_ptr = request.consume!
+        fut = Blazen::FFI.blazen_model_manager_complete(@ptr, id_ptr, req_ptr)
+        if fut.nil? || fut.null?
+          raise Blazen::ValidationError,
+                "blazen_model_manager_complete rejected the call " \
+                "(null manager, null/non-UTF-8 id, or invalid request)"
+        end
+        out_resp = ::FFI::MemoryPointer.new(:pointer)
+        out_err  = ::FFI::MemoryPointer.new(:pointer)
+        Blazen::FFI.await_future(fut) do |f|
+          Blazen::FFI.blazen_future_take_model_response(f, out_resp, out_err)
+        end
+        Blazen::FFI.check_error!(out_err)
+        Blazen::Llm::ModelResponse.new(out_resp.read_pointer)
+      end
+    end
+
+    # Synchronous variant of {#complete}. Use when no `Fiber.scheduler` is
+    # available and you explicitly want a blocking call. The `request` is
+    # consumed by the call.
+    #
+    # @param id [String]
+    # @param request [Blazen::Llm::ModelRequest]
+    # @return [Blazen::Llm::ModelResponse]
+    def complete_blocking(id, request)
+      unless request.is_a?(Blazen::Llm::ModelRequest)
+        raise ArgumentError, "request must be a Blazen::Llm::ModelRequest"
+      end
+
+      Blazen::FFI.with_cstring(id.to_s) do |id_ptr|
+        req_ptr  = request.consume!
+        out_resp = ::FFI::MemoryPointer.new(:pointer)
+        out_err  = ::FFI::MemoryPointer.new(:pointer)
+        Blazen::FFI.blazen_model_manager_complete_blocking(
+          @ptr, id_ptr, req_ptr, out_resp, out_err,
+        )
+        Blazen::FFI.check_error!(out_err)
+        Blazen::Llm::ModelResponse.new(out_resp.read_pointer)
+      end
+    end
+
     # Registers a Ruby-side {LocalModel}-like object with the manager.
     #
     # @raise [Blazen::UnsupportedError] always — the cabi intentionally does

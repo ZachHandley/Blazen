@@ -13,7 +13,6 @@ postcard = { workspace = true, features = ["alloc"] }
 blazen-core = { workspace = true, features = ["distributed"] }
 blazen-peer = { workspace = true }
 blazen-llm = { workspace = true, optional = true }
-blazen-resource-probe = { workspace = true }
 async-trait = { workspace = true }
 dashmap = { workspace = true }
 serde = { workspace = true }
@@ -33,6 +32,10 @@ vendored-orm = { workspace = true, optional = true }
 # for wasm32-wasi*; the `http-transport` feature provides a pure-HTTP
 # alternative for those targets.
 [target.'cfg(not(any(target_os = "wasi", target_arch = "wasm32")))'.dependencies]
+# Host-only GPU/CPU prober: shells out to nvidia-smi/rocm-smi/system_profiler
+# and reads sysinfo. It enables tokio `process`/`net` (→ mio), which has no
+# wasm support, so it must stay out of the wasm32/wasi dependency graph.
+blazen-resource-probe = { workspace = true }
 tonic = { workspace = true, features = ["tls-aws-lc"] }
 tonic-prost = { workspace = true }
 prost = { workspace = true }

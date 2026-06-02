@@ -79,10 +79,10 @@ python examples/branching_workflow.py
 Multi-step RAG pipeline with context sharing between steps. Uses typed `ChatMessage` and `ModelResponse`:
 
 ```python
-from blazen import Model, ChatMessage, ModelResponse
+from blazen import OpenAiProvider, ProviderOptions, ChatMessage, ModelResponse
 
-# Reads OPENAI_API_KEY from the environment by default.
-model = Model.openai()
+# Construct the provider directly. With no api_key, it reads OPENAI_API_KEY.
+model = OpenAiProvider(options=ProviderOptions(api_key="sk-..."))
 response: ModelResponse = await model.complete([
     ChatMessage.system("Answer based on the provided documents."),
     ChatMessage.user(query),
@@ -256,17 +256,36 @@ python examples/custom_memory_backend.py
 
 ## Example 9: ModelManager with Memory Budgets
 
-Track memory budgets across multiple local models, with separate pools for CPU RAM and GPU VRAM. Register each model with an estimated footprint; when loading a new one would exceed its pool's budget, the least-recently-used model **in the same pool** is automatically unloaded.
+`ModelManager` is the **unified registry** — register local models *and* remote
+providers by name, then dispatch with `complete(id, messages)` (also
+`stream(id, messages, on_chunk)` and `get(id)`). Local models additionally
+participate in memory budgeting across separate pools for CPU RAM and GPU VRAM:
+register each with an estimated footprint, and when loading a new one would
+exceed its pool's budget, the least-recently-used model **in the same pool** is
+automatically unloaded. Remote providers own no local weights, so they dispatch
+straight through and never count against a budget.
 
 ```python
 import asyncio
 
-from blazen import Model, MistralRsOptions, ModelManager
+from blazen import (
+    ChatMessage,
+    Model,
+    MistralRsOptions,
+    ModelManager,
+    OpenAiProvider,
+    ProviderOptions,
+)
 
 
 async def main():
     # 64 GB of CPU RAM, 24 GB of GPU VRAM (GPU-typical for a consumer card).
     manager = ModelManager(cpu_ram_gb=64, gpu_vram_gb=24)
+
+    # Remote provider: dispatch-only, no footprint (pass 0 / omit estimate).
+    await manager.register(
+        "gpt", OpenAiProvider(options=ProviderOptions(api_key="sk-...")),
+    )
 
     llama_8b = Model.mistralrs(
         options=MistralRsOptions("meta-llama/Llama-3.1-8B-Instruct"),
@@ -281,6 +300,10 @@ async def main():
     await manager.register("llama-8b", llama_8b, memory_estimate_bytes=8 * 1024**3)
     await manager.register("qwen-14b", qwen_14b, memory_estimate_bytes=14 * 1024**3)
     await manager.register("mistral-24b", mistral_24b, memory_estimate_bytes=20 * 1024**3)
+
+    # Dispatch by name — same call shape for the remote and local entries.
+    remote = await manager.complete("gpt", [ChatMessage.user("Hello from the cloud!")])
+    print(remote.content)
 
     # Fits alongside qwen-14b in the GPU pool (8 + 14 = 22 GB).
     await manager.load("llama-8b")
@@ -434,14 +457,15 @@ import asyncio
 from blazen import (
     BlazenError,
     ChatMessage,
-    Model,
+    OpenAiProvider,
     ProviderError,
+    ProviderOptions,
     RateLimitError,
 )
 
 
 async def main():
-    model = Model.openai()
+    model = OpenAiProvider(options=ProviderOptions(api_key="sk-..."))
     try:
         response = await model.complete([ChatMessage.user("Hello")])
         print(response.content)

@@ -16,10 +16,12 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use crate::errors::{BlazenError, BlazenResult};
+use crate::llm::{ModelRequest, ModelResponse};
 use crate::local_model::{
     AdapterOptionsRecord, AdapterStatusRecord, ForeignLocalModel, ForeignLocalModelAdapter,
 };
 use crate::runtime::runtime;
+use crate::streaming::{CompletionStreamSink, clone_error, drive_completion_stream};
 use blazen_llm::Pool;
 use blazen_manager::ModelManager;
 #[cfg(feature = "hf-loader")]
@@ -147,6 +149,110 @@ fn parse_pool_label(s: &str) -> BlazenResult<Pool> {
     }
 }
 
+/// Opaque chat-model handle for the unified registry.
+///
+/// UniFFI can't pass `Arc<dyn blazen_llm::Model>` across the FFI, so a
+/// remote provider (or any in-process chat backend) is boxed into one of
+/// these via the per-engine `to_model()` constructors in
+/// [`crate::concrete::llm`]. Foreign callers register it by name with
+/// [`UniffiModelManager::register_model`] and dispatch completions through
+/// the manager's [`complete`](UniffiModelManager::complete) /
+/// [`stream`](UniffiModelManager::stream) — or fetch it back with
+/// [`get`](UniffiModelManager::get) and call [`complete`](Self::complete) /
+/// [`stream`](Self::stream) on it directly.
+#[derive(uniffi::Object)]
+pub struct UniffiModel {
+    inner: Arc<dyn blazen_llm::Model>,
+}
+
+impl UniffiModel {
+    /// Box an `Arc<dyn blazen_llm::Model>` into the opaque FFI handle.
+    ///
+    /// Used by the per-engine `to_model()` constructors and by
+    /// [`UniffiModelManager::get`].
+    #[must_use]
+    pub(crate) fn from_inner(inner: Arc<dyn blazen_llm::Model>) -> Arc<Self> {
+        Arc::new(Self { inner })
+    }
+
+    /// Borrow the wrapped chat model for registration in the core
+    /// [`ModelManager`].
+    pub(crate) fn as_model(&self) -> Arc<dyn blazen_llm::Model> {
+        Arc::clone(&self.inner)
+    }
+}
+
+#[uniffi::export]
+impl UniffiModel {
+    /// The default model id reported by the wrapped provider.
+    #[must_use]
+    pub fn model_id(&self) -> String {
+        self.inner.model_id().to_owned()
+    }
+}
+
+#[uniffi::export(async_runtime = "tokio")]
+impl UniffiModel {
+    /// Run a non-streaming chat completion directly against this provider.
+    pub async fn complete(
+        self: Arc<Self>,
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
+        let core_req: blazen_llm::types::ModelRequest = request.try_into()?;
+        let core_res = self.inner.complete(core_req).await?;
+        Ok(core_res.into())
+    }
+
+    /// Stream a chat completion directly against this provider, driving each
+    /// chunk into `sink`. A failed *start* is surfaced both as an `Err` and
+    /// via `sink.on_error`; once the stream is live every outcome flows
+    /// through the sink.
+    pub async fn stream(
+        self: Arc<Self>,
+        request: ModelRequest,
+        sink: Arc<dyn CompletionStreamSink>,
+    ) -> Result<(), BlazenError> {
+        let core_req: blazen_llm::types::ModelRequest = match request.try_into() {
+            Ok(r) => r,
+            Err(err) => {
+                let _ = sink.on_error(clone_error(&err)).await;
+                return Err(err);
+            }
+        };
+        let stream = match self.inner.stream(core_req).await {
+            Ok(s) => s,
+            Err(err) => {
+                let wire_err = BlazenError::from(err);
+                let _ = sink.on_error(clone_error(&wire_err)).await;
+                return Err(wire_err);
+            }
+        };
+        drive_completion_stream(stream, sink).await
+    }
+}
+
+#[uniffi::export]
+impl UniffiModel {
+    /// Synchronous variant of [`complete`](Self::complete).
+    pub fn complete_blocking(
+        self: Arc<Self>,
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
+        let this = Arc::clone(&self);
+        runtime().block_on(async move { this.complete(request).await })
+    }
+
+    /// Synchronous variant of [`stream`](Self::stream).
+    pub fn stream_blocking(
+        self: Arc<Self>,
+        request: ModelRequest,
+        sink: Arc<dyn CompletionStreamSink>,
+    ) -> Result<(), BlazenError> {
+        let this = Arc::clone(&self);
+        runtime().block_on(async move { this.stream(request, sink).await })
+    }
+}
+
 /// Memory-budget-aware model manager with per-pool LRU eviction.
 ///
 /// Foreign code constructs one of these, registers
@@ -241,6 +347,81 @@ impl UniffiModelManager {
             .register(&id, adapter, memory_estimate_bytes)
             .await;
         Ok(())
+    }
+
+    /// Register a chat provider under `id` so it can be dispatched by name
+    /// with [`Self::complete`] / [`Self::stream`], or fetched back with
+    /// [`Self::get`].
+    ///
+    /// This is the unified registry — remote providers *and* in-process chat
+    /// backends in one place. `model` is built from any concrete provider via
+    /// its `to_model()` method (e.g. `OpenAiProvider::to_model`). Remote
+    /// providers own no local weights, so they never count against a memory
+    /// budget — pass `memory_estimate_bytes = 0`.
+    ///
+    /// To register a foreign-implemented local model with raw load / unload
+    /// lifecycle callbacks instead, use [`Self::register_local`].
+    pub async fn register_model(
+        self: Arc<Self>,
+        id: String,
+        model: Arc<UniffiModel>,
+        memory_estimate_bytes: u64,
+    ) -> BlazenResult<()> {
+        self.inner
+            .register_provider(&id, model.as_model(), None, memory_estimate_bytes)
+            .await;
+        Ok(())
+    }
+
+    /// Run a chat completion against the provider registered under `id`.
+    ///
+    /// Local entries are auto-loaded on first use; remote entries dispatch
+    /// straight through. Errors if `id` is not registered or was registered
+    /// for lifecycle only (via [`Self::register_local`]).
+    pub async fn complete(
+        self: Arc<Self>,
+        id: String,
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
+        let core_req: blazen_llm::types::ModelRequest = request.try_into()?;
+        let core_res = self.inner.complete(&id, core_req).await?;
+        Ok(core_res.into())
+    }
+
+    /// Streaming counterpart to [`Self::complete`], driving each chunk into
+    /// `sink`. A failed *start* (unknown / lifecycle-only `id`, or the
+    /// provider's own `stream()` failing to begin) is surfaced both as an
+    /// `Err` and via `sink.on_error`; once live, every outcome flows through
+    /// the sink.
+    pub async fn stream(
+        self: Arc<Self>,
+        id: String,
+        request: ModelRequest,
+        sink: Arc<dyn CompletionStreamSink>,
+    ) -> Result<(), BlazenError> {
+        let core_req: blazen_llm::types::ModelRequest = match request.try_into() {
+            Ok(r) => r,
+            Err(err) => {
+                let _ = sink.on_error(clone_error(&err)).await;
+                return Err(err);
+            }
+        };
+        let stream = match self.inner.stream(&id, core_req).await {
+            Ok(s) => s,
+            Err(err) => {
+                let wire_err = BlazenError::from(err);
+                let _ = sink.on_error(clone_error(&wire_err)).await;
+                return Err(wire_err);
+            }
+        };
+        drive_completion_stream(stream, sink).await
+    }
+
+    /// Fetch the chat provider registered under `id` to use or compose
+    /// directly. Returns `None` if `id` is unknown or was registered for
+    /// lifecycle only (no chat model).
+    pub async fn get(self: Arc<Self>, id: String) -> Option<Arc<UniffiModel>> {
+        self.inner.get(&id).await.map(UniffiModel::from_inner)
     }
 
     pub async fn load(self: Arc<Self>, model_id: String) -> BlazenResult<()> {
@@ -390,6 +571,27 @@ impl UniffiModelManager {
     pub fn unload_blocking(self: Arc<Self>, model_id: String) -> BlazenResult<()> {
         let this = Arc::clone(&self);
         runtime().block_on(async move { this.unload(model_id).await })
+    }
+
+    /// Synchronous variant of [`Self::complete`].
+    pub fn complete_blocking(
+        self: Arc<Self>,
+        id: String,
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
+        let this = Arc::clone(&self);
+        runtime().block_on(async move { this.complete(id, request).await })
+    }
+
+    /// Synchronous variant of [`Self::stream`].
+    pub fn stream_blocking(
+        self: Arc<Self>,
+        id: String,
+        request: ModelRequest,
+        sink: Arc<dyn CompletionStreamSink>,
+    ) -> Result<(), BlazenError> {
+        let this = Arc::clone(&self);
+        runtime().block_on(async move { this.stream(id, request, sink).await })
     }
 }
 

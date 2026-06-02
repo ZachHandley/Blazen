@@ -248,7 +248,7 @@ Models at 7B+ parameters require 4+ GB of GPU memory and have cold starts measur
 Not every user has WebGPU. Even those who do may be on low-end hardware or a phone with insufficient memory. The recommended production pattern is to try local inference first and fall back to a cloud API:
 
 ```typescript
-import init, { Model, ChatMessage } from '@blazen/sdk';
+import init, { Model, OpenRouterProvider, ChatMessage } from '@blazen/sdk';
 
 await init();
 
@@ -260,7 +260,9 @@ try {
   // WebGPU not available or model too large
 }
 
-const apiModel = Model.openrouter(); // reads OPENROUTER_API_KEY
+// Construct the provider directly, then adapt it for the Model decorator
+// chain (withFallback) via toModel(). With no apiKey, it reads OPENROUTER_API_KEY.
+const apiModel = new OpenRouterProvider({ apiKey: 'sk-or-...' }).toModel();
 
 // If local model loaded, try it first; if it fails, use the API.
 // If local model did not load, use the API directly.
@@ -292,7 +294,7 @@ const results = await memory.query("question", 5);
 ### Full RAG pipeline with the built-in embedder
 
 ```typescript
-import init, { Memory, InMemoryBackend, TractEmbedModel, Model, ChatMessage } from '@blazen/sdk';
+import init, { Memory, InMemoryBackend, TractEmbedModel, OpenRouterProvider, ChatMessage } from '@blazen/sdk';
 
 await init();
 
@@ -311,7 +313,8 @@ await memory.upsert([
 async function answerQuestion(question: string) {
   const context = await memory.query(question, 3);
   const contextText = context.map((r) => r.content).join('\n');
-  const llm = Model.openrouter();
+  // Construct the provider directly. With no apiKey, it reads OPENROUTER_API_KEY.
+  const llm = new OpenRouterProvider({ apiKey: 'sk-or-...' });
   const response = await llm.complete([
     ChatMessage.system(`Answer using only this context:\n${contextText}`),
     ChatMessage.user(question),

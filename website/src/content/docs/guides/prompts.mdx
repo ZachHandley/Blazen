@@ -43,9 +43,9 @@ console.log(msg.content);
 Pass the rendered `ChatMessage` straight into the model:
 
 ```python
-from blazen import Model, ChatMessage
+from blazen import OpenAiProvider, ProviderOptions, ChatMessage
 
-model = Model.openai()
+model = OpenAiProvider(options=ProviderOptions(api_key="sk-..."))
 response = await model.complete([
     template.render({"doc_type": "article", "style": "concise"}),
     ChatMessage.user(document_text),

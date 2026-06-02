@@ -1539,6 +1539,7 @@ dependencies = [
  "blazen-train",
  "candle-core",
  "candle-nn",
+ "futures-util",
  "hf-hub 0.5.0",
  "serde",
  "serde_json",

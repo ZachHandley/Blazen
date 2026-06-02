@@ -1,26 +1,51 @@
-//! Memory-budget-aware model manager with per-pool LRU eviction.
+//! A named registry for the models and providers your application uses,
+//! local and remote, in one place.
 //!
-//! Tracks registered [`LocalModel`] instances and their estimated memory
-//! footprint, organised by [`Pool`] (one budget for host RAM, one per GPU).
-//! Loading a model that would exceed its pool's budget evicts the
-//! least-recently-used loaded model **in the same pool** until it fits.
-//! Models in different pools never evict each other.
+//! Register any provider — a remote API client ([`Model`]) or a local
+//! in-process backend ([`LocalModel`], or one that is both) — under a name,
+//! then dispatch by name with [`ModelManager::complete`] /
+//! [`ModelManager::stream`], or pull the instance back out with
+//! [`ModelManager::get`] to pass around and compose. This is the "scale up
+//! from one provider to many" tier: construct a provider directly for the
+//! simple case, reach for the manager when you juggle several.
 //!
-//! # Capacity, not performance
+//! # Memory budgeting (local weights)
+//!
+//! For entries that own real weights, the manager doubles as a
+//! memory-budget bookkeeper with per-pool LRU eviction. Each [`LocalModel`]
+//! carries an estimated footprint organised by [`Pool`] (one budget for
+//! host RAM, one per GPU). Loading a model that would exceed its pool's
+//! budget evicts the least-recently-used loaded model **in the same pool**
+//! until it fits; models in different pools never evict each other. Remote
+//! providers ([`Pool::Remote`]) hold no local weights, so they never
+//! participate in eviction and never count against a budget.
 //!
 //! These budgets answer "will this fit?" — not "will this run fast?".
 //! Whether a 70B model loaded on CPU is *useful* at 1–3 tok/s is a
 //! workload-choice question that this manager intentionally does not
 //! answer. It only prevents OOM.
+//!
+//! # Dispatch is the text [`Model`] surface
+//!
+//! [`ModelManager::complete`] / [`ModelManager::stream`] dispatch the chat
+//! completion interface. Media providers (image / video / audio) can still
+//! be registered for lifecycle and budget bookkeeping, but are invoked on
+//! the concrete handle you hold (or fetch via [`ModelManager::get`]), not
+//! through `complete`.
 
 pub mod hf_loader;
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Instant;
 
-use blazen_llm::{AdapterHandle, AdapterOptions, AdapterStatus, BlazenError, LocalModel, Pool};
+use blazen_llm::{
+    AdapterHandle, AdapterOptions, AdapterStatus, BlazenError, LocalModel, Model, ModelRequest,
+    ModelResponse, Pool, StreamChunk,
+};
+use futures_util::Stream;
 use tokio::sync::Mutex;
 
 #[cfg(feature = "hf-loader")]
@@ -68,7 +93,15 @@ pub struct ModelStatus {
 }
 
 struct RegisteredModel {
-    model: Arc<dyn LocalModel>,
+    /// Chat-completion dispatch target. `Some` for remote providers and for
+    /// local backends that implement [`Model`]; `None` for lifecycle-only
+    /// entries (e.g. a local media backend registered purely for memory
+    /// budgeting). At least one of `model` / `local` is always `Some`.
+    model: Option<Arc<dyn Model>>,
+    /// Local-weights lifecycle handle. `Some` when the entry owns in-process
+    /// weights that can be loaded / unloaded / adapter-mounted; `None` for
+    /// remote providers.
+    local: Option<Arc<dyn LocalModel>>,
     memory_estimate_bytes: u64,
     pool: Pool,
     loaded: bool,
@@ -116,15 +149,25 @@ impl ModelManager {
         Self::new(budgets)
     }
 
-    /// Register a model with its estimated memory footprint in bytes.
-    /// The pool is derived from `model.device()` at registration time.
+    /// Register a local model for lifecycle and memory management under `id`.
+    ///
+    /// The pool is derived from `model.device()` at registration time. This
+    /// is the lifecycle-only path: the entry can be loaded / unloaded /
+    /// adapter-mounted and counts against its pool budget, but is **not**
+    /// dispatchable via [`Self::complete`] unless the backend also
+    /// implements [`Model`] and is registered through [`Self::register_provider`].
+    ///
+    /// For the common case of a local backend that is *both* a [`LocalModel`]
+    /// and a chat [`Model`] (mistral.rs, llama.cpp, candle), prefer
+    /// [`Self::register_provider`] so it can be dispatched by name.
     pub async fn register(&self, id: &str, model: Arc<dyn LocalModel>, memory_estimate_bytes: u64) {
         let pool: Pool = model.device().into();
         let mut state = self.state.lock().await;
         state.insert(
             id.to_owned(),
             RegisteredModel {
-                model,
+                model: None,
+                local: Some(model),
                 memory_estimate_bytes,
                 pool,
                 loaded: false,
@@ -132,6 +175,128 @@ impl ModelManager {
                 adapters: HashMap::new(),
             },
         );
+    }
+
+    /// Register a provider under `id` so it can be dispatched by name with
+    /// [`Self::complete`] / [`Self::stream`] and fetched with [`Self::get`].
+    ///
+    /// This is the unified entry point that puts remote API providers and
+    /// local in-process backends in one place:
+    ///
+    /// - **Remote provider** (`OpenAI`, Anthropic, fal.ai, …): pass the
+    ///   [`Model`] and `local = None`. The entry is filed under
+    ///   [`Pool::Remote`], holds no local weights, never participates in
+    ///   eviction, and never counts against a memory budget — pass
+    ///   `memory_estimate_bytes = 0`.
+    /// - **Local backend that is also a chat model** (mistral.rs, llama.cpp,
+    ///   candle): pass the same instance as both `model` and
+    ///   `Some(local)` (concrete providers implement both traits, so the two
+    ///   `Arc`s coerce from one value). The pool is derived from
+    ///   `local.device()` and the entry participates in memory budgeting and
+    ///   LRU eviction exactly like [`Self::register`].
+    ///
+    /// `complete`/`stream` auto-load a local entry on first use via
+    /// [`Self::ensure_loaded`]; for remote entries that load is a no-op.
+    pub async fn register_provider(
+        &self,
+        id: &str,
+        model: Arc<dyn Model>,
+        local: Option<Arc<dyn LocalModel>>,
+        memory_estimate_bytes: u64,
+    ) {
+        let pool: Pool = match &local {
+            Some(l) => l.device().into(),
+            None => Pool::Remote,
+        };
+        let mut state = self.state.lock().await;
+        state.insert(
+            id.to_owned(),
+            RegisteredModel {
+                model: Some(model),
+                local,
+                memory_estimate_bytes,
+                pool,
+                loaded: false,
+                last_used: None,
+                adapters: HashMap::new(),
+            },
+        );
+    }
+
+    /// Fetch the chat interface registered under `id` to use or compose
+    /// directly (e.g. wrap several in a
+    /// [`FallbackModel`](blazen_llm::fallback::FallbackModel)).
+    ///
+    /// Returns `None` if `id` is not registered or was registered for
+    /// lifecycle only (no chat [`Model`]).
+    pub async fn get(&self, id: &str) -> Option<Arc<dyn Model>> {
+        let state = self.state.lock().await;
+        state.get(id).and_then(|e| e.model.clone())
+    }
+
+    /// Run a chat completion against the provider registered under `id`.
+    ///
+    /// Local entries are auto-loaded on first use (subject to the pool
+    /// budget); remote entries dispatch straight through. The entry's
+    /// last-used timestamp is bumped so LRU eviction sees the access.
+    ///
+    /// # Errors
+    /// - [`BlazenError::validation`] if `id` is not registered.
+    /// - [`BlazenError::unsupported`] if `id` was registered for lifecycle
+    ///   only (no chat [`Model`] — see [`Self::register_provider`]).
+    /// - Any error from [`Self::ensure_loaded`] (local budget / load) or the
+    ///   provider's own [`Model::complete`].
+    pub async fn complete(
+        &self,
+        id: &str,
+        request: ModelRequest,
+    ) -> Result<ModelResponse, BlazenError> {
+        let model = self.dispatch_target(id).await?;
+        self.ensure_loaded(id).await?;
+        self.touch(id).await;
+        model.complete(request).await
+    }
+
+    /// Streaming counterpart to [`Self::complete`].
+    ///
+    /// # Errors
+    /// Same surface as [`Self::complete`], plus any error from the
+    /// provider's own [`Model::stream`].
+    pub async fn stream(
+        &self,
+        id: &str,
+        request: ModelRequest,
+    ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
+    {
+        let model = self.dispatch_target(id).await?;
+        self.ensure_loaded(id).await?;
+        self.touch(id).await;
+        model.stream(request).await
+    }
+
+    /// Resolve `id` to its chat dispatch target, erroring if it is unknown
+    /// or lifecycle-only.
+    async fn dispatch_target(&self, id: &str) -> Result<Arc<dyn Model>, BlazenError> {
+        let state = self.state.lock().await;
+        let entry = state
+            .get(id)
+            .ok_or_else(|| BlazenError::validation(format!("model '{id}' is not registered")))?;
+        entry.model.clone().ok_or_else(|| {
+            BlazenError::unsupported(format!(
+                "model '{id}' is registered for lifecycle/memory management only and does not \
+                 implement the chat Model interface; register it via register_provider with a \
+                 Model to dispatch completions"
+            ))
+        })
+    }
+
+    /// Bump the last-used timestamp for LRU bookkeeping. Silent no-op if the
+    /// entry vanished between dispatch and here.
+    async fn touch(&self, id: &str) {
+        let mut state = self.state.lock().await;
+        if let Some(e) = state.get_mut(id) {
+            e.last_used = Some(Instant::now());
+        }
     }
 
     /// Load a model, evicting LRU models in the same pool if necessary.
@@ -159,6 +324,17 @@ impl ModelManager {
             return Ok(());
         }
 
+        // Remote / dispatch-only entries own no local weights: there is
+        // nothing to load, no budget to charge, and no eviction to run.
+        // Mark them ready so `complete`/`stream` can treat both tiers
+        // uniformly.
+        if entry.local.is_none() {
+            let entry = state.get_mut(id).expect("checked above");
+            entry.loaded = true;
+            entry.last_used = Some(Instant::now());
+            return Ok(());
+        }
+
         let needed = entry.memory_estimate_bytes;
         let pool = entry.pool;
         let budget = self.pool_budgets.get(&pool).copied().unwrap_or(0);
@@ -173,7 +349,9 @@ impl ModelManager {
         while used + needed > budget {
             let lru_id = state
                 .iter()
-                .filter(|(k, v)| v.loaded && v.pool == pool && k.as_str() != id)
+                .filter(|(k, v)| {
+                    v.loaded && v.local.is_some() && v.pool == pool && k.as_str() != id
+                })
                 .min_by_key(|(_, v)| v.last_used)
                 .map(|(k, _)| k.clone());
 
@@ -187,8 +365,9 @@ impl ModelManager {
             let lru_model = state
                 .get(&lru_id)
                 .expect("lru_id came from iteration")
-                .model
-                .clone();
+                .local
+                .clone()
+                .expect("LRU candidates are filtered to local entries");
             drop(state);
             lru_model.unload().await?;
             state = self.state.lock().await;
@@ -199,7 +378,12 @@ impl ModelManager {
             used = Self::used_bytes_in_pool(&state, pool);
         }
 
-        let model = state.get(id).expect("checked at top").model.clone();
+        let model = state
+            .get(id)
+            .expect("checked at top")
+            .local
+            .clone()
+            .expect("local presence checked above");
         drop(state);
         model.load().await?;
         let mut state = self.state.lock().await;
@@ -223,7 +407,16 @@ impl ModelManager {
         if !entry.loaded {
             return Ok(());
         }
-        let model = entry.model.clone();
+        // Remote / dispatch-only entries have no weights to free; just clear
+        // the ready flag.
+        let Some(model) = entry.local.clone() else {
+            let mut state = state;
+            if let Some(e) = state.get_mut(id) {
+                e.loaded = false;
+                e.last_used = None;
+            }
+            return Ok(());
+        };
         drop(state);
         model.unload().await?;
         let mut state = self.state.lock().await;
@@ -235,9 +428,14 @@ impl ModelManager {
     }
 
     /// Check if a model is currently loaded.
+    ///
+    /// Remote / dispatch-only entries report `true` — they own no local
+    /// weights and are always ready to dispatch.
     pub async fn is_loaded(&self, id: &str) -> bool {
         let state = self.state.lock().await;
-        state.get(id).is_some_and(|e| e.loaded)
+        state
+            .get(id)
+            .is_some_and(|e| e.loaded || e.local.is_none())
     }
 
     /// Ensure a model is loaded. Equivalent to [`Self::load`].
@@ -338,7 +536,11 @@ impl ModelManager {
             let pool = entry.pool;
             let budget = self.pool_budgets.get(&pool).copied().unwrap_or(0);
             let used = Self::used_bytes_in_pool(&state, pool);
-            let model = entry.model.clone();
+            let model = entry.local.clone().ok_or_else(|| {
+                BlazenError::unsupported(format!(
+                    "model '{model_id}' is a remote provider and does not support LoRA adapters"
+                ))
+            })?;
             let on_disk = sum_adapter_bytes(adapter_dir)?;
             (model, pool, used, budget, on_disk)
         };
@@ -391,7 +593,12 @@ impl ModelManager {
                     "adapter '{adapter_id}' is not mounted on model '{model_id}'",
                 ))
             })?;
-            (entry.model.clone(), status)
+            let model = entry.local.clone().ok_or_else(|| {
+                BlazenError::unsupported(format!(
+                    "model '{model_id}' is a remote provider and does not support LoRA adapters"
+                ))
+            })?;
+            (model, status)
         };
 
         let handle = AdapterHandle {
@@ -1180,6 +1387,127 @@ mod tests {
         }
     }
 
+    /// Build a minimal canned [`ModelResponse`] for mock providers.
+    fn mock_response(model: &str, content: &str) -> ModelResponse {
+        ModelResponse {
+            content: Some(content.to_owned()),
+            tool_calls: Vec::new(),
+            reasoning: None,
+            citations: Vec::new(),
+            artifacts: Vec::new(),
+            usage: None,
+            model: model.to_owned(),
+            finish_reason: Some("stop".to_owned()),
+            cost: None,
+            timing: None,
+            images: Vec::new(),
+            audio: Vec::new(),
+            videos: Vec::new(),
+            metadata: serde_json::Value::Null,
+        }
+    }
+
+    /// A remote-style provider: implements [`Model`] only (no local weights).
+    struct MockRemoteModel {
+        id: String,
+    }
+
+    impl MockRemoteModel {
+        fn new(id: &str) -> Self {
+            Self { id: id.to_owned() }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Model for MockRemoteModel {
+        fn model_id(&self) -> &str {
+            &self.id
+        }
+        async fn complete(&self, _request: ModelRequest) -> Result<ModelResponse, BlazenError> {
+            Ok(mock_response(&self.id, &format!("echo from {}", self.id)))
+        }
+        async fn stream(
+            &self,
+            _request: ModelRequest,
+        ) -> Result<
+            Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>,
+            BlazenError,
+        > {
+            let chunk = StreamChunk {
+                delta: Some(format!("echo from {}", self.id)),
+                tool_calls: Vec::new(),
+                finish_reason: Some("stop".to_owned()),
+                reasoning_delta: None,
+                citations: Vec::new(),
+                artifacts: Vec::new(),
+            };
+            Ok(Box::pin(futures_util::stream::iter(vec![Ok(chunk)])))
+        }
+    }
+
+    /// A local backend that is *both* a [`Model`] and a [`LocalModel`] — the
+    /// mistral.rs / llama.cpp shape. Used to prove a local entry registered
+    /// via [`ModelManager::register_provider`] is both dispatchable and
+    /// budget-managed.
+    struct MockLocalLlm {
+        id: String,
+        loaded: StdMutex<bool>,
+        device: Device,
+    }
+
+    impl MockLocalLlm {
+        fn new(id: &str, device: Device) -> Self {
+            Self {
+                id: id.to_owned(),
+                loaded: StdMutex::new(false),
+                device,
+            }
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl Model for MockLocalLlm {
+        fn model_id(&self) -> &str {
+            &self.id
+        }
+        async fn complete(&self, _request: ModelRequest) -> Result<ModelResponse, BlazenError> {
+            if !*self.loaded.lock().unwrap() {
+                return Err(BlazenError::validation(format!(
+                    "mock local llm '{}' completed before being loaded",
+                    self.id
+                )));
+            }
+            Ok(mock_response(&self.id, &format!("local {}", self.id)))
+        }
+        async fn stream(
+            &self,
+            _request: ModelRequest,
+        ) -> Result<
+            Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>,
+            BlazenError,
+        > {
+            Ok(Box::pin(futures_util::stream::iter(Vec::new())))
+        }
+    }
+
+    #[async_trait::async_trait]
+    impl LocalModel for MockLocalLlm {
+        async fn load(&self) -> Result<(), BlazenError> {
+            *self.loaded.lock().unwrap() = true;
+            Ok(())
+        }
+        async fn unload(&self) -> Result<(), BlazenError> {
+            *self.loaded.lock().unwrap() = false;
+            Ok(())
+        }
+        async fn is_loaded(&self) -> bool {
+            *self.loaded.lock().unwrap()
+        }
+        fn device(&self) -> Device {
+            self.device.clone()
+        }
+    }
+
     fn make_peft_adapter_dir(bytes_a: usize, bytes_b: usize) -> tempfile::TempDir {
         let dir = tempfile::tempdir().expect("tempdir");
         std::fs::write(
@@ -1535,6 +1863,152 @@ mod tests {
         assert!(
             msg.contains("not registered"),
             "expected 'not registered' in error, got: {msg}"
+        );
+    }
+
+    // -- unified provider registry (remote + local dispatch) ----------------
+
+    #[tokio::test]
+    async fn test_register_remote_provider_and_complete_by_name() {
+        use futures_util::StreamExt;
+
+        let mgr = cpu_gpu_mgr(24, 24);
+        mgr.register_provider("fast", Arc::new(MockRemoteModel::new("fast")), None, 0)
+            .await;
+
+        // Dispatch by name.
+        let resp = mgr
+            .complete("fast", ModelRequest::new(Vec::new()))
+            .await
+            .expect("remote complete by name should succeed");
+        assert_eq!(resp.content.as_deref(), Some("echo from fast"));
+        assert_eq!(resp.model, "fast");
+
+        // Streaming counterpart.
+        let mut stream = mgr
+            .stream("fast", ModelRequest::new(Vec::new()))
+            .await
+            .expect("remote stream by name should succeed");
+        let first = stream.next().await.expect("one chunk").expect("ok chunk");
+        assert_eq!(first.delta.as_deref(), Some("echo from fast"));
+
+        // The instance can be fetched back out to use / compose directly.
+        let handle = mgr.get("fast").await.expect("get returns the model");
+        assert_eq!(handle.model_id(), "fast");
+
+        // Remote providers are always "ready" and never count against a budget.
+        assert!(mgr.is_loaded("fast").await);
+        assert_eq!(mgr.used_bytes(Pool::Remote).await, 0);
+        assert_eq!(mgr.used_bytes(Pool::Cpu).await, 0);
+
+        let status = mgr.status().await;
+        let fast = status.iter().find(|s| s.id == "fast").expect("fast status");
+        assert_eq!(fast.pool, Pool::Remote);
+        assert_eq!(fast.memory_estimate_bytes, 0);
+    }
+
+    #[tokio::test]
+    async fn test_remote_provider_does_not_evict_or_charge_local_pool() {
+        // Pool fits exactly one 16 GB local model.
+        let mgr = cpu_gpu_mgr(16, 0);
+        let local = Arc::new(MockLocalModel::new(Device::Cpu));
+        mgr.register("local", local.clone(), 16 * GB).await;
+        mgr.load("local").await.unwrap();
+
+        // Registering and using a remote provider must not disturb the CPU
+        // pool or evict the resident local model.
+        mgr.register_provider("remote", Arc::new(MockRemoteModel::new("remote")), None, 0)
+            .await;
+        let resp = mgr
+            .complete("remote", ModelRequest::new(Vec::new()))
+            .await
+            .expect("remote complete should succeed even with a full local pool");
+        assert_eq!(resp.content.as_deref(), Some("echo from remote"));
+
+        assert!(
+            mgr.is_loaded("local").await,
+            "remote dispatch must not evict the resident local model"
+        );
+        assert_eq!(mgr.used_bytes(Pool::Cpu).await, 16 * GB);
+    }
+
+    #[tokio::test]
+    async fn test_complete_on_lifecycle_only_entry_is_unsupported() {
+        let mgr = cpu_gpu_mgr(24, 0);
+        // Registered via the lifecycle-only path: no chat Model attached.
+        let media = Arc::new(MockLocalModel::new(Device::Cpu));
+        mgr.register("media", media, GB).await;
+
+        let err = mgr
+            .complete("media", ModelRequest::new(Vec::new()))
+            .await
+            .expect_err("completing a lifecycle-only entry must fail");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("does not implement the chat Model interface"),
+            "expected an unsupported-dispatch error, got: {msg}"
+        );
+
+        // get() returns None for lifecycle-only entries.
+        assert!(mgr.get("media").await.is_none());
+    }
+
+    #[tokio::test]
+    async fn test_complete_on_unknown_id_is_validation_error() {
+        let mgr = cpu_gpu_mgr(24, 0);
+        let err = mgr
+            .complete("ghost", ModelRequest::new(Vec::new()))
+            .await
+            .expect_err("completing an unregistered id must fail");
+        assert!(
+            matches!(err, BlazenError::Validation { .. }),
+            "expected BlazenError::Validation, got {err:?}"
+        );
+    }
+
+    #[tokio::test]
+    async fn test_local_llm_via_register_provider_auto_loads_and_charges_pool() {
+        let mgr = cpu_gpu_mgr(0, 24);
+        let llm = Arc::new(MockLocalLlm::new("llama", Device::Cuda(0)));
+        // Same instance is both the chat Model and the LocalModel.
+        mgr.register_provider("llama", llm.clone(), Some(llm.clone()), 8 * GB)
+            .await;
+
+        // Not loaded yet — pool is empty.
+        assert!(!mgr.is_loaded("llama").await);
+        assert_eq!(mgr.used_bytes(Pool::Gpu(0)).await, 0);
+
+        // complete() auto-loads the local weights, then dispatches.
+        let resp = mgr
+            .complete("llama", ModelRequest::new(Vec::new()))
+            .await
+            .expect("local llm complete should auto-load and succeed");
+        assert_eq!(resp.content.as_deref(), Some("local llama"));
+
+        assert!(mgr.is_loaded("llama").await);
+        assert_eq!(mgr.used_bytes(Pool::Gpu(0)).await, 8 * GB);
+
+        // Unload frees the pool and the dispatch handle remains fetchable.
+        mgr.unload("llama").await.unwrap();
+        assert!(!mgr.is_loaded("llama").await);
+        assert_eq!(mgr.used_bytes(Pool::Gpu(0)).await, 0);
+        assert!(mgr.get("llama").await.is_some());
+    }
+
+    #[tokio::test]
+    async fn test_remote_provider_rejects_adapter_mount() {
+        let mgr = cpu_gpu_mgr(24, 0);
+        mgr.register_provider("remote", Arc::new(MockRemoteModel::new("remote")), None, 0)
+            .await;
+        let dir = make_peft_adapter_dir(1024, 256);
+        let err = mgr
+            .load_adapter("remote", dir.path(), AdapterOptions::new("a1"))
+            .await
+            .expect_err("mounting an adapter on a remote provider must fail");
+        let msg = err.to_string();
+        assert!(
+            msg.contains("remote provider") && msg.contains("does not support LoRA adapters"),
+            "expected a remote-adapter-unsupported error, got: {msg}"
         );
     }
 }

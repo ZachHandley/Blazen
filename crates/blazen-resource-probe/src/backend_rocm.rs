@@ -15,9 +15,13 @@
 //! }
 //! ```
 
-use crate::types::{GpuInfo, GpuVendor, ProbeError};
+use crate::types::{GpuInfo, ProbeError};
+#[cfg(target_os = "linux")]
+use crate::types::GpuVendor;
+#[cfg(target_os = "linux")]
 use std::collections::BTreeMap;
 
+#[cfg(target_os = "linux")]
 const BYTES_PER_MB: u64 = 1024 * 1024;
 
 /// Probe AMD GPUs via `rocm-smi --json`.

@@ -50,8 +50,7 @@ pub async fn probe() -> Result<Vec<GpuInfo>, ProbeError> {
         let name = entry
             .get("sppci_model")
             .and_then(|v| v.as_str())
-            .map(str::to_string)
-            .unwrap_or_else(|| format!("Metal #{idx}"));
+            .map_or_else(|| format!("Metal #{idx}"), str::to_string);
 
         // sppci_vendor on Apple Silicon is "sppci_vendor_Apple"; Intel
         // Macs see "Intel", "ATI" (AMD), or "NVIDIA".
@@ -87,7 +86,7 @@ pub async fn probe() -> Result<Vec<GpuInfo>, ProbeError> {
 
         out.push(GpuInfo {
             vendor,
-            index: idx as u32,
+            index: u32::try_from(idx).unwrap_or(u32::MAX),
             name,
             uuid: None,
             total_vram_mb,

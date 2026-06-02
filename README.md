@@ -347,46 +347,76 @@ let deepseek = OpenAiCompatProvider::deepseek("...");
 
 ### Python
 
+Construct a provider directly and call `.complete()`:
+
 ```python
-from blazen import Model, ChatMessage, Role, ModelResponse, ProviderOptions
+from blazen import OpenAiProvider, ProviderOptions, ChatMessage
 
-model = Model.openai(options=ProviderOptions(api_key="sk-..."))
-# or: Model.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
-# or: Model.groq(options=ProviderOptions(api_key="gsk-..."))
-# or: Model.openrouter(options=ProviderOptions(api_key="sk-or-..."))
-# or with env vars: Model.openai()
+model = OpenAiProvider(options=ProviderOptions(api_key="sk-..."))
+# also: AnthropicProvider, GroqProvider, OpenRouterProvider, FalProvider, ...
+# omit options to read the key from the provider's env var (OPENAI_API_KEY, ...)
 
-response: ModelResponse = await model.complete([
+resp = await model.complete([
     ChatMessage.system("You are helpful."),
     ChatMessage.user("What is the meaning of life?"),
 ])
-print(response.content)        # typed attribute access
-print(response.model)          # model name used
-print(response.usage)          # TokenUsage with .prompt_tokens, .completion_tokens, .total_tokens
-print(response.finish_reason)
+print(resp.content)        # typed attribute access
+print(resp.model)          # model name used
+print(resp.usage)          # TokenUsage: .prompt_tokens, .completion_tokens, .total_tokens
+print(resp.finish_reason)
 ```
+
+**Scaling up — `ModelManager`.** Register many providers (local *and* remote) under names and dispatch by name:
+
+```python
+from blazen import ModelManager, FalProvider, FalOptions, AnthropicProvider, ProviderOptions, ChatMessage
+
+mgr = ModelManager()
+await mgr.register("fast", FalProvider(options=FalOptions(api_key="fal-...")))
+await mgr.register("smart", AnthropicProvider(options=ProviderOptions(api_key="sk-ant-...")))
+
+resp = await mgr.complete("fast", [ChatMessage.user("Hello")])
+smart = await mgr.get("smart")          # fetch the instance to pass around / compose
+```
+
+> Shorthand: `Model.openai(...)`, `Model.anthropic(...)`, `Model.fal(...)`, etc. are optional static factories that build the same providers — use whichever reads better.
 
 ### TypeScript
 
+Construct a provider directly and call `.complete()`:
+
 ```typescript
-import { Model, ChatMessage, Role } from "blazen";
+import { OpenAiProvider, ChatMessage } from "blazen";
 import type { ModelResponse } from "blazen";
 
-const model = Model.openai({ apiKey: "sk-..." });
-// or: Model.anthropic({ apiKey: "sk-ant-..." })
-// or: Model.groq({ apiKey: "gsk-..." })
-// or: Model.openrouter({ apiKey: "sk-or-..." })
-// or with env vars: Model.openai()
+const model = OpenAiProvider.create({ apiKey: "sk-..." });
+// also: AnthropicProvider, GroqProvider, OpenRouterProvider, FalProvider, ...
+// omit the arg to read the key from the provider's env var (OPENAI_API_KEY, ...)
 
-const response: ModelResponse = await model.complete([
+const resp: ModelResponse = await model.complete([
   ChatMessage.system("You are helpful."),
   ChatMessage.user("What is the meaning of life?"),
 ]);
-console.log(response.content);      // string
-console.log(response.model);        // model name used
-console.log(response.usage);        // { promptTokens, completionTokens, totalTokens }
-console.log(response.finishReason);
+console.log(resp.content);      // string
+console.log(resp.model);        // model name used
+console.log(resp.usage);        // { promptTokens, completionTokens, totalTokens }
+console.log(resp.finishReason);
 ```
+
+**Scaling up — `ModelManager`.** Register many providers (local *and* remote) under names and dispatch by name:
+
+```typescript
+import { ModelManager, FalProvider, AnthropicProvider, ChatMessage } from "blazen";
+
+const mgr = new ModelManager();
+await mgr.register("fast", FalProvider.create({ apiKey: "fal-..." }));
+await mgr.register("smart", AnthropicProvider.create({ apiKey: "sk-ant-..." }));
+
+const resp = await mgr.complete("fast", [ChatMessage.user("Hello")]);
+const smart = await mgr.get("smart");   // fetch the instance to pass around / compose
+```
+
+> Shorthand: `Model.openai(...)`, `Model.anthropic(...)`, `Model.fal(...)`, etc. are optional static factories that build the same providers — use whichever reads better.
 
 ## Multimodal Tool I/O
 

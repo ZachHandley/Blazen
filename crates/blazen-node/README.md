@@ -130,20 +130,20 @@ console.log(result.data); // { status: "done" }
 
 ## LLM Integration
 
-`Model` provides a unified interface to 15 LLM providers. Create a model instance with a static factory method and call `complete()` or `completeWithOptions()`. All messages and responses are fully typed.
+Blazen exposes a unified interface across 15+ LLM providers. All messages and responses are fully typed.
 
-### ChatMessage and Role
+### Tier 1: construct a provider, call `complete()`
 
-Build messages with the `ChatMessage` class and `Role` enum:
+Each provider class has a static `create({...})` constructor:
 
 ```typescript
-import { Model, ChatMessage, Role } from "blazen";
+import { OpenAiProvider, ChatMessage } from "blazen";
 import type { ModelResponse, ToolCall, TokenUsage } from "blazen";
 
-const model = Model.openrouter({ apiKey: process.env.OPENROUTER_API_KEY! });
-// or rely on the OPENROUTER_API_KEY env var: Model.openrouter();
+const model = OpenAiProvider.create({ apiKey: "sk-..." });
+// also: AnthropicProvider, GroqProvider, OpenRouterProvider, FalProvider, ...
+// omit the arg to read the key from the provider's env var (OPENAI_API_KEY, ...)
 
-// Using static factory methods (recommended)
 const response: ModelResponse = await model.complete([
   ChatMessage.system("You are helpful."),
   ChatMessage.user("What is 2+2?"),
@@ -156,7 +156,26 @@ console.log(response.finishReason);  // "stop", "tool_calls", etc.
 console.log(response.toolCalls);     // ToolCall[] | undefined
 ```
 
-You can also construct messages with the `ChatMessage` constructor:
+### Tier 2: register many providers in one `ModelManager`
+
+Scaling past a single model? Register providers — **local and remote** — under names in one manager and dispatch by name. Fetch an instance back with `get()` to pass around or compose:
+
+```typescript
+import { ModelManager, FalProvider, AnthropicProvider, ChatMessage } from "blazen";
+
+const mgr = new ModelManager();
+await mgr.register("fast", FalProvider.create({ apiKey: "fal-..." }));
+await mgr.register("smart", AnthropicProvider.create({ apiKey: "sk-ant-..." }));
+
+const response = await mgr.complete("fast", [ChatMessage.user("What is 2+2?")]);
+const smart = await mgr.get("smart");   // the AnthropicProvider, to call or compose directly
+```
+
+> Shorthand: `Model.openai(...)`, `Model.anthropic(...)`, `Model.fal(...)`, etc. are optional static factories that build the same providers — use whichever reads better.
+
+### ChatMessage and Role
+
+Build messages with the `ChatMessage` class and `Role` enum. You can also construct messages with the `ChatMessage` constructor:
 
 ```typescript
 const msg = new ChatMessage({ role: Role.User, content: "Hello" });

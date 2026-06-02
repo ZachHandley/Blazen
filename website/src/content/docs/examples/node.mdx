@@ -66,10 +66,10 @@ npx tsx examples/branching_workflow.ts
 Multi-step RAG pipeline using context for shared state between steps. Uses typed `ChatMessage` and `ModelResponse`:
 
 ```javascript
-import { Model, ChatMessage } from "blazen";
+import { OpenAiProvider, ChatMessage } from "blazen";
 
-// Reads OPENAI_API_KEY from the environment by default.
-const model = Model.openai();
+// Construct the provider directly. With no apiKey, it reads OPENAI_API_KEY.
+const model = OpenAiProvider.create({ apiKey: "sk-..." });
 const response = await model.complete([
   ChatMessage.system("Answer based on the provided documents."),
   ChatMessage.user(query),
@@ -239,15 +239,26 @@ npx tsx examples/custom_memory_backend.ts
 
 ## Example 9: ModelManager with Memory Budgets
 
-Track memory across multiple local models. Each model is charged to a pool (CPU RAM vs GPU VRAM) based on its device; LRU eviction is per-pool, so a GPU LLM never evicts a CPU embedder. Register each model with an estimated footprint; when loading a new one would exceed its pool's budget, the least-recently-used model **within the same pool** is automatically unloaded.
+`ModelManager` is the **unified registry** — register local models *and* remote
+providers by name, then dispatch with `complete(id, messages)` (also
+`stream(id, messages, onChunk)` and `get(id)`). Each local model is charged to a
+pool (CPU RAM vs GPU VRAM) based on its device; LRU eviction is per-pool, so a
+GPU LLM never evicts a CPU embedder. Register each local model with an estimated
+footprint; when loading a new one would exceed its pool's budget, the
+least-recently-used model **within the same pool** is automatically unloaded.
+Remote providers own no local weights, so they dispatch straight through and
+never count against a budget.
 
 > **Note:** `poolBudgets` values, `memoryEstimateBytes`, `usedBytes`, `availableBytes`, and the `memoryEstimateBytes` field on `ModelStatus` are JS `bigint`s (since the Rust side uses `u64` and `>4 GiB` budgets used to silently truncate). `cpuRamGb` / `gpuVramGb` are still regular `number`s. `pool` is a plain string (`"cpu"`, `"gpu:0"`, ...).
 
 ```typescript
-import { Model, ModelManager } from "blazen";
+import { Model, ModelManager, OpenAiProvider, ChatMessage } from "blazen";
 
 // 64 GB host RAM pool + 24 GB GPU pool (GPU-typical for a consumer card).
 const manager = new ModelManager({ cpuRamGb: 64, gpuVramGb: 24 });
+
+// Remote provider: dispatch-only, no footprint (pass 0n).
+await manager.register("gpt", OpenAiProvider.create({ apiKey: "sk-..." }), 0n);
 
 const llama8b = Model.mistralrs({
   modelId: "meta-llama/Llama-3.1-8B-Instruct",
@@ -396,14 +407,14 @@ Blazen exports a typed error hierarchy so you can branch on failure modes with `
 
 ```typescript
 import {
-  Model,
+  OpenAiProvider,
   ChatMessage,
   RateLimitError,
   ProviderError,
   BlazenError,
 } from "blazen";
 
-const model = Model.openai();
+const model = OpenAiProvider.create({ apiKey: "sk-..." });
 try {
   const response = await model.complete([ChatMessage.user("Hello")]);
   console.log(response.content);

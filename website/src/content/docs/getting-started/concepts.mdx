@@ -39,3 +39,7 @@ Steps can publish non-routing events to an external stream via `ctx.write_event_
 ## Pipelines
 
 Pipelines compose multiple workflows into sequential or parallel stages, where each stage's output feeds into the next stage's input. This allows you to break complex processes into discrete, reusable workflows that can be tested and reasoned about independently. Pipelines handle the orchestration of data flow between stages automatically.
+
+## Models & Providers
+
+Steps that call an LLM do so through a **provider** (OpenAI, Anthropic, fal.ai, local backends, …) — construct one and call `complete()`, or register many in a `ModelManager` and dispatch by name. See [Models & Providers](/getting-started/providers/) for the canonical pattern.

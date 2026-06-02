@@ -308,11 +308,101 @@ store = CallbackFieldStore(
 
 ---
 
+## Constructing a provider — direct
+
+The canonical way to talk to a provider is to construct its class directly and
+call `complete()` (or `stream()`) on it. Each provider class wraps the same Rust
+provider as the matching `Model.x()` shorthand, but the class form is the
+preferred surface: it is explicit about which provider you are using and exposes
+that provider's full capability set (e.g. `OpenAiProvider.text_to_speech`,
+`FalProvider.generate_image`).
+
+API keys are resolved from `ProviderOptions(api_key=...)` (or `FalOptions`,
+`AzureOptions`, `BedrockOptions` for those providers) when passed explicitly, or
+from the provider's standard environment variable (e.g. `OPENAI_API_KEY`,
+`ANTHROPIC_API_KEY`, `FAL_KEY`) when `options` is omitted.
+
+```python
+from blazen import OpenAiProvider, ProviderOptions, ChatMessage, ModelOptions
+
+# Read key from OPENAI_API_KEY env var
+openai = OpenAiProvider()
+
+# Pass an explicit key
+openai = OpenAiProvider(options=ProviderOptions(api_key="sk-..."))
+
+response = await openai.complete([
+    ChatMessage.system("You are a helpful assistant."),
+    ChatMessage.user("What is 2 + 2?"),
+])
+print(response.content)  # "4"
+
+# Sampling/tool/response-format options:
+response = await openai.complete(
+    [ChatMessage.user("Write a haiku about Rust.")],
+    ModelOptions(temperature=0.7, max_tokens=100),
+)
+```
+
+Every LLM provider class exposes the same two methods:
+
+```python
+async def complete(
+    self,
+    messages: list[ChatMessage],
+    options: ModelOptions | None = None,
+) -> ModelResponse: ...
+
+def stream(
+    self,
+    messages: list[ChatMessage],
+    options: ModelOptions | None = None,
+) -> CompletionStream: ...   # async iterator — use `async for`
+```
+
+`stream()` returns a `CompletionStream` you iterate with `async for`:
+
+```python
+async for chunk in openai.stream([ChatMessage.user("Tell me a story")]):
+    if chunk.delta:
+        print(chunk.delta, end="")
+```
+
+**Provider classes**
+
+Construct any of these directly with `Provider(options=...)`:
+
+| Class | Options type | Direct construction |
+|---|---|---|
+| `OpenAiProvider` | `ProviderOptions` | `OpenAiProvider(options=ProviderOptions(...))` |
+| `AnthropicProvider` | `ProviderOptions` | `AnthropicProvider(options=ProviderOptions(...))` |
+| `GeminiProvider` | `ProviderOptions` | `GeminiProvider(options=ProviderOptions(...))` |
+| `AzureOpenAiProvider` | `AzureOptions` | `AzureOpenAiProvider(options=AzureOptions(...))` |
+| `OpenRouterProvider` | `ProviderOptions` | `OpenRouterProvider(options=ProviderOptions(...))` |
+| `GroqProvider` | `ProviderOptions` | `GroqProvider(options=ProviderOptions(...))` |
+| `TogetherProvider` | `ProviderOptions` | `TogetherProvider(options=ProviderOptions(...))` |
+| `MistralProvider` | `ProviderOptions` | `MistralProvider(options=ProviderOptions(...))` |
+| `DeepSeekProvider` | `ProviderOptions` | `DeepSeekProvider(options=ProviderOptions(...))` |
+| `FireworksProvider` | `ProviderOptions` | `FireworksProvider(options=ProviderOptions(...))` |
+| `PerplexityProvider` | `ProviderOptions` | `PerplexityProvider(options=ProviderOptions(...))` |
+| `XaiProvider` | `ProviderOptions` | `XaiProvider(options=ProviderOptions(...))` |
+| `CohereProvider` | `ProviderOptions` | `CohereProvider(options=ProviderOptions(...))` |
+| `BedrockProvider` | `BedrockOptions` | `BedrockProvider(options=BedrockOptions(...))` |
+| `FalProvider` | `FalOptions` | `FalProvider(options=FalOptions(...))` |
+
+The `OpenAiProvider` and `FalProvider` classes carry extra capabilities beyond
+chat — `OpenAiProvider.text_to_speech(...)`, and the full `FalProvider`
+image/video/audio/3D surface. See [media generation](/guides/media-generation/)
+for those.
+
 ## Model
 
-Use static constructor methods to create a model for a specific provider, then call `complete()` or `stream()` to generate responses.
-
-API keys are resolved from `ProviderOptions(api_key=...)` when passed explicitly, or from the provider's standard environment variable (e.g. `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`) when `options` is omitted.
+`Model` is the generic, provider-agnostic chat handle. Its static
+`Model.x()` factories are **shorthand constructors** that build the same
+underlying provider as the classes above; reach for them when you want a uniform
+`Model` type (e.g. to mix providers in `Model.with_fallback([...])` or to register
+remote providers in a [`ModelManager`](#modelmanager)). For single-provider code,
+prefer the [direct provider class](#constructing-a-provider--direct).
 
 ```python
 from blazen import Model, ProviderOptions
@@ -329,7 +419,11 @@ model = Model.openrouter(
 )
 ```
 
-**Provider constructors**
+**Shorthand constructors (`Model.x()`)**
+
+Each returns a generic `Model`. Direct construction of the provider class is
+preferred for single-provider code; use these when you want the uniform `Model`
+type.
 
 | Constructor | Signature |
 |---|---|
@@ -1633,9 +1727,51 @@ class PostgresBackend(MemoryBackend):
 
 ## ModelManager
 
-Per-pool memory budget-aware model manager with LRU eviction. Tracks registered local models and their estimated memory footprint (host RAM if the model runs on CPU, GPU VRAM otherwise) in distinct pools -- one for CPU RAM and one per GPU device. When loading a model that would exceed its pool's budget, the least-recently-used loaded model **in the same pool** is unloaded first; models in different pools never evict each other.
+A `ModelManager` is a **named registry for providers** — local *and* remote — that
+you dispatch against by id. Register a provider once under a string id, then call
+`complete(id, ...)` / `stream(id, ...)` from anywhere, or fetch it back with
+`get(id)` to use or compose it directly. This is the natural way to scale a single
+provider up to a fleet: one place that holds "the cheap model", "the smart model",
+"the local model", each addressable by name.
 
-`ModelManager` is a **memory budget bookkeeper**, not a performance scheduler. It answers "will this fit?" -- not "will this run fast?". Whether a 70B model loaded on CPU is *useful* at 1-3 tok/s is a workload-choice question the manager intentionally does not answer.
+```python
+from blazen import ModelManager, Model, FalProvider, ChatMessage
+
+manager = ModelManager()
+
+# Remote providers register as dispatch-only entries (no memory budget).
+await manager.register("fast", Model.openai())
+await manager.register("smart", Model.anthropic())
+await manager.register("image", FalProvider())
+
+# Dispatch by name from anywhere.
+resp = await manager.complete("smart", [ChatMessage.user("Explain CRDTs.")])
+print(resp.content)
+
+# Stream by name (callback per chunk).
+def on_chunk(chunk):
+    if chunk.delta:
+        print(chunk.delta, end="")
+
+await manager.stream("fast", [ChatMessage.user("Count to 5")], on_chunk)
+
+# Fetch a registered provider to use or compose directly.
+smart = await manager.get("smart")
+fallback = Model.with_fallback([await manager.get("fast"), smart])
+```
+
+The same registry is also a **per-pool VRAM/RAM budgeter for local weights**: when
+you register a *local* backend (`Model.mistralrs(...)`, a `LlamaCppProvider` /
+`CandleLlmProvider`, or a Hugging Face repo via `load_from_hf`), the manager
+tracks its memory footprint
+per pool (host RAM, or per-GPU VRAM) and applies LRU eviction within a pool when a
+load would exceed the budget. Remote providers own no local weights, so they never
+count against a budget. Models in different pools never evict each other.
+
+`ModelManager` is a **memory budget bookkeeper**, not a performance scheduler. It
+answers "will this fit?" -- not "will this run fast?". Whether a 70B model loaded on
+CPU is *useful* at 1-3 tok/s is a workload-choice question the manager intentionally
+does not answer.
 
 ### Constructor
 
@@ -1664,9 +1800,19 @@ manager = ModelManager()
 
 ### Methods
 
+**Registry / dispatch** — the primary surface:
+
 | Method | Signature | Description |
 |---|---|---|
-| `register` | `await manager.register(id, model, memory_estimate_bytes=...)` | Register a model with its estimated memory footprint. Memory is charged to the pool returned by `model.device()`. Starts unloaded. |
+| `register` | `await manager.register(id, model, *, memory_estimate_bytes=None)` | Register a provider under `id`. Remote providers (`Model.openai()`, `FalProvider(...)`, …) register as dispatch-only entries and never count against a budget; local backends additionally participate in load/unload + per-pool LRU eviction, with `memory_estimate_bytes` reporting their footprint. Duck-typed objects with `load`/`unload` are registered for lifecycle bookkeeping only (not dispatchable). |
+| `complete` | `await manager.complete(id, messages, *, options=None) -> ModelResponse` | Run a chat completion against the provider registered under `id`. Local entries auto-load on first use (subject to budget); remote entries dispatch straight through. Raises `ValueError` if `id` is unknown, or if it was registered for lifecycle only. |
+| `stream` | `await manager.stream(id, messages, on_chunk, *, options=None)` | Stream a chat completion against `id`, invoking `on_chunk` once per `StreamChunk`. For `async for` iteration, fetch the provider with `get(id)` and stream on it directly. |
+| `get` | `await manager.get(id) -> Model \| None` | Fetch the provider registered under `id` to use or compose directly. Returns `None` if `id` is unknown or was registered for lifecycle only. |
+
+**Lifecycle / budgeting** — for local weights:
+
+| Method | Signature | Description |
+|---|---|---|
 | `load` | `await manager.load(id)` | Load a model, evicting LRU same-pool models if needed. |
 | `unload` | `await manager.unload(id)` | Unload a model and free its memory. |
 | `is_loaded` | `await manager.is_loaded(id) -> bool` | Check if a model is currently loaded. |

@@ -1605,6 +1605,15 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_anthropicprovider_to_model()
+		})
+		if checksum != 11487 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_anthropicprovider_to_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_azureopenaiprovider_complete()
 		})
 		if checksum != 25281 {
@@ -1619,6 +1628,15 @@ func uniffiCheckChecksums() {
 		if checksum != 18528 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_azureopenaiprovider_complete_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_azureopenaiprovider_to_model()
+		})
+		if checksum != 2982 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_azureopenaiprovider_to_model: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -1641,6 +1659,15 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_bedrockprovider_to_model()
+		})
+		if checksum != 12484 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_bedrockprovider_to_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_candlellmprovider_complete()
 		})
 		if checksum != 17724 {
@@ -1655,6 +1682,15 @@ func uniffiCheckChecksums() {
 		if checksum != 55435 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_candlellmprovider_complete_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_candlellmprovider_to_model()
+		})
+		if checksum != 60361 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_candlellmprovider_to_model: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -1677,6 +1713,15 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_cohereprovider_to_model()
+		})
+		if checksum != 64525 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_cohereprovider_to_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_deepseekprovider_complete()
 		})
 		if checksum != 48602 {
@@ -1691,6 +1736,15 @@ func uniffiCheckChecksums() {
 		if checksum != 43171 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_deepseekprovider_complete_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_deepseekprovider_to_model()
+		})
+		if checksum != 12086 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_deepseekprovider_to_model: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -1713,6 +1767,15 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_falllmprovider_to_model()
+		})
+		if checksum != 63406 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_falllmprovider_to_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_fireworksprovider_complete()
 		})
 		if checksum != 24689 {
@@ -1727,6 +1790,15 @@ func uniffiCheckChecksums() {
 		if checksum != 36073 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_fireworksprovider_complete_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_fireworksprovider_to_model()
+		})
+		if checksum != 25443 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_fireworksprovider_to_model: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -1749,6 +1821,15 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_geminiprovider_to_model()
+		})
+		if checksum != 12229 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_geminiprovider_to_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_groqprovider_complete()
 		})
 		if checksum != 24549 {
@@ -1763,6 +1844,15 @@ func uniffiCheckChecksums() {
 		if checksum != 24192 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_groqprovider_complete_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_groqprovider_to_model()
+		})
+		if checksum != 37277 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_groqprovider_to_model: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -1785,6 +1875,15 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_llamacppprovider_to_model()
+		})
+		if checksum != 12816 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_llamacppprovider_to_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_lmstudioprovider_complete()
 		})
 		if checksum != 28845 {
@@ -1799,6 +1898,15 @@ func uniffiCheckChecksums() {
 		if checksum != 4167 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_lmstudioprovider_complete_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_lmstudioprovider_to_model()
+		})
+		if checksum != 46866 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_lmstudioprovider_to_model: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -1821,6 +1929,15 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_mistralprovider_to_model()
+		})
+		if checksum != 41372 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_mistralprovider_to_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_mistralrsprovider_complete()
 		})
 		if checksum != 25702 {
@@ -1835,6 +1952,15 @@ func uniffiCheckChecksums() {
 		if checksum != 58005 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_mistralrsprovider_complete_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_mistralrsprovider_to_model()
+		})
+		if checksum != 15558 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_mistralrsprovider_to_model: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -1857,6 +1983,15 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_ollamaprovider_to_model()
+		})
+		if checksum != 42480 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_ollamaprovider_to_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_openaicompatprovider_complete()
 		})
 		if checksum != 39007 {
@@ -1871,6 +2006,15 @@ func uniffiCheckChecksums() {
 		if checksum != 53120 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_openaicompatprovider_complete_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_openaicompatprovider_to_model()
+		})
+		if checksum != 3166 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_openaicompatprovider_to_model: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -1893,6 +2037,15 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_openaiprovider_to_model()
+		})
+		if checksum != 599 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_openaiprovider_to_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_openrouterprovider_complete()
 		})
 		if checksum != 8526 {
@@ -1907,6 +2060,15 @@ func uniffiCheckChecksums() {
 		if checksum != 14875 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_openrouterprovider_complete_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_openrouterprovider_to_model()
+		})
+		if checksum != 29493 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_openrouterprovider_to_model: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -1929,6 +2091,15 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_perplexityprovider_to_model()
+		})
+		if checksum != 54203 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_perplexityprovider_to_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_togetherprovider_complete()
 		})
 		if checksum != 64044 {
@@ -1947,6 +2118,15 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_togetherprovider_to_model()
+		})
+		if checksum != 24568 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_togetherprovider_to_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_xaiprovider_complete()
 		})
 		if checksum != 28511 {
@@ -1961,6 +2141,15 @@ func uniffiCheckChecksums() {
 		if checksum != 25933 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_xaiprovider_complete_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_xaiprovider_to_model()
+		})
+		if checksum != 935 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_xaiprovider_to_model: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -2730,6 +2919,51 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodel_complete()
+		})
+		if checksum != 29201 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodel_complete: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodel_complete_blocking()
+		})
+		if checksum != 14208 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodel_complete_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodel_model_id()
+		})
+		if checksum != 39622 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodel_model_id: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodel_stream()
+		})
+		if checksum != 26135 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodel_stream: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodel_stream_blocking()
+		})
+		if checksum != 55632 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodel_stream_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_available_bytes()
 		})
 		if checksum != 19672 {
@@ -2739,11 +2973,38 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_complete()
+		})
+		if checksum != 10719 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_complete: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_complete_blocking()
+		})
+		if checksum != 12823 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_complete_blocking: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_ensure_loaded()
 		})
 		if checksum != 33632 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_ensure_loaded: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_get()
+		})
+		if checksum != 17000 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_get: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -2820,11 +3081,38 @@ func uniffiCheckChecksums() {
 	}
 	{
 		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_register_model()
+		})
+		if checksum != 36677 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_register_model: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
 			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_status()
 		})
 		if checksum != 18811 {
 			// If this happens try cleaning and rebuilding your project
 			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_status: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_stream()
+		})
+		if checksum != 18373 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_stream: UniFFI API checksum mismatch")
+		}
+	}
+	{
+		checksum := rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint16_t {
+			return C.uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_stream_blocking()
+		})
+		if checksum != 9980 {
+			// If this happens try cleaning and rebuilding your project
+			panic("blazen: uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_stream_blocking: UniFFI API checksum mismatch")
 		}
 	}
 	{
@@ -5203,6 +5491,8 @@ type AnthropicProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -5270,6 +5560,16 @@ func (_self *AnthropicProvider) CompleteBlocking(request ModelRequest) (ModelRes
 	} else {
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *AnthropicProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*AnthropicProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_anthropicprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
 }
 func (object *AnthropicProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -5725,6 +6025,8 @@ type AzureOpenAiProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -5801,6 +6103,16 @@ func (_self *AzureOpenAiProvider) CompleteBlocking(request ModelRequest) (ModelR
 	} else {
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *AzureOpenAiProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*AzureOpenAiProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_azureopenaiprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
 }
 func (object *AzureOpenAiProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -6106,6 +6418,8 @@ type BedrockProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -6175,6 +6489,16 @@ func (_self *BedrockProvider) CompleteBlocking(request ModelRequest) (ModelRespo
 	} else {
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *BedrockProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*BedrockProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_bedrockprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
 }
 func (object *BedrockProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -6414,6 +6738,8 @@ type CandleLlmProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -6492,6 +6818,16 @@ func (_self *CandleLlmProvider) CompleteBlocking(request ModelRequest) (ModelRes
 	} else {
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *CandleLlmProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*CandleLlmProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_candlellmprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
 }
 func (object *CandleLlmProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -6936,6 +7272,8 @@ type CohereProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -7003,6 +7341,16 @@ func (_self *CohereProvider) CompleteBlocking(request ModelRequest) (ModelRespon
 	} else {
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *CohereProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*CohereProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_cohereprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
 }
 func (object *CohereProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -11815,6 +12163,8 @@ type DeepSeekProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -11882,6 +12232,16 @@ func (_self *DeepSeekProvider) CompleteBlocking(request ModelRequest) (ModelResp
 	} else {
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *DeepSeekProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*DeepSeekProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_deepseekprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
 }
 func (object *DeepSeekProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -12731,6 +13091,8 @@ type FalLlmProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -12812,6 +13174,16 @@ func (_self *FalLlmProvider) CompleteBlocking(request ModelRequest) (ModelRespon
 	} else {
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *FalLlmProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*FalLlmProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_falllmprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
 }
 func (object *FalLlmProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -13915,6 +14287,8 @@ type FireworksProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -13982,6 +14356,16 @@ func (_self *FireworksProvider) CompleteBlocking(request ModelRequest) (ModelRes
 	} else {
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *FireworksProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*FireworksProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_fireworksprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
 }
 func (object *FireworksProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -14964,6 +15348,8 @@ type GeminiProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -15032,6 +15418,16 @@ func (_self *GeminiProvider) CompleteBlocking(request ModelRequest) (ModelRespon
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
 }
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *GeminiProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*GeminiProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_geminiprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
+}
 func (object *GeminiProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
 	object.ffiObject.destroy()
@@ -15097,6 +15493,8 @@ type GroqProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -15164,6 +15562,16 @@ func (_self *GroqProvider) CompleteBlocking(request ModelRequest) (ModelResponse
 	} else {
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *GroqProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*GroqProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_groqprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
 }
 func (object *GroqProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -15503,6 +15911,8 @@ type LlamaCppProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -15580,6 +15990,16 @@ func (_self *LlamaCppProvider) CompleteBlocking(request ModelRequest) (ModelResp
 	} else {
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *LlamaCppProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*LlamaCppProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_llamacppprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
 }
 func (object *LlamaCppProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -16015,6 +16435,8 @@ type LmStudioProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping an LM Studio server via
@@ -16085,6 +16507,16 @@ func (_self *LmStudioProvider) CompleteBlocking(request ModelRequest) (ModelResp
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
 }
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *LmStudioProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*LmStudioProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_lmstudioprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
+}
 func (object *LmStudioProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
 	object.ffiObject.destroy()
@@ -16150,6 +16582,8 @@ type MistralProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -16218,6 +16652,16 @@ func (_self *MistralProvider) CompleteBlocking(request ModelRequest) (ModelRespo
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
 }
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *MistralProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*MistralProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_mistralprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
+}
 func (object *MistralProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
 	object.ffiObject.destroy()
@@ -16283,6 +16727,8 @@ type MistralRsProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -16361,6 +16807,16 @@ func (_self *MistralRsProvider) CompleteBlocking(request ModelRequest) (ModelRes
 	} else {
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *MistralRsProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*MistralRsProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_mistralrsprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
 }
 func (object *MistralRsProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -18339,6 +18795,8 @@ type OllamaProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping an Ollama server via
@@ -18407,6 +18865,16 @@ func (_self *OllamaProvider) CompleteBlocking(request ModelRequest) (ModelRespon
 	} else {
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *OllamaProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*OllamaProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_ollamaprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
 }
 func (object *OllamaProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -18477,6 +18945,8 @@ type OpenAiCompatProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -18552,6 +19022,16 @@ func (_self *OpenAiCompatProvider) CompleteBlocking(request ModelRequest) (Model
 	} else {
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *OpenAiCompatProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*OpenAiCompatProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_openaicompatprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
 }
 func (object *OpenAiCompatProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -18784,6 +19264,9 @@ type OpenAiProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration with
+	// [`UniffiModelManager::register_model`].
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -18857,6 +19340,17 @@ func (_self *OpenAiProvider) CompleteBlocking(request ModelRequest) (ModelRespon
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
 }
+
+// Box this provider into a [`UniffiModel`] for registration with
+// [`UniffiModelManager::register_model`].
+func (_self *OpenAiProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*OpenAiProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_openaiprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
+}
 func (object *OpenAiProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
 	object.ffiObject.destroy()
@@ -18922,6 +19416,8 @@ type OpenRouterProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -18989,6 +19485,16 @@ func (_self *OpenRouterProvider) CompleteBlocking(request ModelRequest) (ModelRe
 	} else {
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *OpenRouterProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*OpenRouterProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_openrouterprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
 }
 func (object *OpenRouterProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -19474,6 +19980,8 @@ type PerplexityProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -19541,6 +20049,16 @@ func (_self *PerplexityProvider) CompleteBlocking(request ModelRequest) (ModelRe
 	} else {
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *PerplexityProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*PerplexityProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_perplexityprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
 }
 func (object *PerplexityProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -22527,6 +23045,8 @@ type TogetherProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -22594,6 +23114,16 @@ func (_self *TogetherProvider) CompleteBlocking(request ModelRequest) (ModelResp
 	} else {
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *TogetherProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*TogetherProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_togetherprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
 }
 func (object *TogetherProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -23560,6 +24090,218 @@ func (_ FfiDestroyerUniffiJsonlDataset) Destroy(value *UniffiJsonlDataset) {
 	value.Destroy()
 }
 
+// Opaque chat-model handle for the unified registry.
+//
+// UniFFI can't pass `Arc<dyn blazen_llm::Model>` across the FFI, so a
+// remote provider (or any in-process chat backend) is boxed into one of
+// these via the per-engine `to_model()` constructors in
+// [`crate::concrete::llm`]. Foreign callers register it by name with
+// [`UniffiModelManager::register_model`] and dispatch completions through
+// the manager's [`complete`](UniffiModelManager::complete) /
+// [`stream`](UniffiModelManager::stream) — or fetch it back with
+// [`get`](UniffiModelManager::get) and call [`complete`](Self::complete) /
+// [`stream`](Self::stream) on it directly.
+type UniffiModelInterface interface {
+	// Run a non-streaming chat completion directly against this provider.
+	Complete(request ModelRequest) (ModelResponse, error)
+	// Synchronous variant of [`complete`](Self::complete).
+	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// The default model id reported by the wrapped provider.
+	ModelId() string
+	// Stream a chat completion directly against this provider, driving each
+	// chunk into `sink`. A failed *start* is surfaced both as an `Err` and
+	// via `sink.on_error`; once the stream is live every outcome flows
+	// through the sink.
+	Stream(request ModelRequest, sink CompletionStreamSink) error
+	// Synchronous variant of [`stream`](Self::stream).
+	StreamBlocking(request ModelRequest, sink CompletionStreamSink) error
+}
+
+// Opaque chat-model handle for the unified registry.
+//
+// UniFFI can't pass `Arc<dyn blazen_llm::Model>` across the FFI, so a
+// remote provider (or any in-process chat backend) is boxed into one of
+// these via the per-engine `to_model()` constructors in
+// [`crate::concrete::llm`]. Foreign callers register it by name with
+// [`UniffiModelManager::register_model`] and dispatch completions through
+// the manager's [`complete`](UniffiModelManager::complete) /
+// [`stream`](UniffiModelManager::stream) — or fetch it back with
+// [`get`](UniffiModelManager::get) and call [`complete`](Self::complete) /
+// [`stream`](Self::stream) on it directly.
+type UniffiModel struct {
+	ffiObject FfiObject
+}
+
+// Run a non-streaming chat completion directly against this provider.
+func (_self *UniffiModel) Complete(request ModelRequest) (ModelResponse, error) {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModel")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) ModelResponse {
+			return FfiConverterModelResponseINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_uniffimodel_complete(
+			_pointer, FfiConverterModelRequestINSTANCE.Lower(request)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`complete`](Self::complete).
+func (_self *UniffiModel) CompleteBlocking(request ModelRequest) (ModelResponse, error) {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModel")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_uniffimodel_complete_blocking(
+				_pointer, FfiConverterModelRequestINSTANCE.Lower(request), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue ModelResponse
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
+// The default model id reported by the wrapped provider.
+func (_self *UniffiModel) ModelId() string {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModel")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterStringINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_uniffimodel_model_id(
+				_pointer, _uniffiStatus),
+		}
+	}))
+}
+
+// Stream a chat completion directly against this provider, driving each
+// chunk into `sink`. A failed *start* is surfaced both as an `Err` and
+// via `sink.on_error`; once the stream is live every outcome flows
+// through the sink.
+func (_self *UniffiModel) Stream(request ModelRequest, sink CompletionStreamSink) error {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModel")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_uniffimodel_stream(
+			_pointer, FfiConverterModelRequestINSTANCE.Lower(request), FfiConverterCompletionStreamSinkINSTANCE.Lower(sink)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+// Synchronous variant of [`stream`](Self::stream).
+func (_self *UniffiModel) StreamBlocking(request ModelRequest, sink CompletionStreamSink) error {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModel")
+	defer _self.ffiObject.decrementPointer()
+	_, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) bool {
+		C.uniffi_blazen_uniffi_fn_method_uniffimodel_stream_blocking(
+			_pointer, FfiConverterModelRequestINSTANCE.Lower(request), FfiConverterCompletionStreamSinkINSTANCE.Lower(sink), _uniffiStatus)
+		return false
+	})
+	return _uniffiErr.AsError()
+}
+func (object *UniffiModel) Destroy() {
+	runtime.SetFinalizer(object, nil)
+	object.ffiObject.destroy()
+}
+
+type FfiConverterUniffiModel struct{}
+
+var FfiConverterUniffiModelINSTANCE = FfiConverterUniffiModel{}
+
+func (c FfiConverterUniffiModel) Lift(handle C.uint64_t) *UniffiModel {
+	result := &UniffiModel{
+		newFfiObject(
+			handle,
+			func(handle C.uint64_t, status *C.RustCallStatus) C.uint64_t {
+				return C.uniffi_blazen_uniffi_fn_clone_uniffimodel(handle, status)
+			},
+			func(handle C.uint64_t, status *C.RustCallStatus) {
+				C.uniffi_blazen_uniffi_fn_free_uniffimodel(handle, status)
+			},
+		),
+	}
+	runtime.SetFinalizer(result, (*UniffiModel).Destroy)
+	return result
+}
+
+func (c FfiConverterUniffiModel) Read(reader io.Reader) *UniffiModel {
+	return c.Lift(C.uint64_t(readUint64(reader)))
+}
+
+func (c FfiConverterUniffiModel) Lower(value *UniffiModel) C.uint64_t {
+	// SAFETY (audited 2026-05-13): incrementPointer calls cloneFunction
+	// which does Arc::clone on the Rust side, bumping the Rust refcount
+	// independently of the Go-side callCounter. The defer below only
+	// decrements the (redundant) Go counter; the returned handle survives
+	// because the C caller owns its own Arc refcount via Arc::from_raw.
+	handle := value.ffiObject.incrementPointer("*UniffiModel")
+	defer value.ffiObject.decrementPointer()
+	return handle
+}
+
+func (c FfiConverterUniffiModel) Write(writer io.Writer, value *UniffiModel) {
+	writeUint64(writer, uint64(c.Lower(value)))
+}
+
+func LiftFromExternalUniffiModel(handle uint64) *UniffiModel {
+	return FfiConverterUniffiModelINSTANCE.Lift(C.uint64_t(handle))
+}
+
+func LowerToExternalUniffiModel(value *UniffiModel) uint64 {
+	return uint64(FfiConverterUniffiModelINSTANCE.Lower(value))
+}
+
+type FfiDestroyerUniffiModel struct{}
+
+func (_ FfiDestroyerUniffiModel) Destroy(value *UniffiModel) {
+	value.Destroy()
+}
+
 // Memory-budget-aware model manager with per-pool LRU eviction.
 //
 // Foreign code constructs one of these, registers
@@ -23568,7 +24310,19 @@ func (_ FfiDestroyerUniffiJsonlDataset) Destroy(value *UniffiJsonlDataset) {
 // coroutine on the foreign side.
 type UniffiModelManagerInterface interface {
 	AvailableBytes(pool string) (uint64, error)
+	// Run a chat completion against the provider registered under `id`.
+	//
+	// Local entries are auto-loaded on first use; remote entries dispatch
+	// straight through. Errors if `id` is not registered or was registered
+	// for lifecycle only (via [`Self::register_local`]).
+	Complete(id string, request ModelRequest) (ModelResponse, error)
+	// Synchronous variant of [`Self::complete`].
+	CompleteBlocking(id string, request ModelRequest) (ModelResponse, error)
 	EnsureLoaded(modelId string) error
+	// Fetch the chat provider registered under `id` to use or compose
+	// directly. Returns `None` if `id` is unknown or was registered for
+	// lifecycle only (no chat model).
+	Get(id string) **UniffiModel
 	IsLoaded(modelId string) bool
 	ListAdapters(modelId string) ([]AdapterStatusRecord, error)
 	Load(modelId string) error
@@ -23597,7 +24351,28 @@ type UniffiModelManagerInterface interface {
 	// charged against the pool derived from the foreign model's `device()`
 	// when it's loaded.
 	RegisterLocal(id string, model ForeignLocalModel, memoryEstimateBytes uint64) error
+	// Register a chat provider under `id` so it can be dispatched by name
+	// with [`Self::complete`] / [`Self::stream`], or fetched back with
+	// [`Self::get`].
+	//
+	// This is the unified registry — remote providers *and* in-process chat
+	// backends in one place. `model` is built from any concrete provider via
+	// its `to_model()` method (e.g. `OpenAiProvider::to_model`). Remote
+	// providers own no local weights, so they never count against a memory
+	// budget — pass `memory_estimate_bytes = 0`.
+	//
+	// To register a foreign-implemented local model with raw load / unload
+	// lifecycle callbacks instead, use [`Self::register_local`].
+	RegisterModel(id string, model *UniffiModel, memoryEstimateBytes uint64) error
 	Status() []ModelStatusRecord
+	// Streaming counterpart to [`Self::complete`], driving each chunk into
+	// `sink`. A failed *start* (unknown / lifecycle-only `id`, or the
+	// provider's own `stream()` failing to begin) is surfaced both as an
+	// `Err` and via `sink.on_error`; once live, every outcome flows through
+	// the sink.
+	Stream(id string, request ModelRequest, sink CompletionStreamSink) error
+	// Synchronous variant of [`Self::stream`].
+	StreamBlocking(id string, request ModelRequest, sink CompletionStreamSink) error
 	Unload(modelId string) error
 	UnloadAdapter(modelId string, adapterId string) error
 	// Synchronous variant of [`Self::unload`].
@@ -23735,6 +24510,64 @@ func (_self *UniffiModelManager) AvailableBytes(pool string) (uint64, error) {
 	return res, err
 }
 
+// Run a chat completion against the provider registered under `id`.
+//
+// Local entries are auto-loaded on first use; remote entries dispatch
+// straight through. Errors if `id` is not registered or was registered
+// for lifecycle only (via [`Self::register_local`]).
+func (_self *UniffiModelManager) Complete(id string, request ModelRequest) (ModelResponse, error) {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	res, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) ModelResponse {
+			return FfiConverterModelResponseINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_complete(
+			_pointer, FfiConverterStringINSTANCE.Lower(id), FfiConverterModelRequestINSTANCE.Lower(request)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	if err == nil {
+		return res, nil
+	}
+
+	return res, err
+}
+
+// Synchronous variant of [`Self::complete`].
+func (_self *UniffiModelManager) CompleteBlocking(id string, request ModelRequest) (ModelResponse, error) {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	_uniffiRV, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) RustBufferI {
+		return GoRustBuffer{
+			inner: C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_complete_blocking(
+				_pointer, FfiConverterStringINSTANCE.Lower(id), FfiConverterModelRequestINSTANCE.Lower(request), _uniffiStatus),
+		}
+	})
+	if _uniffiErr != nil {
+		var _uniffiDefaultValue ModelResponse
+		return _uniffiDefaultValue, _uniffiErr
+	} else {
+		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
+	}
+}
+
 func (_self *UniffiModelManager) EnsureLoaded(modelId string) error {
 	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
 	defer _self.ffiObject.decrementPointer()
@@ -23764,6 +24597,40 @@ func (_self *UniffiModelManager) EnsureLoaded(modelId string) error {
 	}
 
 	return err
+}
+
+// Fetch the chat provider registered under `id` to use or compose
+// directly. Returns `None` if `id` is unknown or was registered for
+// lifecycle only (no chat model).
+func (_self *UniffiModelManager) Get(id string) **UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	res, _ := uniffiRustCallAsync[error](
+		nil,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) RustBufferI {
+			res := C.ffi_blazen_uniffi_rust_future_complete_rust_buffer(handle, status)
+			return GoRustBuffer{
+				inner: res,
+			}
+		},
+		// liftFn
+		func(ffi RustBufferI) **UniffiModel {
+			return FfiConverterOptionalUniffiModelINSTANCE.Lift(ffi)
+		},
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_get(
+			_pointer, FfiConverterStringINSTANCE.Lower(id)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_rust_buffer(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_rust_buffer(handle)
+		},
+	)
+
+	return res
 }
 
 func (_self *UniffiModelManager) IsLoaded(modelId string) bool {
@@ -24004,6 +24871,49 @@ func (_self *UniffiModelManager) RegisterLocal(id string, model ForeignLocalMode
 	return err
 }
 
+// Register a chat provider under `id` so it can be dispatched by name
+// with [`Self::complete`] / [`Self::stream`], or fetched back with
+// [`Self::get`].
+//
+// This is the unified registry — remote providers *and* in-process chat
+// backends in one place. `model` is built from any concrete provider via
+// its `to_model()` method (e.g. `OpenAiProvider::to_model`). Remote
+// providers own no local weights, so they never count against a memory
+// budget — pass `memory_estimate_bytes = 0`.
+//
+// To register a foreign-implemented local model with raw load / unload
+// lifecycle callbacks instead, use [`Self::register_local`].
+func (_self *UniffiModelManager) RegisterModel(id string, model *UniffiModel, memoryEstimateBytes uint64) error {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_register_model(
+			_pointer, FfiConverterStringINSTANCE.Lower(id), FfiConverterUniffiModelINSTANCE.Lower(model), FfiConverterUint64INSTANCE.Lower(memoryEstimateBytes)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
 func (_self *UniffiModelManager) Status() []ModelStatusRecord {
 	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
 	defer _self.ffiObject.decrementPointer()
@@ -24033,6 +24943,54 @@ func (_self *UniffiModelManager) Status() []ModelStatusRecord {
 	)
 
 	return res
+}
+
+// Streaming counterpart to [`Self::complete`], driving each chunk into
+// `sink`. A failed *start* (unknown / lifecycle-only `id`, or the
+// provider's own `stream()` failing to begin) is surfaced both as an
+// `Err` and via `sink.on_error`; once live, every outcome flows through
+// the sink.
+func (_self *UniffiModelManager) Stream(id string, request ModelRequest, sink CompletionStreamSink) error {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	_, err := uniffiRustCallAsync[*BlazenError](
+		FfiConverterBlazenErrorINSTANCE,
+		// completeFn
+		func(handle C.uint64_t, status *C.RustCallStatus) struct{} {
+			C.ffi_blazen_uniffi_rust_future_complete_void(handle, status)
+			return struct{}{}
+		},
+		// liftFn
+		func(_ struct{}) struct{} { return struct{}{} },
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_stream(
+			_pointer, FfiConverterStringINSTANCE.Lower(id), FfiConverterModelRequestINSTANCE.Lower(request), FfiConverterCompletionStreamSinkINSTANCE.Lower(sink)),
+		// pollFn
+		func(handle C.uint64_t, continuation C.UniffiRustFutureContinuationCallback, data C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_poll_void(handle, continuation, data)
+		},
+		// freeFn
+		func(handle C.uint64_t) {
+			C.ffi_blazen_uniffi_rust_future_free_void(handle)
+		},
+	)
+
+	if err == nil {
+		return nil
+	}
+
+	return err
+}
+
+// Synchronous variant of [`Self::stream`].
+func (_self *UniffiModelManager) StreamBlocking(id string, request ModelRequest, sink CompletionStreamSink) error {
+	_pointer := _self.ffiObject.incrementPointer("*UniffiModelManager")
+	defer _self.ffiObject.decrementPointer()
+	_, _uniffiErr := rustCallWithError[*BlazenError](FfiConverterBlazenError{}, func(_uniffiStatus *C.RustCallStatus) bool {
+		C.uniffi_blazen_uniffi_fn_method_uniffimodelmanager_stream_blocking(
+			_pointer, FfiConverterStringINSTANCE.Lower(id), FfiConverterModelRequestINSTANCE.Lower(request), FfiConverterCompletionStreamSinkINSTANCE.Lower(sink), _uniffiStatus)
+		return false
+	})
+	return _uniffiErr.AsError()
 }
 
 func (_self *UniffiModelManager) Unload(modelId string) error {
@@ -26930,6 +27888,8 @@ type XaiProviderInterface interface {
 	Complete(request ModelRequest) (ModelResponse, error)
 	// Synchronous variant of [`complete`](Self::complete).
 	CompleteBlocking(request ModelRequest) (ModelResponse, error)
+	// Box this provider into a [`UniffiModel`] for registration.
+	ToModel() *UniffiModel
 }
 
 // Concrete LLM provider wrapping
@@ -26997,6 +27957,16 @@ func (_self *XaiProvider) CompleteBlocking(request ModelRequest) (ModelResponse,
 	} else {
 		return FfiConverterModelResponseINSTANCE.Lift(_uniffiRV), nil
 	}
+}
+
+// Box this provider into a [`UniffiModel`] for registration.
+func (_self *XaiProvider) ToModel() *UniffiModel {
+	_pointer := _self.ffiObject.incrementPointer("*XaiProvider")
+	defer _self.ffiObject.decrementPointer()
+	return FfiConverterUniffiModelINSTANCE.Lift(rustCall(func(_uniffiStatus *C.RustCallStatus) C.uint64_t {
+		return C.uniffi_blazen_uniffi_fn_method_xaiprovider_to_model(
+			_pointer, _uniffiStatus)
+	}))
 }
 func (object *XaiProvider) Destroy() {
 	runtime.SetFinalizer(object, nil)
@@ -35388,6 +36358,47 @@ type FfiDestroyerOptionalForeignTrainingProgress struct{}
 func (_ FfiDestroyerOptionalForeignTrainingProgress) Destroy(value *ForeignTrainingProgress) {
 	if value != nil {
 		FfiDestroyerForeignTrainingProgress{}.Destroy(*value)
+	}
+}
+
+type FfiConverterOptionalUniffiModel struct{}
+
+var FfiConverterOptionalUniffiModelINSTANCE = FfiConverterOptionalUniffiModel{}
+
+func (c FfiConverterOptionalUniffiModel) Lift(rb RustBufferI) **UniffiModel {
+	return LiftFromRustBuffer[**UniffiModel](c, rb)
+}
+
+func (_ FfiConverterOptionalUniffiModel) Read(reader io.Reader) **UniffiModel {
+	if readInt8(reader) == 0 {
+		return nil
+	}
+	temp := FfiConverterUniffiModelINSTANCE.Read(reader)
+	return &temp
+}
+
+func (c FfiConverterOptionalUniffiModel) Lower(value **UniffiModel) C.RustBuffer {
+	return LowerIntoRustBuffer[**UniffiModel](c, value)
+}
+
+func (c FfiConverterOptionalUniffiModel) LowerExternal(value **UniffiModel) ExternalCRustBuffer {
+	return RustBufferFromC(LowerIntoRustBuffer[**UniffiModel](c, value))
+}
+
+func (_ FfiConverterOptionalUniffiModel) Write(writer io.Writer, value **UniffiModel) {
+	if value == nil {
+		writeInt8(writer, 0)
+	} else {
+		writeInt8(writer, 1)
+		FfiConverterUniffiModelINSTANCE.Write(writer, *value)
+	}
+}
+
+type FfiDestroyerOptionalUniffiModel struct{}
+
+func (_ FfiDestroyerOptionalUniffiModel) Destroy(value **UniffiModel) {
+	if value != nil {
+		FfiDestroyerUniffiModel{}.Destroy(*value)
 	}
 }
 

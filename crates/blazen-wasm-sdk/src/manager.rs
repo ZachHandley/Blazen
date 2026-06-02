@@ -36,8 +36,12 @@ use js_sys::{Function, Object, Promise, Reflect};
 use wasm_bindgen::prelude::*;
 use wasm_bindgen_futures::{JsFuture, future_to_promise};
 
-use blazen_llm::{BlazenError, Device, LocalModel, Pool};
+use blazen_llm::types::ModelRequest;
+use blazen_llm::{BlazenError, Device, LocalModel, Model, Pool};
 use blazen_manager::ModelManager;
+
+use crate::chat_message::js_messages_to_vec;
+use crate::model::WasmModel;
 
 // ---------------------------------------------------------------------------
 // SendFuture wrapper (same pattern as agent.rs / js_embedding.rs)
@@ -434,45 +438,61 @@ impl WasmModelManager {
         }
     }
 
-    /// Register a model with its estimated memory footprint.
+    /// Register a provider under `id` so it can be dispatched by name with
+    /// [`Self::complete`] / [`Self::stream`], or fetched back with
+    /// [`Self::get`].
     ///
-    /// The model starts in the unloaded state. The `lifecycle` object must
-    /// implement `load()` and `unload()` async methods that are called when
-    /// the manager needs to load or unload the model. It may also provide
-    /// optional `isLoaded()`, `memoryBytes()`, and `device()` callbacks
-    /// (sync or async) which are forwarded to the underlying [`LocalModel`]
-    /// trait methods.
+    /// This is the unified registry — remote chat providers **and** local
+    /// lifecycle-managed resources live in one place, mirroring the native
+    /// (Node/Python) bindings:
+    ///
+    /// - **Remote chat provider** (`Model.openai()`, `Model.fal()`, …): pass
+    ///   it as `model`. It registers as a dispatch-only entry — it owns no
+    ///   local weights, so it never counts against a memory budget. (Omit
+    ///   `lifecycle`.)
+    /// - **Lifecycle-only local resource** (a browser-side WebLLM / WebGPU
+    ///   engine you load and unload yourself): pass `model = null` and supply
+    ///   a `lifecycle` object with `load()`/`unload()` (plus optional
+    ///   `isLoaded()`, `memoryBytes()`, `device()`). It participates in
+    ///   load/unload lifecycle and per-pool LRU eviction but is not
+    ///   dispatchable via [`Self::complete`].
+    /// - **Local chat provider with lifecycle**: pass BOTH a `model` and a
+    ///   `lifecycle`. The provider is dispatchable AND budgeted/evictable.
+    ///
+    /// To register a JS object that implements the full inference surface
+    /// (`complete`/`streamComplete`) in-browser, use
+    /// [`Self::register_byo_backend`] instead.
     ///
     /// Returns a `Promise<void>` that resolves once registration completes.
     ///
     /// @param id                  - Unique identifier for this model.
-    /// @param model               - The model value (`Model`, etc.) or `null`.
-    /// @param memoryEstimateBytes - Estimated memory footprint in bytes.
-    /// @param lifecycle           - Object with `load()` and `unload()` async methods,
-    ///                              plus optional `isLoaded()`, `memoryBytes()`, and
-    ///                              `device()` callbacks.
+    /// @param model               - A `Model` chat provider, or `null`.
+    /// @param memoryEstimateBytes - Estimated memory footprint in bytes
+    ///                              (`0` for remote providers).
+    /// @param lifecycle           - Optional object with `load()`/`unload()`
+    ///                              async methods, plus optional `isLoaded()`,
+    ///                              `memoryBytes()`, and `device()` callbacks.
     ///
     /// ```js
-    /// // Minimal: only required callbacks (defaults to Pool::Cpu).
-    /// await manager.register('m1', null, 5e9, {
-    ///   load: async () => {},
-    ///   unload: async () => {},
-    /// });
+    /// // Remote provider: dispatch-only, no lifecycle, no budget.
+    /// await manager.register('gpt', Model.openai(), 0);
+    /// const res = await manager.complete('gpt', [ChatMessage.user('Hi')]);
     ///
-    /// // Full: opt into runtime isLoaded / memoryBytes / device queries.
+    /// // Lifecycle-only local resource (defaults to Pool::Cpu).
     /// let loaded = false;
-    /// await manager.register('m2', null, 5e9, {
+    /// await manager.register('webllm', null, 5e9, {
     ///   load: async () => { loaded = true; },
     ///   unload: async () => { loaded = false; },
     ///   isLoaded: () => loaded,
     ///   memoryBytes: async () => 5e9,
-    ///   device: () => 'cuda:0',
+    ///   device: () => 'gpu',
     /// });
     /// ```
     ///
     /// # Errors
     ///
-    /// Rejects if `lifecycle` is not an object, its `load`/`unload` keys are
+    /// Rejects if neither a `model` nor a `lifecycle` object is supplied, if
+    /// `lifecycle` is present but not an object, its `load`/`unload` keys are
     /// not functions, or its optional callback keys are present but not
     /// functions.
     ///
@@ -489,11 +509,59 @@ impl WasmModelManager {
     pub fn register(
         &self,
         id: String,
-        _model: Option<JsValue>,
+        model: Option<WasmModel>,
         memory_estimate_bytes: f64,
-        lifecycle: Object,
+        lifecycle: Option<Object>,
     ) -> Result<Promise, JsValue> {
-        let cbs = extract_lifecycle(lifecycle.as_ref())?;
+        let chat: Option<Arc<dyn Model>> = model.as_ref().map(WasmModel::inner_arc);
+
+        // Build the local lifecycle adapter (and stash its adapter callbacks)
+        // when a `lifecycle` object is supplied.
+        let local: Option<Arc<dyn LocalModel>> = match lifecycle {
+            Some(lifecycle) => Some(self.build_lifecycle_adapter(
+                &id,
+                memory_estimate_bytes as u64,
+                lifecycle.as_ref(),
+            )?),
+            None => None,
+        };
+
+        if chat.is_none() && local.is_none() {
+            return Err(JsValue::from_str(
+                "register() requires a Model provider, a lifecycle object, or both; \
+                 use registerByoBackend() for a JS-implemented inference backend",
+            ));
+        }
+
+        let inner = Arc::clone(&self.inner);
+        Ok(future_to_promise(SendFuture(async move {
+            if let Some(chat) = chat {
+                // Dispatchable provider (remote, or a local backend that is
+                // also a chat Model): register for by-name completion plus
+                // lifecycle/budget when local weights are present.
+                inner
+                    .register_provider(&id, chat, local, memory_estimate_bytes as u64)
+                    .await;
+            } else if let Some(local) = local {
+                // Lifecycle-only local resource (no chat surface).
+                inner
+                    .register(&id, local, memory_estimate_bytes as u64)
+                    .await;
+            }
+            Ok(JsValue::UNDEFINED)
+        })))
+    }
+
+    /// Build a [`JsLocalModelAdapter`] from a `lifecycle` JS object, stashing
+    /// its adapter callbacks for the browser-side `load_adapter` /
+    /// `unload_adapter` / `list_adapters` bypass routes.
+    fn build_lifecycle_adapter(
+        &self,
+        id: &str,
+        memory_estimate_bytes: u64,
+        lifecycle: &JsValue,
+    ) -> Result<Arc<dyn LocalModel>, JsValue> {
+        let cbs = extract_lifecycle(lifecycle)?;
 
         let device = resolve_device_from_callback(cbs.device.as_ref());
 
@@ -510,7 +578,7 @@ impl WasmModelManager {
                 .lock()
                 .expect("adapter_callbacks mutex poisoned");
             map.insert(
-                id.clone(),
+                id.to_owned(),
                 AdapterCallbacks {
                     load: load_adapter_fn.clone(),
                     unload: unload_adapter_fn.clone(),
@@ -519,8 +587,8 @@ impl WasmModelManager {
             );
         }
 
-        let adapter: Arc<dyn LocalModel> = Arc::new(JsLocalModelAdapter {
-            id: id.clone(),
+        Ok(Arc::new(JsLocalModelAdapter {
+            id: id.to_owned(),
             load_fn: Arc::new(JsClosure(cbs.load)),
             unload_fn: Arc::new(JsClosure(cbs.unload)),
             is_loaded_fn: cbs.is_loaded.map(|f| Arc::new(JsClosure(f))),
@@ -528,17 +596,9 @@ impl WasmModelManager {
             load_adapter_fn,
             unload_adapter_fn,
             list_adapters_fn,
-            memory_estimate_bytes: memory_estimate_bytes as u64,
+            memory_estimate_bytes,
             device,
-        });
-
-        let inner = Arc::clone(&self.inner);
-        Ok(future_to_promise(SendFuture(async move {
-            inner
-                .register(&id, adapter, memory_estimate_bytes as u64)
-                .await;
-            Ok(JsValue::UNDEFINED)
-        })))
+        }))
     }
 
     /// Register a Bring-Your-Own (BYO) JS-implemented inference backend.
@@ -579,11 +639,17 @@ impl WasmModelManager {
     pub fn register_byo_backend(&self, id: String, backend: JsValue) -> Result<Promise, JsValue> {
         let shim = crate::byo_backend::shim_from_js(backend)?;
         let memory_estimate = shim.memory_bytes_estimate();
-        let adapter: Arc<dyn LocalModel> = shim;
+        // The shim implements both `Model` (chat dispatch) and `LocalModel`
+        // (lifecycle/budget). Register it as a unified provider so it is both
+        // dispatchable via `complete`/`stream` and load/unload-managed.
+        let chat: Arc<dyn Model> = shim.clone();
+        let local: Arc<dyn LocalModel> = shim;
 
         let inner = Arc::clone(&self.inner);
         Ok(future_to_promise(SendFuture(async move {
-            inner.register(&id, adapter, memory_estimate).await;
+            inner
+                .register_provider(&id, chat, Some(local), memory_estimate)
+                .await;
             Ok(JsValue::UNDEFINED)
         })))
     }
@@ -962,6 +1028,87 @@ impl WasmModelManager {
                 arr.push(&obj);
             }
             Ok(arr.into())
+        }))
+    }
+
+    /// Run a chat completion against the provider registered under `id`.
+    ///
+    /// Local entries are auto-loaded on first use (subject to the pool
+    /// budget); remote entries dispatch straight through.
+    ///
+    /// `messages` should be an array of `ChatMessage` objects or plain JSON
+    /// objects with `role` and `content` fields.
+    ///
+    /// Returns a `Promise<ModelResponse>`.
+    ///
+    /// # Errors
+    ///
+    /// Rejects if `id` is not registered, was registered for lifecycle only
+    /// (no chat `Model`), or the underlying provider errors.
+    #[wasm_bindgen]
+    pub fn complete(&self, id: String, messages: JsValue) -> Promise {
+        let inner = Arc::clone(&self.inner);
+        future_to_promise(SendFuture(async move {
+            let msgs = js_messages_to_vec(&messages)?;
+            let request = ModelRequest::new(msgs);
+            let response = inner
+                .complete(&id, request)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+            serde_wasm_bindgen::to_value(&response)
+                .map_err(|e| JsValue::from_str(&e.to_string()))
+        }))
+    }
+
+    /// Streaming counterpart to [`Self::complete`].
+    ///
+    /// The `on_chunk` function is invoked once per `StreamChunk`. Returns a
+    /// `Promise<void>` that resolves when streaming is complete.
+    ///
+    /// ```js
+    /// await manager.stream('gpt', [ChatMessage.user('Count to 5')], (chunk) => {
+    ///   if (chunk.delta) process.stdout.write(chunk.delta);
+    /// });
+    /// ```
+    ///
+    /// # Errors
+    ///
+    /// Same surface as [`Self::complete`].
+    #[wasm_bindgen]
+    pub fn stream(&self, id: String, messages: JsValue, on_chunk: Function) -> Promise {
+        let inner = Arc::clone(&self.inner);
+        future_to_promise(SendFuture(async move {
+            let msgs = js_messages_to_vec(&messages)?;
+            let request = ModelRequest::new(msgs);
+            let mut stream = inner
+                .stream(&id, request)
+                .await
+                .map_err(|e| JsValue::from_str(&e.to_string()))?;
+
+            use futures_util::StreamExt;
+            while let Some(chunk_result) = stream.next().await {
+                let chunk = chunk_result.map_err(|e| JsValue::from_str(&e.to_string()))?;
+                let js_chunk = serde_wasm_bindgen::to_value(&chunk)
+                    .map_err(|e| JsValue::from_str(&e.to_string()))?;
+                let _ = on_chunk.call1(&JsValue::NULL, &js_chunk);
+            }
+            Ok(JsValue::UNDEFINED)
+        }))
+    }
+
+    /// Fetch the chat provider registered under `id` to use or compose
+    /// directly (e.g. wrap several in a fallback).
+    ///
+    /// Resolves to a `Model`, or `null` if `id` is unknown or was registered
+    /// for lifecycle only (no chat `Model`).
+    #[wasm_bindgen]
+    pub fn get(&self, id: String) -> Promise {
+        let inner = Arc::clone(&self.inner);
+        future_to_promise(SendFuture(async move {
+            match inner.get(&id).await {
+                Some(model) => Ok(WasmModel::from_inner(model).into()),
+                None => Ok(JsValue::NULL),
+            }
         }))
     }
 }

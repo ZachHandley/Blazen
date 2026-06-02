@@ -21,9 +21,9 @@ Key properties:
 ## Basic usage
 
 ```python
-from blazen import Model, ChatMessage, complete_batch
+from blazen import OpenAiProvider, ProviderOptions, ChatMessage, complete_batch
 
-model = Model.openai()
+model = OpenAiProvider(options=ProviderOptions(api_key="sk-..."))
 
 conversations = [
     [ChatMessage.user("What is 2 + 2?")],
@@ -44,9 +44,9 @@ print("Total cost:  $", result.total_cost)
 ```
 
 ```typescript
-import { Model, ChatMessage, completeBatch } from "blazen";
+import { OpenAiProvider, ChatMessage, completeBatch } from "blazen";
 
-const model = Model.openai({ apiKey: process.env.OPENAI_API_KEY });
+const model = OpenAiProvider.create({ apiKey: process.env.OPENAI_API_KEY });
 
 const result = await completeBatch(
   model,

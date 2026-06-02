@@ -8028,26 +8028,66 @@ class ModelManager:
         """
     async def register(self, id: builtins.str, model: typing.Any, *, memory_estimate_bytes: typing.Optional[builtins.int] = None) -> None:
         r"""
-        Register a model with its estimated memory footprint.
+        Register a provider under ``id`` so it can be dispatched by name with
+        :meth:`complete` / :meth:`stream`, or fetched back with :meth:`get`.
         
-        The `model` argument can be either:
+        This is the unified registry — local models *and* remote providers in
+        one place. The ``model`` argument can be:
         
-        * A :class:`Model` produced by a local factory (e.g.
-          ``Model.mistralrs(...)``), in which case its built-in
-          ``LocalModel`` implementation is used.
+        * A remote provider (``Model.openai(...)``, ``FalProvider(...)``, …):
+          registered as a dispatch-only entry. It owns no local weights, so it
+          never counts against a memory budget.
+        * A local backend (``Model.mistralrs(...)``, ``Model.llamacpp(...)``,
+          …): registered for both by-name dispatch *and* load/unload lifecycle
+          with per-pool LRU eviction; ``memory_estimate_bytes`` reports its
+          footprint.
         * Any Python object exposing callable ``load`` and ``unload``
           attributes (sync or async). It does *not* need to subclass
           :class:`blazen.LocalModel`. ``is_loaded``, ``memory_bytes``, and
-          ``device`` are optional; if absent or unimplemented the manager
-          falls back to ``False``, ``memory_estimate_bytes``, and ``Cpu``
-          respectively.
+          ``device`` are optional; such duck-typed objects are registered for
+          lifecycle/budget bookkeeping only (not dispatchable via
+          :meth:`complete`).
         
         Args:
             id: A unique identifier for this model.
-            model: A Model with local model support, or a duck-typed
-                object with ``load`` and ``unload`` methods.
+            model: A Model / provider, or a duck-typed object with ``load``
+                and ``unload`` methods.
             memory_estimate_bytes: Estimated memory footprint in bytes (host
-                RAM if the model targets CPU, GPU VRAM otherwise).
+                RAM if the model targets CPU, GPU VRAM otherwise). Pass ``0``
+                (the default) for remote providers.
+        """
+    async def complete(self, id: builtins.str, messages: typing.Sequence[ChatMessage], *, options: typing.Optional[ModelOptions] = None) -> ModelResponse:
+        r"""
+        Run a chat completion against the provider registered under ``id``.
+        
+        Local entries are auto-loaded on first use (subject to the pool
+        budget); remote entries dispatch straight through.
+        
+        Args:
+            id: The identifier the provider was registered under.
+            messages: A list of :class:`ChatMessage` objects.
+            options: Optional :class:`ModelOptions` for sampling parameters,
+                tools, and response format.
+        
+        Raises:
+            ValueError: if ``id`` is not registered.
+            NotImplementedError-equivalent: if ``id`` was registered for
+                lifecycle only (no chat ``Model``).
+        """
+    async def stream(self, id: builtins.str, messages: typing.Sequence[ChatMessage], on_chunk: typing.Any, *, options: typing.Optional[ModelOptions] = None) -> None:
+        r"""
+        Stream a chat completion against the provider registered under ``id``,
+        invoking ``on_chunk`` once per :class:`StreamChunk`.
+        
+        For async-iterator streaming (``async for``) or to pass the instance
+        around, fetch the provider with :meth:`get` and stream on it directly.
+        """
+    async def get(self, id: builtins.str) -> typing.Optional[Model]:
+        r"""
+        Fetch the provider registered under ``id`` to use or compose directly.
+        
+        Returns ``None`` if ``id`` is unknown or was registered for lifecycle
+        only (no chat ``Model``).
         """
     async def load(self, id: builtins.str) -> None:
         r"""
@@ -8913,15 +8953,19 @@ class OpenAiEmbeddingModel:
 @typing.final
 class OpenAiProvider:
     r"""
-    An OpenAI provider for text-to-speech and other compute capabilities.
+    An OpenAI provider for chat completion, text-to-speech, and other compute
+    capabilities.
     
-    For LLM chat completions, use [`Model.openai`] instead.
-    This class wraps [`blazen_llm::providers::openai::OpenAiProvider`]
-    directly and exposes its non-completion capabilities.
+    This is the standalone class form of `Model.openai(...)`. Both surfaces wrap
+    the same Rust provider; use whichever you prefer.
     
     Example:
-        >>> from blazen import OpenAiProvider, ProviderOptions, SpeechRequest
+        >>> from blazen import OpenAiProvider, ProviderOptions, ChatMessage
         >>> openai = OpenAiProvider(options=ProviderOptions(api_key="sk-..."))
+        >>> resp = await openai.complete([ChatMessage.user("Hello!")])
+    
+    It also exposes text-to-speech:
+        >>> from blazen import SpeechRequest
         >>> result = await openai.text_to_speech(SpeechRequest(text="Hello, world!"))
     
     To target an OpenAI-compatible service (zvoice/VoxCPM2, etc.), set
@@ -8933,12 +8977,41 @@ class OpenAiProvider:
         ... ))
         >>> result = await local.text_to_speech(SpeechRequest(text="Hello!"))
     """
+    @property
+    def model_id(self) -> builtins.str:
+        r"""
+        Get the model ID.
+        """
     def __new__(cls, *, options: typing.Optional[ProviderOptions] = None) -> OpenAiProvider:
         r"""
         Create a new OpenAI provider.
         
         Args:
             options: Optional [`ProviderOptions`] with api_key, base_url, model.
+        """
+    async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse:
+        r"""
+        Perform a chat completion.
+        
+        Args:
+            messages: A list of ChatMessage objects.
+            options: Optional [`ModelOptions`] for sampling parameters,
+                tools, and response format.
+        
+        Returns:
+            A ModelResponse with content, model, tool_calls, usage, etc.
+        """
+    def stream(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> CompletionStream:
+        r"""
+        Stream a chat completion as an async iterator.
+        
+        Args:
+            messages: A list of ChatMessage objects.
+            options: Optional [`ModelOptions`] for sampling parameters,
+                tools, and response format.
+        
+        Returns:
+            A [`CompletionStream`] that yields chunks via ``async for``.
         """
     async def text_to_speech(self, request: SpeechRequest) -> AudioResult:
         r"""

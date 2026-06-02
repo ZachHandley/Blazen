@@ -378,9 +378,51 @@ const synthetic = new MemoryResult("manual-1", "manual entry", 0.42, null);
 
 `Memory.fromJsBackend(embedder, backend)` is still available when you want to back the store with IndexedDB, localStorage, or a remote API from JavaScript; see the d.ts comments on `Memory.fromJsBackend` for the required method shape.
 
+## Chat completions
+
+### Tier 1: construct a provider, call `complete()`
+
+Each provider class takes a plain options object and exposes `complete()` / `stream()`:
+
+```typescript
+import { OpenAiProvider, ChatMessage } from "@blazen-dev/wasm";
+
+const model = new OpenAiProvider({ apiKey: "sk-..." });
+// also: AnthropicProvider, OpenRouterProvider, FalProvider, ...
+// omit the arg to read the key from the provider's env var (OPENAI_API_KEY, ...)
+
+const response = await model.complete([
+  ChatMessage.system("You are helpful."),
+  ChatMessage.user("What is 2+2?"),
+]);
+console.log(response.content);
+
+// streaming
+await model.stream([ChatMessage.user("Count to 5")], (chunk) => {
+  if (chunk.delta) console.log(chunk.delta);
+});
+```
+
+### Tier 2: register many providers in one `ModelManager`
+
+Scaling past a single model? Register providers under names and dispatch by name. `register` takes a generic `Model` plus a memory estimate, so convert a provider with `provider.toModel()` and pass `0` — remote providers own no local weights:
+
+```typescript
+import { ModelManager, OpenAiProvider, FalProvider, ChatMessage } from "@blazen-dev/wasm";
+
+const mgr = new ModelManager(0);
+await mgr.register("fast", new FalProvider({ apiKey: "fal-..." }).toModel(), 0);
+await mgr.register("smart", new OpenAiProvider({ apiKey: "sk-..." }).toModel(), 0);
+
+const response = await mgr.complete("fast", [ChatMessage.user("What is 2+2?")]);
+const smart = await mgr.get("smart");   // the underlying Model, to call or compose directly
+```
+
+> Shorthand: `Model.openai()`, `Model.anthropic()`, `Model.fal()`, etc. are zero-arg static factories that build the same providers from environment variables (`OPENAI_API_KEY`, `FAL_KEY`, …); `provider.toModel()` is the explicit-key path that `register` expects.
+
 ## `ModelManager`
 
-`ModelManager` wraps the real `blazen_manager::ModelManager` (LRU-backed VRAM accounting). The JS API is unchanged from the previous WASM stub, so existing code keeps working:
+`ModelManager` wraps the real `blazen_manager::ModelManager` (LRU-backed VRAM accounting). Beyond remote-provider dispatch (above), it manages the load/unload lifecycle and per-pool LRU eviction of local, browser-side resources:
 
 ```typescript
 import { ModelManager } from "@blazen-dev/wasm";

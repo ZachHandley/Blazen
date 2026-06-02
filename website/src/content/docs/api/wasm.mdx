@@ -20,11 +20,78 @@ Returns a `Promise<void>`. Subsequent calls are no-ops.
 
 ---
 
+## Constructing a provider — direct
+
+The canonical way to talk to a provider is to construct its class directly with
+`new XProvider(options)` and call `complete()` on it. Each provider class wraps
+the same Rust provider as the matching `Model.x()` shorthand, but the class form
+is the preferred surface: it is explicit about which provider you are using, takes
+an options object (`apiKey`, `model`, `baseUrl`) at construction time, and exposes
+that provider's full capability set (e.g. `OpenAiProvider.textToSpeech`,
+`FalProvider.generateImage`).
+
+The provider-class constructor accepts a plain JS options object. When `apiKey`
+is omitted it is read from the provider's standard environment variable
+(`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `FAL_KEY`, …); when `model` is omitted the
+provider default is used.
+
+```typescript
+import init, { OpenAiProvider, ChatMessage } from "@blazen/sdk";
+
+await init();
+
+// Reads OPENAI_API_KEY from the environment; default model.
+const openai = new OpenAiProvider({});
+
+// Explicit key + model override.
+const openaiExplicit = new OpenAiProvider({ apiKey: "sk-...", model: "gpt-4o" });
+
+const response = await openai.complete([
+  ChatMessage.system("You are a helpful assistant."),
+  ChatMessage.user("What is 2 + 2?"),
+]);
+console.log(response.content); // "4"
+```
+
+Every LLM provider class exposes the same methods:
+
+```typescript
+provider.complete(messages: ChatMessage[]): Promise<ModelResponse>
+provider.completeWithOptions(messages: ChatMessage[], options: ModelOptions): Promise<ModelResponse>
+provider.stream(messages: ChatMessage[], callback: (chunk) => void): Promise<void>
+provider.toModel(): Model   // convert to a generic Model for runAgent / decorators / ModelManager
+```
+
+**Provider classes**
+
+Construct any of these directly with `new XProvider(options)`:
+
+| Class | Constructor |
+|---|---|
+| `OpenAiProvider` | `new OpenAiProvider({ apiKey?, model?, baseUrl? })` |
+| `AnthropicProvider` | `new AnthropicProvider({ apiKey?, model?, baseUrl? })` |
+| `AzureOpenAiProvider` | `new AzureOpenAiProvider({ ... })` |
+| `OpenRouterProvider` | `new OpenRouterProvider({ apiKey?, model?, baseUrl? })` |
+| `BedrockProvider` | `new BedrockProvider({ ... })` |
+| `FalProvider` | `new FalProvider({ apiKey?, model? })` |
+
+Call `.toModel()` on any provider instance to obtain a generic `Model` (for use
+with `runAgent`, decorators, `Model.withFallback`, or registering in a
+[`ModelManager`](#modelmanager)). The `OpenAiProvider` and `FalProvider` classes
+also carry extra capabilities beyond chat — `OpenAiProvider.textToSpeech(...)` and
+the full `FalProvider` image/video/audio/3D surface. See
+[media generation](/guides/media-generation/) for those.
+
 ## Model
 
-A chat completion model. Created via static factory methods for each provider.
+`Model` is the generic, provider-agnostic chat handle. Its static `Model.x()`
+factories are **shorthand constructors** that build the same underlying provider
+as the classes above; reach for them when you want a uniform `Model` type (e.g. to
+mix providers in `Model.withFallback([...])` or to register remote providers in a
+[`ModelManager`](#modelmanager)). For single-provider code, prefer the
+[direct provider class](#constructing-a-provider--direct).
 
-### Provider Factory Methods
+### Shorthand constructors (`Model.x()`)
 
 All factory methods take **no arguments** -- API keys are read from environment variables at runtime (`OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, `GEMINI_API_KEY`, `FAL_KEY`, `OPENROUTER_API_KEY`, etc.). To override the default model, chain `.withModel(...)` on the returned instance.
 
@@ -1389,7 +1456,47 @@ new MemoryResult(id: string, text: string, score: number, metadata: any);
 
 ## ModelManager
 
-Per-pool memory budget-aware model manager with LRU eviction. Not typically used in WASM (where GPU model loading is uncommon), but available for tracking model state across CPU and GPU pools.
+A `ModelManager` is a **named registry for providers** — remote *and* local — that
+you dispatch against by id. Register a provider once under a string id, then call
+`complete(id, ...)` / `stream(id, ...)` from anywhere, or fetch it back with
+`get(id)` to use or compose it directly. This is the natural way to scale a single
+provider up to a fleet: one place that holds "the cheap model", "the smart model",
+each addressable by name.
+
+```typescript
+import init, { ModelManager, Model, ChatMessage } from "@blazen/sdk";
+
+await init();
+
+const manager = new ModelManager(0); // no memory budget needed for remote-only
+
+// Remote providers register as dispatch-only entries (memoryEstimateBytes = 0,
+// no lifecycle object).
+await manager.register("fast", Model.openai(), 0);
+await manager.register("smart", Model.anthropic(), 0);
+
+// Dispatch by name from anywhere.
+const resp = await manager.complete("smart", [ChatMessage.user("Explain CRDTs.")]);
+console.log(resp.content);
+
+// Stream by name (callback per chunk).
+await manager.stream("fast", [ChatMessage.user("Count to 5")], (chunk) => {
+  if (chunk.delta) process.stdout.write(chunk.delta);
+});
+
+// Fetch a registered provider to use or compose directly.
+const smart = await manager.get("smart");
+const fast = await manager.get("fast");
+const fallback = Model.withFallback([fast, smart]);
+```
+
+The same registry is also a **per-pool VRAM/RAM budgeter for local weights**: pass
+a `lifecycle` object (with async `load()` / `unload()`, plus optional `isLoaded()`,
+`memoryBytes()`, `device()`) when registering a browser-side resource (a WebLLM /
+WebGPU engine you load yourself, or a BYO backend via `registerByoBackend`). Such
+entries participate in load/unload and per-pool LRU eviction; `memoryEstimateBytes`
+reports their footprint. Remote providers own no local weights, so they never count
+against a budget.
 
 > `ModelManager` is a **memory budget bookkeeper**, not a performance scheduler. It answers "will this fit?" — not "will this run fast?". Whether a 70B model loaded on CPU is *useful* at 1–3 tok/s is a workload-choice question the manager intentionally does not answer.
 
@@ -1409,9 +1516,20 @@ const manager = new ModelManager(8, 24);   // 8 GB CPU pool + 24 GB GPU pool (ra
 
 ### Methods
 
+**Registry / dispatch** — the primary surface:
+
 | Method | Signature | Description |
 |---|---|---|
-| `register` | `await manager.register(id, model, memoryEstimateBytes, lifecycle)` | Register a model with its estimated memory footprint (`memoryEstimateBytes: number` bytes — host RAM if on CPU, GPU VRAM otherwise) and a JS lifecycle object. The lifecycle accepts async `load()` / `unload()` / `isLoaded()` plus optional `memoryBytes()` (async) and `device()` (sync — returns the pool string, defaults to `"cpu"`). |
+| `register` | `await manager.register(id, model: Model \| null, memoryEstimateBytes: number, lifecycle?)` | Register a provider under `id`. Pass a `Model` (e.g. `Model.openai()`) for a remote dispatch-only entry — use `memoryEstimateBytes = 0` and omit `lifecycle`; it never counts against a budget. For a lifecycle-only browser resource, pass `model = null` and supply a `lifecycle` object (async `load()` / `unload()`, optional `isLoaded()`, `memoryBytes()`, `device()`). Pass both to get a dispatchable *and* budgeted entry. |
+| `complete` | `await manager.complete(id, messages): Promise<ModelResponse>` | Run a chat completion against the provider registered under `id`. Local entries auto-load on first use; remote entries dispatch straight through. Rejects if `id` is unknown or was registered for lifecycle only. |
+| `stream` | `await manager.stream(id, messages, onChunk)` | Streaming counterpart to `complete`. `onChunk` is invoked once per `StreamChunk`. |
+| `get` | `await manager.get(id): Promise<Model \| null>` | Fetch the chat provider registered under `id` to use or compose directly (e.g. wrap several in a fallback). Resolves to `null` if `id` is unknown or was registered for lifecycle only. |
+| `registerByoBackend` | `await manager.registerByoBackend(id, backend)` | Register a Bring-Your-Own JS inference backend (object with `complete(req)`, optional `streamComplete(req, onChunk)`, `memoryBytes`, `device`). Dispatchable and budgeted via its own `memoryBytes`. |
+
+**Lifecycle / budgeting** — for local weights:
+
+| Method | Signature | Description |
+|---|---|---|
 | `load` | `await manager.load(id)` | Load a model, evicting LRU models in the same pool if needed. |
 | `unload` | `await manager.unload(id)` | Unload a model and free its memory. |
 | `isLoaded` | `await manager.isLoaded(id): boolean` | Check if a model is currently loaded. |

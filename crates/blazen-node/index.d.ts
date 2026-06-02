@@ -3750,19 +3750,41 @@ export declare class ModelManager {
    */
   constructor(config?: ModelManagerConfig | undefined | null)
   /**
-   * Register a `Model`-backed local model with the manager.
+   * Register a provider under `id` so it can be dispatched by name with
+   * [`Self::complete`] / [`Self::stream`].
    *
-   * The model starts in the unloaded state. An optional
-   * `memoryEstimateBytes` overrides the model's self-reported
-   * estimate.
+   * Works for **both** tiers in one place:
+   * - **Remote providers** (`Model.openai()`, `FalProvider.create()`, …)
+   *   register as dispatch-only entries — they own no local weights, so
+   *   they never count against a memory budget.
+   * - **Local in-process providers** (mistral.rs, llama.cpp, candle)
+   *   additionally participate in load/unload lifecycle and per-pool LRU
+   *   eviction; `memoryEstimateBytes` reports their footprint.
    *
-   * Only local in-process providers (mistral.rs, llama.cpp, candle)
-   * can be registered — remote HTTP providers will throw. To
-   * register an arbitrary JS-managed resource (embedding model,
-   * tokenizer, custom runtime, …), use
+   * To register an arbitrary JS-managed resource (embedding model,
+   * tokenizer, custom runtime, …) with raw lifecycle callbacks, use
    * [`Self::register_local_model`] instead.
    */
   register(id: string, model: JsModel, memoryEstimateBytes?: bigint | undefined | null): Promise<void>
+  /**
+   * Run a chat completion against the provider registered under `id`.
+   *
+   * Local entries are auto-loaded on first use; remote entries dispatch
+   * straight through. Throws if `id` is not registered or was registered
+   * for lifecycle only.
+   */
+  complete(id: string, messages: Array<JsChatMessage>): Promise<JsModelResponse>
+  /**
+   * Streaming counterpart to [`Self::complete`]. The `onChunk` callback
+   * receives each chunk as a typed `StreamChunk`.
+   */
+  stream(id: string, messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
+  /**
+   * Fetch the chat interface registered under `id` to use or compose
+   * directly. Returns `null` if `id` is unknown or was registered for
+   * lifecycle only (no chat `Model`).
+   */
+  get(id: string): Promise<JsModel | null>
   /**
    * Register an arbitrary JS-managed local model with the manager.
    *
@@ -4278,16 +4300,15 @@ export declare class OpenAiEmbeddingModel {
 export type JsOpenAiEmbeddingModel = OpenAiEmbeddingModel
 
 /**
- * An `OpenAI` compute provider exposing text-to-speech.
+ * An `OpenAI` provider exposing chat completion, streaming, and text-to-speech.
  *
- * For chat completions and embeddings, use
- * [`Model.openai`](crate::providers::model::JsModel::openai)
- * instead — this class is the standalone entry point for the compute
- * capabilities (currently text-to-speech) that the `OpenAI` provider
- * implements directly.
+ * This is the standalone class form of
+ * [`Model.openai`](crate::providers::model::JsModel::openai); both surfaces
+ * wrap the same Rust provider.
  *
  * ```typescript
  * const openai = OpenAiProvider.create({ apiKey: "sk-..." });
+ * const response = await openai.complete([ChatMessage.user("Hi")]);
  * const audio = await openai.textToSpeech({
  *     text: "Hello, world!",
  *     voice: "alloy",
@@ -4304,6 +4325,16 @@ export declare class OpenAiProvider {
    * [`OpenAiProvider::from_options`] are applied.
    */
   static create(options?: JsProviderOptions | undefined | null): OpenAiProvider
+  /** Get the model ID. */
+  get modelId(): string
+  /** Perform a chat completion. */
+  complete(messages: Array<JsChatMessage>): Promise<JsModelResponse>
+  /** Perform a chat completion with additional options. */
+  completeWithOptions(messages: Array<JsChatMessage>, options: JsModelOptions): Promise<JsModelResponse>
+  /** Stream a chat completion. */
+  stream(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn): Promise<void>
+  /** Stream a chat completion with additional options. */
+  streamWithOptions(messages: Array<JsChatMessage>, onChunk: StreamChunkCallbackTsfn, options: JsModelOptions): Promise<void>
   /** Synthesize speech from text via `OpenAI`'s `/v1/audio/speech`. */
   textToSpeech(request: JsSpeechRequest): Promise<JsAudioResult>
 }

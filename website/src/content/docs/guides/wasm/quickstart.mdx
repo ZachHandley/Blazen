@@ -27,16 +27,17 @@ yarn add @blazen/sdk
 
 ## Basic usage
 
-Initialize the WASM module, then use `Model` and `ChatMessage` the same way you would in the Node.js SDK:
+Initialize the WASM module, then construct a provider directly and call
+`complete()` on it:
 
 ```typescript
-import init, { Model, ChatMessage } from '@blazen/sdk';
+import init, { OpenRouterProvider, ChatMessage } from '@blazen/sdk';
 
 await init();
 
-// The WASM SDK reads API keys from the runtime environment only
-// (OPENROUTER_API_KEY, OPENAI_API_KEY, etc.). No arguments are accepted.
-const model = Model.openrouter();
+// Construct the provider directly. With no apiKey, it reads OPENROUTER_API_KEY
+// from the runtime environment.
+const model = new OpenRouterProvider({ apiKey: 'sk-or-...' });
 const response = await model.complete([ChatMessage.user('Hello!')]);
 console.log(response.content);
 ```
@@ -48,11 +49,12 @@ console.log(response.content);
 Stream tokens as they arrive using `model.stream()`:
 
 ```typescript
-import init, { Model, ChatMessage } from '@blazen/sdk';
+import init, { OpenAiProvider, ChatMessage } from '@blazen/sdk';
 
 await init();
 
-const model = Model.openai(); // reads OPENAI_API_KEY from env
+// With no apiKey, the provider reads OPENAI_API_KEY from the environment.
+const model = new OpenAiProvider({ apiKey: 'sk-...' });
 
 await model.stream(
   [ChatMessage.user('Write a haiku about WebAssembly')],

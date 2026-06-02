@@ -1499,6 +1499,19 @@ module Blazen
     attach_function :blazen_model_manager_with_budgets_gb, [:double, :double], :pointer
     attach_function :blazen_model_manager_free,            [:pointer], :void
 
+    # Unified remote-provider registry: file a polymorphic remote provider
+    # (built via +<engine>_provider_as_llm_provider+) under an id, then
+    # dispatch completions by name. +register_remote+ takes the manager, the
+    # id, the +BlazenLlmProvider+ pointer, and a memory estimate (0 for remote
+    # providers — they own no local weights). +complete[_blocking]+ consume the
+    # request pointer (do not free it afterwards).
+    attach_function :blazen_model_manager_register_remote,
+                    [:pointer, :pointer, :pointer, :uint64, :pointer], :int32, blocking: true
+    attach_function :blazen_model_manager_complete_blocking,
+                    [:pointer, :pointer, :pointer, :pointer, :pointer], :int32, blocking: true
+    attach_function :blazen_model_manager_complete,
+                    [:pointer, :pointer, :pointer], :pointer
+
     attach_function :blazen_model_manager_load_blocking,
                     [:pointer, :pointer, :pointer], :int32, blocking: true
     attach_function :blazen_model_manager_load,

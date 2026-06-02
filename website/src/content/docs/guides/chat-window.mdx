@@ -16,12 +16,12 @@ Token counting uses a characters-per-token heuristic (3.5 chars/token by default
 ## Basic usage
 
 ```python
-from blazen import ChatWindow, ChatMessage, Model
+from blazen import ChatWindow, ChatMessage, OpenAiProvider, ProviderOptions
 
 window = ChatWindow(max_tokens=4000)
 window.add(ChatMessage.system("You are a terse, helpful assistant."))
 
-model = Model.openai()
+model = OpenAiProvider(options=ProviderOptions(api_key="sk-..."))
 
 async def turn(user_input: str) -> str:
     window.add(ChatMessage.user(user_input))
@@ -37,12 +37,12 @@ await turn("And 3 + 3?")
 ```
 
 ```typescript
-import { ChatWindow, ChatMessage, Model } from "blazen";
+import { ChatWindow, ChatMessage, OpenAiProvider } from "blazen";
 
 const window = new ChatWindow(4000);
 window.add(ChatMessage.system("You are a terse, helpful assistant."));
 
-const model = Model.openai({ apiKey: process.env.OPENAI_API_KEY });
+const model = OpenAiProvider.create({ apiKey: process.env.OPENAI_API_KEY });
 
 async function turn(userInput: string): Promise<string> {
   window.add(ChatMessage.user(userInput));

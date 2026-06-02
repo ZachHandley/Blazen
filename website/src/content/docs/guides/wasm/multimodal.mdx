@@ -164,11 +164,12 @@ You normally do not pick the variant yourself; pass the handle and let the resol
 Tool registrations in the WASM SDK use the same `{ name, description, parameters, handler }` object shape documented in the [WASM Agent guide](/docs/guides/wasm/agent), and tools are passed directly to `runAgent` (or `runAgentWithCallback`). The `imageInput`, `audioInput`, `videoInput`, `fileInput`, `threeDInput`, and `cadInput` helpers build the `parameters` schema for you:
 
 ```typescript
-import init, { Model, ChatMessage, runAgent, ContentStore, imageInput } from "@blazen/sdk";
+import init, { OpenAiProvider, ChatMessage, runAgent, ContentStore, imageInput } from "@blazen/sdk";
 
 await init();
 
-const model = Model.openai();
+// Construct the provider directly, then adapt it for runAgent via toModel().
+const model = new OpenAiProvider({ apiKey: 'sk-...' }).toModel();
 const store = ContentStore.inMemory();
 
 const photoBytes = new Uint8Array(await (await fetch("/photo.jpg")).arrayBuffer());
@@ -226,7 +227,7 @@ A Worker is just a fetch handler, but the same `init()` + `ContentStore` flow ap
 
 ```typescript
 import init, {
-  Model,
+  OpenAiProvider,
   ChatMessage,
   ContentStore,
   runAgent,
@@ -248,7 +249,8 @@ export default {
     const upload = new Uint8Array(await request.arrayBuffer());
     const handle = await persistent.put(upload, "image", request.headers.get("content-type") ?? undefined);
 
-    const model = Model.openai();
+    // Construct the provider directly, then adapt it for runAgent via toModel().
+    const model = new OpenAiProvider({ apiKey: env.OPENAI_API_KEY }).toModel();
     const tools = [
       {
         name: "describe",

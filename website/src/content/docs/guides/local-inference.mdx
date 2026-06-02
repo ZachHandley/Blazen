@@ -178,10 +178,27 @@ mesh = await mesher.image_to_mesh("/path/to/photo.png")
 
 ## Memory budgeting with ModelManager (CPU RAM + GPU VRAM)
 
-When running several local models side by side, the `ModelManager` tracks per-pool memory budgets (host RAM and GPU VRAM as separate buckets) and evicts the least-recently-used model **in the same pool** when a new load would exceed that pool's budget. Models in different pools never evict each other.
+`ModelManager` is the **unified registry** for Blazen models: register local
+models *and* remote providers by name, then dispatch with
+`complete(id, messages)` (also `stream(id, messages, on_chunk)` and `get(id)`).
+For local models it additionally tracks per-pool memory budgets (host RAM and
+GPU VRAM as separate buckets) and evicts the least-recently-used model **in the
+same pool** when a new load would exceed that pool's budget. Models in different
+pools never evict each other. Remote providers own no local weights, so they
+register with a `0` estimate, dispatch straight through, and never count against
+a budget — which lets you mix a cloud fallback alongside your local hot set
+behind one dispatch surface.
 
 ```python
-from blazen import ModelManager, Model, EmbeddingModel, MistralRsOptions
+from blazen import (
+    ChatMessage,
+    ModelManager,
+    Model,
+    EmbeddingModel,
+    MistralRsOptions,
+    OpenAiProvider,
+    ProviderOptions,
+)
 
 # 64 GB of CPU RAM, 24 GB of GPU VRAM (RTX 4090).
 manager = ModelManager(cpu_ram_gb=64, gpu_vram_gb=24)
@@ -195,12 +212,21 @@ embedder = EmbeddingModel.local()  # runs on CPU
 await manager.register("llm", llm, memory_estimate_bytes=6 * 1024**3)
 await manager.register("embed", embedder, memory_estimate_bytes=100 * 1024**2)
 
+# Remote provider in the SAME registry: dispatch-only, no footprint.
+await manager.register(
+    "cloud", OpenAiProvider(options=ProviderOptions(api_key="sk-...")),
+)
+
 await manager.load("llm")
 await manager.ensure_loaded("embed")   # different pool, no eviction
 
 print(await manager.used_bytes(pool="gpu:0"))       # bytes on the GPU pool
 print(await manager.available_bytes(pool="gpu:0"))  # room left on the GPU pool
 print(await manager.used_bytes(pool="cpu"))         # bytes on the CPU pool
+
+# Dispatch any registered entry by name — local or remote, same call shape.
+local = await manager.complete("llm", [ChatMessage.user("Hello!")])
+cloud = await manager.complete("cloud", [ChatMessage.user("Hello!")])
 ```
 
 ```rust

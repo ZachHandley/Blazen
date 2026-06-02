@@ -131,6 +131,11 @@ pub struct WorkerConfig {
     /// Optional probe-handle that sources real `vram_free_mb` for the
     /// heartbeat's [`AdmissionSnapshot`]. When `None`, the synthesized
     /// snapshot reports `vram_free_mb = None` (today's behavior).
+    ///
+    /// The host-only `blazen-resource-probe` crate is not part of the
+    /// wasm32/wasi dependency graph (it shells out to GPU tooling), so the
+    /// field is absent on those targets.
+    #[cfg(not(any(target_os = "wasi", target_arch = "wasm32")))]
     pub probe_handle: Option<blazen_resource_probe::ProbeHandle>,
 }
 
@@ -153,6 +158,7 @@ impl WorkerConfig {
             tls: None,
             retry: RetryPolicy::default(),
             bearer_token: None,
+            #[cfg(not(any(target_os = "wasi", target_arch = "wasm32")))]
             probe_handle: None,
         }
     }
@@ -160,6 +166,9 @@ impl WorkerConfig {
     /// Attach a [`blazen_resource_probe::ProbeHandle`]. When set, the
     /// heartbeat ticker sources `vram_free_mb` from the probe's latest
     /// snapshot instead of leaving it `None`.
+    ///
+    /// Host-only: `blazen-resource-probe` is not in the wasm32/wasi graph.
+    #[cfg(not(any(target_os = "wasi", target_arch = "wasm32")))]
     #[must_use]
     pub fn with_probe_handle(mut self, handle: blazen_resource_probe::ProbeHandle) -> Self {
         self.probe_handle = Some(handle);
@@ -907,6 +916,7 @@ impl Worker {
     ) -> JoinHandle<()> {
         let state = Arc::clone(&self.state);
         let admission = self.config.admission.clone();
+        #[cfg(not(any(target_os = "wasi", target_arch = "wasm32")))]
         let probe = self.config.probe_handle.clone();
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(interval);
@@ -920,7 +930,10 @@ impl Worker {
                     _ = ticker.tick() => {}
                 }
                 let in_flight = state.in_flight.load(Ordering::Relaxed);
+                #[cfg(not(any(target_os = "wasi", target_arch = "wasm32")))]
                 let snapshot = synthesize_admission_snapshot(&admission, in_flight, probe.as_ref());
+                #[cfg(any(target_os = "wasi", target_arch = "wasm32"))]
+                let snapshot = synthesize_admission_snapshot(&admission, in_flight);
                 if let Err(e) = outbox.heartbeat(in_flight, Some(snapshot)).await {
                     tracing::debug!(error = %e, "heartbeat send failed; session ending");
                     return;
@@ -1193,6 +1206,7 @@ fn duration_ms_lossy(d: Duration) -> u64 {
 /// probe snapshot. When `probe` is `Some`, `vram_free_mb` is sourced from
 /// the latest probe; otherwise it is left `None` to preserve the
 /// pre-probe behavior.
+#[cfg(not(any(target_os = "wasi", target_arch = "wasm32")))]
 fn synthesize_admission_snapshot(
     admission: &AdmissionMode,
     in_flight: u32,
@@ -1209,6 +1223,22 @@ fn synthesize_admission_snapshot(
         }
     });
 
+    build_admission_snapshot(admission, in_flight, vram_free_mb)
+}
+
+/// wasm/wasi variant: the host-only resource probe is not in the dependency
+/// graph, so `vram_free_mb` is always `None` (the pre-probe behavior).
+#[cfg(any(target_os = "wasi", target_arch = "wasm32"))]
+fn synthesize_admission_snapshot(admission: &AdmissionMode, in_flight: u32) -> AdmissionSnapshot {
+    build_admission_snapshot(admission, in_flight, None)
+}
+
+/// Shared snapshot assembly, independent of where `vram_free_mb` was sourced.
+fn build_admission_snapshot(
+    admission: &AdmissionMode,
+    in_flight: u32,
+    vram_free_mb: Option<u64>,
+) -> AdmissionSnapshot {
     match admission {
         AdmissionMode::Fixed { max_in_flight } => AdmissionSnapshot {
             capacity_score: fixed_capacity_score(*max_in_flight, in_flight),

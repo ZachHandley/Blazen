@@ -450,6 +450,51 @@ pub unsafe extern "C" fn blazen_future_take_string(
     }
 }
 
+/// Pops a `Result<blazen_uniffi::llm::ModelResponse, _>` future, writing a
+/// caller-owned `BlazenModelResponse*` into `*out` (free with
+/// [`crate::llm_records::blazen_model_response_free`]). Returns `0` on success
+/// or `-1` on failure (writes `*err`).
+///
+/// This is the async counterpart for every cabi verb that spawns a chat
+/// completion: the per-engine `blazen_<engine>_provider_complete` factories in
+/// [`crate::llm_providers`] and the by-name
+/// [`crate::manager::blazen_model_manager_complete`]. All of them spawn a
+/// future whose `Ok` type is the wire `blazen_uniffi::llm::ModelResponse`.
+///
+/// # Safety
+///
+/// `fut` is null OR a live cabi-produced future whose `Ok` type is
+/// `blazen_uniffi::llm::ModelResponse`. `out` and `err` are each null OR a
+/// single-writer destination.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_future_take_model_response(
+    fut: *mut BlazenFuture,
+    out: *mut *mut crate::llm_records::BlazenModelResponse,
+    err: *mut *mut crate::error::BlazenError,
+) -> i32 {
+    // SAFETY: caller upholds the future-pointer contract.
+    match unsafe { BlazenFuture::take_typed::<blazen_uniffi::llm::ModelResponse>(fut) } {
+        Ok(resp) => {
+            if !out.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *out = crate::llm_records::BlazenModelResponse::from(resp).into_ptr();
+                }
+            }
+            0
+        }
+        Err(e) => {
+            if !err.is_null() {
+                // SAFETY: out-param contract.
+                unsafe {
+                    *err = crate::error::BlazenError::from(e).into_ptr();
+                }
+            }
+            -1
+        }
+    }
+}
+
 /// Pops a `Result<Vec<blazen_manager::ModelStatus>, _>` future, writing a
 /// caller-owned `BlazenModelStatusList*` into `*out` (free with
 /// [`crate::manager_records::blazen_model_status_list_free`]). Returns `0` on

@@ -828,6 +828,11 @@ public protocol AnthropicProviderProtocol: AnyObject, Sendable {
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
+    
 }
 /**
  * Concrete LLM provider wrapping
@@ -927,6 +932,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
     uniffi_blazen_uniffi_fn_method_anthropicprovider_complete_blocking(
             self.uniffiCloneHandle(),
         FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_anthropicprovider_to_model(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -1454,6 +1470,11 @@ public protocol AzureOpenAiProviderProtocol: AnyObject, Sendable {
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
+    
 }
 /**
  * Concrete LLM provider wrapping
@@ -1562,6 +1583,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
     uniffi_blazen_uniffi_fn_method_azureopenaiprovider_complete_blocking(
             self.uniffiCloneHandle(),
         FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_azureopenaiprovider_to_model(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -1956,6 +1988,11 @@ public protocol BedrockProviderProtocol: AnyObject, Sendable {
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
+    
 }
 /**
  * Concrete LLM provider wrapping
@@ -2057,6 +2094,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
     uniffi_blazen_uniffi_fn_method_bedrockprovider_complete_blocking(
             self.uniffiCloneHandle(),
         FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_bedrockprovider_to_model(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -2333,6 +2381,11 @@ public protocol CandleLlmProviderProtocol: AnyObject, Sendable {
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
+    
 }
 /**
  * Concrete LLM provider wrapping
@@ -2439,6 +2492,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
     uniffi_blazen_uniffi_fn_method_candlellmprovider_complete_blocking(
             self.uniffiCloneHandle(),
         FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_candlellmprovider_to_model(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -2869,6 +2933,11 @@ public protocol CohereProviderProtocol: AnyObject, Sendable {
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
+    
 }
 /**
  * Concrete LLM provider wrapping
@@ -2967,6 +3036,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
     uniffi_blazen_uniffi_fn_method_cohereprovider_complete_blocking(
             self.uniffiCloneHandle(),
         FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_cohereprovider_to_model(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -7313,6 +7393,11 @@ public protocol DeepSeekProviderProtocol: AnyObject, Sendable {
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
+    
 }
 /**
  * Concrete LLM provider wrapping
@@ -7411,6 +7496,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
     uniffi_blazen_uniffi_fn_method_deepseekprovider_complete_blocking(
             self.uniffiCloneHandle(),
         FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_deepseekprovider_to_model(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -8447,6 +8543,11 @@ public protocol FalLlmProviderProtocol: AnyObject, Sendable {
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
+    
 }
 /**
  * Concrete LLM provider wrapping
@@ -8560,6 +8661,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
     uniffi_blazen_uniffi_fn_method_falllmprovider_complete_blocking(
             self.uniffiCloneHandle(),
         FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_falllmprovider_to_model(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -9856,6 +9968,11 @@ public protocol FireworksProviderProtocol: AnyObject, Sendable {
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
+    
 }
 /**
  * Concrete LLM provider wrapping
@@ -9954,6 +10071,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
     uniffi_blazen_uniffi_fn_method_fireworksprovider_complete_blocking(
             self.uniffiCloneHandle(),
         FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_fireworksprovider_to_model(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -10879,6 +11007,11 @@ public protocol GeminiProviderProtocol: AnyObject, Sendable {
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
+    
 }
 /**
  * Concrete LLM provider wrapping
@@ -10982,6 +11115,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
 })
 }
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_geminiprovider_to_model(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
 
     
 }
@@ -11047,6 +11191,11 @@ public protocol GroqProviderProtocol: AnyObject, Sendable {
      * Synchronous variant of [`complete`](Self::complete).
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
     
 }
 /**
@@ -11146,6 +11295,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
     uniffi_blazen_uniffi_fn_method_groqprovider_complete_blocking(
             self.uniffiCloneHandle(),
         FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_groqprovider_to_model(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -11558,6 +11718,11 @@ public protocol LlamaCppProviderProtocol: AnyObject, Sendable {
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
+    
 }
 /**
  * Concrete LLM provider wrapping
@@ -11663,6 +11828,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
     uniffi_blazen_uniffi_fn_method_llamacppprovider_complete_blocking(
             self.uniffiCloneHandle(),
         FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_llamacppprovider_to_model(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -12196,6 +12372,11 @@ public protocol LmStudioProviderProtocol: AnyObject, Sendable {
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
+    
 }
 /**
  * Concrete LLM provider wrapping an LM Studio server via
@@ -12301,6 +12482,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
 })
 }
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_lmstudioprovider_to_model(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
 
     
 }
@@ -12366,6 +12558,11 @@ public protocol MistralProviderProtocol: AnyObject, Sendable {
      * Synchronous variant of [`complete`](Self::complete).
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
     
 }
 /**
@@ -12469,6 +12666,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
 })
 }
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_mistralprovider_to_model(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
 
     
 }
@@ -12534,6 +12742,11 @@ public protocol MistralRsProviderProtocol: AnyObject, Sendable {
      * Synchronous variant of [`complete`](Self::complete).
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
     
 }
 /**
@@ -12641,6 +12854,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
     uniffi_blazen_uniffi_fn_method_mistralrsprovider_complete_blocking(
             self.uniffiCloneHandle(),
         FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_mistralrsprovider_to_model(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -14462,6 +14686,11 @@ public protocol OllamaProviderProtocol: AnyObject, Sendable {
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
+    
 }
 /**
  * Concrete LLM provider wrapping an Ollama server via
@@ -14566,6 +14795,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
 })
 }
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_ollamaprovider_to_model(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
 
     
 }
@@ -14635,6 +14875,11 @@ public protocol OpenAiCompatProviderProtocol: AnyObject, Sendable {
      * Synchronous variant of [`complete`](Self::complete).
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
     
 }
 /**
@@ -14744,6 +14989,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
     uniffi_blazen_uniffi_fn_method_openaicompatprovider_complete_blocking(
             self.uniffiCloneHandle(),
         FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_openaicompatprovider_to_model(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -15019,6 +15275,12 @@ public protocol OpenAiProviderProtocol: AnyObject, Sendable {
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration with
+     * [`UniffiModelManager::register_model`].
+     */
+    func toModel()  -> UniffiModel
+    
 }
 /**
  * Concrete LLM provider wrapping
@@ -15127,6 +15389,18 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
 })
 }
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration with
+     * [`UniffiModelManager::register_model`].
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_openaiprovider_to_model(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
 
     
 }
@@ -15192,6 +15466,11 @@ public protocol OpenRouterProviderProtocol: AnyObject, Sendable {
      * Synchronous variant of [`complete`](Self::complete).
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
     
 }
 /**
@@ -15291,6 +15570,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
     uniffi_blazen_uniffi_fn_method_openrouterprovider_complete_blocking(
             self.uniffiCloneHandle(),
         FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_openrouterprovider_to_model(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -15857,6 +16147,11 @@ public protocol PerplexityProviderProtocol: AnyObject, Sendable {
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
+    
 }
 /**
  * Concrete LLM provider wrapping
@@ -15955,6 +16250,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
     uniffi_blazen_uniffi_fn_method_perplexityprovider_complete_blocking(
             self.uniffiCloneHandle(),
         FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_perplexityprovider_to_model(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -19183,6 +19489,11 @@ public protocol TogetherProviderProtocol: AnyObject, Sendable {
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
+    
 }
 /**
  * Concrete LLM provider wrapping
@@ -19281,6 +19592,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
     uniffi_blazen_uniffi_fn_method_togetherprovider_complete_blocking(
             self.uniffiCloneHandle(),
         FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_togetherprovider_to_model(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -20418,6 +20740,244 @@ public func FfiConverterTypeUniffiJsonlDataset_lower(_ value: UniffiJsonlDataset
 
 
 /**
+ * Opaque chat-model handle for the unified registry.
+ *
+ * UniFFI can't pass `Arc<dyn blazen_llm::Model>` across the FFI, so a
+ * remote provider (or any in-process chat backend) is boxed into one of
+ * these via the per-engine `to_model()` constructors in
+ * [`crate::concrete::llm`]. Foreign callers register it by name with
+ * [`UniffiModelManager::register_model`] and dispatch completions through
+ * the manager's [`complete`](UniffiModelManager::complete) /
+ * [`stream`](UniffiModelManager::stream) — or fetch it back with
+ * [`get`](UniffiModelManager::get) and call [`complete`](Self::complete) /
+ * [`stream`](Self::stream) on it directly.
+ */
+public protocol UniffiModelProtocol: AnyObject, Sendable {
+    
+    /**
+     * Run a non-streaming chat completion directly against this provider.
+     */
+    func complete(request: ModelRequest) async throws  -> ModelResponse
+    
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+    func completeBlocking(request: ModelRequest) throws  -> ModelResponse
+    
+    /**
+     * The default model id reported by the wrapped provider.
+     */
+    func modelId()  -> String
+    
+    /**
+     * Stream a chat completion directly against this provider, driving each
+     * chunk into `sink`. A failed *start* is surfaced both as an `Err` and
+     * via `sink.on_error`; once the stream is live every outcome flows
+     * through the sink.
+     */
+    func stream(request: ModelRequest, sink: CompletionStreamSink) async throws 
+    
+    /**
+     * Synchronous variant of [`stream`](Self::stream).
+     */
+    func streamBlocking(request: ModelRequest, sink: CompletionStreamSink) throws 
+    
+}
+/**
+ * Opaque chat-model handle for the unified registry.
+ *
+ * UniFFI can't pass `Arc<dyn blazen_llm::Model>` across the FFI, so a
+ * remote provider (or any in-process chat backend) is boxed into one of
+ * these via the per-engine `to_model()` constructors in
+ * [`crate::concrete::llm`]. Foreign callers register it by name with
+ * [`UniffiModelManager::register_model`] and dispatch completions through
+ * the manager's [`complete`](UniffiModelManager::complete) /
+ * [`stream`](UniffiModelManager::stream) — or fetch it back with
+ * [`get`](UniffiModelManager::get) and call [`complete`](Self::complete) /
+ * [`stream`](Self::stream) on it directly.
+ */
+open class UniffiModel: UniffiModelProtocol, @unchecked Sendable {
+    fileprivate let handle: UInt64
+
+    /// Used to instantiate a [FFIObject] without an actual handle, for fakes in tests, mostly.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public struct NoHandle {
+        public init() {}
+    }
+
+    // TODO: We'd like this to be `private` but for Swifty reasons,
+    // we can't implement `FfiConverter` without making this `required` and we can't
+    // make it `required` without making it `public`.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    required public init(unsafeFromHandle handle: UInt64) {
+        self.handle = handle
+    }
+
+    // This constructor can be used to instantiate a fake object.
+    // - Parameter noHandle: Placeholder value so we can have a constructor separate from the default empty one that may be implemented for classes extending [FFIObject].
+    //
+    // - Warning:
+    //     Any object instantiated with this constructor cannot be passed to an actual Rust-backed object. Since there isn't a backing handle the FFI lower functions will crash.
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public init(noHandle: NoHandle) {
+        self.handle = 0
+    }
+
+#if swift(>=5.8)
+    @_documentation(visibility: private)
+#endif
+    public func uniffiCloneHandle() -> UInt64 {
+        return try! rustCall { uniffi_blazen_uniffi_fn_clone_uniffimodel(self.handle, $0) }
+    }
+    // No primary constructor declared for this class.
+
+    deinit {
+        if handle == 0 {
+            // Mock objects have handle=0 don't try to free them
+            return
+        }
+
+        try! rustCall { uniffi_blazen_uniffi_fn_free_uniffimodel(handle, $0) }
+    }
+
+    
+
+    
+    /**
+     * Run a non-streaming chat completion directly against this provider.
+     */
+open func complete(request: ModelRequest)async throws  -> ModelResponse  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodel_complete(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeModelRequest_lower(request)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeModelResponse_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`complete`](Self::complete).
+     */
+open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
+    return try  FfiConverterTypeModelResponse_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_uniffimodel_complete_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * The default model id reported by the wrapped provider.
+     */
+open func modelId() -> String  {
+    return try!  FfiConverterString.lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_uniffimodel_model_id(
+            self.uniffiCloneHandle(),$0
+    )
+})
+}
+    
+    /**
+     * Stream a chat completion directly against this provider, driving each
+     * chunk into `sink`. A failed *start* is surfaced both as an `Err` and
+     * via `sink.on_error`; once the stream is live every outcome flows
+     * through the sink.
+     */
+open func stream(request: ModelRequest, sink: CompletionStreamSink)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodel_stream(
+                    self.uniffiCloneHandle(),
+                    FfiConverterTypeModelRequest_lower(request),FfiConverterTypeCompletionStreamSink_lower(sink)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`stream`](Self::stream).
+     */
+open func streamBlocking(request: ModelRequest, sink: CompletionStreamSink)throws   {try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_uniffimodel_stream_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterTypeModelRequest_lower(request),
+        FfiConverterTypeCompletionStreamSink_lower(sink),$0
+    )
+}
+}
+    
+
+    
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public struct FfiConverterTypeUniffiModel: FfiConverter {
+    typealias FfiType = UInt64
+    typealias SwiftType = UniffiModel
+
+    public static func lift(_ handle: UInt64) throws -> UniffiModel {
+        return UniffiModel(unsafeFromHandle: handle)
+    }
+
+    public static func lower(_ value: UniffiModel) -> UInt64 {
+        return value.uniffiCloneHandle()
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> UniffiModel {
+        let handle: UInt64 = try readInt(&buf)
+        return try lift(handle)
+    }
+
+    public static func write(_ value: UniffiModel, into buf: inout [UInt8]) {
+        writeInt(&buf, lower(value))
+    }
+}
+
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUniffiModel_lift(_ handle: UInt64) throws -> UniffiModel {
+    return try FfiConverterTypeUniffiModel.lift(handle)
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
+public func FfiConverterTypeUniffiModel_lower(_ value: UniffiModel) -> UInt64 {
+    return FfiConverterTypeUniffiModel.lower(value)
+}
+
+
+
+
+
+
+/**
  * Memory-budget-aware model manager with per-pool LRU eviction.
  *
  * Foreign code constructs one of these, registers
@@ -20429,7 +20989,28 @@ public protocol UniffiModelManagerProtocol: AnyObject, Sendable {
     
     func availableBytes(pool: String) async throws  -> UInt64
     
+    /**
+     * Run a chat completion against the provider registered under `id`.
+     *
+     * Local entries are auto-loaded on first use; remote entries dispatch
+     * straight through. Errors if `id` is not registered or was registered
+     * for lifecycle only (via [`Self::register_local`]).
+     */
+    func complete(id: String, request: ModelRequest) async throws  -> ModelResponse
+    
+    /**
+     * Synchronous variant of [`Self::complete`].
+     */
+    func completeBlocking(id: String, request: ModelRequest) throws  -> ModelResponse
+    
     func ensureLoaded(modelId: String) async throws 
+    
+    /**
+     * Fetch the chat provider registered under `id` to use or compose
+     * directly. Returns `None` if `id` is unknown or was registered for
+     * lifecycle only (no chat model).
+     */
+    func get(id: String) async  -> UniffiModel?
     
     func isLoaded(modelId: String) async  -> Bool
     
@@ -20477,7 +21058,37 @@ public protocol UniffiModelManagerProtocol: AnyObject, Sendable {
      */
     func registerLocal(id: String, model: ForeignLocalModel, memoryEstimateBytes: UInt64) async throws 
     
+    /**
+     * Register a chat provider under `id` so it can be dispatched by name
+     * with [`Self::complete`] / [`Self::stream`], or fetched back with
+     * [`Self::get`].
+     *
+     * This is the unified registry — remote providers *and* in-process chat
+     * backends in one place. `model` is built from any concrete provider via
+     * its `to_model()` method (e.g. `OpenAiProvider::to_model`). Remote
+     * providers own no local weights, so they never count against a memory
+     * budget — pass `memory_estimate_bytes = 0`.
+     *
+     * To register a foreign-implemented local model with raw load / unload
+     * lifecycle callbacks instead, use [`Self::register_local`].
+     */
+    func registerModel(id: String, model: UniffiModel, memoryEstimateBytes: UInt64) async throws 
+    
     func status() async  -> [ModelStatusRecord]
+    
+    /**
+     * Streaming counterpart to [`Self::complete`], driving each chunk into
+     * `sink`. A failed *start* (unknown / lifecycle-only `id`, or the
+     * provider's own `stream()` failing to begin) is surfaced both as an
+     * `Err` and via `sink.on_error`; once live, every outcome flows through
+     * the sink.
+     */
+    func stream(id: String, request: ModelRequest, sink: CompletionStreamSink) async throws 
+    
+    /**
+     * Synchronous variant of [`Self::stream`].
+     */
+    func streamBlocking(id: String, request: ModelRequest, sink: CompletionStreamSink) throws 
     
     func unload(modelId: String) async throws 
     
@@ -20680,6 +21291,43 @@ open func availableBytes(pool: String)async throws  -> UInt64  {
         )
 }
     
+    /**
+     * Run a chat completion against the provider registered under `id`.
+     *
+     * Local entries are auto-loaded on first use; remote entries dispatch
+     * straight through. Errors if `id` is not registered or was registered
+     * for lifecycle only (via [`Self::register_local`]).
+     */
+open func complete(id: String, request: ModelRequest)async throws  -> ModelResponse  {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_complete(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(id),FfiConverterTypeModelRequest_lower(request)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterTypeModelResponse_lift,
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`Self::complete`].
+     */
+open func completeBlocking(id: String, request: ModelRequest)throws  -> ModelResponse  {
+    return try  FfiConverterTypeModelResponse_lift(try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_uniffimodelmanager_complete_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
 open func ensureLoaded(modelId: String)async throws   {
     return
         try  await uniffiRustCallAsync(
@@ -20694,6 +21342,29 @@ open func ensureLoaded(modelId: String)async throws   {
             freeFunc: ffi_blazen_uniffi_rust_future_free_void,
             liftFunc: { $0 },
             errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Fetch the chat provider registered under `id` to use or compose
+     * directly. Returns `None` if `id` is unknown or was registered for
+     * lifecycle only (no chat model).
+     */
+open func get(id: String)async  -> UniffiModel?  {
+    return
+        try!  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_get(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(id)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_rust_buffer,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_rust_buffer,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_rust_buffer,
+            liftFunc: FfiConverterOptionTypeUniffiModel.lift,
+            errorHandler: nil
+            
         )
 }
     
@@ -20846,6 +21517,37 @@ open func registerLocal(id: String, model: ForeignLocalModel, memoryEstimateByte
         )
 }
     
+    /**
+     * Register a chat provider under `id` so it can be dispatched by name
+     * with [`Self::complete`] / [`Self::stream`], or fetched back with
+     * [`Self::get`].
+     *
+     * This is the unified registry — remote providers *and* in-process chat
+     * backends in one place. `model` is built from any concrete provider via
+     * its `to_model()` method (e.g. `OpenAiProvider::to_model`). Remote
+     * providers own no local weights, so they never count against a memory
+     * budget — pass `memory_estimate_bytes = 0`.
+     *
+     * To register a foreign-implemented local model with raw load / unload
+     * lifecycle callbacks instead, use [`Self::register_local`].
+     */
+open func registerModel(id: String, model: UniffiModel, memoryEstimateBytes: UInt64)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_register_model(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(id),FfiConverterTypeUniffiModel_lower(model),FfiConverterUInt64.lower(memoryEstimateBytes)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
 open func status()async  -> [ModelStatusRecord]  {
     return
         try!  await uniffiRustCallAsync(
@@ -20862,6 +21564,43 @@ open func status()async  -> [ModelStatusRecord]  {
             errorHandler: nil
             
         )
+}
+    
+    /**
+     * Streaming counterpart to [`Self::complete`], driving each chunk into
+     * `sink`. A failed *start* (unknown / lifecycle-only `id`, or the
+     * provider's own `stream()` failing to begin) is surfaced both as an
+     * `Err` and via `sink.on_error`; once live, every outcome flows through
+     * the sink.
+     */
+open func stream(id: String, request: ModelRequest, sink: CompletionStreamSink)async throws   {
+    return
+        try  await uniffiRustCallAsync(
+            rustFutureFunc: {
+                uniffi_blazen_uniffi_fn_method_uniffimodelmanager_stream(
+                    self.uniffiCloneHandle(),
+                    FfiConverterString.lower(id),FfiConverterTypeModelRequest_lower(request),FfiConverterTypeCompletionStreamSink_lower(sink)
+                )
+            },
+            pollFunc: ffi_blazen_uniffi_rust_future_poll_void,
+            completeFunc: ffi_blazen_uniffi_rust_future_complete_void,
+            freeFunc: ffi_blazen_uniffi_rust_future_free_void,
+            liftFunc: { $0 },
+            errorHandler: FfiConverterTypeBlazenError_lift
+        )
+}
+    
+    /**
+     * Synchronous variant of [`Self::stream`].
+     */
+open func streamBlocking(id: String, request: ModelRequest, sink: CompletionStreamSink)throws   {try rustCallWithError(FfiConverterTypeBlazenError_lift) {
+    uniffi_blazen_uniffi_fn_method_uniffimodelmanager_stream_blocking(
+            self.uniffiCloneHandle(),
+        FfiConverterString.lower(id),
+        FfiConverterTypeModelRequest_lower(request),
+        FfiConverterTypeCompletionStreamSink_lower(sink),$0
+    )
+}
 }
     
 open func unload(modelId: String)async throws   {
@@ -23909,6 +24648,11 @@ public protocol XaiProviderProtocol: AnyObject, Sendable {
      */
     func completeBlocking(request: ModelRequest) throws  -> ModelResponse
     
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+    func toModel()  -> UniffiModel
+    
 }
 /**
  * Concrete LLM provider wrapping
@@ -24007,6 +24751,17 @@ open func completeBlocking(request: ModelRequest)throws  -> ModelResponse  {
     uniffi_blazen_uniffi_fn_method_xaiprovider_complete_blocking(
             self.uniffiCloneHandle(),
         FfiConverterTypeModelRequest_lower(request),$0
+    )
+})
+}
+    
+    /**
+     * Box this provider into a [`UniffiModel`] for registration.
+     */
+open func toModel() -> UniffiModel  {
+    return try!  FfiConverterTypeUniffiModel_lift(try! rustCall() {
+    uniffi_blazen_uniffi_fn_method_xaiprovider_to_model(
+            self.uniffiCloneHandle(),$0
     )
 })
 }
@@ -34036,6 +34791,30 @@ fileprivate struct FfiConverterOptionTypeForeignTrainingProgress: FfiConverterRu
 #if swift(>=5.8)
 @_documentation(visibility: private)
 #endif
+fileprivate struct FfiConverterOptionTypeUniffiModel: FfiConverterRustBuffer {
+    typealias SwiftType = UniffiModel?
+
+    public static func write(_ value: SwiftType, into buf: inout [UInt8]) {
+        guard let value = value else {
+            writeInt(&buf, Int8(0))
+            return
+        }
+        writeInt(&buf, Int8(1))
+        FfiConverterTypeUniffiModel.write(value, into: &buf)
+    }
+
+    public static func read(from buf: inout (data: Data, offset: Data.Index)) throws -> SwiftType {
+        switch try readInt(&buf) as Int8 {
+        case 0: return nil
+        case 1: return try FfiConverterTypeUniffiModel.read(from: &buf)
+        default: throw UniffiInternalError.unexpectedOptionalTag
+        }
+    }
+}
+
+#if swift(>=5.8)
+@_documentation(visibility: private)
+#endif
 fileprivate struct FfiConverterOptionTypeBaseProviderDefaults: FfiConverterRustBuffer {
     typealias SwiftType = BaseProviderDefaults?
 
@@ -36748,10 +37527,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_anthropicprovider_complete_blocking() != 30514) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_anthropicprovider_to_model() != 11487) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_azureopenaiprovider_complete() != 25281) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_azureopenaiprovider_complete_blocking() != 18528) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_azureopenaiprovider_to_model() != 2982) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_bedrockprovider_complete() != 1274) {
@@ -36760,10 +37545,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_bedrockprovider_complete_blocking() != 30053) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_bedrockprovider_to_model() != 12484) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_candlellmprovider_complete() != 17724) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_candlellmprovider_complete_blocking() != 55435) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_candlellmprovider_to_model() != 60361) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_cohereprovider_complete() != 52000) {
@@ -36772,10 +37563,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_cohereprovider_complete_blocking() != 50974) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_cohereprovider_to_model() != 64525) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_deepseekprovider_complete() != 48602) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_deepseekprovider_complete_blocking() != 43171) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_deepseekprovider_to_model() != 12086) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_falllmprovider_complete() != 1701) {
@@ -36784,10 +37581,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_falllmprovider_complete_blocking() != 63746) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_falllmprovider_to_model() != 63406) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_fireworksprovider_complete() != 24689) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_fireworksprovider_complete_blocking() != 36073) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_fireworksprovider_to_model() != 25443) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_geminiprovider_complete() != 12743) {
@@ -36796,10 +37599,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_geminiprovider_complete_blocking() != 6383) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_geminiprovider_to_model() != 12229) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_groqprovider_complete() != 24549) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_groqprovider_complete_blocking() != 24192) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_groqprovider_to_model() != 37277) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_llamacppprovider_complete() != 40542) {
@@ -36808,10 +37617,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_llamacppprovider_complete_blocking() != 43656) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_llamacppprovider_to_model() != 12816) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_lmstudioprovider_complete() != 28845) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_lmstudioprovider_complete_blocking() != 4167) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_lmstudioprovider_to_model() != 46866) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_mistralprovider_complete() != 17782) {
@@ -36820,10 +37635,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_mistralprovider_complete_blocking() != 28600) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_mistralprovider_to_model() != 41372) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_mistralrsprovider_complete() != 25702) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_mistralrsprovider_complete_blocking() != 58005) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_mistralrsprovider_to_model() != 15558) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_ollamaprovider_complete() != 14555) {
@@ -36832,10 +37653,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_ollamaprovider_complete_blocking() != 65217) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_ollamaprovider_to_model() != 42480) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_openaicompatprovider_complete() != 39007) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_openaicompatprovider_complete_blocking() != 53120) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_openaicompatprovider_to_model() != 3166) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_openaiprovider_complete() != 22900) {
@@ -36844,10 +37671,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_openaiprovider_complete_blocking() != 59004) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_openaiprovider_to_model() != 599) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_openrouterprovider_complete() != 8526) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_openrouterprovider_complete_blocking() != 14875) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_openrouterprovider_to_model() != 29493) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_perplexityprovider_complete() != 46725) {
@@ -36856,16 +37689,25 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_perplexityprovider_complete_blocking() != 50822) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_perplexityprovider_to_model() != 54203) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_togetherprovider_complete() != 64044) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_togetherprovider_complete_blocking() != 29699) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_togetherprovider_to_model() != 24568) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_xaiprovider_complete() != 28511) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_xaiprovider_complete_blocking() != 25933) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_xaiprovider_to_model() != 935) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_audiogenprovider_generate_music() != 18485) {
@@ -37123,10 +37965,34 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_foreignlocalmodel_list_adapters() != 49821) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodel_complete() != 29201) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodel_complete_blocking() != 14208) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodel_model_id() != 39622) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodel_stream() != 26135) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodel_stream_blocking() != 55632) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_available_bytes() != 19672) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_complete() != 10719) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_complete_blocking() != 12823) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_ensure_loaded() != 33632) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_get() != 17000) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_is_loaded() != 48692) {
@@ -37153,7 +38019,16 @@ private let initializationResult: InitializationResult = {
     if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_register_local() != 23428) {
         return InitializationResult.apiChecksumMismatch
     }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_register_model() != 36677) {
+        return InitializationResult.apiChecksumMismatch
+    }
     if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_status() != 18811) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_stream() != 18373) {
+        return InitializationResult.apiChecksumMismatch
+    }
+    if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_stream_blocking() != 9980) {
         return InitializationResult.apiChecksumMismatch
     }
     if (uniffi_blazen_uniffi_checksum_method_uniffimodelmanager_unload() != 3272) {

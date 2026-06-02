@@ -25,7 +25,7 @@ A minimal chat interface that runs Blazen entirely in the browser. Tokens stream
   <button id="send">Send</button>
 
   <script type="module">
-    import init, { Model, ChatMessage } from '@blazen/sdk';
+    import init, { OpenRouterProvider, ChatMessage } from '@blazen/sdk';
 
     await init();
 
@@ -34,9 +34,9 @@ A minimal chat interface that runs Blazen entirely in the browser. Tokens stream
     const send = document.getElementById('send');
     const messages = [];
 
-    // WASM reads OPENROUTER_API_KEY from the runtime env (or `process.env` in Node).
+    // Construct the provider directly. With no apiKey, it reads OPENROUTER_API_KEY.
     // In production, proxy through your backend -- never expose keys client-side.
-    const model = Model.openrouter();
+    const model = new OpenRouterProvider({ apiKey: 'sk-or-...' });
 
     send.addEventListener('click', async () => {
       const text = input.value.trim();
@@ -72,7 +72,7 @@ A minimal chat interface that runs Blazen entirely in the browser. Tokens stream
 A serverless API endpoint that uses the WASM SDK with tool calling. Deploy to any platform that supports Node.js (Vercel, AWS Lambda, etc.).
 
 ```typescript
-import init, { Model, ChatMessage, runAgent } from '@blazen/sdk';
+import init, { OpenAiProvider, ChatMessage, runAgent } from '@blazen/sdk';
 
 let initialized = false;
 
@@ -119,8 +119,8 @@ export default async function handler(req: Request): Promise<Response> {
   }
 
   const { message } = await req.json();
-  // Reads OPENAI_API_KEY from process.env.
-  const model = Model.openai();
+  // Construct the provider directly, then adapt it for runAgent via toModel().
+  const model = new OpenAiProvider({ apiKey: process.env.OPENAI_API_KEY }).toModel();
 
   const result = await runAgent(
     model,
@@ -150,7 +150,12 @@ Use the WASM SDK inside a Tauri v2 app to run AI features locally without a serv
 
 ```typescript
 // src/lib/ai.ts
-import init, { Model, ChatMessage, Workflow } from '@blazen/sdk';
+import init, {
+  AnthropicProvider,
+  OpenAiProvider,
+  ChatMessage,
+  Workflow,
+} from '@blazen/sdk';
 
 let ready = false;
 
@@ -167,8 +172,8 @@ export async function summarize(text: string): Promise<string> {
   const wf = new Workflow('summarizer');
 
   wf.addStep('summarize', ['blazen::StartEvent'], async (event, ctx) => {
-    // The WASM SDK reads ANTHROPIC_API_KEY from the runtime environment.
-    const model = Model.anthropic();
+    // Construct the provider directly. With no apiKey, it reads ANTHROPIC_API_KEY.
+    const model = new AnthropicProvider({ apiKey: 'sk-ant-...' });
     const response = await model.complete([
       ChatMessage.system('Summarize the following text concisely.'),
       ChatMessage.user(event.text),
@@ -189,8 +194,8 @@ export async function chat(
 ): Promise<void> {
   await ensureInit();
 
-  // Reads OPENAI_API_KEY from the environment.
-  const model = Model.openai();
+  // Construct the provider directly. With no apiKey, it reads OPENAI_API_KEY.
+  const model = new OpenAiProvider({ apiKey: 'sk-...' });
   const chatMessages = messages.map((m) =>
     m.role === 'user' ? ChatMessage.user(m.content) : ChatMessage.assistant(m.content)
   );
@@ -327,16 +332,20 @@ const music = new MusicProvider("local-musicgen", {
 
 ## ModelManager (WASM)
 
-The WASM `ModelManager` tracks per-pool memory budgets and evicts the least-recently-used model within the same pool when its budget would be exceeded. Because WASM classes cannot be subclassed, the manager takes an explicit `lifecycle` object with `load()` and `unload()` async methods (plus optional `memoryBytes()` and `device()` callbacks for pool routing).
+The WASM `ModelManager` is the **unified registry** — register local models *and* remote providers by name, then dispatch with `complete(id, messages)` (also `stream(id, messages, onChunk)` and `get(id)`). It tracks per-pool memory budgets and evicts the least-recently-used local model within the same pool when its budget would be exceeded. Remote providers own no local weights, so they dispatch straight through and never count against a budget. Because WASM classes cannot be subclassed, local models take an explicit `lifecycle` object with `load()` and `unload()` async methods (plus optional `memoryBytes()` and `device()` callbacks for pool routing).
 
 ```typescript
-import init, { Model, ModelManager } from "@blazen/sdk";
+import init, { Model, ModelManager, OpenAiProvider, ChatMessage } from "@blazen/sdk";
 
 await init();
 
 // 8 GB CPU pool budget (conservative for a laptop). Pass a second
 // argument like `new ModelManager(8, 4)` to add a GPU pool too.
 const manager = new ModelManager(8);
+
+// Remote provider: dispatch-only, no footprint (pass 0, omit lifecycle).
+// Standalone providers expose toModel() for the registry.
+manager.register("gpt", new OpenAiProvider({ apiKey: "sk-..." }).toModel(), 0);
 
 // Construct models backed by @mlc-ai/web-llm (lazy-loaded at complete-time).
 const llama = Model.webLlm("Llama-3.1-8B-Instruct-q4f32_1-MLC");
@@ -358,6 +367,10 @@ manager.register("qwen-7b", qwen, 4_200_000_000, {
   memoryBytes: async () => 4_200_000_000,
   device: () => "cpu",
 });
+
+// Dispatch the remote provider by name — same call shape as the local models.
+const remote = await manager.complete("gpt", [ChatMessage.user("Hello from the cloud!")]);
+console.log(remote.content);
 
 await manager.load("llama-8b");
 await manager.load("qwen-7b"); // evicts llama-8b (4.5 + 4.2 > 8 GB CPU pool budget)

@@ -2408,3 +2408,260 @@ pub fn candle_provider_complete_streaming_blocking(
 ) -> Result<(), BlazenError> {
     crate::runtime::runtime().block_on(candle_provider_complete_streaming(provider, request, sink))
 }
+
+// ---------------------------------------------------------------------------
+// `as_model()` accessors + `to_model()` exported constructors
+// ---------------------------------------------------------------------------
+//
+// Each concrete `<Engine>Provider` wraps an `Arc<C>` where the upstream
+// concrete `C` implements `blazen_llm::Model` (see the `impl
+// crate::traits::Model for <Engine>Provider` blocks in `blazen_llm`). The
+// `as_model()` accessor erases that inner `Arc` to `Arc<dyn
+// blazen_llm::Model>` so `UniffiModelManager::register_model` can file the
+// provider in the unified registry for by-name dispatch.
+//
+// UniFFI cannot pass `Arc<dyn Trait>` across the FFI, so each provider also
+// gets a `to_model()` method (exported) that boxes itself into a
+// `UniffiModel` opaque — the foreign-facing handle the manager registers and
+// `get()` hands back. `to_model()` is the bridge: foreign callers do
+// `manager.registerModel(id, openAi.toModel(), 0)`.
+
+use crate::manager::UniffiModel;
+
+/// Generate the `pub(crate) fn as_model()` accessor + the exported
+/// `to_model()` constructor for one concrete provider. Hand-expanded per
+/// engine because `#[uniffi::export]` reads pre-expansion tokens.
+macro_rules! impl_as_model {
+    ($provider:ty) => {
+        impl $provider {
+            /// Erase the wrapped provider to `Arc<dyn blazen_llm::Model>` for
+            /// registration in the unified [`UniffiModelManager`] registry.
+            pub(crate) fn as_model(&self) -> Arc<dyn blazen_llm::Model> {
+                Arc::clone(&self.inner) as Arc<dyn blazen_llm::Model>
+            }
+        }
+    };
+}
+
+impl_as_model!(OpenAiProvider);
+impl_as_model!(AnthropicProvider);
+impl_as_model!(GeminiProvider);
+impl_as_model!(AzureOpenAiProvider);
+impl_as_model!(BedrockProvider);
+impl_as_model!(MistralProvider);
+impl_as_model!(FireworksProvider);
+impl_as_model!(DeepSeekProvider);
+impl_as_model!(PerplexityProvider);
+impl_as_model!(TogetherProvider);
+impl_as_model!(GroqProvider);
+impl_as_model!(OpenRouterProvider);
+impl_as_model!(CohereProvider);
+impl_as_model!(XaiProvider);
+impl_as_model!(FalLlmProvider);
+impl_as_model!(OpenAiCompatProvider);
+impl_as_model!(OllamaProvider);
+impl_as_model!(LmStudioProvider);
+#[cfg(feature = "mistralrs")]
+impl_as_model!(MistralRsProvider);
+#[cfg(feature = "llamacpp")]
+impl_as_model!(LlamaCppProvider);
+#[cfg(feature = "candle-llm")]
+impl_as_model!(CandleLlmProvider);
+
+// The exported `to_model()` constructors are hand-written (one
+// `#[uniffi::export]` block per engine) so the proc-macro registers each in
+// the UniFFI metadata. Every one boxes `self.as_model()` into a `UniffiModel`
+// opaque so foreign callers can pass it to `register_model`.
+
+#[uniffi::export]
+impl OpenAiProvider {
+    /// Box this provider into a [`UniffiModel`] for registration with
+    /// [`UniffiModelManager::register_model`].
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[uniffi::export]
+impl AnthropicProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[uniffi::export]
+impl GeminiProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[uniffi::export]
+impl AzureOpenAiProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[uniffi::export]
+impl BedrockProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[uniffi::export]
+impl MistralProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[uniffi::export]
+impl FireworksProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[uniffi::export]
+impl DeepSeekProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[uniffi::export]
+impl PerplexityProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[uniffi::export]
+impl TogetherProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[uniffi::export]
+impl GroqProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[uniffi::export]
+impl OpenRouterProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[uniffi::export]
+impl CohereProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[uniffi::export]
+impl XaiProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[uniffi::export]
+impl FalLlmProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[uniffi::export]
+impl OpenAiCompatProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[uniffi::export]
+impl OllamaProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[uniffi::export]
+impl LmStudioProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[cfg(feature = "mistralrs")]
+#[uniffi::export]
+impl MistralRsProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[cfg(feature = "llamacpp")]
+#[uniffi::export]
+impl LlamaCppProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}
+
+#[cfg(feature = "candle-llm")]
+#[uniffi::export]
+impl CandleLlmProvider {
+    /// Box this provider into a [`UniffiModel`] for registration.
+    #[must_use]
+    pub fn to_model(&self) -> Arc<UniffiModel> {
+        UniffiModel::from_inner(self.as_model())
+    }
+}

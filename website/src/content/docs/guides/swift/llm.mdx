@@ -187,6 +187,41 @@ let candle = try Providers.candle(
 
 Each requires the underlying native lib to be built with the corresponding feature flag (`llamacpp`, `mistralrs`, `candle-llm`). The prebuilt `XCFramework` shipped by `BlazenSwift` includes these features on macOS; check the package release notes for iOS.
 
+## Scaling up with ModelManager
+
+Constructing a provider and calling `complete(request:)` directly is the right default. When you start juggling several models, `UniffiModelManager` is the **unified registry**: register providers — local *and* remote — under names, then dispatch by name with `complete(id:request:)` (also `stream(...)` and `get(id:)`). Each per-engine provider exposes `toModel()` to produce the `UniffiModel` the registry expects. Remote providers own no local weights, so they register with a `0` estimate and never count against a memory budget.
+
+```swift
+import BlazenSwift
+import UniFFIBlazen
+
+let manager = UniffiModelManager()
+
+// Register remote providers under names. toModel() adapts the per-engine
+// provider into the generic UniffiModel the manager dispatches.
+try await manager.registerModel(
+    id: "fast",
+    model: UniFFIBlazen.OpenAiProvider(apiKey: "", model: "gpt-4o-mini", baseUrl: nil).toModel(),
+    memoryEstimateBytes: 0
+)
+try await manager.registerModel(
+    id: "smart",
+    model: UniFFIBlazen.AnthropicProvider(apiKey: "", model: nil, baseUrl: nil).toModel(),
+    memoryEstimateBytes: 0
+)
+
+let request = ModelRequest(
+    messages: [.user("Write a haiku about Swift actors.")],
+    maxTokens: 256
+)
+
+// Dispatch by name — same call shape for every registered entry.
+let response = try await manager.complete(id: "fast", request: request)
+print(response.content)
+```
+
+For local models, `registerModel` also takes a memory-footprint estimate and the manager evicts the least-recently-used model in the same pool when a load would exceed its budget. Use `UniffiModelManager.withBudgetsGb(cpuRamGb:gpuVramGb:)` to set those budgets. See the [Local Inference](/guides/local-inference/) guide for the budgeting details.
+
 ## Errors
 
 Every failure surfaces as a `BlazenError`. Switch on the variant for typed handling, or just read `.message` for a uniform `String`:

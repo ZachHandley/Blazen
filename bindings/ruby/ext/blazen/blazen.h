@@ -6607,6 +6607,29 @@ BlazenEmbeddingProvider *blazen_fal_embedding_provider_as_embedding_provider(con
  int32_t blazen_future_take_string(BlazenFuture *fut, char **out, BlazenError **err);
 
 /**
+ * Pops a `Result<blazen_uniffi::llm::ModelResponse, _>` future, writing a
+ * caller-owned `BlazenModelResponse*` into `*out` (free with
+ * [`crate::llm_records::blazen_model_response_free`]). Returns `0` on success
+ * or `-1` on failure (writes `*err`).
+ *
+ * This is the async counterpart for every cabi verb that spawns a chat
+ * completion: the per-engine `blazen_<engine>_provider_complete` factories in
+ * [`crate::llm_providers`] and the by-name
+ * [`crate::manager::blazen_model_manager_complete`]. All of them spawn a
+ * future whose `Ok` type is the wire `blazen_uniffi::llm::ModelResponse`.
+ *
+ * # Safety
+ *
+ * `fut` is null OR a live cabi-produced future whose `Ok` type is
+ * `blazen_uniffi::llm::ModelResponse`. `out` and `err` are each null OR a
+ * single-writer destination.
+ */
+
+int32_t blazen_future_take_model_response(BlazenFuture *fut,
+                                          BlazenModelResponse **out,
+                                          BlazenError **err);
+
+/**
  * Pops a `Result<Vec<blazen_manager::ModelStatus>, _>` future, writing a
  * caller-owned `BlazenModelStatusList*` into `*out` (free with
  * [`crate::manager_records::blazen_model_status_list_free`]). Returns `0` on
@@ -8957,6 +8980,78 @@ int32_t blazen_model_manager_is_loaded_blocking(const BlazenModelManager *mgr,
  * Same as [`blazen_model_manager_load`].
  */
  BlazenFuture *blazen_model_manager_is_loaded(const BlazenModelManager *mgr, const char *model_id);
+
+/**
+ * Registers the remote provider behind `provider` under `id` so it can be
+ * dispatched by name with [`blazen_model_manager_complete_blocking`] /
+ * [`blazen_model_manager_complete`]. The provider's inner `Arc` is cloned and
+ * coerced to `Arc<dyn blazen_llm::Model>` — the original `provider` handle
+ * remains valid and the caller still frees it with
+ * [`crate::llm_provider::blazen_llm_provider_free`].
+ *
+ * `memory_estimate_bytes` is recorded but not enforced for remote providers
+ * (they own no local weights and file on `Pool::Remote`); pass `0` unless a
+ * host wants the bookkeeping. Returns `0` on success or `-1` on failure
+ * (writes `*out_err`).
+ *
+ * # Safety
+ *
+ * `mgr` must be null OR a live [`BlazenModelManager`]. `id` must be a
+ * NUL-terminated UTF-8 buffer valid for the call. `provider` must be null OR
+ * a live [`BlazenLlmProvider`] (produced by a
+ * `blazen_<engine>_provider_as_llm_provider` C function). `out_err` is null
+ * OR a single-writer destination.
+ */
+
+int32_t blazen_model_manager_register_remote(const BlazenModelManager *mgr,
+                                             const char *id,
+                                             const BlazenLlmProvider *provider,
+                                             uint64_t memory_estimate_bytes,
+                                             BlazenError **out_err);
+
+/**
+ * Synchronously runs a chat completion against the provider registered under
+ * `id`. On success returns `0` and writes a fresh `BlazenModelResponse*` into
+ * `*out_response` (free with
+ * [`crate::llm_records::blazen_model_response_free`]). On failure returns
+ * `-1` and writes a fresh `BlazenError*` into `*out_err`.
+ *
+ * **The `request` pointer is consumed** (matching the per-engine
+ * `blazen_<engine>_provider_complete_blocking` contract): internally
+ * `Box::from_raw` reclaims it. Do not also call
+ * [`crate::llm_records::blazen_model_request_free`] on it afterwards.
+ *
+ * # Safety
+ *
+ * `mgr` must be null OR a live [`BlazenModelManager`]. `id` must be a
+ * NUL-terminated UTF-8 buffer valid for the call. `request` must be null OR a
+ * live [`BlazenModelRequest`]; ownership transfers to this function
+ * regardless of outcome. `out_response` / `out_err` are each null OR a
+ * single-writer destination.
+ */
+
+int32_t blazen_model_manager_complete_blocking(const BlazenModelManager *mgr,
+                                               const char *id,
+                                               BlazenModelRequest *request,
+                                               BlazenModelResponse **out_response,
+                                               BlazenError **out_err);
+
+/**
+ * Spawns a by-name chat completion onto the cabi tokio runtime; pop the
+ * result with [`crate::llm_records::blazen_future_take_model_response`]. Returns
+ * null on argument-shape failure (null manager / null or non-UTF-8 `id` /
+ * null or invalid `request`); the `request` pointer is consumed in every
+ * case (dropped on the null/invalid paths to avoid a leak).
+ *
+ * # Safety
+ *
+ * Same as [`blazen_model_manager_complete_blocking`] (minus the out-param
+ * pointers). The request buffer is taken before this function returns.
+ */
+
+BlazenFuture *blazen_model_manager_complete(const BlazenModelManager *mgr,
+                                            const char *id,
+                                            BlazenModelRequest *request);
 
 /**
  * Synchronously snapshots the status of every registered model. Returns a

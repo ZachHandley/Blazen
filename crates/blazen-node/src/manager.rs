@@ -7,12 +7,16 @@ use napi_derive::napi;
 use std::collections::HashMap;
 use std::sync::Arc;
 
+use blazen_llm::types::{ChatMessage, ModelRequest};
 use blazen_llm::{AdapterHandle, AdapterMountStrategy, BlazenError, Device, LocalModel, Pool};
 use blazen_manager::ModelManager;
 #[cfg(feature = "hf-loader")]
 use blazen_manager::hf_loader::{BackendHint, HfLoadOptions};
+use tokio_stream::StreamExt;
 
-use crate::providers::model::JsModel;
+use crate::error::llm_error_to_napi;
+use crate::providers::model::{JsModel, StreamChunkCallbackTsfn};
+use crate::types::{JsChatMessage, JsModelResponse, build_response, build_stream_chunk};
 
 // ---------------------------------------------------------------------------
 // ThreadsafeFunction type aliases for the JS-callback `LocalModel` adapter.
@@ -342,16 +346,19 @@ impl JsModelManager {
         })
     }
 
-    /// Register a `Model`-backed local model with the manager.
+    /// Register a provider under `id` so it can be dispatched by name with
+    /// [`Self::complete`] / [`Self::stream`].
     ///
-    /// The model starts in the unloaded state. An optional
-    /// `memoryEstimateBytes` overrides the model's self-reported
-    /// estimate.
+    /// Works for **both** tiers in one place:
+    /// - **Remote providers** (`Model.openai()`, `FalProvider.create()`, …)
+    ///   register as dispatch-only entries — they own no local weights, so
+    ///   they never count against a memory budget.
+    /// - **Local in-process providers** (mistral.rs, llama.cpp, candle)
+    ///   additionally participate in load/unload lifecycle and per-pool LRU
+    ///   eviction; `memoryEstimateBytes` reports their footprint.
     ///
-    /// Only local in-process providers (mistral.rs, llama.cpp, candle)
-    /// can be registered — remote HTTP providers will throw. To
-    /// register an arbitrary JS-managed resource (embedding model,
-    /// tokenizer, custom runtime, …), use
+    /// To register an arbitrary JS-managed resource (embedding model,
+    /// tokenizer, custom runtime, …) with raw lifecycle callbacks, use
     /// [`Self::register_local_model`] instead.
     #[napi]
     pub async fn register(
@@ -360,13 +367,84 @@ impl JsModelManager {
         model: &JsModel,
         memory_estimate_bytes: Option<BigInt>,
     ) -> napi::Result<()> {
-        let local_model = model
-            .local_model
-            .clone()
-            .ok_or_else(|| napi::Error::from_reason("model does not support local loading"))?;
         let memory = memory_estimate_bytes.map_or(0, |b| b.get_u64().1);
-        self.inner.register(&id, local_model, memory).await;
+        let local = model.local_model.clone();
+        if let Some(chat) = model.inner.clone() {
+            // A dispatchable provider (remote, or a local backend that is
+            // also a chat Model): register for by-name completion, plus
+            // lifecycle/budget when local weights are present.
+            self.inner.register_provider(&id, chat, local, memory).await;
+        } else if let Some(local) = local {
+            // Lifecycle-only backend (no chat surface, e.g. a local media
+            // model): register for memory budgeting alone.
+            self.inner.register(&id, local, memory).await;
+        } else {
+            return Err(napi::Error::from_reason(
+                "model is neither a chat provider nor a loadable local model; \
+                 use registerLocalModel() for JS-managed resources",
+            ));
+        }
         Ok(())
+    }
+
+    /// Run a chat completion against the provider registered under `id`.
+    ///
+    /// Local entries are auto-loaded on first use; remote entries dispatch
+    /// straight through. Throws if `id` is not registered or was registered
+    /// for lifecycle only.
+    #[napi]
+    pub async fn complete(
+        &self,
+        id: String,
+        messages: Vec<&JsChatMessage>,
+    ) -> napi::Result<JsModelResponse> {
+        let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
+        let request = ModelRequest::new(chat_messages);
+        let response = self
+            .inner
+            .complete(&id, request)
+            .await
+            .map_err(llm_error_to_napi)?;
+        Ok(build_response(response))
+    }
+
+    /// Streaming counterpart to [`Self::complete`]. The `onChunk` callback
+    /// receives each chunk as a typed `StreamChunk`.
+    #[napi]
+    pub async fn stream(
+        &self,
+        id: String,
+        messages: Vec<&JsChatMessage>,
+        on_chunk: StreamChunkCallbackTsfn,
+    ) -> napi::Result<()> {
+        let chat_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
+        let request = ModelRequest::new(chat_messages);
+        let stream = self
+            .inner
+            .stream(&id, request)
+            .await
+            .map_err(llm_error_to_napi)?;
+        let mut stream = std::pin::pin!(stream);
+        while let Some(result) = stream.next().await {
+            match result {
+                Ok(chunk) => {
+                    on_chunk.call(
+                        build_stream_chunk(chunk),
+                        napi::threadsafe_function::ThreadsafeFunctionCallMode::Blocking,
+                    );
+                }
+                Err(e) => return Err(napi::Error::from_reason(e.to_string())),
+            }
+        }
+        Ok(())
+    }
+
+    /// Fetch the chat interface registered under `id` to use or compose
+    /// directly. Returns `null` if `id` is unknown or was registered for
+    /// lifecycle only (no chat `Model`).
+    #[napi]
+    pub async fn get(&self, id: String) -> Option<JsModel> {
+        self.inner.get(&id).await.map(JsModel::from_inner)
     }
 
     /// Register an arbitrary JS-managed local model with the manager.

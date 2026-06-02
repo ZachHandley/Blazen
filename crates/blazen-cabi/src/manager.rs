@@ -42,6 +42,8 @@ use blazen_uniffi::errors::BlazenError as InnerError;
 
 use crate::error::BlazenError;
 use crate::future::BlazenFuture;
+use crate::llm_provider::BlazenLlmProvider;
+use crate::llm_records::{BlazenModelRequest, BlazenModelResponse};
 #[cfg(feature = "hf-loader")]
 use crate::manager_records::{
     BLAZEN_BACKEND_HINT_CANDLE, BLAZEN_BACKEND_HINT_LLAMACPP, BLAZEN_BACKEND_HINT_MISTRALRS,
@@ -349,6 +351,207 @@ pub unsafe extern "C" fn blazen_model_manager_is_loaded(
     let mgr = unsafe { &*mgr };
     let inner = Arc::clone(&mgr.0);
     BlazenFuture::spawn(async move { Ok::<bool, InnerError>(inner.is_loaded(&id).await) })
+}
+
+// ---------------------------------------------------------------------------
+// register_remote / complete (unified remote-provider dispatch)
+//
+// Why: core `ModelManager` now holds BOTH local models and remote providers
+// in one registry. `register_provider(id, Arc<dyn Model>, None, mem)` files a
+// remote provider for by-name dispatch (it owns no local weights, so it never
+// counts against a memory budget). `complete(id, request)` then dispatches
+// straight through. The C surface exposes the remote-provider half here; the
+// local-only `register` still needs the foreign callback trampoline tracked in
+// the module-level deferred-surface note.
+// ---------------------------------------------------------------------------
+
+/// Registers the remote provider behind `provider` under `id` so it can be
+/// dispatched by name with [`blazen_model_manager_complete_blocking`] /
+/// [`blazen_model_manager_complete`]. The provider's inner `Arc` is cloned and
+/// coerced to `Arc<dyn blazen_llm::Model>` — the original `provider` handle
+/// remains valid and the caller still frees it with
+/// [`crate::llm_provider::blazen_llm_provider_free`].
+///
+/// `memory_estimate_bytes` is recorded but not enforced for remote providers
+/// (they own no local weights and file on `Pool::Remote`); pass `0` unless a
+/// host wants the bookkeeping. Returns `0` on success or `-1` on failure
+/// (writes `*out_err`).
+///
+/// # Safety
+///
+/// `mgr` must be null OR a live [`BlazenModelManager`]. `id` must be a
+/// NUL-terminated UTF-8 buffer valid for the call. `provider` must be null OR
+/// a live [`BlazenLlmProvider`] (produced by a
+/// `blazen_<engine>_provider_as_llm_provider` C function). `out_err` is null
+/// OR a single-writer destination.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_register_remote(
+    mgr: *const BlazenModelManager,
+    id: *const c_char,
+    provider: *const BlazenLlmProvider,
+    memory_estimate_bytes: u64,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if mgr.is_null() {
+        // SAFETY: out_err contract per the per-fn doc.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_register_remote: null manager",
+            )
+        };
+    }
+    if provider.is_null() {
+        // SAFETY: out_err contract per the per-fn doc.
+        return unsafe {
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_register_remote: null provider",
+            )
+        };
+    }
+    // SAFETY: out_err + id contracts per the per-fn doc.
+    let Some(id) =
+        (unsafe { borrow_model_id("blazen_model_manager_register_remote", id, out_err) })
+    else {
+        return -1;
+    };
+    // SAFETY: caller has guaranteed `provider` is a live handle.
+    let model = unsafe { &*provider }.as_model();
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    runtime().block_on(async move {
+        inner
+            .register_provider(&id, model, None, memory_estimate_bytes)
+            .await;
+    });
+    0
+}
+
+/// Synchronously runs a chat completion against the provider registered under
+/// `id`. On success returns `0` and writes a fresh `BlazenModelResponse*` into
+/// `*out_response` (free with
+/// [`crate::llm_records::blazen_model_response_free`]). On failure returns
+/// `-1` and writes a fresh `BlazenError*` into `*out_err`.
+///
+/// **The `request` pointer is consumed** (matching the per-engine
+/// `blazen_<engine>_provider_complete_blocking` contract): internally
+/// `Box::from_raw` reclaims it. Do not also call
+/// [`crate::llm_records::blazen_model_request_free`] on it afterwards.
+///
+/// # Safety
+///
+/// `mgr` must be null OR a live [`BlazenModelManager`]. `id` must be a
+/// NUL-terminated UTF-8 buffer valid for the call. `request` must be null OR a
+/// live [`BlazenModelRequest`]; ownership transfers to this function
+/// regardless of outcome. `out_response` / `out_err` are each null OR a
+/// single-writer destination.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_complete_blocking(
+    mgr: *const BlazenModelManager,
+    id: *const c_char,
+    request: *mut BlazenModelRequest,
+    out_response: *mut *mut BlazenModelResponse,
+    out_err: *mut *mut BlazenError,
+) -> i32 {
+    if mgr.is_null() {
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; drop to avoid a leak.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        // SAFETY: out_err contract per the per-fn doc.
+        return unsafe {
+            write_internal_error(out_err, "blazen_model_manager_complete_blocking: null manager")
+        };
+    }
+    if request.is_null() {
+        // SAFETY: out_err contract per the per-fn doc.
+        return unsafe {
+            write_internal_error(out_err, "blazen_model_manager_complete_blocking: null request")
+        };
+    }
+    // SAFETY: out_err + id contracts per the per-fn doc.
+    let Some(id) =
+        (unsafe { borrow_model_id("blazen_model_manager_complete_blocking", id, out_err) })
+    else {
+        // SAFETY: caller transferred ownership of `request`; drop to avoid a leak.
+        drop(unsafe { Box::from_raw(request) });
+        return -1;
+    };
+    // SAFETY: caller has transferred ownership of `request`.
+    let wire_request = unsafe { Box::from_raw(request) }.0;
+    let core_request = match blazen_llm::ModelRequest::try_from(wire_request) {
+        Ok(r) => r,
+        // SAFETY: out_err contract per the per-fn doc.
+        Err(e) => return unsafe { write_error(out_err, e) },
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    match runtime().block_on(async move { inner.complete(&id, core_request).await }) {
+        Ok(resp) => {
+            if !out_response.is_null() {
+                let wire = blazen_uniffi::llm::ModelResponse::from(resp);
+                // SAFETY: out_response contract per the per-fn doc.
+                unsafe {
+                    *out_response = BlazenModelResponse::from(wire).into_ptr();
+                }
+            }
+            0
+        }
+        // SAFETY: out_err contract per the per-fn doc.
+        Err(e) => unsafe { write_error(out_err, into_inner_error(e)) },
+    }
+}
+
+/// Spawns a by-name chat completion onto the cabi tokio runtime; pop the
+/// result with [`crate::llm_records::blazen_future_take_model_response`]. Returns
+/// null on argument-shape failure (null manager / null or non-UTF-8 `id` /
+/// null or invalid `request`); the `request` pointer is consumed in every
+/// case (dropped on the null/invalid paths to avoid a leak).
+///
+/// # Safety
+///
+/// Same as [`blazen_model_manager_complete_blocking`] (minus the out-param
+/// pointers). The request buffer is taken before this function returns.
+#[unsafe(no_mangle)]
+pub unsafe extern "C" fn blazen_model_manager_complete(
+    mgr: *const BlazenModelManager,
+    id: *const c_char,
+    request: *mut BlazenModelRequest,
+) -> *mut BlazenFuture {
+    if mgr.is_null() {
+        if !request.is_null() {
+            // SAFETY: caller transferred ownership; drop to avoid a leak.
+            drop(unsafe { Box::from_raw(request) });
+        }
+        return std::ptr::null_mut();
+    }
+    if request.is_null() {
+        return std::ptr::null_mut();
+    }
+    // SAFETY: caller upholds the NUL + lifetime contract on `id`.
+    let Some(id) = (unsafe { cstr_to_str(id) }).map(str::to_owned) else {
+        // SAFETY: caller transferred ownership; drop to avoid a leak.
+        drop(unsafe { Box::from_raw(request) });
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller has transferred ownership of `request`.
+    let wire_request = unsafe { Box::from_raw(request) }.0;
+    let Ok(core_request) = blazen_llm::ModelRequest::try_from(wire_request) else {
+        return std::ptr::null_mut();
+    };
+    // SAFETY: caller has guaranteed `mgr` is a live pointer.
+    let mgr = unsafe { &*mgr };
+    let inner = Arc::clone(&mgr.0);
+    BlazenFuture::spawn(async move {
+        inner
+            .complete(&id, core_request)
+            .await
+            .map(blazen_uniffi::llm::ModelResponse::from)
+            .map_err(into_inner_error)
+    })
 }
 
 // ---------------------------------------------------------------------------

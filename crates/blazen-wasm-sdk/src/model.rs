@@ -98,6 +98,14 @@ impl WasmModel {
     pub(crate) fn from_arc(inner: Arc<dyn Model>) -> Self {
         Self { inner }
     }
+
+    /// Construct a [`WasmModel`] from a chat [`Model`] trait object fetched
+    /// back out of the [`crate::manager::WasmModelManager`] registry via
+    /// `get(id)`. Alias of [`Self::from_arc`] kept for naming parity with the
+    /// native bindings' `JsModel::from_inner` / `PyModel::from_inner`.
+    pub(crate) fn from_inner(inner: Arc<dyn Model>) -> Self {
+        Self { inner }
+    }
 }
 
 /// Create an `OpenAiCompatProvider` backed by the fetch HTTP client.

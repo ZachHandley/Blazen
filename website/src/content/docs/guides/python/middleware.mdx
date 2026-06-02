@@ -8,6 +8,8 @@ order: 7
 
 Blazen models are immutable. Each decorator method (`with_retry()`, `with_cache()`, `with_fallback()`) returns a **new** `Model` that wraps the original, so you can layer behaviours without mutating anything.
 
+> The decorator chain (`with_retry()` / `with_cache()` / `with_fallback()`) lives on the generic `Model` type, so this guide uses the `Model.openai(...)` / `Model.anthropic(...)` factories. For a plain completion you construct a provider directly — `OpenAiProvider(options=ProviderOptions(api_key="sk-..."))` — and call `.complete([...])` on it; reach for the `Model.x(...)` shorthand when you want the composable middleware surface shown below.
+
 ## Retry
 
 Wrap a model with automatic retry on transient failures (rate limits, timeouts, server errors). Retries use exponential backoff with jitter.

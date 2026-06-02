@@ -7,9 +7,20 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 use crate::error::BlazenPyError;
+use crate::providers::model::{PyModel, PyModelOptions, build_request};
+use crate::types::{PyChatMessage, PyModelResponse};
+use blazen_llm::types::ChatMessage;
 use blazen_llm::Pool;
 use blazen_manager::ModelManager;
 use blazen_manager::hf_loader::{BackendHint, HfLoadOptions};
+use tokio_stream::StreamExt;
+
+/// The chat (`Model`) and local-lifecycle (`LocalModel`) trait objects pulled
+/// out of a Python [`PyModel`] at registration time. Either may be `None`.
+type ModelArcs = (
+    Option<Arc<dyn blazen_llm::Model>>,
+    Option<Arc<dyn blazen_llm::LocalModel>>,
+);
 
 // ---------------------------------------------------------------------------
 // Pool label parsing
@@ -705,26 +716,33 @@ impl PyModelManager {
         })
     }
 
-    /// Register a model with its estimated memory footprint.
+    /// Register a provider under ``id`` so it can be dispatched by name with
+    /// :meth:`complete` / :meth:`stream`, or fetched back with :meth:`get`.
     ///
-    /// The `model` argument can be either:
+    /// This is the unified registry — local models *and* remote providers in
+    /// one place. The ``model`` argument can be:
     ///
-    /// * A :class:`Model` produced by a local factory (e.g.
-    ///   ``Model.mistralrs(...)``), in which case its built-in
-    ///   ``LocalModel`` implementation is used.
+    /// * A remote provider (``Model.openai(...)``, ``FalProvider(...)``, …):
+    ///   registered as a dispatch-only entry. It owns no local weights, so it
+    ///   never counts against a memory budget.
+    /// * A local backend (``Model.mistralrs(...)``, ``Model.llamacpp(...)``,
+    ///   …): registered for both by-name dispatch *and* load/unload lifecycle
+    ///   with per-pool LRU eviction; ``memory_estimate_bytes`` reports its
+    ///   footprint.
     /// * Any Python object exposing callable ``load`` and ``unload``
     ///   attributes (sync or async). It does *not* need to subclass
     ///   :class:`blazen.LocalModel`. ``is_loaded``, ``memory_bytes``, and
-    ///   ``device`` are optional; if absent or unimplemented the manager
-    ///   falls back to ``False``, ``memory_estimate_bytes``, and ``Cpu``
-    ///   respectively.
+    ///   ``device`` are optional; such duck-typed objects are registered for
+    ///   lifecycle/budget bookkeeping only (not dispatchable via
+    ///   :meth:`complete`).
     ///
     /// Args:
     ///     id: A unique identifier for this model.
-    ///     model: A Model with local model support, or a duck-typed
-    ///         object with ``load`` and ``unload`` methods.
+    ///     model: A Model / provider, or a duck-typed object with ``load``
+    ///         and ``unload`` methods.
     ///     memory_estimate_bytes: Estimated memory footprint in bytes (host
-    ///         RAM if the model targets CPU, GPU VRAM otherwise).
+    ///         RAM if the model targets CPU, GPU VRAM otherwise). Pass ``0``
+    ///         (the default) for remote providers.
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, None]", imports = ("typing",)))]
     #[pyo3(signature = (id, model, *, memory_estimate_bytes=None))]
     fn register<'py>(
@@ -736,39 +754,140 @@ impl PyModelManager {
     ) -> PyResult<Bound<'py, PyAny>> {
         let memory_estimate = memory_estimate_bytes.unwrap_or(0);
 
-        // First, see if the user passed a Model that already carries
-        // a LocalModel impl. If so, use it directly (its device() is already
-        // implemented in Rust).
-        let local_model: Arc<dyn blazen_llm::LocalModel> =
-            if let Ok(cm) = model.extract::<PyRef<'_, crate::providers::PyModel>>() {
-                if let Some(lm) = cm.local_model.clone() {
-                    lm
-                } else {
-                    // Model without local support -- fall back to duck
-                    // typing on the same object (rare, but harmless).
-                    drop(cm);
-                    Arc::new(build_local_model_wrapper(
-                        py,
-                        model,
-                        memory_estimate,
-                        blazen_llm::Device::Cpu,
-                    )?)
-                }
-            } else {
-                // Arbitrary Python object: duck-type via load/unload, probe
-                // device() for an explicit target.
-                Arc::new(build_local_model_wrapper(
-                    py,
-                    model,
-                    memory_estimate,
-                    blazen_llm::Device::Cpu,
-                )?)
-            };
+        // If the user passed a Blazen Model, pull its chat (`Model`) and/or
+        // local (`LocalModel`) trait objects straight out — they carry their
+        // own device()/dispatch impls. Cloning the Arcs lets the PyRef drop
+        // before we may re-borrow `model` for the duck-typed fallback.
+        let model_arcs: Option<ModelArcs> = model
+            .extract::<PyRef<'_, crate::providers::PyModel>>()
+            .ok()
+            .map(|cm| (cm.inner.clone(), cm.local_model.clone()));
 
+        if let Some((chat, local)) = model_arcs {
+            if let Some(chat) = chat {
+                // Dispatchable provider (remote, or a local backend that is
+                // also a chat Model): register for by-name completion plus
+                // lifecycle/budget when local weights are present.
+                let inner = self.inner.clone();
+                return pyo3_async_runtimes::tokio::future_into_py(py, async move {
+                    inner
+                        .register_provider(&id, chat, local, memory_estimate)
+                        .await;
+                    Ok(())
+                });
+            }
+            if let Some(local) = local {
+                // Lifecycle-only local backend (no chat surface).
+                let inner = self.inner.clone();
+                return pyo3_async_runtimes::tokio::future_into_py(py, async move {
+                    inner.register(&id, local, memory_estimate).await;
+                    Ok(())
+                });
+            }
+            // PyModel subclass with neither a Rust chat impl nor a local
+            // impl: fall through to duck-typing on the same object.
+        }
+
+        // Arbitrary Python object: duck-type via load/unload, probe device()
+        // for an explicit target. Registered for lifecycle/budget only.
+        let local_model: Arc<dyn blazen_llm::LocalModel> = Arc::new(build_local_model_wrapper(
+            py,
+            model,
+            memory_estimate,
+            blazen_llm::Device::Cpu,
+        )?);
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
             inner.register(&id, local_model, memory_estimate).await;
             Ok(())
+        })
+    }
+
+    /// Run a chat completion against the provider registered under ``id``.
+    ///
+    /// Local entries are auto-loaded on first use (subject to the pool
+    /// budget); remote entries dispatch straight through.
+    ///
+    /// Args:
+    ///     id: The identifier the provider was registered under.
+    ///     messages: A list of :class:`ChatMessage` objects.
+    ///     options: Optional :class:`ModelOptions` for sampling parameters,
+    ///         tools, and response format.
+    ///
+    /// Raises:
+    ///     ValueError: if ``id`` is not registered.
+    ///     NotImplementedError-equivalent: if ``id`` was registered for
+    ///         lifecycle only (no chat ``Model``).
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ModelResponse]", imports = ("typing",)))]
+    #[pyo3(signature = (id, messages, *, options=None))]
+    fn complete<'py>(
+        &self,
+        py: Python<'py>,
+        id: String,
+        messages: Vec<PyRef<'py, PyChatMessage>>,
+        options: Option<PyRef<'py, PyModelOptions>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
+        let request = build_request(py, rust_messages, options.as_deref())?;
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let response = inner.complete(&id, request).await.map_err(BlazenPyError::from)?;
+            Ok(PyModelResponse { inner: response })
+        })
+    }
+
+    /// Stream a chat completion against the provider registered under ``id``,
+    /// invoking ``on_chunk`` once per :class:`StreamChunk`.
+    ///
+    /// For async-iterator streaming (``async for``) or to pass the instance
+    /// around, fetch the provider with :meth:`get` and stream on it directly.
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, None]", imports = ("typing",)))]
+    #[pyo3(signature = (id, messages, on_chunk, *, options=None))]
+    fn stream<'py>(
+        &self,
+        py: Python<'py>,
+        id: String,
+        messages: Vec<PyRef<'py, PyChatMessage>>,
+        on_chunk: Py<PyAny>,
+        options: Option<PyRef<'py, PyModelOptions>>,
+    ) -> PyResult<Bound<'py, PyAny>> {
+        let rust_messages: Vec<ChatMessage> = messages.iter().map(|m| m.inner.clone()).collect();
+        let request = build_request(py, rust_messages, options.as_deref())?;
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            let stream = inner.stream(&id, request).await.map_err(BlazenPyError::from)?;
+            let mut stream = std::pin::pin!(stream);
+            while let Some(result) = stream.next().await {
+                match result {
+                    Ok(chunk) => {
+                        tokio::task::block_in_place(|| {
+                            Python::attach(|py| {
+                                let py_chunk = pythonize::pythonize(py, &chunk).map_err(|e| {
+                                    pyo3::exceptions::PyRuntimeError::new_err(e.to_string())
+                                })?;
+                                on_chunk.call1(py, (py_chunk,))?;
+                                Ok::<_, PyErr>(())
+                            })
+                        })?;
+                    }
+                    Err(e) => {
+                        return Err(pyo3::exceptions::PyRuntimeError::new_err(e.to_string()));
+                    }
+                }
+            }
+            Ok(())
+        })
+    }
+
+    /// Fetch the provider registered under ``id`` to use or compose directly.
+    ///
+    /// Returns ``None`` if ``id`` is unknown or was registered for lifecycle
+    /// only (no chat ``Model``).
+    #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, typing.Optional[Model]]", imports = ("typing",)))]
+    fn get<'py>(&self, py: Python<'py>, id: String) -> PyResult<Bound<'py, PyAny>> {
+        let inner = self.inner.clone();
+        pyo3_async_runtimes::tokio::future_into_py(py, async move {
+            Ok(inner.get(&id).await.map(PyModel::from_inner))
         })
     }
 

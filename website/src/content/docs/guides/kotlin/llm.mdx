@@ -227,6 +227,49 @@ val candle = newCandleModel(
 
 Each requires the underlying native lib to be built with the corresponding feature flag (`llamacpp`, `mistralrs`, `candle-llm`). The prebuilt artefact ships with the cloud factories always enabled; check the release notes for the per-platform local-backend matrix.
 
+## Scaling up with ModelManager
+
+Constructing a model and calling `complete(request)` directly is the right default. When you start juggling several models, `UniffiModelManager` is the **unified registry**: register providers — local *and* remote — under names, then dispatch by name with `complete(id, request)` (also `stream(...)` and `get(id)`). Each per-engine provider class (`OpenAiProvider`, `AnthropicProvider`, …) exposes `toModel()` to produce the `UniffiModel` the registry expects. Remote providers own no local weights, so they register with a `0u` estimate and never count against a memory budget.
+
+```kotlin
+import dev.zorpx.blazen.uniffi.AnthropicProvider
+import dev.zorpx.blazen.uniffi.ChatMessage
+import dev.zorpx.blazen.uniffi.ModelRequest
+import dev.zorpx.blazen.uniffi.OpenAiProvider
+import dev.zorpx.blazen.uniffi.UniffiModelManager
+
+val manager = UniffiModelManager()
+
+// Register remote providers under names. toModel() adapts the per-engine
+// provider into the generic UniffiModel the manager dispatches.
+manager.registerModel(
+    "fast",
+    OpenAiProvider(apiKey = "", model = "gpt-4o-mini", baseUrl = null).toModel(),
+    0u,
+)
+manager.registerModel(
+    "smart",
+    AnthropicProvider(apiKey = "", model = null, baseUrl = null).toModel(),
+    0u,
+)
+
+val request = ModelRequest(
+    messages = listOf(
+        ChatMessage(role = "user", content = "Write a haiku about Kotlin.",
+                    mediaParts = emptyList(), toolCalls = emptyList(),
+                    toolCallId = null, name = null),
+    ),
+    tools = emptyList(), temperature = null, maxTokens = 256u,
+    topP = null, model = null, responseFormatJson = null, system = null,
+)
+
+// Dispatch by name — same call shape for every registered entry.
+val response = manager.complete("fast", request)
+println(response.content)
+```
+
+For local models, `registerModel` also takes a memory-footprint estimate (its third argument) and the manager evicts the least-recently-used model in the same pool when a load would exceed its budget. Use `UniffiModelManager.withBudgetsGb(cpuRamGb, gpuVramGb)` to set those budgets. See the [Local Inference](/guides/local-inference/) guide for the budgeting details.
+
 ## Errors
 
 Every failure surfaces as a `BlazenException` (sealed class). Switch on the variant for typed handling, or just read `.message` for a uniform `String`:

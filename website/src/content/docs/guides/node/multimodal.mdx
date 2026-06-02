@@ -260,14 +260,14 @@ The `x-blazen-content-ref` extension is a custom JSON Schema key. LLM providers 
 
 ```typescript
 import {
-  Model,
+  OpenAiProvider,
   ChatMessage,
   ContentStore,
   imageInput,
   runAgent,
 } from "blazen";
 
-const model = Model.openai({ apiKey: process.env.OPENAI_API_KEY! });
+const model = OpenAiProvider.create({ apiKey: process.env.OPENAI_API_KEY! });
 const store = ContentStore.inMemory();
 
 // Pre-stash a photo and surface its handle id to the model in a user message.

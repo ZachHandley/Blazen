@@ -180,6 +180,19 @@ pub struct JsModel {
     pub(crate) config: Option<blazen_llm::ProviderConfig>,
 }
 
+impl JsModel {
+    /// Wrap a bare `Arc<dyn Model>` (e.g. one fetched back out of a
+    /// [`ModelManager`](blazen_manager::ModelManager) by name) as a `Model`
+    /// handle for the JS side.
+    pub(crate) fn from_inner(inner: Arc<dyn Model>) -> Self {
+        Self {
+            inner: Some(inner),
+            local_model: None,
+            config: None,
+        }
+    }
+}
+
 #[napi]
 #[allow(clippy::must_use_candidate, clippy::missing_errors_doc)]
 impl JsModel {
