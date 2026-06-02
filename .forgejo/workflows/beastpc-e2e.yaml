@@ -54,11 +54,11 @@ env:
   # to 89 (Ada — matches the 4090 BeastPC GPU). Bump to "89;120" when the
   # inbound 5070 Ti / 5090 Blackwell box is wired in.
   CUDA_COMPUTE_CAP: "89"
-  # CUDA_HOME + PATH for nvcc are set by the per-job setup-cuda-toolkit step
-  # (see the `Setup CUDA Toolkit` step below) — it probes /opt/cuda, /usr,
-  # etc. and exports CUDA_HOME deterministically. The forgejo-runner systemd
-  # unit has empty Environment= so the interactive shell's CUDA path
-  # addition doesn't reach jobs.
+  # CUDA_HOME + PATH for nvcc are set by the `Setup CUDA Toolkit` step below
+  # (Public/actions/setup-cuda-toolkit@main) — it probes /opt/cuda, /usr, etc.
+  # and exports CUDA_HOME deterministically. The forgejo-runner systemd unit
+  # has empty Environment= so the interactive shell's CUDA path addition
+  # doesn't reach jobs.
 
 jobs:
   e2e:
@@ -70,11 +70,25 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Setup Rust
-        # The repo pins via rust-toolchain.toml (channel = "stable"); the
-        # dtolnay action is enough because the runner already has the toolchain
-        # cached locally. Matches live-models.yaml's setup style — light, no
-        # sccache (this is a heavy GPU box, not the shared ubuntu pool).
-        uses: https://github.com/dtolnay/rust-toolchain@stable
+        # The repo pins via rust-toolchain.toml (channel = "stable"). The BeastPC
+        # runner is a PERSISTENT self-hosted box that already has the toolchain;
+        # raw dtolnay/rust-toolchain runs rustup-init, which fails on this runner
+        # with "could not create bin directory '/home/forgejo-runner/.cargo/bin':
+        # Permission denied". Use the in-house self-hosted-aware setup-rust action
+        # (same as ci.yaml's `nvidia` jobs) — light, no sccache on this heavy GPU
+        # box, just registry auth for the private Forgejo cargo index.
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Setup CUDA Toolkit
+        # Probes /opt/cuda, /usr, etc. and exports CUDA_HOME + nvcc on PATH
+        # deterministically (the forgejo-runner systemd unit has empty
+        # Environment= so the interactive shell's CUDA path doesn't reach jobs).
+        # Required because the workspace build below is --all-features (CUDA).
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-cuda-toolkit@main
+        with:
+          required: 'true'
 
       - name: Install nextest
         uses: https://github.com/taiki-e/install-action@v2

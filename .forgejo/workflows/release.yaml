@@ -37,6 +37,7 @@ jobs:
     if: github.event_name == 'workflow_dispatch'
     outputs:
       version: ${{ steps.pick.outputs.version }}
+      already_released: ${{ steps.released.outputs.completed }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -68,10 +69,32 @@ jobs:
             exit 1
           fi
 
+      - name: Check if already released
+        # Idempotency guard: mark-release-complete writes a `release-complete`
+        # marker per version at the end of a successful run. If it exists, this
+        # version is already published — a re-dispatch must NOT re-run
+        # fetch-artifacts (the build packages were deleted by cleanup-artifacts,
+        # so it would 404). See the `already_released` gate on fetch-artifacts.
+        id: released
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ steps.pick.outputs.version }}
+          step: release-complete
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Notice if already released
+        if: steps.released.outputs.completed == 'true'
+        run: |
+          echo "::warning::v${{ steps.pick.outputs.version }} is already released (release-complete marker present). Skipping artifact fetch + publish. Bump the version, or clear the release-complete + per-step markers and re-run build-artifacts.yaml, to re-release."
+
   fetch-artifacts:
     name: Fetch Build Artifacts
     runs-on: ubuntu-latest
     needs: version
+    if: needs.version.outputs.already_released != 'true'
     outputs:
       version: ${{ needs.version.outputs.version }}
     steps:
