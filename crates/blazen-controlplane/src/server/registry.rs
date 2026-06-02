@@ -12,9 +12,11 @@ use dashmap::DashMap;
 use tokio::sync::mpsc;
 use uuid::Uuid;
 
-use blazen_core::distributed::{AdmissionMode, AdmissionSnapshot, WorkerCapability, WorkerInfo};
+use blazen_core::distributed::{
+    AdmissionMode, AdmissionSnapshot, WorkerCapability, WorkerInfo, WorkerTaint,
+};
 
-use crate::protocol::ServerToWorker;
+use crate::protocol::{NodeDescriptorWire, ServerToWorker};
 
 /// One connected worker.
 #[derive(Clone)]
@@ -32,6 +34,17 @@ pub struct WorkerHandle {
     /// Last reported in-flight count.
     pub in_flight: u32,
     pub connected_at_ms: u64,
+    /// Worker-side scheduling labels declared in [`WorkerHello::labels`].
+    /// Filtered against [`Assignment::selector`] in admission. Empty for
+    /// legacy v1 workers.
+    pub labels: BTreeMap<String, String>,
+    /// Worker-side taints. Jobs must carry a matching toleration to land
+    /// here. Empty for legacy v1 workers.
+    pub taints: Vec<WorkerTaint>,
+    /// Capability-descriptor manifest the worker published in
+    /// [`crate::protocol::WorkerHello::descriptors`]. Empty for legacy
+    /// callers that don't publish a catalogue.
+    pub descriptors: Vec<NodeDescriptorWire>,
 }
 
 /// Registry of currently-connected workers.
@@ -64,6 +77,7 @@ impl WorkerRegistry {
     /// outbound channel is dropped, which the old session task uses as
     /// a shutdown signal).
     #[must_use = "the returned session_id is the only handle to the registered worker"]
+    #[allow(clippy::too_many_arguments)]
     pub fn register(
         &self,
         node_id: String,
@@ -71,6 +85,9 @@ impl WorkerRegistry {
         tags: BTreeMap<String, String>,
         admission: AdmissionMode,
         outbound: mpsc::Sender<ServerToWorker>,
+        labels: BTreeMap<String, String>,
+        taints: Vec<WorkerTaint>,
+        descriptors: Vec<NodeDescriptorWire>,
     ) -> Uuid {
         let session_id = Uuid::new_v4();
         let connected_at_ms = now_ms();
@@ -100,6 +117,9 @@ impl WorkerRegistry {
             admission_snapshot: None,
             in_flight: 0,
             connected_at_ms,
+            labels,
+            taints,
+            descriptors,
         };
 
         self.sessions.insert(session_id, handle);
@@ -180,6 +200,26 @@ impl WorkerRegistry {
         }
     }
 
+    /// Union of every connected worker's capability-descriptor manifest.
+    /// De-duplicates entries by `descriptor.id` — when more than one
+    /// worker publishes the same descriptor (the common case for
+    /// horizontally-scaled capability pools), the first one observed
+    /// wins. Iteration order matches `dashmap`'s shard scan and is
+    /// therefore not stable across calls.
+    #[must_use]
+    pub fn all_descriptors(&self) -> Vec<NodeDescriptorWire> {
+        let mut seen: HashSet<String> = HashSet::new();
+        let mut out: Vec<NodeDescriptorWire> = Vec::new();
+        for entry in &self.sessions {
+            for desc in &entry.value().descriptors {
+                if seen.insert(desc.id.clone()) {
+                    out.push(desc.clone());
+                }
+            }
+        }
+        out
+    }
+
     #[must_use]
     pub fn len(&self) -> usize {
         self.sessions.len()
@@ -226,6 +266,9 @@ mod tests {
             BTreeMap::new(),
             AdmissionMode::Fixed { max_in_flight: 4 },
             tx,
+            BTreeMap::new(),
+            Vec::new(),
+            Vec::new(),
         );
 
         assert_eq!(reg.len(), 1);
@@ -248,6 +291,9 @@ mod tests {
             BTreeMap::new(),
             AdmissionMode::Reactive,
             tx,
+            BTreeMap::new(),
+            Vec::new(),
+            Vec::new(),
         );
 
         reg.unregister(sid);
@@ -274,6 +320,9 @@ mod tests {
             BTreeMap::new(),
             AdmissionMode::Fixed { max_in_flight: 4 },
             tx1,
+            BTreeMap::new(),
+            Vec::new(),
+            Vec::new(),
         );
         let sid2 = reg.register(
             "node-a".into(),
@@ -281,6 +330,9 @@ mod tests {
             BTreeMap::new(),
             AdmissionMode::Fixed { max_in_flight: 4 },
             tx2,
+            BTreeMap::new(),
+            Vec::new(),
+            Vec::new(),
         );
 
         assert_ne!(sid1, sid2);
@@ -299,6 +351,9 @@ mod tests {
             BTreeMap::new(),
             AdmissionMode::Fixed { max_in_flight: 4 },
             tx,
+            BTreeMap::new(),
+            Vec::new(),
+            Vec::new(),
         );
         reg.record_heartbeat(sid, 3, None);
         assert_eq!(reg.get(sid).unwrap().in_flight, 3);

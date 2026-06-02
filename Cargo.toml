@@ -48,7 +48,7 @@ members = [
     "crates/blazen-3d",
     "crates/blazen-3d-core",
     "crates/blazen-video-core",
-    "crates/blazen-ggml-sys",
+    "crates/blazen-ggml-sys", "crates/blazen-resource-probe",
 ]
 # NOTE: The three -sys forks (blazen-whisper-sys, blazen-diffusion-sys,
 # blazen-llama-cpp-sys-2) are intentionally NOT workspace members.
@@ -183,6 +183,14 @@ blazen-peer = { version = "0.0.0-dev", path = "crates/blazen-peer", registry = "
 blazen-controlplane = { version = "0.0.0-dev", path = "crates/blazen-controlplane", registry = "forgejo", default-features = false }
 blazen-manager = { version = "0.0.0-dev", path = "crates/blazen-manager", registry = "forgejo" }
 blazen-train = { version = "0.0.0-dev", path = "crates/blazen-train", registry = "forgejo" }
+blazen-resource-probe = { version = "0.0.0-dev", path = "crates/blazen-resource-probe", registry = "forgejo" }
+
+# the durable store ORM (sibling repo): used by `blazen-controlplane`'s `durable-store`
+# feature for the durable assignment store. `default-features = false`
+# strips out the heavy `cluster` mode (Raft, gRPC, openraft, tonic) that
+# the control-plane never needs; we only want the synchronous +
+# `async-tokio` typed CRUD surface.
+vendored-orm = { version = "0.0.0-dev", path = "../vendored/crates/vendored-orm", registry = "forgejo", default-features = false, features = ["async-tokio"] }
 
 # Distributed peer transport
 tonic = "0.14"

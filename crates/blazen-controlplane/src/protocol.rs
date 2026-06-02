@@ -38,6 +38,14 @@ use blazen_core::distributed as core;
 ///   forward-compatible. Bump this constant and update
 ///   [`crate::error::ControlPlaneError::EnvelopeVersion`] handling on
 ///   the server side.
+///
+/// Wire-format generation. Bumped from 1 → 2 to add `priority`,
+/// `selector`, `tolerations` to [`Assignment`] and `labels`, `taints`,
+/// `descriptors` to [`WorkerHello`], plus the bearer-token / input-request
+/// round-trip surface. Postcard's binary format is positional so a v1
+/// peer cannot decode v2 frames — the handshake negotiates the
+/// intersection of `supported_envelope_versions` and rejects when the
+/// versions don't overlap.
 pub const ENVELOPE_VERSION: u32 = 2;
 
 /// Returns `Err` if `got` is greater than [`ENVELOPE_VERSION`] (i.e.
@@ -104,6 +112,155 @@ pub struct CapabilityWire {
     pub version: u32,
 }
 
+/// Wire-format mirror of [`core::TaintEffect`].
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+pub enum TaintEffectWire {
+    NoSchedule,
+    PreferNoSchedule,
+}
+
+impl From<core::TaintEffect> for TaintEffectWire {
+    fn from(t: core::TaintEffect) -> Self {
+        match t {
+            core::TaintEffect::NoSchedule => Self::NoSchedule,
+            core::TaintEffect::PreferNoSchedule => Self::PreferNoSchedule,
+        }
+    }
+}
+
+impl From<TaintEffectWire> for core::TaintEffect {
+    fn from(t: TaintEffectWire) -> Self {
+        match t {
+            TaintEffectWire::NoSchedule => Self::NoSchedule,
+            TaintEffectWire::PreferNoSchedule => Self::PreferNoSchedule,
+        }
+    }
+}
+
+/// Wire-format mirror of [`core::WorkerTaint`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WorkerTaintWire {
+    pub key: String,
+    pub value: Option<String>,
+    pub effect: TaintEffectWire,
+}
+
+impl From<core::WorkerTaint> for WorkerTaintWire {
+    fn from(t: core::WorkerTaint) -> Self {
+        Self {
+            key: t.key,
+            value: t.value,
+            effect: t.effect.into(),
+        }
+    }
+}
+
+impl From<WorkerTaintWire> for core::WorkerTaint {
+    fn from(t: WorkerTaintWire) -> Self {
+        Self {
+            key: t.key,
+            value: t.value,
+            effect: t.effect.into(),
+        }
+    }
+}
+
+/// Wire-format mirror of [`core::TolerationSpec`].
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct TolerationSpecWire {
+    pub key: String,
+    pub value: Option<String>,
+    pub effect: TaintEffectWire,
+}
+
+impl From<core::TolerationSpec> for TolerationSpecWire {
+    fn from(t: core::TolerationSpec) -> Self {
+        Self {
+            key: t.key,
+            value: t.value,
+            effect: t.effect.into(),
+        }
+    }
+}
+
+impl From<TolerationSpecWire> for core::TolerationSpec {
+    fn from(t: TolerationSpecWire) -> Self {
+        Self {
+            key: t.key,
+            value: t.value,
+            effect: t.effect.into(),
+        }
+    }
+}
+
+/// Wire-format mirror of [`core::NodeSelector`].
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NodeSelectorWire {
+    pub required: Vec<String>,
+    pub forbidden: Vec<String>,
+    pub preferred: Vec<String>,
+}
+
+impl From<core::NodeSelector> for NodeSelectorWire {
+    fn from(s: core::NodeSelector) -> Self {
+        Self {
+            required: s.required,
+            forbidden: s.forbidden,
+            preferred: s.preferred,
+        }
+    }
+}
+
+impl From<NodeSelectorWire> for core::NodeSelector {
+    fn from(s: NodeSelectorWire) -> Self {
+        Self {
+            required: s.required,
+            forbidden: s.forbidden,
+            preferred: s.preferred,
+        }
+    }
+}
+
+/// Wire-format description of one capability node a worker hosts.
+///
+/// Workers attach a `Vec<NodeDescriptorWire>` to their [`WorkerHello`]
+/// so the control plane can build a live capability catalogue without
+/// the workers having to depend on `zbrain-core` (or vice versa). The
+/// schema bytes (`input_schema_json`, `output_schema_json`) are
+/// pre-serialized JSON text so postcard can round-trip them without
+/// going through `serde_json::Value` (which postcard cannot decode).
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct NodeDescriptorWire {
+    /// Stable slug, e.g. `"trellis-image-to-mesh"`.
+    pub id: String,
+    /// Capability the executing worker must advertise.
+    pub capability: CapabilityWire,
+    /// JSON Schema (draft 2020-12) of the node's input shape, as
+    /// pre-serialized JSON bytes.
+    #[serde(with = "serde_bytes")]
+    pub input_schema_json: Vec<u8>,
+    /// JSON Schema (draft 2020-12) of the node's output shape, as
+    /// pre-serialized JSON bytes.
+    #[serde(with = "serde_bytes")]
+    pub output_schema_json: Vec<u8>,
+    /// Default resource estimate.
+    pub default_resource_hint: ResourceHintWire,
+    /// Default node selector.
+    pub default_selector: NodeSelectorWire,
+    /// Schema/contract version.
+    pub version: u32,
+    /// UI-only display name.
+    pub display_name: String,
+    /// Icon hint (emoji or named svg asset).
+    pub icon: Option<String>,
+    /// Tile color (CSS string).
+    pub color: Option<String>,
+    /// Palette category (e.g. `"3d"`, `"vision"`).
+    pub category: Option<String>,
+    /// Long-form description.
+    pub description: Option<String>,
+}
+
 /// Wire-format mirror of [`core::AdmissionSnapshot`].
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AdmissionSnapshotWire {
@@ -146,6 +303,22 @@ pub struct WorkerHello {
     /// Highest `envelope_version` this worker understands. Server uses
     /// this to negotiate down if it's older.
     pub supported_envelope_versions: Vec<u32>,
+    /// Worker-side schedulable labels (e.g. `gpu:nvidia`, `host:beastpc`,
+    /// `vram:>=24gb`). Filtered against [`Assignment::selector`] inside
+    /// admission. Empty for legacy callers. Introduced in envelope v2.
+    pub labels: BTreeMap<String, String>,
+    /// Worker-side taints. Jobs must carry a matching toleration to land
+    /// on a tainted worker. Empty for legacy callers. Introduced in
+    /// envelope v2.
+    pub taints: Vec<WorkerTaintWire>,
+    /// Capability-descriptor manifest the worker publishes (one entry
+    /// per node the worker is willing to host). The control plane
+    /// merges these across every connected worker into the live
+    /// capability catalogue. Empty for legacy callers; the field is
+    /// appended at the end of the struct so postcard skips it cleanly
+    /// when decoding older payloads.
+    #[serde(default)]
+    pub descriptors: Vec<NodeDescriptorWire>,
 }
 
 /// Periodic worker → server heartbeat. Drives liveness, in-flight
@@ -323,6 +496,17 @@ pub struct Assignment {
     /// Optional resource estimate. Required when targeting a
     /// `VramBudget` worker, advisory for `Reactive`, ignored by `Fixed`.
     pub resource_hint: Option<ResourceHintWire>,
+    /// Scheduling priority — lower numeric value runs first. Default is
+    /// [`core::DEFAULT_PRIORITY`] (128 = mid-band). Introduced in
+    /// envelope v2.
+    pub priority: u8,
+    /// Node selector — `required` labels must all match the worker's
+    /// labels, `forbidden` must none match, `preferred` adds to the
+    /// tie-break score. Introduced in envelope v2.
+    pub selector: NodeSelectorWire,
+    /// Tolerations — allow the job to land on workers carrying a matching
+    /// taint. Introduced in envelope v2.
+    pub tolerations: Vec<TolerationSpecWire>,
 }
 
 impl Assignment {
@@ -925,6 +1109,9 @@ mod tests {
                 max_vram_mb: 16_384,
             },
             supported_envelope_versions: vec![1],
+            labels: BTreeMap::new(),
+            taints: Vec::new(),
+            descriptors: Vec::new(),
         };
 
         let decoded = roundtrip(&original);
@@ -956,6 +1143,9 @@ mod tests {
                 cpu_cores: Some(1.5),
                 expected_seconds: Some(10),
             }),
+            priority: core::DEFAULT_PRIORITY,
+            selector: NodeSelectorWire::default(),
+            tolerations: Vec::new(),
         };
 
         let decoded = roundtrip(&original);

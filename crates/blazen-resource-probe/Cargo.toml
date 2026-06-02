@@ -1,0 +1,36 @@
+[package]
+name = "blazen-resource-probe"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+description = "Cross-platform GPU / CPU / RAM probe for Blazen workers — sources real AdmissionSnapshot fields"
+
+[dependencies]
+async-trait.workspace = true
+chrono = { workspace = true, features = ["serde"] }
+nvml-wrapper = { version = "0.12.1", optional = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+sysinfo = "0.38.4"
+thiserror.workspace = true
+tokio = { workspace = true, features = ["rt", "macros", "time", "sync", "process"] }
+tracing.workspace = true
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["rt", "macros", "time", "sync", "process", "test-util"] }
+
+[features]
+default = []
+# Enable the NVML backend (NVIDIA Linux). Workers built for NVIDIA hosts
+# turn this on at compile time. The backend is also conditional on
+# `target_os = "linux"` so this feature is a no-op elsewhere.
+nvml = ["dep:nvml-wrapper"]
+# Run the live-hardware integration tests against a real NVIDIA GPU. CI
+# never enables this; local devs do for smoke testing.
+nvml-live = ["nvml"]
+
+[lints]
+workspace = true

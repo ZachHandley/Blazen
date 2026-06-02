@@ -206,12 +206,21 @@ async fn worker_register(
 
     let (tx, rx) = mpsc::channel::<ServerToWorker>(64);
     let capabilities = hello.capabilities.iter().map(Into::into).collect();
+    let taints = hello
+        .taints
+        .iter()
+        .cloned()
+        .map(blazen_core::distributed::WorkerTaint::from)
+        .collect();
     let session_id = shared.registry.register(
         hello.node_id.clone(),
         capabilities,
         hello.tags.clone(),
         (&hello.admission).into(),
         tx.clone(),
+        hello.labels.clone(),
+        taints,
+        hello.descriptors.clone(),
     );
 
     // Stash the receiver so the SSE handler can pick it up on the
@@ -388,6 +397,9 @@ async fn orchestrator_submit(
         deadline_ms: core.deadline_ms,
         attempt: 0,
         resource_hint: core.resource_hint.as_ref().map(Into::into),
+        priority: blazen_core::distributed::DEFAULT_PRIORITY,
+        selector: protocol::NodeSelectorWire::default(),
+        tolerations: Vec::new(),
     };
     let cap = WorkerCapability {
         kind: format!("workflow:{}", core.workflow_name),
@@ -601,6 +613,9 @@ mod tests {
             tags: std::collections::BTreeMap::new(),
             admission: protocol::AdmissionModeWire::Reactive,
             supported_envelope_versions: vec![1],
+            labels: std::collections::BTreeMap::new(),
+            taints: Vec::new(),
+            descriptors: Vec::new(),
         };
         let env = PostcardEnvelope::encode(&hello).expect("encode WorkerHello");
         let decoded: WorkerHello = env.decode().expect("decode WorkerHello");

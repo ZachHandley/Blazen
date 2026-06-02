@@ -17,15 +17,17 @@
 //! asks the admission policy where to send it, and either pushes to a
 //! worker channel or stashes the assignment until a worker frees up.
 
-use std::collections::{HashMap, VecDeque};
+use std::collections::{BTreeMap, HashMap};
 use std::sync::Arc;
+use std::time::Instant;
 
 use dashmap::DashMap;
 use tokio::sync::{Notify, RwLock, broadcast};
 use uuid::Uuid;
 
 use blazen_core::distributed::{
-    ResourceHint, RunEvent, RunStateSnapshot, RunStatus, WorkerCapability,
+    NodeSelector, ResourceHint, RunEvent, RunStateSnapshot, RunStatus, TolerationSpec,
+    WorkerCapability,
 };
 
 use crate::error::ControlPlaneError;
@@ -37,11 +39,18 @@ use super::store::{AssignmentStore, MemoryAssignmentStore};
 
 /// One queued (or in-flight) assignment plus the routing inputs the queue
 /// will need if it has to re-route on a worker disconnect.
+///
+/// `enqueued_at` is captured once at the first time the assignment lands
+/// in the pending pool (or, for a Push that goes straight to a worker,
+/// the moment routing was attempted). It is preserved across
+/// surrender-on-disconnect so a previously-in-flight job does not lose
+/// its FIFO position within its priority band when it is re-queued.
 #[derive(Clone)]
 struct QueuedAssignment {
     assignment: Assignment,
     required_capability: WorkerCapability,
     required_tags: Vec<String>,
+    enqueued_at: Instant,
 }
 
 /// In-flight assignment record — tracks which session is running it so
@@ -52,16 +61,104 @@ struct InFlight {
     session_id: Uuid,
 }
 
+/// Owned routing inputs derived from an `Assignment`. Holds the converted
+/// `ResourceHint`, `NodeSelector`, `Vec<TolerationSpec>`, and decoded
+/// input `Value` so the `RouteRequest` can borrow them without lifetime
+/// gymnastics inside the routing helper.
+struct RouteInputs {
+    hint: Option<ResourceHint>,
+    selector: NodeSelector,
+    tolerations: Vec<TolerationSpec>,
+    input: Option<serde_json::Value>,
+}
+
+impl RouteInputs {
+    fn from_assignment(assignment: &Assignment) -> Self {
+        Self {
+            hint: assignment.resource_hint.as_ref().map(Into::into),
+            selector: assignment.selector.clone().into(),
+            tolerations: assignment
+                .tolerations
+                .iter()
+                .cloned()
+                .map(Into::into)
+                .collect(),
+            input: assignment.input_value().ok(),
+        }
+    }
+}
+
+/// Composite key for the per-capability pending pool:
+/// `(priority, enqueued_at, run_id)`. `BTreeMap` orders entries
+/// lexicographically by this tuple — priority first (lowest =
+/// highest-priority = first served), then `enqueued_at` (FIFO within
+/// a priority), then `run_id` (deterministic tiebreak).
+type PendingKey = (u8, Instant, Uuid);
+
+/// One per-capability pending pool: priority-ordered map of pending
+/// assignments.
+type PendingBucket = BTreeMap<PendingKey, QueuedAssignment>;
+
+/// Per-capability state for the deficit-round-robin WFQ scheduler.
+///
+/// - `deficit[band]` is the accumulated service credit for that band.
+/// - `served_this_round[band]` is `true` once that band has been
+///   serviced in the current round; cleared at end-of-round.
+/// - A "round" ends and a new top-up happens when every band is
+///   either already served-this-round OR has insufficient deficit AND
+///   no servable entries (i.e. we've made one full pass without being
+///   able to make further progress without a top-up).
+struct WfqState {
+    deficit: BTreeMap<u8, i32>,
+    served_this_round: BTreeMap<u8, bool>,
+}
+
+impl Default for WfqState {
+    fn default() -> Self {
+        let mut deficit = BTreeMap::new();
+        let mut served = BTreeMap::new();
+        for band in 0u8..PRIORITY_BANDS {
+            deficit.insert(band, 0);
+            served.insert(band, false);
+        }
+        Self {
+            deficit,
+            served_this_round: served,
+        }
+    }
+}
+
+impl WfqState {
+    fn top_up(&mut self) {
+        for band in 0u8..PRIORITY_BANDS {
+            let weight = band_weight(band);
+            let d = self.deficit.entry(band).or_insert(0);
+            *d = d.saturating_add(weight);
+            self.served_this_round.insert(band, false);
+        }
+    }
+}
+
 /// Server-side assignment queue.
 ///
 /// Holds pending assignments waiting on a matching worker, plus the
 /// in-flight set so disconnects can surrender work back to the pool.
 /// Routing decisions are delegated to [`super::admission::Admission`].
 pub struct AssignmentQueue {
-    /// Pending submissions keyed by the capability they need. Each
-    /// bucket is a FIFO. Wrapped in `RwLock` so multiple readers
-    /// (admission scans) don't serialize behind a writer.
-    pending: RwLock<HashMap<WorkerCapability, VecDeque<QueuedAssignment>>>,
+    /// Pending submissions keyed by the capability they need.
+    ///
+    /// Each capability bucket is a `BTreeMap` keyed by
+    /// `(priority, enqueued_at, run_id)`. `BTreeMap` orders entries
+    /// lexicographically by key tuple: priority first (lowest numeric
+    /// value = highest priority = first served), then `enqueued_at`
+    /// (FIFO within a priority), then `run_id` (deterministic
+    /// tiebreak). Wrapped in `RwLock` so multiple readers (admission
+    /// scans) don't serialize behind a writer.
+    pending: RwLock<HashMap<WorkerCapability, PendingBucket>>,
+    /// Per-capability deficit counters for the weighted-fair-queueing
+    /// (WFQ) scheduler. See [`Self::pop_pending`], [`band_weight`], and
+    /// [`band_lo`] for the band math + weight guarantees.
+    deficits: RwLock<HashMap<WorkerCapability, WfqState>>,
     /// In-flight assignments by `run_id`.
     in_flight: DashMap<Uuid, InFlight>,
     /// Run state snapshot per `run_id`. Updated by `mark_running`,
@@ -149,6 +246,7 @@ impl AssignmentQueue {
     fn build(store: Arc<dyn AssignmentStore>, events: Option<broadcast::Sender<RunEvent>>) -> Self {
         Self {
             pending: RwLock::new(HashMap::new()),
+            deficits: RwLock::new(HashMap::new()),
             in_flight: DashMap::new(),
             runs: DashMap::new(),
             wake: Notify::new(),
@@ -179,39 +277,25 @@ impl AssignmentQueue {
             assignment,
             required_capability: required_capability.clone(),
             required_tags: required_tags.clone(),
+            enqueued_at: Instant::now(),
         };
 
         // Record the run as Pending until a worker accepts it.
-        let pending_snapshot = RunStateSnapshot {
-            run_id,
-            status: RunStatus::Pending,
-            started_at_ms: now_ms(),
-            completed_at_ms: None,
-            assigned_to: None,
-            last_event_at_ms: None,
-            output: None,
-            error: None,
-        };
-        self.runs.insert(run_id, pending_snapshot.clone());
-        if let Err(e) = self.store.put_state(run_id, &pending_snapshot, None).await {
-            tracing::warn!(%run_id, error = %e, "store.put_state(Pending) failed");
-        }
-        if let Err(e) = self.store.put_assignment(run_id, &queued.assignment).await {
-            tracing::warn!(%run_id, error = %e, "store.put_assignment failed");
-        }
+        self.record_pending(run_id, &queued.assignment).await;
 
-        // Build the routing inputs. `hint_owned` keeps the converted
-        // ResourceHint alive for the duration of the borrow inside
-        // `RouteRequest`. The RouteRequest and hint are scoped to a
-        // dedicated block so the borrows on `required_capability` and
-        // `required_tags` end cleanly before any await below.
+        // Build the routing inputs. The owned ResourceHint / NodeSelector /
+        // Vec<TolerationSpec> / Value live for the duration of the borrow
+        // inside `RouteRequest`. The block scope ensures those borrows end
+        // before any await below.
         let decision = {
-            let hint_owned: Option<ResourceHint> =
-                queued.assignment.resource_hint.as_ref().map(Into::into);
+            let inputs = RouteInputs::from_assignment(&queued.assignment);
             let req = RouteRequest {
                 required_capability: &required_capability,
                 required_tags: &required_tags,
-                resource_hint: hint_owned.as_ref(),
+                resource_hint: inputs.hint.as_ref(),
+                selector: &inputs.selector,
+                tolerations: &inputs.tolerations,
+                input: inputs.input.as_ref(),
             };
             admission.route(registry, &req)
         };
@@ -271,6 +355,7 @@ impl AssignmentQueue {
                     let err = match reason {
                         NoCandidateReason::NoCapability
                         | NoCandidateReason::TagMismatch
+                        | NoCandidateReason::SelectorMismatch
                         | NoCandidateReason::Saturated => ControlPlaneError::NoMatchingWorker {
                             workflow_name: required_capability.kind.clone(),
                             required_tags,
@@ -294,25 +379,21 @@ impl AssignmentQueue {
     ) {
         for cap in capabilities {
             loop {
-                // Pop one entry under the write lock, then release.
-                let queued = {
-                    let mut pending = self.pending.write().await;
-                    let Some(queue) = pending.get_mut(cap) else {
-                        break;
-                    };
-                    let Some(item) = queue.pop_front() else {
-                        break;
-                    };
-                    item
+                // Pop one entry via the WFQ scheduler; releases all
+                // locks before we await on routing below.
+                let Some(queued) = self.pop_pending(cap).await else {
+                    break;
                 };
 
                 let decision = {
-                    let hint_owned: Option<ResourceHint> =
-                        queued.assignment.resource_hint.as_ref().map(Into::into);
+                    let inputs = RouteInputs::from_assignment(&queued.assignment);
                     let req = RouteRequest {
                         required_capability: &queued.required_capability,
                         required_tags: &queued.required_tags,
-                        resource_hint: hint_owned.as_ref(),
+                        resource_hint: inputs.hint.as_ref(),
+                        selector: &inputs.selector,
+                        tolerations: &inputs.tolerations,
+                        input: inputs.input.as_ref(),
                     };
                     admission.route(registry, &req)
                 };
@@ -532,23 +613,29 @@ impl AssignmentQueue {
                 kind: format!("workflow:{}", assignment.workflow_name),
                 version: assignment.workflow_version.unwrap_or(0),
             };
+            let priority = assignment.priority;
+            let enqueued_at = Instant::now();
             let queued = QueuedAssignment {
                 assignment,
                 required_capability: cap.clone(),
                 required_tags: Vec::new(),
+                enqueued_at,
             };
 
-            // Populate the in-memory FIFO; admission will pick this
-            // up on the next drain. We do NOT mirror the orphan into
-            // the store's pending FIFO — the orphan record lives in
-            // the inflight set, and if THIS process also crashes
+            // Populate the in-memory pending pool; admission will pick
+            // this up on the next drain. We do NOT mirror the orphan
+            // into the store's pending FIFO — the orphan record lives
+            // in the inflight set, and if THIS process also crashes
             // before routing the run, the next recovery will
             // re-discover the same orphan and re-queue it again.
             // Mirroring here would double-count and create a hot loop
             // in pass 2 below.
             {
                 let mut pending = self.pending.write().await;
-                pending.entry(cap.clone()).or_default().push_back(queued);
+                pending
+                    .entry(cap.clone())
+                    .or_default()
+                    .insert((priority, enqueued_at, run_id), queued);
             }
 
             // Reset the run-state snapshot to Pending so the next
@@ -588,14 +675,20 @@ impl AssignmentQueue {
                     // the orphan entry — not re-enqueued.
                     continue;
                 };
+                let priority = assignment.priority;
+                let enqueued_at = Instant::now();
                 let queued = QueuedAssignment {
                     assignment,
                     required_capability: cap.clone(),
                     required_tags: tags.clone(),
+                    enqueued_at,
                 };
                 {
                     let mut pending = self.pending.write().await;
-                    pending.entry(cap.clone()).or_default().push_back(queued);
+                    pending
+                        .entry(cap.clone())
+                        .or_default()
+                        .insert((priority, enqueued_at, run_id), queued);
                 }
                 if let Err(e) = self.store.enqueue_pending(&cap, run_id, &tags).await {
                     tracing::warn!(%run_id, error = %e, "re-enqueue during recovery");
@@ -604,6 +697,29 @@ impl AssignmentQueue {
         }
 
         Ok(())
+    }
+
+    /// Record a freshly-submitted run as `Pending` in the in-memory map
+    /// and mirror the state + the wire assignment into the store so a
+    /// cold restart can recover both.
+    async fn record_pending(&self, run_id: Uuid, assignment: &Assignment) {
+        let pending_snapshot = RunStateSnapshot {
+            run_id,
+            status: RunStatus::Pending,
+            started_at_ms: now_ms(),
+            completed_at_ms: None,
+            assigned_to: None,
+            last_event_at_ms: None,
+            output: None,
+            error: None,
+        };
+        self.runs.insert(run_id, pending_snapshot.clone());
+        if let Err(e) = self.store.put_state(run_id, &pending_snapshot, None).await {
+            tracing::warn!(%run_id, error = %e, "store.put_state(Pending) failed");
+        }
+        if let Err(e) = self.store.put_assignment(run_id, assignment).await {
+            tracing::warn!(%run_id, error = %e, "store.put_assignment failed");
+        }
     }
 
     /// Common tail for a successful Push/Offer routing decision: stash
@@ -626,14 +742,16 @@ impl AssignmentQueue {
 
     async fn enqueue_pending(&self, queued: QueuedAssignment) {
         let run_id = queued.assignment.run_id;
+        let priority = queued.assignment.priority;
+        let enqueued_at = queued.enqueued_at;
         let capability = queued.required_capability.clone();
         let required_tags = queued.required_tags.clone();
         {
             let mut pending = self.pending.write().await;
             pending
-                .entry(queued.required_capability.clone())
+                .entry(capability.clone())
                 .or_default()
-                .push_back(queued);
+                .insert((priority, enqueued_at, run_id), queued);
         }
         if let Err(e) = self
             .store
@@ -642,6 +760,121 @@ impl AssignmentQueue {
         {
             tracing::warn!(%run_id, error = %e, "store.enqueue_pending failed");
         }
+    }
+
+    /// Pop the next pending assignment for `cap` according to the
+    /// weighted-fair-queueing (WFQ) deficit-round-robin (DRR)
+    /// scheduler.
+    ///
+    /// Returns `None` when the capability bucket is empty.
+    ///
+    /// ### Scheduler semantics
+    ///
+    /// Each `pop_pending` call returns at most one entry. State per
+    /// capability is held in [`WfqState`]: a per-band `deficit` map, a
+    /// `cursor` pointing at the next band to consider, and a
+    /// `topped_up` flag marking whether the current round has had its
+    /// per-band weight credited yet.
+    ///
+    /// One "round" = exactly one top-up of every band's deficit by its
+    /// [`band_weight`]. Within a round we walk bands starting at
+    /// `cursor` in priority order. For each band:
+    ///
+    /// - If the band has at least one entry AND
+    ///   `deficit[band] >= SERVICE_COST`, serve the lex-smallest
+    ///   `(priority, enqueued_at, run_id)` entry inside that band,
+    ///   subtract `SERVICE_COST` from `deficit[band]`, advance the
+    ///   cursor, and return. **We advance after serving so a single
+    ///   band cannot monopolize even when its deficit would allow
+    ///   more services in this round.** This is the anti-starvation
+    ///   invariant: every band gets at most floor(deficit/cost)
+    ///   services per round, and lower bands accumulate deficit
+    ///   across rounds.
+    /// - Otherwise advance the cursor and continue.
+    ///
+    /// When the cursor wraps back to 0 we end the current round and
+    /// start a new one (top up again). If a full new round produces
+    /// nothing — only possible when the bucket is empty — return
+    /// `None`.
+    ///
+    /// ### Anti-starvation guarantee
+    ///
+    /// `SERVICE_COST = 256` (the maximum band weight). Band 7 (weight
+    /// 32) accumulates 32 deficit per round, so it crosses
+    /// `SERVICE_COST` after at most `ceil(SERVICE_COST / 32) = 8`
+    /// rounds. Since every other band serves at most one entry per
+    /// round, a band-7 entry waits at most ~8 services from other
+    /// bands before it wins. This holds regardless of how full the
+    /// higher bands are.
+    async fn pop_pending(&self, cap: &WorkerCapability) -> Option<QueuedAssignment> {
+        let mut pending = self.pending.write().await;
+        let bucket = pending.get_mut(cap)?;
+        if bucket.is_empty() {
+            pending.remove(cap);
+            let mut deficits_guard = self.deficits.write().await;
+            deficits_guard.remove(cap);
+            return None;
+        }
+
+        let mut deficits_guard = self.deficits.write().await;
+        let state = deficits_guard.entry(cap.clone()).or_default();
+
+        // Bounded retry: at most PRIORITY_BANDS rounds. Each round
+        // either serves (success), or marks at least one band as
+        // exhausted (no servable entries) or unservable (deficit too
+        // low — promoted on next top-up). Since the bucket is
+        // non-empty and band 7 reaches SERVICE_COST after at most 8
+        // rounds, we always serve within PRIORITY_BANDS top-ups
+        // (PRIORITY_BANDS = 8 = ceil(SERVICE_COST / weight(7))).
+        for _round_attempt in 0..PRIORITY_BANDS {
+            // Walk bands in priority order. Serve the first band
+            // that (a) hasn't been served this round, (b) has
+            // deficit >= SERVICE_COST, and (c) has at least one
+            // entry.
+            let mut served = None;
+            for band in 0u8..PRIORITY_BANDS {
+                if *state.served_this_round.get(&band).unwrap_or(&false) {
+                    continue;
+                }
+                let d = *state.deficit.get(&band).unwrap_or(&0);
+                if d < SERVICE_COST {
+                    continue;
+                }
+                let lo = band_lo(band);
+                let hi = band_hi(band);
+                let key_opt = bucket
+                    .iter()
+                    .find(|((p, _, _), _)| *p >= lo && *p <= hi)
+                    .map(|(k, _)| *k);
+                if let Some(key) = key_opt {
+                    served = Some((band, key));
+                    break;
+                }
+                // Band has deficit but no entries — mark served so
+                // we don't keep re-checking it in this round.
+                state.served_this_round.insert(band, true);
+            }
+
+            if let Some((band, key)) = served {
+                let queued = bucket.remove(&key)?;
+                let d_ref = state.deficit.entry(band).or_insert(0);
+                *d_ref = d_ref.saturating_sub(SERVICE_COST);
+                state.served_this_round.insert(band, true);
+                if bucket.is_empty() {
+                    pending.remove(cap);
+                    deficits_guard.remove(cap);
+                }
+                return Some(queued);
+            }
+
+            // Nothing servable this round: top up and continue. This
+            // either credits more deficit to bands that were below
+            // threshold OR resets served_this_round so a band that
+            // was "spent" this round becomes eligible next round.
+            state.top_up();
+        }
+
+        None
     }
 
     async fn push_to_session(
@@ -721,6 +954,61 @@ impl Default for AssignmentQueue {
     }
 }
 
+/// Number of priority bands. The `u8` priority space (0..=255) is
+/// partitioned into 8 contiguous bands of width [`PRIORITY_BAND_WIDTH`]
+/// (32). Band 0 covers priorities 0..=31 (highest), band 7 covers
+/// 224..=255 (lowest).
+///
+/// Bands are 32 wide so a user picking a priority in the natural 0..=255
+/// range crosses a band boundary every 32 steps — coarse enough that
+/// "I picked priority 100, my friend picked 110" lands in the same band
+/// (same weight class), but fine enough that distinct priority *tiers*
+/// are honored (priority 0 vs 100 vs 200 are visibly different bands).
+const PRIORITY_BANDS: u8 = 8;
+const PRIORITY_BAND_WIDTH: u8 = 32;
+
+/// Per-serve deficit decrement, equal to the maximum band weight. With
+/// `SERVICE_COST = MAX_WEIGHT`, band 0 (weight 256) services exactly
+/// one entry per round, while band 7 (weight 32) services one entry
+/// per 8 rounds. This guarantees:
+///
+/// 1. **Anti-starvation.** Even a steady stream of band-0 work cannot
+///    keep band-7 work waiting forever — band 7 wins after at most
+///    `ceil(MAX_WEIGHT / weight(7)) = 8` rounds.
+/// 2. **Priority is honored.** Across any sustained mixed workload,
+///    band 0 receives 8x the service rate of band 7.
+const SERVICE_COST: i32 = 256;
+
+/// Weight of a priority band: band 0 = 256, band 1 = 224, …, band 7 = 32.
+///
+/// Strictly decreasing so higher-priority bands are serviced more often
+/// per round. The minimum weight (32) is non-zero, which is what
+/// prevents the lowest band from starving.
+fn band_weight(band: u8) -> i32 {
+    256_i32 - i32::from(band) * i32::from(PRIORITY_BAND_WIDTH)
+}
+
+/// Inclusive lower bound of priorities in `band`.
+fn band_lo(band: u8) -> u8 {
+    band.saturating_mul(PRIORITY_BAND_WIDTH)
+}
+
+/// Inclusive upper bound of priorities in `band`.
+fn band_hi(band: u8) -> u8 {
+    band.saturating_mul(PRIORITY_BAND_WIDTH)
+        .saturating_add(PRIORITY_BAND_WIDTH - 1)
+}
+
+/// Map a raw `u8` priority to its band index in `0..PRIORITY_BANDS`.
+///
+/// Exposed for the `priority_band_math_buckets_correctly` test; the
+/// scheduler itself queries band membership via `band_lo` / `band_hi`
+/// directly to avoid an extra division on the hot path.
+#[cfg(test)]
+fn priority_band(priority: u8) -> u8 {
+    priority / PRIORITY_BAND_WIDTH
+}
+
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -753,6 +1041,9 @@ mod tests {
             deadline_ms: None,
             attempt: 0,
             resource_hint: None,
+            priority: blazen_core::distributed::DEFAULT_PRIORITY,
+            selector: crate::protocol::NodeSelectorWire::default(),
+            tolerations: Vec::new(),
         }
     }
 
@@ -771,6 +1062,9 @@ mod tests {
             BTreeMap::new(),
             AdmissionMode::Fixed { max_in_flight: 4 },
             tx,
+            BTreeMap::new(),
+            Vec::new(),
+            Vec::new(),
         );
 
         let run_id = Uuid::new_v4();
@@ -875,6 +1169,9 @@ mod tests {
             BTreeMap::new(),
             AdmissionMode::Fixed { max_in_flight: 4 },
             tx,
+            BTreeMap::new(),
+            Vec::new(),
+            Vec::new(),
         );
         let caps_vec = vec![cap("workflow:hello", 1)];
         queue.try_drain_for(&caps_vec, &registry, &admission).await;
@@ -900,6 +1197,9 @@ mod tests {
             BTreeMap::new(),
             AdmissionMode::Fixed { max_in_flight: 4 },
             tx,
+            BTreeMap::new(),
+            Vec::new(),
+            Vec::new(),
         );
 
         let run_id = Uuid::new_v4();
@@ -968,5 +1268,200 @@ mod tests {
         let s2 = queue.describe(id2).unwrap();
         assert_eq!(s2.status, RunStatus::Failed);
         assert_eq!(s2.error.as_deref(), Some("boom"));
+    }
+
+    fn make_assignment_p(run_id: Uuid, name: &str, priority: u8) -> Assignment {
+        Assignment {
+            envelope_version: crate::protocol::ENVELOPE_VERSION,
+            run_id,
+            parent_run_id: None,
+            workflow_name: name.to_string(),
+            workflow_version: None,
+            input_json: b"{}".to_vec(),
+            deadline_ms: None,
+            attempt: 0,
+            resource_hint: None,
+            priority,
+            selector: crate::protocol::NodeSelectorWire::default(),
+            tolerations: Vec::new(),
+        }
+    }
+
+    /// Enqueue a fresh assignment directly into the pending pool with
+    /// the given priority and capability. Returns the `run_id`.
+    async fn enqueue_for_test(
+        queue: &AssignmentQueue,
+        capability: WorkerCapability,
+        priority: u8,
+    ) -> Uuid {
+        let run_id = Uuid::new_v4();
+        let queued = QueuedAssignment {
+            assignment: make_assignment_p(run_id, &capability.kind, priority),
+            required_capability: capability.clone(),
+            required_tags: Vec::new(),
+            enqueued_at: Instant::now(),
+        };
+        queue.enqueue_pending(queued).await;
+        run_id
+    }
+
+    #[test]
+    fn priority_band_math_buckets_correctly() {
+        // Boundaries: each band is 32 wide.
+        assert_eq!(priority_band(0), 0);
+        assert_eq!(priority_band(31), 0);
+        assert_eq!(priority_band(32), 1);
+        assert_eq!(priority_band(63), 1);
+        assert_eq!(priority_band(64), 2);
+        assert_eq!(priority_band(128), 4); // DEFAULT_PRIORITY
+        assert_eq!(priority_band(223), 6);
+        assert_eq!(priority_band(224), 7);
+        assert_eq!(priority_band(255), 7);
+
+        // Band lo/hi cover the full priority space without gaps or overlap.
+        for band in 0u8..PRIORITY_BANDS {
+            let lo = band_lo(band);
+            let hi = band_hi(band);
+            assert_eq!(lo, band * 32);
+            assert_eq!(hi, band * 32 + 31);
+            for p in lo..=hi {
+                assert_eq!(priority_band(p), band);
+            }
+        }
+
+        // Weights: 256, 224, 192, 160, 128, 96, 64, 32.
+        let weights: Vec<i32> = (0u8..PRIORITY_BANDS).map(band_weight).collect();
+        assert_eq!(weights, vec![256, 224, 192, 160, 128, 96, 64, 32]);
+        // Lowest band weight is strictly positive (anti-starvation invariant).
+        assert!(band_weight(PRIORITY_BANDS - 1) > 0);
+    }
+
+    #[tokio::test]
+    async fn queue_orders_by_priority_then_fifo() {
+        let queue = AssignmentQueue::new();
+        let capability = cap("workflow:hello", 1);
+
+        // Submit three: pri=100 (A), pri=50 (B), pri=100 (C), in that
+        // order. Expected pop order: B (pri 50), then A, then C
+        // (FIFO within priority 100).
+        let id_a = enqueue_for_test(&queue, capability.clone(), 100).await;
+        // Force a perceptible gap so enqueued_at differs.
+        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+        let id_b = enqueue_for_test(&queue, capability.clone(), 50).await;
+        tokio::time::sleep(std::time::Duration::from_millis(2)).await;
+        let id_c = enqueue_for_test(&queue, capability.clone(), 100).await;
+
+        let first = queue.pop_pending(&capability).await.unwrap();
+        assert_eq!(first.assignment.run_id, id_b, "pri-50 must come first");
+
+        let second = queue.pop_pending(&capability).await.unwrap();
+        assert_eq!(
+            second.assignment.run_id, id_a,
+            "earliest pri-100 next (FIFO within priority)"
+        );
+
+        let third = queue.pop_pending(&capability).await.unwrap();
+        assert_eq!(third.assignment.run_id, id_c, "later pri-100 last");
+
+        assert!(queue.pop_pending(&capability).await.is_none());
+    }
+
+    #[tokio::test]
+    async fn wfq_does_not_starve_low_priority_under_steady_high() {
+        // Bound rationale: weights are 256, 224, …, 32. The lowest
+        // band (band 7, weight 32) accrues 32 deficit per round. With
+        // `SERVICE_COST = 256`, band 7 wins after at most
+        // `ceil(SERVICE_COST / 32) = 8` rounds. Each preceding round
+        // services at most one band-0 entry (deficit math; band 0 also
+        // costs SERVICE_COST per serve). So the lowest-priority entry
+        // is returned within roughly 8 pops. We pad to 16 for safety
+        // against off-by-one accumulation effects from the priming
+        // round. The spec's "within first 50 pops" is a much looser
+        // bound; we choose 16 to assert the algorithm actually works.
+        const STARVATION_BOUND: usize = 16;
+
+        let queue = AssignmentQueue::new();
+        let capability = cap("workflow:hello", 1);
+
+        // 100 priority-0 jobs.
+        for _ in 0..100 {
+            enqueue_for_test(&queue, capability.clone(), 0).await;
+        }
+        // Then 1 priority-255 job.
+        let low_id = enqueue_for_test(&queue, capability.clone(), 255).await;
+
+        let mut low_position = None;
+        for i in 0..110 {
+            let item = queue.pop_pending(&capability).await.unwrap();
+            if item.assignment.run_id == low_id {
+                low_position = Some(i);
+                break;
+            }
+        }
+
+        let pos = low_position.expect("priority-255 entry was never served");
+        assert!(
+            pos < STARVATION_BOUND,
+            "priority-255 entry returned at pop {pos}, expected < {STARVATION_BOUND}"
+        );
+    }
+
+    #[tokio::test]
+    async fn surrender_preserves_priority_and_enqueued_at() {
+        let registry = WorkerRegistry::new();
+        let admission = Admission::new();
+        let queue = AssignmentQueue::new();
+
+        let (tx, mut _rx) = mpsc::channel(8);
+        let mut caps = HashSet::new();
+        caps.insert(cap("workflow:hello", 1));
+        let sid = registry.register(
+            "node-a".into(),
+            caps,
+            BTreeMap::new(),
+            AdmissionMode::Fixed { max_in_flight: 4 },
+            tx,
+            BTreeMap::new(),
+            Vec::new(),
+            Vec::new(),
+        );
+
+        let run_id = Uuid::new_v4();
+        let outcome = queue
+            .submit(
+                run_id,
+                make_assignment_p(run_id, "workflow:hello", 50),
+                cap("workflow:hello", 1),
+                vec![],
+                false,
+                &registry,
+                &admission,
+            )
+            .await;
+        assert!(matches!(outcome, SubmitOutcome::Pushed { .. }));
+
+        // Capture the original enqueued_at from the in-flight record.
+        let original_enqueued_at = queue
+            .in_flight
+            .get(&run_id)
+            .map(|r| r.value().queued.enqueued_at)
+            .expect("in-flight record present after Push");
+
+        // Surrender, then verify the re-queued entry is the very next
+        // pop (the queue is otherwise empty) AND that its enqueued_at
+        // is unchanged.
+        queue.surrender_session(sid).await;
+
+        let capability = cap("workflow:hello", 1);
+        let popped = queue
+            .pop_pending(&capability)
+            .await
+            .expect("surrendered entry is back in pending");
+        assert_eq!(popped.assignment.run_id, run_id);
+        assert_eq!(popped.assignment.priority, 50);
+        assert_eq!(
+            popped.enqueued_at, original_enqueued_at,
+            "enqueued_at must be preserved across surrender"
+        );
     }
 }

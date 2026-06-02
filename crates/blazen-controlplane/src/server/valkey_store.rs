@@ -453,6 +453,9 @@ mod tests {
             deadline_ms: None,
             attempt: 0,
             resource_hint: None,
+            priority: blazen_core::distributed::DEFAULT_PRIORITY,
+            selector: crate::protocol::NodeSelectorWire::default(),
+            tolerations: Vec::new(),
         }
     }
 

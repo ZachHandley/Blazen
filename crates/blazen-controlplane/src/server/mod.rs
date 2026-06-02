@@ -21,6 +21,8 @@ pub mod store;
 pub mod subscribe;
 #[cfg(feature = "valkey-store")]
 pub mod valkey_store;
+#[cfg(feature = "durable-store")]
+pub mod durable_store;
 
 // PR5: remote-mode ModelManager server side. Gated behind the
 // `model-server` feature so the host can keep the workflow control
@@ -34,6 +36,8 @@ pub use service::ControlPlaneService;
 pub use store::{AssignmentStore, MemoryAssignmentStore};
 #[cfg(feature = "valkey-store")]
 pub use valkey_store::ValkeyAssignmentStore;
+#[cfg(feature = "durable-store")]
+pub use durable_store::DurableAssignmentStore;
 
 #[cfg(feature = "model-server")]
 pub use model_manager::{ManagerHandle, ModelServerState};

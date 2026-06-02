@@ -69,6 +69,9 @@ async fn cold_start_recovers_orphaned_inflight() {
         deadline_ms: None,
         attempt: 0,
         resource_hint: None,
+        priority: blazen_core::distributed::DEFAULT_PRIORITY,
+        selector: blazen_controlplane::protocol::NodeSelectorWire::default(),
+        tolerations: Vec::new(),
     };
 
     store

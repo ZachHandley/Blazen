@@ -898,6 +898,9 @@ impl WasmControlPlaneWorker {
                     .as_ref()
                     .map_or(AdmissionModeWire::Reactive, Into::into),
                 supported_envelope_versions: vec![ENVELOPE_VERSION],
+                labels: std::collections::BTreeMap::new(),
+                taints: Vec::new(),
+                descriptors: Vec::new(),
             };
 
             let url = join_url(&endpoint, "/v1/cp/worker/register");

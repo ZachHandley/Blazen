@@ -62,6 +62,9 @@ pub async fn handle_submit_workflow(
         deadline_ms: core_req.deadline_ms,
         attempt: 0,
         resource_hint: core_req.resource_hint.as_ref().map(Into::into),
+        priority: blazen_core::distributed::DEFAULT_PRIORITY,
+        selector: protocol::NodeSelectorWire::default(),
+        tolerations: Vec::new(),
     };
 
     let required_capability = WorkerCapability {

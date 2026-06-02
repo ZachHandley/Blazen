@@ -66,7 +66,8 @@ use tonic::transport::{Channel, ClientTlsConfig, Endpoint};
 use uuid::Uuid;
 
 use blazen_core::distributed::{
-    AdmissionMode, AdmissionSnapshot, RunEvent as CoreRunEvent, WorkerCapability, WorkerSessionSink,
+    AdmissionMode, AdmissionSnapshot, RunEvent as CoreRunEvent, WorkerCapability,
+    WorkerSessionSink, WorkerTaint,
 };
 
 use crate::auth;
@@ -99,6 +100,18 @@ pub struct WorkerConfig {
     /// Free-form `key=value` tags used by submission-time tag predicates.
     /// `BTreeMap` for deterministic encoding.
     pub tags: BTreeMap<String, String>,
+    /// Worker-side scheduling labels surfaced in [`WorkerHello::labels`].
+    /// Filtered against job-side [`crate::protocol::Assignment::selector`]
+    /// inside admission. Empty by default.
+    pub labels: BTreeMap<String, String>,
+    /// Worker-side taints surfaced in [`WorkerHello::taints`]. Jobs without
+    /// a matching toleration are not scheduled here. Empty by default.
+    pub taints: Vec<WorkerTaint>,
+    /// Capability-descriptor manifest surfaced in
+    /// [`WorkerHello::descriptors`]. One entry per node this worker is
+    /// willing to host. Empty by default — workers that don't publish a
+    /// descriptor catalogue keep the legacy behaviour.
+    pub descriptors: Vec<protocol::NodeDescriptorWire>,
     /// Admission mode declared at handshake.
     pub admission: AdmissionMode,
     /// Cadence of [`WorkerHeartbeat`] frames.
@@ -115,6 +128,10 @@ pub struct WorkerConfig {
     /// the handshake. When `None`, falls back to `BLAZEN_PEER_TOKEN` from
     /// the environment.
     pub bearer_token: Option<String>,
+    /// Optional probe-handle that sources real `vram_free_mb` for the
+    /// heartbeat's [`AdmissionSnapshot`]. When `None`, the synthesized
+    /// snapshot reports `vram_free_mb = None` (today's behavior).
+    pub probe_handle: Option<blazen_resource_probe::ProbeHandle>,
 }
 
 impl WorkerConfig {
@@ -127,13 +144,26 @@ impl WorkerConfig {
             node_id: node_id.into(),
             capabilities: Vec::new(),
             tags: BTreeMap::new(),
+            labels: BTreeMap::new(),
+            taints: Vec::new(),
+            descriptors: Vec::new(),
             admission: AdmissionMode::Fixed { max_in_flight: 1 },
             heartbeat_interval: Duration::from_secs(5),
             envelope_versions: vec![ENVELOPE_VERSION],
             tls: None,
             retry: RetryPolicy::default(),
             bearer_token: None,
+            probe_handle: None,
         }
+    }
+
+    /// Attach a [`blazen_resource_probe::ProbeHandle`]. When set, the
+    /// heartbeat ticker sources `vram_free_mb` from the probe's latest
+    /// snapshot instead of leaving it `None`.
+    #[must_use]
+    pub fn with_probe_handle(mut self, handle: blazen_resource_probe::ProbeHandle) -> Self {
+        self.probe_handle = Some(handle);
+        self
     }
 
     /// Append a capability the worker advertises.
@@ -155,6 +185,29 @@ impl WorkerConfig {
     #[must_use]
     pub fn with_bearer_token(mut self, token: impl Into<String>) -> Self {
         self.bearer_token = Some(token.into());
+        self
+    }
+
+    /// Insert a scheduling label surfaced in [`WorkerHello::labels`].
+    #[must_use]
+    pub fn with_label(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.labels.insert(key.into(), value.into());
+        self
+    }
+
+    /// Append a worker-side taint surfaced in [`WorkerHello::taints`].
+    #[must_use]
+    pub fn with_taint(mut self, taint: WorkerTaint) -> Self {
+        self.taints.push(taint);
+        self
+    }
+
+    /// Append a capability descriptor surfaced in
+    /// [`WorkerHello::descriptors`]. The descriptor is consumed verbatim
+    /// — the control plane uses its `id` field as the catalogue key.
+    #[must_use]
+    pub fn with_descriptor(mut self, descriptor: protocol::NodeDescriptorWire) -> Self {
+        self.descriptors.push(descriptor);
         self
     }
 
@@ -777,6 +830,15 @@ impl Worker {
             tags: self.config.tags.clone(),
             admission: (&self.config.admission).into(),
             supported_envelope_versions: self.config.envelope_versions.clone(),
+            labels: self.config.labels.clone(),
+            taints: self
+                .config
+                .taints
+                .iter()
+                .cloned()
+                .map(protocol::WorkerTaintWire::from)
+                .collect(),
+            descriptors: self.config.descriptors.clone(),
         });
         outbound_tx.send(hello).await.map_err(|_| {
             ControlPlaneError::Transport("outbound channel closed before Hello".into())
@@ -845,6 +907,7 @@ impl Worker {
     ) -> JoinHandle<()> {
         let state = Arc::clone(&self.state);
         let admission = self.config.admission.clone();
+        let probe = self.config.probe_handle.clone();
         tokio::spawn(async move {
             let mut ticker = tokio::time::interval(interval);
             ticker.set_missed_tick_behavior(tokio::time::MissedTickBehavior::Delay);
@@ -857,7 +920,7 @@ impl Worker {
                     _ = ticker.tick() => {}
                 }
                 let in_flight = state.in_flight.load(Ordering::Relaxed);
-                let snapshot = synthesize_admission_snapshot(&admission, in_flight);
+                let snapshot = synthesize_admission_snapshot(&admission, in_flight, probe.as_ref());
                 if let Err(e) = outbox.heartbeat(in_flight, Some(snapshot)).await {
                     tracing::debug!(error = %e, "heartbeat send failed; session ending");
                     return;
@@ -1126,21 +1189,37 @@ fn duration_ms_lossy(d: Duration) -> u64 {
 }
 
 /// Synthesise a best-effort [`AdmissionSnapshot`] for the heartbeat
-/// from the admission mode + current in-flight count. A future revision
-/// can hook real OS / GPU stats in here without changing the wire
-/// format or this function's signature.
-fn synthesize_admission_snapshot(admission: &AdmissionMode, in_flight: u32) -> AdmissionSnapshot {
+/// from the admission mode, current in-flight count, and (optionally) a
+/// probe snapshot. When `probe` is `Some`, `vram_free_mb` is sourced from
+/// the latest probe; otherwise it is left `None` to preserve the
+/// pre-probe behavior.
+fn synthesize_admission_snapshot(
+    admission: &AdmissionMode,
+    in_flight: u32,
+    probe: Option<&blazen_resource_probe::ProbeHandle>,
+) -> AdmissionSnapshot {
+    let vram_free_mb = probe.and_then(|p| {
+        let snap = p.latest();
+        if snap.free_vram_is_complete() {
+            Some(snap.total_free_vram_mb())
+        } else {
+            // Snapshot is incomplete — better to report None than a
+            // known-undercounted value.
+            None
+        }
+    });
+
     match admission {
         AdmissionMode::Fixed { max_in_flight } => AdmissionSnapshot {
             capacity_score: fixed_capacity_score(*max_in_flight, in_flight),
             model_residency: std::collections::BTreeSet::new(),
-            vram_free_mb: None,
+            vram_free_mb,
             in_flight_vram_mb: 0,
         },
         AdmissionMode::VramBudget { .. } | AdmissionMode::Reactive => AdmissionSnapshot {
             capacity_score: 1.0,
             model_residency: std::collections::BTreeSet::new(),
-            vram_free_mb: None,
+            vram_free_mb,
             in_flight_vram_mb: 0,
         },
     }
@@ -1207,20 +1286,55 @@ mod tests {
 
     #[test]
     fn synthesize_admission_snapshot_fixed_reports_capacity() {
-        let snap = synthesize_admission_snapshot(&AdmissionMode::Fixed { max_in_flight: 4 }, 1);
+        let snap =
+            synthesize_admission_snapshot(&AdmissionMode::Fixed { max_in_flight: 4 }, 1, None);
         assert!((snap.capacity_score - 0.75).abs() < 0.001);
     }
 
     #[test]
     fn synthesize_admission_snapshot_fixed_reports_zero_at_capacity() {
-        let snap = synthesize_admission_snapshot(&AdmissionMode::Fixed { max_in_flight: 4 }, 4);
+        let snap =
+            synthesize_admission_snapshot(&AdmissionMode::Fixed { max_in_flight: 4 }, 4, None);
         assert!(snap.capacity_score < f32::EPSILON);
     }
 
     #[test]
     fn synthesize_admission_snapshot_zero_cap_is_saturated() {
-        let snap = synthesize_admission_snapshot(&AdmissionMode::Fixed { max_in_flight: 0 }, 0);
+        let snap =
+            synthesize_admission_snapshot(&AdmissionMode::Fixed { max_in_flight: 0 }, 0, None);
         assert!(snap.capacity_score < f32::EPSILON);
+    }
+
+    #[test]
+    fn synthesize_admission_snapshot_without_probe_leaves_vram_none() {
+        let snap =
+            synthesize_admission_snapshot(&AdmissionMode::Fixed { max_in_flight: 4 }, 1, None);
+        assert!(snap.vram_free_mb.is_none());
+    }
+
+    #[tokio::test]
+    async fn synthesize_admission_snapshot_with_probe_sources_vram_when_complete() {
+        // Use the probe's real probe_once() (the test host's CPU/RAM are
+        // always probed; GPUs may or may not be present depending on
+        // build target). What we assert is the contract: if the snapshot
+        // is `free_vram_is_complete`, the result reflects the sum; if
+        // not, the result is None (rather than a partial under-count).
+        let handle =
+            blazen_resource_probe::Probe::spawn(blazen_resource_probe::ProbeConfig::default())
+                .await;
+        let snap = synthesize_admission_snapshot(
+            &AdmissionMode::VramBudget {
+                max_vram_mb: 24_000,
+            },
+            0,
+            Some(&handle),
+        );
+        let probed = handle.latest();
+        if probed.free_vram_is_complete() {
+            assert_eq!(snap.vram_free_mb, Some(probed.total_free_vram_mb()));
+        } else {
+            assert!(snap.vram_free_mb.is_none());
+        }
     }
 
     #[test]

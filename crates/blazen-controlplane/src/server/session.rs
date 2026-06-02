@@ -70,12 +70,21 @@ pub async fn handle_worker_session(
     // Build outbound channel and register.
     let (outbound_tx, outbound_rx) = mpsc::channel::<ServerToWorker>(OUTBOUND_BUFFER);
     let capabilities = hello.capabilities.iter().map(Into::into).collect();
+    let taints = hello
+        .taints
+        .iter()
+        .cloned()
+        .map(blazen_core::distributed::WorkerTaint::from)
+        .collect();
     let session_id = shared.registry.register(
         hello.node_id.clone(),
         capabilities,
         hello.tags.clone(),
         (&hello.admission).into(),
         outbound_tx.clone(),
+        hello.labels.clone(),
+        taints,
+        hello.descriptors.clone(),
     );
 
     let negotiated = hello

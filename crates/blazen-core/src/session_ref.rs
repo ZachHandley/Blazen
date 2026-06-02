@@ -2146,7 +2146,7 @@ mod tests {
     // --------------------------------------------------------------
 
     /// (a) LIVE identity survives N in-process hops: the same Arc is returned
-    /// after repeated get/clone_ref hops (no deep copy, no JSON).
+    /// after repeated `get`/`clone_ref` hops (no deep copy, no JSON).
     #[tokio::test]
     async fn live_identity_survives_n_in_process_hops() {
         use std::sync::atomic::{AtomicUsize, Ordering};
@@ -2201,7 +2201,7 @@ mod tests {
         assert!(resumed.get_any(key).await.is_none());
     }
 
-    /// (c) SERIALIZABLE lane survives a snapshot: a SessionRefSerializable
+    /// (c) SERIALIZABLE lane survives a snapshot: a `SessionRefSerializable`
     /// entry serializes to bytes and rehydrates under the SAME key into a
     /// fresh registry (the resume path).
     #[tokio::test]

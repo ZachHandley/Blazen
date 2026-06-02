@@ -29,7 +29,9 @@
 
 use std::sync::atomic::{AtomicUsize, Ordering};
 
-use blazen_core::distributed::{AdmissionMode, ResourceHint, WorkerCapability};
+use blazen_core::distributed::{
+    AdmissionMode, NodeSelector, ResourceHint, TaintEffect, TolerationSpec, WorkerCapability,
+};
 
 use super::registry::{WorkerHandle, WorkerRegistry};
 
@@ -76,6 +78,9 @@ pub enum NoCandidateReason {
     NoCapability,
     /// Workers exist with the capability but none match the tag predicate.
     TagMismatch,
+    /// Workers exist (capability + tag matched) but none satisfied the
+    /// node selector and/or taint+toleration constraints.
+    SelectorMismatch,
     /// Workers match but all are saturated.
     Saturated,
     /// Submission targeted a `VramBudget` worker but omitted
@@ -91,6 +96,19 @@ pub struct RouteRequest<'a> {
     pub required_tags: &'a [String],
     /// Resource estimate. Required for `VramBudget` workers.
     pub resource_hint: Option<&'a ResourceHint>,
+    /// Node selector — `required` labels must match, `forbidden` must not,
+    /// `preferred` contributes to candidate scoring.
+    pub selector: &'a NodeSelector,
+    /// Tolerations carried by the job — admit workers carrying matching
+    /// taints. `NoSchedule` taints without a matching toleration exclude
+    /// the worker; `PreferNoSchedule` taints without a matching toleration
+    /// penalize the worker's score but do not exclude it.
+    pub tolerations: &'a [TolerationSpec],
+    /// Decoded assignment input. Used for `model_residency` affinity
+    /// scoring — if the input is a JSON object containing a `model` or
+    /// `model_name` string field, workers with that model already loaded
+    /// gain a score bonus.
+    pub input: Option<&'a serde_json::Value>,
 }
 
 impl Admission {
@@ -130,11 +148,34 @@ impl Admission {
             };
         }
 
-        // Step 3: capacity filter.
-        let mut had_vram_miss = false;
-        let with_capacity: Vec<WorkerHandle> = after_tags
+        // Step 3 (new): NodeSelector + taint/toleration filter, with
+        // PreferNoSchedule penalties + preferred-label bonuses + model
+        // residency bonuses tracked per-worker. Score is signed; higher
+        // is better.
+        let requested_model = req.input.and_then(requested_model_name);
+        let scored: Vec<(WorkerHandle, i32)> = after_tags
             .into_iter()
-            .filter(|w| match has_capacity(w, req.resource_hint) {
+            .filter_map(|w| {
+                score_candidate(
+                    &w,
+                    req.selector,
+                    req.tolerations,
+                    requested_model.as_deref(),
+                )
+                .map(|s| (w, s))
+            })
+            .collect();
+        if scored.is_empty() {
+            return Decision::NoCandidate {
+                reason: NoCandidateReason::SelectorMismatch,
+            };
+        }
+
+        // Step 4: capacity filter.
+        let mut had_vram_miss = false;
+        let with_capacity: Vec<(WorkerHandle, i32)> = scored
+            .into_iter()
+            .filter(|(w, _)| match has_capacity(w, req.resource_hint) {
                 CapacityCheck::HasRoom => true,
                 CapacityCheck::Saturated => false,
                 CapacityCheck::MissingVramHint => {
@@ -155,14 +196,23 @@ impl Admission {
             };
         }
 
-        // Step 4: least-loaded with round-robin tie-break.
-        let min_load = with_capacity
+        // Step 5: pick the best candidate. Primary key = highest score
+        // (selector/taint/affinity); secondary = lowest load; ties broken
+        // by round-robin.
+        let max_score = with_capacity.iter().map(|(_, s)| *s).max().unwrap_or(0);
+        let top_scored: Vec<WorkerHandle> = with_capacity
+            .into_iter()
+            .filter(|(_, s)| *s == max_score)
+            .map(|(w, _)| w)
+            .collect();
+
+        let min_load = top_scored
             .iter()
             .map(load_score)
             .min_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal))
             .unwrap_or(0.0);
 
-        let tied: Vec<WorkerHandle> = with_capacity
+        let tied: Vec<WorkerHandle> = top_scored
             .into_iter()
             .filter(|w| (load_score(w) - min_load).abs() < f32::EPSILON)
             .collect();
@@ -170,7 +220,7 @@ impl Admission {
         let rr = self.round_robin.fetch_add(1, Ordering::Relaxed);
         let chosen = &tied[rr % tied.len()];
 
-        // Step 5: dispatch shape depends on admission mode.
+        // Step 6: dispatch shape depends on admission mode.
         match chosen.admission {
             AdmissionMode::Reactive => Decision::Offer {
                 session_id: chosen.session_id,
@@ -182,6 +232,64 @@ impl Admission {
             },
         }
     }
+}
+
+/// Score penalty subtracted per un-tolerated `PreferNoSchedule` taint.
+/// `-100` is large enough to distinguish from a preferred-label bonus
+/// (`+10`) or a model-residency bonus (`+50`).
+const PREFER_NO_SCHEDULE_PENALTY: i32 = 100;
+/// Score bonus per matched preferred label in the node selector.
+const PREFERRED_LABEL_BONUS: i32 = 10;
+/// Score bonus when the worker already has the requested model resident.
+const MODEL_RESIDENCY_BONUS: i32 = 50;
+
+/// Extract the model name the caller is asking for, if the assignment
+/// input is a JSON object containing `model_name` or `model` as a string.
+fn requested_model_name(input: &serde_json::Value) -> Option<String> {
+    let obj = input.as_object()?;
+    for key in ["model_name", "model"] {
+        if let Some(serde_json::Value::String(s)) = obj.get(key) {
+            return Some(s.clone());
+        }
+    }
+    None
+}
+
+/// Per-worker selector + taint + score evaluation.
+///
+/// Returns `None` if the worker is excluded by the selector or by a
+/// `NoSchedule` taint without a matching toleration. Otherwise returns
+/// the candidate's signed score: `PreferNoSchedule` taints subtract,
+/// preferred-label matches and model-residency affinity add.
+fn score_candidate(
+    w: &WorkerHandle,
+    selector: &NodeSelector,
+    tolerations: &[TolerationSpec],
+    requested_model: Option<&str>,
+) -> Option<i32> {
+    if !selector.admits(&w.labels) {
+        return None;
+    }
+    let mut score: i32 = 0;
+    for taint in &w.taints {
+        if tolerations.iter().any(|t| t.matches(taint)) {
+            continue;
+        }
+        match taint.effect {
+            TaintEffect::NoSchedule => return None,
+            TaintEffect::PreferNoSchedule => score -= PREFER_NO_SCHEDULE_PENALTY,
+        }
+    }
+    let pref = i32::try_from(selector.preferred_match_count(&w.labels)).unwrap_or(i32::MAX);
+    score += pref * PREFERRED_LABEL_BONUS;
+    if let Some(model) = requested_model
+        && w.admission_snapshot
+            .as_ref()
+            .is_some_and(|s| s.model_residency.contains(model))
+    {
+        score += MODEL_RESIDENCY_BONUS;
+    }
+    Some(score)
 }
 
 impl Default for Admission {
@@ -290,15 +398,35 @@ fn tags_match(required: &[String], have: &std::collections::BTreeMap<String, Str
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::collections::{BTreeMap, HashSet};
+    use std::collections::{BTreeMap, BTreeSet, HashSet};
 
-    use blazen_core::distributed::WorkerCapability;
+    use blazen_core::distributed::{AdmissionSnapshot, WorkerCapability, WorkerTaint};
     use tokio::sync::mpsc;
 
     fn cap(kind: &str, version: u32) -> WorkerCapability {
         WorkerCapability {
             kind: kind.to_string(),
             version,
+        }
+    }
+
+    /// Default `RouteRequest` builder for tests. Most tests don't care about
+    /// the selector/toleration fields, so they default to empty.
+    fn route_req<'a>(
+        capability: &'a WorkerCapability,
+        tags: &'a [String],
+        hint: Option<&'a ResourceHint>,
+        selector: &'a NodeSelector,
+        tolerations: &'a [TolerationSpec],
+        input: Option<&'a serde_json::Value>,
+    ) -> RouteRequest<'a> {
+        RouteRequest {
+            required_capability: capability,
+            required_tags: tags,
+            resource_hint: hint,
+            selector,
+            tolerations,
+            input,
         }
     }
 
@@ -309,10 +437,46 @@ mod tests {
         tags: BTreeMap<String, String>,
         admission: AdmissionMode,
     ) -> (uuid::Uuid, mpsc::Receiver<crate::protocol::ServerToWorker>) {
+        register_worker_full(
+            reg,
+            node_id,
+            capabilities,
+            tags,
+            admission,
+            BTreeMap::new(),
+            Vec::new(),
+        )
+    }
+
+    fn register_worker_full(
+        reg: &WorkerRegistry,
+        node_id: &str,
+        capabilities: Vec<WorkerCapability>,
+        tags: BTreeMap<String, String>,
+        admission: AdmissionMode,
+        labels: BTreeMap<String, String>,
+        taints: Vec<WorkerTaint>,
+    ) -> (uuid::Uuid, mpsc::Receiver<crate::protocol::ServerToWorker>) {
         let (tx, rx) = mpsc::channel(8);
         let caps: HashSet<_> = capabilities.into_iter().collect();
-        let sid = reg.register(node_id.into(), caps, tags, admission, tx);
+        let sid = reg.register(
+            node_id.into(),
+            caps,
+            tags,
+            admission,
+            tx,
+            labels,
+            taints,
+            Vec::new(),
+        );
         (sid, rx)
+    }
+
+    fn labels_from(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+            .collect()
     }
 
     #[test]
@@ -327,14 +491,8 @@ mod tests {
         );
         let admission = Admission::new();
         let need = cap("workflow:wanted", 1);
-        let d = admission.route(
-            &reg,
-            &RouteRequest {
-                required_capability: &need,
-                required_tags: &[],
-                resource_hint: None,
-            },
-        );
+        let sel = NodeSelector::default();
+        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
         assert!(matches!(
             d,
             Decision::NoCandidate {
@@ -355,14 +513,8 @@ mod tests {
         );
         let admission = Admission::new();
         let need = cap("workflow:hello", 1);
-        let d = admission.route(
-            &reg,
-            &RouteRequest {
-                required_capability: &need,
-                required_tags: &[],
-                resource_hint: None,
-            },
-        );
+        let sel = NodeSelector::default();
+        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
         match d {
             Decision::Push { session_id, .. } => assert_eq!(session_id, sid),
             other => panic!("expected Push, got {other:?}"),
@@ -382,14 +534,8 @@ mod tests {
         reg.record_heartbeat(sid, 2, None); // at cap
         let admission = Admission::new();
         let need = cap("workflow:hello", 1);
-        let d = admission.route(
-            &reg,
-            &RouteRequest {
-                required_capability: &need,
-                required_tags: &[],
-                resource_hint: None,
-            },
-        );
+        let sel = NodeSelector::default();
+        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
         assert!(matches!(
             d,
             Decision::NoCandidate {
@@ -412,14 +558,8 @@ mod tests {
         );
         let admission = Admission::new();
         let need = cap("workflow:hello", 1);
-        let d = admission.route(
-            &reg,
-            &RouteRequest {
-                required_capability: &need,
-                required_tags: &[],
-                resource_hint: None,
-            },
-        );
+        let sel = NodeSelector::default();
+        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
         assert!(matches!(
             d,
             Decision::NoCandidate {
@@ -446,14 +586,8 @@ mod tests {
             vram_mb: Some(8_000),
             ..Default::default()
         };
-        let d = admission.route(
-            &reg,
-            &RouteRequest {
-                required_capability: &need,
-                required_tags: &[],
-                resource_hint: Some(&hint),
-            },
-        );
+        let sel = NodeSelector::default();
+        let d = admission.route(&reg, &route_req(&need, &[], Some(&hint), &sel, &[], None));
         match d {
             Decision::Push { session_id, .. } => assert_eq!(session_id, sid),
             other => panic!("expected Push, got {other:?}"),
@@ -472,14 +606,8 @@ mod tests {
         );
         let admission = Admission::new();
         let need = cap("workflow:hello", 1);
-        let d = admission.route(
-            &reg,
-            &RouteRequest {
-                required_capability: &need,
-                required_tags: &[],
-                resource_hint: None,
-            },
-        );
+        let sel = NodeSelector::default();
+        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
         match d {
             Decision::Offer { session_id, .. } => assert_eq!(session_id, sid),
             other => panic!("expected Offer, got {other:?}"),
@@ -510,15 +638,9 @@ mod tests {
 
         let admission = Admission::new();
         let need = cap("workflow:hello", 1);
+        let sel = NodeSelector::default();
         let req_tags = vec!["region=eu-central".to_string()];
-        let d = admission.route(
-            &reg,
-            &RouteRequest {
-                required_capability: &need,
-                required_tags: &req_tags,
-                resource_hint: None,
-            },
-        );
+        let d = admission.route(&reg, &route_req(&need, &req_tags, None, &sel, &[], None));
         match d {
             Decision::Push { session_id, .. } => assert_eq!(session_id, sid_b),
             other => panic!("expected Push to b, got {other:?}"),
@@ -528,24 +650,13 @@ mod tests {
         let req_tags_wild = vec!["region=*".to_string()];
         let d2 = admission.route(
             &reg,
-            &RouteRequest {
-                required_capability: &need,
-                required_tags: &req_tags_wild,
-                resource_hint: None,
-            },
+            &route_req(&need, &req_tags_wild, None, &sel, &[], None),
         );
         assert!(matches!(d2, Decision::Push { .. }));
 
         // No match.
         let req_tags_no = vec!["region=apac".to_string()];
-        let d3 = admission.route(
-            &reg,
-            &RouteRequest {
-                required_capability: &need,
-                required_tags: &req_tags_no,
-                resource_hint: None,
-            },
-        );
+        let d3 = admission.route(&reg, &route_req(&need, &req_tags_no, None, &sel, &[], None));
         assert!(matches!(
             d3,
             Decision::NoCandidate {
@@ -577,19 +688,316 @@ mod tests {
 
         let admission = Admission::new();
         let need = cap("workflow:hello", 1);
-        let d = admission.route(
-            &reg,
-            &RouteRequest {
-                required_capability: &need,
-                required_tags: &[],
-                resource_hint: None,
-            },
-        );
+        let sel = NodeSelector::default();
+        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
         match d {
             Decision::Push { session_id, .. } => assert_eq!(session_id, sid_b),
             other => panic!("expected Push to b, got {other:?}"),
         }
         // sid_a unused
         let _ = sid_a;
+    }
+
+    // -----------------------------------------------------------------
+    // NodeSelector + taint/toleration tests.
+    // -----------------------------------------------------------------
+
+    #[test]
+    fn selector_required_filter_excludes_non_matching_workers() {
+        let reg = WorkerRegistry::new();
+        let need = cap("workflow:hello", 1);
+        let (sid_nv, _) = register_worker_full(
+            &reg,
+            "nv",
+            vec![need.clone()],
+            BTreeMap::new(),
+            AdmissionMode::Fixed { max_in_flight: 4 },
+            labels_from(&[("gpu", "nvidia")]),
+            Vec::new(),
+        );
+        let (_sid_cpu, _) = register_worker_full(
+            &reg,
+            "cpu",
+            vec![need.clone()],
+            BTreeMap::new(),
+            AdmissionMode::Fixed { max_in_flight: 4 },
+            labels_from(&[("cpu-only", "true")]),
+            Vec::new(),
+        );
+
+        let sel = NodeSelector {
+            required: vec!["gpu:nvidia".into()],
+            forbidden: vec![],
+            preferred: vec![],
+        };
+        let admission = Admission::new();
+        // Run several times — round-robin must never pick the non-nvidia worker.
+        for _ in 0..5 {
+            let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+            match d {
+                Decision::Push { session_id, .. } => assert_eq!(session_id, sid_nv),
+                other => panic!("expected Push to nv, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn selector_forbidden_excludes_matching_workers() {
+        let reg = WorkerRegistry::new();
+        let need = cap("workflow:hello", 1);
+        let (_sid, _) = register_worker_full(
+            &reg,
+            "dev",
+            vec![need.clone()],
+            BTreeMap::new(),
+            AdmissionMode::Fixed { max_in_flight: 4 },
+            labels_from(&[("lifecycle", "dev")]),
+            Vec::new(),
+        );
+
+        let sel = NodeSelector {
+            required: vec![],
+            forbidden: vec!["lifecycle:dev".into()],
+            preferred: vec![],
+        };
+        let admission = Admission::new();
+        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+        assert!(matches!(
+            d,
+            Decision::NoCandidate {
+                reason: NoCandidateReason::SelectorMismatch
+            }
+        ));
+    }
+
+    #[test]
+    fn selector_preferred_breaks_ties_in_score() {
+        let reg = WorkerRegistry::new();
+        let need = cap("workflow:hello", 1);
+        let (sid_pref, _) = register_worker_full(
+            &reg,
+            "pref",
+            vec![need.clone()],
+            BTreeMap::new(),
+            AdmissionMode::Fixed { max_in_flight: 4 },
+            labels_from(&[("region", "us-west"), ("host", "beastpc")]),
+            Vec::new(),
+        );
+        let (_sid_plain, _) = register_worker_full(
+            &reg,
+            "plain",
+            vec![need.clone()],
+            BTreeMap::new(),
+            AdmissionMode::Fixed { max_in_flight: 4 },
+            labels_from(&[("region", "eu-central")]),
+            Vec::new(),
+        );
+
+        let sel = NodeSelector {
+            required: vec![],
+            forbidden: vec![],
+            preferred: vec![
+                "region:us-west".into(),
+                "host:beastpc".into(),
+                "tier:premium".into(),
+            ],
+        };
+        let admission = Admission::new();
+        for _ in 0..5 {
+            let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+            match d {
+                Decision::Push { session_id, .. } => assert_eq!(session_id, sid_pref),
+                other => panic!("expected Push to pref, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn taint_no_schedule_blocks_without_toleration() {
+        let reg = WorkerRegistry::new();
+        let need = cap("workflow:hello", 1);
+        let (_sid, _) = register_worker_full(
+            &reg,
+            "tainted",
+            vec![need.clone()],
+            BTreeMap::new(),
+            AdmissionMode::Fixed { max_in_flight: 4 },
+            BTreeMap::new(),
+            vec![WorkerTaint {
+                key: "dedicated".into(),
+                value: Some("arrchitect".into()),
+                effect: TaintEffect::NoSchedule,
+            }],
+        );
+
+        let sel = NodeSelector::default();
+        let admission = Admission::new();
+        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+        assert!(matches!(
+            d,
+            Decision::NoCandidate {
+                reason: NoCandidateReason::SelectorMismatch
+            }
+        ));
+    }
+
+    #[test]
+    fn taint_no_schedule_admits_with_toleration() {
+        let reg = WorkerRegistry::new();
+        let need = cap("workflow:hello", 1);
+        let (sid, _) = register_worker_full(
+            &reg,
+            "tainted",
+            vec![need.clone()],
+            BTreeMap::new(),
+            AdmissionMode::Fixed { max_in_flight: 4 },
+            BTreeMap::new(),
+            vec![WorkerTaint {
+                key: "dedicated".into(),
+                value: Some("arrchitect".into()),
+                effect: TaintEffect::NoSchedule,
+            }],
+        );
+
+        let sel = NodeSelector::default();
+        let tols = vec![TolerationSpec {
+            key: "dedicated".into(),
+            value: Some("arrchitect".into()),
+            effect: TaintEffect::NoSchedule,
+        }];
+        let admission = Admission::new();
+        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &tols, None));
+        match d {
+            Decision::Push { session_id, .. } => assert_eq!(session_id, sid),
+            other => panic!("expected Push to tainted worker, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn taint_prefer_no_schedule_only_penalizes_score() {
+        let reg = WorkerRegistry::new();
+        let need = cap("workflow:hello", 1);
+        let (_sid_tainted, _) = register_worker_full(
+            &reg,
+            "tainted",
+            vec![need.clone()],
+            BTreeMap::new(),
+            AdmissionMode::Fixed { max_in_flight: 4 },
+            BTreeMap::new(),
+            vec![WorkerTaint {
+                key: "experimental".into(),
+                value: None,
+                effect: TaintEffect::PreferNoSchedule,
+            }],
+        );
+        let (sid_clean, _) = register_worker_full(
+            &reg,
+            "clean",
+            vec![need.clone()],
+            BTreeMap::new(),
+            AdmissionMode::Fixed { max_in_flight: 4 },
+            BTreeMap::new(),
+            Vec::new(),
+        );
+
+        let sel = NodeSelector::default();
+        let admission = Admission::new();
+        // Untainted worker should always win across multiple rounds.
+        for _ in 0..5 {
+            let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+            match d {
+                Decision::Push { session_id, .. } => assert_eq!(session_id, sid_clean),
+                other => panic!("expected Push to clean, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn model_residency_preferred_bumps_score() {
+        let reg = WorkerRegistry::new();
+        let need = cap("workflow:hello", 1);
+        let (sid_loaded, _) = register_worker_full(
+            &reg,
+            "loaded",
+            vec![need.clone()],
+            BTreeMap::new(),
+            AdmissionMode::Fixed { max_in_flight: 4 },
+            BTreeMap::new(),
+            Vec::new(),
+        );
+        let (_sid_cold, _) = register_worker_full(
+            &reg,
+            "cold",
+            vec![need.clone()],
+            BTreeMap::new(),
+            AdmissionMode::Fixed { max_in_flight: 4 },
+            BTreeMap::new(),
+            Vec::new(),
+        );
+        let mut residency = BTreeSet::new();
+        residency.insert("llama-3-8b".to_string());
+        reg.record_heartbeat(
+            sid_loaded,
+            0,
+            Some(AdmissionSnapshot {
+                capacity_score: 1.0,
+                model_residency: residency,
+                vram_free_mb: None,
+                in_flight_vram_mb: 0,
+            }),
+        );
+
+        let sel = NodeSelector::default();
+        let input = serde_json::json!({ "model_name": "llama-3-8b" });
+        let admission = Admission::new();
+        for _ in 0..5 {
+            let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], Some(&input)));
+            match d {
+                Decision::Push { session_id, .. } => assert_eq!(session_id, sid_loaded),
+                other => panic!("expected Push to loaded, got {other:?}"),
+            }
+        }
+    }
+
+    #[test]
+    fn selector_mismatch_returns_dedicated_no_candidate_reason() {
+        let reg = WorkerRegistry::new();
+        let need = cap("workflow:hello", 1);
+        // Two workers that pass capability but neither has the required label.
+        let (_sid_a, _) = register_worker_full(
+            &reg,
+            "a",
+            vec![need.clone()],
+            BTreeMap::new(),
+            AdmissionMode::Fixed { max_in_flight: 4 },
+            labels_from(&[("region", "us-east")]),
+            Vec::new(),
+        );
+        let (_sid_b, _) = register_worker_full(
+            &reg,
+            "b",
+            vec![need.clone()],
+            BTreeMap::new(),
+            AdmissionMode::Fixed { max_in_flight: 4 },
+            labels_from(&[("region", "us-east")]),
+            Vec::new(),
+        );
+
+        let sel = NodeSelector {
+            required: vec!["gpu:nvidia".into()],
+            forbidden: vec![],
+            preferred: vec![],
+        };
+        let admission = Admission::new();
+        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+        assert!(
+            matches!(
+                d,
+                Decision::NoCandidate {
+                    reason: NoCandidateReason::SelectorMismatch
+                }
+            ),
+            "expected SelectorMismatch, got {d:?}"
+        );
     }
 }

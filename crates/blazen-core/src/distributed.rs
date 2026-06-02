@@ -141,6 +141,100 @@ pub struct ResourceHint {
     pub expected_seconds: Option<u32>,
 }
 
+/// Per-job hint for which workers may take the job. Mirrors Kubernetes'
+/// nodeSelector + tolerations pattern: `required` labels must all match,
+/// `forbidden` labels must none match, `preferred` labels feed a
+/// tie-breaker score during routing.
+///
+/// Conventional label namespaces (see `ZBrain` `CAPABILITIES.md`):
+/// - hardware: `gpu:nvidia`, `vram:>=24gb`, `cpu-only`
+/// - host: `host:beastpc`, `host:minibeast`
+/// - cluster/network: `cluster:homelabs`, `mesh:netbird-a`
+/// - tenancy: `tenant:zach`, `tenant:blackleafdigital`
+/// - lifecycle: `lifecycle:prod`, `lifecycle:dev`
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NodeSelector {
+    pub required: Vec<String>,
+    pub forbidden: Vec<String>,
+    pub preferred: Vec<String>,
+}
+
+impl NodeSelector {
+    /// `true` if `worker_labels` satisfies `required` (all match) and
+    /// avoids `forbidden` (none match). `preferred` is NOT enforced here
+    /// — it contributes to scoring inside the admission router.
+    #[must_use]
+    pub fn admits(&self, worker_labels: &std::collections::BTreeMap<String, String>) -> bool {
+        let flat: Vec<String> = worker_labels
+            .iter()
+            .map(|(k, v)| format!("{k}:{v}"))
+            .chain(worker_labels.keys().cloned())
+            .collect();
+        let has = |needle: &str| flat.iter().any(|l| l == needle);
+        self.required.iter().all(|r| has(r)) && !self.forbidden.iter().any(|f| has(f))
+    }
+
+    /// Number of `preferred` labels currently satisfied by `worker_labels`.
+    /// Higher = better tie-break score.
+    #[must_use]
+    pub fn preferred_match_count(
+        &self,
+        worker_labels: &std::collections::BTreeMap<String, String>,
+    ) -> usize {
+        let flat: Vec<String> = worker_labels
+            .iter()
+            .map(|(k, v)| format!("{k}:{v}"))
+            .chain(worker_labels.keys().cloned())
+            .collect();
+        self.preferred
+            .iter()
+            .filter(|p| flat.iter().any(|l| &l == p))
+            .count()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum TaintEffect {
+    /// Jobs without a matching toleration MUST NOT land here.
+    NoSchedule,
+    /// Jobs without a matching toleration SHOULD avoid; can still land
+    /// if no untainted worker is available.
+    PreferNoSchedule,
+}
+
+/// Worker-side declaration that this node is "reserved" for jobs that
+/// carry a matching [`TolerationSpec`]. Mirrors k8s taints.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct WorkerTaint {
+    pub key: String,
+    pub value: Option<String>,
+    pub effect: TaintEffect,
+}
+
+/// Job-side claim that lets the job land on a worker carrying the
+/// matching [`WorkerTaint`]. A toleration with `value = None` matches
+/// any value; otherwise the strings must equal.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct TolerationSpec {
+    pub key: String,
+    pub value: Option<String>,
+    pub effect: TaintEffect,
+}
+
+impl TolerationSpec {
+    /// `true` if this toleration matches `taint`.
+    #[must_use]
+    pub fn matches(&self, taint: &WorkerTaint) -> bool {
+        self.key == taint.key
+            && self.effect == taint.effect
+            && (self.value.is_none() || self.value == taint.value)
+    }
+}
+
+/// Default `priority` value when callers don't set one — mid-band.
+/// Lower numeric value = higher scheduling priority.
+pub const DEFAULT_PRIORITY: u8 = 128;
+
 /// Snapshot of a Reactive worker's live capacity. Carried in
 /// heartbeats so the control plane can rank candidate workers without
 /// pinging them per-decision.
@@ -316,4 +410,115 @@ pub trait ControlPlane: Send + Sync {
 
     /// Cancel an in-flight run.
     async fn cancel(&self, run_id: uuid::Uuid) -> Result<RunStateSnapshot, WorkflowError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::BTreeMap;
+
+    fn labels(pairs: &[(&str, &str)]) -> BTreeMap<String, String> {
+        pairs
+            .iter()
+            .map(|(k, v)| ((*k).to_string(), (*v).to_string()))
+            .collect()
+    }
+
+    #[test]
+    fn selector_admits_when_all_required_present() {
+        let sel = NodeSelector {
+            required: vec!["gpu:nvidia".into(), "host:beastpc".into()],
+            forbidden: vec![],
+            preferred: vec![],
+        };
+        let worker = labels(&[("gpu", "nvidia"), ("host", "beastpc"), ("region", "us")]);
+        assert!(sel.admits(&worker));
+    }
+
+    #[test]
+    fn selector_rejects_missing_required() {
+        let sel = NodeSelector {
+            required: vec!["gpu:nvidia".into(), "vram:>=24gb".into()],
+            forbidden: vec![],
+            preferred: vec![],
+        };
+        let worker = labels(&[("gpu", "nvidia")]);
+        assert!(!sel.admits(&worker));
+    }
+
+    #[test]
+    fn selector_rejects_forbidden_present() {
+        let sel = NodeSelector {
+            required: vec!["gpu:nvidia".into()],
+            forbidden: vec!["lifecycle:dev".into()],
+            preferred: vec![],
+        };
+        let worker = labels(&[("gpu", "nvidia"), ("lifecycle", "dev")]);
+        assert!(!sel.admits(&worker));
+    }
+
+    #[test]
+    fn selector_preferred_match_count_used_for_tiebreak() {
+        let sel = NodeSelector {
+            required: vec![],
+            forbidden: vec![],
+            preferred: vec![
+                "region:us-west".into(),
+                "host:beastpc".into(),
+                "missing:tag".into(),
+            ],
+        };
+        let worker = labels(&[("region", "us-west"), ("host", "beastpc")]);
+        assert_eq!(sel.preferred_match_count(&worker), 2);
+    }
+
+    #[test]
+    fn toleration_matches_taint_with_same_key_value_effect() {
+        let taint = WorkerTaint {
+            key: "dedicated".into(),
+            value: Some("arrchitect".into()),
+            effect: TaintEffect::NoSchedule,
+        };
+        let tol = TolerationSpec {
+            key: "dedicated".into(),
+            value: Some("arrchitect".into()),
+            effect: TaintEffect::NoSchedule,
+        };
+        assert!(tol.matches(&taint));
+    }
+
+    #[test]
+    fn toleration_with_none_value_matches_any_value() {
+        let taint = WorkerTaint {
+            key: "dedicated".into(),
+            value: Some("arrchitect".into()),
+            effect: TaintEffect::NoSchedule,
+        };
+        let tol = TolerationSpec {
+            key: "dedicated".into(),
+            value: None,
+            effect: TaintEffect::NoSchedule,
+        };
+        assert!(tol.matches(&taint));
+    }
+
+    #[test]
+    fn toleration_with_wrong_effect_does_not_match() {
+        let taint = WorkerTaint {
+            key: "k".into(),
+            value: None,
+            effect: TaintEffect::NoSchedule,
+        };
+        let tol = TolerationSpec {
+            key: "k".into(),
+            value: None,
+            effect: TaintEffect::PreferNoSchedule,
+        };
+        assert!(!tol.matches(&taint));
+    }
+
+    #[test]
+    fn default_priority_is_mid_band() {
+        assert_eq!(DEFAULT_PRIORITY, 128);
+    }
 }

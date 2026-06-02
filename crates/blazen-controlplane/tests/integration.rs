@@ -2,13 +2,15 @@
 //! tiers. These spin up a real `ControlPlaneServer` on ephemeral ports
 //! and exercise the worker session + submit flow end-to-end.
 
+#[cfg(feature = "http-transport")]
 use std::collections::BTreeMap;
 use std::net::SocketAddr;
 use std::time::Duration;
 
+#[cfg(feature = "http-transport")]
+use blazen_controlplane::protocol::{AdmissionModeWire, CapabilityWire, WorkerHello};
 use blazen_controlplane::protocol::{
-    AdmissionModeWire, CapabilityWire, ENVELOPE_VERSION, RunStateSnapshotWire, RunStatusWire,
-    SubmitRequest, WorkerHello,
+    ENVELOPE_VERSION, RunStateSnapshotWire, RunStatusWire, SubmitRequest,
 };
 use blazen_controlplane::server::ControlPlaneServer;
 
@@ -596,6 +598,9 @@ async fn http_worker_register_and_submit() {
         tags: BTreeMap::new(),
         admission: AdmissionModeWire::Fixed { max_in_flight: 4 },
         supported_envelope_versions: vec![1],
+        labels: BTreeMap::new(),
+        taints: Vec::new(),
+        descriptors: Vec::new(),
     };
     let register_resp: serde_json::Value = client
         .post(format!("{base}/v1/cp/worker/register"))
