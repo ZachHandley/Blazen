@@ -68,7 +68,13 @@ def _add_forgejo_registry_to_path_deps(text: str) -> str:
     return _PATH_DEP_RE.sub(repl, text)
 
 
-_CROSS_REPO_PATH_RE = re.compile(r',\s*path\s*=\s*"\.\./[^"]+"')
+# Matches ONLY cross-repo path deps, i.e. `path = "../X/Y/..."` where there
+# are TWO OR MORE path segments after `../`. In-tree sibling deps look like
+# `path = "../blazen-memory-valkey"` (a single segment after `../`) and must
+# NOT be stripped — those resolve inside the same workspace and stripping
+# them creates a "different source paths" cargo error (workspace inheritance
+# vs registry-only dep declaration mismatch).
+_CROSS_REPO_PATH_RE = re.compile(r',\s*path\s*=\s*"\.\./[^/"]+/[^"]+"')
 
 
 def stamp_default(repo: pathlib.Path, version: str, keep_forgejo_registry: bool = False) -> None:
