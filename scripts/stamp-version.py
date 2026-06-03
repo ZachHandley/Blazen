@@ -79,16 +79,21 @@ _CROSS_REPO_PATH_RE = re.compile(r',\s*path\s*=\s*"\.\./[^/"]+/[^"]+"')
 
 def stamp_default(repo: pathlib.Path, version: str, keep_forgejo_registry: bool = False) -> None:
     # 1. Every Cargo.toml: 0.0.0-dev -> VERSION, EXCEPT on lines that carry a
-    # cross-repo path dep (`path = "../..."`). Those reference a sibling
-    # repo (e.g. vendored-orm in the durable store) which has its OWN release train and carries
-    # a pinned version (e.g. 0.4.42) we must not stamp over.
+    # CROSS-REPO path dep (`path = "../X/Y/..."` — TWO or more segments after
+    # `../`). Those reference a sibling repo (e.g. vendored-orm in the durable store) which has
+    # its OWN release train and carries a pinned version (e.g. 0.4.42) we
+    # must not stamp over.
+    #
+    # In-tree sibling deps like `path = "../blazen-3d"` (single segment) MUST
+    # be stamped — they reference workspace siblings whose versions DO follow
+    # the workspace release train.
     for cargo in repo.rglob("Cargo.toml"):
         if "target" in cargo.parts:
             continue
         text = cargo.read_text()
         new_lines = []
         for line in text.split("\n"):
-            if 'path = "../' in line:
+            if _CROSS_REPO_PATH_RE.search(line):
                 new_lines.append(line)
             else:
                 new_lines.append(line.replace("0.0.0-dev", version))
