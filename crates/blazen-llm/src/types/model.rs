@@ -225,6 +225,21 @@ pub struct ModelRequest {
     /// Audio output configuration (voice, format, etc.).
     #[serde(skip_serializing_if = "Option::is_none")]
     pub audio_config: Option<serde_json::Value>,
+    /// Provider-agnostic tool-choice directive.
+    ///
+    /// Holds a CANONICAL value (not provider wire form); each provider's body
+    /// builder translates it to that provider's `tool_choice` representation.
+    ///
+    /// Accepted canonical values:
+    /// - `"auto"` — the model decides whether to call a tool.
+    /// - `"required"` (alias `"any"`) — the model must call some tool.
+    /// - `"none"` — the model must not call a tool.
+    /// - `{"name": "<tool>"}` — force the named tool.
+    ///
+    /// As an escape hatch, a full provider-shaped object (any object carrying a
+    /// `"type"` key) is passed through to the wire unchanged.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_choice: Option<serde_json::Value>,
 }
 
 impl ModelRequest {
@@ -242,6 +257,7 @@ impl ModelRequest {
             modalities: None,
             image_config: None,
             audio_config: None,
+            tool_choice: None,
         }
     }
 
@@ -305,6 +321,17 @@ impl ModelRequest {
     #[must_use]
     pub fn with_audio_config(mut self, config: serde_json::Value) -> Self {
         self.audio_config = Some(config);
+        self
+    }
+
+    /// Set the provider-agnostic tool-choice directive.
+    ///
+    /// `value` is the CANONICAL representation; see
+    /// [`ModelRequest::tool_choice`] for the accepted forms. Each provider's
+    /// body builder translates it to that provider's wire form.
+    #[must_use]
+    pub fn with_tool_choice(mut self, value: serde_json::Value) -> Self {
+        self.tool_choice = Some(value);
         self
     }
 

@@ -411,6 +411,7 @@ impl TryFrom<ModelRequest> for CoreModelRequest {
             modalities: None,
             image_config: None,
             audio_config: None,
+            tool_choice: None,
         })
     }
 }

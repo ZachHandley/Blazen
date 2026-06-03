@@ -479,6 +479,13 @@ impl AnthropicProvider {
             body["tools"] = serde_json::json!(tools);
         }
 
+        // Tool choice (provider-agnostic canonical -> Messages-API wire form).
+        if let Some(ref tc) = request.tool_choice {
+            if let Some(wire) = super::tool_choice_to_messages_api(tc) {
+                body["tool_choice"] = wire;
+            }
+        }
+
         body
     }
 
@@ -1361,6 +1368,7 @@ mod tests {
             modalities: None,
             image_config: None,
             audio_config: None,
+            tool_choice: None,
         };
 
         let body = provider.build_body(&request, false);
@@ -1398,6 +1406,7 @@ mod tests {
             modalities: None,
             image_config: None,
             audio_config: None,
+            tool_choice: None,
         };
         let body = provider.build_body(&request, false);
         let system = body["system"].as_str().expect("system field should be set");
@@ -1426,6 +1435,38 @@ mod tests {
         // Anthropic uses "input_schema" not "parameters".
         assert!(tools[0].get("input_schema").is_some());
         assert_eq!(tools[0]["name"], "search");
+    }
+
+    #[test]
+    fn build_body_tool_choice_canonical_to_messages_api() {
+        let provider = AnthropicProvider::new("test-key");
+
+        // "auto" -> {"type":"auto"}
+        let body = provider.build_body(
+            &ModelRequest::new(vec![ChatMessage::user("Hi")])
+                .with_tool_choice(serde_json::json!("auto")),
+            false,
+        );
+        assert_eq!(body["tool_choice"], serde_json::json!({ "type": "auto" }));
+
+        // "required" -> {"type":"any"}
+        let body = provider.build_body(
+            &ModelRequest::new(vec![ChatMessage::user("Hi")])
+                .with_tool_choice(serde_json::json!("required")),
+            false,
+        );
+        assert_eq!(body["tool_choice"], serde_json::json!({ "type": "any" }));
+
+        // {"name":"x"} -> {"type":"tool","name":"x"}
+        let body = provider.build_body(
+            &ModelRequest::new(vec![ChatMessage::user("Hi")])
+                .with_tool_choice(serde_json::json!({ "name": "search" })),
+            false,
+        );
+        assert_eq!(
+            body["tool_choice"],
+            serde_json::json!({ "type": "tool", "name": "search" })
+        );
     }
 
     #[test]

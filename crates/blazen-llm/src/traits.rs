@@ -141,6 +141,7 @@ pub trait StructuredOutput: Model {
             modalities: None,
             image_config: None,
             audio_config: None,
+            tool_choice: None,
         };
 
         let response = self.complete(request).await?;

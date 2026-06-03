@@ -313,6 +313,13 @@ impl AzureOpenAiProvider {
             body["tools"] = serde_json::json!(tools);
         }
 
+        // Tool choice (provider-agnostic canonical -> OpenAI wire form).
+        if let Some(ref tc) = request.tool_choice {
+            if let Some(wire) = super::tool_choice_to_openai(tc) {
+                body["tool_choice"] = wire;
+            }
+        }
+
         body
     }
 

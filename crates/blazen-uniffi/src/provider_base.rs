@@ -163,6 +163,7 @@ impl LlmProviderDefaults {
             modalities: None,
             image_config: None,
             audio_config: None,
+            tool_choice: None,
         };
 
         let core = self.snapshot();

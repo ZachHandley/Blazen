@@ -269,6 +269,13 @@ impl OpenAiProvider {
             body["tools"] = serde_json::json!(tools);
         }
 
+        // Tool choice (provider-agnostic canonical -> OpenAI wire form).
+        if let Some(ref tc) = request.tool_choice {
+            if let Some(wire) = super::tool_choice_to_openai(tc) {
+                body["tool_choice"] = wire;
+            }
+        }
+
         // Multimodal output modalities
         if let Some(modalities) = &request.modalities {
             body["modalities"] = serde_json::to_value(modalities).unwrap_or_default();
@@ -970,6 +977,7 @@ mod tests {
             modalities: None,
             image_config: None,
             audio_config: None,
+            tool_choice: None,
         };
 
         let body = provider.build_body(&request, false);
@@ -1013,6 +1021,45 @@ mod tests {
         let tools = body["tools"].as_array().unwrap();
         assert_eq!(tools.len(), 1);
         assert_eq!(tools[0]["function"]["name"], "get_weather");
+    }
+
+    #[test]
+    fn build_body_tool_choice_canonical_to_openai() {
+        let provider = OpenAiProvider::new("test-key");
+
+        // "auto" -> "auto"
+        let body = provider.build_body(
+            &ModelRequest::new(vec![ChatMessage::user("Hi")])
+                .with_tool_choice(serde_json::json!("auto")),
+            false,
+        );
+        assert_eq!(body["tool_choice"], serde_json::json!("auto"));
+
+        // "required" -> "required"
+        let body = provider.build_body(
+            &ModelRequest::new(vec![ChatMessage::user("Hi")])
+                .with_tool_choice(serde_json::json!("required")),
+            false,
+        );
+        assert_eq!(body["tool_choice"], serde_json::json!("required"));
+
+        // {"name":"x"} -> {"type":"function","function":{"name":"x"}}
+        let body = provider.build_body(
+            &ModelRequest::new(vec![ChatMessage::user("Hi")])
+                .with_tool_choice(serde_json::json!({ "name": "get_weather" })),
+            false,
+        );
+        assert_eq!(
+            body["tool_choice"],
+            serde_json::json!({
+                "type": "function",
+                "function": { "name": "get_weather" }
+            })
+        );
+
+        // No directive -> field absent.
+        let body = provider.build_body(&ModelRequest::new(vec![ChatMessage::user("Hi")]), false);
+        assert!(body.get("tool_choice").is_none());
     }
 
     #[test]

@@ -345,6 +345,13 @@ impl OpenAiCompatProvider {
             body["tools"] = serde_json::json!(tools);
         }
 
+        // Tool choice (provider-agnostic canonical -> OpenAI wire form).
+        if let Some(ref tc) = request.tool_choice {
+            if let Some(wire) = super::tool_choice_to_openai(tc) {
+                body["tool_choice"] = wire;
+            }
+        }
+
         // Multimodal output modalities
         if let Some(modalities) = &request.modalities {
             body["modalities"] = serde_json::to_value(modalities).unwrap_or_default();
@@ -1413,6 +1420,7 @@ mod tests {
             modalities: None,
             image_config: None,
             audio_config: None,
+            tool_choice: None,
         };
 
         let body = provider.build_body(&request, false);

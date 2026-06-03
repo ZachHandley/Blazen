@@ -1394,6 +1394,13 @@ impl FalProvider {
             body["tools"] = tools.into();
         }
 
+        // Tool choice (provider-agnostic canonical -> OpenAI chat wire form).
+        if let Some(ref tc) = request.tool_choice {
+            if let Some(wire) = crate::providers::tool_choice_to_openai(tc) {
+                body["tool_choice"] = wire;
+            }
+        }
+
         if let Some(t) = request.temperature {
             body["temperature"] = t.into();
         }
@@ -1440,6 +1447,31 @@ impl FalProvider {
                 })
                 .collect();
             body["tools"] = tools.into();
+        }
+
+        // Tool choice (provider-agnostic canonical -> OpenAI Responses wire
+        // form). The Responses API uses the same string directives as chat
+        // ("auto"/"required"/"none") but represents a forced tool as a flat
+        // {"type":"function","name":"<tool>"} (name at top level, not nested
+        // under "function"), so translate it locally here.
+        if let Some(ref tc) = request.tool_choice {
+            let wire = if tc.get("type").is_some() {
+                Some(tc.clone())
+            } else if let Some(s) = tc.as_str() {
+                match s {
+                    "auto" => Some(serde_json::json!("auto")),
+                    "required" | "any" => Some(serde_json::json!("required")),
+                    "none" => Some(serde_json::json!("none")),
+                    _ => None,
+                }
+            } else if let Some(name) = tc.get("name").and_then(serde_json::Value::as_str) {
+                Some(serde_json::json!({ "type": "function", "name": name }))
+            } else {
+                None
+            };
+            if let Some(wire) = wire {
+                body["tool_choice"] = wire;
+            }
         }
 
         if let Some(t) = request.temperature {

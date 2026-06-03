@@ -56,13 +56,21 @@ pub struct PyModelOptions {
     /// JSON schema dict for structured output.
     #[pyo3(get, set)]
     pub response_format: Option<Py<PyAny>>,
+    /// Provider-agnostic tool-choice directive (canonical form).
+    ///
+    /// Accepts ``"auto"``, ``"required"`` (alias ``"any"``), ``"none"``, or a
+    /// dict ``{"name": "<tool>"}`` to force a specific tool. Each provider
+    /// translates this to its own wire form. A full provider-shaped dict
+    /// (carrying a ``"type"`` key) is passed through unchanged.
+    #[pyo3(get, set)]
+    pub tool_choice: Option<Py<PyAny>>,
 }
 
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyModelOptions {
     #[new]
-    #[pyo3(signature = (temperature=None, max_tokens=None, top_p=None, model=None, tools=None, response_format=None))]
+    #[pyo3(signature = (temperature=None, max_tokens=None, top_p=None, model=None, tools=None, response_format=None, tool_choice=None))]
     fn new(
         temperature: Option<f32>,
         max_tokens: Option<u32>,
@@ -70,6 +78,7 @@ impl PyModelOptions {
         model: Option<String>,
         tools: Option<Vec<Py<PyToolDef>>>,
         response_format: Option<Py<PyAny>>,
+        tool_choice: Option<Py<PyAny>>,
     ) -> Self {
         Self {
             temperature,
@@ -78,6 +87,7 @@ impl PyModelOptions {
             model,
             tools,
             response_format,
+            tool_choice,
         }
     }
 }
@@ -1066,6 +1076,9 @@ pub(crate) fn build_request(
             let schema = crate::convert::py_to_json(py, fmt.bind(py))?;
             request = request.with_response_format(schema);
         }
+        if let Some(ref tc) = opts.tool_choice {
+            request = request.with_tool_choice(crate::convert::py_to_json(py, tc.bind(py))?);
+        }
     }
 
     Ok(request)
@@ -1270,6 +1283,11 @@ fn build_py_options_from_request(
         None => None,
     };
 
+    let tool_choice = match request.tool_choice.as_ref() {
+        Some(v) => Some(crate::convert::json_to_py(py, v)?),
+        None => None,
+    };
+
     let opts = PyModelOptions {
         temperature: request.temperature,
         max_tokens: request.max_tokens,
@@ -1277,6 +1295,7 @@ fn build_py_options_from_request(
         model: request.model.clone(),
         tools: tools_py,
         response_format,
+        tool_choice,
     };
 
     Py::new(py, opts).map(Some)

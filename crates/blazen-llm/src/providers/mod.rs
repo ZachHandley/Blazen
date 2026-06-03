@@ -182,6 +182,122 @@ pub fn format_provider_http_tail(
     }
 }
 
+// ---------------------------------------------------------------------------
+// Provider-agnostic tool_choice translation
+// ---------------------------------------------------------------------------
+//
+// `ModelRequest::tool_choice` holds a CANONICAL value. Each provider family
+// has a different wire representation, so these helpers map the canonical form
+// to the family's wire JSON. The accepted canonical forms are:
+//
+//   "auto"                -> model decides
+//   "required" | "any"    -> must call some tool
+//   "none"                -> must not call a tool
+//   {"name": "<tool>"}    -> force the named tool
+//
+// Escape hatch: if the canonical value is already a provider-shaped object
+// (any object carrying a "type" key), it is passed through unchanged.
+
+/// Pull the forced tool name out of a canonical `{"name": "<tool>"}` object.
+fn canonical_forced_tool_name(value: &serde_json::Value) -> Option<&str> {
+    value.get("name").and_then(serde_json::Value::as_str)
+}
+
+/// True when the canonical value is already a provider-shaped object (has a
+/// `"type"` key) and should be forwarded to the wire unchanged.
+fn is_provider_shaped(value: &serde_json::Value) -> bool {
+    value.get("type").is_some()
+}
+
+/// Translate a canonical `tool_choice` to the OpenAI chat-completions wire
+/// form (used by OpenAI, OpenAI-compatible providers, Azure, Groq, and fal's
+/// OpenAI-style router).
+///
+/// Returns `None` when the value cannot be interpreted (the builder should
+/// then omit `tool_choice` rather than emit garbage).
+#[must_use]
+pub(crate) fn tool_choice_to_openai(value: &serde_json::Value) -> Option<serde_json::Value> {
+    // Escape hatch: already provider-shaped (e.g. {"type":"function",...}).
+    if is_provider_shaped(value) {
+        return Some(value.clone());
+    }
+    if let Some(s) = value.as_str() {
+        return match s {
+            "auto" => Some(serde_json::Value::String("auto".to_owned())),
+            "required" | "any" => Some(serde_json::Value::String("required".to_owned())),
+            "none" => Some(serde_json::Value::String("none".to_owned())),
+            _ => None,
+        };
+    }
+    if let Some(name) = canonical_forced_tool_name(value) {
+        return Some(serde_json::json!({
+            "type": "function",
+            "function": { "name": name },
+        }));
+    }
+    None
+}
+
+/// Translate a canonical `tool_choice` to the Anthropic Messages-API wire form.
+///
+/// The Messages API has no `"none"` directive; the documented choice here is
+/// to map `"none"` to `{"type":"auto"}` (let the model decide, which in
+/// practice will not force a tool call). Returns `None` when the value cannot
+/// be interpreted.
+#[must_use]
+pub(crate) fn tool_choice_to_messages_api(
+    value: &serde_json::Value,
+) -> Option<serde_json::Value> {
+    if is_provider_shaped(value) {
+        return Some(value.clone());
+    }
+    if let Some(s) = value.as_str() {
+        return match s {
+            // Messages API has no native "none"; fall back to "auto".
+            "auto" | "none" => Some(serde_json::json!({ "type": "auto" })),
+            "required" | "any" => Some(serde_json::json!({ "type": "any" })),
+            _ => None,
+        };
+    }
+    if let Some(name) = canonical_forced_tool_name(value) {
+        return Some(serde_json::json!({ "type": "tool", "name": name }));
+    }
+    None
+}
+
+/// Translate a canonical `tool_choice` to the Gemini `toolConfig` wire form.
+///
+/// Gemini expresses tool choice via `tool_config.function_calling_config.mode`
+/// (`AUTO` / `ANY` / `NONE`), optionally constrained to `allowed_function_names`.
+/// Returns `None` when the value cannot be interpreted.
+#[must_use]
+pub(crate) fn tool_choice_to_gemini(value: &serde_json::Value) -> Option<serde_json::Value> {
+    // Already provider-shaped: forward unchanged.
+    if value.get("function_calling_config").is_some() {
+        return Some(value.clone());
+    }
+    if let Some(s) = value.as_str() {
+        let mode = match s {
+            "auto" => "AUTO",
+            "required" | "any" => "ANY",
+            "none" => "NONE",
+            _ => return None,
+        };
+        return Some(serde_json::json!({
+            "function_calling_config": { "mode": mode },
+        }));
+    }
+    if let Some(name) = canonical_forced_tool_name(value) {
+        return Some(serde_json::json!({
+            "function_calling_config": {
+                "mode": "ANY",
+                "allowed_function_names": [name],
+            },
+        }));
+    }
+    None
+}
+
 /// Build a structured `BlazenError::ProviderHttp` from an `HttpResponse`.
 ///
 /// Reads the body as lossy UTF-8, caps it at `PROVIDER_ERROR_BODY_CAP`,
@@ -316,7 +432,8 @@ pub(crate) use impl_simple_from_options;
 mod tests {
     use super::{
         cap_body, extract_detail, format_provider_http_tail, pick_request_id, provider_http_error,
-        provider_http_error_parts,
+        provider_http_error_parts, tool_choice_to_gemini, tool_choice_to_messages_api,
+        tool_choice_to_openai,
     };
     use crate::error::{BlazenError, PROVIDER_ERROR_BODY_CAP};
     use crate::http::HttpResponse;
@@ -476,5 +593,129 @@ mod tests {
         let raw = "A".repeat(300);
         let s = format_provider_http_tail(None, &raw, None);
         assert_eq!(s.len(), 200); // truncated at 200 chars
+    }
+
+    // -----------------------------------------------------------------------
+    // tool_choice translation
+    // -----------------------------------------------------------------------
+
+    use serde_json::json;
+
+    #[test]
+    fn tool_choice_openai_auto() {
+        assert_eq!(
+            tool_choice_to_openai(&json!("auto")),
+            Some(json!("auto"))
+        );
+    }
+
+    #[test]
+    fn tool_choice_openai_required_and_any_alias() {
+        assert_eq!(
+            tool_choice_to_openai(&json!("required")),
+            Some(json!("required"))
+        );
+        // "any" is an alias for "required" in the canonical form.
+        assert_eq!(tool_choice_to_openai(&json!("any")), Some(json!("required")));
+    }
+
+    #[test]
+    fn tool_choice_openai_none() {
+        assert_eq!(
+            tool_choice_to_openai(&json!("none")),
+            Some(json!("none"))
+        );
+    }
+
+    #[test]
+    fn tool_choice_openai_named_tool() {
+        assert_eq!(
+            tool_choice_to_openai(&json!({ "name": "output_decision" })),
+            Some(json!({
+                "type": "function",
+                "function": { "name": "output_decision" }
+            }))
+        );
+    }
+
+    #[test]
+    fn tool_choice_openai_passthrough_provider_shaped() {
+        // Escape hatch: a full provider-shaped object is forwarded unchanged.
+        let raw = json!({ "type": "function", "function": { "name": "x" } });
+        assert_eq!(tool_choice_to_openai(&raw), Some(raw));
+    }
+
+    #[test]
+    fn tool_choice_openai_unknown_returns_none() {
+        assert_eq!(tool_choice_to_openai(&json!("bogus")), None);
+        assert_eq!(tool_choice_to_openai(&json!(42)), None);
+    }
+
+    #[test]
+    fn tool_choice_messages_api_auto() {
+        assert_eq!(
+            tool_choice_to_messages_api(&json!("auto")),
+            Some(json!({ "type": "auto" }))
+        );
+    }
+
+    #[test]
+    fn tool_choice_messages_api_required_and_any_alias() {
+        assert_eq!(
+            tool_choice_to_messages_api(&json!("required")),
+            Some(json!({ "type": "any" }))
+        );
+        assert_eq!(
+            tool_choice_to_messages_api(&json!("any")),
+            Some(json!({ "type": "any" }))
+        );
+    }
+
+    #[test]
+    fn tool_choice_messages_api_none_maps_to_auto() {
+        // Messages API has no native "none"; documented choice is "auto".
+        assert_eq!(
+            tool_choice_to_messages_api(&json!("none")),
+            Some(json!({ "type": "auto" }))
+        );
+    }
+
+    #[test]
+    fn tool_choice_messages_api_named_tool() {
+        assert_eq!(
+            tool_choice_to_messages_api(&json!({ "name": "output_decision" })),
+            Some(json!({ "type": "tool", "name": "output_decision" }))
+        );
+    }
+
+    #[test]
+    fn tool_choice_messages_api_passthrough_provider_shaped() {
+        let raw = json!({ "type": "tool", "name": "x" });
+        assert_eq!(tool_choice_to_messages_api(&raw), Some(raw));
+    }
+
+    #[test]
+    fn tool_choice_gemini_modes_and_named() {
+        assert_eq!(
+            tool_choice_to_gemini(&json!("auto")),
+            Some(json!({ "function_calling_config": { "mode": "AUTO" } }))
+        );
+        assert_eq!(
+            tool_choice_to_gemini(&json!("required")),
+            Some(json!({ "function_calling_config": { "mode": "ANY" } }))
+        );
+        assert_eq!(
+            tool_choice_to_gemini(&json!("none")),
+            Some(json!({ "function_calling_config": { "mode": "NONE" } }))
+        );
+        assert_eq!(
+            tool_choice_to_gemini(&json!({ "name": "output_decision" })),
+            Some(json!({
+                "function_calling_config": {
+                    "mode": "ANY",
+                    "allowed_function_names": ["output_decision"]
+                }
+            }))
+        );
     }
 }

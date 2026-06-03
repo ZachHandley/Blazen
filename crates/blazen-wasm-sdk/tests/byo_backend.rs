@@ -103,6 +103,7 @@ async fn byo_complete_deserializes_response_via_shim() {
         modalities: None,
         image_config: None,
         audio_config: None,
+        tool_choice: None,
     };
 
     let resp = shim.complete(req).await.expect("complete() should succeed");
@@ -145,6 +146,7 @@ async fn byo_stream_complete_chunks_delivered() {
         modalities: None,
         image_config: None,
         audio_config: None,
+        tool_choice: None,
     };
 
     let stream = shim.stream(req).await.expect("stream() should succeed");

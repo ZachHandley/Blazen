@@ -8327,7 +8327,27 @@ class ModelOptions:
         r"""
         JSON schema dict for structured output.
         """
-    def __new__(cls, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, top_p: typing.Optional[builtins.float] = None, model: typing.Optional[builtins.str] = None, tools: typing.Optional[typing.Sequence[ToolDef]] = None, response_format: typing.Optional[typing.Any] = None) -> ModelOptions: ...
+    @property
+    def tool_choice(self) -> typing.Optional[typing.Any]:
+        r"""
+        Provider-agnostic tool-choice directive (canonical form).
+        
+        Accepts ``"auto"``, ``"required"`` (alias ``"any"``), ``"none"``, or a
+        dict ``{"name": "<tool>"}`` to force a specific tool. Each provider
+        translates this to its own wire form. A full provider-shaped dict
+        (carrying a ``"type"`` key) is passed through unchanged.
+        """
+    @tool_choice.setter
+    def tool_choice(self, value: typing.Optional[typing.Any]) -> None:
+        r"""
+        Provider-agnostic tool-choice directive (canonical form).
+        
+        Accepts ``"auto"``, ``"required"`` (alias ``"any"``), ``"none"``, or a
+        dict ``{"name": "<tool>"}`` to force a specific tool. Each provider
+        translates this to its own wire form. A full provider-shaped dict
+        (carrying a ``"type"`` key) is passed through unchanged.
+        """
+    def __new__(cls, temperature: typing.Optional[builtins.float] = None, max_tokens: typing.Optional[builtins.int] = None, top_p: typing.Optional[builtins.float] = None, model: typing.Optional[builtins.str] = None, tools: typing.Optional[typing.Sequence[ToolDef]] = None, response_format: typing.Optional[typing.Any] = None, tool_choice: typing.Optional[typing.Any] = None) -> ModelOptions: ...
 
 @typing.final
 class ModelPricing:
