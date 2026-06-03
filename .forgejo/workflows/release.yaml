@@ -233,7 +233,12 @@ jobs:
           # two ZMarketer consumes) don't touch vendored-orm and publish
           # cleanly. Re-include once controlplane is verified against
           # the published vendored-orm release.
-          exclude: blazen-py,blazen-node,blazen-controlplane
+          #
+          # blazen-cabi + blazen-uniffi depend on blazen-controlplane,
+          # so they fail to publish (registry can't find controlplane
+          # ^0.6.3, only 0.6.2 exists). Exclude both until controlplane
+          # itself is unblocked.
+          exclude: blazen-py,blazen-node,blazen-controlplane,blazen-cabi,blazen-uniffi
           cargo-token: ${{ secrets.FORGEJO_ACTIONS_TOKEN }}
           max-backoff-seconds: '300'
           max-attempts-per-crate: '5'
