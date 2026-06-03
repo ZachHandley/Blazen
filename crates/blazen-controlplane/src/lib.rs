@@ -138,13 +138,6 @@ pub use server::{AssignmentStore, ControlPlaneServer, MemoryAssignmentStore};
 ))]
 pub use server::ValkeyAssignmentStore;
 
-#[cfg(all(
-    feature = "server",
-    feature = "durable-store",
-    not(any(target_os = "wasi", target_arch = "wasm32"))
-))]
-pub use server::DurableAssignmentStore;
-
 // PR5: re-exports for the BlazenModelServer service.
 #[cfg(all(
     feature = "model-server",

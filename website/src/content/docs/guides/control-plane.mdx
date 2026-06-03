@@ -48,7 +48,7 @@ use blazen_controlplane::ControlPlaneServer;
 
 let server = ControlPlaneServer::new("cp-node-1");
 // .with_tls(tls_config)   // optional mTLS
-// .with_store(arc_store)  // optional durable AssignmentStore (Valkey / the durable store)
+// .with_store(arc_store)  // optional durable AssignmentStore (Valkey)
 server.serve("0.0.0.0:7445".parse()?).await?;
 ```
 
@@ -165,7 +165,7 @@ The call fails if the run is cancelled, the worker disconnects, or `timeout_ms` 
 - **gRPC** (default) over HTTP/2, with optional mTLS.
 - **HTTP/SSE bridge** (`http-transport` feature) for clients that can't speak HTTP/2 — browsers and some serverless / wasi targets.
 - **OpenAI-compatible REST** (`http-rest` feature) plus Blazen-admin endpoints.
-- **Durable assignment queue** (`valkey-store` / `durable-store` features) so queued and in-flight work survives a control-plane restart; the default store is in-memory.
+- **Durable assignment queue** (`valkey-store` feature) so queued and in-flight work survives a control-plane restart; the default store is in-memory.
 
 ## Related
 

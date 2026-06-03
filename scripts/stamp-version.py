@@ -80,9 +80,8 @@ _CROSS_REPO_PATH_RE = re.compile(r',\s*path\s*=\s*"\.\./[^/"]+/[^"]+"')
 def stamp_default(repo: pathlib.Path, version: str, keep_forgejo_registry: bool = False) -> None:
     # 1. Every Cargo.toml: 0.0.0-dev -> VERSION, EXCEPT on lines that carry a
     # CROSS-REPO path dep (`path = "../X/Y/..."` — TWO or more segments after
-    # `../`). Those reference a sibling repo (e.g. vendored-orm in the durable store) which has
-    # its OWN release train and carries a pinned version (e.g. 0.4.42) we
-    # must not stamp over.
+    # `../`). Those reference an external sibling repo which has its OWN
+    # release train and carries a pinned version we must not stamp over.
     #
     # In-tree sibling deps like `path = "../blazen-3d"` (single segment) MUST
     # be stamped — they reference workspace siblings whose versions DO follow
@@ -114,8 +113,8 @@ def stamp_default(repo: pathlib.Path, version: str, keep_forgejo_registry: bool 
         root_cargo.write_text(root_text.replace(', registry = "forgejo"', ""))
     else:
         # publish-rust path:
-        #   (a) STRIP `, path = "../..."` from EVERY Cargo.toml — sibling
-        #       repos (e.g. the durable store) are not checked out in the publish CI
+        #   (a) STRIP `, path = "../..."` from EVERY Cargo.toml — external
+        #       sibling repos are not checked out in the publish CI
         #       sandbox, so `cargo metadata` fails when it tries to read
         #       their manifest. With path stripped, cargo resolves those
         #       deps purely from the registry (the version pin is the

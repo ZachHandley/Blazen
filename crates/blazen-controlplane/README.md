@@ -47,8 +47,8 @@ system NAT-friendly: only the control plane needs a reachable address.
   with a **deficit-round-robin WFQ scheduler** across 8 priority bands
   (band width 32; lower numeric `priority` = served first; weights step
   down 256 → 32 so low-priority work never starves). Optionally durable
-  via a pluggable `AssignmentStore` (in-memory default, or Valkey / the durable store
-  behind feature flags) so queue state survives a control-plane restart.
+  via a pluggable `AssignmentStore` (in-memory default, or Valkey
+  behind a feature flag) so queue state survives a control-plane restart.
 - **Admission / routing** (`server/admission.rs`) — decides *which* worker
   gets a submitted assignment. It does **not** hold provider credentials.
 
@@ -209,7 +209,7 @@ Worker::connect(config)?.run(MyHandler).await?;
 - `http-transport` — axum-based HTTP/SSE bridge for environments that
   cannot speak HTTP/2 (browsers, some serverless / wasi targets).
 - `http-rest` — OpenAI-compatible REST + Blazen-admin endpoints.
-- `valkey-store` / `durable-store` — durable `AssignmentStore` backends.
+- `valkey-store` — durable `AssignmentStore` backend.
 - `model-server` / `model-client` — the separate `blazen.modelserver.v1`
   service (remote `ModelManager`), independent of the workflow control
   plane.

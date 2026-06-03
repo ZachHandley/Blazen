@@ -238,10 +238,6 @@ starve: band 0 (0..32) weight 256, band 1 (32..64) weight 224, …, band 7
   `~/.zbrain/models/<provider>/<model-id>/` (shared across workers on
   the same host so two workers loading the same model share the file
   cache).
-- the durable store still lacks `SELECT FOR UPDATE SKIP LOCKED` and per-row TTL — see
-  the durable store issue tracker. Until both land, the `DurableAssignmentStore` uses
-  OCC retry with K=8-shard sharding (`crates/blazen-controlplane/src/server/durable_store.rs`)
-  and a control-plane TTL sweeper (60s).
 - Auth for human-submitted jobs uses ZAuth JWT (mirror
   `ZAITUI/crates/zaitui-server/src/auth.rs`); worker-to-CP uses mTLS
   with ZBrain-issued worker certs at `~/.zbrain/workers/<name>.tls/`.
