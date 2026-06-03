@@ -158,6 +158,14 @@ jobs:
             tar -xzf "/tmp/napi-${T}.tar.gz" -C dist/napi
           done
 
+          # Opt-in exact-BPE Workers variant. Shares filenames with the lean
+          # wasm32-wasi tarball (its tiktoken wasm is staged AS
+          # blazen.wasm32-wasi.wasm), so it MUST extract into a separate dir or
+          # it would clobber the lean default binary in dist/napi/.
+          mkdir -p dist/napi-tiktoken
+          fetch_or_die "${BASE}/napi-wasm32-wasi-tiktoken.tar.gz" "/tmp/napi-wasm32-wasi-tiktoken.tar.gz"
+          tar -xzf "/tmp/napi-wasm32-wasi-tiktoken.tar.gz" -C dist/napi-tiktoken
+
           fetch_or_die "${BASE}/wasm.tar.gz" "/tmp/wasm.tar.gz"
           tar -xzf "/tmp/wasm.tar.gz" -C dist/wasm
           # build-artifacts.yaml tars `crates/blazen-wasm-sdk/pkg` so the result is dist/wasm/pkg/
@@ -510,6 +518,50 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
 
+      - name: Publish @blazen-dev/blazen-wasm32-wasi-tiktoken variant
+        if: steps.check.outputs.completed != 'true'
+        working-directory: crates/blazen-node
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.version.outputs.version }}"
+          # The opt-in exact-BPE Workers binary. It is NOT a napi target (it's a
+          # second build of the wasm32-wasi target), so `napi prepublish` does
+          # not handle it — we build + publish it by hand here.
+          #
+          # Built from the already-patched lean subpackage (npm/wasm32-wasi) so
+          # the exports map, JS shims, and d.ts are byte-identical; only the
+          # .wasm and the package name differ. That is exactly what makes a
+          # package-manager override remapping @blazen-dev/blazen-wasm32-wasi ->
+          # @blazen-dev/blazen-wasm32-wasi-tiktoken a true drop-in binary swap.
+          TKWASM="../../dist/napi-tiktoken/blazen.wasm32-wasi.wasm"
+          if [ ! -f "$TKWASM" ]; then
+            echo "::error::missing tiktoken wasm at $TKWASM (build-artifacts wasi leg or fetch-artifacts changed)"
+            exit 1
+          fi
+          if [ ! -f npm/wasm32-wasi/package.json ]; then
+            echo "::error::expected npm/wasm32-wasi to exist (napi artifacts step did not run)"
+            exit 1
+          fi
+          # Stage outside npm/ so `napi prepublish` (already run above) never
+          # sees this extra dir.
+          DST="tiktoken-subpackage"
+          rm -rf "$DST"
+          cp -R npm/wasm32-wasi "$DST"
+          cp "$TKWASM" "$DST/blazen.wasm32-wasi.wasm"
+          jq '.name = "@blazen-dev/blazen-wasm32-wasi-tiktoken"' \
+            "$DST/package.json" > "$DST/package.json.tmp"
+          mv "$DST/package.json.tmp" "$DST/package.json"
+          echo "=== tiktoken subpackage package.json ===" && cat "$DST/package.json"
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_ACCESS_TOKEN }}" > .npmrc
+          if npm view "@blazen-dev/blazen-wasm32-wasi-tiktoken@${VERSION}" version >/dev/null 2>&1; then
+            echo "@blazen-dev/blazen-wasm32-wasi-tiktoken@${VERSION} already on npm; skipping publish"
+          else
+            ( cd "$DST" && npm publish --access public --no-git-checks )
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
+
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
@@ -574,6 +626,65 @@ jobs:
           mode: mark
           version: ${{ needs.version.outputs.version }}
           step: publish-workers-alias
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+  publish-workers-tiktoken-alias:
+    name: Publish @blazen-dev/wasi-tiktoken alias
+    # Depends on publish-node, which publishes the
+    # @blazen-dev/blazen-wasm32-wasi-tiktoken sidecar this alias re-exports.
+    needs: [version, publish-node]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ needs.version.outputs.version }}
+          step: publish-workers-tiktoken-alias
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Setup Node
+        if: steps.check.outputs.completed != 'true'
+        uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Stamp version
+        if: steps.check.outputs.completed != 'true'
+        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
+
+      - name: Publish @blazen-dev/wasi-tiktoken
+        if: steps.check.outputs.completed != 'true'
+        working-directory: crates/blazen-workers-tiktoken-alias
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ needs.version.outputs.version }}"
+          echo "//registry.npmjs.org/:_authToken=${{ secrets.NPM_ACCESS_TOKEN }}" > .npmrc
+          if npm view "@blazen-dev/wasi-tiktoken@${VERSION}" version >/dev/null 2>&1; then
+            echo "@blazen-dev/wasi-tiktoken@${VERSION} already on npm; skipping publish"
+          else
+            npm publish --access public --no-git-checks
+          fi
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_ACCESS_TOKEN }}
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ needs.version.outputs.version }}
+          step: publish-workers-tiktoken-alias
           base-url: https://forge.blackleafdigital.com
           owner: BlackLeafDigital
           auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
@@ -1024,7 +1135,7 @@ jobs:
   create-release:
     name: Create Release
     runs-on: ubuntu-latest
-    needs: [version, publish-rust, publish-python, publish-node, publish-workers-alias, publish-wasm, release-ruby]
+    needs: [version, publish-rust, publish-python, publish-node, publish-workers-alias, publish-workers-tiktoken-alias, publish-wasm, release-ruby]
     # workflow_dispatch only — binding tag pushes flow through release-go /
     # release-swift, which cut their own subtree-scoped releases.
     if: github.event_name == 'workflow_dispatch'
@@ -1108,6 +1219,26 @@ jobs:
             return { status: res.status, headers: [...res.headers.entries()], body };
           });
           setDefaultHttpClient(client);
+          \`\`\`
+
+          **Exact token counting on Workers (opt-in).** The default Workers
+          build ships **without** \`tiktoken\` to stay under the Cloudflare bundle
+          budget (~1.7 MiB gzipped vs ~4.8 MiB with tiktoken). On it, token
+          counting uses the always-available \`EstimateCounter\` heuristic and
+          \`TiktokenCounter.forModel(...)\` throws an actionable error. For exact
+          OpenAI BPE counts on a Worker, use the larger variant — either the
+          single-install alias:
+          \`\`\`bash
+          pnpm add @blazen-dev/wasi-tiktoken
+          # import { TiktokenCounter } from '@blazen-dev/wasi-tiktoken'
+          \`\`\`
+          or, if you import via \`blazen/workers\`, install the tiktoken sidecar
+          and remap the lean one with a package-manager override (the two share
+          an identical export map + file layout, so it's a drop-in binary swap):
+          \`\`\`json
+          { "pnpm": { "overrides": {
+            "@blazen-dev/blazen-wasm32-wasi": "npm:@blazen-dev/blazen-wasm32-wasi-tiktoken@${{ needs.version.outputs.version }}"
+          } } }
           \`\`\`
           NOTES_EOF
 
@@ -1230,7 +1361,7 @@ jobs:
   cleanup-artifacts:
     name: Cleanup Build Artifacts
     runs-on: ubuntu-latest
-    needs: [version, publish-rust, publish-python, publish-node, publish-workers-alias, publish-wasm, create-release, mirror-github]
+    needs: [version, publish-rust, publish-python, publish-node, publish-workers-alias, publish-workers-tiktoken-alias, publish-wasm, create-release, mirror-github]
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -1270,6 +1401,7 @@ jobs:
             napi-aarch64-apple-darwin.tar.gz
             napi-x86_64-pc-windows-msvc.tar.gz
             napi-wasm32-wasi.tar.gz
+            napi-wasm32-wasi-tiktoken.tar.gz
             wasm.tar.gz
             libblazen_cabi-linux-x86_64.so
             libblazen_cabi-linux-aarch64.so

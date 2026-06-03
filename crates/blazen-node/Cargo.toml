@@ -89,8 +89,17 @@ triposr = ["threed", "blazen-llm/triposr", "blazen-3d/triposr"]
 hf-loader = ["blazen-manager/hf-loader"]
 # Wasi feature alias for Cloudflare Workers / Deno / Node-fallback (wasm32-
 # wasip1* via napi-rs wasi runtime). Pulls everything the wasi target
-# supports: tiktoken token counting, distributed peer (HTTP/JSON client),
+# supports EXCEPT exact token counting: distributed peer (HTTP/JSON client),
 # OTLP-HTTP + Langfuse exporters via the host-registered HttpClient.
+# `tiktoken` is intentionally OFF here — its embedded BPE tables dominate the
+# wasm bundle (measured: dropping tiktoken takes the wasi binary from 4.93 to
+# 1.83 MiB gzipped, 14M -> 6.8M raw), which blows the Cloudflare Workers bundle
+# budget. Callers who need exact BPE counts on a Worker install the
+# `@blazen-dev/blazen-wasm32-wasi-tiktoken` variant (built with the
+# `wasi-tiktoken` alias below) and remap it via a package-manager override.
+# Without it, `TokenCounter` falls back to the always-compiled `EstimateCounter`
+# heuristic, and the `TiktokenCounter` class throws an actionable "install the
+# -tiktoken build" error (see src/types/tokens.rs).
 # Excludes `tract` (blazen-embed-tract still pulls reqwest's wasm-bindgen
 # path on wasm32, which requires a browser host that napi-rs's wasi runtime
 # doesn't provide), `prometheus` (no listener on wasi), and all native C/C++
@@ -98,7 +107,11 @@ hf-loader = ["blazen-manager/hf-loader"]
 # Note: `embed` is intentionally excluded — `blazen-embed`'s facade
 # unconditionally pulls in `blazen-embed-fastembed` (and ort-sys C++ runtime)
 # on non-musl targets.
-wasi = ["tiktoken", "distributed-http", "otlp-http", "langfuse"]
+wasi = ["distributed-http", "otlp-http", "langfuse"]
+# Opt-in Workers variant: the lean `wasi` surface plus exact `tiktoken` BPE
+# counting. Published as `@blazen-dev/blazen-wasm32-wasi-tiktoken`. Larger wasm
+# bundle; only for Workers that need exact token counts and have budget for it.
+wasi-tiktoken = ["wasi", "tiktoken"]
 local-all = ["embed", "fastembed", "tract", "candle-embed", "mistralrs", "llamacpp", "candle-llm", "diffusion", "whispercpp", "tts", "tiktoken", "distributed", "otlp", "prometheus", "langfuse", "audio-music-musicgen", "audio-music-audiogen", "audio-music-stable-audio", "audio-stt-faster-whisper", "audio-tts-spark", "audio-codec-encodec", "audio-vc-rvc", "hf-loader", "training"]
 # Distributed peer-to-peer execution (cross-node sub-workflow invocation).
 # Native: gRPC client+server via tonic.

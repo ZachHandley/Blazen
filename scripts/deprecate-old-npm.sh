@@ -3,7 +3,8 @@
 # One-shot deprecation script for legacy Blazen npm package names.
 #
 # Run MANUALLY (NOT from CI), AFTER the first release that publishes the new
-# scoped names (`@blazen-dev/wasm`, `@blazen-dev/wasi`, `@blazen-dev/blazen-wasm32-wasi`,
+# scoped names (`@blazen-dev/wasm`, `@blazen-dev/wasi`, `@blazen-dev/wasi-tiktoken`,
+# `@blazen-dev/blazen-wasm32-wasi`, `@blazen-dev/blazen-wasm32-wasi-tiktoken`,
 # and the existing `@blazen-dev/blazen-<triple>` native sidecars) succeeds.
 #
 # Usage:

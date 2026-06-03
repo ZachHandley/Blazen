@@ -34,8 +34,15 @@ uuid.workspace = true
 chrono.workspace = true
 async-trait.workspace = true
 anyhow.workspace = true
-wasm-bindgen = "=0.2.122"
-wasm-bindgen-futures = "=0.4.72"
+# NOTE: wasm-bindgen + wasm-bindgen-futures are NOT declared here unconditionally.
+# They are browser-WASM-only (declared in the
+# `cfg(all(target_arch = "wasm32", not(target_os = "wasi")))` block below) and all
+# their usage in src/ is gated to that same cfg. Declaring them unconditionally
+# pulled wasm-bindgen into the wasm32-wasi (Cloudflare Workers / Deno) build, whose
+# napi-rs WASI loader does NOT provide the `__wbindgen_placeholder__` /
+# `__wbindgen_externref_xform__` host imports — so the module failed to instantiate
+# on workerd with `WebAssembly.Instance(): Import "__wbindgen_placeholder__": module
+# is not an object or function`. Keeping these browser-only fixes that.
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 tokio = { version = "1", default-features = false, features = ["rt", "time"] }

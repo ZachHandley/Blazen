@@ -1064,17 +1064,53 @@ jobs:
           if [[ "${{ matrix.target }}" == "wasm32-wasi" ]]; then
             # wasm32-wasip1-threads target: napi-rs emits a JS shim
             # (blazen.wasi*.cjs / blazen.wasi-browser.js) plus the actual
-            # wasm binary (blazen.wasm32-wasi.wasm). The `wasi` feature alias
-            # in crates/blazen-node/Cargo.toml selects the wasi-safe feature
-            # set (tiktoken, distributed-http, otlp-http, langfuse). `tract` is
-            # intentionally excluded because blazen-embed-tract still drags
-            # `wasm-bindgen` via reqwest's wasm32 path; see Cargo.toml.
+            # wasm binary (blazen.wasm32-wasi.wasm). napi-rs already runs
+            # wasm-opt on the wasi binary, so NO explicit wasm-opt pass is
+            # added here — an extra `wasm-opt -Oz` was measured to *worsen*
+            # the gzip profile (1.73 -> 1.76 MiB) while shrinking raw.
+            #
+            # Two variants are built from one source tree:
+            #   * `wasi`          -> lean default (@blazen-dev/blazen-wasm32-wasi).
+            #                        No `tiktoken`: its embedded BPE tables
+            #                        dominate the bundle. ~1.73 MiB gz, which
+            #                        fits the Cloudflare Workers bundle budget.
+            #   * `wasi-tiktoken` -> opt-in exact-BPE variant
+            #                        (@blazen-dev/blazen-wasm32-wasi-tiktoken).
+            #                        ~4.82 MiB gz. The JS/TS surface is identical
+            #                        to the lean build (lean ships a stub
+            #                        `TiktokenCounter` that throws), so the two
+            #                        packages are a drop-in binary swap.
+            # `tract` stays excluded on both (blazen-embed-tract still drags
+            # `wasm-bindgen` via reqwest's wasm32 path; see Cargo.toml).
+            #
+            # opt-level=z (optimise for size, not speed) is the right tradeoff
+            # for a Worker binding and the biggest lever after dropping
+            # tiktoken. Set via env so ONLY the wasi builds use it — native
+            # targets keep opt-level=3 for inference throughput.
             #
             # EMNAPI_LINK_DIR points at the emnapi sysroot inside pnpm's
             # virtual store so napi-rs can link against the wasi runtime
             # bundled with `emnapi` (already pulled in by `pnpm install`
             # above).
             export EMNAPI_LINK_DIR="$(pwd)/node_modules/.pnpm/emnapi@1.9.0/node_modules/emnapi/lib/wasm32-wasip1-threads"
+            export CARGO_PROFILE_RELEASE_OPT_LEVEL=z
+
+            # tiktoken variant first; stash its wasm aside under a distinct
+            # name (the .cjs/.js shims are ABI-identical across variants and
+            # are shared, so only the .wasm differs).
+            pnpm --filter blazen exec napi build \
+              --release \
+              --platform \
+              --target wasm32-wasip1-threads \
+              --no-default-features \
+              --features wasi-tiktoken \
+              --js index.js
+            cp crates/blazen-node/blazen.wasm32-wasi.wasm \
+               crates/blazen-node/blazen.wasm32-wasi.tiktoken.wasm
+
+            # lean default LAST, so the canonical blazen.wasm32-wasi.wasm +
+            # shims left in place are the lean build the existing upload step
+            # tars into napi-wasm32-wasi.tar.gz unchanged.
             pnpm --filter blazen exec napi build \
               --release \
               --platform \
@@ -1124,12 +1160,39 @@ jobs:
           set -euo pipefail
           VERSION="${{ needs.version.outputs.version }}"
           TARGET="${{ matrix.target }}"
+
+          # Upload one tarball (basename, already in repo root) to the Forgejo
+          # generic package, with the 409-on-retry delete+re-upload dance (see
+          # wheels step for rationale).
+          upload_pkg() {
+            local name="$1"
+            local url="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/${name}"
+            local code
+            code=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
+              -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+              --upload-file "${name}" "$url")
+            case "$code" in
+              200|201) echo "Uploaded ${name} (HTTP $code)" ;;
+              409)
+                echo "::warning::Package ${name} exists (HTTP 409); deleting and re-uploading"
+                curl --fail -s -X DELETE \
+                  -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" "$url"
+                curl --fail -s -X PUT \
+                  -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+                  --upload-file "${name}" "$url"
+                ;;
+              *) echo "::error::Upload of ${name} failed (HTTP $code)"; exit 1 ;;
+            esac
+          }
+
           cd crates/blazen-node
           shopt -s nullglob
           if [[ "${TARGET}" == "wasm32-wasi" ]]; then
             # napi-rs v3 wasi outputs: blazen.wasi.cjs / blazen.wasi-browser.js
             # JS shims plus the blazen.wasm32-wasi.wasm binary. Globs cover all
             # variants emitted by current napi-cli without pinning exact names.
+            # The canonical .wasm left in place is the LEAN default build; the
+            # tiktoken variant's wasm was stashed as blazen.wasm32-wasi.tiktoken.wasm.
             NODE_FILES=(blazen.wasi*.cjs blazen.wasi*.js blazen.wasm32-wasi.wasm)
           else
             NODE_FILES=(blazen.*.node)
@@ -1139,24 +1202,29 @@ jobs:
             exit 1
           fi
           tar -czf "../../napi-${TARGET}.tar.gz" "${NODE_FILES[@]}"
+
+          # Second wasi tarball: the opt-in tiktoken variant. Same archive
+          # layout as the lean one (the tiktoken wasm is staged AS
+          # blazen.wasm32-wasi.wasm next to the shared ABI-identical shims) so
+          # release.yaml stages it into @blazen-dev/blazen-wasm32-wasi-tiktoken
+          # with the exact same patch logic as the lean subpackage.
+          if [[ "${TARGET}" == "wasm32-wasi" && -f blazen.wasm32-wasi.tiktoken.wasm ]]; then
+            REPO_ROOT="$(cd ../.. && pwd)"
+            TKDIR="$(mktemp -d)"
+            cp blazen.wasi*.cjs blazen.wasi*.js "$TKDIR"/
+            cp blazen.wasm32-wasi.tiktoken.wasm "$TKDIR/blazen.wasm32-wasi.wasm"
+            # Flat archive (no leading ./) matching the lean tarball's layout so
+            # release.yaml stages both identically.
+            ( cd "$TKDIR" && tar -czf "${REPO_ROOT}/napi-wasm32-wasi-tiktoken.tar.gz" \
+                blazen.wasi*.cjs blazen.wasi*.js blazen.wasm32-wasi.wasm )
+            rm -rf "$TKDIR"
+          fi
+
           cd ../..
-          URL="https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/generic/blazen-build/${VERSION}/napi-${TARGET}.tar.gz"
-          # 409 on retry → delete + re-upload (see wheels step for rationale).
-          code=$(curl -s -o /dev/null -w "%{http_code}" -X PUT \
-            -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
-            --upload-file "napi-${TARGET}.tar.gz" "$URL")
-          case "$code" in
-            200|201) echo "Uploaded (HTTP $code)" ;;
-            409)
-              echo "::warning::Package exists (HTTP 409); deleting and re-uploading"
-              curl --fail -s -X DELETE \
-                -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" "$URL"
-              curl --fail -s -X PUT \
-                -u "zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
-                --upload-file "napi-${TARGET}.tar.gz" "$URL"
-              ;;
-            *) echo "::error::Upload failed (HTTP $code)"; exit 1 ;;
-          esac
+          upload_pkg "napi-${TARGET}.tar.gz"
+          if [[ "${TARGET}" == "wasm32-wasi" && -f napi-wasm32-wasi-tiktoken.tar.gz ]]; then
+            upload_pkg "napi-wasm32-wasi-tiktoken.tar.gz"
+          fi
 
       - name: Mark step complete
         if: steps.verify.outputs.completed != 'true'

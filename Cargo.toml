@@ -63,6 +63,7 @@ exclude = [
     "crates/blazen-wasm",
     "crates/blazen-wasm-sdk",
     "crates/blazen-workers-alias",
+    "crates/blazen-workers-tiktoken-alias",
 ]
 
 [workspace.package]

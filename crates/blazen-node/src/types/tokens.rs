@@ -268,6 +268,56 @@ impl JsTiktokenCounter {
 }
 
 // ---------------------------------------------------------------------------
+// JsTiktokenCounter stub (when the `tiktoken` feature is OFF)
+// ---------------------------------------------------------------------------
+//
+// The lean wasi build (`@blazen-dev/blazen-wasm32-wasi`) ships without the
+// `tiktoken` BPE tables to stay under the Cloudflare Workers bundle budget.
+// The published TypeScript surface (`index.d.ts`) is generated from the
+// tiktoken-having native build, so it always advertises `TiktokenCounter`.
+// Without this stub the class would simply be absent at runtime on the lean
+// build, and a caller would hit a confusing `TiktokenCounter is not a
+// constructor`. The stub keeps the JS/TS surface identical across both wasi
+// variants (so the `-tiktoken` package is a true drop-in binary swap) and
+// turns the failure into an actionable error pointing at the fix.
+
+/// Exact BPE token counter — **not available in this build**.
+///
+/// This build was compiled without the `tiktoken` feature (the default
+/// `@blazen-dev/blazen-wasm32-wasi` Workers binary). Install the
+/// `@blazen-dev/blazen-wasm32-wasi-tiktoken` variant (or, on the browser SDK,
+/// `@blazen-dev/sdk-tiktoken`) for exact counts, or use `EstimateCounter` for
+/// heuristic counts that work everywhere.
+#[cfg(not(feature = "tiktoken"))]
+#[napi(js_name = "TiktokenCounter")]
+pub struct JsTiktokenCounter {}
+
+#[cfg(not(feature = "tiktoken"))]
+#[napi]
+#[allow(
+    clippy::must_use_candidate,
+    clippy::missing_errors_doc,
+    clippy::needless_pass_by_value
+)]
+impl JsTiktokenCounter {
+    // `model: String` (not `&str`) mirrors the real tiktoken impl's signature
+    // so the generated napi/TS surface (`forModel(model: string)`) is identical
+    // across both wasi variants — required for the drop-in binary swap. The
+    // arg is unused here because this build has no tiktoken backend.
+    /// Always errors in this build — `tiktoken` is not compiled in.
+    #[napi(factory, js_name = "forModel")]
+    pub fn for_model(model: String) -> Result<Self> {
+        let _ = model;
+        Err(napi::Error::from_reason(
+            "TiktokenCounter (exact BPE counting) is not available in this build. \
+             Install the '@blazen-dev/blazen-wasm32-wasi-tiktoken' package and remap \
+             '@blazen-dev/blazen-wasm32-wasi' to it via a package-manager override, \
+             or use EstimateCounter for heuristic counts that work everywhere.",
+        ))
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Public free functions
 // ---------------------------------------------------------------------------
 

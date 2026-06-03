@@ -1,0 +1,39 @@
+{
+  "name": "@blazen-dev/wasi-tiktoken",
+  "version": "0.0.0-dev",
+  "description": "Exact-BPE Blazen package for Cloudflare Workers, Deno, and any WASI host. Identical to @blazen-dev/wasi but re-exports @blazen-dev/blazen-wasm32-wasi-tiktoken, the larger WASI build that bundles tiktoken-rs for exact token counts via TiktokenCounter. Use this (or a package-manager override remapping @blazen-dev/blazen-wasm32-wasi to the -tiktoken sidecar) only when you need exact counts and have bundle budget; the lean @blazen-dev/wasi is the default.",
+  "license": "MPL-2.0",
+  "type": "module",
+  "main": "index.cjs",
+  "module": "index.mjs",
+  "types": "index.d.ts",
+  "files": [
+    "index.cjs",
+    "index.mjs",
+    "index.d.ts"
+  ],
+  "dependencies": {
+    "@blazen-dev/blazen-wasm32-wasi-tiktoken": "0.0.0-dev"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://forge.blackleafdigital.com/BlackLeafDigital/Blazen"
+  },
+  "keywords": [
+    "blazen",
+    "wasi",
+    "wasm",
+    "tiktoken",
+    "cloudflare-workers",
+    "deno",
+    "ai",
+    "llm",
+    "workflow"
+  ],
+  "engines": {
+    "node": ">= 18"
+  }
+}

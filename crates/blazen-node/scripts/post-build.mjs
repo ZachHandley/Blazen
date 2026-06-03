@@ -454,12 +454,18 @@ const __wasi = new __WASI({ version: 'preview1' })
 const __emnapiContext = __emnapiGetDefaultContext()
 
 const __sharedMemory = new WebAssembly.Memory({
-  // 256 pages * 64 KiB = 16 MiB initial (grows on demand up to \`maximum\`).
-  // napi-rs's default is 4000 pages (~250 MiB), which exceeds a Cloudflare
-  // Workers isolate's 128 MiB cap and fails to instantiate (RangeError CF
-  // 10021). Keep this in lockstep with napi.wasm.initialMemory in package.json
-  // (which controls the napi-generated blazen.wasi*.{cjs,js}).
-  initial: 256,
+  // 1152 pages * 64 KiB = 72 MiB initial (grows on demand up to \`maximum\`).
+  // This MUST be >= the wasm module's own declared minimum memory (the
+  // \`(import "env" "memory" (memory <min> ...))\` field), or workerd rejects
+  // instantiation with \`LinkError: memory import has N pages which is smaller
+  // than the declared initial of M\`. The blazen wasm declares ~988 pages
+  // (lean) / ~1094 pages (the -tiktoken variant), so 1152 covers both with a
+  // small margin. It must ALSO stay <= 2048 pages (128 MiB), the Cloudflare
+  // Workers isolate cap — napi-rs's own 4000-page (~250 MiB) default exceeds
+  // it and fails with RangeError CF 10021. Valid window: [1094, 2048].
+  // Keep this in lockstep with napi.wasm.initialMemory in package.json (which
+  // controls the napi-generated blazen.wasi*.{cjs,js}).
+  initial: 1152,
   maximum: 65536,
   shared: true,
 })

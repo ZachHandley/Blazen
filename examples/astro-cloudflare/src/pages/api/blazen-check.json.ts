@@ -23,7 +23,40 @@ import {
   BackgroundRemovalProvider,
   Workflow,
   AgentResult,
+  EstimateCounter,
+  TiktokenCounter,
 } from "blazen/workers";
+
+// Token-counter behaviour differs between the two wasi variants:
+//   * lean `@blazen-dev/blazen-wasm32-wasi`           -> EstimateCounter works;
+//       TiktokenCounter.forModel throws an actionable "install …-tiktoken" error.
+//   * `@blazen-dev/blazen-wasm32-wasi-tiktoken`        -> both work; exact BPE counts.
+// We report the observed result so the same endpoint validates either build.
+function counterProbe() {
+  const out: Record<string, unknown> = {};
+
+  // EstimateCounter — always available on both builds.
+  try {
+    const est = new EstimateCounter(128_000);
+    out.estimate = {
+      ok: true,
+      count: est.countTokens("Hello, world!"),
+      contextSize: est.contextSize(),
+    };
+  } catch (e) {
+    out.estimate = { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+
+  // TiktokenCounter — throws on the lean build, returns a counter on the tiktoken build.
+  try {
+    const tk = TiktokenCounter.forModel("gpt-4o");
+    out.tiktoken = { ok: true, count: tk.countTokens("Hello, world!") };
+  } catch (e) {
+    out.tiktoken = { ok: false, error: e instanceof Error ? e.message : String(e) };
+  }
+
+  return out;
+}
 
 export const GET: APIRoute = () =>
   new Response(
@@ -35,6 +68,9 @@ export const GET: APIRoute = () =>
       BackgroundRemovalProvider: typeof BackgroundRemovalProvider,
       Workflow: typeof Workflow,
       AgentResult: typeof AgentResult,
+      TiktokenCounter: typeof TiktokenCounter,
+      EstimateCounter: typeof EstimateCounter,
+      counters: counterProbe(),
     }),
     { headers: { "content-type": "application/json" } },
   );

@@ -30,7 +30,7 @@
       "wasm32-wasi"
     ],
     "wasm": {
-      "initialMemory": 256
+      "initialMemory": 1152
     }
   },
   "publishConfig": {

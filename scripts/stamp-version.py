@@ -11,7 +11,8 @@ Default mode (no flags) — used by the BUILD jobs (wheels/napi/uniffi/cabi):
     (excluding `target/`), STRIPS `, registry = "forgejo"` off the root
     `Cargo.toml` inter-crate deps (leaving plain `version` + `path` deps),
     and bumps the hand-written `package.json` files for `blazen-node`,
-    `blazen-wasm-sdk`, and `blazen-workers-alias`.
+    `blazen-wasm-sdk`, `blazen-workers-alias`, and
+    `blazen-workers-tiktoken-alias`.
 
     The strip matters: the cross-build environments (notably the musl
     wheel/napi containers) do NOT pick up the repo `.cargo/config.toml`
@@ -162,6 +163,16 @@ def stamp_default(repo: pathlib.Path, version: str, keep_forgejo_registry: bool 
     if alias_pkg.exists():
         alias_text = alias_pkg.read_text()
         alias_pkg.write_text(alias_text.replace("0.0.0-dev", version))
+
+    # 5b. Tiktoken workers alias package.json: same treatment — both `version`
+    #     and the @blazen-dev/blazen-wasm32-wasi-tiktoken dep pin read
+    #     "0.0.0-dev" and get stamped to VERSION. The -tiktoken sidecar it
+    #     depends on is published at VERSION by the publish-node job (built from
+    #     the version-stamped lean wasm32-wasi subpackage).
+    tk_alias_pkg = repo / "crates" / "blazen-workers-tiktoken-alias" / "package.json"
+    if tk_alias_pkg.exists():
+        tk_alias_text = tk_alias_pkg.read_text()
+        tk_alias_pkg.write_text(tk_alias_text.replace("0.0.0-dev", version))
 
 
 def rename_wasm_pkg(repo: pathlib.Path, version: str) -> None:
