@@ -139,7 +139,12 @@ def main() -> None:
         default=12,
         help="Target mode only: always keep this many newest releases (default: 12).",
     )
-    p.add_argument("-u", "--username", default=None, help="PyPI username (required with --do-it).")
+    p.add_argument(
+        "-u",
+        "--username",
+        default=os.environ.get("PYPI_USERNAME", "zachhandley"),
+        help="PyPI username (default: $PYPI_USERNAME or 'zachhandley').",
+    )
     p.add_argument(
         "--do-it",
         action="store_true",
