@@ -190,7 +190,7 @@ blazen-resource-probe = { version = "0.0.0-dev", path = "crates/blazen-resource-
 # strips out the heavy `cluster` mode (Raft, gRPC, openraft, tonic) that
 # the control-plane never needs; we only want the synchronous +
 # `async-tokio` typed CRUD surface.
-vendored-orm = { version = "0.0.0-dev", path = "../vendored/crates/vendored-orm", registry = "forgejo", default-features = false, features = ["async-tokio"] }
+vendored-orm = { version = "0.4.42", path = "../vendored/crates/vendored-orm", registry = "forgejo", default-features = false, features = ["async-tokio"] }
 
 # Distributed peer transport
 tonic = "0.14"

@@ -68,13 +68,25 @@ def _add_forgejo_registry_to_path_deps(text: str) -> str:
     return _PATH_DEP_RE.sub(repl, text)
 
 
+_CROSS_REPO_PATH_RE = re.compile(r',\s*path\s*=\s*"\.\./[^"]+"')
+
+
 def stamp_default(repo: pathlib.Path, version: str, keep_forgejo_registry: bool = False) -> None:
-    # 1. Every Cargo.toml: 0.0.0-dev -> VERSION
+    # 1. Every Cargo.toml: 0.0.0-dev -> VERSION, EXCEPT on lines that carry a
+    # cross-repo path dep (`path = "../..."`). Those reference a sibling
+    # repo (e.g. vendored-orm in the durable store) which has its OWN release train and carries
+    # a pinned version (e.g. 0.4.42) we must not stamp over.
     for cargo in repo.rglob("Cargo.toml"):
         if "target" in cargo.parts:
             continue
         text = cargo.read_text()
-        new = text.replace("0.0.0-dev", version)
+        new_lines = []
+        for line in text.split("\n"):
+            if 'path = "../' in line:
+                new_lines.append(line)
+            else:
+                new_lines.append(line.replace("0.0.0-dev", version))
+        new = "\n".join(new_lines)
         if new != text:
             cargo.write_text(new)
 
@@ -90,21 +102,26 @@ def stamp_default(repo: pathlib.Path, version: str, keep_forgejo_registry: bool 
         root_text = root_cargo.read_text()
         root_cargo.write_text(root_text.replace(', registry = "forgejo"', ""))
     else:
-        # publish-rust path: the 37 root `workspace.dependencies` carry
-        # `registry = "forgejo"`, but inter-crate deps declared DIRECTLY in a
-        # member manifest (e.g. `blazen-3d-core = { version, path }` in
-        # blazen-3d/Cargo.toml) do NOT — so on publish cargo resolves them from
-        # crates.io and fails ("failed to select a version for the requirement
-        # `blazen-3d-core = "^0.6.1"` ... candidate versions found: 0.6.0 ...
-        # location searched: crates.io index"). Inject `registry = "forgejo"`
-        # into every direct `blazen-* = { ... path = ... }` inline-table dep that
-        # lacks it, across every member manifest, so each sibling resolves from
-        # Forgejo. Only runs in keep mode, so the build jobs are unaffected.
+        # publish-rust path:
+        #   (a) STRIP `, path = "../..."` from EVERY Cargo.toml — sibling
+        #       repos (e.g. the durable store) are not checked out in the publish CI
+        #       sandbox, so `cargo metadata` fails when it tries to read
+        #       their manifest. With path stripped, cargo resolves those
+        #       deps purely from the registry (the version pin is the
+        #       sibling repo's own release version, set in step 1).
+        #   (b) Inject `, registry = "forgejo"` into every direct
+        #       `blazen-* = { ... path = ... }` inline-table dep that
+        #       lacks it (existing behavior — the 37 root
+        #       `workspace.dependencies` carry `registry = "forgejo"`,
+        #       but inter-crate deps declared DIRECTLY in a member
+        #       manifest do NOT — so on publish cargo resolves them
+        #       from crates.io and fails).
         for cargo in repo.rglob("Cargo.toml"):
             if "target" in cargo.parts:
                 continue
             text = cargo.read_text()
-            new = _add_forgejo_registry_to_path_deps(text)
+            stripped = _CROSS_REPO_PATH_RE.sub("", text)
+            new = _add_forgejo_registry_to_path_deps(stripped)
             if new != text:
                 cargo.write_text(new)
 

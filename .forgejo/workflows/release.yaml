@@ -226,7 +226,14 @@ jobs:
           # Forgejo sparse index instead of the crates.io REST API.
           registry: forgejo
           sparse-index-url: https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/
-          exclude: blazen-py,blazen-node
+          # blazen-controlplane is excluded because it depends on the
+          # cross-repo `vendored-orm` (sibling the durable store repo) at version 0.4.42 —
+          # whatever API the controlplane source currently uses may not
+          # match the published 0.4.42 surface. blazen + blazen-llm (the
+          # two ZMarketer consumes) don't touch vendored-orm and publish
+          # cleanly. Re-include once controlplane is verified against
+          # the published vendored-orm release.
+          exclude: blazen-py,blazen-node,blazen-controlplane
           cargo-token: ${{ secrets.FORGEJO_ACTIONS_TOKEN }}
           max-backoff-seconds: '300'
           max-attempts-per-crate: '5'
