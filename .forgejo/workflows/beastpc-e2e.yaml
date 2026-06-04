@@ -133,7 +133,7 @@ jobs:
 
       - name: Audio E2E — STT (whisper-streaming + whispercpp + candle)
         if: ${{ !cancelled() }}
-        run: cargo nextest run -p blazen-audio-stt --features whisper-streaming,whispercpp,candle --run-ignored only --test-threads=1 --no-fail-fast
+        run: cargo nextest run -p blazen-audio-stt --features whisper-streaming,vad-ort,whispercpp,candle --run-ignored only --test-threads=1 --no-fail-fast
         env:
           BLAZEN_HF_TOKEN: ${{ secrets.BLAZEN_HF_TOKEN }}
 

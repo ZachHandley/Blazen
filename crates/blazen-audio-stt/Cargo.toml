@@ -25,6 +25,7 @@ thiserror.workspace = true
 tokenizers = { workspace = true, optional = true }
 tokio = { workspace = true, features = ["fs", "macros", "rt", "sync"] }
 tracing.workspace = true
+tract-onnx = { workspace = true, optional = true }
 # whisper-rs with default-features = false compiles on all platforms (CPU-only).
 # Platform-specific acceleration is opt-in via `cuda`, `metal`, `coreml` features
 # below, which are intentionally NO-OP at the library level — see the
@@ -115,12 +116,24 @@ coreml = ["whispercpp"]
 
 # `whisper-streaming` enables the low-latency streaming Whisper backend in
 # `src/backends/whisper_streaming.rs`. It builds on the Candle Whisper
-# weights (`candle` feature) and uses `ort` (ONNX Runtime) to run the Silero
-# VAD v5 ONNX model that chunks incoming audio into utterance windows
-# (ONNX Runtime handles the v5 graph's control-flow `If` op, which tract
-# cannot). Implements [`SttBackend::stream`]; the file-based `transcribe`
-# returns `Unsupported` (route to the `candle` backend for blocking work).
-whisper-streaming = ["candle", "dep:ort"]
+# weights (`candle` feature) and runs an embedded, control-flow-free Silero
+# VAD v5 (16 kHz) ONNX to chunk incoming audio into utterance windows.
+#
+# It requires exactly one VAD runtime backend:
+#   - `vad-ort`   — ONNX Runtime (native: macOS / Linux-gnu / Windows, CPU+GPU)
+#   - `vad-tract` — pure-Rust tract (musl / wasm, where ONNX Runtime doesn't ship)
+# `vad.rs` raises a `compile_error!` if neither is enabled. When both are on
+# (e.g. `--all-features`), `ort` takes precedence. Consumers default to
+# `vad-ort`; the musl/wasm artifact path selects `vad-tract`.
+#
+# Implements [`SttBackend::stream`]; the file-based `transcribe` returns
+# `Unsupported` (route to the `candle` backend for blocking work).
+whisper-streaming = ["candle"]
+
+# VAD runtime backends for `whisper-streaming` (see above). Both execute the
+# same embedded `assets/silero_vad_16k.onnx`; only the runtime differs.
+vad-ort = ["dep:ort"]
+vad-tract = ["dep:tract-onnx"]
 
 # `faster-whisper` enables the CTranslate2-backed Whisper SttBackend in
 # `src/backends/faster_whisper/`. Pulls in `ct2rs` (Rust bindings to

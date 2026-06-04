@@ -67,9 +67,6 @@ pub struct WhisperStreamingBackend {
 pub struct WhisperStreamingConfig {
     /// Model identifier (HF repo). Reuses the candle backend's loader.
     pub model_id: String,
-    /// Silero VAD model path (ONNX). If `None`, downloads from HF on
-    /// first use.
-    pub vad_model_path: Option<String>,
     /// Sliding-window chunk length in seconds. Default 30s
     /// (Whisper's native window).
     pub chunk_seconds: f32,
@@ -81,7 +78,6 @@ impl Default for WhisperStreamingConfig {
     fn default() -> Self {
         Self {
             model_id: "openai/whisper-base".into(),
-            vad_model_path: None,
             chunk_seconds: 30.0,
             chunk_overlap_seconds: 5.0,
         }
@@ -91,11 +87,11 @@ impl Default for WhisperStreamingConfig {
 impl WhisperStreamingBackend {
     /// Construct a new streaming backend from `config`.
     ///
-    /// Cheap and synchronous: no weights are loaded. The Silero VAD
-    /// ONNX downloads on the first call to [`Self::vad_owned_mut`] (or
-    /// is loaded from `config.vad_model_path` if set); the candle
-    /// Whisper weights download on the first inference through the
-    /// decoder surfaced by [`Self::decoder_owned_mut`].
+    /// Cheap and synchronous: no weights are loaded. The Silero VAD is
+    /// built from the embedded model on the first call to
+    /// [`Self::vad_owned_mut`] (no I/O); the candle Whisper weights
+    /// download on the first inference through the decoder surfaced by
+    /// [`Self::decoder_owned_mut`].
     #[must_use]
     pub fn new(config: WhisperStreamingConfig) -> Self {
         let id = format!("whisper-streaming:{}", config.model_id);
@@ -113,35 +109,25 @@ impl WhisperStreamingBackend {
         &self.config
     }
 
-    /// Lazily materialise the Silero VAD model and return an *owned*
-    /// guard holding the populated slot.
+    /// Lazily materialise the Silero VAD and return an *owned* guard
+    /// holding the populated slot.
     ///
-    /// On first call, either:
-    /// - loads from [`WhisperStreamingConfig::vad_model_path`] if it's
-    ///   `Some`, or
-    /// - downloads `silero_vad.onnx` from the pinned `HuggingFace`
-    ///   mirror (see [`vad`] module docs).
-    ///
-    /// Subsequent calls return the existing instance. The returned
-    /// [`OwnedMutexGuard`] can be moved into a spawned task — this is
-    /// how [`SttBackend::stream`] keeps the VAD locked for the entire
-    /// duration of the streaming pipeline.
+    /// The Silero VAD is built from the model embedded in the binary
+    /// ([`vad`] module docs) — no I/O or network. Subsequent calls return
+    /// the existing instance. The returned [`OwnedMutexGuard`] can be moved
+    /// into a spawned task — this is how [`SttBackend::stream`] keeps the
+    /// VAD locked for the entire duration of the streaming pipeline.
     ///
     /// # Errors
     ///
-    /// Propagates any [`SttError::ModelLoad`] from the underlying
-    /// constructor.
+    /// Propagates any [`SttError::ModelLoad`] from building the embedded
+    /// model (effectively never on a healthy build).
     pub(crate) async fn vad_owned_mut(
         &self,
     ) -> Result<OwnedMutexGuard<Option<SileroVad>>, SttError> {
         let mut guard = Arc::clone(&self.vad).lock_owned().await;
         if guard.is_none() {
-            let vad = if let Some(path) = &self.config.vad_model_path {
-                SileroVad::from_path(Path::new(path), vad::SileroVadConfig::default())?
-            } else {
-                SileroVad::from_hf(vad::SileroVadConfig::default()).await?
-            };
-            *guard = Some(vad);
+            *guard = Some(SileroVad::new(vad::SileroVadConfig::default())?);
         }
         Ok(guard)
     }
@@ -227,12 +213,10 @@ impl SttBackend for WhisperStreamingBackend {
     ///
     /// # Errors
     ///
-    /// Returns [`SttError::ModelLoad`] when the Silero VAD ONNX cannot
-    /// be loaded (HF download failure or bad
-    /// [`WhisperStreamingConfig::vad_model_path`]) or when
-    /// [`ChunkedWhisperDecoder::new`] rejects the config. Pipeline-time
-    /// failures (decoder inference, malformed frames) propagate as
-    /// `Err` items inside the returned stream.
+    /// Returns [`SttError::ModelLoad`] when the embedded Silero VAD cannot
+    /// be built, or when [`ChunkedWhisperDecoder::new`] rejects the config.
+    /// Pipeline-time failures (decoder inference, malformed frames)
+    /// propagate as `Err` items inside the returned stream.
     async fn stream(
         &self,
         audio: Pin<Box<dyn Stream<Item = Vec<f32>> + Send>>,
@@ -258,7 +242,6 @@ mod tests {
     fn default_config_uses_whisper_base() {
         let cfg = WhisperStreamingConfig::default();
         assert_eq!(cfg.model_id, "openai/whisper-base");
-        assert!(cfg.vad_model_path.is_none());
         assert!((cfg.chunk_seconds - 30.0).abs() < f32::EPSILON);
         assert!((cfg.chunk_overlap_seconds - 5.0).abs() < f32::EPSILON);
     }
@@ -293,7 +276,6 @@ mod tests {
             model_id: "openai/whisper-tiny".into(),
             chunk_seconds: 20.0,
             chunk_overlap_seconds: 3.0,
-            ..WhisperStreamingConfig::default()
         };
         let be = WhisperStreamingBackend::new(cfg);
         assert_eq!(be.config().model_id, "openai/whisper-tiny");
@@ -332,97 +314,43 @@ mod tests {
     }
 
     #[tokio::test(flavor = "current_thread")]
-    async fn vad_owned_mut_prefers_vad_model_path_over_hf_download() {
-        // Pointing `vad_model_path` at a non-existent file forces the
-        // `from_path` branch to be selected (and to fail with
-        // `ModelLoad`) — which is exactly the assertion we want: the
-        // HF download path would have been pointed at the network and
-        // succeeded (or at least failed with a different error
-        // signature). A `ModelLoad("silero-vad ort load …")` here proves
-        // we routed to `from_path`, never to `from_hf` (which would error
-        // with a `silero-vad hf-hub …` prefix).
-        let cfg = WhisperStreamingConfig {
-            vad_model_path: Some(
-                "/nonexistent/blazen-audio-stt/vad-precedence-sentinel.onnx".into(),
-            ),
-            ..WhisperStreamingConfig::default()
-        };
-        let be = WhisperStreamingBackend::new(cfg);
-        let err = be
-            .vad_owned_mut()
-            .await
-            .expect_err("nonexistent path must fail to load");
-        match err {
-            SttError::ModelLoad(msg) => assert!(
-                msg.starts_with("silero-vad ort"),
-                "vad_model_path must route through SileroVad::from_path, not from_hf; got: {msg}"
-            ),
-            other => panic!("expected ModelLoad from from_path, got {other:?}"),
-        }
-    }
-
-    // Live HF integration test. Downloads ~2.3 MB from
-    // `deepghs/silero-vad-onnx` (pinned by SHA) on first run; cached
-    // afterwards. Skipped by default — unlock with `--ignored`:
-    //
-    // ```sh
-    // cargo nextest run -p blazen-audio-stt --features whisper-streaming \
-    //     vad_owned_mut_downloads_from_hf_on_first_call -- --ignored
-    // ```
-    #[tokio::test(flavor = "current_thread")]
-    #[ignore = "downloads ~2.3 MB from huggingface.co"]
-    async fn vad_owned_mut_downloads_from_hf_on_first_call() {
+    async fn vad_owned_mut_loads_embedded_model() {
+        // The Silero VAD is built from the embedded ONNX — no network, no
+        // path. First call populates the slot; the second reuses it.
         let be = WhisperStreamingBackend::new(WhisperStreamingConfig::default());
-        let guard = be.vad_owned_mut().await.expect("hf-hub download");
-        assert!(guard.is_some(), "vad slot must be populated after call");
-    }
-
-    /// Empty input stream — when the Silero VAD fails to load (bad
-    /// path here), the error propagates synchronously from `stream()`
-    /// itself rather than landing inside the boxed result stream. That
-    /// exercises the eager-init contract of the pipeline.
-    #[tokio::test(flavor = "current_thread")]
-    async fn stream_propagates_vad_load_failure_eagerly() {
-        use futures_util::stream;
-
-        let cfg = WhisperStreamingConfig {
-            vad_model_path: Some("/nonexistent/whisper-streaming-eager-init.onnx".into()),
-            ..WhisperStreamingConfig::default()
-        };
-        let be = WhisperStreamingBackend::new(cfg);
-        let empty: Pin<Box<dyn Stream<Item = Vec<f32>> + Send>> = Box::pin(stream::empty());
-        match be.stream(empty, None).await {
-            Ok(_) => panic!("bad vad path must fail eagerly"),
-            Err(err) => assert!(
-                matches!(err, SttError::ModelLoad(_)),
-                "expected ModelLoad, got {err:?}"
-            ),
+        {
+            let guard = be
+                .vad_owned_mut()
+                .await
+                .expect("build embedded silero-vad");
+            assert!(guard.is_some(), "vad slot must be populated after call");
         }
+        let guard = be.vad_owned_mut().await.expect("reuse");
+        assert!(guard.is_some());
     }
 
-    /// End-to-end live test: download Silero VAD (v5, via `from_hf`), load
-    /// candle Whisper, stream a synthetic 5-second 440 Hz tone through
+    /// End-to-end live test: build the embedded Silero VAD, load candle
+    /// Whisper, stream a synthetic 5-second 440 Hz tone through
     /// `SttBackend::stream`, and assert at least one final emission
     /// arrives (its `text` may be empty — Whisper rarely transcribes
     /// pure sine waves to anything meaningful, and Silero v5 doesn't flag a
     /// pure tone as speech — but the pipeline must reach the `finalize`
     /// path and emit the terminal record).
     ///
-    /// Skipped by default (`#[ignore]`). Unlock with:
+    /// Skipped by default (`#[ignore]`) because it downloads candle
+    /// whisper-base weights. Unlock with:
     ///
     /// ```sh
     /// cargo nextest run -p blazen-audio-stt --features whisper-streaming \
     ///     stream_emits_at_least_one_chunk_for_synthetic_tone -- --ignored
     /// ```
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    #[ignore = "downloads the Silero VAD ONNX + candle whisper-base weights"]
+    #[ignore = "downloads candle whisper-base weights"]
     async fn stream_emits_at_least_one_chunk_for_synthetic_tone() {
         use futures_util::StreamExt;
         use futures_util::stream;
 
         let cfg = WhisperStreamingConfig {
-            // `None` → the backend downloads the Silero VAD via `from_hf`.
-            vad_model_path: None,
             // Shorter chunks → less audio needed before a flush fires.
             chunk_seconds: 5.0,
             chunk_overlap_seconds: 1.0,
