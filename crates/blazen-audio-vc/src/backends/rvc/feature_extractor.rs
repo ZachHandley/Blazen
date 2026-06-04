@@ -14,16 +14,18 @@
 //! | layer | in -> out  | kernel | stride | norm                  |
 //! |------:|------------|-------:|-------:|-----------------------|
 //! | 0     | 1 -> 512   | 10     | 5      | `GroupNorm(32, 512)`  |
-//! | 1     | 512 -> 512 | 3      | 2      | channel-`LayerNorm`   |
-//! | 2     | 512 -> 512 | 3      | 2      | channel-`LayerNorm`   |
-//! | 3     | 512 -> 512 | 3      | 2      | channel-`LayerNorm`   |
-//! | 4     | 512 -> 512 | 3      | 2      | channel-`LayerNorm`   |
-//! | 5     | 512 -> 512 | 2      | 2      | channel-`LayerNorm`   |
-//! | 6     | 512 -> 512 | 2      | 2      | channel-`LayerNorm`   |
+//! | 1     | 512 -> 512 | 3      | 2      | none                  |
+//! | 2     | 512 -> 512 | 3      | 2      | none                  |
+//! | 3     | 512 -> 512 | 3      | 2      | none                  |
+//! | 4     | 512 -> 512 | 3      | 2      | none                  |
+//! | 5     | 512 -> 512 | 2      | 2      | none                  |
+//! | 6     | 512 -> 512 | 2      | 2      | none                  |
 //!
-//! Every layer is `Conv1d(no bias) -> Norm -> GELU(erf)`. The fairseq
-//! reference uses `nn.functional.gelu` (the exact, erf-based form), so
-//! we match that with `Tensor::gelu_erf` rather than the tanh
+//! This is fairseq's `extractor_mode="default"` (what `hubert_base.pt`
+//! ships): layer 0 is `Conv1d(no bias) -> GroupNorm -> GELU(erf)`, layers
+//! 1..=6 are `Conv1d(no bias) -> GELU(erf)` with no normalization. The
+//! fairseq reference uses `nn.functional.gelu` (the exact, erf-based
+//! form), so we match that with `Tensor::gelu_erf` rather than the tanh
 //! approximation.
 //!
 //! The combined stride is `5 * 2 * 2 * 2 * 2 * 2 * 2 = 320`, which is
@@ -48,7 +50,7 @@
 //!
 //! - `conv_layers.{i}.0.weight` -- conv kernel `(out, in, k)`, no bias
 //! - Layer 0 norm: `conv_layers.0.2.{weight,bias}` -- `GroupNorm(32, 512)`
-//! - Layers 1..=6 norm: `conv_layers.{i}.2.1.{weight,bias}` -- `LayerNorm(512)`
+//! - Layers 1..=6: no norm tensors (bare conv + GELU)
 //!
 //! This matches the table at the top of [`super::content`] (the
 //! fairseq -> candle remap that [`super::hubert::HubertBase::load`]
@@ -65,9 +67,7 @@
 #![allow(clippy::needless_pass_by_value)]
 
 use candle_core::{Module, Result, Tensor};
-use candle_nn::{
-    Conv1d, Conv1dConfig, GroupNorm, LayerNorm, VarBuilder, conv1d_no_bias, group_norm, layer_norm,
-};
+use candle_nn::{Conv1d, Conv1dConfig, GroupNorm, VarBuilder, conv1d_no_bias, group_norm};
 
 /// LayerNorm / GroupNorm epsilon. Fairseq's `Fp32LayerNorm` and
 /// `Fp32GroupNorm` both default to PyTorch's `1e-5`.
@@ -88,35 +88,22 @@ const GROUP_NORM_GROUPS: usize = 32;
 /// canonical `conv_feature_layers` default.
 const LAYER_SHAPES: [(usize, usize); 7] = [(10, 5), (3, 2), (3, 2), (3, 2), (3, 2), (2, 2), (2, 2)];
 
-/// One conv-stack layer: `Conv1d -> (GroupNorm | channel-LayerNorm) -> GELU(erf)`.
+/// One conv-stack layer: `Conv1d -> (GroupNorm?) -> GELU(erf)`.
 ///
-/// Only one of `gn` / `ln` is `Some` per instance -- layer 0 carries the
-/// `GroupNorm`, layers 1..=6 carry the channel-`LayerNorm` (applied
-/// after a transpose so it sees the channel dim as the last axis, then
-/// transposed back; this is fairseq's `Fp32LayerNorm` convention).
+/// `hubert_base.pt` ships fairseq's `extractor_mode="default"` topology:
+/// only layer 0 carries a `GroupNorm`; layers 1..=6 are bare
+/// `Conv1d -> Dropout(paramless) -> GELU` with no normalization.
 struct FeatureLayer {
     conv: Conv1d,
     gn: Option<GroupNorm>,
-    ln: Option<LayerNorm>,
 }
 
 impl FeatureLayer {
     fn forward(&self, xs: &Tensor) -> Result<Tensor> {
         let xs = self.conv.forward(xs)?;
-        let xs = match (&self.gn, &self.ln) {
-            (Some(gn), None) => gn.forward(&xs)?,
-            (None, Some(ln)) => {
-                // Channel-axis LayerNorm: (B, C, T) -> (B, T, C),
-                // normalize the trailing C axis, then transpose back.
-                // Matches fairseq's `Fp32LayerNorm` placement.
-                let h = xs.transpose(1, 2)?.contiguous()?;
-                let h = ln.forward(&h)?;
-                h.transpose(1, 2)?.contiguous()?
-            }
-            // The `load` impl always installs exactly one normalizer per
-            // layer, so neither of the remaining match arms is reachable
-            // in practice. Bail loudly if anything ever desyncs them.
-            _ => candle_core::bail!("FeatureLayer must carry exactly one of GroupNorm / LayerNorm"),
+        let xs = match &self.gn {
+            Some(gn) => gn.forward(&xs)?,
+            None => xs,
         };
         xs.gelu_erf()
     }
@@ -154,27 +141,23 @@ impl FeatureExtractor {
             // (sequential index `0` inside the per-layer module), with
             // no bias.
             let conv = conv1d_no_bias(in_channels, HIDDEN_CHANNELS, kernel, cfg, layer_vb.pp("0"))?;
-            let (gn, ln) = if i == 0 {
-                // Layer 0: `conv_layers.0.2.{weight,bias}` is the
+            let gn = if i == 0 {
+                // Layer 0 only: `conv_layers.0.2.{weight,bias}` is the
                 // `GroupNorm(32, 512)`. Sequential index `2` lands
                 // directly on the `GroupNorm` module (no inner wrapper).
-                let gn = group_norm(
+                Some(group_norm(
                     GROUP_NORM_GROUPS,
                     HIDDEN_CHANNELS,
                     NORM_EPS,
                     layer_vb.pp("2"),
-                )?;
-                (Some(gn), None)
+                )?)
             } else {
-                // Layers 1..=6: `conv_layers.{i}.2.1.{weight,bias}` is
-                // the channel-`LayerNorm(512)`. Sequential index `2.1`
-                // because fairseq nests `[TransposeLast, Fp32LayerNorm,
-                // TransposeLast]` -- only the middle module (index `1`)
-                // carries weights.
-                let ln = layer_norm(HIDDEN_CHANNELS, NORM_EPS, layer_vb.pp("2").pp("1"))?;
-                (None, Some(ln))
+                // Layers 1..=6 carry no normalization in fairseq's
+                // `extractor_mode="default"` — the per-layer module is
+                // just `Conv1d -> Dropout -> GELU`.
+                None
             };
-            layers.push(FeatureLayer { conv, gn, ln });
+            layers.push(FeatureLayer { conv, gn });
         }
         Ok(Self { layers })
     }

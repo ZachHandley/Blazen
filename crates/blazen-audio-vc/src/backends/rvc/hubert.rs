@@ -184,12 +184,18 @@ impl HubertBase {
     ///   shape / dtype mismatch against the canonical HuBERT-base
     ///   topology.
     pub(super) fn load(weights_path: &Path, device: &Device) -> Result<Self, ContentError> {
-        let vb = VarBuilder::from_pth(weights_path, DType::F32, device).map_err(|e| {
-            ContentError::ModelLoad(format!(
-                "hubert load: VarBuilder::from_pth({}) failed: {e}",
-                weights_path.display()
-            ))
-        })?;
+        // `hubert_base.pt` is a fairseq checkpoint: the state-dict lives
+        // under the top-level `model` key (alongside `args`, `cfg`,
+        // `optimizer_history`, …). Plain `from_pth` reads the outer dict and
+        // finds no `feature_extractor.*` tensors, so route through the
+        // state-keyed variant to descend into `model`.
+        let vb = VarBuilder::from_pth_with_state(weights_path, DType::F32, "model", device)
+            .map_err(|e| {
+                ContentError::ModelLoad(format!(
+                    "hubert load: VarBuilder::from_pth_with_state({}, key=model) failed: {e}",
+                    weights_path.display()
+                ))
+            })?;
         Self::from_vb(vb, device)
     }
 

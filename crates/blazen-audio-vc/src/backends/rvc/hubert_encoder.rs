@@ -312,26 +312,26 @@ impl PosConv {
         // For HuBERT-base: (768, 48, 128).
         let weight_v = vb.get((embed_dim, in_per_group, POS_CONV_KERNEL), "weight_v")?;
 
-        // weight_g is the per-output-channel gain. Most fairseq
-        // checkpoints save it as [out, 1, 1]; some serialisers (and the
-        // raw `.parametrize` storage in newer PyTorch) flatten it to
-        // [out]. Try the canonical shape first, fall back to the flat
-        // form via `get_unchecked`.
+        // fairseq's pos-conv uses `weight_norm(conv, name="weight",
+        // dim=2)`, so `weight_g` is a *per-kernel-position* gain of shape
+        // [1, 1, kernel] (= [1, 1, 128]) — NOT the per-output-channel
+        // [out, 1, 1] of the default `dim=0`. Try that canonical shape,
+        // falling back to a flat [kernel] serialisation.
         let weight_g = vb
-            .get((embed_dim, 1, 1), "weight_g")
-            .or_else(|_| vb.get(embed_dim, "weight_g")?.reshape((embed_dim, 1, 1)))?;
+            .get((1, 1, POS_CONV_KERNEL), "weight_g")
+            .or_else(|_| vb.get(POS_CONV_KERNEL, "weight_g")?.reshape((1, 1, POS_CONV_KERNEL)))?;
 
         // Bias is a normal per-output-channel tensor.
         let bias = vb.get(embed_dim, "bias")?;
 
-        // PyTorch `weight_norm(dim=0)`: synthesize
+        // PyTorch `weight_norm(dim=2)`: synthesize
         //   weight = weight_g * weight_v / ||weight_v||
-        // where the L2 norm is taken jointly over axes (1, 2) -- the
-        // input-channel and kernel dims -- keeping output channels
-        // (axis 0) independent. `sum_keepdim((1, 2))` preserves the
-        // leading axis so the broadcast against `weight_g` works
-        // element-wise without an extra reshape.
-        let norm = weight_v.sqr()?.sum_keepdim((1, 2))?.sqrt()?;
+        // where the L2 norm is taken jointly over axes (0, 1) -- the
+        // output-channel and input-channel dims -- keeping the kernel
+        // position (axis 2) independent. `sum_keepdim((0, 1))` preserves
+        // the trailing axis so the broadcast against the [1, 1, kernel]
+        // `weight_g` works element-wise.
+        let norm = weight_v.sqr()?.sum_keepdim((0, 1))?.sqrt()?;
         let weight = weight_g.broadcast_mul(&weight_v.broadcast_div(&norm)?)?;
 
         // Construct the Conv1d by hand: `candle_nn::conv1d` expects a
