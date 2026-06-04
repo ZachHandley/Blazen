@@ -200,8 +200,15 @@ serde_yml = "0.0.12"
 regex = "1"
 indexmap = { version = "2", features = ["serde"] }
 
-# Model caching / download
-hf-hub = { version = "0.5", default-features = false }
+# Model caching / download.
+# `rustls-tls` gives the async (`tokio`/reqwest) consumers a bundled
+# webpki-roots CA bundle — without it, `default-features = false` strips
+# hf-hub's default `native-tls` and the `tokio` feature builds reqwest with
+# NO TLS backend, so every HTTPS download fails with "error sending request"
+# on hosts without a system CA store (e.g. the GPU CI runner). The `ureq`
+# consumers already bundle rustls and are unaffected (the feature is
+# `reqwest?/rustls-tls`, a no-op when reqwest isn't enabled).
+hf-hub = { version = "0.5", default-features = false, features = ["rustls-tls"] }
 
 # Candle ML framework (local inference)
 candle-core = "0.10"

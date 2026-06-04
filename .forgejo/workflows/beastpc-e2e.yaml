@@ -148,13 +148,17 @@ jobs:
 
       - name: LLM E2E — mistralrs
         if: ${{ !cancelled() }}
-        run: cargo nextest run -p blazen-llm-mistralrs --run-ignored only --test-threads=1 --no-fail-fast
+        # `--no-tests=pass`: this crate exposes no `#[ignore]` GPU smoke tests,
+        # so `--run-ignored only` matches 0 tests; treat that as a pass rather
+        # than nextest's default exit-4 "no tests to run".
+        run: cargo nextest run -p blazen-llm-mistralrs --run-ignored only --test-threads=1 --no-fail-fast --no-tests=pass
         env:
           BLAZEN_HF_TOKEN: ${{ secrets.BLAZEN_HF_TOKEN }}
 
       - name: Image diffusion E2E
         if: ${{ !cancelled() }}
-        run: cargo nextest run -p blazen-image-diffusion --run-ignored only --test-threads=1 --no-fail-fast
+        # `--no-tests=pass`: no `#[ignore]` GPU smoke tests in this crate yet.
+        run: cargo nextest run -p blazen-image-diffusion --run-ignored only --test-threads=1 --no-fail-fast --no-tests=pass
         env:
           BLAZEN_HF_TOKEN: ${{ secrets.BLAZEN_HF_TOKEN }}
 
@@ -164,7 +168,8 @@ jobs:
       # -------------------------------------------------------------------
       - name: 3D E2E — compat-proxy (mocked HTTP)
         if: ${{ !cancelled() }}
-        run: cargo nextest run -p blazen-3d --features compat-proxy --run-ignored only --test-threads=1 --no-fail-fast
+        # `--no-tests=pass`: no `#[ignore]` GPU smoke tests in this crate yet.
+        run: cargo nextest run -p blazen-3d --features compat-proxy --run-ignored only --test-threads=1 --no-fail-fast --no-tests=pass
 
       # - name: 3D E2E — blazen-3d-core (TripoSR native)
       #   # Activate this line once blazen-3d-core ships its TripoSR native port.
@@ -208,7 +213,16 @@ jobs:
           BLAZEN_TEST_F5: "1"
           BLAZEN_TEST_RVC: "1"
           BLAZEN_TEST_WHISPER_STREAMING: "1"
-        run: uv run --no-sync pytest tests/python/ -k gpu -p no:xdist
+        # pytest exits 5 when `-k gpu` collects 0 tests; treat that as a pass
+        # (no GPU-tagged Python smokes present) rather than a step failure.
+        run: |
+          uv run --no-sync pytest tests/python/ -k gpu -p no:xdist
+          rc=$?
+          if [ "$rc" -eq 5 ]; then
+            echo "no '-k gpu' Python tests collected — skipping."
+            exit 0
+          fi
+          exit "$rc"
 
       - name: Setup Node
         if: ${{ !cancelled() }}
