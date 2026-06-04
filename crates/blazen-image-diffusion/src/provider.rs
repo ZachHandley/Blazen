@@ -287,6 +287,35 @@ mod tests {
         assert_eq!(provider.scheduler(), DiffusionScheduler::EulerA);
     }
 
+    /// GPU/inference smoke: download a fast diffusion model and generate one
+    /// image. Gated on `engine` (the real generate path) and `#[ignore]`'d so
+    /// the beastpc-e2e `--run-ignored only` step runs it. Uses SD-Turbo at a
+    /// single step for speed. Runs on CPU unless the binary enables
+    /// `diffusion-rs/cuda` (the crate-level `cuda` feature is a marker — see
+    /// Cargo.toml).
+    #[cfg(feature = "engine")]
+    #[tokio::test]
+    #[ignore = "downloads an SD-Turbo diffusion model + generates an image"]
+    async fn smoke_generate_image() {
+        let opts = DiffusionOptions {
+            model_id: Some("sd-turbo".into()),
+            num_inference_steps: Some(1),
+            ..DiffusionOptions::default()
+        };
+        let provider = DiffusionProvider::from_options(opts).expect("options valid");
+        let image = provider
+            .generate_image_inherent("a red square".into(), None, Some(512), Some(512))
+            .await
+            .expect("image generation should succeed");
+        assert!(!image.bytes.is_empty(), "should produce non-empty image bytes");
+        assert!(
+            image.width > 0 && image.height > 0,
+            "image should have positive dimensions, got {}x{}",
+            image.width,
+            image.height
+        );
+    }
+
     #[test]
     fn from_options_with_custom_values() {
         let opts = DiffusionOptions {

@@ -148,17 +148,19 @@ jobs:
 
       - name: LLM E2E — mistralrs
         if: ${{ !cancelled() }}
-        # `--no-tests=pass`: this crate exposes no `#[ignore]` GPU smoke tests,
-        # so `--run-ignored only` matches 0 tests; treat that as a pass rather
-        # than nextest's default exit-4 "no tests to run".
-        run: cargo nextest run -p blazen-llm-mistralrs --run-ignored only --test-threads=1 --no-fail-fast --no-tests=pass
+        # `engine` compiles in the real inference path the `#[ignore]` smoke
+        # exercises (downloads TinyLlama, generates text). Runs on CPU — the
+        # crate-level `cuda` is a marker; real GPU needs `mistralrs/cuda` at
+        # the binary level (see the crate Cargo.toml).
+        run: cargo nextest run -p blazen-llm-mistralrs --features engine --run-ignored only --test-threads=1 --no-fail-fast
         env:
           BLAZEN_HF_TOKEN: ${{ secrets.BLAZEN_HF_TOKEN }}
 
       - name: Image diffusion E2E
         if: ${{ !cancelled() }}
-        # `--no-tests=pass`: no `#[ignore]` GPU smoke tests in this crate yet.
-        run: cargo nextest run -p blazen-image-diffusion --run-ignored only --test-threads=1 --no-fail-fast --no-tests=pass
+        # `engine` compiles in the real generate path the `#[ignore]` smoke
+        # exercises (downloads SD-Turbo, generates an image).
+        run: cargo nextest run -p blazen-image-diffusion --features engine --run-ignored only --test-threads=1 --no-fail-fast
         env:
           BLAZEN_HF_TOKEN: ${{ secrets.BLAZEN_HF_TOKEN }}
 
@@ -168,8 +170,7 @@ jobs:
       # -------------------------------------------------------------------
       - name: 3D E2E — compat-proxy (mocked HTTP)
         if: ${{ !cancelled() }}
-        # `--no-tests=pass`: no `#[ignore]` GPU smoke tests in this crate yet.
-        run: cargo nextest run -p blazen-3d --features compat-proxy --run-ignored only --test-threads=1 --no-fail-fast --no-tests=pass
+        run: cargo nextest run -p blazen-3d --features compat-proxy --run-ignored only --test-threads=1 --no-fail-fast
 
       # - name: 3D E2E — blazen-3d-core (TripoSR native)
       #   # Activate this line once blazen-3d-core ships its TripoSR native port.

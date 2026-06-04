@@ -551,6 +551,44 @@ mod tests {
         B64.encode(bytes)
     }
 
+    /// Integration smoke for the compat-proxy path (mocked HTTP): exercises
+    /// the full texturize round-trip — request build, POST, base64 decode.
+    /// `#[ignore]`'d so the beastpc-e2e `--run-ignored only` step runs it;
+    /// needs no network, model, or GPU (it's the mocked-HTTP backend).
+    #[tokio::test]
+    #[ignore = "compat-proxy smoke (mocked HTTP); run via --run-ignored only"]
+    async fn smoke_compat_proxy_texturize_roundtrip() {
+        let mut server = mockito::Server::new_async().await;
+        let body = serde_json::json!({
+            "textured_glb_b64": b64(b"SMOKE_GLB"),
+            "mime_type": "model/gltf-binary",
+        })
+        .to_string();
+        let m = server
+            .mock("POST", "/v1/3d/texturize")
+            .with_status(200)
+            .with_header("content-type", "application/json")
+            .with_body(body)
+            .create_async()
+            .await;
+
+        let provider = Compat3dProvider::new(server.url());
+        let req = TexturizeRequest {
+            prompt: Some("smoke".into()),
+            reference_image: None,
+            style: None,
+            resolution: Some(512),
+            pbr: false,
+        };
+        let out = provider
+            .texturize(b"GLB_IN", req)
+            .await
+            .expect("compat-proxy texturize smoke");
+        m.assert_async().await;
+        assert_eq!(out.textured_glb, b"SMOKE_GLB");
+        assert_eq!(out.mime_type, "model/gltf-binary");
+    }
+
     #[tokio::test]
     async fn texturize_success() {
         let mut server = mockito::Server::new_async().await;

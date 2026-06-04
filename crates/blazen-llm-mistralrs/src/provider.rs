@@ -1030,6 +1030,43 @@ mod tests {
         assert!(result.is_err());
     }
 
+    /// GPU/inference smoke: download a small chat model and generate text.
+    /// Gated on `engine` (the real inference path) and `#[ignore]`'d so the
+    /// beastpc-e2e `--run-ignored only` step runs it. Runs on CPU unless the
+    /// binary additionally enables `mistralrs/cuda` (the crate-level `cuda`
+    /// feature is a marker — see Cargo.toml).
+    #[cfg(feature = "engine")]
+    #[tokio::test]
+    #[ignore = "downloads ~1 GB Qwen2.5-0.5B-Instruct + runs inference"]
+    async fn smoke_generate_small_model() {
+        // A small FULL HF model (safetensors + tokenizer.json) — the provider
+        // builds via `TextModelBuilder`, which needs a tokenizer.json that
+        // GGUF-only repos don't ship.
+        let opts = MistralRsOptions {
+            context_length: Some(2048),
+            ..MistralRsOptions::required("Qwen/Qwen2.5-0.5B-Instruct")
+        };
+        let provider = MistralRsProvider::from_options(opts).expect("options valid");
+        provider.load().await.expect("model should load");
+
+        let messages = vec![
+            ChatMessageInput::text(ChatRole::System, "You are a helpful assistant."),
+            ChatMessageInput::text(ChatRole::User, "What is 2 + 2? Answer in one word."),
+        ];
+        let result = provider
+            .infer(messages)
+            .await
+            .expect("inference should succeed");
+        assert!(
+            result.content.as_deref().is_some_and(|c| !c.is_empty()),
+            "should produce non-empty text"
+        );
+        assert!(
+            result.usage.completion_tokens > 0,
+            "should produce completion tokens"
+        );
+    }
+
     #[test]
     fn engine_not_available_display() {
         let err = MistralRsError::EngineNotAvailable;
