@@ -1395,10 +1395,10 @@ impl FalProvider {
         }
 
         // Tool choice (provider-agnostic canonical -> OpenAI chat wire form).
-        if let Some(ref tc) = request.tool_choice {
-            if let Some(wire) = crate::providers::tool_choice_to_openai(tc) {
-                body["tool_choice"] = wire;
-            }
+        if let Some(ref tc) = request.tool_choice
+            && let Some(wire) = crate::providers::tool_choice_to_openai(tc)
+        {
+            body["tool_choice"] = wire;
         }
 
         if let Some(t) = request.temperature {
@@ -1464,10 +1464,10 @@ impl FalProvider {
                     "none" => Some(serde_json::json!("none")),
                     _ => None,
                 }
-            } else if let Some(name) = tc.get("name").and_then(serde_json::Value::as_str) {
-                Some(serde_json::json!({ "type": "function", "name": name }))
             } else {
-                None
+                tc.get("name")
+                    .and_then(serde_json::Value::as_str)
+                    .map(|name| serde_json::json!({ "type": "function", "name": name }))
             };
             if let Some(wire) = wire {
                 body["tool_choice"] = wire;

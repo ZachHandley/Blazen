@@ -346,10 +346,10 @@ impl OpenAiCompatProvider {
         }
 
         // Tool choice (provider-agnostic canonical -> OpenAI wire form).
-        if let Some(ref tc) = request.tool_choice {
-            if let Some(wire) = super::tool_choice_to_openai(tc) {
-                body["tool_choice"] = wire;
-            }
+        if let Some(ref tc) = request.tool_choice
+            && let Some(wire) = super::tool_choice_to_openai(tc)
+        {
+            body["tool_choice"] = wire;
         }
 
         // Multimodal output modalities

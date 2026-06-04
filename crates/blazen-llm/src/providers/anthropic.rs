@@ -368,6 +368,7 @@ impl AnthropicProvider {
     /// Key differences from `OpenAI`:
     /// - System messages are extracted into the top-level `system` field.
     /// - `max_tokens` is always present (required by the API).
+    #[allow(clippy::too_many_lines)]
     fn build_body(&self, request: &ModelRequest, stream: bool) -> serde_json::Value {
         let model = request.model.as_deref().unwrap_or(&self.default_model);
 
@@ -480,10 +481,10 @@ impl AnthropicProvider {
         }
 
         // Tool choice (provider-agnostic canonical -> Messages-API wire form).
-        if let Some(ref tc) = request.tool_choice {
-            if let Some(wire) = super::tool_choice_to_messages_api(tc) {
-                body["tool_choice"] = wire;
-            }
+        if let Some(ref tc) = request.tool_choice
+            && let Some(wire) = super::tool_choice_to_messages_api(tc)
+        {
+            body["tool_choice"] = wire;
         }
 
         body

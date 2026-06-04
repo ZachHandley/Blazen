@@ -209,8 +209,8 @@ fn is_provider_shaped(value: &serde_json::Value) -> bool {
     value.get("type").is_some()
 }
 
-/// Translate a canonical `tool_choice` to the OpenAI chat-completions wire
-/// form (used by OpenAI, OpenAI-compatible providers, Azure, Groq, and fal's
+/// Translate a canonical `tool_choice` to the `OpenAI` chat-completions wire
+/// form (used by `OpenAI`, OpenAI-compatible providers, Azure, Groq, and fal's
 /// OpenAI-style router).
 ///
 /// Returns `None` when the value cannot be interpreted (the builder should

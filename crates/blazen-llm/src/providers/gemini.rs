@@ -522,10 +522,10 @@ impl GeminiProvider {
         }
 
         // Tool choice (provider-agnostic canonical -> Gemini toolConfig form).
-        if let Some(ref tc) = request.tool_choice {
-            if let Some(wire) = super::tool_choice_to_gemini(tc) {
-                body["tool_config"] = wire;
-            }
+        if let Some(ref tc) = request.tool_choice
+            && let Some(wire) = super::tool_choice_to_gemini(tc)
+        {
+            body["tool_config"] = wire;
         }
 
         body
