@@ -8,7 +8,7 @@ Default mode (no flags) — used by the BUILD jobs (wheels/napi/uniffi/cabi):
     python3 scripts/stamp-version.py <VERSION>
 
     Stamps `0.0.0-dev` -> VERSION across every workspace `Cargo.toml`
-    (excluding `target/`), STRIPS `, registry = "forgejo"` off the root
+    (excluding `target/`), STRIPS `, registry = "zreg"` off the root
     `Cargo.toml` inter-crate deps (leaving plain `version` + `path` deps),
     and bumps the hand-written `package.json` files for `blazen-node`,
     `blazen-wasm-sdk`, `blazen-workers-alias`, and
@@ -16,19 +16,19 @@ Default mode (no flags) — used by the BUILD jobs (wheels/napi/uniffi/cabi):
 
     The strip matters: the cross-build environments (notably the musl
     wheel/napi containers) do NOT pick up the repo `.cargo/config.toml`
-    that defines the `forgejo` registry, so a `registry = "forgejo"` dep is
+    that defines the `zreg` registry, so a `registry = "zreg"` dep is
     an unknown registry there and the build fails. Path deps build fine
     without it. (Observed: run 674 stripped -> musl green; run 678 kept ->
     all three musl targets failed while gnu/darwin/windows passed.)
 
 Keep-registry mode — used ONLY by the publish-rust job:
-    python3 scripts/stamp-version.py <VERSION> --keep-forgejo-registry
+    python3 scripts/stamp-version.py <VERSION> --keep-registry
 
-    Same as default but KEEPS `, registry = "forgejo"` so `cargo publish
-    --registry forgejo` resolves each crate's sibling deps from the private
-    Forgejo cargo registry (not crates.io). The publish-rust job runs
-    setup-rust, which configures the forgejo registry + token, so the
-    registry resolves there.
+    Same as default but KEEPS `, registry = "zreg"` so `cargo publish
+    --registry zreg` resolves each crate's sibling deps from the private
+    ZRegistry (registry.blackleafdigital.com) cargo registry (not crates.io).
+    The publish-rust job mints a ZRegistry token + configures the zreg
+    registry, so the registry resolves there.
 
 Rename-wasm-pkg mode:
     python3 scripts/stamp-version.py <VERSION> --rename-wasm-pkg
@@ -55,8 +55,8 @@ PUBLISHED_WASM_NAME = "@blazen-dev/wasm"
 _PATH_DEP_RE = re.compile(r"^(\s*blazen-[a-z0-9-]+\s*=\s*\{)([^}\n]*)(\})", re.M)
 
 
-def _add_forgejo_registry_to_path_deps(text: str) -> str:
-    """Add `, registry = "forgejo"` to direct `blazen-* = { ... path = ... }`
+def _add_zreg_registry_to_path_deps(text: str) -> str:
+    """Add `, registry = "zreg"` to direct `blazen-* = { ... path = ... }`
     deps that lack a registry (skips `workspace = true` and already-tagged deps).
     """
 
@@ -64,7 +64,7 @@ def _add_forgejo_registry_to_path_deps(text: str) -> str:
         head, body, tail = m.group(1), m.group(2), m.group(3)
         if "registry" in body or "workspace" in body or "path" not in body:
             return m.group(0)
-        return f'{head}{body.rstrip()}, registry = "forgejo" {tail}'
+        return f'{head}{body.rstrip()}, registry = "zreg" {tail}'
 
     return _PATH_DEP_RE.sub(repl, text)
 
@@ -78,7 +78,7 @@ def _add_forgejo_registry_to_path_deps(text: str) -> str:
 _CROSS_REPO_PATH_RE = re.compile(r',\s*path\s*=\s*"\.\./[^/"]+/[^"]+"')
 
 
-def stamp_default(repo: pathlib.Path, version: str, keep_forgejo_registry: bool = False) -> None:
+def stamp_default(repo: pathlib.Path, version: str, keep_registry: bool = False) -> None:
     # 1. Every Cargo.toml: 0.0.0-dev -> VERSION, EXCEPT on lines that carry a
     # CROSS-REPO path dep (`path = "../X/Y/..."` — TWO or more segments after
     # `../`). Those reference an external sibling repo which has its OWN
@@ -101,17 +101,17 @@ def stamp_default(repo: pathlib.Path, version: str, keep_forgejo_registry: bool 
         if new != text:
             cargo.write_text(new)
 
-    # 2. Root Cargo.toml: STRIP `, registry = "forgejo"` off the inter-crate
+    # 2. Root Cargo.toml: STRIP `, registry = "zreg"` off the inter-crate
     # workspace deps by default — the cross-build envs (musl wheel/napi
     # containers) don't see the repo `.cargo/config.toml` that defines the
-    # `forgejo` registry, so the dep is an unknown registry there and the build
+    # `zreg` registry, so the dep is an unknown registry there and the build
     # fails (run 678: all musl targets failed; run 674, which stripped, passed).
-    # publish-rust passes --keep-forgejo-registry so `cargo publish --registry
-    # forgejo` resolves siblings from Forgejo (it configures the registry+token).
-    if not keep_forgejo_registry:
+    # publish-rust passes --keep-registry so `cargo publish --registry
+    # zreg` resolves siblings from ZRegistry (it configures the registry+token).
+    if not keep_registry:
         root_cargo = repo / "Cargo.toml"
         root_text = root_cargo.read_text()
-        root_cargo.write_text(root_text.replace(', registry = "forgejo"', ""))
+        root_cargo.write_text(root_text.replace(', registry = "zreg"', ""))
     else:
         # publish-rust path:
         #   (a) STRIP `, path = "../..."` from EVERY Cargo.toml — external
@@ -120,10 +120,10 @@ def stamp_default(repo: pathlib.Path, version: str, keep_forgejo_registry: bool 
         #       their manifest. With path stripped, cargo resolves those
         #       deps purely from the registry (the version pin is the
         #       sibling repo's own release version, set in step 1).
-        #   (b) Inject `, registry = "forgejo"` into every direct
+        #   (b) Inject `, registry = "zreg"` into every direct
         #       `blazen-* = { ... path = ... }` inline-table dep that
         #       lacks it (existing behavior — the 37 root
-        #       `workspace.dependencies` carry `registry = "forgejo"`,
+        #       `workspace.dependencies` carry `registry = "zreg"`,
         #       but inter-crate deps declared DIRECTLY in a member
         #       manifest do NOT — so on publish cargo resolves them
         #       from crates.io and fails).
@@ -132,7 +132,7 @@ def stamp_default(repo: pathlib.Path, version: str, keep_forgejo_registry: bool 
                 continue
             text = cargo.read_text()
             stripped = _CROSS_REPO_PATH_RE.sub("", text)
-            new = _add_forgejo_registry_to_path_deps(stripped)
+            new = _add_zreg_registry_to_path_deps(stripped)
             if new != text:
                 cargo.write_text(new)
 
@@ -209,14 +209,17 @@ def main() -> None:
         ),
     )
     parser.add_argument(
+        "--keep-registry",
         "--keep-forgejo-registry",
+        dest="keep_registry",
         action="store_true",
         help=(
-            "Keep `, registry = \"forgejo\"` on the root Cargo.toml inter-crate deps "
+            "Keep `, registry = \"zreg\"` on the root Cargo.toml inter-crate deps "
             "(default strips it). Pass this ONLY from the publish-rust job so "
-            "`cargo publish --registry forgejo` resolves siblings from Forgejo. "
-            "Build jobs must NOT pass it (their cross-build envs lack the forgejo "
-            "registry config and would fail to resolve the dep)."
+            "`cargo publish --registry zreg` resolves siblings from ZRegistry. "
+            "Build jobs must NOT pass it (their cross-build envs lack the zreg "
+            "registry config and would fail to resolve the dep). "
+            "`--keep-forgejo-registry` is accepted as a legacy alias."
         ),
     )
     args = parser.parse_args()
@@ -227,9 +230,9 @@ def main() -> None:
         rename_wasm_pkg(repo, args.version)
         print(f"renamed wasm pkg/package.json: name={PUBLISHED_WASM_NAME} version={args.version}")
     else:
-        stamp_default(repo, args.version, keep_forgejo_registry=args.keep_forgejo_registry)
-        kept = "kept" if args.keep_forgejo_registry else "stripped"
-        print(f"stamped version={args.version} (forgejo registry {kept})")
+        stamp_default(repo, args.version, keep_registry=args.keep_registry)
+        kept = "kept" if args.keep_registry else "stripped"
+        print(f"stamped version={args.version} (zreg registry {kept})")
 
 
 if __name__ == "__main__":

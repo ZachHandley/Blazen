@@ -147,44 +147,44 @@ redb = "4"
 redis = { version = "1", features = ["aio", "tokio-comp", "connection-manager"] }
 
 # Internal crates
-blazen-events = { version = "0.0.0-dev", path = "crates/blazen-events", registry = "forgejo" }
-blazen-macros = { version = "0.0.0-dev", path = "crates/blazen-macros", registry = "forgejo" }
-blazen-core = { version = "0.0.0-dev", path = "crates/blazen-core", registry = "forgejo" }
-blazen-llm = { version = "0.0.0-dev", path = "crates/blazen-llm", registry = "forgejo" }
-blazen-memory = { version = "0.0.0-dev", path = "crates/blazen-memory", registry = "forgejo" }
-blazen-memory-valkey = { version = "0.0.0-dev", path = "crates/blazen-memory-valkey", registry = "forgejo" }
-blazen-persist = { version = "0.0.0-dev", path = "crates/blazen-persist", registry = "forgejo" }
-blazen-pipeline = { version = "0.0.0-dev", path = "crates/blazen-pipeline", registry = "forgejo" }
-blazen-prompts = { version = "0.0.0-dev", path = "crates/blazen-prompts", registry = "forgejo" }
-blazen-telemetry = { version = "0.0.0-dev", path = "crates/blazen-telemetry", registry = "forgejo" }
-blazen-model-cache = { version = "0.0.0-dev", path = "crates/blazen-model-cache", registry = "forgejo" }
-blazen-embed = { version = "0.0.0-dev", path = "crates/blazen-embed", registry = "forgejo" }
-blazen-embed-fastembed = { version = "0.0.0-dev", path = "crates/blazen-embed-fastembed", registry = "forgejo" }
-blazen-embed-tract = { version = "0.0.0-dev", path = "crates/blazen-embed-tract", registry = "forgejo" }
-blazen-llm-mistralrs = { version = "0.0.0-dev", path = "crates/blazen-llm-mistralrs", registry = "forgejo" }
-blazen-audio = { version = "0.0.0-dev", path = "crates/blazen-audio", registry = "forgejo" }
-blazen-embed-candle = { version = "0.0.0-dev", path = "crates/blazen-embed-candle", registry = "forgejo" }
-blazen-image-diffusion = { version = "0.0.0-dev", path = "crates/blazen-image-diffusion", registry = "forgejo" }
-blazen-llm-candle = { version = "0.0.0-dev", path = "crates/blazen-llm-candle", registry = "forgejo" }
-blazen-llm-llamacpp = { version = "0.0.0-dev", path = "crates/blazen-llm-llamacpp", registry = "forgejo" }
-blazen-llm-vllm = { version = "0.0.0-dev", path = "crates/blazen-llm-vllm", registry = "forgejo" }
-blazen-llm-ollama = { version = "0.0.0-dev", path = "crates/blazen-llm-ollama", registry = "forgejo" }
-blazen-llm-llamacpp-server = { version = "0.0.0-dev", path = "crates/blazen-llm-llamacpp-server", registry = "forgejo" }
-blazen-llm-tgi = { version = "0.0.0-dev", path = "crates/blazen-llm-tgi", registry = "forgejo" }
-blazen-llm-lmstudio = { version = "0.0.0-dev", path = "crates/blazen-llm-lmstudio", registry = "forgejo" }
-blazen-audio-tts = { version = "0.0.0-dev", path = "crates/blazen-audio-tts", registry = "forgejo" }
-blazen-audio-piper-vendored = { version = "0.0.0-dev", path = "crates/blazen-audio-piper-vendored", registry = "forgejo" }
-blazen-audio-dac-vendored = { version = "0.0.0-dev", path = "crates/blazen-audio-dac-vendored", registry = "forgejo" }
-blazen-audio-stt = { version = "0.0.0-dev", path = "crates/blazen-audio-stt", registry = "forgejo" }
-blazen-audio-music = { version = "0.0.0-dev", path = "crates/blazen-audio-music", registry = "forgejo" }
-blazen-audio-codec = { version = "0.0.0-dev", path = "crates/blazen-audio-codec", registry = "forgejo" }
-blazen-audio-core = { version = "0.0.0-dev", path = "crates/blazen-audio-core", registry = "forgejo" }
-blazen-audio-vc = { version = "0.0.0-dev", path = "crates/blazen-audio-vc", registry = "forgejo" }
-blazen-peer = { version = "0.0.0-dev", path = "crates/blazen-peer", registry = "forgejo" }
+blazen-events = { version = "0.0.0-dev", path = "crates/blazen-events", registry = "zreg" }
+blazen-macros = { version = "0.0.0-dev", path = "crates/blazen-macros", registry = "zreg" }
+blazen-core = { version = "0.0.0-dev", path = "crates/blazen-core", registry = "zreg" }
+blazen-llm = { version = "0.0.0-dev", path = "crates/blazen-llm", registry = "zreg" }
+blazen-memory = { version = "0.0.0-dev", path = "crates/blazen-memory", registry = "zreg" }
+blazen-memory-valkey = { version = "0.0.0-dev", path = "crates/blazen-memory-valkey", registry = "zreg" }
+blazen-persist = { version = "0.0.0-dev", path = "crates/blazen-persist", registry = "zreg" }
+blazen-pipeline = { version = "0.0.0-dev", path = "crates/blazen-pipeline", registry = "zreg" }
+blazen-prompts = { version = "0.0.0-dev", path = "crates/blazen-prompts", registry = "zreg" }
+blazen-telemetry = { version = "0.0.0-dev", path = "crates/blazen-telemetry", registry = "zreg" }
+blazen-model-cache = { version = "0.0.0-dev", path = "crates/blazen-model-cache", registry = "zreg" }
+blazen-embed = { version = "0.0.0-dev", path = "crates/blazen-embed", registry = "zreg" }
+blazen-embed-fastembed = { version = "0.0.0-dev", path = "crates/blazen-embed-fastembed", registry = "zreg" }
+blazen-embed-tract = { version = "0.0.0-dev", path = "crates/blazen-embed-tract", registry = "zreg" }
+blazen-llm-mistralrs = { version = "0.0.0-dev", path = "crates/blazen-llm-mistralrs", registry = "zreg" }
+blazen-audio = { version = "0.0.0-dev", path = "crates/blazen-audio", registry = "zreg" }
+blazen-embed-candle = { version = "0.0.0-dev", path = "crates/blazen-embed-candle", registry = "zreg" }
+blazen-image-diffusion = { version = "0.0.0-dev", path = "crates/blazen-image-diffusion", registry = "zreg" }
+blazen-llm-candle = { version = "0.0.0-dev", path = "crates/blazen-llm-candle", registry = "zreg" }
+blazen-llm-llamacpp = { version = "0.0.0-dev", path = "crates/blazen-llm-llamacpp", registry = "zreg" }
+blazen-llm-vllm = { version = "0.0.0-dev", path = "crates/blazen-llm-vllm", registry = "zreg" }
+blazen-llm-ollama = { version = "0.0.0-dev", path = "crates/blazen-llm-ollama", registry = "zreg" }
+blazen-llm-llamacpp-server = { version = "0.0.0-dev", path = "crates/blazen-llm-llamacpp-server", registry = "zreg" }
+blazen-llm-tgi = { version = "0.0.0-dev", path = "crates/blazen-llm-tgi", registry = "zreg" }
+blazen-llm-lmstudio = { version = "0.0.0-dev", path = "crates/blazen-llm-lmstudio", registry = "zreg" }
+blazen-audio-tts = { version = "0.0.0-dev", path = "crates/blazen-audio-tts", registry = "zreg" }
+blazen-audio-piper-vendored = { version = "0.0.0-dev", path = "crates/blazen-audio-piper-vendored", registry = "zreg" }
+blazen-audio-dac-vendored = { version = "0.0.0-dev", path = "crates/blazen-audio-dac-vendored", registry = "zreg" }
+blazen-audio-stt = { version = "0.0.0-dev", path = "crates/blazen-audio-stt", registry = "zreg" }
+blazen-audio-music = { version = "0.0.0-dev", path = "crates/blazen-audio-music", registry = "zreg" }
+blazen-audio-codec = { version = "0.0.0-dev", path = "crates/blazen-audio-codec", registry = "zreg" }
+blazen-audio-core = { version = "0.0.0-dev", path = "crates/blazen-audio-core", registry = "zreg" }
+blazen-audio-vc = { version = "0.0.0-dev", path = "crates/blazen-audio-vc", registry = "zreg" }
+blazen-peer = { version = "0.0.0-dev", path = "crates/blazen-peer", registry = "zreg" }
 blazen-controlplane = { version = "0.0.0-dev", path = "crates/blazen-controlplane", registry = "forgejo", default-features = false }
-blazen-manager = { version = "0.0.0-dev", path = "crates/blazen-manager", registry = "forgejo" }
-blazen-train = { version = "0.0.0-dev", path = "crates/blazen-train", registry = "forgejo" }
-blazen-resource-probe = { version = "0.0.0-dev", path = "crates/blazen-resource-probe", registry = "forgejo" }
+blazen-manager = { version = "0.0.0-dev", path = "crates/blazen-manager", registry = "zreg" }
+blazen-train = { version = "0.0.0-dev", path = "crates/blazen-train", registry = "zreg" }
+blazen-resource-probe = { version = "0.0.0-dev", path = "crates/blazen-resource-probe", registry = "zreg" }
 
 # Distributed peer transport
 tonic = "0.14"

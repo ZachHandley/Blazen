@@ -1,6 +1,12 @@
 [registries.forgejo]
 index = "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/"
 
+# ZRegistry cargo sparse index — new publish target. Kept alongside the
+# forgejo registry during the transition so deps not yet backfilled onto
+# ZRegistry still resolve against forge.
+[registries.zreg]
+index = "sparse+https://registry.blackleafdigital.com/cargo/"
+
 # whisper-rs-sys and llama-cpp-sys-2 each vendor their own copies of
 # ggml/gguf sources. When `local-all` enables both `whispercpp` and
 # `llamacpp` in the same final-link unit (e.g. blazen-py / blazen-node /
