@@ -229,10 +229,12 @@ impl WhisperStreamingProvider {
     /// Build a `WhisperStreamingProvider`.
     ///
     /// `model_id` selects the underlying candle Whisper HF model
-    /// (default `"openai/whisper-base"`). `vad_model_path` overrides the
-    /// Silero VAD ONNX location (default: download from HF on first
-    /// use). `chunk_seconds` / `chunk_overlap_seconds` tune the sliding
-    /// window geometry; pass `None` for the defaults (`30.0` / `5.0`).
+    /// (default `"openai/whisper-base"`). `vad_model_path` is accepted for
+    /// backwards compatibility but **ignored** — the Silero VAD model is
+    /// now embedded in the binary (control-flow-free, runs under ort or
+    /// tract), so there is no external ONNX path to override.
+    /// `chunk_seconds` / `chunk_overlap_seconds` tune the sliding window
+    /// geometry; pass `None` for the defaults (`30.0` / `5.0`).
     #[must_use]
     pub fn new(
         model_id: Option<String>,
@@ -243,12 +245,13 @@ impl WhisperStreamingProvider {
         use blazen_audio_stt::SttBackendHandle;
         use blazen_audio_stt::{WhisperStreamingBackend, WhisperStreamingConfig};
 
+        // The Silero VAD is embedded; a caller-supplied path no longer
+        // applies (kept in the signature for ABI/binding stability).
+        let _ = vad_model_path;
+
         let mut config = WhisperStreamingConfig::default();
         if let Some(id) = model_id {
             config.model_id = id;
-        }
-        if let Some(path) = vad_model_path {
-            config.vad_model_path = Some(path);
         }
         if let Some(s) = chunk_seconds {
             config.chunk_seconds = s;
