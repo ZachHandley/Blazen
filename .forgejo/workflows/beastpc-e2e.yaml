@@ -114,22 +114,26 @@ jobs:
       # Audio E2E — sequential, one GPU at a time.
       # -------------------------------------------------------------------
       - name: Audio E2E — music (stable-audio + musicgen)
-        run: cargo nextest run -p blazen-audio-music --features stable-audio,musicgen --run-ignored only --test-threads=1
+        if: ${{ !cancelled() }}
+        run: cargo nextest run -p blazen-audio-music --features stable-audio,musicgen --run-ignored only --test-threads=1 --no-fail-fast
         env:
           BLAZEN_HF_TOKEN: ${{ secrets.BLAZEN_HF_TOKEN }}
 
       - name: Audio E2E — TTS (bark + f5-tts)
-        run: cargo nextest run -p blazen-audio-tts --features bark,f5-tts --run-ignored only --test-threads=1
+        if: ${{ !cancelled() }}
+        run: cargo nextest run -p blazen-audio-tts --features bark,f5-tts --run-ignored only --test-threads=1 --no-fail-fast
         env:
           BLAZEN_HF_TOKEN: ${{ secrets.BLAZEN_HF_TOKEN }}
 
       - name: Audio E2E — voice conversion (rvc)
-        run: cargo nextest run -p blazen-audio-vc --features rvc --run-ignored only --test-threads=1
+        if: ${{ !cancelled() }}
+        run: cargo nextest run -p blazen-audio-vc --features rvc --run-ignored only --test-threads=1 --no-fail-fast
         env:
           BLAZEN_HF_TOKEN: ${{ secrets.BLAZEN_HF_TOKEN }}
 
       - name: Audio E2E — STT (whisper-streaming + whispercpp + candle)
-        run: cargo nextest run -p blazen-audio-stt --features whisper-streaming,whispercpp,candle --run-ignored only --test-threads=1
+        if: ${{ !cancelled() }}
+        run: cargo nextest run -p blazen-audio-stt --features whisper-streaming,whispercpp,candle --run-ignored only --test-threads=1 --no-fail-fast
         env:
           BLAZEN_HF_TOKEN: ${{ secrets.BLAZEN_HF_TOKEN }}
 
@@ -137,17 +141,20 @@ jobs:
       # GPU LLM + image diffusion E2E — sequential.
       # -------------------------------------------------------------------
       - name: LLM E2E — candle
-        run: cargo nextest run -p blazen-llm-candle --run-ignored only --test-threads=1
+        if: ${{ !cancelled() }}
+        run: cargo nextest run -p blazen-llm-candle --run-ignored only --test-threads=1 --no-fail-fast
         env:
           BLAZEN_HF_TOKEN: ${{ secrets.BLAZEN_HF_TOKEN }}
 
       - name: LLM E2E — mistralrs
-        run: cargo nextest run -p blazen-llm-mistralrs --run-ignored only --test-threads=1
+        if: ${{ !cancelled() }}
+        run: cargo nextest run -p blazen-llm-mistralrs --run-ignored only --test-threads=1 --no-fail-fast
         env:
           BLAZEN_HF_TOKEN: ${{ secrets.BLAZEN_HF_TOKEN }}
 
       - name: Image diffusion E2E
-        run: cargo nextest run -p blazen-image-diffusion --run-ignored only --test-threads=1
+        if: ${{ !cancelled() }}
+        run: cargo nextest run -p blazen-image-diffusion --run-ignored only --test-threads=1 --no-fail-fast
         env:
           BLAZEN_HF_TOKEN: ${{ secrets.BLAZEN_HF_TOKEN }}
 
@@ -156,7 +163,8 @@ jobs:
       # ready but commented out until blazen-3d-core lands.
       # -------------------------------------------------------------------
       - name: 3D E2E — compat-proxy (mocked HTTP)
-        run: cargo nextest run -p blazen-3d --features compat-proxy --run-ignored only --test-threads=1
+        if: ${{ !cancelled() }}
+        run: cargo nextest run -p blazen-3d --features compat-proxy --run-ignored only --test-threads=1 --no-fail-fast
 
       # - name: 3D E2E — blazen-3d-core (TripoSR native)
       #   # Activate this line once blazen-3d-core ships its TripoSR native port.
@@ -168,8 +176,8 @@ jobs:
       # Video E2E — gated on FAL_KEY (the cloud-video smoke hits fal.ai).
       # -------------------------------------------------------------------
       - name: Video E2E — cloud_video_smoke (fal.ai)
-        if: ${{ secrets.FAL_KEY != '' }}
-        run: cargo nextest run --test cloud_video_smoke --run-ignored only
+        if: ${{ !cancelled() && secrets.FAL_KEY != '' }}
+        run: cargo nextest run --test cloud_video_smoke --run-ignored only --no-fail-fast
         env:
           FAL_KEY: ${{ secrets.FAL_KEY }}
 
@@ -177,11 +185,13 @@ jobs:
       # Binding smokes — Python + Node, GPU-gated.
       # -------------------------------------------------------------------
       - name: Setup Python + uv
+        if: ${{ !cancelled() }}
         uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
         with:
           python-version: '3.12'
 
       - name: Install Python deps and build wheel (GPU features)
+        if: ${{ !cancelled() }}
         # Match the stub-gen feature set so feature-gated symbols compile in;
         # see CLAUDE.md § "Regenerate typegens" for the canonical list.
         run: |
@@ -190,6 +200,7 @@ jobs:
               --features langfuse,otlp,prometheus,tract,distributed --release
 
       - name: Python GPU smokes (-k gpu, serial)
+        if: ${{ !cancelled() }}
         env:
           BLAZEN_HF_TOKEN: ${{ secrets.BLAZEN_HF_TOKEN }}
           BLAZEN_TEST_STABLE_AUDIO: "1"
@@ -200,19 +211,23 @@ jobs:
         run: uv run --no-sync pytest tests/python/ -k gpu -p no:xdist
 
       - name: Setup Node
+        if: ${{ !cancelled() }}
         uses: actions/setup-node@v4
         with:
           node-version: "22"
 
       - name: Setup pnpm
+        if: ${{ !cancelled() }}
         run: corepack enable && corepack prepare pnpm@10 --activate
 
       - name: Build Node bindings
+        if: ${{ !cancelled() }}
         run: |
           pnpm install
           pnpm --filter blazen run build
 
       - name: Node GPU smokes (ava, guarded on glob match)
+        if: ${{ !cancelled() }}
         # The *_gpu.mjs glob may be empty today; guard the invocation so the
         # job doesn't fail purely because no GPU-tagged Node tests exist yet.
         env:
