@@ -9,8 +9,8 @@ use std::sync::Arc;
 use crate::error::BlazenPyError;
 use crate::providers::model::{PyModel, PyModelOptions, build_request};
 use crate::types::{PyChatMessage, PyModelResponse};
-use blazen_llm::types::ChatMessage;
 use blazen_llm::Pool;
+use blazen_llm::types::ChatMessage;
 use blazen_manager::ModelManager;
 use blazen_manager::hf_loader::{BackendHint, HfLoadOptions};
 use tokio_stream::StreamExt;
@@ -831,7 +831,10 @@ impl PyModelManager {
         let request = build_request(py, rust_messages, options.as_deref())?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let response = inner.complete(&id, request).await.map_err(BlazenPyError::from)?;
+            let response = inner
+                .complete(&id, request)
+                .await
+                .map_err(BlazenPyError::from)?;
             Ok(PyModelResponse { inner: response })
         })
     }
@@ -855,7 +858,10 @@ impl PyModelManager {
         let request = build_request(py, rust_messages, options.as_deref())?;
         let inner = self.inner.clone();
         pyo3_async_runtimes::tokio::future_into_py(py, async move {
-            let stream = inner.stream(&id, request).await.map_err(BlazenPyError::from)?;
+            let stream = inner
+                .stream(&id, request)
+                .await
+                .map_err(BlazenPyError::from)?;
             let mut stream = std::pin::pin!(stream);
             while let Some(result) = stream.next().await {
                 match result {

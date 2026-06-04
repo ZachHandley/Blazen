@@ -15,9 +15,9 @@
 //! }
 //! ```
 
-use crate::types::{GpuInfo, ProbeError};
 #[cfg(target_os = "linux")]
 use crate::types::GpuVendor;
+use crate::types::{GpuInfo, ProbeError};
 #[cfg(target_os = "linux")]
 use std::collections::BTreeMap;
 

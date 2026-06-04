@@ -463,13 +463,19 @@ pub unsafe extern "C" fn blazen_model_manager_complete_blocking(
         }
         // SAFETY: out_err contract per the per-fn doc.
         return unsafe {
-            write_internal_error(out_err, "blazen_model_manager_complete_blocking: null manager")
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_complete_blocking: null manager",
+            )
         };
     }
     if request.is_null() {
         // SAFETY: out_err contract per the per-fn doc.
         return unsafe {
-            write_internal_error(out_err, "blazen_model_manager_complete_blocking: null request")
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_complete_blocking: null request",
+            )
         };
     }
     // SAFETY: out_err + id contracts per the per-fn doc.
@@ -603,14 +609,20 @@ pub unsafe extern "C" fn blazen_model_manager_stream_blocking(
         }
         // SAFETY: out_err contract per the per-fn doc.
         return unsafe {
-            write_internal_error(out_err, "blazen_model_manager_stream_blocking: null manager")
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_stream_blocking: null manager",
+            )
         };
     }
     if request.is_null() {
         (vtable.drop_user_data)(vtable.user_data);
         // SAFETY: out_err contract per the per-fn doc.
         return unsafe {
-            write_internal_error(out_err, "blazen_model_manager_stream_blocking: null request")
+            write_internal_error(
+                out_err,
+                "blazen_model_manager_stream_blocking: null request",
+            )
         };
     }
     // SAFETY: out_err + id contracts per the per-fn doc.
@@ -720,8 +732,7 @@ pub unsafe extern "C" fn blazen_model_manager_stream(
         match inner.stream(&id, core_request).await {
             Ok(stream) => {
                 // Mid-stream chunks/errors flow to the sink; always Ok(()).
-                let _ =
-                    blazen_uniffi::streaming::drive_completion_stream(stream, sink_arc).await;
+                let _ = blazen_uniffi::streaming::drive_completion_stream(stream, sink_arc).await;
             }
             Err(e) => {
                 // A future was already handed back, so route the start-failure

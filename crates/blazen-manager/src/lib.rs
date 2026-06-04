@@ -433,9 +433,7 @@ impl ModelManager {
     /// weights and are always ready to dispatch.
     pub async fn is_loaded(&self, id: &str) -> bool {
         let state = self.state.lock().await;
-        state
-            .get(id)
-            .is_some_and(|e| e.loaded || e.local.is_none())
+        state.get(id).is_some_and(|e| e.loaded || e.local.is_none())
     }
 
     /// Ensure a model is loaded. Equivalent to [`Self::load`].
@@ -1429,10 +1427,8 @@ mod tests {
         async fn stream(
             &self,
             _request: ModelRequest,
-        ) -> Result<
-            Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>,
-            BlazenError,
-        > {
+        ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
+        {
             let chunk = StreamChunk {
                 delta: Some(format!("echo from {}", self.id)),
                 tool_calls: Vec::new(),
@@ -1482,10 +1478,8 @@ mod tests {
         async fn stream(
             &self,
             _request: ModelRequest,
-        ) -> Result<
-            Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>,
-            BlazenError,
-        > {
+        ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
+        {
             Ok(Box::pin(futures_util::stream::iter(Vec::new())))
         }
     }

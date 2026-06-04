@@ -245,9 +245,7 @@ pub(crate) fn tool_choice_to_openai(value: &serde_json::Value) -> Option<serde_j
 /// practice will not force a tool call). Returns `None` when the value cannot
 /// be interpreted.
 #[must_use]
-pub(crate) fn tool_choice_to_messages_api(
-    value: &serde_json::Value,
-) -> Option<serde_json::Value> {
+pub(crate) fn tool_choice_to_messages_api(value: &serde_json::Value) -> Option<serde_json::Value> {
     if is_provider_shaped(value) {
         return Some(value.clone());
     }
@@ -603,10 +601,7 @@ mod tests {
 
     #[test]
     fn tool_choice_openai_auto() {
-        assert_eq!(
-            tool_choice_to_openai(&json!("auto")),
-            Some(json!("auto"))
-        );
+        assert_eq!(tool_choice_to_openai(&json!("auto")), Some(json!("auto")));
     }
 
     #[test]
@@ -616,15 +611,15 @@ mod tests {
             Some(json!("required"))
         );
         // "any" is an alias for "required" in the canonical form.
-        assert_eq!(tool_choice_to_openai(&json!("any")), Some(json!("required")));
+        assert_eq!(
+            tool_choice_to_openai(&json!("any")),
+            Some(json!("required"))
+        );
     }
 
     #[test]
     fn tool_choice_openai_none() {
-        assert_eq!(
-            tool_choice_to_openai(&json!("none")),
-            Some(json!("none"))
-        );
+        assert_eq!(tool_choice_to_openai(&json!("none")), Some(json!("none")));
     }
 
     #[test]
