@@ -200,14 +200,6 @@ jobs:
           owner: BlackLeafDigital
           auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
-      - name: Mint ZRegistry token
-        id: zregtoken
-        if: steps.check.outputs.completed != 'true'
-        uses: https://forge.blackleafdigital.com/Public/actions/zregistry-token@main
-        with:
-          client-id: ${{ secrets.ZREGISTRY_CLIENT_ID }}
-          client-secret: ${{ secrets.ZREGISTRY_CLIENT_SECRET }}
-
       - name: Setup Rust
         if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
@@ -219,31 +211,29 @@ jobs:
           sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
           sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
           sccache-key-prefix: sccache/blazen-publish-rust
-          # ZRegistry (zreg) is the publish target. Forgejo kept alongside for
-          # the transition so sibling deps not yet on ZRegistry still resolve.
-          # The zreg token is the RAW minted ZAuth JWT (no `Bearer ` prefix).
-          registries: '[{"name": "zreg", "index": "sparse+https://registry.blackleafdigital.com/cargo/", "token": "${{ steps.zregtoken.outputs.token }}"}, {"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
 
       - name: Stamp version
         if: steps.check.outputs.completed != 'true'
-        # --keep-registry: publish-rust is the ONLY job that keeps the
-        # `registry = "zreg"` dep markers, so `cargo publish --registry
-        # zreg` resolves siblings from ZRegistry. Build jobs strip them (their
-        # cross-build envs lack the zreg registry config).
-        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }} --keep-registry
+        # --keep-forgejo-registry: publish-rust is the ONLY job that keeps the
+        # `registry = "forgejo"` dep markers, so `cargo publish --registry
+        # forgejo` resolves siblings from Forgejo. Build jobs strip them (their
+        # cross-build envs lack the forgejo registry config).
+        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }} --keep-forgejo-registry
 
       - name: Publish crates in dependency order
         if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/cargo-publish-workspace@main
         with:
           version: ${{ needs.version.outputs.version }}
-          # Publish to ZRegistry (named `zreg` in .cargo/config.toml +
-          # configured by setup-rust above), NOT public crates.io. The action
-          # translates `cargo-token` into CARGO_REGISTRIES_ZREG_TOKEN for a
-          # non-`crates-io` registry. `sparse-index-url` points the
-          # idempotency/existence check at the ZRegistry sparse index.
-          registry: zreg
-          sparse-index-url: https://registry.blackleafdigital.com/cargo
+          # Publish to the PRIVATE Forgejo cargo registry (named `forgejo` in
+          # .cargo/config.toml + configured by setup-rust above), NOT public
+          # crates.io. The action translates `cargo-token` into
+          # CARGO_REGISTRIES_FORGEJO_TOKEN for a non-`crates-io` registry.
+          # `sparse-index-url` points the idempotency/existence check at the
+          # Forgejo sparse index instead of the crates.io REST API.
+          registry: forgejo
+          sparse-index-url: https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/
           # blazen-controlplane is excluded until its current version is
           # published and verified against consumers. blazen + blazen-llm
           # (the two ZMarketer consumes) publish cleanly.
@@ -253,13 +243,9 @@ jobs:
           # ^0.6.3, only 0.6.2 exists). Exclude both until controlplane
           # itself is unblocked.
           exclude: blazen-py,blazen-node,blazen-controlplane,blazen-cabi,blazen-uniffi
-          cargo-token: ${{ steps.zregtoken.outputs.token }}
+          cargo-token: ${{ secrets.FORGEJO_ACTIONS_TOKEN }}
           max-backoff-seconds: '300'
           max-attempts-per-crate: '5'
-        env:
-          # Cargo prefers the env var over credentials.toml. ZRegistry's cargo
-          # adapter wants the RAW ZAuth JWT — NO `Bearer ` prefix.
-          CARGO_REGISTRIES_ZREG_TOKEN: ${{ steps.zregtoken.outputs.token }}
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
