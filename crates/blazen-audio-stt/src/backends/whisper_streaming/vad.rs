@@ -6,37 +6,27 @@
 //!
 //! # Model assumptions
 //!
-//! This wrapper targets the **Silero VAD v4** ONNX graph published at
-//! <https://github.com/snakers4/silero-vad> (file
-//! `files/silero_vad.onnx`, ~~ February 2024 release). That graph has
-//! three inputs (`input`, `h`, `c`) and three outputs (`output`, `hn`,
-//! `cn`). The audio frame must be exactly **512 samples at 16 kHz** (32
-//! ms); other sizes change the model's receptive field and produce
-//! undefined behaviour. The newer v5 graph (Jul 2024) collapsed `h`/`c`
-//! into a single `state` input and added an `sr` scalar — running v5
-//! weights through this wrapper without adjusting the IO names will
-//! fail at load time.
+//! This wrapper targets the **Silero VAD v5** ONNX graph published at
+//! <https://github.com/snakers4/silero-vad> (file `silero_vad.onnx`,
+//! Jul 2024+). That graph has three inputs (`input`, `state`, `sr`) and
+//! two outputs (`output`, `stateN`) — v5 collapsed v4's separate `h`/`c`
+//! LSTM states into a single `[2, 1, 128]` `state` tensor and added the
+//! `sr` (sample-rate) scalar. The audio frame must be exactly **512
+//! samples at 16 kHz** (32 ms); other sizes change the model's receptive
+//! field and produce undefined behaviour.
 //!
 //! # `HuggingFace` source
 //!
-//! [`SileroVad::from_hf`] downloads the v4 ONNX from the
+//! [`SileroVad::from_hf`] downloads the ONNX from the
 //! [`deepghs/silero-vad-onnx`](https://huggingface.co/deepghs/silero-vad-onnx)
-//! HF mirror (file `silero_vad.onnx`, 2.33 MB — byte-identical to the
-//! file shipped at `src/silero_vad/data/silero_vad.onnx` in the upstream
-//! GitHub repo), pinned to revision
-//! `8547eb3c577a6f712c1ed1a554c21c5d9137867d` (the "Upload 2 files"
-//! commit from 2024-08-31, which uploaded the v4 weights themselves —
-//! we deliberately skip the later README-update commit so the pin
-//! tracks the binary content).
+//! HF mirror (file `silero_vad.onnx`, ~2.2 MB), pinned to revision
+//! `8547eb3c577a6f712c1ed1a554c21c5d9137867d`. That pinned file is the v5
+//! graph (`input`/`state`/`sr` → `output`/`stateN`); the pin keeps the
+//! binary content fixed for reproducibility.
 //!
-//! The other obvious HF mirror, `onnx-community/silero-vad/onnx/model.onnx`
-//! (2.24 MB), is the **v5** graph (smaller; different IO names) and is
-//! deliberately *not* used here — it would fail this wrapper's
-//! `input`/`h`/`c` lookup at load time.
-//!
-//! The LSTM hidden states have shape `[2, 1, 64]` for both `h` and `c`.
-//! `feed` threads them across forward calls so the model can integrate
-//! evidence over the audio stream.
+//! The combined recurrent `state` has shape `[2, 1, 128]`. `feed` threads
+//! it across forward calls so the model can integrate evidence over the
+//! audio stream.
 //!
 //! # Utterance-boundary hysteresis
 //!
@@ -67,25 +57,27 @@ use crate::error::SttError;
 /// `type_complexity` lint doesn't fire on every field that mentions it.
 type SileroPlan = SimplePlan<TypedFact, Box<dyn TypedOp>, Graph<TypedFact, Box<dyn TypedOp>>>;
 
-/// Sample rate the Silero VAD v4 graph expects.
+/// Sample rate the Silero VAD v5 graph expects.
 pub(crate) const VAD_SAMPLE_RATE: usize = 16_000;
 
-/// Frame size (samples) the Silero VAD v4 graph expects.
+/// Frame size (samples) the Silero VAD v5 graph expects.
 pub(crate) const VAD_FRAME_SIZE: usize = 512;
 
-/// `HuggingFace` repo hosting the v4 ONNX weights (see crate-level
+/// `HuggingFace` repo hosting the v5 ONNX weights (see crate-level
 /// docs in this module for why we pin this specific mirror).
 pub(crate) const VAD_HF_REPO: &str = "deepghs/silero-vad-onnx";
 
-/// File name inside [`VAD_HF_REPO`] for the v4 weights.
+/// File name inside [`VAD_HF_REPO`] for the v5 weights.
 pub(crate) const VAD_HF_FILE: &str = "silero_vad.onnx";
 
-/// Commit SHA the v4 ONNX is pinned to. See the module-level
+/// Commit SHA the v5 ONNX is pinned to. See the module-level
 /// "`HuggingFace` source" doc for the choice rationale.
 pub(crate) const VAD_HF_REVISION: &str = "8547eb3c577a6f712c1ed1a554c21c5d9137867d";
 
-/// Shape of the LSTM hidden states (`h` and `c`).
-const VAD_STATE_SHAPE: [usize; 3] = [2, 1, 64];
+/// Shape of the combined recurrent `state` tensor. Silero VAD v5 fuses
+/// the old separate `h` / `c` LSTM states (`[2, 1, 64]` each in v4) into a
+/// single `[2, 1, 128]` input/output.
+const VAD_STATE_SHAPE: [usize; 3] = [2, 1, 128];
 
 /// One emission from [`SileroVad::feed`].
 #[derive(Debug, Clone)]
@@ -135,24 +127,19 @@ impl Default for SileroVadConfig {
 pub struct SileroVad {
     model: SileroPlan,
     config: SileroVadConfig,
-    /// LSTM hidden state `h` of shape `[2, 1, 64]`. Threaded across
-    /// `feed` calls.
-    h: Tensor,
-    /// LSTM cell state `c` of shape `[2, 1, 64]`. Threaded across
-    /// `feed` calls.
-    c: Tensor,
+    /// Combined recurrent `state` of shape `[2, 1, 128]`. Threaded across
+    /// `feed` calls (Silero v5's fused `h`/`c`).
+    state: Tensor,
     /// Index of the input named `input` in the model's input list.
     input_audio_ix: usize,
-    /// Index of the input named `h`.
-    input_h_ix: usize,
-    /// Index of the input named `c`.
-    input_cell_ix: usize,
+    /// Index of the input named `state`.
+    input_state_ix: usize,
+    /// Index of the int64 scalar input named `sr` (sample rate).
+    input_sr_ix: usize,
     /// Index of the output named `output` (speech probability).
     output_prob_ix: usize,
-    /// Index of the output named `hn` (new h state).
-    output_hn_ix: usize,
-    /// Index of the output named `cn` (new c state).
-    output_cell_ix: usize,
+    /// Index of the output named `stateN` (new recurrent state).
+    output_state_ix: usize,
     /// Consecutive frames at or above `speech_threshold`.
     active_frames: usize,
     /// Consecutive frames below `speech_threshold`.
@@ -176,7 +163,7 @@ impl std::fmt::Debug for SileroVad {
 impl SileroVad {
     /// Load a Silero VAD model from disk.
     ///
-    /// `onnx_path` must point at a Silero VAD **v4** ONNX file. Other
+    /// `onnx_path` must point at a Silero VAD **v5** ONNX file. Other
     /// versions use different input/output names and will fail with
     /// [`SttError::ModelLoad`].
     ///
@@ -184,13 +171,19 @@ impl SileroVad {
     ///
     /// Returns [`SttError::ModelLoad`] when the file can't be read, the
     /// graph can't be optimised, or any of the expected IO names
-    /// (`input`/`h`/`c` → `output`/`hn`/`cn`) are missing.
+    /// (`input`/`state`/`sr` → `output`/`stateN`) are missing.
     pub fn from_path(onnx_path: &Path, config: SileroVadConfig) -> Result<Self, SttError> {
         // Fix the input shape so optimisation can specialise the LSTM
         // for our single-batch single-frame contract. `tract-onnx`
         // requires a concrete fact when calling `into_optimized`.
         let input_fact = InferenceFact::dt_shape(f32::datum_type(), [1usize, VAD_FRAME_SIZE]);
         let state_fact = InferenceFact::dt_shape(f32::datum_type(), VAD_STATE_SHAPE);
+        // `sr` is a rank-0 (scalar) int64 input. The v5 graph branches on
+        // it through an `If` op (16 kHz vs 8 kHz STFT path); tract can only
+        // analyse/optimise that `If` if `sr` is a *known constant*, so pin
+        // the fact to the concrete sample-rate value (not just dt+shape).
+        #[allow(clippy::cast_possible_wrap)]
+        let sr_fact = InferenceFact::from(tensor0(VAD_SAMPLE_RATE as i64));
 
         let mut inference = tract_onnx::onnx()
             .model_for_path(onnx_path)
@@ -199,21 +192,20 @@ impl SileroVad {
         // Locate the named inputs/outputs so we can pass them in the
         // order tract expects (positional, not keyed by name).
         let input_audio_ix = find_input_index(&inference, "input")?;
-        let input_h_ix = find_input_index(&inference, "h")?;
-        let input_cell_ix = find_input_index(&inference, "c")?;
+        let input_state_ix = find_input_index(&inference, "state")?;
+        let input_sr_ix = find_input_index(&inference, "sr")?;
         let output_prob_ix = find_output_index(&inference, "output")?;
-        let output_hn_ix = find_output_index(&inference, "hn")?;
-        let output_cell_ix = find_output_index(&inference, "cn")?;
+        let output_state_ix = find_output_index(&inference, "stateN")?;
 
         inference
             .set_input_fact(input_audio_ix, input_fact)
             .map_err(|e| SttError::ModelLoad(format!("silero-vad set audio fact: {e}")))?;
         inference
-            .set_input_fact(input_h_ix, state_fact.clone())
-            .map_err(|e| SttError::ModelLoad(format!("silero-vad set h fact: {e}")))?;
+            .set_input_fact(input_state_ix, state_fact)
+            .map_err(|e| SttError::ModelLoad(format!("silero-vad set state fact: {e}")))?;
         inference
-            .set_input_fact(input_cell_ix, state_fact)
-            .map_err(|e| SttError::ModelLoad(format!("silero-vad set c fact: {e}")))?;
+            .set_input_fact(input_sr_ix, sr_fact)
+            .map_err(|e| SttError::ModelLoad(format!("silero-vad set sr fact: {e}")))?;
 
         let optimized = inference
             .into_optimized()
@@ -222,26 +214,24 @@ impl SileroVad {
             .into_runnable()
             .map_err(|e| SttError::ModelLoad(format!("silero-vad runnable: {e}")))?;
 
-        let (h, c) = zero_states()?;
+        let state = zero_state()?;
 
         Ok(Self {
             model,
             config,
-            h,
-            c,
+            state,
             input_audio_ix,
-            input_h_ix,
-            input_cell_ix,
+            input_state_ix,
+            input_sr_ix,
             output_prob_ix,
-            output_hn_ix,
-            output_cell_ix,
+            output_state_ix,
             active_frames: 0,
             inactive_frames: 0,
             is_in_utterance: false,
         })
     }
 
-    /// Download the Silero VAD v4 ONNX from `HuggingFace` and load it.
+    /// Download the Silero VAD v5 ONNX from `HuggingFace` and load it.
     ///
     /// Uses `hf-hub` (already a `blazen-audio-stt` dep via the
     /// `whisper-streaming` feature → `candle`) to fetch
@@ -304,19 +294,24 @@ impl SileroVad {
                 .map_err(|e| SttError::Transcription(format!("silero-vad audio reshape: {e}")))?
                 .into_tensor();
 
+        // The `sr` scalar (int64) is constant per stream but is a runtime
+        // input in the v5 graph, so supply it each call.
+        #[allow(clippy::cast_possible_wrap)]
+        let sr_tensor = tensor0(VAD_SAMPLE_RATE as i64);
+
         // Build positional inputs in the order tract expects.
         let mut inputs: TVec<TValue> = tvec!(
             TValue::from_const(audio_tensor.into()),
-            TValue::from_const(self.h.clone().into()),
-            TValue::from_const(self.c.clone().into()),
+            TValue::from_const(self.state.clone().into()),
+            TValue::from_const(sr_tensor.into()),
         );
-        // Reorder so the slot at `input_audio_ix` holds the audio
-        // tensor, etc. We initialised them in slot order [audio, h, c]
-        // above; rotate into the model's actual ordering.
+        // Reorder so the slot at `input_audio_ix` holds the audio tensor,
+        // etc. We initialised them in slot order [audio, state, sr] above;
+        // rotate into the model's actual ordering.
         let mut ordered: Vec<Option<TValue>> = vec![None; 3];
         ordered[self.input_audio_ix] = Some(inputs.remove(0));
-        ordered[self.input_h_ix] = Some(inputs.remove(0));
-        ordered[self.input_cell_ix] = Some(inputs.remove(0));
+        ordered[self.input_state_ix] = Some(inputs.remove(0));
+        ordered[self.input_sr_ix] = Some(inputs.remove(0));
         let ordered_inputs: TVec<TValue> = ordered
             .into_iter()
             .map(|v| {
@@ -340,15 +335,11 @@ impl SileroVad {
             .copied()
             .ok_or_else(|| SttError::Transcription("silero-vad prob tensor empty".into()))?;
 
-        // Threaded states.
-        let hn = outputs
-            .get(self.output_hn_ix)
-            .ok_or_else(|| SttError::Transcription("silero-vad missing hn output".into()))?;
-        let cn = outputs
-            .get(self.output_cell_ix)
-            .ok_or_else(|| SttError::Transcription("silero-vad missing cn output".into()))?;
-        self.h = hn.clone().into_tensor();
-        self.c = cn.clone().into_tensor();
+        // Thread the recurrent state forward.
+        let state_n = outputs
+            .get(self.output_state_ix)
+            .ok_or_else(|| SttError::Transcription("silero-vad missing stateN output".into()))?;
+        self.state = state_n.clone().into_tensor();
 
         Ok(self.apply_hysteresis(speech_prob))
     }
@@ -361,9 +352,7 @@ impl SileroVad {
     /// Returns [`SttError::Transcription`] when the zero-state tensors
     /// cannot be allocated (effectively never on a healthy system).
     pub fn reset(&mut self) -> Result<(), SttError> {
-        let (h, c) = zero_states()?;
-        self.h = h;
-        self.c = c;
+        self.state = zero_state()?;
         self.active_frames = 0;
         self.inactive_frames = 0;
         self.is_in_utterance = false;
@@ -396,14 +385,12 @@ impl SileroVad {
         Self {
             model: dummy_model(),
             config,
-            h: Tensor::zero::<f32>(&VAD_STATE_SHAPE).expect("zero h"),
-            c: Tensor::zero::<f32>(&VAD_STATE_SHAPE).expect("zero c"),
+            state: Tensor::zero::<f32>(&VAD_STATE_SHAPE).expect("zero state"),
             input_audio_ix: 0,
-            input_h_ix: 1,
-            input_cell_ix: 2,
+            input_state_ix: 1,
+            input_sr_ix: 2,
             output_prob_ix: 0,
-            output_hn_ix: 1,
-            output_cell_ix: 2,
+            output_state_ix: 1,
             active_frames: 0,
             inactive_frames: 0,
             is_in_utterance: false,
@@ -441,12 +428,9 @@ impl SileroVad {
     }
 }
 
-fn zero_states() -> Result<(Tensor, Tensor), SttError> {
-    let h = Tensor::zero::<f32>(&VAD_STATE_SHAPE)
-        .map_err(|e| SttError::ModelLoad(format!("silero-vad h alloc: {e}")))?;
-    let c = Tensor::zero::<f32>(&VAD_STATE_SHAPE)
-        .map_err(|e| SttError::ModelLoad(format!("silero-vad c alloc: {e}")))?;
-    Ok((h, c))
+fn zero_state() -> Result<Tensor, SttError> {
+    Tensor::zero::<f32>(&VAD_STATE_SHAPE)
+        .map_err(|e| SttError::ModelLoad(format!("silero-vad state alloc: {e}")))
 }
 
 fn find_input_index(model: &InferenceModel, name: &str) -> Result<usize, SttError> {
@@ -456,18 +440,22 @@ fn find_input_index(model: &InferenceModel, name: &str) -> Result<usize, SttErro
         }
     }
     Err(SttError::ModelLoad(format!(
-        "silero-vad: input named `{name}` not found (graph version mismatch? this wrapper expects v4)"
+        "silero-vad: input named `{name}` not found (graph version mismatch? this wrapper expects v5)"
     )))
 }
 
 fn find_output_index(model: &InferenceModel, name: &str) -> Result<usize, SttError> {
     for (ix, outlet) in model.outputs.iter().enumerate() {
-        if model.nodes()[outlet.node].name == name {
+        // Match the ONNX output *tensor* (outlet) label first — in v5 the
+        // graph output `output`/`stateN` is produced by a node whose own
+        // name differs from the tensor name. Fall back to the node name
+        // (v4 named the producing node after the output directly).
+        if model.outlet_label(*outlet) == Some(name) || model.nodes()[outlet.node].name == name {
             return Ok(ix);
         }
     }
     Err(SttError::ModelLoad(format!(
-        "silero-vad: output named `{name}` not found (graph version mismatch? this wrapper expects v4)"
+        "silero-vad: output named `{name}` not found (graph version mismatch? this wrapper expects v5)"
     )))
 }
 
@@ -500,7 +488,7 @@ mod tests {
     }
 
     #[test]
-    fn frame_size_and_sample_rate_are_v4_constants() {
+    fn frame_size_and_sample_rate_are_v5_constants() {
         assert_eq!(SileroVad::frame_size(), 512);
         assert_eq!(SileroVad::sample_rate(), 16_000);
     }
