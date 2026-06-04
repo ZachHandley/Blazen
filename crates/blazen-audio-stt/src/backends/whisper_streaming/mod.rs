@@ -338,8 +338,9 @@ mod tests {
         // `ModelLoad`) — which is exactly the assertion we want: the
         // HF download path would have been pointed at the network and
         // succeeded (or at least failed with a different error
-        // signature). A `ModelLoad("silero-vad load: …")` here proves
-        // we routed to `from_path`, never to `from_hf`.
+        // signature). A `ModelLoad("silero-vad ort load …")` here proves
+        // we routed to `from_path`, never to `from_hf` (which would error
+        // with a `silero-vad hf-hub …` prefix).
         let cfg = WhisperStreamingConfig {
             vad_model_path: Some(
                 "/nonexistent/blazen-audio-stt/vad-precedence-sentinel.onnx".into(),
@@ -353,7 +354,7 @@ mod tests {
             .expect_err("nonexistent path must fail to load");
         match err {
             SttError::ModelLoad(msg) => assert!(
-                msg.starts_with("silero-vad load:"),
+                msg.starts_with("silero-vad ort"),
                 "vad_model_path must route through SileroVad::from_path, not from_hf; got: {msg}"
             ),
             other => panic!("expected ModelLoad from from_path, got {other:?}"),
@@ -399,30 +400,29 @@ mod tests {
         }
     }
 
-    /// End-to-end live test: load Silero VAD from disk, load candle
-    /// Whisper, stream a synthetic 5-second 440 Hz tone through
+    /// End-to-end live test: download Silero VAD (v5, via `from_hf`), load
+    /// candle Whisper, stream a synthetic 5-second 440 Hz tone through
     /// `SttBackend::stream`, and assert at least one final emission
     /// arrives (its `text` may be empty — Whisper rarely transcribes
-    /// pure sine waves to anything meaningful — but the pipeline must
-    /// reach the `finalize` path).
+    /// pure sine waves to anything meaningful, and Silero v5 doesn't flag a
+    /// pure tone as speech — but the pipeline must reach the `finalize`
+    /// path and emit the terminal record).
     ///
     /// Skipped by default (`#[ignore]`). Unlock with:
     ///
     /// ```sh
-    /// BLAZEN_SILERO_VAD_ONNX_PATH=/path/to/silero_vad.onnx \
-    ///     cargo nextest run -p blazen-audio-stt --features whisper-streaming \
-    ///         stream_emits_at_least_one_chunk_for_synthetic_tone -- --ignored
+    /// cargo nextest run -p blazen-audio-stt --features whisper-streaming \
+    ///     stream_emits_at_least_one_chunk_for_synthetic_tone -- --ignored
     /// ```
     #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-    #[ignore = "needs BLAZEN_SILERO_VAD_ONNX_PATH + downloads candle whisper-base weights"]
+    #[ignore = "downloads the Silero VAD ONNX + candle whisper-base weights"]
     async fn stream_emits_at_least_one_chunk_for_synthetic_tone() {
         use futures_util::StreamExt;
         use futures_util::stream;
 
-        let vad_path =
-            std::env::var("BLAZEN_SILERO_VAD_ONNX_PATH").expect("set BLAZEN_SILERO_VAD_ONNX_PATH");
         let cfg = WhisperStreamingConfig {
-            vad_model_path: Some(vad_path),
+            // `None` → the backend downloads the Silero VAD via `from_hf`.
+            vad_model_path: None,
             // Shorter chunks → less audio needed before a flush fires.
             chunk_seconds: 5.0,
             chunk_overlap_seconds: 1.0,

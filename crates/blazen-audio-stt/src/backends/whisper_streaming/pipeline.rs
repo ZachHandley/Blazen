@@ -223,11 +223,12 @@ async fn run_pipeline(
         .await?;
     }
 
-    // Promote any pending partial to final.
+    // Promote any pending partial to final. Always emit this terminal
+    // record (even when `text` is empty) so consumers get a definitive
+    // `is_final` stream-end marker — e.g. a non-speech input the VAD never
+    // segmented still yields exactly one final emission at EOS.
     let final_tail = decoder.finalize();
-    if !final_tail.text.is_empty() {
-        let _ = tx.send(Ok(final_tail)).await;
-    }
+    let _ = tx.send(Ok(final_tail)).await;
 
     Ok(())
 }
