@@ -28,7 +28,8 @@
 
 use candle_core::{D, Device, Module, Result, Tensor};
 use candle_nn::{
-    LayerNorm, Linear, VarBuilder, layer_norm, linear, linear_no_bias, ops::softmax_last_dim,
+    LayerNorm, Linear, VarBuilder, layer_norm, layer_norm_no_bias, linear, linear_no_bias,
+    ops::softmax_last_dim,
 };
 
 /// `LayerNorm` epsilon. Upstream Bark uses `PyTorch`'s default `1e-5`.
@@ -198,9 +199,13 @@ pub(super) struct Block {
 
 impl Block {
     pub(super) fn load(vb: VarBuilder, cfg: BlockConfig) -> Result<Self> {
-        let layernorm_1 = layer_norm(cfg.n_embd, LAYER_NORM_EPS, vb.pp("layernorm_1"))?;
+        // HF Bark's `BarkLayerNorm` carries a bias only when `config.bias`
+        // is set; the published checkpoints use `bias=false`, so the layernorm
+        // tensors ship weight-only. Honor the flag both for the linears
+        // (above) and the layernorms here.
+        let layernorm_1 = load_layer_norm(cfg.n_embd, cfg.bias, vb.pp("layernorm_1"))?;
         let attn = CausalSelfAttention::load(vb.pp("attn"), cfg)?;
-        let layernorm_2 = layer_norm(cfg.n_embd, LAYER_NORM_EPS, vb.pp("layernorm_2"))?;
+        let layernorm_2 = load_layer_norm(cfg.n_embd, cfg.bias, vb.pp("layernorm_2"))?;
         let mlp = Mlp::load(vb.pp("mlp"), cfg.n_embd, cfg.bias)?;
         Ok(Self {
             layernorm_1,
@@ -217,6 +222,22 @@ impl Block {
         let h = self.layernorm_2.forward(&xs)?;
         let h = self.mlp.forward(&h)?;
         &xs + h
+    }
+}
+
+/// Load a `LayerNorm` honoring Bark's optional-bias convention.
+///
+/// HF transformers' `BarkLayerNorm` only allocates a bias parameter when
+/// `config.bias` is true; the published `suno/bark*` checkpoints set
+/// `bias=false`, so their layernorm tensors are weight-only. candle's plain
+/// [`layer_norm`] always expects a `bias` tensor, so we route to
+/// [`layer_norm_no_bias`] (weight-only, still mean-removing) when `bias` is
+/// false. Shared by [`Block::load`] and each stage's `layernorm_final`.
+pub(super) fn load_layer_norm(size: usize, bias: bool, vb: VarBuilder) -> Result<LayerNorm> {
+    if bias {
+        layer_norm(size, LAYER_NORM_EPS, vb)
+    } else {
+        layer_norm_no_bias(size, LAYER_NORM_EPS, vb)
     }
 }
 

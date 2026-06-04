@@ -41,16 +41,12 @@
 
 use candle_core::{D, IndexOp, Module, Result as CandleResult, Tensor};
 use candle_nn::{
-    Embedding, LayerNorm, Linear, VarBuilder, embedding, layer_norm, linear_no_bias,
-    ops::softmax_last_dim,
+    Embedding, LayerNorm, Linear, VarBuilder, embedding, linear_no_bias, ops::softmax_last_dim,
 };
 
 use crate::error::TtsError;
 
-use super::gpt_block::{Block, BlockConfig};
-
-/// `LayerNorm` epsilon — `PyTorch` default, matches upstream Bark.
-const LAYER_NORM_EPS: f64 = 1e-5;
+use super::gpt_block::{Block, BlockConfig, load_layer_norm};
 
 /// Static config for the Bark fine GPT.
 ///
@@ -72,6 +68,15 @@ pub struct FineConfig {
     pub codebook_size: usize,
     pub n_codebooks: usize,
     pub n_codebooks_input: usize,
+    /// Per-codebook input embedding table size. The HF `suno/bark*` fine
+    /// checkpoint uses `1056` (= `codebook_size` rounded up to a 32-aligned
+    /// shelf); only ids `0..codebook_size` are ever indexed, the rest is
+    /// padding present in the weight tensor.
+    pub input_vocab_size: usize,
+    /// Per-codebook `lm_head` output width. Also `1056` in the checkpoint;
+    /// generation slices the logits back to `codebook_size` before sampling
+    /// (matching `bark/model_fine.py`'s `logits[..., :codebook_size]`).
+    pub output_vocab_size: usize,
     pub n_layer: usize,
     pub n_head: usize,
     pub n_embd: usize,
@@ -90,11 +95,13 @@ impl FineConfig {
             codebook_size: 1024,
             n_codebooks: 8,
             n_codebooks_input: 2,
+            input_vocab_size: 1056,
+            output_vocab_size: 1056,
             n_layer: 12,
             n_head: 12,
             n_embd: 768,
             block_size: 1024,
-            bias: true,
+            bias: false,
         }
     }
 
@@ -171,7 +178,7 @@ impl FineDecoder {
         let mut wtes = Vec::with_capacity(config.n_codebooks);
         for i in 0..config.n_codebooks {
             wtes.push(embedding(
-                config.codebook_size,
+                config.input_vocab_size,
                 config.n_embd,
                 vb.pp(format!("input_embeds_layers.{i}")),
             )?);
@@ -188,13 +195,15 @@ impl FineDecoder {
                 config.block_cfg(),
             )?);
         }
-        let ln_f = layer_norm(config.n_embd, LAYER_NORM_EPS, vb.pp("layernorm_final"))?;
+        let ln_f = load_layer_norm(config.n_embd, config.bias, vb.pp("layernorm_final"))?;
         let mut lm_heads = Vec::with_capacity(config.n_codebooks - n_codes_given);
         for i in 0..(config.n_codebooks - n_codes_given) {
-            // Heads have no bias in upstream (`bias=False`).
+            // Heads have no bias in upstream (`bias=False`). Sized to the
+            // checkpoint's `output_vocab_size` (1056); `forward` slices the
+            // result back to `codebook_size` before it reaches sampling.
             lm_heads.push(linear_no_bias(
                 config.n_embd,
-                config.codebook_size,
+                config.output_vocab_size,
                 vb.pp(format!("lm_heads.{i}")),
             )?);
         }
@@ -269,7 +278,12 @@ impl FineDecoder {
         }
         x = x.apply(&self.ln_f)?;
         let head_idx = pred_codebook_idx - self.n_codes_given;
-        let logits = self.lm_heads[head_idx].forward(&x)?; // [B, T, codebook_size]
+        let logits = self.lm_heads[head_idx].forward(&x)?; // [B, T, output_vocab_size]
+        // Upstream restricts the fine logits to the first `codebook_size`
+        // ids before sampling (`bark/model_fine.py`'s
+        // `relevant_logits = logits[:, :, :codebook_size]`); the remaining
+        // columns are padding slots that must never be sampled.
+        let logits = logits.narrow(D::Minus1, 0, self.config.codebook_size)?; // [B, T, codebook_size]
         let _ = b; // silences unused — shape is implicit
         Ok(logits)
     }
@@ -461,6 +475,11 @@ mod tests {
             codebook_size: 8,
             n_codebooks: 4,
             n_codebooks_input: 2,
+            // Synthetic config keeps the embedding/head width equal to
+            // `codebook_size` so `forward`'s slice-to-codebook_size is a
+            // no-op and the shape assertions below stay exact.
+            input_vocab_size: 8,
+            output_vocab_size: 8,
             n_layer: 1,
             n_head: 2,
             n_embd: 8,
@@ -479,7 +498,10 @@ mod tests {
         assert_eq!(cfg.n_head, 12);
         assert_eq!(cfg.n_embd, 768);
         assert_eq!(cfg.block_size, 1024);
-        assert!(cfg.bias);
+        assert_eq!(cfg.input_vocab_size, 1056);
+        assert_eq!(cfg.output_vocab_size, 1056);
+        // HF `suno/bark*` fine checkpoints are bias-free.
+        assert!(!cfg.bias);
     }
 
     #[test]

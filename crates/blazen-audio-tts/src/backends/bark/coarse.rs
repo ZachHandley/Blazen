@@ -58,16 +58,11 @@
 #![allow(clippy::needless_pass_by_value)]
 
 use candle_core::{D, DType, IndexOp, Module, Result as CandleResult, Tensor};
-use candle_nn::{
-    Embedding, LayerNorm, Linear, VarBuilder, embedding, layer_norm, linear_no_bias, ops,
-};
+use candle_nn::{Embedding, LayerNorm, Linear, VarBuilder, embedding, linear_no_bias, ops};
 
 use crate::error::TtsError;
 
-use super::gpt_block::{Block, BlockConfig};
-
-/// `LayerNorm` epsilon — `PyTorch` default, matches upstream Bark.
-const LAYER_NORM_EPS: f64 = 1e-5;
+use super::gpt_block::{Block, BlockConfig, load_layer_norm};
 
 /// Configuration for the Bark coarse-stage transformer.
 ///
@@ -129,7 +124,7 @@ impl CoarseConfig {
             n_head: 12,
             n_embd: 768,
             block_size: 1024,
-            bias: true,
+            bias: false,
         }
     }
 
@@ -149,7 +144,7 @@ impl CoarseConfig {
             n_head: 16,
             n_embd: 1024,
             block_size: 1024,
-            bias: true,
+            bias: false,
         }
     }
 
@@ -237,7 +232,7 @@ impl CoarseDecoder {
         let blocks = (0..config.n_layer)
             .map(|i| Block::load(vb.pp(format!("layers.{i}")), config.block_cfg()))
             .collect::<CandleResult<Vec<_>>>()?;
-        let ln_f = layer_norm(config.n_embd, LAYER_NORM_EPS, vb.pp("layernorm_final"))?;
+        let ln_f = load_layer_norm(config.n_embd, config.bias, vb.pp("layernorm_final"))?;
         // `lm_head` is bias-free per upstream `modeling_bark.py:379`.
         let lm_head = linear_no_bias(config.n_embd, config.output_vocab_size, vb.pp("lm_head"))?;
         Ok(Self {
@@ -501,7 +496,8 @@ mod tests {
         assert_eq!(cfg.n_codebooks, 2);
         assert_eq!(cfg.input_vocab_size, 12_096);
         assert_eq!(cfg.output_vocab_size, 12_096);
-        assert!(cfg.bias);
+        // HF `suno/bark*` coarse checkpoints are bias-free.
+        assert!(!cfg.bias);
     }
 
     #[test]

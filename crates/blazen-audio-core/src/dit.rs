@@ -35,7 +35,7 @@
 )]
 
 use candle_core::{D, DType, Module, Result, Tensor};
-use candle_nn::{Linear, VarBuilder, linear_no_bias};
+use candle_nn::{Linear, VarBuilder, linear, linear_no_bias};
 
 use crate::rope::apply_rope;
 
@@ -68,9 +68,16 @@ pub struct Attention {
     /// Self-attn QKV fused projection (`embed_dim → 3 * embed_dim`).
     /// `None` for cross-attention.
     qkv: Option<Linear>,
-    /// Cross-attn Q projection (`embed_dim → embed_dim`). `None` for
-    /// self-attention.
+    /// Q projection (`embed_dim → embed_dim`). Used by cross-attention
+    /// and by split self-attention (F5 / diffusers naming, `to_q`).
+    /// `None` for fused self-attention.
     q_proj: Option<Linear>,
+    /// Split self-attn K projection (`embed_dim → embed_dim`, `to_k`).
+    /// `None` unless built via [`Attention::new_self_split`].
+    k_proj: Option<Linear>,
+    /// Split self-attn V projection (`embed_dim → embed_dim`, `to_v`).
+    /// `None` unless built via [`Attention::new_self_split`].
+    v_proj: Option<Linear>,
     /// Cross-attn KV fused projection (`kv_dim → 2 * kv_dim`). `None`
     /// for self-attention.
     kv_proj: Option<Linear>,
@@ -105,6 +112,46 @@ impl Attention {
         Ok(Self {
             qkv: Some(qkv),
             q_proj: None,
+            k_proj: None,
+            v_proj: None,
+            kv_proj: None,
+            out_proj,
+            num_heads,
+            head_dim,
+            is_cross: false,
+            qk_norm,
+            scale,
+        })
+    }
+
+    /// Construct a self-attention block with **split** Q/K/V projections
+    /// that carry a bias, plus a `to_out.0` output projection.
+    ///
+    /// This matches the diffusers / F5-TTS naming (`to_q`, `to_k`, `to_v`,
+    /// `to_out.0`) — distinct from [`Attention::new_self`], which loads a
+    /// single bias-less fused `to_qkv` (the Stable Audio convention). RoPE
+    /// is applied the same way as fused self-attention.
+    pub fn new_self_split(
+        embed_dim: usize,
+        num_heads: usize,
+        head_dim: usize,
+        qk_norm: bool,
+        vb: VarBuilder,
+    ) -> Result<Self> {
+        assert_eq!(embed_dim, num_heads * head_dim);
+        let q_proj = linear(embed_dim, embed_dim, vb.pp("to_q"))?;
+        let k_proj = linear(embed_dim, embed_dim, vb.pp("to_k"))?;
+        let v_proj = linear(embed_dim, embed_dim, vb.pp("to_v"))?;
+        // F5's `to_out` is `nn.ModuleList([Linear, Dropout])`; the Linear
+        // (with bias) is index 0.
+        let out_proj = linear(embed_dim, embed_dim, vb.pp("to_out").pp("0"))?;
+        #[allow(clippy::cast_precision_loss)]
+        let scale = 1.0 / (head_dim as f64).sqrt();
+        Ok(Self {
+            qkv: None,
+            q_proj: Some(q_proj),
+            k_proj: Some(k_proj),
+            v_proj: Some(v_proj),
             kv_proj: None,
             out_proj,
             num_heads,
@@ -136,6 +183,8 @@ impl Attention {
         Ok(Self {
             qkv: None,
             q_proj: Some(q_proj),
+            k_proj: None,
+            v_proj: None,
             kv_proj: Some(kv_proj),
             out_proj,
             num_heads,
@@ -197,12 +246,30 @@ impl Attention {
             let k = kv.narrow(D::Minus1, 0, kv_dim)?;
             let v = kv.narrow(D::Minus1, kv_dim, kv_dim)?;
             (q, k, v)
-        } else {
-            let qkv = self.qkv.as_ref().expect("self-attn has qkv").forward(x)?;
+        } else if let Some(qkv) = self.qkv.as_ref() {
+            let qkv = qkv.forward(x)?;
             let d = qkv.dim(D::Minus1)? / 3;
             let q = qkv.narrow(D::Minus1, 0, d)?;
             let k = qkv.narrow(D::Minus1, d, d)?;
             let v = qkv.narrow(D::Minus1, 2 * d, d)?;
+            (q, k, v)
+        } else {
+            // Split self-attention (F5 / diffusers `to_q`/`to_k`/`to_v`).
+            let q = self
+                .q_proj
+                .as_ref()
+                .expect("split self-attn has q_proj")
+                .forward(x)?;
+            let k = self
+                .k_proj
+                .as_ref()
+                .expect("split self-attn has k_proj")
+                .forward(x)?;
+            let v = self
+                .v_proj
+                .as_ref()
+                .expect("split self-attn has v_proj")
+                .forward(x)?;
             (q, k, v)
         };
 

@@ -73,7 +73,7 @@
 // tests only.
 #![allow(dead_code)]
 
-use blazen_audio_core::dit::{Attention, FeedForward};
+use blazen_audio_core::dit::Attention;
 use blazen_audio_core::rope::precompute_rope_freqs;
 use candle_core::{D, DType, Module, Result, Tensor};
 use candle_nn::{Conv1d, Conv1dConfig, Linear, VarBuilder, conv1d, linear, linear_no_bias};
@@ -450,7 +450,7 @@ pub(super) struct F5DitBlock {
     attn_norm: F5AdaLayerNorm,
     attn: Attention,
     ff_norm: candle_nn::LayerNorm,
-    ff: FeedForward,
+    ff: F5FeedForward,
 }
 
 impl std::fmt::Debug for F5DitBlock {
@@ -462,7 +462,10 @@ impl std::fmt::Debug for F5DitBlock {
 impl F5DitBlock {
     pub(super) fn new(vb: VarBuilder, cfg: &F5DitConfig) -> Result<Self> {
         let attn_norm = F5AdaLayerNorm::new(vb.pp("attn_norm"), cfg.hidden_dim)?;
-        let attn = Attention::new_self(
+        // F5-TTS uses split Q/K/V projections with bias and a `to_out.0`
+        // output linear (diffusers `Attention` naming) — not Stable Audio's
+        // fused bias-less `to_qkv`.
+        let attn = Attention::new_self_split(
             cfg.hidden_dim,
             cfg.heads,
             cfg.head_dim,
@@ -475,7 +478,7 @@ impl F5DitBlock {
         let device = vb.device();
         let gamma = Tensor::ones(cfg.hidden_dim, DType::F32, device)?;
         let ff_norm = candle_nn::LayerNorm::new_no_bias(gamma, 1e-6);
-        let ff = FeedForward::new(cfg.hidden_dim, cfg.ff_inner(), vb.pp("ff"))?;
+        let ff = F5FeedForward::new(vb.pp("ff"), cfg.hidden_dim, cfg.ff_inner())?;
         Ok(Self {
             attn_norm,
             attn,
@@ -512,6 +515,35 @@ impl F5DitBlock {
             .broadcast_add(&shift_mlp)?;
         let ff_out = self.ff.forward(&modulated)?;
         xs.add(&ff_out.broadcast_mul(&gate_mlp)?)
+    }
+}
+
+/// F5-TTS feed-forward: `Linear(dim, inner) → GELU(tanh) → Linear(inner,
+/// dim)`, both linears with bias.
+///
+/// This is the diffusers / F5 `FeedForward` layout — distinct from Stable
+/// Audio's gated SwiGLU ([`blazen_audio_core::dit::FeedForward`]). The
+/// inner `nn.Sequential` lives at `ff`; the project-in `Linear` is at
+/// `ff.0.0` (followed by a paramless GELU at `ff.0.1`) and the project-out
+/// `Linear` at `ff.2`. F5TTS_Base builds the GELU with `approximate="tanh"`,
+/// so we use candle's tanh-approximate [`Tensor::gelu`] (not `gelu_erf`).
+struct F5FeedForward {
+    proj_in: Linear,
+    proj_out: Linear,
+}
+
+impl F5FeedForward {
+    fn new(vb: VarBuilder, hidden_dim: usize, inner_dim: usize) -> Result<Self> {
+        let inner = vb.pp("ff");
+        let proj_in = linear(hidden_dim, inner_dim, inner.pp("0").pp("0"))?;
+        let proj_out = linear(inner_dim, hidden_dim, inner.pp("2"))?;
+        Ok(Self { proj_in, proj_out })
+    }
+
+    fn forward(&self, xs: &Tensor) -> Result<Tensor> {
+        let xs = self.proj_in.forward(xs)?;
+        let xs = xs.gelu()?;
+        self.proj_out.forward(&xs)
     }
 }
 

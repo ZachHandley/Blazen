@@ -33,11 +33,11 @@
 #![allow(clippy::many_single_char_names, clippy::similar_names)]
 
 use candle_core::{DType, IndexOp, Module, Result, Tensor};
-use candle_nn::{Embedding, LayerNorm, Linear, VarBuilder, embedding, layer_norm, linear_no_bias};
+use candle_nn::{Embedding, LayerNorm, Linear, VarBuilder, embedding, linear_no_bias};
 
 use crate::error::TtsError;
 
-use super::gpt_block::{Block, BlockConfig};
+use super::gpt_block::{Block, BlockConfig, load_layer_norm};
 
 /// `SEMANTIC_VOCAB_SIZE` from
 /// `bark/generation.py` (`10_000`). The pad token id (`10_000`) lives at
@@ -50,10 +50,6 @@ pub const SEMANTIC_VOCAB_SIZE: usize = 10_000;
 /// `allow_early_stop=True`.
 pub const SEMANTIC_PAD_TOKEN: u32 = 10_000;
 
-/// `LayerNorm` epsilon. Upstream `bark/model.py::LayerNorm` uses
-/// `PyTorch`'s default (`1e-5`).
-const LAYER_NORM_EPS: f64 = 1e-5;
-
 /// Hyper-parameters for the semantic GPT decoder.
 ///
 /// Field names match `bark/model.py::GPTConfig` so a future weight
@@ -62,16 +58,17 @@ const LAYER_NORM_EPS: f64 = 1e-5;
 /// (`bark/model.py::GPTConfig` lines 19-26).
 #[derive(Debug, Clone)]
 pub struct SemanticConfig {
-    /// Text-token vocabulary size. Upstream default is `10_048` and
-    /// covers semantic ids `0..10_000`, the `SEMANTIC_PAD_TOKEN` slot,
-    /// and the BERT-WordPiece text-token shelf at offset
-    /// `TEXT_ENCODING_OFFSET = 10_048` (the text tokens themselves are
-    /// represented by re-indexing into the same embedding table during
-    /// inference, hence the shared `input_vocab_size`).
+    /// Input-token embedding size. The published `suno/bark*` text model
+    /// uses `129_600` — the `GPTConfig` dataclass *default* of `10_048` is
+    /// overridden by the saved checkpoint. The single input embedding table
+    /// spans the whole id space the semantic model consumes: semantic ids
+    /// `0..10_000`, the `SEMANTIC_PAD_TOKEN` slot, and the BERT-WordPiece
+    /// text-token shelf at offset `TEXT_ENCODING_OFFSET = 10_048` up to
+    /// `SEMANTIC_INFER_TOKEN = 129_599`.
     pub input_vocab_size: usize,
-    /// Output (semantic) vocabulary size. Upstream default is `10_048`;
-    /// the live semantic ids occupy `0..10_000` and id `10_000` doubles
-    /// as the EOS / pad token.
+    /// Output (semantic) vocabulary size — `10_048` in the checkpoint. The
+    /// live semantic ids occupy `0..10_000` and id `10_000` doubles as the
+    /// EOS / pad token; the remainder is padding.
     pub output_vocab_size: usize,
     /// Number of transformer blocks. 12 for `suno/bark-small`, 24 for
     /// `suno/bark`.
@@ -98,13 +95,13 @@ impl SemanticConfig {
     #[must_use]
     pub fn bark_small() -> Self {
         Self {
-            input_vocab_size: 10_048,
+            input_vocab_size: 129_600,
             output_vocab_size: 10_048,
             n_layer: 12,
             n_head: 12,
             n_embd: 768,
             block_size: 1024,
-            bias: true,
+            bias: false,
         }
     }
 
@@ -114,13 +111,13 @@ impl SemanticConfig {
     #[must_use]
     pub fn bark_full() -> Self {
         Self {
-            input_vocab_size: 10_048,
+            input_vocab_size: 129_600,
             output_vocab_size: 10_048,
             n_layer: 24,
             n_head: 16,
             n_embd: 1024,
             block_size: 1024,
-            bias: true,
+            bias: false,
         }
     }
 
@@ -206,7 +203,7 @@ impl SemanticDecoder {
         let blocks = (0..config.n_layer)
             .map(|i| Block::load(vb.pp(format!("layers.{i}")), config.block_cfg()))
             .collect::<Result<Vec<_>>>()?;
-        let ln_f = layer_norm(n_embd, LAYER_NORM_EPS, vb.pp("layernorm_final"))?;
+        let ln_f = load_layer_norm(n_embd, config.bias, vb.pp("layernorm_final"))?;
         // Upstream: `self.lm_head = nn.Linear(n_embd, output_vocab_size,
         // bias=False)`. Always no-bias regardless of `config.bias`.
         let head = linear_no_bias(n_embd, config.output_vocab_size, vb.pp("lm_head"))?;
@@ -470,17 +467,20 @@ mod tests {
         }
     }
 
-    /// Upstream defaults — `bark/model.py::GPTConfig`, lines 19-26.
+    /// Matches the published HF `suno/bark-small` `semantic_config`
+    /// (input `129_600` / output `10_048` / bias false) — NOT the bare
+    /// `bark/model.py::GPTConfig` dataclass defaults, which the checkpoint
+    /// overrides.
     #[test]
     fn bark_small_config_matches_upstream() {
         let c = SemanticConfig::bark_small();
-        assert_eq!(c.input_vocab_size, 10_048);
+        assert_eq!(c.input_vocab_size, 129_600);
         assert_eq!(c.output_vocab_size, 10_048);
         assert_eq!(c.n_layer, 12);
         assert_eq!(c.n_head, 12);
         assert_eq!(c.n_embd, 768);
         assert_eq!(c.block_size, 1024);
-        assert!(c.bias);
+        assert!(!c.bias);
         assert_eq!(c.head_dim(), 64);
         assert_eq!(c.n_head * c.head_dim(), c.n_embd);
 
