@@ -273,8 +273,17 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "downloads 1.68 GB of gated weights; run manually with --ignored"]
+    #[ignore = "requires BLAZEN_TEST_STABLE_AUDIO=1 and downloads 1.68 GB of gated weights from HF Hub"]
     fn load_from_hf_smoke() {
+        // Gated by `BLAZEN_TEST_STABLE_AUDIO=1` (mirrors the bark / f5 download
+        // smokes) because the repo `stabilityai/stable-audio-open-small` is
+        // gated and pulls 1.68 GB. The beastpc-e2e Rust music step does not set
+        // this var — it exercises the real download via the Python GPU smokes —
+        // so this stays a no-op skip on tokenless / non-gated machines.
+        if std::env::var("BLAZEN_TEST_STABLE_AUDIO").ok().as_deref() != Some("1") {
+            eprintln!("skipping: BLAZEN_TEST_STABLE_AUDIO != 1");
+            return;
+        }
         let device = Device::Cpu;
         let weights = StableAudioWeights::load_from_hf(&device, DType::F32)
             .expect("hf-hub load + remap should succeed when HF_TOKEN is set");

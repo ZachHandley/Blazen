@@ -1356,7 +1356,7 @@ jobs:
             -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
             -H "Content-Type: application/json" \
             "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/actions/workflows/mirror-github.yaml/dispatches" \
-            -d '{"ref": "main"}'
+            -d '{"ref": "main", "inputs": {"confirm": "yes"}}'
 
   cleanup-artifacts:
     name: Cleanup Build Artifacts
