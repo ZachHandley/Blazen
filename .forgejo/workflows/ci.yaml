@@ -151,11 +151,11 @@ jobs:
           else
             echo "web_only=false" >> "$GITHUB_OUTPUT"
           fi
-          # [np] anywhere in the subject suppresses the release dispatch
+          # [np] anywhere in the commit message suppresses the release dispatch
           # (auto-tag job). Tests still run for signal. Mirrors ZLayer's
           # [np] semantics. workflow_dispatch ignores this — manual
           # dispatch is an explicit "release me anyway" signal.
-          if [[ "$SUBJECT" == *"[np]"* ]]; then
+          if [[ "$BODY" == *"[np]"* ]]; then
             echo "no_publish=true" >> "$GITHUB_OUTPUT"
             echo "Detected [np] — auto-tag will be skipped (no release dispatched)."
           else
@@ -168,19 +168,20 @@ jobs:
           # with [vX.Y.Z] to pin the version for the dispatch. auto-tag's
           # `if: !contains(needs.*.result, 'failure')` gate tolerates the
           # SKIPPED upstream test jobs, so the release flow keeps moving.
-          if [[ "$SUBJECT" == *"[fast]"* ]]; then
+          if [[ "$BODY" == *"[fast]"* ]]; then
             echo "fast=true" >> "$GITHUB_OUTPUT"
             echo "Detected [fast] — test/lint/audit jobs will be skipped; auto-tag still fires."
           else
             echo "fast=false" >> "$GITHUB_OUTPUT"
           fi
-          # [skip] anywhere in the subject is a HARD no-op: NOTHING runs — no
-          # lint, no tests, no build, no audit, no auto-tag/release. Only this
-          # detect job executes. Use it for commits that must not trigger any
-          # CI processing (workflow/registry plumbing already verified locally).
+          # [skip] anywhere in the commit message is a HARD no-op: NOTHING runs
+          # — no lint, no tests, no build, no audit, no auto-tag/release. Only
+          # this detect job executes. Use it for commits that must not trigger
+          # any CI processing (workflow/registry plumbing verified locally).
           # Unlike [fast] (which still fires auto-tag), [skip] suppresses
-          # everything including the release dispatch.
-          if [[ "$SUBJECT" == *"[skip]"* ]]; then
+          # everything including the release dispatch. Matches the full message
+          # (subject OR body) so it can't be missed.
+          if [[ "$BODY" == *"[skip]"* ]]; then
             echo "skip=true" >> "$GITHUB_OUTPUT"
             echo "Detected [skip] — ALL downstream jobs will be skipped."
           else
@@ -192,7 +193,7 @@ jobs:
           # version so every target rebuilds from the new sha (no stale cached
           # artifacts shipped). Use after a fix that must invalidate prior
           # artifacts. Without it, build-artifacts reuses cached step results.
-          if [[ "$SUBJECT" == *"[purge]"* ]]; then
+          if [[ "$BODY" == *"[purge]"* ]]; then
             echo "purge=true" >> "$GITHUB_OUTPUT"
             echo "Detected [purge] — build-artifacts will be dispatched with purge_existing=true."
           else
