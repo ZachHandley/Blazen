@@ -1,0 +1,457 @@
+name: Provider Conformance
+
+# Weekly real-external-provider conformance suite + self-healing remediation.
+# The `conformance` job runs the REAL provider wire-format tests weekly; on a
+# failure the `remediate` job files a Forgejo issue, notifies via the ZRelay
+# action, runs Claude Code headless for a minimal auto-fix, opens a PR, and
+# ai-reviews it. It NEVER auto-merges.
+#
+# Secrets to add (repo/org → Settings → Actions → Secrets). Absent ones
+# self-skip / fall through; the conformance job runs without them. All are
+# opaque tokens — referenced only as ${{ secrets.* }}, never inlined:
+#   ZRELAY_API_KEY            ZRelay bearer token (notify action)
+#   ZRELAY_RECIPIENT          channel target, held as a secret so the
+#                             destination never appears in this file
+#   CLAUDE_CODE_OAUTH_TOKEN   Claude Code auth (preferred) — or
+#   ANTHROPIC_API_KEY         fallback Claude auth (also a provider key)
+#   Optional provider keys (broaden conformance; self-skip when absent):
+#     OPENAI_API_KEY, GEMINI_API_KEY, GROQ_API_KEY, TOGETHER_API_KEY,
+#     MISTRAL_API_KEY, DEEPSEEK_API_KEY, FIREWORKS_API_KEY,
+#     PERPLEXITY_API_KEY, XAI_API_KEY, COHERE_API_KEY
+# Already present: FORGEJO_TOKEN, FORGEJO_ACTIONS_TOKEN, OPENROUTER_API_KEY,
+# FAL_API_KEY, FAL_KEY, S3_* (sccache).
+
+on:
+  schedule:
+    - cron: '0 9 * * 1'   # weekly, Mondays 09:00 UTC
+  workflow_dispatch: {}
+
+concurrency:
+  group: provider-conformance
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+  CARGO_INCREMENTAL: "0"
+  RUST_BACKTRACE: 1
+
+jobs:
+  conformance:
+    name: Conformance (${{ matrix.group }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        group: [openrouter, fal, providers]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python + uv
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-python@main
+        with:
+          python-version: '3.12'
+
+      - name: Setup Rust
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          sccache: true
+          sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-s3-region: ${{ secrets.S3_REGION }}
+          sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-conformance
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Install deps and build extension
+        run: |
+          uv sync --group dev
+          uv run maturin develop -m crates/blazen-py/Cargo.toml
+
+      - name: Run conformance tests (${{ matrix.group }})
+        id: run
+        # Real external-provider tests for this leg. Capture combined output to
+        # a per-group log via `tee`; `set -o pipefail` + the saved exit code
+        # ensure the leg goes red on a pytest failure even though tee succeeds.
+        # The very-slow FAL video test and the FAL compute tests stay OFF
+        # (BLAZEN_TEST_FAL_VIDEO / BLAZEN_TEST_FAL_COMPUTE intentionally unset)
+        # so the weekly run stays bounded. Each provider in the `providers`
+        # group self-skips when its key is absent — absent keys are green.
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          FAL_API_KEY: ${{ secrets.FAL_API_KEY }}
+          FAL_KEY: ${{ secrets.FAL_KEY }}
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+          TOGETHER_API_KEY: ${{ secrets.TOGETHER_API_KEY }}
+          MISTRAL_API_KEY: ${{ secrets.MISTRAL_API_KEY }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          FIREWORKS_API_KEY: ${{ secrets.FIREWORKS_API_KEY }}
+          PERPLEXITY_API_KEY: ${{ secrets.PERPLEXITY_API_KEY }}
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          COHERE_API_KEY: ${{ secrets.COHERE_API_KEY }}
+        run: |
+          set -o pipefail
+          GROUP="${{ matrix.group }}"
+          LOG="conformance-${GROUP}.log"
+          JSON="conformance-${GROUP}.json"
+
+          case "$GROUP" in
+            openrouter)
+              FILES="tests/python/test_llm_smoke.py tests/python/test_capabilities_smoke.py"
+              ;;
+            fal)
+              FILES="tests/python/test_fal_smoke.py"
+              ;;
+            providers)
+              FILES="tests/python/test_provider_smoke.py"
+              ;;
+            *)
+              echo "Unknown conformance group: $GROUP" | tee "$LOG"
+              exit 1
+              ;;
+          esac
+
+          echo "Running conformance group '$GROUP': $FILES"
+          set +e
+          uv run pytest -v --timeout=600 $FILES 2>&1 | tee "$LOG"
+          RC=${PIPESTATUS[0]}
+          set -e
+
+          # Build the per-group status JSON with the last ~150 log lines.
+          TAIL="$(tail -n 150 "$LOG")"
+          if [ "$RC" -eq 0 ]; then
+            STATUS="success"
+          else
+            STATUS="failure"
+          fi
+          # Use python for safe JSON encoding of the (multiline) log tail.
+          GROUP="$GROUP" STATUS="$STATUS" TAIL="$TAIL" JSON="$JSON" python3 -c 'import json, os; open(os.environ["JSON"], "w").write(json.dumps({"group": os.environ["GROUP"], "status": os.environ["STATUS"], "log_tail": os.environ["TAIL"]}, indent=2))'
+          echo "Wrote $JSON (status=$STATUS, exit=$RC)"
+          exit "$RC"
+
+      - name: Upload conformance artifact
+        if: always()
+        uses: https://code.forgejo.org/forgejo/upload-artifact@v4
+        with:
+          name: conformance-${{ matrix.group }}
+          path: |
+            conformance-${{ matrix.group }}.json
+            conformance-${{ matrix.group }}.log
+          if-no-files-found: warn
+          retention-days: 30
+
+  remediate:
+    name: Remediate conformance failure
+    needs: [conformance]
+    if: ${{ failure() }}
+    runs-on: beastpc
+    timeout-minutes: 60
+    env:
+      # Forgejo REST auth + git push token. Forgejo injects this into the
+      # remote so a plain `git push` authenticates.
+      FORGEJO_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
+      GITHUB_TOKEN: ${{ secrets.FORGEJO_TOKEN }}
+      FORGEJO_API: https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}
+      RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+      AUTOFIX_BRANCH: autofix/conformance-${{ github.run_id }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.FORGEJO_TOKEN }}
+
+      - name: Download conformance artifacts
+        if: always()
+        # v4 to match the forgejo upload-artifact@v4 used by the conformance
+        # job (v3 and v4 artifact backends are not cross-compatible).
+        uses: https://code.forgejo.org/forgejo/download-artifact@v4
+        with:
+          path: artifacts
+
+      - name: Collect failed groups
+        if: always()
+        id: collect
+        # Walk every conformance-*.json artifact, collect the groups whose
+        # status == failure, and emit:
+        #   failed.txt         — newline list of failed group names
+        #   summary.md         — human summary (failing groups + log tails)
+        #   <group>.tail.txt   — log tail per failed group (for the fix prompt)
+        run: |
+          set -euo pipefail
+          mkdir -p remediate
+          : > remediate/failed.txt
+          : > remediate/summary.md
+
+          shopt -s nullglob
+          FOUND_ANY=0
+          for j in artifacts/*/conformance-*.json artifacts/conformance-*.json; do
+            [ -f "$j" ] || continue
+            FOUND_ANY=1
+            GROUP="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['group'])" "$j")"
+            STATUS="$(python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['status'])" "$j")"
+            if [ "$STATUS" = "failure" ]; then
+              echo "$GROUP" >> remediate/failed.txt
+              python3 -c "import json,sys;print(json.load(open(sys.argv[1]))['log_tail'])" "$j" \
+                > "remediate/${GROUP}.tail.txt"
+              {
+                echo "### conformance group: ${GROUP}"
+                echo ""
+                echo '```'
+                cat "remediate/${GROUP}.tail.txt"
+                echo '```'
+                echo ""
+              } >> remediate/summary.md
+            fi
+          done
+
+          if [ "$FOUND_ANY" -eq 0 ]; then
+            echo "No conformance JSON artifacts found." >&2
+          fi
+
+          # Deduplicate failed group list.
+          if [ -s remediate/failed.txt ]; then
+            sort -u remediate/failed.txt -o remediate/failed.txt
+          fi
+          FAILED_CSV="$(paste -sd ',' remediate/failed.txt 2>/dev/null || true)"
+          echo "failed_groups=${FAILED_CSV}" >> "$GITHUB_OUTPUT"
+          echo "Failed groups: ${FAILED_CSV:-<none>}"
+
+      - name: Open or update Forgejo issue(s)
+        if: always()
+        # For each failed group: dedup-open an issue labelled conformance-failure.
+        # Search open issues for title "conformance: <group>"; if present, comment;
+        # else create a fresh issue. Records the issue index per group for the PR body.
+        run: |
+          set -euo pipefail
+          [ -s remediate/failed.txt ] || { echo "No failed groups; skipping issues."; exit 0; }
+          : > remediate/issue_links.txt
+
+          AUTH="Authorization: token ${FORGEJO_TOKEN}"
+
+          while IFS= read -r GROUP; do
+            [ -n "$GROUP" ] || continue
+            TITLE="conformance: ${GROUP}"
+            TAIL_FILE="remediate/${GROUP}.tail.txt"
+            [ -f "$TAIL_FILE" ] || echo "(no log tail captured)" > "$TAIL_FILE"
+
+            # Build the issue/comment body via python (safe JSON encoding).
+            BODY_JSON="$(GROUP="$GROUP" TITLE="$TITLE" RUN_URL="$RUN_URL" TAIL_FILE="$TAIL_FILE" python3 -c 'import json, os; g=os.environ["GROUP"]; run=os.environ["RUN_URL"]; tail=open(os.environ["TAIL_FILE"]).read(); body="## Provider conformance failure: `"+g+"`\n\nThe weekly real-external-provider conformance suite failed for group **"+g+"**. This usually means the provider changed its endpoint URL, auth header, or request/response schema.\n\n**Run:** "+run+"\n\n### Failing test log (tail)\n\n```\n"+tail+"\n```\n"; print(json.dumps({"title": os.environ["TITLE"], "body": body, "labels": ["conformance-failure"]}))')"
+
+            # Look for an existing open issue with this exact title.
+            EXISTING="$(curl -fsSL -H "$AUTH" \
+              "${FORGEJO_API}/issues?labels=conformance-failure&state=open&type=issues" \
+              | TITLE="$TITLE" python3 -c 'import json,sys,os; data=json.load(sys.stdin); t=os.environ["TITLE"]; m=[i for i in data if i.get("title")==t]; print(m[0]["number"] if m else "")' 2>/dev/null || true)"
+
+            if [ -n "$EXISTING" ]; then
+              echo "Issue #${EXISTING} exists for '${TITLE}' — commenting."
+              COMMENT_JSON="$(RUN_URL="$RUN_URL" TAIL_FILE="$TAIL_FILE" python3 -c 'import json, os; tail=open(os.environ["TAIL_FILE"]).read(); body="Still failing as of run "+os.environ["RUN_URL"]+".\n\n```\n"+tail+"\n```\n"; print(json.dumps({"body": body}))')"
+              curl -fsSL -X POST -H "$AUTH" -H "Content-Type: application/json" \
+                "${FORGEJO_API}/issues/${EXISTING}/comments" \
+                -d "$COMMENT_JSON" >/dev/null || echo "WARN: comment POST failed for #${EXISTING}"
+              NUM="$EXISTING"
+            else
+              echo "Creating new issue for '${TITLE}'."
+              NUM="$(curl -fsSL -X POST -H "$AUTH" -H "Content-Type: application/json" \
+                "${FORGEJO_API}/issues" -d "$BODY_JSON" \
+                | python3 -c "import json,sys;print(json.load(sys.stdin).get('number',''))" 2>/dev/null || true)"
+              echo "Created issue #${NUM:-<unknown>}"
+            fi
+            [ -n "${NUM:-}" ] && echo "${GROUP} #${NUM}" >> remediate/issue_links.txt
+          done < remediate/failed.txt
+
+      - name: Notify failure (ZRelay)
+        if: always()
+        # Routes through the ZRelay action so the destination (channel id /
+        # phone) stays a redacted secret and never appears in this public file.
+        # fail-on-error:false → a notify miss (or unset ZRELAY_API_KEY) never
+        # breaks remediation.
+        uses: https://forge.blackleafdigital.com/Public/actions/zrelay-notify@main
+        with:
+          api-key: ${{ secrets.ZRELAY_API_KEY }}
+          channel: discord
+          recipient: ${{ secrets.ZRELAY_RECIPIENT }}
+          body: "⚠️ Blazen provider conformance failed for: ${{ steps.collect.outputs.failed_groups }}. Attempting auto-remediation. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fail-on-error: false
+
+      - name: Setup Rust (for cargo check on the fix)
+        if: always()
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          sccache: true
+          sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-s3-region: ${{ secrets.S3_REGION }}
+          sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-conformance-fix
+          registries: '[{"name": "forgejo", "index": "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/", "token": "${{ secrets.FORGEJO_ACTIONS_TOKEN }}"}]'
+
+      - name: Attempt auto-fix with Claude Code (headless)
+        if: always()
+        id: autofix
+        # Best-effort: never hard-fail the job. Claude researches the provider's
+        # CURRENT API via WebSearch/WebFetch and makes the MINIMAL fix in the
+        # provider source. Auth via CLAUDE_CODE_OAUTH_TOKEN (preferred) with
+        # ANTHROPIC_API_KEY as fallback.
+        env:
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        run: |
+          set -uo pipefail
+          if [ ! -s remediate/failed.txt ]; then
+            echo "No failed groups; nothing to fix."
+            echo "fixed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ -z "${CLAUDE_CODE_OAUTH_TOKEN:-}" ] && [ -z "${ANTHROPIC_API_KEY:-}" ]; then
+            echo "Neither CLAUDE_CODE_OAUTH_TOKEN nor ANTHROPIC_API_KEY set; cannot run Claude Code."
+            echo "fixed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Fresh autofix branch off the failing commit.
+          git config user.name "Blazen CI"
+          git config user.email "ci@blazen.dev"
+          git checkout -b "${AUTOFIX_BRANCH}"
+
+          npm install -g @anthropic-ai/claude-code@latest || {
+            echo "claude-code install failed; skipping auto-fix."
+            echo "fixed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          }
+
+          FAILED_CSV="$(paste -sd ', ' remediate/failed.txt)"
+          SUMMARY="$(cat remediate/summary.md)"
+
+          # Assemble the fix prompt with printf so every line stays inside the
+          # YAML block scalar (no column-1 continuation lines).
+          FIX_PROMPT="$(printf '%s\n' \
+            "The weekly provider-conformance suite failed for these groups: ${FAILED_CSV}." \
+            "" \
+            "These tests hit REAL external provider APIs. A failure almost always means a provider changed its endpoint URL, auth header, or request/response JSON schema." \
+            "" \
+            "Failing test output (per group):" \
+            "${SUMMARY}" \
+            "" \
+            "Your task:" \
+            "1. Diagnose the conformance break from the log tails above." \
+            "2. Use WebSearch / WebFetch to check the affected provider's CURRENT public API documentation (endpoints, auth headers, request and response shapes)." \
+            "3. Make the MINIMAL code fix in crates/blazen-llm/src/providers/ to bring Blazen back into conformance. Do NOT touch unrelated code, tests, or config." \
+            "4. Do NOT add any AI attribution to code or comments anywhere." \
+            "Keep the change as small and surgical as possible.")"
+
+          # Don't let a nonzero claude exit fail the job — fall through to the
+          # diff check, which decides PR vs. needs-human.
+          claude -p "$FIX_PROMPT" \
+            --allowedTools "Read Edit Bash Grep Glob WebSearch WebFetch" \
+            --permission-mode acceptEdits 2>&1 | tee remediate/claude.log || \
+            echo "claude exited nonzero; continuing."
+
+          # Best-effort validation; record but don't hard-fail.
+          if cargo check -p blazen-llm 2>&1 | tee remediate/cargo-check.log; then
+            echo "cargo_check=pass" >> "$GITHUB_OUTPUT"
+          else
+            echo "cargo_check=fail" >> "$GITHUB_OUTPUT"
+            echo "WARN: cargo check -p blazen-llm failed after auto-fix."
+          fi
+
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "Auto-fix produced changes."
+            echo "fixed=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "Auto-fix produced no changes."
+            echo "fixed=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Commit, push, open PR
+        if: ${{ always() && steps.autofix.outputs.fixed == 'true' }}
+        id: pr
+        run: |
+          set -euo pipefail
+          FAILED_CSV="$(paste -sd ', ' remediate/failed.txt)"
+          git config user.name "Blazen CI"
+          git config user.email "ci@blazen.dev"
+
+          git add -A
+          git commit -m "fix(conformance): auto-remediate ${FAILED_CSV} provider conformance break"
+          git push origin "HEAD:refs/heads/${AUTOFIX_BRANCH}" --force-with-lease
+
+          # Link any issues we opened/updated into the PR body.
+          ISSUE_LINKS=""
+          if [ -s remediate/issue_links.txt ]; then
+            ISSUE_LINKS="$(sed 's/^/- /' remediate/issue_links.txt)"
+          fi
+
+          AUTH="Authorization: token ${FORGEJO_TOKEN}"
+          PR_BODY_JSON="$(FAILED_CSV="$FAILED_CSV" RUN_URL="$RUN_URL" BRANCH="$AUTOFIX_BRANCH" ISSUE_LINKS="$ISSUE_LINKS" CARGO_CHECK="${{ steps.autofix.outputs.cargo_check }}" python3 -c 'import json, os; csv=os.environ["FAILED_CSV"]; links=os.environ.get("ISSUE_LINKS","").strip(); cc=os.environ.get("CARGO_CHECK") or "(not run)"; body="## Auto-remediation: provider conformance\n\nAutomated minimal fix for the failing conformance group(s): `"+csv+"`.\n\n**Conformance run:** "+os.environ["RUN_URL"]+"\n\n**`cargo check -p blazen-llm` after fix:** "+cc+"\n\n"; body += (("### Related issues\n"+links+"\n\n") if links else ""); body += "> This PR was generated by the conformance self-healing workflow and awaits human review. It is NOT auto-merged.\n"; print(json.dumps({"title": "fix(conformance): auto-remediate "+csv+" provider conformance break", "body": body, "head": os.environ["BRANCH"], "base": "main"}))')"
+
+          PR_RESP="$(curl -fsSL -X POST -H "$AUTH" -H "Content-Type: application/json" \
+            "${FORGEJO_API}/pulls" -d "$PR_BODY_JSON")" || {
+              echo "WARN: PR creation failed."; echo "$PR_RESP"
+              echo "pr_index=" >> "$GITHUB_OUTPUT"
+              echo "pr_url=" >> "$GITHUB_OUTPUT"
+              exit 0
+            }
+          PR_INDEX="$(echo "$PR_RESP" | python3 -c "import json,sys;print(json.load(sys.stdin).get('number',''))" 2>/dev/null || true)"
+          PR_URL="$(echo "$PR_RESP" | python3 -c "import json,sys;print(json.load(sys.stdin).get('html_url',''))" 2>/dev/null || true)"
+          echo "Opened PR #${PR_INDEX:-<unknown>}: ${PR_URL:-}"
+          echo "pr_index=${PR_INDEX}" >> "$GITHUB_OUTPUT"
+          echo "pr_url=${PR_URL}" >> "$GITHUB_OUTPUT"
+
+      - name: AI review the auto-fix PR
+        if: ${{ always() && steps.autofix.outputs.fixed == 'true' && steps.pr.outputs.pr_index != '' }}
+        uses: https://forge.blackleafdigital.com/Public/actions/ai-review@main
+        with:
+          api-key: ${{ secrets.OPENROUTER_API_KEY }}
+          base-url: https://openrouter.ai/api/v1
+          provider: openai
+          model: anthropic/claude-sonnet-4.6
+          forgejo-token: ${{ secrets.FORGEJO_TOKEN }}
+          forgejo-url: https://forge.blackleafdigital.com
+
+      - name: Notify PR opened — awaiting approval (ZRelay)
+        if: ${{ always() && steps.autofix.outputs.fixed == 'true' }}
+        uses: https://forge.blackleafdigital.com/Public/actions/zrelay-notify@main
+        with:
+          api-key: ${{ secrets.ZRELAY_API_KEY }}
+          channel: discord
+          recipient: ${{ secrets.ZRELAY_RECIPIENT }}
+          body: "🔧 Conformance auto-fix PR opened and awaiting approval (not auto-merged): ${{ steps.pr.outputs.pr_url }}"
+          fail-on-error: false
+
+      - name: No-fix fallback — comment on issue(s) (needs human)
+        if: ${{ always() && steps.autofix.outputs.fixed != 'true' }}
+        # The auto-fix produced no diff (or couldn't run). Tell the issue(s) a
+        # human is needed. Do NOT open an empty PR.
+        run: |
+          set -euo pipefail
+          [ -s remediate/failed.txt ] || { echo "No failed groups; nothing to report."; exit 0; }
+          AUTH="Authorization: token ${FORGEJO_TOKEN}"
+
+          # Comment on each open conformance issue.
+          if [ -s remediate/issue_links.txt ]; then
+            while IFS= read -r LINE; do
+              NUM="$(echo "$LINE" | grep -oE '#[0-9]+' | tr -d '#' || true)"
+              [ -n "$NUM" ] || continue
+              C_JSON="$(RUN_URL="$RUN_URL" python3 -c 'import json, os; print(json.dumps({"body": "Auto-fix could not resolve this conformance break — needs human. Run: "+os.environ["RUN_URL"]}))')"
+              curl -fsSL -X POST -H "$AUTH" -H "Content-Type: application/json" \
+                "${FORGEJO_API}/issues/${NUM}/comments" -d "$C_JSON" >/dev/null \
+                || echo "WARN: comment POST failed for #${NUM}"
+            done < remediate/issue_links.txt
+          fi
+
+      - name: No-fix fallback — notify needs-human (ZRelay)
+        if: ${{ always() && steps.autofix.outputs.fixed != 'true' }}
+        uses: https://forge.blackleafdigital.com/Public/actions/zrelay-notify@main
+        with:
+          api-key: ${{ secrets.ZRELAY_API_KEY }}
+          channel: discord
+          recipient: ${{ secrets.ZRELAY_RECIPIENT }}
+          body: "🚨 Conformance auto-fix could NOT resolve: ${{ steps.collect.outputs.failed_groups }} — needs human. Run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+          fail-on-error: false

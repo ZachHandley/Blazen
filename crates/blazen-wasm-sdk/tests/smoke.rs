@@ -68,7 +68,7 @@ async fn js_api_model_manager_registers_with_lifecycle() {
     // The new register signature: (id, model: Option<JsValue>, memory_estimate_bytes, lifecycle).
     // Pass `None` for the model to exercise the `Option<JsValue>` arm.
     let promise = mgr
-        .register("smoke-full".to_string(), None, 1_000_000_000.0, lifecycle)
+        .register("smoke-full".to_string(), None, 1_000_000_000.0, Some(lifecycle))
         .expect("register should accept the new shape");
     wasm_bindgen_futures::JsFuture::from(promise)
         .await
@@ -117,7 +117,7 @@ async fn js_api_model_manager_register_minimal_lifecycle() {
     Reflect::set(&lifecycle, &JsValue::from_str("unload"), unload.as_ref()).unwrap();
 
     let promise = mgr
-        .register("smoke-minimal".to_string(), None, 500_000_000.0, lifecycle)
+        .register("smoke-minimal".to_string(), None, 500_000_000.0, Some(lifecycle))
         .expect("register should accept a minimal lifecycle");
     wasm_bindgen_futures::JsFuture::from(promise)
         .await

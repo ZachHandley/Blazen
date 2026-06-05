@@ -14,8 +14,16 @@
 //! - **`vad-tract`** — pure-Rust `tract`, for `musl` / `wasm` targets where
 //!   ONNX Runtime doesn't ship.
 //!
-//! When both are enabled (e.g. `--all-features`), `ort` takes precedence. A
-//! `compile_error!` fires if neither is enabled under `whisper-streaming`.
+//! These are **mutually-exclusive** engine selectors — a real artifact enables
+//! exactly one (native → `vad-ort`; musl/wasm → `vad-tract`). The only config
+//! that turns on both is a CI convenience like `--all-features`. There,
+//! **`vad-tract` takes precedence**: it is pure-Rust and links no native
+//! runtime, so it cannot collide at link/run time with the other native ML
+//! libraries that `--all-features` also pulls in (ONNX Runtime via `ort`,
+//! CTranslate2 via `ct2rs`, whisper.cpp) — a combination that otherwise
+//! SIGSEGVs when an `ort` session is created in the same process. A
+//! `compile_error!` fires if neither backend is enabled under
+//! `whisper-streaming`.
 //!
 //! # Why an embedded, re-exported model
 //!
@@ -125,7 +133,10 @@ impl Default for SileroVadConfig {
 // compiled (`ort` wins when both features are on).
 // ---------------------------------------------------------------------------
 
-#[cfg(feature = "vad-ort")]
+// `vad-tract` wins when both backends are enabled (see module docs): the
+// pure-Rust engine avoids the native-library coexistence SIGSEGV under
+// `--all-features`. A real single-backend artifact is unaffected.
+#[cfg(all(feature = "vad-ort", not(feature = "vad-tract")))]
 mod engine {
     use super::{MODEL_BYTES, SttError, VAD_INPUT_LEN};
     use ort::session::Session;
@@ -180,7 +191,7 @@ mod engine {
     }
 }
 
-#[cfg(all(feature = "vad-tract", not(feature = "vad-ort")))]
+#[cfg(feature = "vad-tract")]
 mod engine {
     use super::{MODEL_BYTES, SttError, VAD_INPUT_LEN};
     use tract_onnx::prelude::*;

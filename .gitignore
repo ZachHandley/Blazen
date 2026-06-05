@@ -42,4 +42,8 @@ bindings/ruby/.rspec_status
 bindings/ruby/Gemfile.lock
 bindings/ruby/vendor/
 bindings/ruby/.bundle/
+
+# Local agent / assistant files — kept out of the public repo.
 .claude/
+CLAUDE.md
+TODO_DELME.md

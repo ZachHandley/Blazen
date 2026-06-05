@@ -55,8 +55,8 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          git config user.name  "Zach Handley"
-          git config user.email "zachhandley@gmail.com"
+          git config user.name  "Blazen CI"
+          git config user.email "ci@blazen.dev"
 
           # Fetch existing models-data branch (if any) so we can compare
           # against its tip and avoid a redundant force-push when nothing
