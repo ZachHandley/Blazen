@@ -122,9 +122,13 @@ coreml = ["whispercpp"]
 # It requires exactly one VAD runtime backend:
 #   - `vad-ort`   — ONNX Runtime (native: macOS / Linux-gnu / Windows, CPU+GPU)
 #   - `vad-tract` — pure-Rust tract (musl / wasm, where ONNX Runtime doesn't ship)
-# `vad.rs` raises a `compile_error!` if neither is enabled. When both are on
-# (e.g. `--all-features`), `ort` takes precedence. Consumers default to
-# `vad-ort`; the musl/wasm artifact path selects `vad-tract`.
+# `vad.rs` raises a `compile_error!` if neither is enabled. They are mutually
+# exclusive — a real artifact enables exactly one. When both are on (a CI
+# convenience like `--all-features`), the pure-Rust `vad-tract` takes
+# precedence so the VAD links no native runtime and cannot collide with the
+# other native ML libs `--all-features` pulls in (ort / ct2rs / whisper.cpp),
+# which otherwise SIGSEGVs when an ort session is created. Consumers select
+# `vad-ort` (native) or `vad-tract` (musl/wasm).
 #
 # Implements [`SttBackend::stream`]; the file-based `transcribe` returns
 # `Unsupported` (route to the `candle` backend for blocking work).
