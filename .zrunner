@@ -1,0 +1,16 @@
+# .zrunner — ZArcRunner per-repository scheduling policy.
+#
+# Read by the self-hosted ZArcRunner from this repo's DEFAULT branch and cached
+# briefly. All fields are optional; an absent file means normal priority.
+#
+#   priority   int, 0 = normal (default). Lower yields to other repos when the
+#              runner is under contention; higher is scheduled ahead. A lower-
+#              priority repo still uses the whole machine when nothing higher is
+#              running — it only steps aside while a higher-priority repo has a
+#              live job.
+#   max_defer  optional duration cap (e.g. 10m) on how long a job may be held
+#              before it runs anyway, so a low-priority repo is never starved.
+#
+# Blazen's CI does full --all-features GPU builds that run for hours, so it runs
+# at low priority and lets faster repos jump ahead.
+priority: -10
