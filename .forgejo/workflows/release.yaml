@@ -215,35 +215,24 @@ jobs:
 
       - name: Stamp version
         if: steps.check.outputs.completed != 'true'
-        # --keep-forgejo-registry: publish-rust is the ONLY job that keeps the
-        # `registry = "forgejo"` dep markers, so `cargo publish --registry
-        # forgejo` resolves siblings from Forgejo. Build jobs strip them (their
-        # cross-build envs lack the forgejo registry config).
-        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }} --keep-forgejo-registry
+        # Default mode STRIPS `, registry = "forgejo"` off the root inter-crate
+        # deps so `cargo publish` resolves siblings from PUBLIC crates.io
+        # (Blazen is a public crate). Do NOT pass --keep-forgejo-registry.
+        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }}
 
       - name: Publish crates in dependency order
         if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/cargo-publish-workspace@main
         with:
           version: ${{ needs.version.outputs.version }}
-          # Publish to the PRIVATE Forgejo cargo registry (named `forgejo` in
-          # .cargo/config.toml + configured by setup-rust above), NOT public
-          # crates.io. The action translates `cargo-token` into
-          # CARGO_REGISTRIES_FORGEJO_TOKEN for a non-`crates-io` registry.
-          # `sparse-index-url` points the idempotency/existence check at the
-          # Forgejo sparse index instead of the crates.io REST API.
-          registry: forgejo
-          sparse-index-url: https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/
-          # blazen-controlplane is excluded until its current version is
-          # published and verified against consumers. blazen + blazen-llm
-          # (the two ZMarketer consumes) publish cleanly.
-          #
-          # blazen-cabi + blazen-uniffi depend on blazen-controlplane,
-          # so they fail to publish (registry can't find controlplane
-          # ^0.6.3, only 0.6.2 exists). Exclude both until controlplane
-          # itself is unblocked.
+          # Publish to PUBLIC crates.io (https://crates.io/crates/blazen). Blazen
+          # is a public crate; the earlier Forgejo-registry publish was wrong.
+          registry: crates-io
+          # blazen-py + blazen-node are language bindings (ship via PyPI/npm, not
+          # crates.io). blazen-controlplane is not published yet; blazen-cabi +
+          # blazen-uniffi depend on it — all three excluded until it's unblocked.
           exclude: blazen-py,blazen-node,blazen-controlplane,blazen-cabi,blazen-uniffi
-          cargo-token: ${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+          cargo-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
           max-backoff-seconds: '300'
           max-attempts-per-crate: '5'
 

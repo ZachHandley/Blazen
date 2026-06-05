@@ -59,6 +59,8 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     needs: [detect]
+    # [skip] short-circuits the entire pipeline — don't even resolve the version.
+    if: needs.detect.outputs.skip != 'true'
     outputs:
       version:          ${{ steps.version.outputs.version }}
       cursor_sha:       ${{ steps.cursor.outputs.sha }}
@@ -129,6 +131,7 @@ jobs:
       no_publish:     ${{ steps.check.outputs.no_publish }}
       version_marker: ${{ steps.check.outputs.version_marker }}
       fast:           ${{ steps.check.outputs.fast }}
+      skip:           ${{ steps.check.outputs.skip }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -170,6 +173,18 @@ jobs:
             echo "Detected [fast] — test/lint/audit jobs will be skipped; auto-tag still fires."
           else
             echo "fast=false" >> "$GITHUB_OUTPUT"
+          fi
+          # [skip] anywhere in the subject is a HARD no-op: NOTHING runs — no
+          # lint, no tests, no build, no audit, no auto-tag/release. Only this
+          # detect job executes. Use it for commits that must not trigger any
+          # CI processing (workflow/registry plumbing already verified locally).
+          # Unlike [fast] (which still fires auto-tag), [skip] suppresses
+          # everything including the release dispatch.
+          if [[ "$SUBJECT" == *"[skip]"* ]]; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "Detected [skip] — ALL downstream jobs will be skipped."
+          else
+            echo "skip=false" >> "$GITHUB_OUTPUT"
           fi
           # [purge] anywhere in the subject forces a FRESH artifact rebuild:
           # auto-tag dispatches build-artifacts with purge_existing=true, which
@@ -213,7 +228,7 @@ jobs:
     # /opt/cuda/bin to PATH for the job.
     runs-on: nvidia
     needs: [detect, version]
-    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true'
+    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true' && needs.detect.outputs.skip != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -288,7 +303,7 @@ jobs:
     # 100% of crates+features.
     runs-on: macos-latest
     needs: [detect, version]
-    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true'
+    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true' && needs.detect.outputs.skip != 'true'
     env:
       MACOSX_DEPLOYMENT_TARGET: "14.0"
     steps:
@@ -386,7 +401,7 @@ jobs:
     # setup-cuda-toolkit step exports /opt/cuda/bin into the job env.
     runs-on: nvidia
     needs: [detect, version, lint]
-    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true'
+    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true' && needs.detect.outputs.skip != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -485,7 +500,7 @@ jobs:
     name: Test Python Bindings
     runs-on: ubuntu-latest
     needs: [detect, version, lint]
-    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true'
+    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true' && needs.detect.outputs.skip != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -565,7 +580,7 @@ jobs:
     name: Test Node.js Bindings
     runs-on: ubuntu-latest
     needs: [detect, version, lint]
-    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true'
+    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true' && needs.detect.outputs.skip != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -656,7 +671,7 @@ jobs:
     name: Test Go binding
     runs-on: ubuntu-latest
     needs: [detect, version, lint]
-    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true'
+    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true' && needs.detect.outputs.skip != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -731,7 +746,7 @@ jobs:
     # build-artifacts.yaml on a macos-latest runner; this job exercises the
     # SwiftPM build + tests on Linux against the host-built libblazen_uniffi.so.
     needs: [detect, version, lint]
-    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true'
+    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true' && needs.detect.outputs.skip != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -799,7 +814,7 @@ jobs:
     name: Test Kotlin binding
     runs-on: ubuntu-latest
     needs: [detect, version, lint]
-    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true'
+    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true' && needs.detect.outputs.skip != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -874,7 +889,7 @@ jobs:
     name: Test Ruby binding
     runs-on: ubuntu-latest
     needs: [detect, version, lint]
-    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true'
+    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true' && needs.detect.outputs.skip != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -954,7 +969,7 @@ jobs:
     # Depends on test-wasm for the generated wasm `.d.ts` artifact (consumed by
     # the parity audit) so this job no longer rebuilds the wasm package itself.
     needs: [detect, version, lint, test-wasm]
-    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true'
+    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true' && needs.detect.outputs.skip != 'true'
     # The per-binding DRIFT checks now live in the jobs that already build each
     # binding: blazen.pyi in test-python, index.d.ts in test-node, the wasm
     # pkg .d.ts in test-wasm. What remains here is (a) the cross-binding parity
@@ -1075,7 +1090,7 @@ jobs:
     name: Test WASM
     runs-on: ubuntu-latest
     needs: [detect, version, lint]
-    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true'
+    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true' && needs.detect.outputs.skip != 'true'
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -1210,7 +1225,7 @@ jobs:
     # release critical path. auto-tag.needs depends on this job, so the gate
     # must match — otherwise a skipped-need on workflow_dispatch would skip
     # auto-tag itself.
-    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true' && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
+    if: needs.detect.outputs.web_only != 'true' && needs.version.outputs.only_skip_paths != 'true' && needs.detect.outputs.fast != 'true' && needs.detect.outputs.skip != 'true' && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -1312,6 +1327,7 @@ jobs:
     # only_skip_paths gating) is tolerated.
     if: |
       always()
+      && needs.detect.outputs.skip != 'true'
       && needs.detect.outputs.web_only != 'true'
       && (needs.detect.outputs.no_publish != 'true' || github.event_name == 'workflow_dispatch')
       && ((github.event_name == 'push' && github.ref == 'refs/heads/main') || github.event_name == 'workflow_dispatch')
@@ -1509,7 +1525,7 @@ jobs:
     name: Deploy Website (web-only commit)
     needs: detect
     runs-on: ubuntu-latest
-    if: needs.detect.outputs.web_only == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: needs.detect.outputs.web_only == 'true' && github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.detect.outputs.skip != 'true'
     steps:
       - name: Dispatch deploy-website workflow
         run: |
