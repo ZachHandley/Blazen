@@ -1,5 +1,6 @@
 [package]
 name = "blazen-train-tune"
+description = "AutoML / hyperparameter search for Blazen fine-tuning, layered on blazen-train"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

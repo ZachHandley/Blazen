@@ -229,9 +229,10 @@ jobs:
           # is a public crate; the earlier Forgejo-registry publish was wrong.
           registry: crates-io
           # blazen-py + blazen-node are language bindings (ship via PyPI/npm, not
-          # crates.io). blazen-controlplane is not published yet; blazen-cabi +
-          # blazen-uniffi depend on it — all three excluded until it's unblocked.
-          exclude: blazen-py,blazen-node,blazen-controlplane,blazen-cabi,blazen-uniffi
+          # crates.io). blazen-controlplane is now decoupled from ZQL and
+          # published. blazen-cabi + blazen-uniffi remain excluded pending their
+          # own crates.io-publish validation (large optional-dep surface).
+          exclude: blazen-py,blazen-node,blazen-cabi,blazen-uniffi
           cargo-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
           max-backoff-seconds: '300'
           max-attempts-per-crate: '5'

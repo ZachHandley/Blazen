@@ -1,5 +1,6 @@
 [package]
 name = "blazen-audio-dac-vendored"
+description = "Vendored fork of candle-transformers' Descript Audio Codec (DAC) model, patched for Blazen"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

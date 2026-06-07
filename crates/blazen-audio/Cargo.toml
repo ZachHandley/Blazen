@@ -1,5 +1,6 @@
 [package]
 name = "blazen-audio"
+description = "Capability-agnostic shared types and traits for Blazen's audio engine crates (TTS, STT, music, codec, voice conversion)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

@@ -1,5 +1,6 @@
 [package]
 name = "blazen-audio-codec"
+description = "Neural audio-codec backends for Blazen — encode PCM to discrete codebook tokens and back for generative audio models"
 version.workspace = true
 edition.workspace = true
 license.workspace = true

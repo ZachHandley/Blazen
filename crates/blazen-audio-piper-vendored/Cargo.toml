@@ -1,5 +1,6 @@
 [package]
 name = "blazen-audio-piper-vendored"
+description = "Vendored fork of piper-rs (Piper neural text-to-speech) patched for the Blazen workspace"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
