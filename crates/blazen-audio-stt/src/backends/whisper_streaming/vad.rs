@@ -136,7 +136,16 @@ impl Default for SileroVadConfig {
 // `vad-tract` wins when both backends are enabled (see module docs): the
 // pure-Rust engine avoids the native-library coexistence SIGSEGV under
 // `--all-features`. A real single-backend artifact is unaffected.
-#[cfg(all(feature = "vad-ort", not(feature = "vad-tract")))]
+//
+// `x86_64-apple-darwin` is also excluded here even under `vad-ort`: `ort`
+// (ONNX Runtime) has no Intel-mac prebuilt as of rc.12 and is target-gated
+// out of the crate (see Cargo.toml), so that triple uses the `tract` engine
+// below instead.
+#[cfg(all(
+    feature = "vad-ort",
+    not(feature = "vad-tract"),
+    not(all(target_arch = "x86_64", target_os = "macos"))
+))]
 mod engine {
     use super::{MODEL_BYTES, SttError, VAD_INPUT_LEN};
     use ort::session::Session;
@@ -191,7 +200,13 @@ mod engine {
     }
 }
 
-#[cfg(feature = "vad-tract")]
+// Pure-Rust `tract` engine: selected by the explicit `vad-tract` feature
+// (musl / wasm), and ALSO on `x86_64-apple-darwin` under `vad-ort` (where ORT
+// has no prebuilt — see the Cargo.toml target-gate + the ort arm above).
+#[cfg(any(
+    feature = "vad-tract",
+    all(feature = "vad-ort", target_arch = "x86_64", target_os = "macos")
+))]
 mod engine {
     use super::{MODEL_BYTES, SttError, VAD_INPUT_LEN};
     use tract_onnx::prelude::*;
