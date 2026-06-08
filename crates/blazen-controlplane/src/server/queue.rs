@@ -175,6 +175,11 @@ pub struct AssignmentQueue {
     /// `mark_completed`, `mark_failed`, `mark_cancelled`. Exposed to
     /// orchestrator describe queries.
     runs: DashMap<Uuid, RunStateSnapshot>,
+    /// Tenant/place each run is scoped to, captured at submit time and
+    /// preserved for the run's lifetime. `RunStateSnapshot` (a `blazen-core`
+    /// type) has no `place` field, so this side-table is the authority for
+    /// place-scoped describe queries (see [`Self::place_for_run`]).
+    run_places: DashMap<Uuid, String>,
     /// Signaled whenever a new pending assignment is enqueued or a
     /// worker disconnects (so re-route loops can wake).
     pub wake: Notify,
@@ -259,6 +264,7 @@ impl AssignmentQueue {
             deficits: RwLock::new(HashMap::new()),
             in_flight: DashMap::new(),
             runs: DashMap::new(),
+            run_places: DashMap::new(),
             wake: Notify::new(),
             events,
             store,
@@ -291,6 +297,10 @@ impl AssignmentQueue {
             required_tags: required_tags.clone(),
             enqueued_at: Instant::now(),
         };
+
+        // Remember this run's place for the lifetime of the run so
+        // place-scoped describe queries can authorize the caller.
+        self.run_places.insert(run_id, place.clone());
 
         // Record the run as Pending until a worker accepts it.
         self.record_pending(run_id, &queued.assignment).await;
@@ -579,6 +589,16 @@ impl AssignmentQueue {
         self.runs.get(&run_id).map(|r| r.clone())
     }
 
+    /// The tenant/place a run is scoped to, if the run is tracked.
+    ///
+    /// Returns `None` when the run is unknown. Recovered-from-store runs that
+    /// predate place tracking are reported as
+    /// [`DEFAULT_PLACE`](crate::protocol::DEFAULT_PLACE).
+    #[must_use]
+    pub fn place_for_run(&self, run_id: Uuid) -> Option<String> {
+        self.run_places.get(&run_id).map(|r| r.clone())
+    }
+
     /// Re-hydrate the in-memory cache from the persisted
     /// [`AssignmentStore`]. Called by [`super::ControlPlaneServer::serve`]
     /// at cold-start so a freshly-booted control plane starts with the
@@ -657,6 +677,11 @@ impl AssignmentQueue {
                     .insert((priority, enqueued_at, run_id), queued);
             }
 
+            // The durable store carries no place; recovered runs are
+            // tracked under the default place.
+            self.run_places
+                .insert(run_id, crate::protocol::DEFAULT_PLACE.to_string());
+
             // Reset the run-state snapshot to Pending so the next
             // worker claim transitions through Running cleanly.
             if let Some(state) = self.store.get_state(run_id).await? {
@@ -712,6 +737,8 @@ impl AssignmentQueue {
                         .or_default()
                         .insert((priority, enqueued_at, run_id), queued);
                 }
+                self.run_places
+                    .insert(run_id, crate::protocol::DEFAULT_PLACE.to_string());
                 if let Err(e) = self.store.enqueue_pending(&cap, run_id, &tags).await {
                     tracing::warn!(%run_id, error = %e, "re-enqueue during recovery");
                 }

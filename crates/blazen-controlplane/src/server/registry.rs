@@ -227,6 +227,27 @@ impl WorkerRegistry {
             .unwrap_or_default()
     }
 
+    /// Like [`Self::list_by_place`] but pairs each worker with its place
+    /// string, mirroring [`Self::list_with_place`]. Every pair carries the
+    /// same `place` (the one queried), but reading it off the handle keeps
+    /// the wire `place` authoritative rather than re-deriving it at the call
+    /// site.
+    #[must_use]
+    pub fn list_by_place_with_place(&self, place: &str) -> Vec<(WorkerInfo, String)> {
+        self.by_place
+            .get(place)
+            .map(|set| {
+                set.iter()
+                    .filter_map(|sid| {
+                        self.sessions
+                            .get(sid)
+                            .map(|r| (worker_info(r.value()), r.value().place.clone()))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    }
+
     /// Look up a session by node id (used by `DrainWorker`).
     #[must_use]
     pub fn session_for_node(&self, node_id: &str) -> Option<Uuid> {
@@ -479,5 +500,12 @@ mod tests {
         assert_eq!(reg.list_by_place("place-a").len(), 1);
         assert_eq!(reg.list_by_place("place-b").len(), 1);
         assert!(reg.list_by_place("place-c").is_empty());
+
+        // list_by_place_with_place pairs each worker with its (queried) place.
+        let paired_a = reg.list_by_place_with_place("place-a");
+        assert_eq!(paired_a.len(), 1);
+        assert_eq!(paired_a[0].0.node_id, "node-a");
+        assert_eq!(paired_a[0].1, "place-a");
+        assert!(reg.list_by_place_with_place("place-c").is_empty());
     }
 }
