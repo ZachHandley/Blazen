@@ -13,7 +13,7 @@ use tonic::Status;
 use tonic::metadata::MetadataMap;
 use tonic::service::Interceptor;
 
-use crate::auth::validate_bearer;
+use crate::auth::{place_authenticator, validate_bearer};
 
 /// Interceptor that validates the bearer token on every gRPC call.
 #[derive(Debug, Default, Clone)]
@@ -27,12 +27,18 @@ impl BearerAuthInterceptor {
 }
 
 impl Interceptor for BearerAuthInterceptor {
-    fn call(&mut self, request: tonic::Request<()>) -> Result<tonic::Request<()>, Status> {
+    fn call(&mut self, mut request: tonic::Request<()>) -> Result<tonic::Request<()>, Status> {
         let header = extract_bearer(request.metadata());
-        match validate_bearer(header.as_deref()) {
-            Ok(()) => Ok(request),
-            Err(reason) => Err(Status::unauthenticated(reason)),
-        }
+        // Validate the bearer first (unchanged behaviour), then derive the
+        // peer identity from it and stash it in the request extensions for
+        // handlers to read. The server-side identity is the source of
+        // truth for a request's place.
+        validate_bearer(header.as_deref()).map_err(Status::unauthenticated)?;
+        let identity = place_authenticator()
+            .authenticate(header.as_deref())
+            .map_err(Status::unauthenticated)?;
+        request.extensions_mut().insert(identity);
+        Ok(request)
     }
 }
 
@@ -111,6 +117,31 @@ mod tests {
         // ----- restore -----
         // SAFETY: see comment.
         unsafe { std::env::remove_var(PEER_TOKEN_ENV) };
+        if let Some(v) = saved {
+            // SAFETY: see comment.
+            unsafe { std::env::set_var(PEER_TOKEN_ENV, v) };
+        }
+    }
+
+    #[test]
+    fn interceptor_inserts_default_identity_extension() {
+        let saved = std::env::var(PEER_TOKEN_ENV).ok();
+        let mut interceptor = BearerAuthInterceptor::new();
+
+        // No token configured: the request is accepted and carries a
+        // PeerIdentity for the default place.
+        // SAFETY: env vars are process-global; consolidate in one test.
+        unsafe { std::env::remove_var(PEER_TOKEN_ENV) };
+        let req = interceptor
+            .call(mk_request(&[("authorization", "Bearer anything")]))
+            .expect("accepted with no token configured");
+        let id = req
+            .extensions()
+            .get::<crate::auth::PeerIdentity>()
+            .expect("identity extension present");
+        assert_eq!(id.place, crate::protocol::DEFAULT_PLACE);
+
+        // SAFETY: see comment.
         if let Some(v) = saved {
             // SAFETY: see comment.
             unsafe { std::env::set_var(PEER_TOKEN_ENV, v) };

@@ -204,6 +204,14 @@ async fn worker_register(
     validate_envelope_version(hello.envelope_version)
         .map_err(|e| HttpError::FailedPrecondition(e.to_string()))?;
 
+    // The HTTP tier authenticates via the shared-token `check_auth`; it
+    // does not derive a per-place identity, so the worker's self-reported
+    // `hello.place` is used (defaulting to the default place).
+    let place = hello
+        .place
+        .clone()
+        .unwrap_or_else(|| crate::protocol::DEFAULT_PLACE.to_string());
+
     let (tx, rx) = mpsc::channel::<ServerToWorker>(64);
     let capabilities = hello.capabilities.iter().map(Into::into).collect();
     let taints = hello
@@ -214,6 +222,7 @@ async fn worker_register(
         .collect();
     let session_id = shared.registry.register(
         hello.node_id.clone(),
+        place.clone(),
         capabilities,
         hello.tags.clone(),
         (&hello.admission).into(),
@@ -254,7 +263,7 @@ async fn worker_register(
     let cap_vec: Vec<WorkerCapability> = hello.capabilities.iter().map(Into::into).collect();
     shared
         .queue
-        .try_drain_for(&cap_vec, &shared.registry, &shared.admission)
+        .try_drain_for(&place, &cap_vec, &shared.registry, &shared.admission)
         .await;
 
     let welcome_envelope = PostcardEnvelope::encode(&welcome)
@@ -405,10 +414,17 @@ async fn orchestrator_submit(
         kind: format!("workflow:{}", core.workflow_name),
         version: core.workflow_version.unwrap_or(0),
     };
+    // The HTTP tier has no per-place identity; use the request's
+    // self-reported place (default when absent).
+    let place = req
+        .place
+        .clone()
+        .unwrap_or_else(|| crate::protocol::DEFAULT_PLACE.to_string());
     let outcome = shared
         .queue
         .submit(
             run_id,
+            place.clone(),
             assignment,
             cap,
             core.required_tags.clone(),
@@ -426,8 +442,9 @@ async fn orchestrator_submit(
                 .queue
                 .describe(run_id)
                 .ok_or_else(|| HttpError::Internal("run state missing".into()))?;
-            let wire = run_state_to_wire(&snap)
+            let mut wire = run_state_to_wire(&snap)
                 .map_err(|e| HttpError::Internal(format!("encode run state: {e}")))?;
+            wire.place = place;
             PostcardEnvelope::encode(&wire)
                 .map(Json)
                 .map_err(|e| HttpError::Internal(format!("encode envelope: {e}")))
@@ -597,6 +614,9 @@ fn run_state_to_wire(
         last_event_at_ms: snap.last_event_at_ms,
         output_json,
         error: snap.error.clone(),
+        // The HTTP transport does not thread per-place identity; the gRPC
+        // path (server/rpc.rs) is the one that populates a real place.
+        place: String::new(),
     })
 }
 
@@ -616,6 +636,7 @@ mod tests {
             labels: std::collections::BTreeMap::new(),
             taints: Vec::new(),
             descriptors: Vec::new(),
+            place: None,
         };
         let env = PostcardEnvelope::encode(&hello).expect("encode WorkerHello");
         let decoded: WorkerHello = env.decode().expect("decode WorkerHello");

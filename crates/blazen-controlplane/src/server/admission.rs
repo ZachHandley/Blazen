@@ -90,6 +90,10 @@ pub enum NoCandidateReason {
 
 /// Inputs to a single routing decision.
 pub struct RouteRequest<'a> {
+    /// Tenant/place this routing decision is scoped to. Only workers
+    /// serving this place are considered as candidates (tenancy
+    /// isolation). `"__default__"` for single-tenant deployments.
+    pub place: &'a str,
     /// Required capability (e.g. `workflow:my-pipeline@1`).
     pub required_capability: &'a WorkerCapability,
     /// `key=value` (or `key=*` wildcard) tag requirements, AND-conjunction.
@@ -129,8 +133,8 @@ impl Admission {
     /// least-loaded worker with round-robin tie-breaking, finally choose
     /// `Push` vs `Offer` based on the worker's admission mode.
     pub fn route(&self, registry: &WorkerRegistry, req: &RouteRequest<'_>) -> Decision {
-        // Step 1: capability match.
-        let candidates = registry.workers_with_capability(req.required_capability);
+        // Step 1: capability match, scoped to the request's place.
+        let candidates = registry.workers_with_capability(req.place, req.required_capability);
         if candidates.is_empty() {
             return Decision::NoCandidate {
                 reason: NoCandidateReason::NoCapability,
@@ -411,8 +415,10 @@ mod tests {
     }
 
     /// Default `RouteRequest` builder for tests. Most tests don't care about
-    /// the selector/toleration fields, so they default to empty.
+    /// the selector/toleration fields, so they default to empty. `place`
+    /// is the first arg — single-place tests pass `"__default__"`.
     fn route_req<'a>(
+        place: &'a str,
         capability: &'a WorkerCapability,
         tags: &'a [String],
         hint: Option<&'a ResourceHint>,
@@ -421,6 +427,7 @@ mod tests {
         input: Option<&'a serde_json::Value>,
     ) -> RouteRequest<'a> {
         RouteRequest {
+            place,
             required_capability: capability,
             required_tags: tags,
             resource_hint: hint,
@@ -437,8 +444,9 @@ mod tests {
         tags: BTreeMap<String, String>,
         admission: AdmissionMode,
     ) -> (uuid::Uuid, mpsc::Receiver<crate::protocol::ServerToWorker>) {
-        register_worker_full(
+        register_worker_in_place(
             reg,
+            "__default__",
             node_id,
             capabilities,
             tags,
@@ -448,8 +456,33 @@ mod tests {
         )
     }
 
+    /// Register a worker into the default place. Thin wrapper over
+    /// [`register_worker_in_place`] for the many single-place tests.
     fn register_worker_full(
         reg: &WorkerRegistry,
+        node_id: &str,
+        capabilities: Vec<WorkerCapability>,
+        tags: BTreeMap<String, String>,
+        admission: AdmissionMode,
+        labels: BTreeMap<String, String>,
+        taints: Vec<WorkerTaint>,
+    ) -> (uuid::Uuid, mpsc::Receiver<crate::protocol::ServerToWorker>) {
+        register_worker_in_place(
+            reg,
+            "__default__",
+            node_id,
+            capabilities,
+            tags,
+            admission,
+            labels,
+            taints,
+        )
+    }
+
+    #[allow(clippy::too_many_arguments)]
+    fn register_worker_in_place(
+        reg: &WorkerRegistry,
+        place: &str,
         node_id: &str,
         capabilities: Vec<WorkerCapability>,
         tags: BTreeMap<String, String>,
@@ -461,6 +494,7 @@ mod tests {
         let caps: HashSet<_> = capabilities.into_iter().collect();
         let sid = reg.register(
             node_id.into(),
+            place.into(),
             caps,
             tags,
             admission,
@@ -492,7 +526,7 @@ mod tests {
         let admission = Admission::new();
         let need = cap("workflow:wanted", 1);
         let sel = NodeSelector::default();
-        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+        let d = admission.route(&reg, &route_req("__default__", &need, &[], None, &sel, &[], None));
         assert!(matches!(
             d,
             Decision::NoCandidate {
@@ -514,7 +548,7 @@ mod tests {
         let admission = Admission::new();
         let need = cap("workflow:hello", 1);
         let sel = NodeSelector::default();
-        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+        let d = admission.route(&reg, &route_req("__default__", &need, &[], None, &sel, &[], None));
         match d {
             Decision::Push { session_id, .. } => assert_eq!(session_id, sid),
             other => panic!("expected Push, got {other:?}"),
@@ -535,7 +569,7 @@ mod tests {
         let admission = Admission::new();
         let need = cap("workflow:hello", 1);
         let sel = NodeSelector::default();
-        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+        let d = admission.route(&reg, &route_req("__default__", &need, &[], None, &sel, &[], None));
         assert!(matches!(
             d,
             Decision::NoCandidate {
@@ -559,7 +593,7 @@ mod tests {
         let admission = Admission::new();
         let need = cap("workflow:hello", 1);
         let sel = NodeSelector::default();
-        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+        let d = admission.route(&reg, &route_req("__default__", &need, &[], None, &sel, &[], None));
         assert!(matches!(
             d,
             Decision::NoCandidate {
@@ -587,7 +621,7 @@ mod tests {
             ..Default::default()
         };
         let sel = NodeSelector::default();
-        let d = admission.route(&reg, &route_req(&need, &[], Some(&hint), &sel, &[], None));
+        let d = admission.route(&reg, &route_req("__default__", &need, &[], Some(&hint), &sel, &[], None));
         match d {
             Decision::Push { session_id, .. } => assert_eq!(session_id, sid),
             other => panic!("expected Push, got {other:?}"),
@@ -607,7 +641,7 @@ mod tests {
         let admission = Admission::new();
         let need = cap("workflow:hello", 1);
         let sel = NodeSelector::default();
-        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+        let d = admission.route(&reg, &route_req("__default__", &need, &[], None, &sel, &[], None));
         match d {
             Decision::Offer { session_id, .. } => assert_eq!(session_id, sid),
             other => panic!("expected Offer, got {other:?}"),
@@ -640,7 +674,7 @@ mod tests {
         let need = cap("workflow:hello", 1);
         let sel = NodeSelector::default();
         let req_tags = vec!["region=eu-central".to_string()];
-        let d = admission.route(&reg, &route_req(&need, &req_tags, None, &sel, &[], None));
+        let d = admission.route(&reg, &route_req("__default__", &need, &req_tags, None, &sel, &[], None));
         match d {
             Decision::Push { session_id, .. } => assert_eq!(session_id, sid_b),
             other => panic!("expected Push to b, got {other:?}"),
@@ -650,13 +684,13 @@ mod tests {
         let req_tags_wild = vec!["region=*".to_string()];
         let d2 = admission.route(
             &reg,
-            &route_req(&need, &req_tags_wild, None, &sel, &[], None),
+            &route_req("__default__", &need, &req_tags_wild, None, &sel, &[], None),
         );
         assert!(matches!(d2, Decision::Push { .. }));
 
         // No match.
         let req_tags_no = vec!["region=apac".to_string()];
-        let d3 = admission.route(&reg, &route_req(&need, &req_tags_no, None, &sel, &[], None));
+        let d3 = admission.route(&reg, &route_req("__default__", &need, &req_tags_no, None, &sel, &[], None));
         assert!(matches!(
             d3,
             Decision::NoCandidate {
@@ -689,7 +723,7 @@ mod tests {
         let admission = Admission::new();
         let need = cap("workflow:hello", 1);
         let sel = NodeSelector::default();
-        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+        let d = admission.route(&reg, &route_req("__default__", &need, &[], None, &sel, &[], None));
         match d {
             Decision::Push { session_id, .. } => assert_eq!(session_id, sid_b),
             other => panic!("expected Push to b, got {other:?}"),
@@ -733,7 +767,7 @@ mod tests {
         let admission = Admission::new();
         // Run several times — round-robin must never pick the non-nvidia worker.
         for _ in 0..5 {
-            let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+            let d = admission.route(&reg, &route_req("__default__", &need, &[], None, &sel, &[], None));
             match d {
                 Decision::Push { session_id, .. } => assert_eq!(session_id, sid_nv),
                 other => panic!("expected Push to nv, got {other:?}"),
@@ -761,7 +795,7 @@ mod tests {
             preferred: vec![],
         };
         let admission = Admission::new();
-        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+        let d = admission.route(&reg, &route_req("__default__", &need, &[], None, &sel, &[], None));
         assert!(matches!(
             d,
             Decision::NoCandidate {
@@ -804,7 +838,7 @@ mod tests {
         };
         let admission = Admission::new();
         for _ in 0..5 {
-            let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+            let d = admission.route(&reg, &route_req("__default__", &need, &[], None, &sel, &[], None));
             match d {
                 Decision::Push { session_id, .. } => assert_eq!(session_id, sid_pref),
                 other => panic!("expected Push to pref, got {other:?}"),
@@ -832,7 +866,7 @@ mod tests {
 
         let sel = NodeSelector::default();
         let admission = Admission::new();
-        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+        let d = admission.route(&reg, &route_req("__default__", &need, &[], None, &sel, &[], None));
         assert!(matches!(
             d,
             Decision::NoCandidate {
@@ -866,7 +900,7 @@ mod tests {
             effect: TaintEffect::NoSchedule,
         }];
         let admission = Admission::new();
-        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &tols, None));
+        let d = admission.route(&reg, &route_req("__default__", &need, &[], None, &sel, &tols, None));
         match d {
             Decision::Push { session_id, .. } => assert_eq!(session_id, sid),
             other => panic!("expected Push to tainted worker, got {other:?}"),
@@ -904,7 +938,7 @@ mod tests {
         let admission = Admission::new();
         // Untainted worker should always win across multiple rounds.
         for _ in 0..5 {
-            let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+            let d = admission.route(&reg, &route_req("__default__", &need, &[], None, &sel, &[], None));
             match d {
                 Decision::Push { session_id, .. } => assert_eq!(session_id, sid_clean),
                 other => panic!("expected Push to clean, got {other:?}"),
@@ -951,7 +985,7 @@ mod tests {
         let input = serde_json::json!({ "model_name": "llama-3-8b" });
         let admission = Admission::new();
         for _ in 0..5 {
-            let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], Some(&input)));
+            let d = admission.route(&reg, &route_req("__default__", &need, &[], None, &sel, &[], Some(&input)));
             match d {
                 Decision::Push { session_id, .. } => assert_eq!(session_id, sid_loaded),
                 other => panic!("expected Push to loaded, got {other:?}"),
@@ -989,7 +1023,7 @@ mod tests {
             preferred: vec![],
         };
         let admission = Admission::new();
-        let d = admission.route(&reg, &route_req(&need, &[], None, &sel, &[], None));
+        let d = admission.route(&reg, &route_req("__default__", &need, &[], None, &sel, &[], None));
         assert!(
             matches!(
                 d,
@@ -999,5 +1033,59 @@ mod tests {
             ),
             "expected SelectorMismatch, got {d:?}"
         );
+    }
+
+    #[test]
+    fn route_isolates_by_place_no_candidate_in_other_place() {
+        // A worker exists, but only in place-B. A place-A submission must
+        // see NoCandidate even though the capability matches in place-B.
+        let reg = WorkerRegistry::new();
+        let need = cap("workflow:hello", 1);
+        let _ = register_worker_in_place(
+            &reg,
+            "place-b",
+            "b-worker",
+            vec![need.clone()],
+            BTreeMap::new(),
+            AdmissionMode::Fixed { max_in_flight: 4 },
+            BTreeMap::new(),
+            Vec::new(),
+        );
+        let admission = Admission::new();
+        let sel = NodeSelector::default();
+        let d = admission.route(&reg, &route_req("place-a", &need, &[], None, &sel, &[], None));
+        assert!(
+            matches!(
+                d,
+                Decision::NoCandidate {
+                    reason: NoCandidateReason::NoCapability
+                }
+            ),
+            "place-A submission must not route to a place-B worker, got {d:?}"
+        );
+    }
+
+    #[test]
+    fn route_matches_worker_in_same_place() {
+        // The same submission routes when a worker serves place-A.
+        let reg = WorkerRegistry::new();
+        let need = cap("workflow:hello", 1);
+        let (sid, _rx) = register_worker_in_place(
+            &reg,
+            "place-a",
+            "a-worker",
+            vec![need.clone()],
+            BTreeMap::new(),
+            AdmissionMode::Fixed { max_in_flight: 4 },
+            BTreeMap::new(),
+            Vec::new(),
+        );
+        let admission = Admission::new();
+        let sel = NodeSelector::default();
+        let d = admission.route(&reg, &route_req("place-a", &need, &[], None, &sel, &[], None));
+        match d {
+            Decision::Push { session_id, .. } => assert_eq!(session_id, sid),
+            other => panic!("expected Push to the place-A worker, got {other:?}"),
+        }
     }
 }

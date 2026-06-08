@@ -46,6 +46,7 @@ const OUTBOUND_BUFFER: usize = 64;
 /// underlying transport reports a recv error before the handshake.
 pub async fn handle_worker_session(
     shared: Arc<SharedState>,
+    identity: Option<crate::auth::PeerIdentity>,
     mut incoming: Streaming<PostcardRequest>,
 ) -> Result<Response<PostcardResponseStream>, Status> {
     // Peek the first frame — must be a Hello.
@@ -67,6 +68,19 @@ pub async fn handle_worker_session(
     validate_envelope_version(hello.envelope_version)
         .map_err(|e| Status::failed_precondition(e.to_string()))?;
 
+    // Resolve the worker's place. The server-derived identity WINS over
+    // the worker's self-reported `hello.place` (anti-spoof). Fall back to
+    // the hello's place, then to the default place.
+    let place = identity.as_ref().map_or_else(
+        || {
+            hello
+                .place
+                .clone()
+                .unwrap_or_else(|| crate::protocol::DEFAULT_PLACE.to_string())
+        },
+        |id| id.place.clone(),
+    );
+
     // Build outbound channel and register.
     let (outbound_tx, outbound_rx) = mpsc::channel::<ServerToWorker>(OUTBOUND_BUFFER);
     let capabilities = hello.capabilities.iter().map(Into::into).collect();
@@ -78,6 +92,7 @@ pub async fn handle_worker_session(
         .collect();
     let session_id = shared.registry.register(
         hello.node_id.clone(),
+        place.clone(),
         capabilities,
         hello.tags.clone(),
         (&hello.admission).into(),
@@ -107,7 +122,7 @@ pub async fn handle_worker_session(
     let cap_vec: Vec<_> = hello.capabilities.iter().map(Into::into).collect();
     shared
         .queue
-        .try_drain_for(&cap_vec, &shared.registry, &shared.admission)
+        .try_drain_for(&place, &cap_vec, &shared.registry, &shared.admission)
         .await;
 
     // Spawn inbound pump: read WorkerToServer frames, update registry / queue.

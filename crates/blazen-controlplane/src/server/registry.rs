@@ -23,6 +23,11 @@ use crate::protocol::{NodeDescriptorWire, ServerToWorker};
 pub struct WorkerHandle {
     pub session_id: Uuid,
     pub node_id: String,
+    /// Tenant/place this worker serves. Determined server-side (the
+    /// bearer-derived identity wins over the worker's self-reported
+    /// [`crate::protocol::WorkerHello::place`]). `"__default__"` for
+    /// single-tenant / legacy deployments.
+    pub place: String,
     pub capabilities: HashSet<WorkerCapability>,
     pub tags: BTreeMap<String, String>,
     pub admission: AdmissionMode,
@@ -56,9 +61,14 @@ pub struct WorkerRegistry {
     sessions: DashMap<Uuid, WorkerHandle>,
     /// `node_id` → `session_id`, for `DrainWorker` and admin lookups.
     by_node_id: DashMap<String, Uuid>,
-    /// capability → set of `session_ids` advertising it. Used by the
-    /// queue to find candidate workers for a submitted workflow.
-    capability_index: DashMap<WorkerCapability, HashSet<Uuid>>,
+    /// `(place, capability)` → set of `session_ids` advertising it within
+    /// that place. Keyed by place so a submission in one tenant never
+    /// routes to a worker in another. Used by the queue to find candidate
+    /// workers for a submitted workflow.
+    capability_index: DashMap<(String, WorkerCapability), HashSet<Uuid>>,
+    /// `place` → set of `session_ids` serving it. Powers
+    /// [`Self::list_by_place`] and place-scoped cleanup on unregister.
+    by_place: DashMap<String, HashSet<Uuid>>,
 }
 
 impl WorkerRegistry {
@@ -68,6 +78,7 @@ impl WorkerRegistry {
             sessions: DashMap::new(),
             by_node_id: DashMap::new(),
             capability_index: DashMap::new(),
+            by_place: DashMap::new(),
         }
     }
 
@@ -81,6 +92,7 @@ impl WorkerRegistry {
     pub fn register(
         &self,
         node_id: String,
+        place: String,
         capabilities: HashSet<WorkerCapability>,
         tags: BTreeMap<String, String>,
         admission: AdmissionMode,
@@ -97,19 +109,24 @@ impl WorkerRegistry {
             self.unregister(prior);
         }
 
-        // Insert into the capability index first using clones, then move
-        // the original set into the handle — saves us cloning the whole
-        // set just to satisfy ownership.
+        // Insert into the place-scoped capability index first using clones,
+        // then move the originals into the handle — saves us cloning the
+        // whole set just to satisfy ownership.
         for cap in &capabilities {
             self.capability_index
-                .entry(cap.clone())
+                .entry((place.clone(), cap.clone()))
                 .or_default()
                 .insert(session_id);
         }
+        self.by_place
+            .entry(place.clone())
+            .or_default()
+            .insert(session_id);
 
         let handle = WorkerHandle {
             session_id,
             node_id: node_id.clone(),
+            place,
             capabilities,
             tags,
             admission,
@@ -133,11 +150,16 @@ impl WorkerRegistry {
         if let Some((_, handle)) = self.sessions.remove(&session_id) {
             self.by_node_id.remove(&handle.node_id);
             for cap in &handle.capabilities {
-                if let Some(mut set) = self.capability_index.get_mut(cap) {
+                if let Some(mut set) =
+                    self.capability_index.get_mut(&(handle.place.clone(), cap.clone()))
+                {
                     set.remove(&session_id);
                 }
                 // Optional: drop the entry entirely if the set is empty.
                 // Leave it for now — harmless and avoids extra contention.
+            }
+            if let Some(mut set) = self.by_place.get_mut(&handle.place) {
+                set.remove(&session_id);
             }
         }
     }
@@ -148,11 +170,17 @@ impl WorkerRegistry {
         self.sessions.get(&session_id).map(|r| r.clone())
     }
 
-    /// Find every session advertising a given capability.
+    /// Find every session in `place` advertising a given capability.
+    /// Workers in other places are never returned — tenancy isolation is
+    /// enforced at the index level.
     #[must_use]
-    pub fn workers_with_capability(&self, cap: &WorkerCapability) -> Vec<WorkerHandle> {
+    pub fn workers_with_capability(
+        &self,
+        place: &str,
+        cap: &WorkerCapability,
+    ) -> Vec<WorkerHandle> {
         self.capability_index
-            .get(cap)
+            .get(&(place.to_string(), cap.clone()))
             .map(|set| {
                 set.iter()
                     .filter_map(|sid| self.sessions.get(sid).map(|r| r.clone()))
@@ -164,21 +192,35 @@ impl WorkerRegistry {
     /// Snapshot of every connected worker — used by `ListWorkers`.
     #[must_use]
     pub fn list(&self) -> Vec<WorkerInfo> {
+        self.sessions.iter().map(|r| worker_info(r.value())).collect()
+    }
+
+    /// Like [`Self::list`] but pairs each worker with its place. The
+    /// `place` has no `core::WorkerInfo` home, so callers that need it on
+    /// the wire read it from here.
+    #[must_use]
+    pub fn list_with_place(&self) -> Vec<(WorkerInfo, String)> {
         self.sessions
             .iter()
             .map(|r| {
                 let h = r.value();
-                WorkerInfo {
-                    node_id: h.node_id.clone(),
-                    capabilities: h.capabilities.iter().cloned().collect(),
-                    tags: h.tags.clone(),
-                    admission: h.admission.clone(),
-                    in_flight: h.in_flight,
-                    admission_snapshot: h.admission_snapshot.clone(),
-                    connected_at_ms: h.connected_at_ms,
-                }
+                (worker_info(h), h.place.clone())
             })
             .collect()
+    }
+
+    /// Snapshot of every connected worker serving `place`. Returns an
+    /// empty `Vec` when no worker serves that place.
+    #[must_use]
+    pub fn list_by_place(&self, place: &str) -> Vec<WorkerInfo> {
+        self.by_place
+            .get(place)
+            .map(|set| {
+                set.iter()
+                    .filter_map(|sid| self.sessions.get(sid).map(|r| worker_info(r.value())))
+                    .collect()
+            })
+            .unwrap_or_default()
     }
 
     /// Look up a session by node id (used by `DrainWorker`).
@@ -237,6 +279,23 @@ impl Default for WorkerRegistry {
     }
 }
 
+/// Project a [`WorkerHandle`] into the core [`WorkerInfo`] snapshot.
+///
+/// `core::WorkerInfo` carries no place field; callers that need the place
+/// on the wire read it from the handle directly (see
+/// [`super::super::protocol::WorkerInfoWire`]).
+fn worker_info(h: &WorkerHandle) -> WorkerInfo {
+    WorkerInfo {
+        node_id: h.node_id.clone(),
+        capabilities: h.capabilities.iter().cloned().collect(),
+        tags: h.tags.clone(),
+        admission: h.admission.clone(),
+        in_flight: h.in_flight,
+        admission_snapshot: h.admission_snapshot.clone(),
+        connected_at_ms: h.connected_at_ms,
+    }
+}
+
 fn now_ms() -> u64 {
     std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
@@ -262,6 +321,7 @@ mod tests {
         caps.insert(cap("workflow:hello", 1));
         let sid = reg.register(
             "node-a".into(),
+            "__default__".into(),
             caps.clone(),
             BTreeMap::new(),
             AdmissionMode::Fixed { max_in_flight: 4 },
@@ -274,7 +334,8 @@ mod tests {
         assert_eq!(reg.len(), 1);
         assert!(reg.get(sid).is_some());
         assert_eq!(reg.session_for_node("node-a"), Some(sid));
-        let candidates = reg.workers_with_capability(&cap("workflow:hello", 1));
+        let candidates =
+            reg.workers_with_capability("__default__", &cap("workflow:hello", 1));
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].session_id, sid);
     }
@@ -287,6 +348,7 @@ mod tests {
         caps.insert(cap("workflow:hello", 1));
         let sid = reg.register(
             "node-a".into(),
+            "__default__".into(),
             caps,
             BTreeMap::new(),
             AdmissionMode::Reactive,
@@ -301,9 +363,10 @@ mod tests {
         assert!(reg.get(sid).is_none());
         assert!(reg.session_for_node("node-a").is_none());
         assert!(
-            reg.workers_with_capability(&cap("workflow:hello", 1))
+            reg.workers_with_capability("__default__", &cap("workflow:hello", 1))
                 .is_empty()
         );
+        assert!(reg.list_by_place("__default__").is_empty());
     }
 
     #[test]
@@ -316,6 +379,7 @@ mod tests {
 
         let sid1 = reg.register(
             "node-a".into(),
+            "__default__".into(),
             caps.clone(),
             BTreeMap::new(),
             AdmissionMode::Fixed { max_in_flight: 4 },
@@ -326,6 +390,7 @@ mod tests {
         );
         let sid2 = reg.register(
             "node-a".into(),
+            "__default__".into(),
             caps,
             BTreeMap::new(),
             AdmissionMode::Fixed { max_in_flight: 4 },
@@ -347,6 +412,7 @@ mod tests {
         let (tx, _rx) = mpsc::channel(8);
         let sid = reg.register(
             "node-a".into(),
+            "__default__".into(),
             HashSet::new(),
             BTreeMap::new(),
             AdmissionMode::Fixed { max_in_flight: 4 },
@@ -357,5 +423,58 @@ mod tests {
         );
         reg.record_heartbeat(sid, 3, None);
         assert_eq!(reg.get(sid).unwrap().in_flight, 3);
+    }
+
+    #[test]
+    fn capability_lookup_is_place_scoped() {
+        let reg = WorkerRegistry::new();
+        let mut caps = HashSet::new();
+        caps.insert(cap("workflow:hello", 1));
+
+        let (tx_a, _rx_a) = mpsc::channel(8);
+        let sid_a = reg.register(
+            "node-a".into(),
+            "place-a".into(),
+            caps.clone(),
+            BTreeMap::new(),
+            AdmissionMode::Reactive,
+            tx_a,
+            BTreeMap::new(),
+            Vec::new(),
+            Vec::new(),
+        );
+        let (tx_b, _rx_b) = mpsc::channel(8);
+        let _sid_b = reg.register(
+            "node-b".into(),
+            "place-b".into(),
+            caps,
+            BTreeMap::new(),
+            AdmissionMode::Reactive,
+            tx_b,
+            BTreeMap::new(),
+            Vec::new(),
+            Vec::new(),
+        );
+
+        // Each place sees only its own worker.
+        let in_a = reg.workers_with_capability("place-a", &cap("workflow:hello", 1));
+        assert_eq!(in_a.len(), 1);
+        assert_eq!(in_a[0].session_id, sid_a);
+        assert_eq!(in_a[0].place, "place-a");
+
+        let in_b = reg.workers_with_capability("place-b", &cap("workflow:hello", 1));
+        assert_eq!(in_b.len(), 1);
+        assert_eq!(in_b[0].node_id, "node-b");
+
+        // A third place has no candidates.
+        assert!(
+            reg.workers_with_capability("place-c", &cap("workflow:hello", 1))
+                .is_empty()
+        );
+
+        // list_by_place mirrors the isolation.
+        assert_eq!(reg.list_by_place("place-a").len(), 1);
+        assert_eq!(reg.list_by_place("place-b").len(), 1);
+        assert!(reg.list_by_place("place-c").is_empty());
     }
 }

@@ -112,6 +112,10 @@ pub struct WorkerConfig {
     /// `BTreeMap` for deterministic order. Empty by default (the worker
     /// installs no resolver and the prior explicit-then-env behaviour holds).
     pub provider_keys: BTreeMap<String, String>,
+    /// Self-reported tenant/place this worker serves, surfaced in
+    /// [`WorkerHello::place`]. Advisory — the server's bearer-derived
+    /// identity wins (anti-spoof). `None` selects the default place.
+    pub place: Option<String>,
     /// Worker-side taints surfaced in [`WorkerHello::taints`]. Jobs without
     /// a matching toleration are not scheduled here. Empty by default.
     pub taints: Vec<WorkerTaint>,
@@ -159,6 +163,7 @@ impl WorkerConfig {
             tags: BTreeMap::new(),
             labels: BTreeMap::new(),
             provider_keys: BTreeMap::new(),
+            place: None,
             taints: Vec::new(),
             descriptors: Vec::new(),
             admission: AdmissionMode::Fixed { max_in_flight: 1 },
@@ -226,6 +231,15 @@ impl WorkerConfig {
         key: impl Into<String>,
     ) -> Self {
         self.provider_keys.insert(provider.into(), key.into());
+        self
+    }
+
+    /// Declare the tenant/place this worker serves, surfaced in
+    /// [`WorkerHello::place`]. Advisory: the server's bearer-derived
+    /// identity wins over it.
+    #[must_use]
+    pub fn with_place(mut self, place: impl Into<String>) -> Self {
+        self.place = Some(place.into());
         self
     }
 
@@ -893,6 +907,7 @@ impl Worker {
                 .map(protocol::WorkerTaintWire::from)
                 .collect(),
             descriptors: self.config.descriptors.clone(),
+            place: self.config.place.clone(),
         });
         outbound_tx.send(hello).await.map_err(|_| {
             ControlPlaneError::Transport("outbound channel closed before Hello".into())

@@ -89,6 +89,7 @@ async fn grpc_worker_session_handshake() {
         deadline_ms: None,
         wait_for_worker: true,
         resource_hint: None,
+        place: None,
     };
     let resp = client
         .submit_workflow(blazen_controlplane::pb::PostcardRequest {
@@ -155,6 +156,7 @@ async fn worker_executes_assignment() {
         deadline_ms: None,
         wait_for_worker: true,
         resource_hint: None,
+        place: None,
     };
     let resp = client
         .submit_workflow(blazen_controlplane::pb::PostcardRequest {
@@ -218,6 +220,7 @@ async fn worker_handles_cancel() {
         deadline_ms: None,
         wait_for_worker: true,
         resource_hint: None,
+        place: None,
     };
     let resp = client
         .submit_workflow(blazen_controlplane::pb::PostcardRequest {
@@ -601,6 +604,7 @@ async fn http_worker_register_and_submit() {
         labels: BTreeMap::new(),
         taints: Vec::new(),
         descriptors: Vec::new(),
+        place: None,
     };
     let register_resp: serde_json::Value = client
         .post(format!("{base}/v1/cp/worker/register"))
@@ -628,6 +632,7 @@ async fn http_worker_register_and_submit() {
         deadline_ms: None,
         wait_for_worker: true,
         resource_hint: None,
+        place: None,
     };
     let submit_resp: PostcardEnvelope = client
         .post(format!("{base}/v1/cp/submit"))

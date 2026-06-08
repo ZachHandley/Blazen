@@ -155,6 +155,7 @@ async fn sse_events_one_streams_run_events() {
         deadline_ms: None,
         wait_for_worker: true,
         resource_hint: None,
+        place: None,
     };
     let submit_envelope = PostcardEnvelope::encode(&submit).expect("encode submit");
     let submit_resp: PostcardEnvelope = http

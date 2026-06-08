@@ -40,12 +40,25 @@ use blazen_core::distributed::{RunStatus, WorkerCapability};
 /// - `INTERNAL` for any other failure (encoding, missing run state).
 pub async fn handle_submit_workflow(
     shared: &Arc<SharedState>,
+    identity: Option<crate::auth::PeerIdentity>,
     request: PostcardRequest,
 ) -> Result<Response<PostcardResponse>, Status> {
     let req: SubmitRequest = decode(&request.postcard_payload)
         .map_err(|e| Status::invalid_argument(format!("decode SubmitRequest: {e}")))?;
     validate_envelope_version(req.envelope_version)
         .map_err(|e| Status::failed_precondition(e.to_string()))?;
+
+    // Resolve the place: the server-derived identity WINS over any
+    // client-set `place` on the wire (anti-spoof). Fall back to the
+    // request's self-reported place, then to the default place.
+    let place = identity.as_ref().map_or_else(
+        || {
+            req.place
+                .clone()
+                .unwrap_or_else(|| crate::protocol::DEFAULT_PLACE.to_string())
+        },
+        |id| id.place.clone(),
+    );
 
     let core_req = req
         .to_core()
@@ -76,6 +89,7 @@ pub async fn handle_submit_workflow(
         .queue
         .submit(
             run_id,
+            place.clone(),
             assignment,
             required_capability,
             core_req.required_tags.clone(),
@@ -93,8 +107,9 @@ pub async fn handle_submit_workflow(
                 .queue
                 .describe(run_id)
                 .ok_or_else(|| Status::internal("run state missing after submit"))?;
-            let wire = run_state_to_wire(&snap)
+            let mut wire = run_state_to_wire(&snap)
                 .map_err(|e| Status::internal(format!("encode run state: {e}")))?;
+            wire.place = place;
             encode_resp(&wire)
         }
         SubmitOutcome::Rejected { reason } => Err(match reason {
@@ -253,8 +268,16 @@ pub async fn handle_list_workers(
     validate_envelope_version(req.envelope_version)
         .map_err(|e| Status::failed_precondition(e.to_string()))?;
 
-    let workers_core = shared.registry.list();
-    let workers: Vec<WorkerInfoWire> = workers_core.iter().map(Into::into).collect();
+    let workers: Vec<WorkerInfoWire> = shared
+        .registry
+        .list_with_place()
+        .iter()
+        .map(|(info, place)| {
+            let mut wire: WorkerInfoWire = info.into();
+            wire.place.clone_from(place);
+            wire
+        })
+        .collect();
     let resp = ListWorkersResponse {
         envelope_version: ENVELOPE_VERSION,
         workers,
@@ -334,5 +357,7 @@ fn run_state_to_wire(
         last_event_at_ms: snap.last_event_at_ms,
         output_json,
         error: snap.error.clone(),
+        // Default place; callers that know the run's place overwrite it.
+        place: String::new(),
     })
 }

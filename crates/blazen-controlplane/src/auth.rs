@@ -24,7 +24,106 @@
 //! [`validate_bearer`] on every incoming request and returns
 //! `Status::unauthenticated` on failure.
 
+use std::sync::{Arc, OnceLock};
+
 pub use blazen_peer::auth::{PEER_TOKEN_ENV, resolve_peer_token};
+
+/// What kind of peer authenticated. Surfaced on [`PeerIdentity`] so
+/// handlers can apply role-specific policy later (e.g. admin-only RPCs).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PeerKind {
+    /// A worker node connecting to run assignments.
+    Worker,
+    /// An orchestrator submitting / observing workflows.
+    Orchestrator,
+    /// A privileged admin caller.
+    Admin,
+}
+
+/// The server-resolved identity of an authenticated peer.
+///
+/// Produced by the installed [`PlaceAuthenticator`] from the inbound
+/// bearer token and inserted into the tonic request extensions by the
+/// interceptor. Handlers read it back to determine the tenant/place a
+/// request operates in — the server-side `place` here WINS over any
+/// client-set `place` on the wire (anti-spoof).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct PeerIdentity {
+    /// Tenant/place this peer belongs to. `"__default__"` for
+    /// single-tenant / token-less deployments.
+    pub place: String,
+    /// Role of the peer.
+    pub kind: PeerKind,
+}
+
+/// Maps an already-validated bearer token to a [`PeerIdentity`].
+///
+/// The interceptor validates the bearer with [`validate_bearer`] FIRST,
+/// then calls the installed authenticator to derive identity. A custom
+/// authenticator (e.g. one that decodes a JWT's `place` claim) can be
+/// installed via [`install_place_authenticator`]; the [`DefaultPlaceAuthenticator`]
+/// is used otherwise and maps every accepted peer to the default place.
+pub trait PlaceAuthenticator: Send + Sync {
+    /// Derive a [`PeerIdentity`] from the (already-validated) bearer
+    /// header value, or return an error string to reject the request.
+    ///
+    /// # Errors
+    ///
+    /// Returns an error message string when the bearer cannot be mapped
+    /// to a valid identity (the interceptor surfaces it as
+    /// `Status::unauthenticated`).
+    fn authenticate(&self, bearer: Option<&str>) -> Result<PeerIdentity, String>;
+}
+
+/// Blanket impl so a bare closure can serve as a [`PlaceAuthenticator`].
+impl<F> PlaceAuthenticator for F
+where
+    F: Fn(Option<&str>) -> Result<PeerIdentity, String> + Send + Sync,
+{
+    fn authenticate(&self, bearer: Option<&str>) -> Result<PeerIdentity, String> {
+        self(bearer)
+    }
+}
+
+/// The default authenticator: maps every (already-validated) bearer to
+/// the default place as an [`PeerKind::Orchestrator`]. Preserves
+/// pre-tenancy behaviour — a token-less or shared-token deployment keeps
+/// working exactly as before.
+#[derive(Debug, Default, Clone, Copy)]
+pub struct DefaultPlaceAuthenticator;
+
+impl PlaceAuthenticator for DefaultPlaceAuthenticator {
+    fn authenticate(&self, _bearer: Option<&str>) -> Result<PeerIdentity, String> {
+        Ok(PeerIdentity {
+            place: crate::protocol::DEFAULT_PLACE.to_string(),
+            kind: PeerKind::Orchestrator,
+        })
+    }
+}
+
+/// Process-global authenticator slot. `None` until installed; the
+/// accessor falls back to [`DefaultPlaceAuthenticator`].
+static PLACE_AUTHENTICATOR: OnceLock<Arc<dyn PlaceAuthenticator>> = OnceLock::new();
+
+/// Install a custom [`PlaceAuthenticator`]. Set-once (mirrors a
+/// `OnceLock` slot): the first call wins and a deployment wires its
+/// authenticator once at startup.
+///
+/// Returns `true` if this call installed the authenticator, or `false`
+/// if one was already installed (in which case the existing one is kept).
+pub fn install_place_authenticator(auth: Arc<dyn PlaceAuthenticator>) -> bool {
+    PLACE_AUTHENTICATOR.set(auth).is_ok()
+}
+
+/// The installed [`PlaceAuthenticator`], or the
+/// [`DefaultPlaceAuthenticator`] when none was installed.
+#[must_use]
+pub fn place_authenticator() -> Arc<dyn PlaceAuthenticator> {
+    PLACE_AUTHENTICATOR
+        .get()
+        .cloned()
+        .unwrap_or_else(|| Arc::new(DefaultPlaceAuthenticator))
+}
 
 /// Build the `Bearer <token>` value for the `authorization` metadata
 /// header. Returns `None` if no token is configured in the environment.
@@ -173,5 +272,36 @@ mod tests {
         assert!(constant_time_eq(b"abc", b"abc"));
         assert!(!constant_time_eq(b"abc", b"abd"));
         assert!(!constant_time_eq(b"abc", b"abcd"));
+    }
+
+    #[test]
+    fn default_authenticator_maps_to_default_place() {
+        let id = DefaultPlaceAuthenticator
+            .authenticate(Some("Bearer whatever"))
+            .expect("default authenticator never rejects");
+        assert_eq!(id.place, crate::protocol::DEFAULT_PLACE);
+        assert_eq!(id.kind, PeerKind::Orchestrator);
+        // Token-less path too.
+        let id_none = DefaultPlaceAuthenticator.authenticate(None).unwrap();
+        assert_eq!(id_none.place, crate::protocol::DEFAULT_PLACE);
+    }
+
+    #[test]
+    fn closure_authenticator_maps_token_to_place() {
+        // A custom authenticator: the bearer's trailing word is the place.
+        let auth = |bearer: Option<&str>| -> Result<PeerIdentity, String> {
+            let header = bearer.ok_or_else(|| "missing bearer".to_string())?;
+            let token = header
+                .strip_prefix("Bearer ")
+                .ok_or_else(|| "bad scheme".to_string())?;
+            Ok(PeerIdentity {
+                place: token.to_string(),
+                kind: PeerKind::Worker,
+            })
+        };
+        let id = PlaceAuthenticator::authenticate(&auth, Some("Bearer acme")).unwrap();
+        assert_eq!(id.place, "acme");
+        assert_eq!(id.kind, PeerKind::Worker);
+        assert!(PlaceAuthenticator::authenticate(&auth, None).is_err());
     }
 }

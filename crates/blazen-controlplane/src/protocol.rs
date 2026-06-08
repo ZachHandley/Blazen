@@ -46,7 +46,27 @@ use blazen_core::distributed as core;
 /// peer cannot decode v2 frames — the handshake negotiates the
 /// intersection of `supported_envelope_versions` and rejects when the
 /// versions don't overlap.
-pub const ENVELOPE_VERSION: u32 = 2;
+///
+/// Bumped 2 → 3 to add the per-place (tenant) `place` field to
+/// [`WorkerHello`], [`SubmitRequest`], [`WorkerInfoWire`], and
+/// [`RunStateSnapshotWire`] as trailing `#[serde(default)]` fields.
+///
+/// Compatibility note (postcard is positional, non-self-describing): the
+/// only direction that holds is FORWARD — an OLDER (v2) decoder reading a
+/// NEWER (v3) frame ignores the trailing `place` bytes. The REVERSE — a
+/// v3 struct decoding a shorter v2 frame — errors with
+/// `DeserializeUnexpectedEnd`, because the missing trailing field has no
+/// bytes to read. A trailing `#[serde(default)]` does NOT change that for
+/// postcard. So, exactly as with the v1 → v2 bump, mixed-version wire
+/// traffic is gated by the handshake's `supported_envelope_versions`
+/// intersection, not by byte-level structural back-compat.
+pub const ENVELOPE_VERSION: u32 = 3;
+
+/// Sentinel tenant/place for single-tenant, legacy, and standalone
+/// deployments. A `None` / empty `place` on the wire resolves to this
+/// value server-side, so existing single-tenant clusters behave exactly
+/// as before the per-place split.
+pub const DEFAULT_PLACE: &str = "__default__";
 
 /// Returns `Err` if `got` is greater than [`ENVELOPE_VERSION`] (i.e.
 /// the payload was produced by a newer build of blazen-controlplane
@@ -319,6 +339,15 @@ pub struct WorkerHello {
     /// when decoding older payloads.
     #[serde(default)]
     pub descriptors: Vec<NodeDescriptorWire>,
+    /// Self-reported tenant/place this worker serves. Advisory only — the
+    /// server-side [`crate::auth::PeerIdentity`] derived from the bearer
+    /// token wins over this value (anti-spoof). `None` for legacy callers
+    /// and standalone workers; the server treats `None` as the default
+    /// place. Trailing `#[serde(default)]` (a v2 decoder ignores it;
+    /// mixed-version traffic is gated by the handshake — see
+    /// [`ENVELOPE_VERSION`]). Introduced in envelope v3.
+    #[serde(default)]
+    pub place: Option<String>,
 }
 
 /// Periodic worker → server heartbeat. Drives liveness, in-flight
@@ -635,6 +664,15 @@ pub struct SubmitRequest {
     /// Optional resource estimate. Required when targeting a
     /// `VramBudget` worker.
     pub resource_hint: Option<ResourceHintWire>,
+    /// Tenant/place this submission targets. Advisory — when the caller
+    /// presents a bearer token, the server-side
+    /// [`crate::auth::PeerIdentity`] place wins over this value
+    /// (anti-spoof). `None` selects the default place. Trailing
+    /// `#[serde(default)]` (a v2 decoder ignores it; mixed-version traffic
+    /// is gated by the handshake — see [`ENVELOPE_VERSION`]). Introduced
+    /// in envelope v3.
+    #[serde(default)]
+    pub place: Option<String>,
 }
 
 impl SubmitRequest {
@@ -656,6 +694,9 @@ impl SubmitRequest {
             deadline_ms: req.deadline_ms,
             wait_for_worker: req.wait_for_worker,
             resource_hint: req.resource_hint.as_ref().map(Into::into),
+            // `place` has no core counterpart; the orchestrator sets it on
+            // the wire struct directly (or leaves it `None` for default).
+            place: None,
         })
     }
 
@@ -779,6 +820,13 @@ pub struct RunStateSnapshotWire {
     pub output_json: Vec<u8>,
     /// Error description when `status == Failed`. `None` otherwise.
     pub error: Option<String>,
+    /// Tenant/place this run belongs to. Empty string = the default
+    /// place. Populated server-side from the submission's resolved place.
+    /// Trailing `#[serde(default)]` (a v2 decoder ignores it; mixed-version
+    /// traffic is gated by the handshake — see [`ENVELOPE_VERSION`]).
+    /// Introduced in envelope v3.
+    #[serde(default)]
+    pub place: String,
 }
 
 impl RunStateSnapshotWire {
@@ -803,6 +851,9 @@ impl RunStateSnapshotWire {
             last_event_at_ms: snap.last_event_at_ms,
             output_json,
             error: snap.error.clone(),
+            // `place` has no core counterpart; the server overwrites it with
+            // the run's resolved place when building the response.
+            place: String::new(),
         })
     }
 
@@ -917,6 +968,13 @@ pub struct WorkerInfoWire {
     /// Wall-clock connection timestamp, milliseconds since the Unix
     /// epoch.
     pub connected_at_ms: u64,
+    /// Tenant/place this worker serves. Empty string = the default place.
+    /// Populated server-side from the worker's registry handle. Trailing
+    /// `#[serde(default)]` (a v2 decoder ignores it; mixed-version traffic
+    /// is gated by the handshake — see [`ENVELOPE_VERSION`]). Introduced
+    /// in envelope v3.
+    #[serde(default)]
+    pub place: String,
 }
 
 /// Response to a [`ListWorkersRequest`].
@@ -1031,6 +1089,9 @@ impl From<&core::WorkerInfo> for WorkerInfoWire {
             in_flight: info.in_flight,
             admission_snapshot: info.admission_snapshot.as_ref().map(Into::into),
             connected_at_ms: info.connected_at_ms,
+            // `place` has no core counterpart; the server overwrites it from
+            // the registry handle when building the `ListWorkers` response.
+            place: String::new(),
         }
     }
 }
@@ -1112,6 +1173,7 @@ mod tests {
             labels: BTreeMap::new(),
             taints: Vec::new(),
             descriptors: Vec::new(),
+            place: Some("acme".to_string()),
         };
 
         let decoded = roundtrip(&original);
@@ -1124,6 +1186,130 @@ mod tests {
             decoded.supported_envelope_versions,
             original.supported_envelope_versions
         );
+        assert_eq!(decoded.place, original.place);
+    }
+
+    // NOTE on postcard envelope compatibility.
+    //
+    // Postcard is positional and non-self-describing. The compatibility
+    // that actually holds (and that the handshake relies on) is the
+    // FORWARD direction: a frame that a NEWER peer produced with MORE
+    // trailing fields can be decoded by an OLDER peer's struct shape —
+    // the older decoder reads exactly its fields and `take_from_bytes`
+    // leaves the extra trailing bytes unconsumed. The REVERSE direction
+    // — decoding OLDER (shorter) bytes into a NEWER struct that has an
+    // extra trailing field — is NOT supported by postcard: it errors
+    // with `DeserializeUnexpectedEnd` because the missing field has no
+    // bytes to read (a trailing `#[serde(default)]` does not rescue a
+    // positional format from EOF). This is exactly why the v1→v2 bump
+    // already documents "a v1 peer cannot decode v2 frames — the
+    // handshake negotiates the intersection". The same holds v2→v3:
+    // wire-level mixing is gated by `supported_envelope_versions`, not by
+    // byte-level structural back-compat. The test below pins the real,
+    // working guarantee: a v3 frame decodes cleanly under a v2-shaped
+    // (place-less) struct, with the trailing `place` bytes ignored.
+
+    /// A v2 [`WorkerHello`] — identical field order minus the trailing
+    /// `place` added in v3.
+    #[derive(Serialize, Deserialize)]
+    struct WorkerHelloV2 {
+        envelope_version: u32,
+        node_id: String,
+        capabilities: Vec<CapabilityWire>,
+        tags: BTreeMap<String, String>,
+        admission: AdmissionModeWire,
+        supported_envelope_versions: Vec<u32>,
+        labels: BTreeMap<String, String>,
+        taints: Vec<WorkerTaintWire>,
+        #[serde(default)]
+        descriptors: Vec<NodeDescriptorWire>,
+    }
+
+    #[test]
+    fn v3_worker_hello_frame_decodes_under_v2_struct_ignoring_place() {
+        // A v3 server/peer encodes a WorkerHello WITH a place set.
+        let v3 = WorkerHello {
+            envelope_version: 3,
+            node_id: "modern-worker".to_string(),
+            capabilities: Vec::new(),
+            tags: BTreeMap::new(),
+            admission: AdmissionModeWire::Reactive,
+            supported_envelope_versions: vec![3],
+            labels: BTreeMap::new(),
+            taints: Vec::new(),
+            descriptors: Vec::new(),
+            place: Some("acme".to_string()),
+        };
+        let bytes = postcard::to_allocvec(&v3).expect("encode v3 WorkerHello");
+        // An older (v2-shaped, place-less) decoder reads its fields and
+        // leaves the trailing `place` bytes unconsumed.
+        let (decoded, rest): (WorkerHelloV2, &[u8]) =
+            postcard::take_from_bytes(&bytes).expect("v2 struct decodes a v3 frame");
+        assert_eq!(decoded.node_id, "modern-worker");
+        // The trailing `place` bytes were NOT consumed by the v2 struct.
+        assert!(
+            !rest.is_empty(),
+            "the v3 `place` field should remain as trailing bytes"
+        );
+    }
+
+    /// A v2 [`SubmitRequest`] — same fields minus the trailing v3 `place`.
+    #[derive(Serialize, Deserialize)]
+    struct SubmitRequestV2 {
+        envelope_version: u32,
+        workflow_name: String,
+        workflow_version: Option<u32>,
+        #[serde(with = "serde_bytes")]
+        input_json: Vec<u8>,
+        required_tags: Vec<String>,
+        idempotency_key: Option<String>,
+        deadline_ms: Option<u64>,
+        wait_for_worker: bool,
+        resource_hint: Option<ResourceHintWire>,
+    }
+
+    #[test]
+    fn v3_submit_request_frame_decodes_under_v2_struct_ignoring_place() {
+        let v3 = SubmitRequest {
+            envelope_version: 3,
+            workflow_name: "summarize".to_string(),
+            workflow_version: Some(1),
+            input_json: serde_json::to_vec(&serde_json::json!({"k": "v"})).unwrap(),
+            required_tags: Vec::new(),
+            idempotency_key: None,
+            deadline_ms: None,
+            wait_for_worker: false,
+            resource_hint: None,
+            place: Some("acme".to_string()),
+        };
+        let bytes = postcard::to_allocvec(&v3).expect("encode v3 SubmitRequest");
+        let (decoded, rest): (SubmitRequestV2, &[u8]) =
+            postcard::take_from_bytes(&bytes).expect("v2 struct decodes a v3 frame");
+        assert_eq!(decoded.workflow_name, "summarize");
+        assert!(
+            !rest.is_empty(),
+            "the v3 `place` field should remain as trailing bytes"
+        );
+    }
+
+    #[test]
+    fn submit_request_roundtrips_with_place() {
+        let original = SubmitRequest {
+            envelope_version: ENVELOPE_VERSION,
+            workflow_name: "summarize".to_string(),
+            workflow_version: Some(2),
+            input_json: serde_json::to_vec(&serde_json::json!({"x": 1})).unwrap(),
+            required_tags: vec!["gpu".to_string()],
+            idempotency_key: Some("dedupe-1".to_string()),
+            deadline_ms: Some(5_000),
+            wait_for_worker: true,
+            resource_hint: None,
+            place: Some("acme".to_string()),
+        };
+        let decoded = roundtrip(&original);
+        assert_eq!(decoded.workflow_name, original.workflow_name);
+        assert_eq!(decoded.place, original.place);
+        assert_eq!(decoded.required_tags, original.required_tags);
     }
 
     #[test]

@@ -48,6 +48,10 @@ use super::store::{AssignmentStore, MemoryAssignmentStore};
 #[derive(Clone)]
 struct QueuedAssignment {
     assignment: Assignment,
+    /// Tenant/place this assignment is scoped to. Buckets are keyed by
+    /// `(place, capability)` so a submission in one place only ever
+    /// routes to a worker in the same place.
+    place: String,
     required_capability: WorkerCapability,
     required_tags: Vec<String>,
     enqueued_at: Instant,
@@ -98,6 +102,11 @@ type PendingKey = (u8, Instant, Uuid);
 /// One per-capability pending pool: priority-ordered map of pending
 /// assignments.
 type PendingBucket = BTreeMap<PendingKey, QueuedAssignment>;
+
+/// Bucket key for the pending / deficit maps: `(place, capability)`.
+/// Keying by place keeps each tenant's queue isolated — a worker that
+/// connects for place A only drains place-A buckets.
+type BucketKey = (String, WorkerCapability);
 
 /// Per-capability state for the deficit-round-robin WFQ scheduler.
 ///
@@ -154,11 +163,12 @@ pub struct AssignmentQueue {
     /// (FIFO within a priority), then `run_id` (deterministic
     /// tiebreak). Wrapped in `RwLock` so multiple readers (admission
     /// scans) don't serialize behind a writer.
-    pending: RwLock<HashMap<WorkerCapability, PendingBucket>>,
-    /// Per-capability deficit counters for the weighted-fair-queueing
-    /// (WFQ) scheduler. See [`Self::pop_pending`], [`band_weight`], and
-    /// [`band_lo`] for the band math + weight guarantees.
-    deficits: RwLock<HashMap<WorkerCapability, WfqState>>,
+    pending: RwLock<HashMap<BucketKey, PendingBucket>>,
+    /// Per-`(place, capability)` deficit counters for the
+    /// weighted-fair-queueing (WFQ) scheduler. See [`Self::pop_pending`],
+    /// [`band_weight`], and [`band_lo`] for the band math + weight
+    /// guarantees.
+    deficits: RwLock<HashMap<BucketKey, WfqState>>,
     /// In-flight assignments by `run_id`.
     in_flight: DashMap<Uuid, InFlight>,
     /// Run state snapshot per `run_id`. Updated by `mark_running`,
@@ -266,6 +276,7 @@ impl AssignmentQueue {
     pub async fn submit(
         &self,
         run_id: Uuid,
+        place: String,
         assignment: Assignment,
         required_capability: WorkerCapability,
         required_tags: Vec<String>,
@@ -275,6 +286,7 @@ impl AssignmentQueue {
     ) -> SubmitOutcome {
         let queued = QueuedAssignment {
             assignment,
+            place: place.clone(),
             required_capability: required_capability.clone(),
             required_tags: required_tags.clone(),
             enqueued_at: Instant::now(),
@@ -290,6 +302,7 @@ impl AssignmentQueue {
         let decision = {
             let inputs = RouteInputs::from_assignment(&queued.assignment);
             let req = RouteRequest {
+                place: &place,
                 required_capability: &required_capability,
                 required_tags: &required_tags,
                 resource_hint: inputs.hint.as_ref(),
@@ -368,11 +381,13 @@ impl AssignmentQueue {
         }
     }
 
-    /// A worker has just connected (or freed capacity). Drain any
-    /// pending assignments for capabilities the worker advertises and
-    /// try to route them.
+    /// A worker has just connected (or freed capacity) in `place`. Drain
+    /// any pending assignments in THAT place for capabilities the worker
+    /// advertises and try to route them. Other places' buckets are left
+    /// untouched — a worker only ever drains its own tenant's queue.
     pub async fn try_drain_for(
         &self,
+        place: &str,
         capabilities: &[WorkerCapability],
         registry: &WorkerRegistry,
         admission: &Admission,
@@ -381,13 +396,14 @@ impl AssignmentQueue {
             loop {
                 // Pop one entry via the WFQ scheduler; releases all
                 // locks before we await on routing below.
-                let Some(queued) = self.pop_pending(cap).await else {
+                let Some(queued) = self.pop_pending(place, cap).await else {
                     break;
                 };
 
                 let decision = {
                     let inputs = RouteInputs::from_assignment(&queued.assignment);
                     let req = RouteRequest {
+                        place: &queued.place,
                         required_capability: &queued.required_capability,
                         required_tags: &queued.required_tags,
                         resource_hint: inputs.hint.as_ref(),
@@ -617,6 +633,9 @@ impl AssignmentQueue {
             let enqueued_at = Instant::now();
             let queued = QueuedAssignment {
                 assignment,
+                // The durable store carries no place; recovered runs land
+                // in the default place.
+                place: crate::protocol::DEFAULT_PLACE.to_string(),
                 required_capability: cap.clone(),
                 required_tags: Vec::new(),
                 enqueued_at,
@@ -633,7 +652,7 @@ impl AssignmentQueue {
             {
                 let mut pending = self.pending.write().await;
                 pending
-                    .entry(cap.clone())
+                    .entry((crate::protocol::DEFAULT_PLACE.to_string(), cap.clone()))
                     .or_default()
                     .insert((priority, enqueued_at, run_id), queued);
             }
@@ -679,6 +698,9 @@ impl AssignmentQueue {
                 let enqueued_at = Instant::now();
                 let queued = QueuedAssignment {
                     assignment,
+                    // Place-agnostic store → recovered runs land in the
+                    // default place.
+                    place: crate::protocol::DEFAULT_PLACE.to_string(),
                     required_capability: cap.clone(),
                     required_tags: tags.clone(),
                     enqueued_at,
@@ -686,7 +708,7 @@ impl AssignmentQueue {
                 {
                     let mut pending = self.pending.write().await;
                     pending
-                        .entry(cap.clone())
+                        .entry((crate::protocol::DEFAULT_PLACE.to_string(), cap.clone()))
                         .or_default()
                         .insert((priority, enqueued_at, run_id), queued);
                 }
@@ -744,15 +766,19 @@ impl AssignmentQueue {
         let run_id = queued.assignment.run_id;
         let priority = queued.assignment.priority;
         let enqueued_at = queued.enqueued_at;
+        let place = queued.place.clone();
         let capability = queued.required_capability.clone();
         let required_tags = queued.required_tags.clone();
         {
             let mut pending = self.pending.write().await;
             pending
-                .entry(capability.clone())
+                .entry((place, capability.clone()))
                 .or_default()
                 .insert((priority, enqueued_at, run_id), queued);
         }
+        // The durable store is place-agnostic (keyed by capability only);
+        // on recovery, persisted pending runs re-hydrate into the default
+        // place. Mirror the FIFO position here as before.
         if let Err(e) = self
             .store
             .enqueue_pending(&capability, run_id, &required_tags)
@@ -806,18 +832,19 @@ impl AssignmentQueue {
     /// round, a band-7 entry waits at most ~8 services from other
     /// bands before it wins. This holds regardless of how full the
     /// higher bands are.
-    async fn pop_pending(&self, cap: &WorkerCapability) -> Option<QueuedAssignment> {
+    async fn pop_pending(&self, place: &str, cap: &WorkerCapability) -> Option<QueuedAssignment> {
+        let bucket_key: BucketKey = (place.to_string(), cap.clone());
         let mut pending = self.pending.write().await;
-        let bucket = pending.get_mut(cap)?;
+        let bucket = pending.get_mut(&bucket_key)?;
         if bucket.is_empty() {
-            pending.remove(cap);
+            pending.remove(&bucket_key);
             let mut deficits_guard = self.deficits.write().await;
-            deficits_guard.remove(cap);
+            deficits_guard.remove(&bucket_key);
             return None;
         }
 
         let mut deficits_guard = self.deficits.write().await;
-        let state = deficits_guard.entry(cap.clone()).or_default();
+        let state = deficits_guard.entry(bucket_key.clone()).or_default();
 
         // Bounded retry: at most PRIORITY_BANDS rounds. Each round
         // either serves (success), or marks at least one band as
@@ -861,8 +888,8 @@ impl AssignmentQueue {
                 *d_ref = d_ref.saturating_sub(SERVICE_COST);
                 state.served_this_round.insert(band, true);
                 if bucket.is_empty() {
-                    pending.remove(cap);
-                    deficits_guard.remove(cap);
+                    pending.remove(&bucket_key);
+                    deficits_guard.remove(&bucket_key);
                 }
                 return Some(queued);
             }
@@ -1058,6 +1085,7 @@ mod tests {
         caps.insert(cap("workflow:hello", 1));
         let sid = registry.register(
             "node-a".into(),
+            "__default__".into(),
             caps,
             BTreeMap::new(),
             AdmissionMode::Fixed { max_in_flight: 4 },
@@ -1071,6 +1099,7 @@ mod tests {
         let outcome = queue
             .submit(
                 run_id,
+                "__default__".into(),
                 make_assignment(run_id, "workflow:hello"),
                 cap("workflow:hello", 1),
                 vec![],
@@ -1101,6 +1130,7 @@ mod tests {
         let outcome = queue
             .submit(
                 run_id,
+                "__default__".into(),
                 make_assignment(run_id, "workflow:hello"),
                 cap("workflow:hello", 1),
                 vec![],
@@ -1125,6 +1155,7 @@ mod tests {
         let outcome = queue
             .submit(
                 run_id,
+                "__default__".into(),
                 make_assignment(run_id, "workflow:hello"),
                 cap("workflow:hello", 1),
                 vec![],
@@ -1148,6 +1179,7 @@ mod tests {
         let _ = queue
             .submit(
                 run_id,
+                "__default__".into(),
                 make_assignment(run_id, "workflow:hello"),
                 cap("workflow:hello", 1),
                 vec![],
@@ -1165,6 +1197,7 @@ mod tests {
         caps.insert(cap("workflow:hello", 1));
         let _sid = registry.register(
             "node-a".into(),
+            "__default__".into(),
             caps,
             BTreeMap::new(),
             AdmissionMode::Fixed { max_in_flight: 4 },
@@ -1174,7 +1207,9 @@ mod tests {
             Vec::new(),
         );
         let caps_vec = vec![cap("workflow:hello", 1)];
-        queue.try_drain_for(&caps_vec, &registry, &admission).await;
+        queue
+            .try_drain_for("__default__", &caps_vec, &registry, &admission)
+            .await;
 
         let received = rx.recv().await.expect("queued assignment delivered");
         assert!(matches!(received, ServerToWorker::Assignment(_)));
@@ -1193,6 +1228,7 @@ mod tests {
         caps.insert(cap("workflow:hello", 1));
         let sid = registry.register(
             "node-a".into(),
+            "__default__".into(),
             caps,
             BTreeMap::new(),
             AdmissionMode::Fixed { max_in_flight: 4 },
@@ -1206,6 +1242,7 @@ mod tests {
         let _ = queue
             .submit(
                 run_id,
+                "__default__".into(),
                 make_assignment(run_id, "workflow:hello"),
                 cap("workflow:hello", 1),
                 vec![],
@@ -1297,6 +1334,7 @@ mod tests {
         let run_id = Uuid::new_v4();
         let queued = QueuedAssignment {
             assignment: make_assignment_p(run_id, &capability.kind, priority),
+            place: "__default__".to_string(),
             required_capability: capability.clone(),
             required_tags: Vec::new(),
             enqueued_at: Instant::now(),
@@ -1351,19 +1389,19 @@ mod tests {
         tokio::time::sleep(std::time::Duration::from_millis(2)).await;
         let id_c = enqueue_for_test(&queue, capability.clone(), 100).await;
 
-        let first = queue.pop_pending(&capability).await.unwrap();
+        let first = queue.pop_pending("__default__", &capability).await.unwrap();
         assert_eq!(first.assignment.run_id, id_b, "pri-50 must come first");
 
-        let second = queue.pop_pending(&capability).await.unwrap();
+        let second = queue.pop_pending("__default__", &capability).await.unwrap();
         assert_eq!(
             second.assignment.run_id, id_a,
             "earliest pri-100 next (FIFO within priority)"
         );
 
-        let third = queue.pop_pending(&capability).await.unwrap();
+        let third = queue.pop_pending("__default__", &capability).await.unwrap();
         assert_eq!(third.assignment.run_id, id_c, "later pri-100 last");
 
-        assert!(queue.pop_pending(&capability).await.is_none());
+        assert!(queue.pop_pending("__default__", &capability).await.is_none());
     }
 
     #[tokio::test]
@@ -1392,7 +1430,7 @@ mod tests {
 
         let mut low_position = None;
         for i in 0..110 {
-            let item = queue.pop_pending(&capability).await.unwrap();
+            let item = queue.pop_pending("__default__", &capability).await.unwrap();
             if item.assignment.run_id == low_id {
                 low_position = Some(i);
                 break;
@@ -1417,6 +1455,7 @@ mod tests {
         caps.insert(cap("workflow:hello", 1));
         let sid = registry.register(
             "node-a".into(),
+            "__default__".into(),
             caps,
             BTreeMap::new(),
             AdmissionMode::Fixed { max_in_flight: 4 },
@@ -1430,6 +1469,7 @@ mod tests {
         let outcome = queue
             .submit(
                 run_id,
+                "__default__".into(),
                 make_assignment_p(run_id, "workflow:hello", 50),
                 cap("workflow:hello", 1),
                 vec![],
@@ -1454,7 +1494,7 @@ mod tests {
 
         let capability = cap("workflow:hello", 1);
         let popped = queue
-            .pop_pending(&capability)
+            .pop_pending("__default__", &capability)
             .await
             .expect("surrendered entry is back in pending");
         assert_eq!(popped.assignment.run_id, run_id);
