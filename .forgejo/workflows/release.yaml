@@ -234,8 +234,18 @@ jobs:
           # own crates.io-publish validation (large optional-dep surface).
           exclude: blazen-py,blazen-node,blazen-cabi,blazen-uniffi
           cargo-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-          max-backoff-seconds: '300'
-          max-attempts-per-crate: '5'
+          # crates.io rate-limits brand-new crates at 1 per 10 MINUTES after an
+          # initial burst of 5. The first 0.6.x cut has ~15-20 brand-new crates,
+          # so the job must patiently wait out that cadence rather than give up:
+          # 700s backoff cap (> the 600s new-crate window) over 20 attempts means
+          # a single job rides the limit instead of dying mid-workspace. The
+          # cargo-publish-workspace action idempotent-SKIPS any crate@version
+          # already live on crates.io, so even if a job is killed, a re-dispatch
+          # RESUMES from where it left off (already-published crates are skipped,
+          # only the remaining ones are attempted). The instant, rate-limit-free
+          # safety net is the parallel publish-rust-zreg job (ZRegistry).
+          max-backoff-seconds: '700'
+          max-attempts-per-crate: '20'
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
