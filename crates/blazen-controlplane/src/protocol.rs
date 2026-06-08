@@ -463,6 +463,26 @@ pub enum DeclineReason {
     Other(String),
 }
 
+/// Worker → server request for a per-place provider key over the
+/// authenticated session. The server resolves the key against the
+/// worker's server-authenticated place (the worker cannot name a place)
+/// and replies with a [`ServerToWorker::KeyResponse`] carrying the same
+/// `request_id`.
+///
+/// The request carries no secret. The key value travels only in the
+/// response, which redacts it in `Debug`.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KeyRequest {
+    /// Envelope version of this payload. See [`ENVELOPE_VERSION`].
+    pub envelope_version: u32,
+    /// Correlation id echoed back in the matching
+    /// [`ServerToWorker::KeyResponse`].
+    pub request_id: Uuid,
+    /// Provider whose key the worker is requesting (e.g. `"openai"`,
+    /// `"fal"`).
+    pub provider: String,
+}
+
 /// Top-level worker→server frame. Carried as the postcard payload of
 /// any `PostcardRequest` the worker sends in the bidi stream.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -477,6 +497,14 @@ pub enum WorkerToServer {
     Event(AssignmentEvent),
     /// Reactive admission decision in response to an [`Offer`].
     OfferDecision(OfferDecision),
+    /// Request a per-place provider key over the authenticated session.
+    ///
+    /// Appended after [`OfferDecision`] so existing variant indices are
+    /// preserved — older servers never decode this frame, and postcard
+    /// decode of older payloads is unaffected (the negotiated
+    /// `supported_envelope_versions` intersection gates whether a worker
+    /// ever sends it).
+    KeyRequest(KeyRequest),
 }
 
 // ---------------------------------------------------------------------------
@@ -603,6 +631,46 @@ pub struct Offer {
     pub assignment: Assignment,
 }
 
+/// Server → worker response to a [`WorkerToServer::KeyRequest`].
+///
+/// Carries the resolved provider key (or `None` when the server has no
+/// key for the worker's place + provider), plus cache-control metadata.
+/// The `key` field is a secret: this struct has a MANUAL [`std::fmt::Debug`]
+/// impl that REDACTS it, so the key never reaches a log line, panic
+/// message, or test assertion that formats the frame.
+#[derive(Clone, Serialize, Deserialize)]
+pub struct KeyResponse {
+    /// Envelope version of this payload. See [`ENVELOPE_VERSION`].
+    pub envelope_version: u32,
+    /// Correlation id echoed from the originating
+    /// [`KeyRequest::request_id`].
+    pub request_id: Uuid,
+    /// The resolved key, or `None` when the server brokers no key for the
+    /// worker's place + provider. NEVER logged — see the manual `Debug`
+    /// impl below.
+    pub key: Option<String>,
+    /// Optional cache TTL in seconds for the worker-side cache. `None` =
+    /// cache for the session lifetime.
+    pub ttl_secs: Option<u64>,
+    /// Monotonic version counter; a higher value supersedes a cached key
+    /// for the same provider.
+    pub version: u64,
+}
+
+impl std::fmt::Debug for KeyResponse {
+    /// Redacts [`KeyResponse::key`] so the secret never reaches a log
+    /// line, panic message, or test assertion that formats the frame.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("KeyResponse")
+            .field("envelope_version", &self.envelope_version)
+            .field("request_id", &self.request_id)
+            .field("key", &self.key.as_ref().map(|_| "<REDACTED>"))
+            .field("ttl_secs", &self.ttl_secs)
+            .field("version", &self.version)
+            .finish()
+    }
+}
+
 /// Top-level server→worker frame.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum ServerToWorker {
@@ -628,6 +696,12 @@ pub enum ServerToWorker {
     /// preserved — older workers (envelope v1) never receive this frame,
     /// and postcard decode of older payloads is unaffected.
     InputResponse(InputResponse),
+    /// Response to a [`WorkerToServer::KeyRequest`] carrying the resolved
+    /// per-place provider key.
+    ///
+    /// Appended after [`InputResponse`] so existing variant indices are
+    /// preserved. The carried [`KeyResponse`] redacts its key in `Debug`.
+    KeyResponse(KeyResponse),
 }
 
 // ---------------------------------------------------------------------------
@@ -1379,6 +1453,78 @@ mod tests {
             round.resource_hint.as_ref().and_then(|h| h.vram_mb),
             Some(4096)
         );
+    }
+
+    #[test]
+    fn key_request_roundtrips() {
+        let original = WorkerToServer::KeyRequest(KeyRequest {
+            envelope_version: ENVELOPE_VERSION,
+            request_id: Uuid::new_v4(),
+            provider: "openai".to_string(),
+        });
+        let decoded = roundtrip(&original);
+        match decoded {
+            WorkerToServer::KeyRequest(req) => {
+                assert_eq!(req.envelope_version, ENVELOPE_VERSION);
+                assert_eq!(req.provider, "openai");
+            }
+            other => panic!("expected KeyRequest, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn key_response_roundtrips() {
+        let request_id = Uuid::new_v4();
+        let original = ServerToWorker::KeyResponse(KeyResponse {
+            envelope_version: ENVELOPE_VERSION,
+            request_id,
+            key: Some("sk-roundtrip-secret".to_string()),
+            ttl_secs: Some(300),
+            version: 5,
+        });
+        let decoded = roundtrip(&original);
+        match decoded {
+            ServerToWorker::KeyResponse(resp) => {
+                assert_eq!(resp.envelope_version, ENVELOPE_VERSION);
+                assert_eq!(resp.request_id, request_id);
+                assert_eq!(resp.key.as_deref(), Some("sk-roundtrip-secret"));
+                assert_eq!(resp.ttl_secs, Some(300));
+                assert_eq!(resp.version, 5);
+            }
+            other => panic!("expected KeyResponse, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn key_response_debug_redacts_key() {
+        let resp = KeyResponse {
+            envelope_version: ENVELOPE_VERSION,
+            request_id: Uuid::new_v4(),
+            key: Some("sk-never-log-me".to_string()),
+            ttl_secs: None,
+            version: 1,
+        };
+        let rendered = format!("{resp:?}");
+        assert!(
+            !rendered.contains("sk-never-log-me"),
+            "KeyResponse Debug must not contain the secret, got: {rendered}"
+        );
+        assert!(
+            rendered.contains("REDACT"),
+            "KeyResponse Debug must signal redaction, got: {rendered}"
+        );
+
+        // A None key renders without a redaction marker and without any
+        // secret (there is none).
+        let empty = KeyResponse {
+            envelope_version: ENVELOPE_VERSION,
+            request_id: Uuid::new_v4(),
+            key: None,
+            ttl_secs: None,
+            version: 0,
+        };
+        let rendered_empty = format!("{empty:?}");
+        assert!(rendered_empty.contains("None"));
     }
 
     #[test]

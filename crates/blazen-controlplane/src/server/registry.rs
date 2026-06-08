@@ -150,8 +150,9 @@ impl WorkerRegistry {
         if let Some((_, handle)) = self.sessions.remove(&session_id) {
             self.by_node_id.remove(&handle.node_id);
             for cap in &handle.capabilities {
-                if let Some(mut set) =
-                    self.capability_index.get_mut(&(handle.place.clone(), cap.clone()))
+                if let Some(mut set) = self
+                    .capability_index
+                    .get_mut(&(handle.place.clone(), cap.clone()))
                 {
                     set.remove(&session_id);
                 }
@@ -192,7 +193,10 @@ impl WorkerRegistry {
     /// Snapshot of every connected worker — used by `ListWorkers`.
     #[must_use]
     pub fn list(&self) -> Vec<WorkerInfo> {
-        self.sessions.iter().map(|r| worker_info(r.value())).collect()
+        self.sessions
+            .iter()
+            .map(|r| worker_info(r.value()))
+            .collect()
     }
 
     /// Like [`Self::list`] but pairs each worker with its place. The
@@ -334,8 +338,7 @@ mod tests {
         assert_eq!(reg.len(), 1);
         assert!(reg.get(sid).is_some());
         assert_eq!(reg.session_for_node("node-a"), Some(sid));
-        let candidates =
-            reg.workers_with_capability("__default__", &cap("workflow:hello", 1));
+        let candidates = reg.workers_with_capability("__default__", &cap("workflow:hello", 1));
         assert_eq!(candidates.len(), 1);
         assert_eq!(candidates[0].session_id, sid);
     }

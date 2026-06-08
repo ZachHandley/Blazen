@@ -20,6 +20,13 @@
 //! or use [`Client::with_mtls`] to load a client identity + CA from PEM
 //! files via [`crate::tls::load_client_tls`].
 
+// P4: worker-side control-plane key client — installs into the
+// `blazen_llm::KeyResolver` cascade and fetches per-place provider keys
+// over the authenticated worker session.
+pub mod key_client;
+
+pub use key_client::ControlPlaneKeyClient;
+
 // PR5: remote-mode ModelManager client. Gated behind the `model-client`
 // feature so consumers of just the workflow control plane don't pay
 // for the model-server symbols.

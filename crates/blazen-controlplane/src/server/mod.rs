@@ -12,6 +12,7 @@
 
 pub mod admission;
 pub mod interceptor;
+pub mod key_store;
 pub mod queue;
 pub mod registry;
 pub mod rpc;
@@ -30,6 +31,7 @@ pub mod model_manager;
 #[cfg(feature = "model-server")]
 pub mod model_service;
 
+pub use key_store::{EnvFileKeyStore, KeyStore, SharedKey};
 pub use service::ControlPlaneService;
 pub use store::{AssignmentStore, MemoryAssignmentStore};
 #[cfg(feature = "valkey-store")]
@@ -88,6 +90,14 @@ pub struct SharedState {
     /// `SubscribeRunEvents` / `SubscribeAll` server-streaming handlers
     /// and (when `http-transport` is on) the matching SSE routes.
     pub events: broadcast::Sender<RunEvent>,
+    /// Per-place provider-key store. The session handler consults this on
+    /// a worker `KeyRequest`, scoping the lookup to the worker's
+    /// server-authenticated place. Defaults to
+    /// [`key_store::EnvFileKeyStore`]; override with
+    /// [`ControlPlaneServer::with_key_store`]. Keys resolved here NEVER
+    /// touch an [`Assignment`](crate::protocol::Assignment) and are never
+    /// logged.
+    pub key_store: Arc<dyn key_store::KeyStore>,
     /// Per-session state for the HTTP/SSE worker tier. Keyed by
     /// `session_id` returned to the worker by `worker_register`. Each
     /// entry's `outbound_rx` is taken exactly once by the matching
@@ -108,6 +118,7 @@ impl ControlPlaneServer {
             admission: admission::Admission::new(),
             node_id: node_id.clone(),
             events: events_tx,
+            key_store: key_store::default_key_store(),
             #[cfg(feature = "http-transport")]
             http_sessions: dashmap::DashMap::new(),
         });
@@ -140,16 +151,44 @@ impl ControlPlaneServer {
     #[must_use]
     pub fn with_store(mut self, store: Arc<dyn store::AssignmentStore>) -> Self {
         let (events_tx, _) = broadcast::channel(EVENT_BUS_CAPACITY);
+        // Preserve any previously-configured key store across the rebuild —
+        // builder-method ordering must not silently drop a key store the
+        // caller set with `with_key_store` first.
+        let key_store = self.shared.key_store.clone();
         let new_shared = Arc::new(SharedState {
             registry: registry::WorkerRegistry::new(),
             queue: queue::AssignmentQueue::with_events_and_store(events_tx.clone(), store),
             admission: admission::Admission::new(),
             node_id: self.node_id.clone(),
             events: events_tx,
+            key_store,
             #[cfg(feature = "http-transport")]
             http_sessions: dashmap::DashMap::new(),
         });
         self.shared = new_shared;
+        self
+    }
+
+    /// Replace the default [`key_store::EnvFileKeyStore`] with a
+    /// caller-supplied [`key_store::KeyStore`]. Use this to wire in a
+    /// tenant-aware secret manager so the control plane can serve per-place
+    /// provider keys to workers over the authenticated session.
+    ///
+    /// Builder-style: must be called BEFORE [`Self::serve`]. Mutates the
+    /// existing [`SharedState`] in place via `Arc::make_mut`-free swap — the
+    /// field is the only thing replaced, so any sibling builder
+    /// (`with_store`) ordering is preserved.
+    ///
+    /// # Panics
+    ///
+    /// Panics only if the internal `SharedState` `Arc` is unexpectedly
+    /// shared at build time (it is not in the normal builder flow, where
+    /// the server holds the sole reference until `serve`).
+    #[must_use]
+    pub fn with_key_store(mut self, key_store: Arc<dyn key_store::KeyStore>) -> Self {
+        let shared = Arc::get_mut(&mut self.shared)
+            .expect("SharedState must be uniquely held during builder configuration");
+        shared.key_store = key_store;
         self
     }
 

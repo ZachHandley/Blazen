@@ -1401,7 +1401,12 @@ mod tests {
         let third = queue.pop_pending("__default__", &capability).await.unwrap();
         assert_eq!(third.assignment.run_id, id_c, "later pri-100 last");
 
-        assert!(queue.pop_pending("__default__", &capability).await.is_none());
+        assert!(
+            queue
+                .pop_pending("__default__", &capability)
+                .await
+                .is_none()
+        );
     }
 
     #[tokio::test]

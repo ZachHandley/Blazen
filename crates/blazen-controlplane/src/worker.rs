@@ -79,6 +79,12 @@ use crate::protocol::{
     WorkerToServer,
 };
 
+/// How long a per-assignment control-plane key pre-warm waits for each
+/// provider's [`crate::protocol::KeyResponse`] before giving up on that
+/// provider (and letting the resolver fall through to env). Bounded so a
+/// stalled control plane can't block assignment start indefinitely.
+const CP_KEY_PREWARM_TIMEOUT: Duration = Duration::from_secs(5);
+
 // ===========================================================================
 // Public types
 // ===========================================================================
@@ -116,6 +122,15 @@ pub struct WorkerConfig {
     /// [`WorkerHello::place`]. Advisory — the server's bearer-derived
     /// identity wins (anti-spoof). `None` selects the default place.
     pub place: Option<String>,
+    /// Providers whose control-plane keys the worker pre-warms ahead of
+    /// each assignment (P4). The synchronous
+    /// [`blazen_llm::KeyResolver::resolve`] cannot fetch over the network,
+    /// so the worker proactively requests these providers' keys from the
+    /// control plane on assignment receipt and caches them, ensuring a
+    /// later resolve hit is served from cache. Empty by default — a worker
+    /// that lists nothing here relies solely on worker-local + env keys.
+    /// `BTreeMap`-free ordered `Vec` so the pre-warm order is deterministic.
+    pub prewarm_providers: Vec<String>,
     /// Worker-side taints surfaced in [`WorkerHello::taints`]. Jobs without
     /// a matching toleration are not scheduled here. Empty by default.
     pub taints: Vec<WorkerTaint>,
@@ -164,6 +179,7 @@ impl WorkerConfig {
             labels: BTreeMap::new(),
             provider_keys: BTreeMap::new(),
             place: None,
+            prewarm_providers: Vec::new(),
             taints: Vec::new(),
             descriptors: Vec::new(),
             admission: AdmissionMode::Fixed { max_in_flight: 1 },
@@ -240,6 +256,14 @@ impl WorkerConfig {
     #[must_use]
     pub fn with_place(mut self, place: impl Into<String>) -> Self {
         self.place = Some(place.into());
+        self
+    }
+
+    /// Append a provider whose control-plane key is pre-warmed before each
+    /// assignment (P4). See [`Self::prewarm_providers`].
+    #[must_use]
+    pub fn with_prewarm_provider(mut self, provider: impl Into<String>) -> Self {
+        self.prewarm_providers.push(provider.into());
         self
     }
 
@@ -650,6 +674,19 @@ struct WorkerState {
     /// pushing the same resolver again. Survives reconnects because
     /// [`WorkerState`] is `Arc`'d for the worker's whole lifetime.
     keys_installed: AtomicBool,
+    /// Worker-side control-plane key client (P4). Installed into the
+    /// process-global [`blazen_llm`] cascade AFTER [`WorkerLocalKeys`] so
+    /// the order is worker-local → control-plane → env terminal. Holds the
+    /// per-provider key cache and the pending-request correlation map; the
+    /// inbound pump routes [`ServerToWorker::KeyResponse`] frames into it,
+    /// and the assignment path pre-warms it. Survives reconnects (the
+    /// outbound sender is rebound per session); the install into the
+    /// global chain is guarded by [`Self::cp_keys_installed`].
+    cp_keys: crate::client::ControlPlaneKeyClient,
+    /// Set once [`Self::cp_keys`] has been pushed into the process-global
+    /// cascade. Mirrors [`Self::keys_installed`] — keeps reconnects from
+    /// installing the same resolver twice.
+    cp_keys_installed: AtomicBool,
 }
 
 impl WorkerState {
@@ -660,6 +697,8 @@ impl WorkerState {
             pending_inputs: Arc::new(DashMap::new()),
             shutdown: CancellationToken::new(),
             keys_installed: AtomicBool::new(false),
+            cp_keys: crate::client::ControlPlaneKeyClient::disconnected(),
+            cp_keys_installed: AtomicBool::new(false),
         }
     }
 }
@@ -828,6 +867,18 @@ impl Worker {
             blazen_llm::push_key_resolver(Arc::new(WorkerLocalKeys::new(Arc::new(
                 self.config.provider_keys.clone(),
             ))));
+        }
+
+        // Bind the control-plane key client to THIS session's outbound
+        // channel, then install it into the global cascade exactly once —
+        // AFTER any worker-local resolver, so the order is
+        // worker-local → control-plane → env terminal. On reconnect the
+        // guard skips the re-push and only the outbound rebind happens, so
+        // the process-global chain holds a single, stable CP resolver whose
+        // cache survives the reconnect.
+        self.state.cp_keys.rebind_outbound(outbound_tx.clone());
+        if !self.state.cp_keys_installed.swap(true, Ordering::AcqRel) {
+            blazen_llm::push_key_resolver(Arc::new(self.state.cp_keys.clone()));
         }
 
         let session_done = CancellationToken::new();
@@ -1081,6 +1132,15 @@ impl Worker {
                 tracing::warn!("ignoring late Welcome/Reject mid-session");
             }
             ServerToWorker::Assignment(a) => {
+                // P4: ensure the LLM resolver chain knows the place this
+                // worker serves, then pre-warm the control-plane key cache
+                // so the (synchronous) resolver hit during the assignment
+                // finds keys already fetched. The worker cannot read the
+                // assignment's declared providers, so pre-warm from the
+                // configured `prewarm_providers` list. Best-effort: a
+                // pre-warm failure (no session, timeout) is non-fatal — the
+                // resolver simply falls through to env.
+                self.prewarm_keys_for_assignment().await;
                 self.spawn_assignment(a, Arc::clone(&handler), Arc::clone(&outbox));
             }
             ServerToWorker::Offer(o) => {
@@ -1128,6 +1188,48 @@ impl Worker {
                     );
                 }
             }
+            ServerToWorker::KeyResponse(resp) => {
+                // P4: route the per-place key response into the CP key
+                // client, which caches it (by the pending request's
+                // provider) and unblocks the matching `pre_warm` waiter.
+                // The key value is never logged (the frame redacts it).
+                self.state.cp_keys.on_key_response(&resp);
+            }
+        }
+    }
+
+    /// Pre-warm the control-plane key cache for this worker's configured
+    /// `prewarm_providers` ahead of running an assignment.
+    ///
+    /// Sets the LLM resolver's current place to the worker's configured
+    /// place (so the cached key is attributed to the right tenant) and
+    /// fetches each configured provider's key over the live session. A
+    /// no-op when no providers are configured. Failures are swallowed —
+    /// the resolver chain falls through to env if a key can't be warmed.
+    async fn prewarm_keys_for_assignment(&self) {
+        if self.config.prewarm_providers.is_empty() {
+            return;
+        }
+        // The worker serves a single place for its whole lifetime; set it
+        // on the process-global resolver scope so the CP resolver (and any
+        // other place-aware resolver) sees it.
+        blazen_llm::set_current_place(self.config.place.clone());
+
+        let place = self.config.place.as_deref().unwrap_or_default();
+        if let Err(e) = self
+            .state
+            .cp_keys
+            .pre_warm(
+                place,
+                &self.config.prewarm_providers,
+                CP_KEY_PREWARM_TIMEOUT,
+            )
+            .await
+        {
+            // Non-fatal: no bound session / closed channel. The resolver
+            // falls through to env. Never log key material (there is none
+            // on this path).
+            tracing::debug!(error = %e, "control-plane key pre-warm failed; falling through to env");
         }
     }
 

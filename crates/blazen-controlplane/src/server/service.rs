@@ -51,7 +51,10 @@ impl BlazenControlPlane for ControlPlaneService {
         &self,
         request: Request<Streaming<PostcardRequest>>,
     ) -> Result<Response<Self::WorkerSessionStream>, Status> {
-        let identity = request.extensions().get::<crate::auth::PeerIdentity>().cloned();
+        let identity = request
+            .extensions()
+            .get::<crate::auth::PeerIdentity>()
+            .cloned();
         super::session::handle_worker_session(self.shared.clone(), identity, request.into_inner())
             .await
     }
@@ -60,7 +63,10 @@ impl BlazenControlPlane for ControlPlaneService {
         &self,
         request: Request<PostcardRequest>,
     ) -> Result<Response<PostcardResponse>, Status> {
-        let identity = request.extensions().get::<crate::auth::PeerIdentity>().cloned();
+        let identity = request
+            .extensions()
+            .get::<crate::auth::PeerIdentity>()
+            .cloned();
         super::rpc::handle_submit_workflow(&self.shared, identity, request.into_inner()).await
     }
 
