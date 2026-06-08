@@ -209,13 +209,43 @@ impl ControlPlaneServer {
     /// build the server with the `http-transport` feature enabled and call
     /// [`ControlPlaneServer::with_http`] before `serve`.
     ///
+    /// Downstream services that need to attach their own auth / context
+    /// (e.g. JWT validation, per-caller `CallerCtx` in request extensions)
+    /// should call [`Self::serve_with_interceptor`] instead — this method
+    /// is a thin wrapper that supplies the default
+    /// [`crate::server::interceptor::BearerAuthInterceptor`].
+    ///
     /// # Errors
     ///
     /// Returns [`ControlPlaneError::Transport`] for any bind / TLS / accept
     /// failure.
     pub async fn serve(self, addr: SocketAddr) -> Result<(), ControlPlaneError> {
-        use crate::pb::blazen_control_plane_server::BlazenControlPlaneServer;
         use crate::server::interceptor::BearerAuthInterceptor;
+        self.serve_with_interceptor(addr, BearerAuthInterceptor::new())
+            .await
+    }
+
+    /// Like [`Self::serve`], but allows the caller to supply a custom tonic
+    /// [`tonic::service::Interceptor`] instead of the default
+    /// [`crate::server::interceptor::BearerAuthInterceptor`].
+    ///
+    /// Useful for downstream services that have their own auth layer
+    /// (e.g. JWT validation) and want to attach a `CallerCtx` to each
+    /// gRPC request's extensions before the handler runs.
+    ///
+    /// # Errors
+    ///
+    /// Returns [`ControlPlaneError::Transport`] for any bind / TLS / accept
+    /// failure, identical to [`Self::serve`].
+    pub async fn serve_with_interceptor<I>(
+        self,
+        addr: SocketAddr,
+        interceptor: I,
+    ) -> Result<(), ControlPlaneError>
+    where
+        I: tonic::service::Interceptor + Clone + Send + Sync + 'static,
+    {
+        use crate::pb::blazen_control_plane_server::BlazenControlPlaneServer;
         use crate::server::service::ControlPlaneService;
 
         // Cold-start recovery: re-hydrate the queue's in-memory cache
@@ -226,7 +256,6 @@ impl ControlPlaneServer {
         self.shared.queue.recover_from_store().await?;
 
         let service = ControlPlaneService::new(self.shared.clone());
-        let interceptor = BearerAuthInterceptor::new();
         let svc = BlazenControlPlaneServer::with_interceptor(service, interceptor);
 
         let mut builder = tonic::transport::Server::builder();
