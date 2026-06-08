@@ -20,7 +20,7 @@
 //! **`vad-tract` takes precedence**: it is pure-Rust and links no native
 //! runtime, so it cannot collide at link/run time with the other native ML
 //! libraries that `--all-features` also pulls in (ONNX Runtime via `ort`,
-//! CTranslate2 via `ct2rs`, whisper.cpp) — a combination that otherwise
+//! `CTranslate2` via `ct2rs`, whisper.cpp) — a combination that otherwise
 //! SIGSEGVs when an `ort` session is created in the same process. A
 //! `compile_error!` fires if neither backend is enabled under
 //! `whisper-streaming`.

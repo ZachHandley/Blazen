@@ -236,6 +236,11 @@ impl WhisperStreamingProvider {
     /// `chunk_seconds` / `chunk_overlap_seconds` tune the sliding window
     /// geometry; pass `None` for the defaults (`30.0` / `5.0`).
     #[must_use]
+    // `vad_model_path` is intentionally taken by value and discarded: it is
+    // retained for binding/ABI stability (the Silero VAD is now embedded), so
+    // it cannot be narrowed to a reference without breaking the public
+    // signature that the py/node/wasm bindings depend on.
+    #[allow(clippy::needless_pass_by_value)]
     pub fn new(
         model_id: Option<String>,
         vad_model_path: Option<String>,
