@@ -41,6 +41,7 @@ pub mod azure;
 pub mod base;
 pub mod custom;
 pub mod defaults;
+pub mod factory;
 pub mod fal;
 pub mod gemini;
 pub mod openai;

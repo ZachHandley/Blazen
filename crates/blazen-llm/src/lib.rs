@@ -124,6 +124,9 @@ pub use providers::capabilities::{
     MusicProvider, SttProvider, ThreeDProvider, TtsProvider, VcProvider, VideoProvider,
 };
 pub use providers::custom::{ApiProtocol, CustomProvider, CustomProviderHandle};
+pub use providers::factory::{
+    build_model, FallbackPolicy, LocalModelFactory, LocalModelProbe, NoLocalModels,
+};
 #[cfg(any(
     all(target_arch = "wasm32", not(target_os = "wasi")),
     feature = "reqwest",
