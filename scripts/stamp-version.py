@@ -30,6 +30,21 @@ Keep-registry mode — used ONLY by the publish-rust job:
     setup-rust, which configures the forgejo registry + token, so the
     registry resolves there.
 
+ZRegistry mode — used ONLY by the publish-rust-zreg job:
+    python3 scripts/stamp-version.py <VERSION> --registry-zreg
+
+    Same as default version-stamping, but RE-POINTS every inter-crate dep
+    from the `forgejo` registry to `zreg` (ZRegistry,
+    registry.blackleafdigital.com). It rewrites `registry = "forgejo"` ->
+    `registry = "zreg"` across every workspace Cargo.toml (both the root
+    `[workspace.dependencies]` blazen-* entries and the two direct
+    blazen-node member deps). With each sibling dep carrying
+    `registry = "zreg"` + its `path`, `cargo publish --registry zreg`
+    resolves workspace siblings from ZRegistry instead of crates.io.
+    ZRegistry has NO publish rate limits, so the whole workspace lands in
+    one shot regardless of crates.io's per-account caps. Pass this ONLY
+    from the publish-rust-zreg job; build jobs and publish-rust must NOT.
+
 Rename-wasm-pkg mode:
     python3 scripts/stamp-version.py <VERSION> --rename-wasm-pkg
 
@@ -78,7 +93,12 @@ def _add_forgejo_registry_to_path_deps(text: str) -> str:
 _CROSS_REPO_PATH_RE = re.compile(r',\s*path\s*=\s*"\.\./[^/"]+/[^"]+"')
 
 
-def stamp_default(repo: pathlib.Path, version: str, keep_forgejo_registry: bool = False) -> None:
+def stamp_default(
+    repo: pathlib.Path,
+    version: str,
+    keep_forgejo_registry: bool = False,
+    registry_zreg: bool = False,
+) -> None:
     # 1. Every Cargo.toml: 0.0.0-dev -> VERSION, EXCEPT on lines that carry a
     # CROSS-REPO path dep (`path = "../X/Y/..."` — TWO or more segments after
     # `../`). Those reference an external sibling repo which has its OWN
@@ -108,7 +128,25 @@ def stamp_default(repo: pathlib.Path, version: str, keep_forgejo_registry: bool 
     # fails (run 678: all musl targets failed; run 674, which stripped, passed).
     # publish-rust passes --keep-forgejo-registry so `cargo publish --registry
     # forgejo` resolves siblings from Forgejo (it configures the registry+token).
-    if not keep_forgejo_registry:
+    if registry_zreg:
+        # publish-rust-zreg path: RE-POINT every inter-crate dep from the
+        # `forgejo` registry to `zreg` (ZRegistry). The workspace deps already
+        # carry `version` + `path` + `registry = "forgejo"`; swapping the
+        # registry name to `zreg` makes `cargo publish --registry zreg` resolve
+        # each sibling from ZRegistry (cargo strips `path` on publish and writes
+        # the `version` + `registry` into the uploaded manifest). ZRegistry has
+        # no publish rate limits, so the full workspace lands in one shot.
+        # Applies to the root `[workspace.dependencies]` blazen-* entries AND
+        # the two direct blazen-node member deps that declare their own
+        # `registry = "forgejo"`.
+        for cargo in repo.rglob("Cargo.toml"):
+            if "target" in cargo.parts:
+                continue
+            text = cargo.read_text()
+            new = text.replace('registry = "forgejo"', 'registry = "zreg"')
+            if new != text:
+                cargo.write_text(new)
+    elif not keep_forgejo_registry:
         root_cargo = repo / "Cargo.toml"
         root_text = root_cargo.read_text()
         root_cargo.write_text(root_text.replace(', registry = "forgejo"', ""))
@@ -219,7 +257,21 @@ def main() -> None:
             "registry config and would fail to resolve the dep)."
         ),
     )
+    parser.add_argument(
+        "--registry-zreg",
+        action="store_true",
+        help=(
+            "Re-point every inter-crate dep from `registry = \"forgejo\"` to "
+            "`registry = \"zreg\"` (ZRegistry) across every workspace Cargo.toml. "
+            "Pass this ONLY from the publish-rust-zreg job so `cargo publish "
+            "--registry zreg` resolves siblings from ZRegistry (no rate limits). "
+            "Mutually exclusive with --keep-forgejo-registry."
+        ),
+    )
     args = parser.parse_args()
+
+    if args.registry_zreg and args.keep_forgejo_registry:
+        parser.error("--registry-zreg and --keep-forgejo-registry are mutually exclusive")
 
     repo = pathlib.Path(__file__).resolve().parent.parent
 
@@ -227,9 +279,19 @@ def main() -> None:
         rename_wasm_pkg(repo, args.version)
         print(f"renamed wasm pkg/package.json: name={PUBLISHED_WASM_NAME} version={args.version}")
     else:
-        stamp_default(repo, args.version, keep_forgejo_registry=args.keep_forgejo_registry)
-        kept = "kept" if args.keep_forgejo_registry else "stripped"
-        print(f"stamped version={args.version} (forgejo registry {kept})")
+        stamp_default(
+            repo,
+            args.version,
+            keep_forgejo_registry=args.keep_forgejo_registry,
+            registry_zreg=args.registry_zreg,
+        )
+        if args.registry_zreg:
+            disposition = "re-pointed forgejo->zreg"
+        elif args.keep_forgejo_registry:
+            disposition = "kept"
+        else:
+            disposition = "stripped"
+        print(f"stamped version={args.version} (forgejo registry {disposition})")
 
 
 if __name__ == "__main__":
