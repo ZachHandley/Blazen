@@ -317,9 +317,10 @@ impl PosConv {
         // [1, 1, kernel] (= [1, 1, 128]) — NOT the per-output-channel
         // [out, 1, 1] of the default `dim=0`. Try that canonical shape,
         // falling back to a flat [kernel] serialisation.
-        let weight_g = vb
-            .get((1, 1, POS_CONV_KERNEL), "weight_g")
-            .or_else(|_| vb.get(POS_CONV_KERNEL, "weight_g")?.reshape((1, 1, POS_CONV_KERNEL)))?;
+        let weight_g = vb.get((1, 1, POS_CONV_KERNEL), "weight_g").or_else(|_| {
+            vb.get(POS_CONV_KERNEL, "weight_g")?
+                .reshape((1, 1, POS_CONV_KERNEL))
+        })?;
 
         // Bias is a normal per-output-channel tensor.
         let bias = vb.get(embed_dim, "bias")?;

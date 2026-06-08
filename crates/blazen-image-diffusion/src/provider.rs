@@ -307,7 +307,10 @@ mod tests {
             .generate_image_inherent("a red square".into(), None, Some(512), Some(512))
             .await
             .expect("image generation should succeed");
-        assert!(!image.bytes.is_empty(), "should produce non-empty image bytes");
+        assert!(
+            !image.bytes.is_empty(),
+            "should produce non-empty image bytes"
+        );
         assert!(
             image.width > 0 && image.height > 0,
             "image should have positive dimensions, got {}x{}",

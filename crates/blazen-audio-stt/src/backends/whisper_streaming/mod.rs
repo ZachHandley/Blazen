@@ -319,10 +319,7 @@ mod tests {
         // path. First call populates the slot; the second reuses it.
         let be = WhisperStreamingBackend::new(WhisperStreamingConfig::default());
         {
-            let guard = be
-                .vad_owned_mut()
-                .await
-                .expect("build embedded silero-vad");
+            let guard = be.vad_owned_mut().await.expect("build embedded silero-vad");
             assert!(guard.is_some(), "vad slot must be populated after call");
         }
         let guard = be.vad_owned_mut().await.expect("reuse");
