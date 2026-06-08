@@ -109,6 +109,15 @@ pub mod server;
 #[cfg(feature = "client")]
 pub mod worker;
 
+// P5 wiring: bridge blazen-llm's local-model fallback seam onto the control
+// plane's in-process `ManagerHandle`. Needs the `model-server` `ManagerHandle`
+// trait + the model-protocol wire structs.
+#[cfg(all(
+    feature = "model-server",
+    not(any(target_os = "wasi", target_arch = "wasm32"))
+))]
+pub mod model_adapter;
+
 #[cfg(feature = "client")]
 pub mod client;
 

@@ -122,6 +122,15 @@ pub struct WorkerConfig {
     /// [`WorkerHello::place`]. Advisory — the server's bearer-derived
     /// identity wins (anti-spoof). `None` selects the default place.
     pub place: Option<String>,
+    /// Remote-vs-local fallback policy for this worker's
+    /// [`build_model`](blazen_llm::build_model) calls (P5 wiring). The default
+    /// is [`FallbackPolicy::Never`](blazen_llm::FallbackPolicy::Never), which
+    /// keeps standalone / keyed behaviour byte-identical: a worker only routes
+    /// to its locally-served model (via the
+    /// [`ManagerProbe`](crate::model_adapter::ManagerProbe) /
+    /// [`ManagerFactory`](crate::model_adapter::ManagerFactory) seam) when this
+    /// permits local AND no key resolves.
+    pub fallback_policy: blazen_llm::FallbackPolicy,
     /// Providers whose control-plane keys the worker pre-warms ahead of
     /// each assignment (P4). The synchronous
     /// [`blazen_llm::KeyResolver::resolve`] cannot fetch over the network,
@@ -179,6 +188,7 @@ impl WorkerConfig {
             labels: BTreeMap::new(),
             provider_keys: BTreeMap::new(),
             place: None,
+            fallback_policy: blazen_llm::FallbackPolicy::Never,
             prewarm_providers: Vec::new(),
             taints: Vec::new(),
             descriptors: Vec::new(),
@@ -256,6 +266,15 @@ impl WorkerConfig {
     #[must_use]
     pub fn with_place(mut self, place: impl Into<String>) -> Self {
         self.place = Some(place.into());
+        self
+    }
+
+    /// Set the remote-vs-local [`fallback_policy`](Self::fallback_policy) for
+    /// this worker (P5 wiring). The default is
+    /// [`FallbackPolicy::Never`](blazen_llm::FallbackPolicy::Never).
+    #[must_use]
+    pub fn with_fallback_policy(mut self, policy: blazen_llm::FallbackPolicy) -> Self {
+        self.fallback_policy = policy;
         self
     }
 
