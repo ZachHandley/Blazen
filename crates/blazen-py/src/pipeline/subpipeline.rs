@@ -45,14 +45,16 @@ pub(crate) enum SubExecutableSource {
 /// the pipeline analogue of `SubWorkflowStep`.
 ///
 /// Example:
-///     >>> child = Pipeline.builder("enrich").stage(stage).build()
-///     >>> step = SubPipelineStep(
-///     ...     name="enrich",
-///     ...     accepts=["StartEvent"],
-///     ...     emits=["enrich::output"],
-///     ...     pipeline=child,
-///     ... )
-///     >>> wf = Workflow.builder("parent").add_subpipeline_step(step).build()
+/// ```text
+///  >>> child = Pipeline.builder("enrich").stage(stage).build()
+///  >>> step = SubPipelineStep(
+///  ...     name="enrich",
+///  ...     accepts=["StartEvent"],
+///  ...     emits=["enrich::output"],
+///  ...     pipeline=child,
+///  ... )
+///  >>> wf = Workflow.builder("parent").add_subpipeline_step(step).build()
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "SubPipelineStep")]
 pub struct PySubPipelineStep {

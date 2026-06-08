@@ -21,15 +21,17 @@ use crate::providers::config::PyRetryConfig;
 /// Fluent builder for constructing a [`Pipeline`].
 ///
 /// Example:
-///     >>> ingest = Stage(name="ingest", workflow=ingest_wf)
-///     >>> enrich = Stage(name="enrich", workflow=enrich_wf)
-///     >>> pipeline = (
-///     ...     PipelineBuilder("etl")
-///     ...     .stage(ingest)
-///     ...     .stage(enrich)
-///     ...     .timeout_per_stage(60.0)
-///     ...     .build()
-///     ... )
+/// ```text
+///  >>> ingest = Stage(name="ingest", workflow=ingest_wf)
+///  >>> enrich = Stage(name="enrich", workflow=enrich_wf)
+///  >>> pipeline = (
+///  ...     PipelineBuilder("etl")
+///  ...     .stage(ingest)
+///  ...     .stage(enrich)
+///  ...     .timeout_per_stage(60.0)
+///  ...     .build()
+///  ... )
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "PipelineBuilder")]
 #[allow(clippy::struct_excessive_bools)]

@@ -47,9 +47,11 @@ use crate::workflow::context::PyContext;
 /// [`SubExecutable`] on the Rust side and do not go through this shim.
 ///
 /// Example:
-///     >>> class DoubleRunner(SubExecutable):
-///     ...     async def execute(self, input, ctx):
-///     ...         return {"value": input["value"] * 2}
+/// ```text
+///  >>> class DoubleRunner(SubExecutable):
+///  ...     async def execute(self, input, ctx):
+///  ...         return {"value": input["value"] * 2}
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "SubExecutable", subclass)]
 pub struct PySubExecutable {

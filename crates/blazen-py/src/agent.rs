@@ -150,12 +150,14 @@ impl Tool for PyToolWrapper {
 /// A tool definition for the agent.
 ///
 /// Example:
-///     >>> tool = ToolDef(
-///     ...     name="search",
-///     ...     description="Search the web",
-///     ...     parameters={"type": "object", "properties": {"query": {"type": "string"}}},
-///     ...     handler=lambda args: {"results": []}
-///     ... )
+/// ```text
+///  >>> tool = ToolDef(
+///  ...     name="search",
+///  ...     description="Search the web",
+///  ...     parameters={"type": "object", "properties": {"query": {"type": "string"}}},
+///  ...     handler=lambda args: {"results": []}
+///  ... )
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ToolDef")]
 pub struct PyToolDef {
@@ -236,10 +238,12 @@ impl PyToolDef {
 /// Result of an agent run.
 ///
 /// Example:
-///     >>> result = await run_agent(model, messages, tools=[tool])
-///     >>> print(result.response.content)
-///     >>> print(result.iterations)
-///     >>> print(result.total_cost)
+/// ```text
+///  >>> result = await run_agent(model, messages, tools=[tool])
+///  >>> print(result.response.content)
+///  >>> print(result.iterations)
+///  >>> print(result.total_cost)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "AgentResult")]
 pub struct PyAgentResult {
@@ -298,8 +302,10 @@ impl PyAgentResult {
 /// [`run_agent`] with a fully-typed config rather than positional kwargs.
 ///
 /// Example:
-///     >>> config = AgentConfig(max_iterations=20, system_prompt="be terse",
-///     ...                      temperature=0.0, tool_concurrency=4)
+/// ```text
+///  >>> config = AgentConfig(max_iterations=20, system_prompt="be terse",
+///  ...                      temperature=0.0, tool_concurrency=4)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "AgentConfig", from_py_object)]
 #[derive(Clone, Default)]

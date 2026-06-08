@@ -14,11 +14,13 @@ use super::kind::PyContentKind;
 /// at `put` time and can be used for routing without dereferencing.
 ///
 /// Example:
-///     >>> handle = await store.put(b"...", kind=ContentKind.Image)
-///     >>> handle.id
-///     'blazen_a1b2c3d4...'
-///     >>> handle.kind
-///     ContentKind.Image
+/// ```text
+///  >>> handle = await store.put(b"...", kind=ContentKind.Image)
+///  >>> handle.id
+///  'blazen_a1b2c3d4...'
+///  >>> handle.kind
+///  ContentKind.Image
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ContentHandle", from_py_object)]
 #[derive(Clone)]

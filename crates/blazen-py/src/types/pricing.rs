@@ -8,9 +8,11 @@ use blazen_llm::traits::ModelPricing;
 /// Pricing information for a model.
 ///
 /// Example:
-///     >>> pricing = ModelPricing(input_per_million=1.0, output_per_million=2.0)
-///     >>> pricing.input_per_million
-///     1.0
+/// ```text
+///  >>> pricing = ModelPricing(input_per_million=1.0, output_per_million=2.0)
+///  >>> pricing.input_per_million
+///  1.0
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ModelPricing", from_py_object)]
 #[derive(Clone)]
@@ -82,7 +84,9 @@ impl PyModelPricing {
 ///         and ``output_per_million`` set.
 ///
 /// Example:
-///     >>> register_pricing("my-model", ModelPricing(input_per_million=1.0, output_per_million=2.0))
+/// ```text
+///  >>> register_pricing("my-model", ModelPricing(input_per_million=1.0, output_per_million=2.0))
+/// ```
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn register_pricing(model_id: &str, pricing: &PyModelPricing) {
@@ -113,9 +117,11 @@ pub fn register_pricing(model_id: &str, pricing: &PyModelPricing) {
 ///     Optional ``ModelPricing`` with input and output costs.
 ///
 /// Example:
-///     >>> pricing = lookup_pricing("gpt-4o")
-///     >>> if pricing:
-///     ...     print(pricing.input_per_million)
+/// ```text
+///  >>> pricing = lookup_pricing("gpt-4o")
+///  >>> if pricing:
+///  ...     print(pricing.input_per_million)
+/// ```
 #[gen_stub_pyfunction]
 #[pyfunction]
 #[must_use]
@@ -180,8 +186,10 @@ pub fn compute_video_cost(model_id: &str, seconds: f64) -> Option<f64> {
 ///         ``https://blazen.dev/api/pricing.json``.
 ///
 /// Example:
-///     >>> count = await refresh_pricing()
-///     >>> print(f"loaded {count} pricing entries")
+/// ```text
+///  >>> count = await refresh_pricing()
+///  >>> print(f"loaded {count} pricing entries")
+/// ```
 #[gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (url=None))]

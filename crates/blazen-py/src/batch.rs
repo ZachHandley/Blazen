@@ -27,8 +27,10 @@ use crate::types::{PyChatMessage, PyModelResponse, PyTokenUsage};
 ///         means unlimited.
 ///
 /// Example:
-///     >>> config = BatchConfig(concurrency=4)
-///     >>> result = await complete_batch(model, requests, config=config)
+/// ```text
+///  >>> config = BatchConfig(concurrency=4)
+///  >>> result = await complete_batch(model, requests, config=config)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "BatchConfig", from_py_object)]
 #[derive(Clone)]
@@ -80,12 +82,14 @@ impl PyBatchConfig {
 /// in ``responses`` and an error string in ``errors``.
 ///
 /// Example:
-///     >>> result = await complete_batch(model, [msgs1, msgs2], concurrency=4)
-///     >>> for i, resp in enumerate(result.responses):
-///     ...     if resp is not None:
-///     ...         print(resp.content)
-///     ...     else:
-///     ...         print(f"Request {i} failed: {result.errors[i]}")
+/// ```text
+///  >>> result = await complete_batch(model, [msgs1, msgs2], concurrency=4)
+///  >>> for i, resp in enumerate(result.responses):
+///  ...     if resp is not None:
+///  ...         print(resp.content)
+///  ...     else:
+///  ...         print(f"Request {i} failed: {result.errors[i]}")
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "BatchResult")]
 pub struct PyBatchResult {
@@ -181,15 +185,17 @@ impl PyBatchResult {
 ///     A ``BatchResult`` with per-request responses and aggregated usage/cost.
 ///
 /// Example:
-///     >>> model = Model.openai()
-///     >>> conversations = [
-///     ...     [ChatMessage.user("What is 2+2?")],
-///     ...     [ChatMessage.user("What is 3+3?")],
-///     ... ]
-///     >>> result = await complete_batch(model, conversations, concurrency=4)
-///     >>> for resp in result.responses:
-///     ...     if resp is not None:
-///     ...         print(resp.content)
+/// ```text
+///  >>> model = Model.openai()
+///  >>> conversations = [
+///  ...     [ChatMessage.user("What is 2+2?")],
+///  ...     [ChatMessage.user("What is 3+3?")],
+///  ... ]
+///  >>> result = await complete_batch(model, conversations, concurrency=4)
+///  >>> for resp in result.responses:
+///  ...     if resp is not None:
+///  ...         print(resp.content)
+/// ```
 #[gen_stub_pyfunction]
 #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, BatchResult]", imports = ("typing",)))]
 #[pyfunction]

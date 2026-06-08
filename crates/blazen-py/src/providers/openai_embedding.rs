@@ -18,9 +18,11 @@ use blazen_llm::traits::EmbeddingModel;
 /// An OpenAI embedding model.
 ///
 /// Example:
-///     >>> from blazen import OpenAiEmbeddingModel, ProviderOptions
-///     >>> em = OpenAiEmbeddingModel(options=ProviderOptions(api_key="sk-..."))
-///     >>> resp = await em.embed(["hello", "world"])
+/// ```text
+///  >>> from blazen import OpenAiEmbeddingModel, ProviderOptions
+///  >>> em = OpenAiEmbeddingModel(options=ProviderOptions(api_key="sk-..."))
+///  >>> resp = await em.embed(["hello", "world"])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "OpenAiEmbeddingModel", from_py_object)]
 #[derive(Clone)]

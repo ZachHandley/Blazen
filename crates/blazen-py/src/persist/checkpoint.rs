@@ -17,9 +17,11 @@ use crate::convert::json_to_py;
 /// for workflow event streams.
 ///
 /// Example:
-///     >>> ev = PersistedEvent(event_type="blazen::StartEvent", data={"input": "hi"})
-///     >>> ev.event_type
-///     'blazen::StartEvent'
+/// ```text
+///  >>> ev = PersistedEvent(event_type="blazen::StartEvent", data={"input": "hi"})
+///  >>> ev.event_type
+///  'blazen::StartEvent'
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "PersistedEvent", frozen)]
 pub struct PyPersistedEvent {
@@ -72,16 +74,18 @@ impl PyPersistedEvent {
 /// these snapshots for crash recovery and pause/resume.
 ///
 /// Example:
-///     >>> import uuid
-///     >>> from datetime import datetime, timezone
-///     >>> cp = WorkflowCheckpoint(
-///     ...     workflow_name="demo",
-///     ...     run_id=str(uuid.uuid4()),
-///     ...     timestamp=datetime.now(timezone.utc).isoformat(),
-///     ...     state={"counter": 1},
-///     ...     pending_events=[],
-///     ...     metadata={},
-///     ... )
+/// ```text
+///  >>> import uuid
+///  >>> from datetime import datetime, timezone
+///  >>> cp = WorkflowCheckpoint(
+///  ...     workflow_name="demo",
+///  ...     run_id=str(uuid.uuid4()),
+///  ...     timestamp=datetime.now(timezone.utc).isoformat(),
+///  ...     state={"counter": 1},
+///  ...     pending_events=[],
+///  ...     metadata={},
+///  ... )
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "WorkflowCheckpoint", frozen)]
 pub struct PyWorkflowCheckpoint {

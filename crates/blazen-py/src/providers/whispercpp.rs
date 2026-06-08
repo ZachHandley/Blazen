@@ -25,11 +25,13 @@ use blazen_llm::traits::LocalModel;
 /// path.
 ///
 /// Example:
-///     >>> opts = WhisperOptions(model=WhisperModel.Base)
-///     >>> provider = WhisperCppProvider(options=opts)
-///     >>> req = TranscriptionRequest.from_file("audio.wav")
-///     >>> result = await provider.transcribe(req)
-///     >>> print(result.text)
+/// ```text
+///  >>> opts = WhisperOptions(model=WhisperModel.Base)
+///  >>> provider = WhisperCppProvider(options=opts)
+///  >>> req = TranscriptionRequest.from_file("audio.wav")
+///  >>> result = await provider.transcribe(req)
+///  >>> print(result.text)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "WhisperCppProvider", from_py_object)]
 #[derive(Clone)]

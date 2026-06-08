@@ -647,11 +647,13 @@ impl From<blazen_llm::AdapterStatus> for PyAdapterStatus {
 /// is unloaded first.
 ///
 /// Example:
-///     >>> manager = ModelManager(cpu_ram_gb=64, gpu_vram_gb=24)
-///     >>> await manager.register("llm", my_local_model)
-///     >>> await manager.load("llm")
-///     >>> await manager.is_loaded("llm")
-///     True
+/// ```text
+///  >>> manager = ModelManager(cpu_ram_gb=64, gpu_vram_gb=24)
+///  >>> await manager.register("llm", my_local_model)
+///  >>> await manager.load("llm")
+///  >>> await manager.is_loaded("llm")
+///  True
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ModelManager")]
 pub struct PyModelManager {

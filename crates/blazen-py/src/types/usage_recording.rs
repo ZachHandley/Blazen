@@ -35,11 +35,13 @@ use crate::types::{PyChatMessage, PyEmbeddingModel, PyEmbeddingResponse, PyModel
 /// implementation raises ``NotImplementedError``.
 ///
 /// Example:
-///     >>> class CountingEmitter(UsageEmitter):
-///     ...     def __init__(self):
-///     ...         self.count = 0
-///     ...     def emit(self, event: UsageEvent) -> None:
-///     ...         self.count += 1
+/// ```text
+///  >>> class CountingEmitter(UsageEmitter):
+///  ...     def __init__(self):
+///  ...         self.count = 0
+///  ...     def emit(self, event: UsageEvent) -> None:
+///  ...         self.count += 1
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "UsageEmitter", subclass)]
 pub struct PyUsageEmitter;
@@ -169,9 +171,11 @@ fn extract_emitter(obj: &Bound<'_, PyAny>) -> PyResult<Arc<dyn UsageEmitter>> {
 /// Mirrors `blazen_llm::usage_recording::UsageRecordingModel`.
 ///
 /// Example:
-///     >>> base = Model.openai()
-///     >>> emitter = NoopUsageEmitter()
-///     >>> model = UsageRecordingModel(base, emitter, "openai")
+/// ```text
+///  >>> base = Model.openai()
+///  >>> emitter = NoopUsageEmitter()
+///  >>> model = UsageRecordingModel(base, emitter, "openai")
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "UsageRecordingModel")]
 pub struct PyUsageRecordingModel {
@@ -265,8 +269,10 @@ type PinnedChunkStream = Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenErr
 /// Mirrors `blazen_llm::usage_recording::UsageRecordingEmbeddingModel`.
 ///
 /// Example:
-///     >>> base = EmbeddingModel.openai()
-///     >>> model = UsageRecordingEmbeddingModel(base, NoopUsageEmitter(), "openai")
+/// ```text
+///  >>> base = EmbeddingModel.openai()
+///  >>> model = UsageRecordingEmbeddingModel(base, NoopUsageEmitter(), "openai")
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "UsageRecordingEmbeddingModel")]
 pub struct PyUsageRecordingEmbeddingModel {

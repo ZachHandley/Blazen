@@ -76,15 +76,17 @@ impl LayerKind {
 /// before returning it.
 ///
 /// Example:
-///     >>> class LoggingMiddleware(Middleware):
-///     ...     async def apply(self, model, messages, options):
-///     ...         print(f"calling {model.model_id}")
-///     ...         response = await model.complete(messages, options)
-///     ...         print(f"got {len(response.content or '')} chars")
-///     ...         return response
-///     >>>
-///     >>> stack = MiddlewareStack().layer(LoggingMiddleware())
-///     >>> wrapped = stack.apply(Model.openai())
+/// ```text
+///  >>> class LoggingMiddleware(Middleware):
+///  ...     async def apply(self, model, messages, options):
+///  ...         print(f"calling {model.model_id}")
+///  ...         response = await model.complete(messages, options)
+///  ...         print(f"got {len(response.content or '')} chars")
+///  ...         return response
+///  >>>
+///  >>> stack = MiddlewareStack().layer(LoggingMiddleware())
+///  >>> wrapped = stack.apply(Model.openai())
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "Middleware", subclass)]
 #[derive(Default)]
@@ -369,10 +371,12 @@ impl PyCacheMiddleware {
 /// supplied model.
 ///
 /// Example:
-///     >>> stack = (MiddlewareStack()
-///     ...     .with_retry(RetryConfig(max_retries=5))
-///     ...     .with_cache(CacheConfig(ttl_seconds=600)))
-///     >>> wrapped = stack.apply(Model.openai())
+/// ```text
+///  >>> stack = (MiddlewareStack()
+///  ...     .with_retry(RetryConfig(max_retries=5))
+///  ...     .with_cache(CacheConfig(ttl_seconds=600)))
+///  >>> wrapped = stack.apply(Model.openai())
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "MiddlewareStack")]
 pub struct PyMiddlewareStack {

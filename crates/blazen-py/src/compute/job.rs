@@ -23,9 +23,11 @@ use crate::error::blazen_error_to_pyerr;
 /// ``cancelled()``) or via the legacy string constants.
 ///
 /// Example:
-///     >>> JobStatus.queued()
-///     >>> JobStatus.failed("rate limited")
-///     >>> JobStatus.QUEUED    # legacy string constant -- "queued"
+/// ```text
+///  >>> JobStatus.queued()
+///  >>> JobStatus.failed("rate limited")
+///  >>> JobStatus.QUEUED    # legacy string constant -- "queued"
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "JobStatus", frozen, from_py_object)]
 #[derive(Clone)]
@@ -146,8 +148,10 @@ impl From<compute_types::JobStatus> for PyJobStatus {
 /// A handle to a submitted compute job.
 ///
 /// Example:
-///     >>> handle = await fal.submit(model="fal-ai/flux/dev", input={...})
-///     >>> print(handle.id, handle.model)
+/// ```text
+///  >>> handle = await fal.submit(model="fal-ai/flux/dev", input={...})
+///  >>> print(handle.id, handle.model)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "JobHandle", frozen, from_py_object)]
 #[derive(Clone)]
@@ -225,7 +229,9 @@ impl PyJobHandle {
 /// Input for a raw compute job.
 ///
 /// Example:
-///     >>> req = ComputeRequest(model="fal-ai/flux/dev", input={"prompt": "a cat"})
+/// ```text
+///  >>> req = ComputeRequest(model="fal-ai/flux/dev", input={"prompt": "a cat"})
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ComputeRequest", from_py_object)]
 #[derive(Clone)]
@@ -286,14 +292,16 @@ impl PyComputeRequest {
 /// ``await_completion`` (or ``cancel``).
 ///
 /// Example:
-///     >>> from blazen import Compute, FalProvider, FalOptions, ComputeRequest
-///     >>> fal = FalProvider(options=FalOptions(api_key="fal-..."))
-///     >>> compute = Compute.from_fal(fal)
-///     >>> handle = await compute.submit(ComputeRequest(model="fal-ai/flux/dev",
-///     ...                                              input={"prompt": "a cat"}))
-///     >>> while (await compute.status(handle)) in ("queued", "running"):
-///     ...     await asyncio.sleep(1)
-///     >>> result = await compute.await_completion(handle)
+/// ```text
+///  >>> from blazen import Compute, FalProvider, FalOptions, ComputeRequest
+///  >>> fal = FalProvider(options=FalOptions(api_key="fal-..."))
+///  >>> compute = Compute.from_fal(fal)
+///  >>> handle = await compute.submit(ComputeRequest(model="fal-ai/flux/dev",
+///  ...                                              input={"prompt": "a cat"}))
+///  >>> while (await compute.status(handle)) in ("queued", "running"):
+///  ...     await asyncio.sleep(1)
+///  >>> result = await compute.await_completion(handle)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "Compute")]
 pub struct PyCompute {

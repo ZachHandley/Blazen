@@ -90,14 +90,16 @@ pub(crate) fn memory_err(e: blazen_memory::MemoryError) -> PyErr {
 /// ``NotImplementedError``.
 ///
 /// Example:
-///     >>> class CachingStore(MemoryStore):
-///     ...     def __init__(self, inner: Memory, cache: dict): ...
-///     ...     async def add(self, entries): ...
-///     ...     async def search(self, query, limit, metadata_filter=None): ...
-///     ...     async def search_local(self, query, limit, metadata_filter=None): ...
-///     ...     async def get(self, id): ...
-///     ...     async def delete(self, id): ...
-///     ...     async def len(self): ...
+/// ```text
+///  >>> class CachingStore(MemoryStore):
+///  ...     def __init__(self, inner: Memory, cache: dict): ...
+///  ...     async def add(self, entries): ...
+///  ...     async def search(self, query, limit, metadata_filter=None): ...
+///  ...     async def search_local(self, query, limit, metadata_filter=None): ...
+///  ...     async def get(self, id): ...
+///  ...     async def delete(self, id): ...
+///  ...     async def len(self): ...
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "MemoryStore", subclass)]
 pub struct PyMemoryStore;
@@ -190,13 +192,15 @@ impl PyMemoryStore {
 /// (e.g. PostgreSQL, DynamoDB, SQLite).
 ///
 /// Example:
-///     >>> class PostgresBackend(MemoryBackend):
-///     ...     async def put(self, entry): ...
-///     ...     async def get(self, id): ...
-///     ...     async def delete(self, id): ...
-///     ...     async def list(self): ...
-///     ...     async def len(self): ...
-///     ...     async def search_by_bands(self, bands, limit): ...
+/// ```text
+///  >>> class PostgresBackend(MemoryBackend):
+///  ...     async def put(self, entry): ...
+///  ...     async def get(self, id): ...
+///  ...     async def delete(self, id): ...
+///  ...     async def list(self): ...
+///  ...     async def len(self): ...
+///  ...     async def search_by_bands(self, bands, limit): ...
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "MemoryBackend", subclass)]
 pub struct PyMemoryBackend {}
@@ -457,8 +461,10 @@ impl MemoryBackend for PyHostMemoryBackend {
 /// Suitable for testing, prototyping, and short-lived processes.
 ///
 /// Example:
-///     >>> backend = InMemoryBackend()
-///     >>> memory = Memory(embedder, backend)
+/// ```text
+///  >>> backend = InMemoryBackend()
+///  >>> memory = Memory(embedder, backend)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "InMemoryBackend", from_py_object)]
 #[derive(Clone)]
@@ -492,8 +498,10 @@ impl PyInMemoryBackend {
 /// the file. Deletions trigger a full rewrite.
 ///
 /// Example:
-///     >>> backend = await JsonlBackend.create("memories.jsonl")
-///     >>> memory = Memory(embedder, backend)
+/// ```text
+///  >>> backend = await JsonlBackend.create("memories.jsonl")
+///  >>> memory = Memory(embedder, backend)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "JsonlBackend", from_py_object)]
 #[derive(Clone)]
@@ -538,8 +546,10 @@ impl PyJsonlBackend {
 /// Uses Redis-compatible commands for persistence and band-based search.
 ///
 /// Example:
-///     >>> backend = ValkeyBackend("redis://localhost:6379")
-///     >>> memory = Memory(embedder, backend)
+/// ```text
+///  >>> backend = ValkeyBackend("redis://localhost:6379")
+///  >>> memory = Memory(embedder, backend)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ValkeyBackend", from_py_object)]
 #[derive(Clone)]
@@ -584,7 +594,9 @@ impl PyValkeyBackend {
 /// targets this still works — it just uses HTTPS instead of raw TCP.
 ///
 /// Example:
-///     >>> backend = UpstashBackend("https://us1-merry-cat-32242.upstash.io", "AYAg...")
+/// ```text
+///  >>> backend = UpstashBackend("https://us1-merry-cat-32242.upstash.io", "AYAg...")
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "UpstashBackend", from_py_object)]
 #[derive(Clone)]
@@ -634,9 +646,11 @@ impl PyUpstashBackend {
 /// times when the underlying backend raises.
 ///
 /// Example:
-///     >>> backend = InMemoryBackend()
-///     >>> retried = RetryMemoryBackend(backend, RetryConfig(max_retries=5))
-///     >>> memory = Memory(embedder, retried)
+/// ```text
+///  >>> backend = InMemoryBackend()
+///  >>> retried = RetryMemoryBackend(backend, RetryConfig(max_retries=5))
+///  >>> memory = Memory(embedder, retried)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "RetryMemoryBackend", from_py_object)]
 #[derive(Clone)]
@@ -683,15 +697,17 @@ impl PyRetryMemoryBackend {
 /// receive and return these objects.
 ///
 /// Example:
-///     >>> entry = StoredEntry(
-///     ...     id="doc1",
-///     ...     text="Paris is the capital of France",
-///     ...     text_simhash=0xDEADBEEF,
-///     ...     bands=["b0:0001", "b1:002a"],
-///     ...     metadata={"category": "geo"},
-///     ... )
-///     >>> entry.id
-///     'doc1'
+/// ```text
+///  >>> entry = StoredEntry(
+///  ...     id="doc1",
+///  ...     text="Paris is the capital of France",
+///  ...     text_simhash=0xDEADBEEF,
+///  ...     bands=["b0:0001", "b1:002a"],
+///  ...     metadata={"category": "geo"},
+///  ... )
+///  >>> entry.id
+///  'doc1'
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "StoredEntry", frozen, from_py_object)]
 #[derive(Clone)]
@@ -921,13 +937,15 @@ pub fn simhash_to_hex(value: u128) -> String {
 /// A single search result from a Memory search.
 ///
 /// Example:
-///     >>> results = await memory.search("France capital", limit=5)
-///     >>> results[0].id
-///     'doc1'
-///     >>> results[0].text
-///     'Paris is the capital of France'
-///     >>> results[0].score
-///     0.85
+/// ```text
+///  >>> results = await memory.search("France capital", limit=5)
+///  >>> results[0].id
+///  'doc1'
+///  >>> results[0].text
+///  'Paris is the capital of France'
+///  >>> results[0].score
+///  0.85
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "MemoryResult", frozen)]
 pub struct PyMemoryResult {
@@ -985,11 +1003,13 @@ impl PyMemoryResult {
 /// ``search_local()`` is available -- no embedding model is required.
 ///
 /// Example:
-///     >>> embedder = EmbeddingModel.openai(options=ProviderOptions(api_key=key))
-///     >>> memory = Memory(embedder, InMemoryBackend())
-///     >>> await memory.add("doc1", "Paris is the capital of France")
-///     >>> results = await memory.search("France capital", limit=5)
-///     >>> print(results[0].text)
+/// ```text
+///  >>> embedder = EmbeddingModel.openai(options=ProviderOptions(api_key=key))
+///  >>> memory = Memory(embedder, InMemoryBackend())
+///  >>> await memory.add("doc1", "Paris is the capital of France")
+///  >>> results = await memory.search("France capital", limit=5)
+///  >>> print(results[0].text)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "Memory")]
 pub struct PyMemory {

@@ -30,8 +30,10 @@ use blazen_llm::DiffusionProvider;
 /// the pipeline wiring lands.
 ///
 /// Example:
-///     >>> opts = DiffusionOptions(model_id="stabilityai/stable-diffusion-2-1")
-///     >>> provider = DiffusionProvider(options=opts)
+/// ```text
+///  >>> opts = DiffusionOptions(model_id="stabilityai/stable-diffusion-2-1")
+///  >>> provider = DiffusionProvider(options=opts)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "DiffusionProvider", from_py_object)]
 #[derive(Clone)]

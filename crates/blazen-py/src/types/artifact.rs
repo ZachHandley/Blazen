@@ -17,11 +17,13 @@ use blazen_llm::Artifact;
 /// fields. Fields not relevant to the variant return ``None``.
 ///
 /// Example:
-///     >>> for art in response.artifacts:
-///     ...     if art.kind == "svg":
-///     ...         render_svg(art.content)
-///     ...     elif art.kind == "code_block":
-///     ...         print(f"{art.language}: {art.content}")
+/// ```text
+///  >>> for art in response.artifacts:
+///  ...     if art.kind == "svg":
+///  ...         render_svg(art.content)
+///  ...     elif art.kind == "code_block":
+///  ...         print(f"{art.language}: {art.content}")
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "Artifact", frozen, from_py_object)]
 #[derive(Clone)]

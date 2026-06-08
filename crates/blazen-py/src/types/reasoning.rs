@@ -10,9 +10,11 @@ use blazen_llm::types::ReasoningTrace;
 /// Gemini thoughts).
 ///
 /// Example:
-///     >>> trace = response.reasoning
-///     >>> if trace is not None:
-///     ...     print(trace.text, trace.effort, trace.redacted)
+/// ```text
+///  >>> trace = response.reasoning
+///  >>> if trace is not None:
+///  ...     print(trace.text, trace.effort, trace.redacted)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ReasoningTrace", frozen, from_py_object)]
 #[derive(Clone)]

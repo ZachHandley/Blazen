@@ -17,8 +17,10 @@ use blazen_memory::types::MemoryEntry;
 ///         Python value).
 ///
 /// Example:
-///     >>> entry = MemoryEntry(text="hello", id="my-id", metadata={"k": "v"})
-///     >>> await memory.add_many([entry])
+/// ```text
+///  >>> entry = MemoryEntry(text="hello", id="my-id", metadata={"k": "v"})
+///  >>> await memory.add_many([entry])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "MemoryEntry", from_py_object)]
 #[derive(Clone)]

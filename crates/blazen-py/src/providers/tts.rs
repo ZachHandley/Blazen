@@ -27,8 +27,10 @@ use blazen_llm::{AnyTtsBackend, DynTtsProvider};
 /// Synthesis runs fully on-device. No API key is required.
 ///
 /// Example:
-///     >>> opts = TtsOptions(model="kokoro82m", voice="af_bella")
-///     >>> provider = TtsProvider(options=opts)
+/// ```text
+///  >>> opts = TtsOptions(model="kokoro82m", voice="af_bella")
+///  >>> provider = TtsProvider(options=opts)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "TtsProvider", from_py_object)]
 #[derive(Clone)]

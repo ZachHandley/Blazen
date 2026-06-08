@@ -60,8 +60,10 @@ impl Model for ArcModel {
 /// NOT recorded unless ``capture_messages`` is enabled.
 ///
 /// Example:
-///     >>> cfg = TracingConfig(capture_messages=True)
-///     >>> traced = wrap_with_tracing(model, "openai", config=cfg)
+/// ```text
+///  >>> cfg = TracingConfig(capture_messages=True)
+///  >>> traced = wrap_with_tracing(model, "openai", config=cfg)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "TracingConfig", from_py_object)]
 #[derive(Clone)]

@@ -17,8 +17,10 @@ use crate::error::BlazenPyError;
 /// Role constants for chat messages.
 ///
 /// Example:
-///     >>> ChatMessage(role=Role.USER, content="Hello!")
-///     >>> ChatMessage(role=Role.SYSTEM, content="You are helpful.")
+/// ```text
+///  >>> ChatMessage(role=Role.USER, content="Hello!")
+///  >>> ChatMessage(role=Role.SYSTEM, content="You are helpful.")
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "Role", frozen)]
 pub struct PyRole;
@@ -143,9 +145,11 @@ impl PyContentPart {
 /// A single message in a chat conversation.
 ///
 /// Example:
-///     >>> msg = ChatMessage(content="Hello, world!")
-///     >>> msg = ChatMessage(role="system", content="You are a helpful assistant.")
-///     >>> msg = ChatMessage.user("What is 2+2?")
+/// ```text
+///  >>> msg = ChatMessage(content="Hello, world!")
+///  >>> msg = ChatMessage(role="system", content="You are a helpful assistant.")
+///  >>> msg = ChatMessage.user("What is 2+2?")
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ChatMessage", from_py_object)]
 #[derive(Clone)]

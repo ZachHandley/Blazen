@@ -19,9 +19,11 @@ use crate::persist::store::parse_run_id;
 /// after which keys auto-expire.
 ///
 /// Example:
-///     >>> store = await ValkeyCheckpointStore.connect("redis://localhost:6379")
-///     >>> # Or with a 24-hour TTL on saved checkpoints:
-///     >>> store = await ValkeyCheckpointStore.connect("redis://localhost:6379", ttl_seconds=86400)
+/// ```text
+///  >>> store = await ValkeyCheckpointStore.connect("redis://localhost:6379")
+///  >>> # Or with a 24-hour TTL on saved checkpoints:
+///  >>> store = await ValkeyCheckpointStore.connect("redis://localhost:6379", ttl_seconds=86400)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ValkeyCheckpointStore")]
 pub struct PyValkeyCheckpointStore {

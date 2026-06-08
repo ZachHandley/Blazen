@@ -54,14 +54,16 @@ impl From<OtlpProtocol> for PyOtlpProtocol {
 /// Configuration for the OpenTelemetry OTLP exporter.
 ///
 /// Example:
-///     >>> from blazen import OtlpConfig, OtlpProtocol, init_otlp
-///     >>> cfg = OtlpConfig(
-///     ...     endpoint="https://otel.example.com/v1/traces",
-///     ...     service_name="my-app",
-///     ...     protocol=OtlpProtocol.HttpProto,
-///     ...     headers={"Authorization": "Bearer xxx"},
-///     ... )
-///     >>> init_otlp(cfg)
+/// ```text
+///  >>> from blazen import OtlpConfig, OtlpProtocol, init_otlp
+///  >>> cfg = OtlpConfig(
+///  ...     endpoint="https://otel.example.com/v1/traces",
+///  ...     service_name="my-app",
+///  ...     protocol=OtlpProtocol.HttpProto,
+///  ...     headers={"Authorization": "Bearer xxx"},
+///  ... )
+///  >>> init_otlp(cfg)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "OtlpConfig", from_py_object)]
 #[derive(Clone)]

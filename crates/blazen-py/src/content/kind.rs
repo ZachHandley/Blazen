@@ -13,9 +13,11 @@ use crate::error::BlazenPyError;
 /// declarations and [`ContentStore`](super::store::PyContentStore) routing.
 ///
 /// Example:
-///     >>> ContentKind.Image
-///     >>> ContentKind.from_str("image")
-///     >>> ContentKind.from_mime("image/png")
+/// ```text
+///  >>> ContentKind.Image
+///  >>> ContentKind.from_str("image")
+///  >>> ContentKind.from_mime("image/png")
+/// ```
 #[gen_stub_pyclass_enum]
 #[pyclass(name = "ContentKind", eq, eq_int, from_py_object)]
 #[derive(Clone, Copy, PartialEq, Eq)]

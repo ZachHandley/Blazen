@@ -631,8 +631,10 @@ impl PyAnimateResult {
 /// base64-wrapped JSON response into the corresponding result class.
 ///
 /// Example:
-///     >>> provider = Compat3dProvider("https://my-3d-server.example.com", api_key="...")
-///     >>> result = await provider.texturize(mesh_glb, TexturizeRequest(prompt="bronze", pbr=True))
+/// ```text
+///  >>> provider = Compat3dProvider("https://my-3d-server.example.com", api_key="...")
+///  >>> result = await provider.texturize(mesh_glb, TexturizeRequest(prompt="bronze", pbr=True))
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "Compat3dProvider", skip_from_py_object)]
 #[derive(Clone)]

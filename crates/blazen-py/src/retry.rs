@@ -151,9 +151,11 @@ impl From<RetryStack> for PyRetryStack {
 /// type to get rate-limit / timeout / 5xx retries with no extra plumbing.
 ///
 /// Example:
-///     >>> base = EmbeddingModel.openai(options=ProviderOptions(api_key="sk-..."))
-///     >>> model = RetryEmbeddingModel(base, RetryConfig(max_retries=5))
-///     >>> resp = await model.embed(["hello", "world"])
+/// ```text
+///  >>> base = EmbeddingModel.openai(options=ProviderOptions(api_key="sk-..."))
+///  >>> model = RetryEmbeddingModel(base, RetryConfig(max_retries=5))
+///  >>> resp = await model.embed(["hello", "world"])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "RetryEmbeddingModel")]
 pub struct PyRetryEmbeddingModel {

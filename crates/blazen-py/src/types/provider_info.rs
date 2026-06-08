@@ -360,11 +360,13 @@ impl From<ProviderConfig> for PyProviderConfig {
 /// the default implementations raise ``NotImplementedError``.
 ///
 /// Example:
-///     >>> class MyProviderInfo(ProviderInfo):
-///     ...     def provider_name(self) -> str: return "my-provider"
-///     ...     def base_url(self) -> str: return "https://api.example.com"
-///     ...     def capabilities(self) -> ProviderCapabilities:
-///     ...         return ProviderCapabilities(streaming=True, tool_calling=True)
+/// ```text
+///  >>> class MyProviderInfo(ProviderInfo):
+///  ...     def provider_name(self) -> str: return "my-provider"
+///  ...     def base_url(self) -> str: return "https://api.example.com"
+///  ...     def capabilities(self) -> ProviderCapabilities:
+///  ...         return ProviderCapabilities(streaming=True, tool_calling=True)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ProviderInfo", subclass)]
 pub struct PyProviderInfo;

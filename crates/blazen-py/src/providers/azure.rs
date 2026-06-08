@@ -26,11 +26,13 @@ use blazen_llm::traits::Model;
 /// `resource_name` and `deployment_name` on [`AzureOptions`].
 ///
 /// Example:
-///     >>> from blazen import AzureOpenAiProvider, AzureOptions
-///     >>> p = AzureOpenAiProvider(options=AzureOptions(
-///     ...     resource_name="my-resource",
-///     ...     deployment_name="gpt-4o",
-///     ... ))
+/// ```text
+///  >>> from blazen import AzureOpenAiProvider, AzureOptions
+///  >>> p = AzureOpenAiProvider(options=AzureOptions(
+///  ...     resource_name="my-resource",
+///  ...     deployment_name="gpt-4o",
+///  ... ))
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "AzureOpenAiProvider", from_py_object)]
 #[derive(Clone)]

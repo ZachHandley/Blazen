@@ -25,9 +25,11 @@ use blazen_llm::traits::EmbeddingModel;
 /// for callers that want explicit feature gating or per-instance options.
 ///
 /// Example:
-///     >>> opts = FastEmbedOptions(model_name="BGESmallENV15")
-///     >>> model = FastEmbedModel(options=opts)
-///     >>> response = await model.embed(["hello", "world"])
+/// ```text
+///  >>> opts = FastEmbedOptions(model_name="BGESmallENV15")
+///  >>> model = FastEmbedModel(options=opts)
+///  >>> response = await model.embed(["hello", "world"])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "FastEmbedModel", from_py_object)]
 #[derive(Clone)]

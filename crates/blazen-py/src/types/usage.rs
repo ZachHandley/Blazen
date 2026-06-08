@@ -12,9 +12,11 @@ pub use blazen_llm::types::RequestTiming;
 /// Token usage statistics for a completion request.
 ///
 /// Example:
-///     >>> usage = response.usage
-///     >>> if usage is not None:
-///     ...     print(usage.prompt_tokens, usage.completion_tokens, usage.total_tokens)
+/// ```text
+///  >>> usage = response.usage
+///  >>> if usage is not None:
+///  ...     print(usage.prompt_tokens, usage.completion_tokens, usage.total_tokens)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "TokenUsage", frozen, from_py_object)]
 #[derive(Clone)]

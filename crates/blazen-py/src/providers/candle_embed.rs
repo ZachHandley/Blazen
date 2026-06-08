@@ -21,9 +21,11 @@ use blazen_llm::traits::EmbeddingModel;
 /// engine. No API key is required.
 ///
 /// Example:
-///     >>> opts = CandleEmbedOptions(model_id="BAAI/bge-small-en-v1.5")
-///     >>> model = CandleEmbedModel(options=opts)
-///     >>> response = await model.embed(["Hello", "world"])
+/// ```text
+///  >>> opts = CandleEmbedOptions(model_id="BAAI/bge-small-en-v1.5")
+///  >>> model = CandleEmbedModel(options=opts)
+///  >>> response = await model.embed(["Hello", "world"])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "CandleEmbedModel", from_py_object)]
 #[derive(Clone)]

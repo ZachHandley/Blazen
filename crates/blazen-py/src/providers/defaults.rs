@@ -33,9 +33,11 @@ use crate::types::PyToolDefinition;
 /// may mutate it in place before downstream typed processing.
 ///
 /// Example:
-///     >>> async def stamp(method, body):
-///     ...     body["trace_id"] = "abc"
-///     >>> base = BaseProviderDefaults(before_request=stamp)
+/// ```text
+///  >>> async def stamp(method, body):
+///  ...     body["trace_id"] = "abc"
+///  >>> base = BaseProviderDefaults(before_request=stamp)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "BaseProviderDefaults", subclass, from_py_object)]
 #[derive(Default)]
@@ -105,14 +107,16 @@ impl PyBaseProviderDefaults {
 /// construction.
 ///
 /// Example:
-///     >>> async def add_user(req):
-///     ...     req["metadata"]["origin"] = "blazen-py"
-///     >>> defaults = ProviderDefaults(
-///     ...     system_prompt="be terse",
-///     ...     tools=[my_tool],
-///     ...     response_format={"type": "json_object"},
-///     ...     before_model=add_user,
-///     ... )
+/// ```text
+///  >>> async def add_user(req):
+///  ...     req["metadata"]["origin"] = "blazen-py"
+///  >>> defaults = ProviderDefaults(
+///  ...     system_prompt="be terse",
+///  ...     tools=[my_tool],
+///  ...     response_format={"type": "json_object"},
+///  ...     before_model=add_user,
+///  ... )
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ProviderDefaults", subclass, from_py_object)]
 #[derive(Default)]

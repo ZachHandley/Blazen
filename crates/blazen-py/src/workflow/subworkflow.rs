@@ -36,14 +36,16 @@ use crate::workflow::workflow::PyWorkflow;
 /// `"<step_name>::output"` for the parent.
 ///
 /// Example:
-///     >>> child = Workflow("enrich", [enrich_step])
-///     >>> step = SubWorkflowStep(
-///     ...     name="enrich",
-///     ...     accepts=["StartEvent"],
-///     ...     emits=["enrich::output"],
-///     ...     workflow=child,
-///     ... )
-///     >>> wf = Workflow.builder("parent").add_subworkflow_step(step).build()
+/// ```text
+///  >>> child = Workflow("enrich", [enrich_step])
+///  >>> step = SubWorkflowStep(
+///  ...     name="enrich",
+///  ...     accepts=["StartEvent"],
+///  ...     emits=["enrich::output"],
+///  ...     workflow=child,
+///  ... )
+///  >>> wf = Workflow.builder("parent").add_subworkflow_step(step).build()
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "SubWorkflowStep")]
 pub struct PySubWorkflowStep {
@@ -158,13 +160,15 @@ impl PySubWorkflowStep {
 /// (`JoinStrategy.FirstCompletes`).
 ///
 /// Example:
-///     >>> step = ParallelSubWorkflowsStep(
-///     ...     name="enrich-fanout",
-///     ...     accepts=["StartEvent"],
-///     ...     emits=["enrich-fanout::output"],
-///     ...     branches=[step_a, step_b, step_c],
-///     ...     join_strategy=JoinStrategy.WaitAll,
-///     ... )
+/// ```text
+///  >>> step = ParallelSubWorkflowsStep(
+///  ...     name="enrich-fanout",
+///  ...     accepts=["StartEvent"],
+///  ...     emits=["enrich-fanout::output"],
+///  ...     branches=[step_a, step_b, step_c],
+///  ...     join_strategy=JoinStrategy.WaitAll,
+///  ... )
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ParallelSubWorkflowsStep")]
 pub struct PyParallelSubWorkflowsStep {

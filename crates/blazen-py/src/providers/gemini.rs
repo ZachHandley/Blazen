@@ -25,9 +25,11 @@ use blazen_llm::traits::Model;
 /// This is the standalone class form of `Model.gemini(...)`.
 ///
 /// Example:
-///     >>> from blazen import GeminiProvider, ProviderOptions, ChatMessage
-///     >>> p = GeminiProvider(options=ProviderOptions(api_key="..."))
-///     >>> resp = await p.complete([ChatMessage.user("Hello!")])
+/// ```text
+///  >>> from blazen import GeminiProvider, ProviderOptions, ChatMessage
+///  >>> p = GeminiProvider(options=ProviderOptions(api_key="..."))
+///  >>> resp = await p.complete([ChatMessage.user("Hello!")])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "GeminiProvider", from_py_object)]
 #[derive(Clone)]

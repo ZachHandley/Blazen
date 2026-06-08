@@ -26,17 +26,19 @@ use blazen_llm::http::HttpClientConfig;
 /// ``send_streaming`` returns an async iterator of ``bytes`` chunks.
 ///
 /// Example:
-///     >>> class HttpxClient(HttpClient):
-///     ...     async def send(self, request):
-///     ...         resp = await self._client.request(
-///     ...             request["method"], request["url"],
-///     ...             headers=request["headers"], content=request.get("body"),
-///     ...         )
-///     ...         return {
-///     ...             "status": resp.status_code,
-///     ...             "headers": list(resp.headers.items()),
-///     ...             "body": resp.content,
-///     ...         }
+/// ```text
+///  >>> class HttpxClient(HttpClient):
+///  ...     async def send(self, request):
+///  ...         resp = await self._client.request(
+///  ...             request["method"], request["url"],
+///  ...             headers=request["headers"], content=request.get("body"),
+///  ...         )
+///  ...         return {
+///  ...             "status": resp.status_code,
+///  ...             "headers": list(resp.headers.items()),
+///  ...             "body": resp.content,
+///  ...         }
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "HttpClient", subclass)]
 pub struct PyHttpClient;
@@ -99,8 +101,10 @@ impl PyHttpClient {
 /// factory (no request / connect timeout).
 ///
 /// Example:
-///     >>> cfg = HttpClientConfig(request_timeout=30.0, connect_timeout=5.0)
-///     >>> unlimited = HttpClientConfig.unlimited()
+/// ```text
+///  >>> cfg = HttpClientConfig(request_timeout=30.0, connect_timeout=5.0)
+///  >>> unlimited = HttpClientConfig.unlimited()
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "HttpClientConfig", from_py_object)]
 #[derive(Clone)]

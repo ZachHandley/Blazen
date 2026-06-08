@@ -32,12 +32,14 @@ use crate::convert::block_on_context;
 /// objects, or live references for unpicklable objects (DB connections, etc.).
 ///
 /// Example:
-///     >>> def my_step(ctx: Context, ev: Event) -> Event:
-///     ...     ctx.set("counter", 42)
-///     ...     ctx.set("model", MyPydanticModel(name="foo"))
-///     ...     ctx.set("db", sqlite3.connect(":memory:"))
-///     ...     val = ctx.get("counter")  # returns 42
-///     ...     db = ctx.get("db")        # returns the same connection
+/// ```text
+///  >>> def my_step(ctx: Context, ev: Event) -> Event:
+///  ...     ctx.set("counter", 42)
+///  ...     ctx.set("model", MyPydanticModel(name="foo"))
+///  ...     ctx.set("db", sqlite3.connect(":memory:"))
+///  ...     val = ctx.get("counter")  # returns 42
+///  ...     db = ctx.get("db")        # returns the same connection
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "Context", from_py_object)]
 #[derive(Clone)]

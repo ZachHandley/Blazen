@@ -19,13 +19,15 @@ use crate::types::message::PyChatMessage;
 /// implementations raise ``NotImplementedError``.
 ///
 /// Example:
-///     >>> class MyCounter(TokenCounter):
-///     ...     def count_tokens(self, text: str) -> int:
-///     ...         return len(text) // 4
-///     ...     def count_message_tokens(self, messages):
-///     ...         return sum(self.count_tokens(m.content or "") for m in messages)
-///     ...     def context_size(self) -> int:
-///     ...         return 128_000
+/// ```text
+///  >>> class MyCounter(TokenCounter):
+///  ...     def count_tokens(self, text: str) -> int:
+///  ...         return len(text) // 4
+///  ...     def count_message_tokens(self, messages):
+///  ...         return sum(self.count_tokens(m.content or "") for m in messages)
+///  ...     def context_size(self) -> int:
+///  ...         return 128_000
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "TokenCounter", subclass)]
 pub struct PyTokenCounter;
@@ -183,8 +185,10 @@ impl PyTiktokenCounter {
 ///     The estimated token count.
 ///
 /// Example:
-///     >>> tokens = estimate_tokens("Hello, world!")
-///     >>> print(tokens)  # 4
+/// ```text
+///  >>> tokens = estimate_tokens("Hello, world!")
+///  >>> print(tokens)  # 4
+/// ```
 #[gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (text, context_size=128_000))]
@@ -206,11 +210,13 @@ pub fn estimate_tokens(text: &str, context_size: usize) -> usize {
 ///     The estimated token count for the full message list.
 ///
 /// Example:
-///     >>> tokens = count_message_tokens([
-///     ...     ChatMessage.system("You are helpful."),
-///     ...     ChatMessage.user("Hello!"),
-///     ... ])
-///     >>> print(tokens)
+/// ```text
+///  >>> tokens = count_message_tokens([
+///  ...     ChatMessage.system("You are helpful."),
+///  ...     ChatMessage.user("Hello!"),
+///  ... ])
+///  >>> print(tokens)
+/// ```
 #[gen_stub_pyfunction]
 #[pyfunction]
 #[pyo3(signature = (messages, context_size=128_000))]

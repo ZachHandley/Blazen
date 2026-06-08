@@ -167,9 +167,11 @@ impl PyTranscription {
     ///     ``language``, ``timing``, ``cost``, and ``metadata``.
     ///
     /// Example:
-    ///     >>> req = TranscriptionRequest.from_file("/path/to/audio.wav")
-    ///     >>> result = await transcriber.transcribe(req)
-    ///     >>> print(result.text)
+    /// ```text
+    ///  >>> req = TranscriptionRequest.from_file("/path/to/audio.wav")
+    ///  >>> result = await transcriber.transcribe(req)
+    ///  >>> print(result.text)
+    /// ```
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, TranscriptionResult]", imports = ("typing",)))]
     fn transcribe<'py>(
         &self,
@@ -222,11 +224,13 @@ impl PyTranscription {
     ///         device, language, and cache directory.
     ///
     /// Example:
-    ///     >>> opts = WhisperOptions(model=WhisperModel.Base)
-    ///     >>> transcriber = Transcription.whispercpp(options=opts)
-    ///     >>> req = TranscriptionRequest.from_file("audio.wav")
-    ///     >>> result = await transcriber.transcribe(req)
-    ///     >>> print(result.text)
+    /// ```text
+    ///  >>> opts = WhisperOptions(model=WhisperModel.Base)
+    ///  >>> transcriber = Transcription.whispercpp(options=opts)
+    ///  >>> req = TranscriptionRequest.from_file("audio.wav")
+    ///  >>> result = await transcriber.transcribe(req)
+    ///  >>> print(result.text)
+    /// ```
     #[staticmethod]
     #[pyo3(signature = (*, options=None))]
     fn whispercpp(options: Option<PyRef<'_, PyWhisperOptions>>) -> PyResult<Self> {

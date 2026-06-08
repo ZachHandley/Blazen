@@ -416,9 +416,11 @@ impl PyBedrockOptions {
 /// Hardware device selection for compute backends.
 ///
 /// Example:
-///     >>> Device.Cpu
-///     >>> Device.Metal
-///     >>> Device.Cuda
+/// ```text
+///  >>> Device.Cpu
+///  >>> Device.Metal
+///  >>> Device.Cuda
+/// ```
 #[gen_stub_pyclass_enum]
 #[pyclass(name = "Device", eq, eq_int, from_py_object)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -449,8 +451,10 @@ impl From<PyDevice> for blazen_llm::Device {
 /// Options for the local embedding backend.
 ///
 /// Example:
-///     >>> opts = EmbedOptions(model_name="BGESmallENV15")
-///     >>> model = EmbeddingModel.local(options=opts)
+/// ```text
+///  >>> opts = EmbedOptions(model_name="BGESmallENV15")
+///  >>> model = EmbeddingModel.local(options=opts)
+/// ```
 #[cfg(feature = "embed")]
 #[gen_stub_pyclass]
 #[pyclass(name = "EmbedOptions", from_py_object)]
@@ -549,7 +553,9 @@ impl PyEmbedOptions {
 /// most popular GPU quantization schemes (GPTQ, AWQ).
 ///
 /// Example:
-///     >>> opts = MistralRsOptions("my-org/model", quantization=Quantization.Q4KM)
+/// ```text
+///  >>> opts = MistralRsOptions("my-org/model", quantization=Quantization.Q4KM)
+/// ```
 #[gen_stub_pyclass_enum]
 #[pyclass(name = "Quantization", eq, eq_int, from_py_object)]
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -599,8 +605,10 @@ impl From<PyQuantization> for blazen_llm::Quantization {
 /// path to a GGUF file). All other arguments are optional.
 ///
 /// Example:
-///     >>> opts = MistralRsOptions("mistralai/Mistral-7B-Instruct-v0.3")
-///     >>> model = Model.mistralrs(options=opts)
+/// ```text
+///  >>> opts = MistralRsOptions("mistralai/Mistral-7B-Instruct-v0.3")
+///  >>> model = Model.mistralrs(options=opts)
+/// ```
 #[cfg(feature = "mistralrs")]
 #[gen_stub_pyclass]
 #[pyclass(name = "MistralRsOptions", from_py_object)]
@@ -749,8 +757,10 @@ impl PyMistralRsOptions {
 /// | LargeV3   | 1.5B   | ~10GB |
 ///
 /// Example:
-///     >>> WhisperModel.Base
-///     >>> opts = WhisperOptions(model=WhisperModel.Base)
+/// ```text
+///  >>> WhisperModel.Base
+///  >>> opts = WhisperOptions(model=WhisperModel.Base)
+/// ```
 #[cfg(feature = "whispercpp")]
 #[gen_stub_pyclass_enum]
 #[pyclass(name = "WhisperModel", eq, eq_int, from_py_object)]
@@ -787,9 +797,11 @@ impl From<PyWhisperModel> for blazen_llm::WhisperModel {
 /// will auto-detect the spoken language.
 ///
 /// Example:
-///     >>> opts = WhisperOptions()
-///     >>> opts = WhisperOptions(model=WhisperModel.Base, language="en")
-///     >>> transcriber = Transcription.whispercpp(options=opts)
+/// ```text
+///  >>> opts = WhisperOptions()
+///  >>> opts = WhisperOptions(model=WhisperModel.Base, language="en")
+///  >>> transcriber = Transcription.whispercpp(options=opts)
+/// ```
 #[cfg(feature = "whispercpp")]
 #[gen_stub_pyclass]
 #[pyclass(name = "WhisperOptions", from_py_object)]
@@ -890,8 +902,10 @@ impl PyWhisperOptions {
 /// Options for the local llama.cpp LLM backend.
 ///
 /// Example:
-///     >>> opts = LlamaCppOptions(model_path="/models/llama-3.2-1b-q4_k_m.gguf")
-///     >>> provider = LlamaCppProvider(options=opts)
+/// ```text
+///  >>> opts = LlamaCppOptions(model_path="/models/llama-3.2-1b-q4_k_m.gguf")
+///  >>> provider = LlamaCppProvider(options=opts)
+/// ```
 #[cfg(feature = "llamacpp")]
 #[gen_stub_pyclass]
 #[pyclass(name = "LlamaCppOptions", from_py_object)]
@@ -1008,8 +1022,10 @@ impl PyLlamaCppOptions {
 /// Options for the local candle LLM backend.
 ///
 /// Example:
-///     >>> opts = CandleLlmOptions(model_id="meta-llama/Llama-3.2-1B")
-///     >>> provider = CandleLlmProvider(options=opts)
+/// ```text
+///  >>> opts = CandleLlmOptions(model_id="meta-llama/Llama-3.2-1B")
+///  >>> provider = CandleLlmProvider(options=opts)
+/// ```
 #[cfg(feature = "candle-llm")]
 #[gen_stub_pyclass]
 #[pyclass(name = "CandleLlmOptions", from_py_object)]
@@ -1127,8 +1143,10 @@ impl PyCandleLlmOptions {
 /// Options for the local candle embedding backend.
 ///
 /// Example:
-///     >>> opts = CandleEmbedOptions(model_id="BAAI/bge-small-en-v1.5")
-///     >>> model = CandleEmbedModel(options=opts)
+/// ```text
+///  >>> opts = CandleEmbedOptions(model_id="BAAI/bge-small-en-v1.5")
+///  >>> model = CandleEmbedModel(options=opts)
+/// ```
 #[cfg(feature = "candle-embed")]
 #[gen_stub_pyclass]
 #[pyclass(name = "CandleEmbedOptions", from_py_object)]
@@ -1221,8 +1239,10 @@ impl PyCandleEmbedOptions {
 /// Options for the local TTS backend (`any-tts`).
 ///
 /// Example:
-///     >>> opts = TtsOptions(model="kokoro82m", voice="af_bella")
-///     >>> provider = TtsProvider(options=opts)
+/// ```text
+///  >>> opts = TtsOptions(model="kokoro82m", voice="af_bella")
+///  >>> provider = TtsProvider(options=opts)
+/// ```
 #[cfg(feature = "tts")]
 #[gen_stub_pyclass]
 #[pyclass(name = "TtsOptions", from_py_object)]
@@ -1409,8 +1429,10 @@ impl From<blazen_llm::DiffusionScheduler> for PyDiffusionScheduler {
 /// Options for the local diffusion-rs image generation backend.
 ///
 /// Example:
-///     >>> opts = DiffusionOptions(model_id="stabilityai/stable-diffusion-2-1", width=768, height=768)
-///     >>> provider = DiffusionProvider(options=opts)
+/// ```text
+///  >>> opts = DiffusionOptions(model_id="stabilityai/stable-diffusion-2-1", width=768, height=768)
+///  >>> provider = DiffusionProvider(options=opts)
+/// ```
 #[cfg(feature = "diffusion")]
 #[gen_stub_pyclass]
 #[pyclass(name = "DiffusionOptions", from_py_object)]
@@ -1555,8 +1577,10 @@ impl PyDiffusionOptions {
 /// the Microsoft-prebuilt ONNX Runtime binaries can link.
 ///
 /// Example:
-///     >>> opts = FastEmbedOptions(model_name="BGESmallENV15")
-///     >>> model = FastEmbedModel(options=opts)
+/// ```text
+///  >>> opts = FastEmbedOptions(model_name="BGESmallENV15")
+///  >>> model = FastEmbedModel(options=opts)
+/// ```
 #[cfg(all(feature = "embed", not(target_env = "musl")))]
 #[gen_stub_pyclass]
 #[pyclass(name = "FastEmbedOptions", from_py_object)]
@@ -1650,8 +1674,10 @@ impl PyFastEmbedOptions {
 /// where fastembed's prebuilt ONNX Runtime binaries are unavailable.
 ///
 /// Example:
-///     >>> opts = TractOptions(model_name="BGESmallENV15")
-///     >>> model = TractEmbedModel(options=opts)
+/// ```text
+///  >>> opts = TractOptions(model_name="BGESmallENV15")
+///  >>> model = TractEmbedModel(options=opts)
+/// ```
 #[cfg(feature = "tract")]
 #[gen_stub_pyclass]
 #[pyclass(name = "TractOptions", from_py_object)]

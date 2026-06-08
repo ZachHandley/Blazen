@@ -169,11 +169,13 @@ py_result_type! {
 /// constructible from Python via ``from_py_object``.
 ///
 /// Example:
-///     >>> handle = await provider.clone_voice(VoiceCloneRequest(
-///     ...     name="rachel-clone",
-///     ...     reference_urls=["https://example.com/rachel.wav"],
-///     ... ))
-///     >>> await provider.delete_voice(handle)
+/// ```text
+///  >>> handle = await provider.clone_voice(VoiceCloneRequest(
+///  ...     name="rachel-clone",
+///  ...     reference_urls=["https://example.com/rachel.wav"],
+///  ... ))
+///  >>> await provider.delete_voice(handle)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "VoiceHandle", from_py_object)]
 #[derive(Clone)]

@@ -109,8 +109,10 @@ impl PyCapabilityKind {
 /// optional version pin (model id / weights revision).
 ///
 /// Example:
-///     >>> meta = ProviderMetadata("openai", CapabilityKind.Llm,
-///     ...                         display_name="OpenAI", version="gpt-4o")
+/// ```text
+///  >>> meta = ProviderMetadata("openai", CapabilityKind.Llm,
+///  ...                         display_name="OpenAI", version="gpt-4o")
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ProviderMetadata", from_py_object)]
 #[derive(Clone)]
@@ -199,9 +201,11 @@ impl PyProviderMetadata {
 /// accessors delegate to ``metadata()`` by default.
 ///
 /// Example:
-///     >>> class MyProvider(BaseProvider):
-///     ...     def metadata(self):
-///     ...         return ProviderMetadata("mine", CapabilityKind.Llm)
+/// ```text
+///  >>> class MyProvider(BaseProvider):
+///  ...     def metadata(self):
+///  ...         return ProviderMetadata("mine", CapabilityKind.Llm)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "BaseProvider", subclass)]
 pub struct PyBaseProviderAbc {

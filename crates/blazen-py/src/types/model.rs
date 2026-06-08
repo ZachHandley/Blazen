@@ -18,8 +18,10 @@ use super::{
 ///
 /// Supports both attribute access and dict-style access for backwards
 /// compatibility:
-///     >>> response.content        # attribute
-///     >>> response["content"]     # dict-style
+/// ```text
+///  >>> response.content        # attribute
+///  >>> response["content"]     # dict-style
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ModelResponse", from_py_object)]
 #[derive(Clone)]

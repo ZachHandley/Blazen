@@ -18,11 +18,13 @@ use crate::types::message::PyChatMessage;
 /// exceeds the configured budget.
 ///
 /// Example:
-///     >>> window = ChatWindow(max_tokens=4096)
-///     >>> window.add(ChatMessage.system("You are helpful."))
-///     >>> window.add(ChatMessage.user("Hello!"))
-///     >>> print(window.token_count())
-///     >>> print(window.remaining_tokens())
+/// ```text
+///  >>> window = ChatWindow(max_tokens=4096)
+///  >>> window.add(ChatMessage.system("You are helpful."))
+///  >>> window.add(ChatMessage.user("Hello!"))
+///  >>> print(window.token_count())
+///  >>> print(window.remaining_tokens())
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ChatWindow")]
 pub struct PyChatWindow {

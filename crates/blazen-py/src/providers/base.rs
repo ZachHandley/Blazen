@@ -39,13 +39,15 @@ use crate::types::{PyChatMessage, PyToolDefinition};
 /// arrives in Phase B.
 ///
 /// Example:
-///     >>> from blazen import LlmProviderDefaults, Model
-///     >>> inner = Model.openai()
-///     >>> provider = (
-///     ...     LlmProviderDefaults(inner)
-///     ...     .with_system_prompt("be terse")
-///     ...     .with_response_format({"type": "json_object"})
-///     ... )
+/// ```text
+///  >>> from blazen import LlmProviderDefaults, Model
+///  >>> inner = Model.openai()
+///  >>> provider = (
+///  ...     LlmProviderDefaults(inner)
+///  ...     .with_system_prompt("be terse")
+///  ...     .with_response_format({"type": "json_object"})
+///  ... )
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "LlmProviderDefaults", subclass, from_py_object)]
 pub struct PyBaseProvider {

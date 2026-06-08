@@ -27,10 +27,12 @@ use super::error::cache_err;
 /// type-checked callers a typed base to inherit from.
 ///
 /// Example:
-///     >>> class Logger(ProgressCallback):
-///     ...     def on_progress(self, downloaded: int, total: int | None) -> None:
-///     ...         print(f"{downloaded}/{total}")
-///     >>> await cache.download("bert-base-uncased", "config.json", Logger())
+/// ```text
+///  >>> class Logger(ProgressCallback):
+///  ...     def on_progress(self, downloaded: int, total: int | None) -> None:
+///  ...         print(f"{downloaded}/{total}")
+///  >>> await cache.download("bert-base-uncased", "config.json", Logger())
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ProgressCallback", subclass)]
 #[derive(Default)]
@@ -105,9 +107,11 @@ impl ProgressCallback for PyHostProgressCallback {
 /// downloaded only once; subsequent calls return the cached path immediately.
 ///
 /// Example:
-///     >>> cache = ModelCache()
-///     >>> path = await cache.download("bert-base-uncased", "config.json")
-///     >>> print(path)
+/// ```text
+///  >>> cache = ModelCache()
+///  >>> path = await cache.download("bert-base-uncased", "config.json")
+///  >>> print(path)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ModelCache")]
 pub struct PyModelCache {

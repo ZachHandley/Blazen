@@ -36,22 +36,28 @@ use blazen_llm::traits::Model;
 /// the same Rust provider; use whichever you prefer.
 ///
 /// Example:
-///     >>> from blazen import OpenAiProvider, ProviderOptions, ChatMessage
-///     >>> openai = OpenAiProvider(options=ProviderOptions(api_key="sk-..."))
-///     >>> resp = await openai.complete([ChatMessage.user("Hello!")])
+/// ```text
+///  >>> from blazen import OpenAiProvider, ProviderOptions, ChatMessage
+///  >>> openai = OpenAiProvider(options=ProviderOptions(api_key="sk-..."))
+///  >>> resp = await openai.complete([ChatMessage.user("Hello!")])
+/// ```
 ///
 /// It also exposes text-to-speech:
-///     >>> from blazen import SpeechRequest
-///     >>> result = await openai.text_to_speech(SpeechRequest(text="Hello, world!"))
+/// ```text
+///  >>> from blazen import SpeechRequest
+///  >>> result = await openai.text_to_speech(SpeechRequest(text="Hello, world!"))
+/// ```
 ///
 /// To target an OpenAI-compatible service (zvoice/VoxCPM2, etc.), set
 /// ``base_url`` on the options. With an empty ``api_key`` the ``Authorization``
 /// header is omitted:
-///     >>> local = OpenAiProvider(options=ProviderOptions(
-///     ...     api_key="",
-///     ...     base_url="http://beastpc.lan:8900/v1",
-///     ... ))
-///     >>> result = await local.text_to_speech(SpeechRequest(text="Hello!"))
+/// ```text
+///  >>> local = OpenAiProvider(options=ProviderOptions(
+///  ...     api_key="",
+///  ...     base_url="http://beastpc.lan:8900/v1",
+///  ... ))
+///  >>> result = await local.text_to_speech(SpeechRequest(text="Hello!"))
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "OpenAiProvider", from_py_object)]
 #[derive(Clone)]

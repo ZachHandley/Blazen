@@ -27,9 +27,11 @@ use super::event::{PyEvent, any_event_to_py_event, py_event_to_any_event};
 /// the workflow engine.
 ///
 /// Example:
-///     >>> @step
-///     ... async def analyze(ctx: Context, ev: Event) -> Event:
-///     ...     return Event("ResultEvent", answer=42)
+/// ```text
+///  >>> @step
+///  ... async def analyze(ctx: Context, ev: Event) -> Event:
+///  ...     return Event("ResultEvent", answer=42)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "_StepWrapper")]
 pub struct PyStepWrapper {

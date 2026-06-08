@@ -26,11 +26,13 @@ use crate::providers::config::PyRetryConfig;
 /// Call ``build()`` to produce a ready-to-run [`Workflow`].
 ///
 /// Example:
-///     >>> wf = (Workflow.builder("my-wf")
-///     ...      .step(my_step)
-///     ...      .timeout(60.0)
-///     ...      .auto_publish_events(True)
-///     ...      .build())
+/// ```text
+///  >>> wf = (Workflow.builder("my-wf")
+///  ...      .step(my_step)
+///  ...      .timeout(60.0)
+///  ...      .auto_publish_events(True)
+///  ...      .build())
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "WorkflowBuilder")]
 #[allow(dead_code)]

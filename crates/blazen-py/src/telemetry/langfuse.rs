@@ -16,15 +16,17 @@ use crate::error::BlazenPyError;
 /// Configuration for the Langfuse LLM observability exporter.
 ///
 /// Example:
-///     >>> from blazen import LangfuseConfig, init_langfuse
-///     >>> cfg = LangfuseConfig(
-///     ...     public_key="pk-lf-...",
-///     ...     secret_key="sk-lf-...",
-///     ...     host="https://cloud.langfuse.com",
-///     ...     batch_size=100,
-///     ...     flush_interval_ms=5000,
-///     ... )
-///     >>> init_langfuse(cfg)
+/// ```text
+///  >>> from blazen import LangfuseConfig, init_langfuse
+///  >>> cfg = LangfuseConfig(
+///  ...     public_key="pk-lf-...",
+///  ...     secret_key="sk-lf-...",
+///  ...     host="https://cloud.langfuse.com",
+///  ...     batch_size=100,
+///  ...     flush_interval_ms=5000,
+///  ... )
+///  >>> init_langfuse(cfg)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "LangfuseConfig", from_py_object)]
 #[derive(Clone)]

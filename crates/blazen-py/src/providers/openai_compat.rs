@@ -53,13 +53,15 @@ pub enum PyAuthMethod {
 /// Configuration for a generic OpenAI-compatible provider.
 ///
 /// Example:
-///     >>> cfg = OpenAiCompatConfig(
-///     ...     provider_name="my-gateway",
-///     ...     base_url="https://gateway.example.com/v1",
-///     ...     api_key="secret",
-///     ...     default_model="gpt-4o",
-///     ... )
-///     >>> p = OpenAiCompatProvider(config=cfg)
+/// ```text
+///  >>> cfg = OpenAiCompatConfig(
+///  ...     provider_name="my-gateway",
+///  ...     base_url="https://gateway.example.com/v1",
+///  ...     api_key="secret",
+///  ...     default_model="gpt-4o",
+///  ... )
+///  >>> p = OpenAiCompatProvider(config=cfg)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "OpenAiCompatConfig", from_py_object)]
 #[derive(Clone)]
@@ -168,14 +170,16 @@ impl PyOpenAiCompatConfig {
 /// prefer the dedicated wrapper which preconfigures the URL/auth.
 ///
 /// Example:
-///     >>> cfg = OpenAiCompatConfig(
-///     ...     provider_name="vllm-host",
-///     ...     base_url="http://localhost:8000/v1",
-///     ...     api_key="",
-///     ...     default_model="meta-llama/Llama-3.1-8B-Instruct",
-///     ... )
-///     >>> p = OpenAiCompatProvider(config=cfg)
-///     >>> resp = await p.complete([ChatMessage.user("Hi!")])
+/// ```text
+///  >>> cfg = OpenAiCompatConfig(
+///  ...     provider_name="vllm-host",
+///  ...     base_url="http://localhost:8000/v1",
+///  ...     api_key="",
+///  ...     default_model="meta-llama/Llama-3.1-8B-Instruct",
+///  ... )
+///  >>> p = OpenAiCompatProvider(config=cfg)
+///  >>> resp = await p.complete([ChatMessage.user("Hi!")])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "OpenAiCompatProvider", from_py_object)]
 #[derive(Clone)]
@@ -292,13 +296,15 @@ impl PyOpenAiCompatProvider {
 /// Exposed as a free-standing class for parity with other providers.
 ///
 /// Example:
-///     >>> cfg = OpenAiCompatConfig(...)
-///     >>> em = OpenAiCompatEmbeddingModel(
-///     ...     config=cfg,
-///     ...     model="text-embedding-3-small",
-///     ...     dimensions=1536,
-///     ... )
-///     >>> resp = await em.embed(["hello"])
+/// ```text
+///  >>> cfg = OpenAiCompatConfig(...)
+///  >>> em = OpenAiCompatEmbeddingModel(
+///  ...     config=cfg,
+///  ...     model="text-embedding-3-small",
+///  ...     dimensions=1536,
+///  ... )
+///  >>> resp = await em.embed(["hello"])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "OpenAiCompatEmbeddingModel", from_py_object)]
 #[derive(Clone)]

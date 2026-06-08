@@ -314,11 +314,13 @@ impl PyHistoryEvent {
 /// Append-only history of events for a single workflow run.
 ///
 /// Example:
-///     >>> from blazen import WorkflowHistory, HistoryEventKind
-///     >>> h = WorkflowHistory("00000000-0000-0000-0000-000000000000", "demo")
-///     >>> h.push(HistoryEventKind.workflow_started({"q": "hi"}))
-///     >>> h.push(HistoryEventKind.workflow_completed(duration_ms=42))
-///     >>> assert len(h) == 2
+/// ```text
+///  >>> from blazen import WorkflowHistory, HistoryEventKind
+///  >>> h = WorkflowHistory("00000000-0000-0000-0000-000000000000", "demo")
+///  >>> h.push(HistoryEventKind.workflow_started({"q": "hi"}))
+///  >>> h.push(HistoryEventKind.workflow_completed(duration_ms=42))
+///  >>> assert len(h) == 2
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "WorkflowHistory", from_py_object)]
 #[derive(Clone)]

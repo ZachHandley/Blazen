@@ -10,9 +10,11 @@ use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 /// Media type constants for identifying file formats.
 ///
 /// Example:
-///     >>> MediaType.PNG   # "image/png"
-///     >>> MediaType.MP4   # "video/mp4"
-///     >>> MediaType.MP3   # "audio/mpeg"
+/// ```text
+///  >>> MediaType.PNG   # "image/png"
+///  >>> MediaType.MP4   # "video/mp4"
+///  >>> MediaType.MP3   # "audio/mpeg"
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "MediaType", frozen)]
 pub struct PyMediaType;

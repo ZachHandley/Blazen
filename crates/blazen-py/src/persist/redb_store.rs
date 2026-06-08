@@ -17,9 +17,11 @@ use crate::persist::store::parse_run_id;
 /// given path. The file is created if it does not exist.
 ///
 /// Example:
-///     >>> store = RedbCheckpointStore("workflow.db")
-///     >>> await store.save(checkpoint)
-///     >>> loaded = await store.load(checkpoint.run_id)
+/// ```text
+///  >>> store = RedbCheckpointStore("workflow.db")
+///  >>> await store.save(checkpoint)
+///  >>> loaded = await store.load(checkpoint.run_id)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "RedbCheckpointStore")]
 pub struct PyRedbCheckpointStore {

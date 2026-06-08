@@ -28,9 +28,11 @@ use blazen_llm::{CandleInferenceResult, CandleLlmModel, CandleLlmProvider};
 /// No API key is required.
 ///
 /// Example:
-///     >>> opts = CandleLlmOptions(model_id="meta-llama/Llama-3.2-1B")
-///     >>> provider = CandleLlmProvider(options=opts)
-///     >>> response = await provider.complete([ChatMessage.user("Hello!")])
+/// ```text
+///  >>> opts = CandleLlmOptions(model_id="meta-llama/Llama-3.2-1B")
+///  >>> provider = CandleLlmProvider(options=opts)
+///  >>> response = await provider.complete([ChatMessage.user("Hello!")])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "CandleLlmProvider", from_py_object)]
 #[derive(Clone)]

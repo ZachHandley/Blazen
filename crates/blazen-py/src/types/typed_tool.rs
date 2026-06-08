@@ -19,19 +19,21 @@ use crate::agent::PyToolDef;
 /// any code that introspects a tool surface.
 ///
 /// Example:
-///     >>> from pydantic import BaseModel
-///     >>> class AddArgs(BaseModel):
-///     ...     a: int
-///     ...     b: int
-///     >>> async def add(args: AddArgs) -> dict:
-///     ...     return {"sum": args.a + args.b}
-///     >>> tool = TypedTool(
-///     ...     name="add",
-///     ...     description="Add two numbers",
-///     ...     args_model=AddArgs,
-///     ...     handler=add,
-///     ... )
-///     >>> result = await run_agent(model, msgs, tools=[tool.as_tool_def()])
+/// ```text
+///  >>> from pydantic import BaseModel
+///  >>> class AddArgs(BaseModel):
+///  ...     a: int
+///  ...     b: int
+///  >>> async def add(args: AddArgs) -> dict:
+///  ...     return {"sum": args.a + args.b}
+///  >>> tool = TypedTool(
+///  ...     name="add",
+///  ...     description="Add two numbers",
+///  ...     args_model=AddArgs,
+///  ...     handler=add,
+///  ... )
+///  >>> result = await run_agent(model, msgs, tools=[tool.as_tool_def()])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "TypedTool")]
 pub struct PyTypedTool {

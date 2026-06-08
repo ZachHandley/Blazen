@@ -31,9 +31,11 @@ use blazen_llm::{
 /// No API key is required.
 ///
 /// Example:
-///     >>> opts = MistralRsOptions("mistralai/Mistral-7B-Instruct-v0.3")
-///     >>> provider = MistralRsProvider(options=opts)
-///     >>> response = await provider.complete([ChatMessage.user("Hello!")])
+/// ```text
+///  >>> opts = MistralRsOptions("mistralai/Mistral-7B-Instruct-v0.3")
+///  >>> provider = MistralRsProvider(options=opts)
+///  >>> response = await provider.complete([ChatMessage.user("Hello!")])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "MistralRsProvider", from_py_object)]
 #[derive(Clone)]

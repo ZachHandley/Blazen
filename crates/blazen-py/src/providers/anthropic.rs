@@ -26,9 +26,11 @@ use blazen_llm::traits::Model;
 /// Both surfaces wrap the same Rust provider; use whichever you prefer.
 ///
 /// Example:
-///     >>> from blazen import AnthropicProvider, ProviderOptions, ChatMessage
-///     >>> p = AnthropicProvider(options=ProviderOptions(api_key="sk-ant-..."))
-///     >>> resp = await p.complete([ChatMessage.user("Hello!")])
+/// ```text
+///  >>> from blazen import AnthropicProvider, ProviderOptions, ChatMessage
+///  >>> p = AnthropicProvider(options=ProviderOptions(api_key="sk-ant-..."))
+///  >>> resp = await p.complete([ChatMessage.user("Hello!")])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "AnthropicProvider", from_py_object)]
 #[derive(Clone)]

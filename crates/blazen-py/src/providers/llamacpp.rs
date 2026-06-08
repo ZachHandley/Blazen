@@ -36,9 +36,11 @@ use blazen_llm::{
 /// callers can pre-warm by awaiting :meth:`load`.
 ///
 /// Example:
-///     >>> opts = LlamaCppOptions(model_path="/models/llama-3.2-1b-q4_k_m.gguf")
-///     >>> provider = LlamaCppProvider(options=opts)
-///     >>> response = await provider.complete([ChatMessage.user("Hello!")])
+/// ```text
+///  >>> opts = LlamaCppOptions(model_path="/models/llama-3.2-1b-q4_k_m.gguf")
+///  >>> provider = LlamaCppProvider(options=opts)
+///  >>> response = await provider.complete([ChatMessage.user("Hello!")])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "LlamaCppProvider", from_py_object)]
 #[derive(Clone)]

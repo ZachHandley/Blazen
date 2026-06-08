@@ -46,8 +46,10 @@ pub fn extract_inline_artifacts(content: &str) -> Vec<PyArtifact> {
 /// Returns ``None`` for unknown providers.
 ///
 /// Example:
-///     >>> env_var_for_provider("openai")
-///     'OPENAI_API_KEY'
+/// ```text
+///  >>> env_var_for_provider("openai")
+///  'OPENAI_API_KEY'
+/// ```
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn env_var_for_provider(provider: &str) -> Option<String> {

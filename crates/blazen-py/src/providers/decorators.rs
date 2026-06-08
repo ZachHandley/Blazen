@@ -44,9 +44,11 @@ type PinnedChunkStream = Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenErr
 /// `complete()` / `stream()` surface.
 ///
 /// Example:
-///     >>> base = Model.openai()
-///     >>> model = RetryModel(base, RetryConfig(max_retries=5))
-///     >>> response = await model.complete([ChatMessage.user("Hi")])
+/// ```text
+///  >>> base = Model.openai()
+///  >>> model = RetryModel(base, RetryConfig(max_retries=5))
+///  >>> response = await model.complete([ChatMessage.user("Hi")])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "RetryModel")]
 pub struct PyRetryModel {
@@ -133,9 +135,11 @@ impl PyRetryModel {
 /// Streaming requests are never cached and always pass through.
 ///
 /// Example:
-///     >>> base = Model.openai()
-///     >>> model = CachedModel(base, CacheConfig(ttl_seconds=600))
-///     >>> response = await model.complete([ChatMessage.user("Hi")])
+/// ```text
+///  >>> base = Model.openai()
+///  >>> model = CachedModel(base, CacheConfig(ttl_seconds=600))
+///  >>> response = await model.complete([ChatMessage.user("Hi")])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "CachedModel")]
 pub struct PyCachedModel {
@@ -223,10 +227,12 @@ impl PyCachedModel {
 /// `Model.with_fallback(...)`.
 ///
 /// Example:
-///     >>> primary = Model.openai()
-///     >>> backup = Model.anthropic()
-///     >>> model = FallbackModel(primary, backup)
-///     >>> response = await model.complete([ChatMessage.user("Hi")])
+/// ```text
+///  >>> primary = Model.openai()
+///  >>> backup = Model.anthropic()
+///  >>> model = FallbackModel(primary, backup)
+///  >>> response = await model.complete([ChatMessage.user("Hi")])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "FallbackModel")]
 pub struct PyFallbackModel {

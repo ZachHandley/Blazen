@@ -32,8 +32,10 @@ type PinnedChunkStream = Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenErr
 /// Options for a chat completion request.
 ///
 /// Example:
-///     >>> opts = ModelOptions(temperature=0.7, max_tokens=1000)
-///     >>> response = await model.complete(messages, opts)
+/// ```text
+///  >>> opts = ModelOptions(temperature=0.7, max_tokens=1000)
+///  >>> response = await model.complete(messages, opts)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ModelOptions")]
 #[derive(Debug, Default)]
@@ -102,13 +104,15 @@ impl PyModelOptions {
 /// provider, then call `complete()` to generate responses.
 ///
 /// Example:
-///     >>> model = Model.openai()
-///     >>> model = Model.anthropic()
-///     >>> model = Model.openrouter()
-///     >>>
-///     >>> response = await model.complete([
-///     ...     ChatMessage.user("What is 2+2?")
-///     ... ])
+/// ```text
+///  >>> model = Model.openai()
+///  >>> model = Model.anthropic()
+///  >>> model = Model.openrouter()
+///  >>>
+///  >>> response = await model.complete([
+///  ...     ChatMessage.user("What is 2+2?")
+///  ... ])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "Model", subclass, from_py_object)]
 #[derive(Clone)]
@@ -614,7 +618,9 @@ impl PyModel {
     ///     A new Model with retry behaviour.
     ///
     /// Example:
-    ///     >>> model = Model.openai(options=ProviderOptions(api_key="sk-...")).with_retry(RetryConfig(max_retries=5))
+    /// ```text
+    ///  >>> model = Model.openai(options=ProviderOptions(api_key="sk-...")).with_retry(RetryConfig(max_retries=5))
+    /// ```
     #[pyo3(signature = (config=None))]
     fn with_retry(slf: Bound<'_, Self>, config: Option<PyRef<'_, PyRetryConfig>>) -> Self {
         let retry_config = config.map(|c| c.inner.clone()).unwrap_or_default();
@@ -641,9 +647,11 @@ impl PyModel {
     ///     A new Model that falls back through the providers.
     ///
     /// Example:
-    ///     >>> primary = Model.openai(options=ProviderOptions(api_key="sk-..."))
-    ///     >>> backup = Model.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
-    ///     >>> model = Model.with_fallback([primary, backup])
+    /// ```text
+    ///  >>> primary = Model.openai(options=ProviderOptions(api_key="sk-..."))
+    ///  >>> backup = Model.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
+    ///  >>> model = Model.with_fallback([primary, backup])
+    /// ```
     #[staticmethod]
     fn with_fallback(models: Vec<Bound<'_, PyModel>>) -> PyResult<Self> {
         if models.is_empty() {
@@ -678,7 +686,9 @@ impl PyModel {
     ///     A new Model with caching enabled.
     ///
     /// Example:
-    ///     >>> model = Model.openai(options=ProviderOptions(api_key="sk-...")).with_cache(CacheConfig(ttl_seconds=600))
+    /// ```text
+    ///  >>> model = Model.openai(options=ProviderOptions(api_key="sk-...")).with_cache(CacheConfig(ttl_seconds=600))
+    /// ```
     #[pyo3(signature = (config=None))]
     fn with_cache(slf: Bound<'_, Self>, config: Option<PyRef<'_, PyCacheConfig>>) -> Self {
         let cache_config = config.map(|c| c.inner.clone()).unwrap_or_default();
@@ -708,11 +718,13 @@ impl PyModel {
     ///     and finish_reason attributes.
     ///
     /// Example:
-    ///     >>> response = await model.complete([
-    ///     ...     ChatMessage.system("You are helpful."),
-    ///     ...     ChatMessage.user("What is 2+2?"),
-    ///     ... ])
-    ///     >>> print(response.content)
+    /// ```text
+    ///  >>> response = await model.complete([
+    ///  ...     ChatMessage.system("You are helpful."),
+    ///  ...     ChatMessage.user("What is 2+2?"),
+    ///  ... ])
+    ///  >>> print(response.content)
+    /// ```
     #[pyo3(signature = (messages, options=None))]
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, ModelResponse]", imports = ("typing",)))]
     fn complete<'py>(
@@ -757,15 +769,19 @@ impl PyModel {
     ///         tools, and response format.
     ///
     /// Example (async iterator):
-    ///     >>> async for chunk in model.stream([ChatMessage.user("Hi!")]):
-    ///     ...     if chunk.delta:
-    ///     ...         print(chunk.delta, end="")
+    /// ```text
+    ///  >>> async for chunk in model.stream([ChatMessage.user("Hi!")]):
+    ///  ...     if chunk.delta:
+    ///  ...         print(chunk.delta, end="")
+    /// ```
     ///
     /// Example (callback):
-    ///     >>> def handle_chunk(chunk):
-    ///     ...     if chunk.delta:
-    ///     ...         print(chunk.delta, end="")
-    ///     >>> await model.stream([ChatMessage.user("Hi!")], handle_chunk)
+    /// ```text
+    ///  >>> def handle_chunk(chunk):
+    ///  ...     if chunk.delta:
+    ///  ...         print(chunk.delta, end="")
+    ///  >>> await model.stream([ChatMessage.user("Hi!")], handle_chunk)
+    /// ```
     #[pyo3(signature = (messages, on_chunk=None, options=None))]
     fn stream<'py>(
         &self,

@@ -75,9 +75,11 @@ impl From<TractResponse> for PyTractResponse {
 /// is unavailable for your target -- typically musl-libc Linux builds.
 ///
 /// Example:
-///     >>> opts = TractOptions(model_name="BGESmallENV15")
-///     >>> model = TractEmbedModel(options=opts)
-///     >>> response = await model.embed(["hello", "world"])
+/// ```text
+///  >>> opts = TractOptions(model_name="BGESmallENV15")
+///  >>> model = TractEmbedModel(options=opts)
+///  >>> response = await model.embed(["hello", "world"])
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "TractEmbedModel", from_py_object)]
 #[derive(Clone)]

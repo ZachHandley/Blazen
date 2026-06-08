@@ -15,9 +15,11 @@ use blazen_llm::FinishReason;
 /// provider string.
 ///
 /// Example:
-///     >>> normalized = response.finish_reason_normalized()
-///     >>> if normalized is not None and normalized.kind == "tool_calls":
-///     ...     handle_tool_calls(response.tool_calls)
+/// ```text
+///  >>> normalized = response.finish_reason_normalized()
+///  >>> if normalized is not None and normalized.kind == "tool_calls":
+///  ...     handle_tool_calls(response.tool_calls)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "FinishReason", frozen, from_py_object)]
 #[derive(Clone)]

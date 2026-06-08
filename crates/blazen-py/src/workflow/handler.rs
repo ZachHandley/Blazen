@@ -34,9 +34,11 @@ use crate::types::PyTokenUsage;
 /// iterate over intermediate events published by steps.
 ///
 /// Example:
-///     >>> handler = await wf.run(prompt="Hello")
-///     >>> result = await handler.result()
-///     >>> print(result.to_dict())
+/// ```text
+///  >>> handler = await wf.run(prompt="Hello")
+///  >>> result = await handler.result()
+///  >>> print(result.to_dict())
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "WorkflowHandler")]
 pub struct PyWorkflowHandler {
@@ -156,8 +158,10 @@ impl PyWorkflowHandler {
     ///     An async iterator of Events.
     ///
     /// Example:
-    ///     >>> async for event in handler.stream_events():
-    ///     ...     print(event.event_type, event.to_dict())
+    /// ```text
+    ///  >>> async for event in handler.stream_events():
+    ///  ...     print(event.event_type, event.to_dict())
+    /// ```
     fn stream_events(&self) -> PyEventStream {
         PyEventStream {
             stream: self.pre_stream.clone(),

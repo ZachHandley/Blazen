@@ -180,48 +180,56 @@ impl Clone for Inner {
 /// All I/O methods return awaitables.
 ///
 /// Example (built-in factory):
-///     >>> store = ContentStore.in_memory()
-///     >>> handle = await store.put(b"hello", kind=ContentKind.Other)
-///     >>> source = await store.resolve(handle)
-///     >>> source["type"]
-///     'base64'
+/// ```text
+///  >>> store = ContentStore.in_memory()
+///  >>> handle = await store.put(b"hello", kind=ContentKind.Other)
+///  >>> source = await store.resolve(handle)
+///  >>> source["type"]
+///  'base64'
+/// ```
 ///
 /// Example (subclass):
-///     >>> class S3ContentStore(ContentStore):
-///     ...     def __init__(self, bucket: str):
-///     ...         super().__init__()
-///     ...         self.bucket = bucket
-///     ...     async def put(self, body, hint): ...
-///     ...     async def resolve(self, handle): ...
-///     ...     async def fetch_bytes(self, handle): ...
+/// ```text
+///  >>> class S3ContentStore(ContentStore):
+///  ...     def __init__(self, bucket: str):
+///  ...         super().__init__()
+///  ...         self.bucket = bucket
+///  ...     async def put(self, body, hint): ...
+///  ...     async def resolve(self, handle): ...
+///  ...     async def fetch_bytes(self, handle): ...
+/// ```
 ///
 /// Example (streaming subclass):
-///     >>> class StreamingStore(ContentStore):
-///     ...     async def put(self, body, hint):
-///     ...         # `body` is a serde-tagged dict; the streaming variant
-///     ...         # exposes an AsyncByteIter under body["stream"].
-///     ...         if body["type"] == "stream":
-///     ...             async for chunk in body["stream"]:
-///     ...                 await self._sink.write(chunk)
-///     ...         else:
-///     ...             ...  # handle "bytes" / "url" / "local_path" / "provider_file"
-///     ...         return ContentHandle(...)
-///     ...     async def fetch_stream(self, handle):
-///     ...         # Yield chunks from an async generator; the runtime
-///     ...         # drives __anext__() and bridges into a Rust ByteStream.
-///     ...         async def gen():
-///     ...             async for chunk in self._source.iter(handle):
-///     ...                 yield chunk
-///     ...         return gen()
+/// ```text
+///  >>> class StreamingStore(ContentStore):
+///  ...     async def put(self, body, hint):
+///  ...         # `body` is a serde-tagged dict; the streaming variant
+///  ...         # exposes an AsyncByteIter under body["stream"].
+///  ...         if body["type"] == "stream":
+///  ...             async for chunk in body["stream"]:
+///  ...                 await self._sink.write(chunk)
+///  ...         else:
+///  ...             ...  # handle "bytes" / "url" / "local_path" / "provider_file"
+///  ...         return ContentHandle(...)
+///  ...     async def fetch_stream(self, handle):
+///  ...         # Yield chunks from an async generator; the runtime
+///  ...         # drives __anext__() and bridges into a Rust ByteStream.
+///  ...         async def gen():
+///  ...             async for chunk in self._source.iter(handle):
+///  ...                 yield chunk
+///  ...         return gen()
+/// ```
 ///
 /// Example (callback factory):
-///     >>> store = ContentStore.custom(
-///     ...     put=async_put_fn,
-///     ...     resolve=async_resolve_fn,
-///     ...     fetch_bytes=async_fetch_fn,
-///     ...     fetch_stream=async_fetch_stream_fn,  # may return bytes or AsyncIterator[bytes]
-///     ...     name="my_s3_store",
-///     ... )
+/// ```text
+///  >>> store = ContentStore.custom(
+///  ...     put=async_put_fn,
+///  ...     resolve=async_resolve_fn,
+///  ...     fetch_bytes=async_fetch_fn,
+///  ...     fetch_stream=async_fetch_stream_fn,  # may return bytes or AsyncIterator[bytes]
+///  ...     name="my_s3_store",
+///  ... )
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ContentStore", subclass, skip_from_py_object)]
 #[derive(Clone)]

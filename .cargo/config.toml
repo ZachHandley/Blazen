@@ -46,3 +46,15 @@ rustflags = [
     "-C", "link-arg=-Wl,--allow-multiple-definition",
     "-C", "link-arg=-Wl,--push-state,--no-as-needed,-lgomp,--pop-state",
 ]
+
+# `cargo test --doc --all-features` builds a merged-doctest binary via
+# `rustdoc --test`, which is a separate codegen + link phase from the
+# regular `rustc` builds above. `[target.<triple>] rustflags` does NOT
+# propagate to it, so without the duplicated flags here the doctest link
+# fails on the same protobuf / OpenMP symbol clashes that the rustc
+# rustflags above resolve for normal tests.
+[build]
+rustdocflags = [
+    "-C", "link-arg=-Wl,--allow-multiple-definition",
+    "-C", "link-arg=-Wl,--push-state,--no-as-needed,-lgomp,--pop-state",
+]

@@ -12,8 +12,10 @@ use blazen_llm::ResponseFormat;
 /// JSON-Schema-validated structured output.
 ///
 /// Example:
-///     >>> rf = ResponseFormat.json_schema("Person", {"type": "object", ...})
-///     >>> options = ModelOptions(response_format=rf.to_dict())
+/// ```text
+///  >>> rf = ResponseFormat.json_schema("Person", {"type": "object", ...})
+///  >>> options = ModelOptions(response_format=rf.to_dict())
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ResponseFormat", frozen, from_py_object)]
 #[derive(Clone)]

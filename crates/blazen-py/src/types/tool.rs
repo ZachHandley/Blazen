@@ -298,8 +298,10 @@ impl PyToolOutput {
 /// Returned in ``ModelResponse.tool_calls`` and ``StreamChunk.tool_calls``.
 ///
 /// Example:
-///     >>> for tc in response.tool_calls:
-///     ...     print(tc.id, tc.name, tc.arguments)
+/// ```text
+///  >>> for tc in response.tool_calls:
+///  ...     print(tc.id, tc.name, tc.arguments)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ToolCall", frozen, from_py_object)]
 #[derive(Clone)]
@@ -376,11 +378,13 @@ impl From<&ToolCall> for PyToolCall {
 /// without binding a handler --- e.g. building a request body manually.
 ///
 /// Example:
-///     >>> tool = ToolDefinition(
-///     ...     name="search",
-///     ...     description="Search the web",
-///     ...     parameters={"type": "object", "properties": {"query": {"type": "string"}}},
-///     ... )
+/// ```text
+///  >>> tool = ToolDefinition(
+///  ...     name="search",
+///  ...     description="Search the web",
+///  ...     parameters={"type": "object", "properties": {"query": {"type": "string"}}},
+///  ... )
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ToolDefinition", frozen, from_py_object)]
 #[derive(Clone)]

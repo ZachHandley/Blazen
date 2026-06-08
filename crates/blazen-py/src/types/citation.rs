@@ -9,8 +9,10 @@ use blazen_llm::types::Citation;
 /// grounding, Anthropic web search, etc.).
 ///
 /// Example:
-///     >>> for c in response.citations:
-///     ...     print(c.url, c.title, c.snippet)
+/// ```text
+///  >>> for c in response.citations:
+///  ...     print(c.url, c.title, c.snippet)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "Citation", frozen, from_py_object)]
 #[derive(Clone)]

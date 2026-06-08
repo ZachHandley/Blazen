@@ -47,9 +47,11 @@ impl From<PyJoinStrategy> for JoinStrategy {
 ///
 /// Construct one of the three variants via the classmethod factories:
 ///
-///     >>> LoopDecision.cont()           # run the inner stage again
-///     >>> LoopDecision.done()           # stop cleanly; the loop succeeds
-///     >>> LoopDecision.abort("reason")  # stop with an error
+/// ```text
+/// >>> LoopDecision.cont()           # run the inner stage again
+/// >>> LoopDecision.done()           # stop cleanly; the loop succeeds
+/// >>> LoopDecision.abort("reason")  # stop with an error
+/// ```
 ///
 /// (`cont` is named without a trailing underscore so it reads as
 /// ``LoopDecision.cont()``; ``continue`` is a Python keyword.)
@@ -124,8 +126,10 @@ impl PyLoopDecision {
 /// Wraps a `Workflow` with optional input mapping and conditional execution.
 ///
 /// Example:
-///     >>> ingest = Workflow("ingest", [extract_step])
-///     >>> stage = Stage(name="ingest", workflow=ingest)
+/// ```text
+///  >>> ingest = Workflow("ingest", [extract_step])
+///  >>> stage = Stage(name="ingest", workflow=ingest)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "Stage")]
 pub struct PyStage {
@@ -190,11 +194,13 @@ impl PyStage {
 /// `join_strategy` determines how results are collected.
 ///
 /// Example:
-///     >>> parallel = ParallelStage(
-///     ...     name="fanout",
-///     ...     branches=[stage_a, stage_b, stage_c],
-///     ...     join_strategy=JoinStrategy.WaitAll,
-///     ... )
+/// ```text
+///  >>> parallel = ParallelStage(
+///  ...     name="fanout",
+///  ...     branches=[stage_a, stage_b, stage_c],
+///  ...     join_strategy=JoinStrategy.WaitAll,
+///  ... )
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ParallelStage")]
 pub struct PyParallelStage {
@@ -266,17 +272,19 @@ pub(crate) enum PyLoopInner {
 /// returning a :class:`LoopDecision`.
 ///
 /// Example:
-///     >>> def keep_going(state, rounds):
-///     ...     if rounds >= 5:
-///     ...         return LoopDecision.done()
-///     ...     return LoopDecision.cont()
-///     >>>
-///     >>> refine = LoopStage(
-///     ...     name="refine",
-///     ...     max_iterations=10,
-///     ...     inner=refine_stage,
-///     ...     until=keep_going,
-///     ... )
+/// ```text
+///  >>> def keep_going(state, rounds):
+///  ...     if rounds >= 5:
+///  ...         return LoopDecision.done()
+///  ...     return LoopDecision.cont()
+///  >>>
+///  >>> refine = LoopStage(
+///  ...     name="refine",
+///  ...     max_iterations=10,
+///  ...     inner=refine_stage,
+///  ...     until=keep_going,
+///  ... )
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "LoopStage")]
 pub struct PyLoopStage {

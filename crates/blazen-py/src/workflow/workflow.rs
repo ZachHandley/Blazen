@@ -89,13 +89,15 @@ impl From<CoreSessionPausePolicy> for PySessionPausePolicy {
 /// (created with the `@step` decorator).
 ///
 /// Example:
-///     >>> @step
-///     ... async def echo(ctx, ev):
-///     ...     return StopEvent(result=ev.to_dict())
-///     >>>
-///     >>> wf = Workflow("echo-wf", [echo])
-///     >>> handler = await wf.run({"message": "hello"})
-///     >>> result = await handler.result()
+/// ```text
+///  >>> @step
+///  ... async def echo(ctx, ev):
+///  ...     return StopEvent(result=ev.to_dict())
+///  >>>
+///  >>> wf = Workflow("echo-wf", [echo])
+///  >>> handler = await wf.run({"message": "hello"})
+///  >>> result = await handler.result()
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "Workflow")]
 pub struct PyWorkflow {
@@ -304,8 +306,10 @@ impl PyWorkflow {
     ///     The :class:`WorkflowResult` produced by the workflow.
     ///
     /// Example:
-    ///     >>> result = await wf.run(prompt="Hello!")
-    ///     >>> print(result.result)
+    /// ```text
+    ///  >>> result = await wf.run(prompt="Hello!")
+    ///  >>> print(result.result)
+    /// ```
     ///
     /// Note:
     ///     This awaits the workflow to completion and resolves directly to
@@ -359,10 +363,12 @@ impl PyWorkflow {
     ///     A `WorkflowHandler` for awaiting results or streaming events.
     ///
     /// Example:
-    ///     >>> handler = await wf.run_with_handler(prompt="Hello!")
-    ///     >>> async for event in handler.stream_events():
-    ///     ...     print(event.event_type)
-    ///     >>> result = await handler.result()
+    /// ```text
+    ///  >>> handler = await wf.run_with_handler(prompt="Hello!")
+    ///  >>> async for event in handler.stream_events():
+    ///  ...     print(event.event_type)
+    ///  >>> result = await handler.result()
+    /// ```
     #[pyo3(signature = (**kwargs))]
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, WorkflowHandler]", imports = ("typing",)))]
     fn run_with_handler<'py>(
@@ -419,8 +425,10 @@ impl PyWorkflow {
     ///     A new `WorkflowHandler` for the resumed workflow.
     ///
     /// Example:
-    ///     >>> handler = await Workflow.resume(snapshot_json, [step1, step2])
-    ///     >>> result = await handler.result()
+    /// ```text
+    ///  >>> handler = await Workflow.resume(snapshot_json, [step1, step2])
+    ///  >>> result = await handler.result()
+    /// ```
     #[staticmethod]
     #[pyo3(signature = (snapshot_json, steps, timeout=None))]
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, WorkflowHandler]", imports = ("typing",)))]
@@ -482,16 +490,18 @@ impl PyWorkflow {
     ///     A new `WorkflowHandler` for the resumed workflow.
     ///
     /// Example:
-    ///     >>> class Blob:
-    ///     ...     def __init__(self, n: int) -> None:
-    ///     ...         self.n = n
-    ///     ...     def __blazen_serialize__(self) -> bytes:
-    ///     ...         return self.n.to_bytes(4, "big")
-    ///     ...     @classmethod
-    ///     ...     def __blazen_deserialize__(cls, data: bytes) -> "Blob":
-    ///     ...         return cls(int.from_bytes(data, "big"))
-    ///     >>>
-    ///     >>> handler = await Workflow.resume_with_session_refs(snap, [s])
+    /// ```text
+    ///  >>> class Blob:
+    ///  ...     def __init__(self, n: int) -> None:
+    ///  ...         self.n = n
+    ///  ...     def __blazen_serialize__(self) -> bytes:
+    ///  ...         return self.n.to_bytes(4, "big")
+    ///  ...     @classmethod
+    ///  ...     def __blazen_deserialize__(cls, data: bytes) -> "Blob":
+    ///  ...         return cls(int.from_bytes(data, "big"))
+    ///  >>>
+    ///  >>> handler = await Workflow.resume_with_session_refs(snap, [s])
+    /// ```
     #[staticmethod]
     #[pyo3(signature = (snapshot_json, steps, timeout=None))]
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, WorkflowHandler]", imports = ("typing",)))]
@@ -548,7 +558,9 @@ impl PyWorkflow {
     /// to ``Workflow(...)`` directly.
     ///
     /// Example:
-    ///     >>> wf = Workflow.builder("my-wf").step(my_step).timeout(60.0).build()
+    /// ```text
+    ///  >>> wf = Workflow.builder("my-wf").step(my_step).timeout(60.0).build()
+    /// ```
     #[staticmethod]
     fn builder(name: &str) -> super::builder::PyWorkflowBuilder {
         super::builder::PyWorkflowBuilder::with_name(name)

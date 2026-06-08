@@ -24,9 +24,11 @@ use blazen_llm::types::EmbeddingResponse;
 /// provider, then call `embed()` to generate embeddings.
 ///
 /// Example:
-///     >>> model = EmbeddingModel.openai(options=ProviderOptions(api_key="sk-..."))
-///     >>> response = await model.embed(["Hello", "World"])
-///     >>> print(response.embeddings)
+/// ```text
+///  >>> model = EmbeddingModel.openai(options=ProviderOptions(api_key="sk-..."))
+///  >>> response = await model.embed(["Hello", "World"])
+///  >>> print(response.embeddings)
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "EmbeddingModel", subclass, from_py_object)]
 #[derive(Clone)]
@@ -242,9 +244,11 @@ impl PyEmbeddingModel {
     ///     An EmbeddingResponse with embeddings, model, usage, and cost.
     ///
     /// Example:
-    ///     >>> response = await model.embed(["Hello", "World"])
-    ///     >>> print(len(response.embeddings))  # 2
-    ///     >>> print(len(response.embeddings[0]))  # dimensionality
+    /// ```text
+    ///  >>> response = await model.embed(["Hello", "World"])
+    ///  >>> print(len(response.embeddings))  # 2
+    ///  >>> print(len(response.embeddings[0]))  # dimensionality
+    /// ```
     #[gen_stub(override_return_type(type_repr = "typing.Coroutine[typing.Any, typing.Any, EmbeddingResponse]", imports = ("typing",)))]
     fn embed<'py>(&self, py: Python<'py>, texts: Vec<String>) -> PyResult<Bound<'py, PyAny>> {
         if let Some(ref inner) = self.inner {
@@ -288,8 +292,10 @@ impl PyEmbeddingModel {
     ///     options: Optional typed ``EmbedOptions`` object.
     ///
     /// Example:
-    ///     >>> model = EmbeddingModel.local()
-    ///     >>> model = EmbeddingModel.local(options=EmbedOptions(model_name="BGESmallENV15"))
+    /// ```text
+    ///  >>> model = EmbeddingModel.local()
+    ///  >>> model = EmbeddingModel.local(options=EmbedOptions(model_name="BGESmallENV15"))
+    /// ```
     #[staticmethod]
     #[pyo3(signature = (*, options=None))]
     fn local(options: Option<PyRef<'_, PyEmbedOptions>>) -> PyResult<Self> {
@@ -314,9 +320,11 @@ impl PyEmbeddingModel {
 /// timing, and provider-specific metadata.
 ///
 /// Example:
-///     >>> response = await model.embed(["Hello", "World"])
-///     >>> print(response.model)
-///     >>> print(len(response.embeddings))  # 2
+/// ```text
+///  >>> response = await model.embed(["Hello", "World"])
+///  >>> print(response.model)
+///  >>> print(len(response.embeddings))  # 2
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "EmbeddingResponse")]
 pub struct PyEmbeddingResponse {

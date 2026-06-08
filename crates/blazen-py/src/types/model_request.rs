@@ -16,11 +16,13 @@ use super::{PyChatMessage, PyToolDefinition};
 /// inspect, serialize, or hand off the full request body explicitly.
 ///
 /// Example:
-///     >>> req = ModelRequest(
-///     ...     messages=[ChatMessage.user("hi")],
-///     ...     temperature=0.0,
-///     ...     max_tokens=100,
-///     ... )
+/// ```text
+///  >>> req = ModelRequest(
+///  ...     messages=[ChatMessage.user("hi")],
+///  ...     temperature=0.0,
+///  ...     max_tokens=100,
+///  ... )
+/// ```
 #[gen_stub_pyclass]
 #[pyclass(name = "ModelRequest", from_py_object)]
 #[derive(Clone)]
