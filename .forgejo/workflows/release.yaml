@@ -234,8 +234,18 @@ jobs:
           # own crates.io-publish validation (large optional-dep surface).
           exclude: blazen-py,blazen-node,blazen-cabi,blazen-uniffi
           cargo-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
-          max-backoff-seconds: '300'
-          max-attempts-per-crate: '5'
+          # crates.io rate-limits brand-new crates at 1 per 10 MINUTES after an
+          # initial burst of 5. The first 0.6.x cut has ~15-20 brand-new crates,
+          # so the job must patiently wait out that cadence rather than give up:
+          # 700s backoff cap (> the 600s new-crate window) over 20 attempts means
+          # a single job rides the limit instead of dying mid-workspace. The
+          # cargo-publish-workspace action idempotent-SKIPS any crate@version
+          # already live on crates.io, so even if a job is killed, a re-dispatch
+          # RESUMES from where it left off (already-published crates are skipped,
+          # only the remaining ones are attempted). The instant, rate-limit-free
+          # safety net is the parallel publish-rust-zreg job (ZRegistry).
+          max-backoff-seconds: '700'
+          max-attempts-per-crate: '20'
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
@@ -244,6 +254,124 @@ jobs:
           mode: mark
           version: ${{ needs.version.outputs.version }}
           step: publish-rust
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+  publish-rust-zreg:
+    name: Publish Rust Crates (ZRegistry)
+    runs-on: ubuntu-latest
+    needs: version
+    # Independent, rate-limit-free mirror of publish-rust. ZRegistry
+    # (registry.blackleafdigital.com) has NO per-account publish rate limits,
+    # so every Blazen crate lands here in ONE shot regardless of crates.io's
+    # 1-new-crate-per-10-minutes cadence. Runs in parallel with publish-rust;
+    # neither blocks the other. create-release does NOT hard-depend on this job
+    # (a zreg hiccup must not block cutting the release), exactly like the
+    # crates.io publish-rust leg it mirrors.
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Check step status
+        id: check
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ needs.version.outputs.version }}
+          step: publish-rust-zreg
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Mint ZRegistry token
+        id: zregtoken
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/zregistry-token@main
+        with:
+          client-id: ${{ secrets.ZREGISTRY_CLIENT_ID }}
+          client-secret: ${{ secrets.ZREGISTRY_CLIENT_SECRET }}
+          scope: packages.publish
+
+      - name: Setup Rust
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
+        with:
+          sccache: true
+          sccache-s3-bucket: ${{ secrets.S3_BUCKET }}
+          sccache-s3-endpoint: https://${{ secrets.S3_ENDPOINT }}
+          sccache-s3-region: ${{ secrets.S3_REGION }}
+          sccache-s3-access-key-id: ${{ secrets.S3_ACCESS_KEY }}
+          sccache-s3-secret-access-key: ${{ secrets.S3_ACCESS_SECRET }}
+          sccache-key-prefix: sccache/blazen-publish-rust-zreg
+
+      - name: Configure ZRegistry Cargo registry credentials
+        if: steps.check.outputs.completed != 'true'
+        env:
+          ZREG_TOKEN: ${{ steps.zregtoken.outputs.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p ~/.cargo
+          # Cargo 1.74+ rejects authenticated third-party registries unless an
+          # explicit `credential-provider` is declared. The built-in
+          # `cargo:token` provider reads the token from credentials.toml
+          # verbatim and emits it as the Authorization header. ZRegistry's cargo
+          # adapter wants the RAW ZAuth JWT — NO `Bearer ` prefix (Forgejo
+          # required one; ZRegistry must NOT have it). setup-rust may have
+          # rewritten ~/.cargo/config.toml, so define the zreg registry here
+          # too rather than relying solely on the repo .cargo/config.toml.
+          cat > ~/.cargo/config.toml <<EOF
+          [registries.zreg]
+          index = "sparse+https://registry.blackleafdigital.com/cargo/"
+          credential-provider = "cargo:token"
+
+          [registry]
+          global-credential-providers = ["cargo:token"]
+          EOF
+          cat > ~/.cargo/credentials.toml <<EOF
+          [registries.zreg]
+          token = "${ZREG_TOKEN}"
+          EOF
+          chmod 600 ~/.cargo/credentials.toml
+
+      - name: Stamp version (re-point inter-crate deps forgejo -> zreg)
+        if: steps.check.outputs.completed != 'true'
+        # --registry-zreg version-stamps every manifest AND rewrites every
+        # `registry = "forgejo"` inter-crate dep to `registry = "zreg"`, so
+        # `cargo publish --registry zreg` resolves workspace siblings from
+        # ZRegistry. Do NOT use the default (crates.io) or --keep-forgejo-registry modes.
+        run: python3 scripts/stamp-version.py ${{ needs.version.outputs.version }} --registry-zreg
+
+      - name: Publish workspace to ZRegistry
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/cargo-publish-workspace@main
+        with:
+          version: ${{ needs.version.outputs.version }}
+          registry: zreg
+          sparse-index-url: https://registry.blackleafdigital.com/cargo
+          cargo-token: ${{ steps.zregtoken.outputs.token }}
+          # require-explicit-registry MUST stay false: Blazen crates carry no
+          # `publish = [...]` field (publish=null), and the action aborts under
+          # require-explicit-registry=true on any null-publish crate. `--registry
+          # zreg` already routes every publish to ZRegistry explicitly.
+          require-explicit-registry: 'false'
+          # SAME exclusion set as publish-rust (controlplane stays INCLUDED):
+          # blazen-py/-node are PyPI/npm bindings; blazen-cabi/-uniffi are FFI
+          # cdylibs with a large optional-dep surface still pending publish validation.
+          exclude: blazen-py,blazen-node,blazen-cabi,blazen-uniffi
+        env:
+          # Cargo prefers the env var over credentials.toml. ZRegistry's cargo
+          # adapter wants the RAW ZAuth JWT — NO `Bearer ` prefix. Both the env
+          # var and the on-disk credentials must agree.
+          CARGO_REGISTRIES_ZREG_TOKEN: ${{ steps.zregtoken.outputs.token }}
+
+      - name: Mark step complete
+        if: steps.check.outputs.completed != 'true'
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: mark
+          version: ${{ needs.version.outputs.version }}
+          step: publish-rust-zreg
           base-url: https://forge.blackleafdigital.com
           owner: BlackLeafDigital
           auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}

@@ -1,6 +1,22 @@
 [registries.forgejo]
 index = "sparse+https://forge.blackleafdigital.com/api/packages/BlackLeafDigital/cargo/"
 
+# ZRegistry (registry.blackleafdigital.com) — the Z-stack private cargo registry.
+# Unlike PUBLIC crates.io it has NO per-account publish rate limits, so the
+# release pipeline's `publish-rust-zreg` leg lands every Blazen crate here in
+# addition to crates.io. The built-in `cargo:token` credential provider reads
+# CARGO_REGISTRIES_ZREG_TOKEN (or ~/.cargo/credentials.toml) and emits the RAW
+# ZAuth JWT as the Authorization header — NO `Bearer ` prefix (Forgejo wanted
+# one; ZRegistry's cargo adapter must NOT have it).
+[registries.zreg]
+index = "sparse+https://registry.blackleafdigital.com/cargo/"
+credential-provider = "cargo:token"
+
+# Self-contained credential provider so CI / Docker (which lack a global
+# ~/.cargo/config.toml) authenticate via CARGO_REGISTRIES_<NAME>_TOKEN env vars.
+[registry]
+global-credential-providers = ["cargo:token"]
+
 # whisper-rs-sys and llama-cpp-sys-2 each vendor their own copies of
 # ggml/gguf sources. When `local-all` enables both `whispercpp` and
 # `llamacpp` in the same final-link unit (e.g. blazen-py / blazen-node /
