@@ -1,0 +1,98 @@
+name: Resume Release (cron)
+
+# Unattended completion of a rate-limited crates.io publish.
+#
+# crates.io rate-limits brand-new crates (1 per 10 min after a burst of 5), so
+# a ~40-crate workspace can't publish in a single release.yaml run. publish-rust
+# now does a short burst then exits fast (see release.yaml: max-attempts-per-crate=3,
+# max-rate-limit-wait-seconds=90). This workflow OWNS the 10-minute cadence: every
+# tick it finds the latest in-flight release (highest temp/v* branch), checks the
+# `release-complete` marker (same ci-step-status mechanism release.yaml uses), and
+# if UNSET re-dispatches release.yaml on that temp branch. cargo-publish-workspace
+# idempotent-SKIPS already-live crates, so a redundant dispatch is always safe.
+
+on:
+  schedule:
+    - cron: '*/10 * * * *'
+  workflow_dispatch: {}
+
+# One tick at a time — don't let overlapping cron fires stampede the dispatch.
+concurrency:
+  group: resume-release
+  cancel-in-progress: false
+
+jobs:
+  resume:
+    name: Resume in-flight release if incomplete
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Find latest in-flight release version
+        id: find
+        shell: bash
+        run: |
+          set -euo pipefail
+          # List temp/v* branches; pick the highest v{X}. No temp/v* -> nothing
+          # in flight -> no-op (downstream steps gate on version != '').
+          RESP=$(curl -s \
+            -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+            "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/branches?limit=100")
+          VERSION=$(printf '%s' "$RESP" | python3 -c '
+          import sys, json
+          try:
+              branches = json.load(sys.stdin)
+          except Exception:
+              branches = []
+          versions = []
+          for b in branches:
+              name = b.get("name", "") if isinstance(b, dict) else ""
+              if name.startswith("temp/v"):
+                  versions.append(name[len("temp/v"):])
+          def key(v):
+              return [int(p) if p.isdigit() else 0 for p in v.split(".")]
+          if versions:
+              versions.sort(key=key)
+              print(versions[-1])
+          ')
+          if [ -z "$VERSION" ]; then
+            echo "No temp/v* branches — nothing in flight."
+          else
+            echo "Latest in-flight release version: ${VERSION} (branch temp/v${VERSION})"
+          fi
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+      - name: Check release-complete marker
+        id: released
+        if: steps.find.outputs.version != ''
+        # Reused verbatim from release.yaml's "Check if already released" step:
+        # same action, owner, base-url, auth, step — only `version` differs.
+        uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
+        with:
+          mode: check
+          version: ${{ steps.find.outputs.version }}
+          step: release-complete
+          base-url: https://forge.blackleafdigital.com
+          owner: BlackLeafDigital
+          auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
+
+      - name: Re-dispatch release.yaml if incomplete
+        if: steps.find.outputs.version != '' && steps.released.outputs.completed != 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.find.outputs.version }}"
+          echo "release-complete marker UNSET for v${VERSION} — re-dispatching release.yaml on temp/v${VERSION}."
+          # Mirrors the existing release.yaml dispatch curl (build-artifacts +
+          # mirror-github jobs): same auth header + dispatches endpoint.
+          curl -s -X POST \
+            -H "Authorization: token ${{ secrets.FORGEJO_ACTIONS_TOKEN }}" \
+            -H "Content-Type: application/json" \
+            "https://forge.blackleafdigital.com/api/v1/repos/${{ github.repository }}/actions/workflows/release.yaml/dispatches" \
+            -d "{\"ref\": \"refs/heads/temp/v${VERSION}\", \"inputs\": {\"version\": \"${VERSION}\"}}"
+
+      - name: No-op (complete or nothing in flight)
+        if: steps.find.outputs.version == '' || steps.released.outputs.completed == 'true'
+        run: |
+          echo "Nothing to resume (no in-flight temp/v* branch, or release-complete marker already set)."
