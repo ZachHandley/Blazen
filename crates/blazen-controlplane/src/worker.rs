@@ -1152,14 +1152,15 @@ impl Worker {
             }
             ServerToWorker::Assignment(a) => {
                 // P4: ensure the LLM resolver chain knows the place this
-                // worker serves, then pre-warm the control-plane key cache
-                // so the (synchronous) resolver hit during the assignment
-                // finds keys already fetched. The worker cannot read the
-                // assignment's declared providers, so pre-warm from the
-                // configured `prewarm_providers` list. Best-effort: a
-                // pre-warm failure (no session, timeout) is non-fatal — the
-                // resolver simply falls through to env.
-                self.prewarm_keys_for_assignment().await;
+                // worker serves (cheap, synchronous, non-blocking), then
+                // pre-warm the control-plane key cache INSIDE the spawned
+                // assignment task — see `spawn_assignment`. The pre-warm
+                // round-trip MUST NOT run on this pump loop: its
+                // `KeyResponse` is delivered by this very loop, so awaiting
+                // it here would deadlock until the pre-warm timeout. The
+                // worker cannot read the assignment's declared providers, so
+                // pre-warm from the configured `prewarm_providers` list.
+                self.set_current_place_for_assignment();
                 self.spawn_assignment(a, Arc::clone(&handler), Arc::clone(&outbox));
             }
             ServerToWorker::Offer(o) => {
@@ -1174,6 +1175,7 @@ impl Worker {
                     return;
                 }
                 if matches!(decision, OfferOutcome::Claim) {
+                    self.set_current_place_for_assignment();
                     self.spawn_assignment(o.assignment, handler, outbox);
                 }
             }
@@ -1217,15 +1219,15 @@ impl Worker {
         }
     }
 
-    /// Pre-warm the control-plane key cache for this worker's configured
-    /// `prewarm_providers` ahead of running an assignment.
+    /// Point the process-global [`blazen_llm`] resolver scope at the place
+    /// this worker serves, ahead of running an assignment.
     ///
-    /// Sets the LLM resolver's current place to the worker's configured
-    /// place (so the cached key is attributed to the right tenant) and
-    /// fetches each configured provider's key over the live session. A
-    /// no-op when no providers are configured. Failures are swallowed —
-    /// the resolver chain falls through to env if a key can't be warmed.
-    async fn prewarm_keys_for_assignment(&self) {
+    /// Cheap and synchronous (a single `RwLock` write) so it is safe to
+    /// call directly on the inbound pump. The actual key pre-warm — which
+    /// blocks on a session round-trip — runs inside the spawned assignment
+    /// task (see [`Self::spawn_assignment`]); doing it here would deadlock
+    /// the pump, since the pump is what delivers the `KeyResponse`.
+    fn set_current_place_for_assignment(&self) {
         if self.config.prewarm_providers.is_empty() {
             return;
         }
@@ -1233,16 +1235,26 @@ impl Worker {
         // on the process-global resolver scope so the CP resolver (and any
         // other place-aware resolver) sees it.
         blazen_llm::set_current_place(self.config.place.clone());
+    }
 
-        let place = self.config.place.as_deref().unwrap_or_default();
-        if let Err(e) = self
-            .state
-            .cp_keys
-            .pre_warm(
-                place,
-                &self.config.prewarm_providers,
-                CP_KEY_PREWARM_TIMEOUT,
-            )
+    /// Pre-warm the control-plane key cache for this worker's configured
+    /// `prewarm_providers`. Run from inside the spawned assignment task,
+    /// BEFORE the handler executes, so the synchronous resolver hit during
+    /// the assignment finds keys already fetched — while the inbound pump
+    /// stays free to deliver the `KeyResponse` frames this awaits.
+    ///
+    /// A no-op when no providers are configured. Failures are swallowed —
+    /// the resolver chain falls through to env if a key can't be warmed.
+    async fn prewarm_keys(
+        cp_keys: &crate::client::ControlPlaneKeyClient,
+        place: Option<&str>,
+        providers: &[String],
+    ) {
+        if providers.is_empty() {
+            return;
+        }
+        if let Err(e) = cp_keys
+            .pre_warm(place.unwrap_or_default(), providers, CP_KEY_PREWARM_TIMEOUT)
             .await
         {
             // Non-fatal: no bound session / closed channel. The resolver
@@ -1270,7 +1282,19 @@ impl Worker {
         let deadline = assignment.deadline_ms.map(Duration::from_millis);
         let outbox_for_ctx = Arc::clone(&outbox);
 
+        // Pre-warm inputs captured into the task. The round-trip runs here
+        // (not on the pump) so the pump can deliver the `KeyResponse` it
+        // awaits — see `set_current_place_for_assignment`.
+        let cp_keys = self.state.cp_keys.clone();
+        let prewarm_place = self.config.place.clone();
+        let prewarm_providers = self.config.prewarm_providers.clone();
+
         tokio::spawn(async move {
+            // P4: warm the control-plane key cache before the handler runs,
+            // so a synchronous `resolve_api_key` hit inside the handler is
+            // served from cache. Best-effort and non-fatal.
+            Self::prewarm_keys(&cp_keys, prewarm_place.as_deref(), &prewarm_providers).await;
+
             let ctx = AssignmentContext {
                 sink: outbox_for_ctx,
                 run_id,

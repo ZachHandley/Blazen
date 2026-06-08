@@ -138,6 +138,19 @@ impl EnvFileKeyStore {
         }
     }
 
+    /// Construct a store whose file source is rooted at `keys_dir` (keys
+    /// live at `<keys_dir>/<place>/<provider>`). The env-variable source is
+    /// also active and serves as a fallback when no file is present. Useful
+    /// for deployments (and tests) that materialise per-place keys on disk
+    /// without going through the `BLAZEN_PLACE_KEYS_DIR` env var.
+    #[must_use]
+    pub fn with_keys_dir(keys_dir: impl Into<PathBuf>) -> Self {
+        Self {
+            keys_dir: Some(keys_dir.into()),
+            env_override: None,
+        }
+    }
+
     /// Construct a store from the ambient environment: reads
     /// `BLAZEN_PLACE_KEYS_DIR` to decide whether the file source is
     /// active. The env-variable source is always active.
