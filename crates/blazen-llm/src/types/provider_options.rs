@@ -6,6 +6,8 @@
 
 use serde::{Deserialize, Serialize};
 
+use crate::providers::factory::FallbackPolicy;
+
 // ---------------------------------------------------------------------------
 // Base
 // ---------------------------------------------------------------------------
@@ -25,6 +27,12 @@ pub struct ProviderOptions {
     /// Override the provider's base URL.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub base_url: Option<String>,
+    /// Remote-vs-local fallback policy, consumed by
+    /// [`build_model`](crate::providers::factory::build_model). `None` is
+    /// treated as [`FallbackPolicy::Never`] (the standalone default); skipped on
+    /// serialization so existing serialized options are byte-identical.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fallback_policy: Option<FallbackPolicy>,
 }
 
 // ---------------------------------------------------------------------------
