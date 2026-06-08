@@ -247,9 +247,10 @@ pub async fn handle_describe_workflow(
 
     // The caller's server-derived place. Unauthenticated callers fall back to
     // the default place — they can only see default-place runs.
-    let caller_place = identity
-        .as_ref()
-        .map_or_else(|| crate::protocol::DEFAULT_PLACE.to_string(), |id| id.place.clone());
+    let caller_place = identity.as_ref().map_or_else(
+        || crate::protocol::DEFAULT_PLACE.to_string(),
+        |id| id.place.clone(),
+    );
 
     let Some(snap) = shared.queue.describe(req.run_id) else {
         return Err(Status::not_found(format!("unknown run {}", req.run_id)));
@@ -297,9 +298,10 @@ pub async fn handle_list_workers(
 
     // The caller's server-derived place. Unauthenticated callers see only the
     // default place's workers.
-    let caller_place = identity
-        .as_ref()
-        .map_or_else(|| crate::protocol::DEFAULT_PLACE.to_string(), |id| id.place.clone());
+    let caller_place = identity.as_ref().map_or_else(
+        || crate::protocol::DEFAULT_PLACE.to_string(),
+        |id| id.place.clone(),
+    );
 
     let workers: Vec<WorkerInfoWire> = shared
         .registry
@@ -411,7 +413,9 @@ mod tests {
     /// Build a fresh in-process `SharedState` (registry + queue + admission)
     /// via the server constructor.
     fn fresh_shared() -> Arc<SharedState> {
-        crate::server::ControlPlaneServer::new("cp-test").shared.clone()
+        crate::server::ControlPlaneServer::new("cp-test")
+            .shared
+            .clone()
     }
 
     fn identity_for(place: &str) -> PeerIdentity {
@@ -486,7 +490,10 @@ mod tests {
             )
             .await;
         assert!(
-            matches!(outcome, SubmitOutcome::Queued { .. } | SubmitOutcome::Pushed { .. }),
+            matches!(
+                outcome,
+                SubmitOutcome::Queued { .. } | SubmitOutcome::Pushed { .. }
+            ),
             "submit should queue or push, got {outcome:?}"
         );
         run_id
@@ -554,9 +561,10 @@ mod tests {
         let shared = fresh_shared();
         let run_id = submit_run(&shared, "place-a").await;
 
-        let resp = handle_describe_workflow(&shared, Some(identity_for("place-a")), describe_req(run_id))
-            .await
-            .expect("describe ok");
+        let resp =
+            handle_describe_workflow(&shared, Some(identity_for("place-a")), describe_req(run_id))
+                .await
+                .expect("describe ok");
         let snap = decode_snapshot(&resp);
         assert_eq!(snap.run_id, run_id);
         assert_eq!(snap.place, "place-a");
@@ -569,19 +577,23 @@ mod tests {
 
         // A place-A caller describing a place-B run must get NOT_FOUND (no
         // existence leakage), NOT PermissionDenied.
-        let err = handle_describe_workflow(&shared, Some(identity_for("place-a")), describe_req(run_id))
-            .await
-            .expect_err("cross-place describe must fail");
+        let err =
+            handle_describe_workflow(&shared, Some(identity_for("place-a")), describe_req(run_id))
+                .await
+                .expect_err("cross-place describe must fail");
         assert_eq!(err.code(), tonic::Code::NotFound);
     }
 
     #[tokio::test]
     async fn describe_unknown_run_is_not_found() {
         let shared = fresh_shared();
-        let err =
-            handle_describe_workflow(&shared, Some(identity_for("place-a")), describe_req(Uuid::new_v4()))
-                .await
-                .expect_err("unknown run must fail");
+        let err = handle_describe_workflow(
+            &shared,
+            Some(identity_for("place-a")),
+            describe_req(Uuid::new_v4()),
+        )
+        .await
+        .expect_err("unknown run must fail");
         assert_eq!(err.code(), tonic::Code::NotFound);
     }
 }

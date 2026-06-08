@@ -99,11 +99,8 @@ pub trait LocalModelFactory: Send + Sync {
     ///
     /// Returns a [`BlazenError`] if the local model cannot be constructed
     /// (e.g. weights unavailable, device out of memory).
-    async fn build_local(
-        &self,
-        provider: &str,
-        model: &str,
-    ) -> Result<Box<dyn Model>, BlazenError>;
+    async fn build_local(&self, provider: &str, model: &str)
+    -> Result<Box<dyn Model>, BlazenError>;
 }
 
 /// The standalone default probe: no model is ever locally servable.
@@ -185,15 +182,20 @@ where
 }
 
 #[cfg(test)]
+// SERIAL is a std `Mutex<()>` held across `.await` to serialize tests that
+// touch process-global resolver state. Switching to a tokio Mutex would
+// require every test fn to also be `async fn` for `.lock().await` and adds
+// no real safety here (the guard carries no data and the lock is only ever
+// used for cross-test exclusion, not for protecting an inner value across
+// the await).
+#[allow(clippy::await_holding_lock)]
 mod tests {
     use std::pin::Pin;
     use std::sync::atomic::{AtomicBool, Ordering};
 
     use futures_util::Stream;
 
-    use super::{
-        build_model, FallbackPolicy, LocalModelFactory, LocalModelProbe, NoLocalModels,
-    };
+    use super::{FallbackPolicy, LocalModelFactory, LocalModelProbe, NoLocalModels, build_model};
     use crate::error::BlazenError;
     use crate::keys::{clear_key_resolvers, set_current_place};
     use crate::traits::Model;
@@ -228,10 +230,8 @@ mod tests {
         async fn stream(
             &self,
             _request: ModelRequest,
-        ) -> Result<
-            Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>,
-            BlazenError,
-        > {
+        ) -> Result<Pin<Box<dyn Stream<Item = Result<StreamChunk, BlazenError>> + Send>>, BlazenError>
+        {
             Err(BlazenError::unsupported("mock"))
         }
     }
@@ -284,7 +284,9 @@ mod tests {
 
     #[tokio::test]
     async fn never_policy_no_key_errors_without_calling_remote() {
-        let _g = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _g = SERIAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         reset();
 
         let remote_called = AtomicBool::new(false);
@@ -297,19 +299,26 @@ mod tests {
             &NeverLocalFactory,
             |_key, _opts| {
                 remote_called.store(true, Ordering::SeqCst);
-                Ok(Box::new(MockModel { id: "remote".into() }) as Box<dyn Model>)
+                Ok(Box::new(MockModel {
+                    id: "remote".into(),
+                }) as Box<dyn Model>)
             },
         )
         .await;
 
         assert!(matches!(result, Err(BlazenError::Auth { .. })));
-        assert!(!remote_called.load(Ordering::SeqCst), "remote must not be built");
+        assert!(
+            !remote_called.load(Ordering::SeqCst),
+            "remote must not be built"
+        );
         reset();
     }
 
     #[tokio::test]
     async fn when_no_key_servable_builds_local() {
-        let _g = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _g = SERIAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         reset();
 
         let factory = RecordingLocalFactory {
@@ -337,7 +346,9 @@ mod tests {
 
     #[tokio::test]
     async fn when_no_key_servable_uses_pinned_model() {
-        let _g = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _g = SERIAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         reset();
 
         let opts = ProviderOptions {
@@ -365,7 +376,9 @@ mod tests {
 
     #[tokio::test]
     async fn when_no_key_not_servable_errors() {
-        let _g = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _g = SERIAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         reset();
 
         let result = build_model(
@@ -387,7 +400,9 @@ mod tests {
 
     #[tokio::test]
     async fn key_present_builds_remote_regardless_of_policy() {
-        let _g = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _g = SERIAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         reset();
 
         for policy in [
@@ -410,7 +425,9 @@ mod tests {
                 &NeverLocalFactory,
                 |key, _opts| {
                     assert_eq!(key, "sk-explicit");
-                    Ok(Box::new(MockModel { id: "remote".into() }) as Box<dyn Model>)
+                    Ok(Box::new(MockModel {
+                        id: "remote".into(),
+                    }) as Box<dyn Model>)
                 },
             )
             .await;

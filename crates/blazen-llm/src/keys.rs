@@ -110,7 +110,10 @@ pub fn set_current_place(place: Option<String>) {
 /// while it was held.
 #[must_use]
 pub fn current_place() -> Option<String> {
-    CURRENT_PLACE.read().expect("current place poisoned").clone()
+    CURRENT_PLACE
+        .read()
+        .expect("current place poisoned")
+        .clone()
 }
 
 /// Well-known provider names and their corresponding environment variables.
@@ -271,7 +274,9 @@ mod tests {
 
     #[test]
     fn empty_chain_preserves_explicit_and_env_behavior() {
-        let _g = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _g = SERIAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         reset();
         // Explicit still wins with an empty chain.
         assert_eq!(
@@ -285,7 +290,9 @@ mod tests {
 
     #[test]
     fn explicit_beats_resolver() {
-        let _g = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _g = SERIAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         reset();
         install_key_resolvers(vec![Arc::new(MockResolver {
             provider: "openai".into(),
@@ -301,7 +308,9 @@ mod tests {
 
     #[test]
     fn resolver_beats_env() {
-        let _g = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _g = SERIAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         reset();
         // `fal` has an env var (FAL_KEY); the resolver must win over it even
         // when set, and supply a key when it is not.
@@ -310,16 +319,15 @@ mod tests {
             place: None,
             key: "sk-resolver-fal".into(),
         })]);
-        assert_eq!(
-            resolve_api_key("fal", None).unwrap(),
-            "sk-resolver-fal"
-        );
+        assert_eq!(resolve_api_key("fal", None).unwrap(), "sk-resolver-fal");
         reset();
     }
 
     #[test]
     fn first_resolver_in_chain_wins() {
-        let _g = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _g = SERIAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         reset();
         install_key_resolvers(vec![
             Arc::new(MockResolver {
@@ -339,7 +347,9 @@ mod tests {
 
     #[test]
     fn resolver_receives_current_place() {
-        let _g = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _g = SERIAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         reset();
         install_key_resolvers(vec![
             Arc::new(MockResolver {
@@ -362,7 +372,9 @@ mod tests {
 
     #[test]
     fn clear_restores_env_terminal() {
-        let _g = SERIAL.lock().unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _g = SERIAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         reset();
         install_key_resolvers(vec![Arc::new(MockResolver {
             provider: "nonexistent".into(),

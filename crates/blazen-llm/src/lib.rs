@@ -69,8 +69,8 @@ pub mod http;
 mod http_reqwest;
 pub mod keys;
 pub use keys::{
-    clear_key_resolvers, current_place, install_key_resolvers, push_key_resolver,
-    resolve_api_key, set_current_place, KeyResolver, KeySource,
+    KeyResolver, KeySource, clear_key_resolvers, current_place, install_key_resolvers,
+    push_key_resolver, resolve_api_key, set_current_place,
 };
 pub(crate) mod sleep;
 #[cfg(all(feature = "reqwest", not(target_arch = "wasm32")))]
@@ -124,9 +124,6 @@ pub use providers::capabilities::{
     MusicProvider, SttProvider, ThreeDProvider, TtsProvider, VcProvider, VideoProvider,
 };
 pub use providers::custom::{ApiProtocol, CustomProvider, CustomProviderHandle};
-pub use providers::factory::{
-    build_model, FallbackPolicy, LocalModelFactory, LocalModelProbe, NoLocalModels,
-};
 #[cfg(any(
     all(target_arch = "wasm32", not(target_os = "wasi")),
     feature = "reqwest",
@@ -142,6 +139,9 @@ pub use providers::defaults::{
     ImageGenerationProviderDefaults, ImageUpscaleProviderDefaults, ProviderDefaults,
     ThreeDProviderDefaults, TranscriptionProviderDefaults, VideoProviderDefaults,
     VoiceCloningProviderDefaults,
+};
+pub use providers::factory::{
+    FallbackPolicy, LocalModelFactory, LocalModelProbe, NoLocalModels, build_model,
 };
 pub use providers::root::{BaseProvider, CapabilityKind, ProviderMetadata};
 

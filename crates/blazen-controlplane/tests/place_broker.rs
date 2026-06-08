@@ -272,8 +272,9 @@ async fn flow_cp_brokered() {
     // Per-place key store seeded on disk: `<dir>/acme/openai`.
     let keys_dir = tempfile::tempdir().expect("tempdir");
     seed_key(keys_dir.path(), BROKER_PLACE, BROKER_PROVIDER, BROKERED_KEY).await;
-    let key_store: Arc<dyn KeyStore> =
-        Arc::new(EnvFileKeyStore::with_keys_dir(keys_dir.path().to_path_buf()));
+    let key_store: Arc<dyn KeyStore> = Arc::new(EnvFileKeyStore::with_keys_dir(
+        keys_dir.path().to_path_buf(),
+    ));
 
     // Sanity: the store resolves the seeded key for the right place and
     // refuses it for a different place (tenant isolation at the store).

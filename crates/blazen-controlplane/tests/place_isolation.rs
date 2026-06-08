@@ -213,8 +213,9 @@ async fn place_isolation_routing_and_key_scoping() {
     )
     .await
     .expect("seed place-b key");
-    let key_store: Arc<dyn KeyStore> =
-        Arc::new(EnvFileKeyStore::with_keys_dir(keys_dir.path().to_path_buf()));
+    let key_store: Arc<dyn KeyStore> = Arc::new(EnvFileKeyStore::with_keys_dir(
+        keys_dir.path().to_path_buf(),
+    ));
 
     let addr = ephemeral_addr().await;
     let server = ControlPlaneServer::new("cp-isolation").with_key_store(key_store);

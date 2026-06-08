@@ -39,7 +39,7 @@ use blazen_llm::{
 use futures_util::Stream;
 
 use crate::model_protocol::{
-    ChatMessageWire, CompleteRequest, IsLoadedRequest, RpcError, MODEL_ENVELOPE_VERSION,
+    ChatMessageWire, CompleteRequest, IsLoadedRequest, MODEL_ENVELOPE_VERSION, RpcError,
 };
 use crate::server::model_manager::ManagerHandle;
 
@@ -277,7 +277,9 @@ fn rpc_error_to_blazen(err: RpcError) -> BlazenError {
             BlazenError::internal(format!("local model not found: {}", err.message))
         }
         RPC_ERR_UNSUPPORTED => BlazenError::unsupported(err.message),
-        RPC_ERR_QUOTA => BlazenError::internal(format!("local model quota exceeded: {}", err.message)),
+        RPC_ERR_QUOTA => {
+            BlazenError::internal(format!("local model quota exceeded: {}", err.message))
+        }
         RPC_ERR_INCOMPATIBLE => {
             BlazenError::internal(format!("local model protocol mismatch: {}", err.message))
         }
@@ -323,10 +325,7 @@ mod tests {
         ) -> Result<crate::model_protocol::UnloadResponse, RpcError> {
             self.inner.unload(req).await
         }
-        async fn is_loaded(
-            &self,
-            _req: IsLoadedRequest,
-        ) -> Result<IsLoadedResponse, RpcError> {
+        async fn is_loaded(&self, _req: IsLoadedRequest) -> Result<IsLoadedResponse, RpcError> {
             Ok(IsLoadedResponse {
                 envelope_version: MODEL_ENVELOPE_VERSION,
                 loaded: self.loaded,
@@ -432,7 +431,11 @@ mod tests {
     async fn probe_reports_servable_when_loaded() {
         let handle = ConfigurableHandle::new(true);
         let probe = ManagerProbe::new(handle);
-        assert!(probe.is_locally_servable("anything", Some("llama-3-8b")).await);
+        assert!(
+            probe
+                .is_locally_servable("anything", Some("llama-3-8b"))
+                .await
+        );
         // model = None falls through to the default id and is still servable.
         assert!(probe.is_locally_servable("anything", None).await);
     }
@@ -441,7 +444,11 @@ mod tests {
     async fn probe_reports_not_servable_when_unloaded() {
         let handle = ConfigurableHandle::new(false);
         let probe = ManagerProbe::new(handle);
-        assert!(!probe.is_locally_servable("anything", Some("llama-3-8b")).await);
+        assert!(
+            !probe
+                .is_locally_servable("anything", Some("llama-3-8b"))
+                .await
+        );
     }
 
     #[tokio::test]
