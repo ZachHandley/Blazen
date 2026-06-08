@@ -50,7 +50,7 @@
 use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::time::Duration;
 
 use async_trait::async_trait;
@@ -104,6 +104,14 @@ pub struct WorkerConfig {
     /// Filtered against job-side [`crate::protocol::Assignment::selector`]
     /// inside admission. Empty by default.
     pub labels: BTreeMap<String, String>,
+    /// Worker-local provider API keys, keyed by provider name (e.g.
+    /// `"fal"`, `"openai"`). Installed as the FIRST link in the
+    /// [`blazen_llm::KeyResolver`] cascade at worker start, so they take
+    /// precedence over any control-plane-shared or environment keys. Not
+    /// place-scoped — a worker serves whatever place the session declares.
+    /// `BTreeMap` for deterministic order. Empty by default (the worker
+    /// installs no resolver and the prior explicit-then-env behaviour holds).
+    pub provider_keys: BTreeMap<String, String>,
     /// Worker-side taints surfaced in [`WorkerHello::taints`]. Jobs without
     /// a matching toleration are not scheduled here. Empty by default.
     pub taints: Vec<WorkerTaint>,
@@ -150,6 +158,7 @@ impl WorkerConfig {
             capabilities: Vec::new(),
             tags: BTreeMap::new(),
             labels: BTreeMap::new(),
+            provider_keys: BTreeMap::new(),
             taints: Vec::new(),
             descriptors: Vec::new(),
             admission: AdmissionMode::Fixed { max_in_flight: 1 },
@@ -201,6 +210,22 @@ impl WorkerConfig {
     #[must_use]
     pub fn with_label(mut self, key: impl Into<String>, value: impl Into<String>) -> Self {
         self.labels.insert(key.into(), value.into());
+        self
+    }
+
+    /// Insert a worker-local provider API key (e.g. `("fal", "key-…")`).
+    ///
+    /// At worker start these are installed as the first link in the
+    /// [`blazen_llm::KeyResolver`] cascade, so they win over
+    /// control-plane-shared and environment keys. The key value is never
+    /// logged.
+    #[must_use]
+    pub fn with_provider_key(
+        mut self,
+        provider: impl Into<String>,
+        key: impl Into<String>,
+    ) -> Self {
+        self.provider_keys.insert(provider.into(), key.into());
         self
     }
 
@@ -605,6 +630,12 @@ struct WorkerState {
     /// Shutdown signal for the whole worker — drops the inbound pump,
     /// heartbeat ticker, and outbound channel.
     shutdown: CancellationToken,
+    /// Set once the worker-local provider-key resolver has been installed
+    /// into the process-global [`blazen_llm`] cascade. The install happens
+    /// at the first session start; this guard keeps reconnects from
+    /// pushing the same resolver again. Survives reconnects because
+    /// [`WorkerState`] is `Arc`'d for the worker's whole lifetime.
+    keys_installed: AtomicBool,
 }
 
 impl WorkerState {
@@ -614,6 +645,7 @@ impl WorkerState {
             running: DashMap::new(),
             pending_inputs: Arc::new(DashMap::new()),
             shutdown: CancellationToken::new(),
+            keys_installed: AtomicBool::new(false),
         }
     }
 }
@@ -770,6 +802,19 @@ impl Worker {
             outbound_tx,
             outbox,
         } = self.do_handshake().await?;
+
+        // Install worker-local provider keys as the first link in the
+        // global resolver cascade — exactly once across reconnects. The
+        // `keys_installed` guard lives on the `Arc`'d `WorkerState`, so a
+        // later reconnect's session sees it already set and skips the push
+        // (the process-global chain would otherwise accumulate duplicates).
+        if !self.config.provider_keys.is_empty()
+            && !self.state.keys_installed.swap(true, Ordering::AcqRel)
+        {
+            blazen_llm::push_key_resolver(Arc::new(WorkerLocalKeys::new(Arc::new(
+                self.config.provider_keys.clone(),
+            ))));
+        }
 
         let session_done = CancellationToken::new();
         let hb_handle = self.spawn_heartbeat_ticker(
@@ -1267,6 +1312,35 @@ fn fixed_capacity_score(max_in_flight: u32, in_flight: u32) -> f32 {
 }
 
 // ===========================================================================
+// Worker-local provider keys
+// ===========================================================================
+
+/// A [`blazen_llm::KeyResolver`] backed by a worker's own provider keys.
+///
+/// Installed as the first link in the global cascade at worker start, so
+/// worker-local keys win over control-plane-shared and environment keys.
+/// Worker-local keys are NOT place-scoped — a worker serves whatever place
+/// the session declares — so the `place` argument is ignored.
+///
+/// The key map is shared via `Arc` so installing the resolver does not
+/// re-copy the keys. The key value is never logged.
+struct WorkerLocalKeys {
+    keys: Arc<BTreeMap<String, String>>,
+}
+
+impl WorkerLocalKeys {
+    fn new(keys: Arc<BTreeMap<String, String>>) -> Self {
+        Self { keys }
+    }
+}
+
+impl blazen_llm::KeyResolver for WorkerLocalKeys {
+    fn resolve(&self, provider: &str, _place: Option<&str>) -> Option<String> {
+        self.keys.get(provider).cloned()
+    }
+}
+
+// ===========================================================================
 // Tests
 // ===========================================================================
 
@@ -1312,6 +1386,82 @@ mod tests {
         let cfg =
             WorkerConfig::new("http://localhost:7445", "node-a").with_tag("region", "us-west");
         assert_eq!(cfg.tags.get("region").map(String::as_str), Some("us-west"));
+    }
+
+    // ---- Worker-local provider keys (P2) ----
+
+    use blazen_llm::KeyResolver as _;
+
+    /// The process-global resolver chain is shared across the whole test
+    /// binary, so any test that installs into it must serialize and tear
+    /// down. Pure-builder tests below don't touch the global chain and so
+    /// don't need the lock.
+    static KEYS_SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+    #[test]
+    fn worker_local_keys_resolves_known_provider() {
+        let mut map = BTreeMap::new();
+        map.insert("fal".to_string(), "fal-key".to_string());
+        let r = WorkerLocalKeys::new(Arc::new(map));
+        assert_eq!(r.resolve("fal", None).as_deref(), Some("fal-key"));
+        // Place is ignored (worker-local keys are not place-scoped).
+        assert_eq!(r.resolve("fal", Some("acme")).as_deref(), Some("fal-key"));
+    }
+
+    #[test]
+    fn worker_local_keys_missing_provider_is_none() {
+        let mut map = BTreeMap::new();
+        map.insert("fal".to_string(), "fal-key".to_string());
+        let r = WorkerLocalKeys::new(Arc::new(map));
+        assert!(r.resolve("openai", None).is_none());
+    }
+
+    #[test]
+    fn worker_config_with_provider_key_populates_map() {
+        let cfg = WorkerConfig::new("http://localhost:7445", "node-a")
+            .with_provider_key("fal", "k")
+            .with_provider_key("openai", "k2");
+        assert_eq!(cfg.provider_keys.get("fal").map(String::as_str), Some("k"));
+        assert_eq!(
+            cfg.provider_keys.get("openai").map(String::as_str),
+            Some("k2")
+        );
+        assert_eq!(cfg.provider_keys.len(), 2);
+    }
+
+    #[test]
+    fn worker_config_provider_key_chains_with_other_builders() {
+        let cfg = WorkerConfig::new("http://localhost:7445", "node-a")
+            .with_capability(WorkerCapability {
+                kind: "workflow:hello".into(),
+                version: 1,
+            })
+            .with_tag("region", "us-west")
+            .with_provider_key("fal", "k");
+        assert_eq!(cfg.capabilities.len(), 1);
+        assert_eq!(cfg.tags.get("region").map(String::as_str), Some("us-west"));
+        assert_eq!(cfg.provider_keys.get("fal").map(String::as_str), Some("k"));
+    }
+
+    #[test]
+    fn worker_local_keys_install_into_global_cascade() {
+        let _g = KEYS_SERIAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        blazen_llm::clear_key_resolvers();
+
+        let mut map = BTreeMap::new();
+        map.insert("fal".to_string(), "worker-fal-key".to_string());
+        blazen_llm::push_key_resolver(Arc::new(WorkerLocalKeys::new(Arc::new(map))));
+
+        // `fal` has an env var (FAL_KEY); the worker-local resolver supplies
+        // the key without one, proving it sits ahead of the env terminal.
+        assert_eq!(
+            blazen_llm::resolve_api_key("fal", None).unwrap(),
+            "worker-fal-key"
+        );
+
+        blazen_llm::clear_key_resolvers();
     }
 
     #[test]

@@ -12,7 +12,7 @@ description = "Distributed workflow control plane for Blazen — workers connect
 postcard = { workspace = true, features = ["alloc"] }
 blazen-core = { workspace = true, features = ["distributed"] }
 blazen-peer = { workspace = true }
-blazen-llm = { workspace = true, optional = true }
+blazen-llm.workspace = true
 async-trait = { workspace = true }
 dashmap = { workspace = true }
 serde = { workspace = true }
@@ -73,7 +73,7 @@ client = []
 # control plane) because a deployment may want only one or the other.
 model-server = []
 model-client = []
-http-transport = ["dep:axum", "dep:tower", "dep:tower-http", "dep:blazen-llm", "dep:base64"]
+http-transport = ["dep:axum", "dep:tower", "dep:tower-http", "dep:base64"]
 # PR5 phase 2: OpenAI-compat REST + Blazen-admin endpoints on top of the
 # `model-server` `ManagerHandle` trait. Independent of `http-transport`
 # (the workflow control plane's HTTP/SSE bridge) — a deployment may
