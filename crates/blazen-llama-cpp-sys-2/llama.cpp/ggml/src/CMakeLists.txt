@@ -464,7 +464,11 @@ ggml_add_backend(ZenDNN)
 ggml_add_backend(OPENVINO)
 
 foreach (target ggml-base ggml)
-    target_include_directories(${target} PUBLIC    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include> $<INSTALL_INTERFACE:include>)
+    # Blazen: also expose ggml/src/ in the BUILD_INTERFACE so unqualified
+    # `#include "ggml-ext.h"` resolves in both modes — the same form the
+    # llama-cpp-sys-2 fork uses, which previously only worked under
+    # system-ggml (install tree puts ggml-ext.h directly in include/).
+    target_include_directories(${target} PUBLIC    $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/../include> $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}> $<INSTALL_INTERFACE:include>)
     target_compile_features   (${target} PRIVATE c_std_11 cxx_std_17) # don't bump
 endforeach()
 

@@ -32,14 +32,6 @@ default = ["cpu"]
 engine = [
     "dep:llama-cpp-2",
     "dep:llama-cpp-sys-2",
-    # Route ggml through the Blazen shared blazen-ggml-sys instead of
-    # llama-cpp-sys-2's bundled in-tree copy. The `[patch.crates-io]`
-    # entry in the workspace Cargo.toml replaces upstream llama-cpp-sys-2
-    # with our Blazen fork that wires DEP_GGML_PREFIX into
-    # CMAKE_PREFIX_PATH so `find_package(ggml)` resolves correctly. Pairs
-    # with the whisper-rs-sys and diffusion-rs-sys forks to eliminate
-    # all three ggml triple-vendoring duplications.
-    "llama-cpp-sys-2/system-ggml-static",
     "dep:encoding_rs",
     "dep:tokio-stream",
 ]
@@ -48,6 +40,19 @@ cuda = ["engine"]
 metal = ["engine"]
 vulkan = ["engine"]
 rocm = ["engine"]
+
+# WORKSPACE-ONLY: route ggml through the shared blazen-ggml-sys install
+# tree instead of llama-cpp-sys-2's bundled in-tree copy. This only works
+# when the workspace `[patch.crates-io]` redirects llama-cpp-sys-2 to the
+# Blazen fork at `crates/blazen-llama-cpp-sys-2`, whose build.rs wires
+# DEP_GGML_PREFIX into CMAKE_PREFIX_PATH so `find_package(ggml)` resolves.
+#
+# Crates.io consumers MUST leave this feature off — upstream
+# llama-cpp-sys-2 has the same feature name as a cmake marker only, and
+# enabling it would cause `find_package(ggml REQUIRED)` to fail because
+# they have no system ggml install. Workspace-internal callers add
+# `features = ["dedup-ggml"]` explicitly to opt in.
+dedup-ggml = ["engine", "llama-cpp-sys-2/system-ggml-static"]
 
 [lints]
 workspace = true
