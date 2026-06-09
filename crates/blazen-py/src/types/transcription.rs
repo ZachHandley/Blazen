@@ -7,6 +7,7 @@
 
 use std::sync::Arc;
 
+use blazen_macros::py_async;
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
@@ -205,6 +206,7 @@ impl PyTranscription {
 // ---------------------------------------------------------------------------
 
 #[cfg(feature = "whispercpp")]
+#[py_async]
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyTranscription {
@@ -231,13 +233,17 @@ impl PyTranscription {
     ///  >>> result = await transcriber.transcribe(req)
     ///  >>> print(result.text)
     /// ```
-    #[staticmethod]
+    #[py_async_static]
     #[pyo3(signature = (*, options=None))]
-    fn whispercpp(options: Option<PyRef<'_, PyWhisperOptions>>) -> PyResult<Self> {
-        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        let provider =
-            crate::convert::block_on_context(blazen_llm::WhisperCppProvider::from_options(opts))
-                .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
+    async fn whispercpp(options: Option<Py<PyWhisperOptions>>) -> PyResult<Self> {
+        let opts = Python::attach(|py| {
+            options
+                .map(|o| o.borrow(py).inner.clone())
+                .unwrap_or_default()
+        });
+        let provider = blazen_llm::WhisperCppProvider::from_options(opts)
+            .await
+            .map_err(|e| pyo3::exceptions::PyRuntimeError::new_err(e.to_string()))?;
         Ok(Self {
             inner: Some(Arc::new(provider)),
             config: None,

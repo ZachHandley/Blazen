@@ -16,14 +16,63 @@
 //!   within a single workflow run; subject to the workflow's
 //!   [`SessionPausePolicy`](blazen_core::session_ref::SessionPausePolicy)
 //!   on snapshot.
+//!
+//! ## Sync vs async
+//!
+//! Every storage-touching method is exposed in **two** forms via the
+//! [`blazen_macros::py_async`] codegen attribute on each `#[pymethods]`
+//! `impl` block:
+//!
+//! - **Sync** (`set`, `get`, …) — drives the future to completion via
+//!   [`crate::convert::block_on_context`], which releases the GIL for
+//!   the duration of the wait so the await body is free to reattach.
+//! - **Async** (`aset`, `aget`, …) — returns an asyncio awaitable via
+//!   `pyo3_async_runtimes::tokio::future_into_py`, for use inside an
+//!   `asyncio.run(...)` event loop.
 
 use std::sync::Arc;
 
+use blazen_macros::py_async;
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
 use super::event::PyEvent;
-use crate::convert::block_on_context;
+
+/// Tier-tagged result of `Context.set`'s value classification. Built
+/// while the GIL is held; the async store path consumes it without
+/// touching Python.
+enum PreparedSet {
+    BlazenState(Py<PyAny>),
+    Bytes(Vec<u8>),
+    Json(serde_json::Value),
+    Pickle(Vec<u8>),
+    Live(Arc<Py<PyAny>>),
+}
+
+/// Classify a Python value into a [`PreparedSet`] under the GIL. The
+/// returned `Prepared*` variants are `Send + 'static` so the async store
+/// path can move them across `await` points.
+fn classify_for_set(py: Python<'_>, value: &Py<PyAny>) -> PyResult<PreparedSet> {
+    let bound = value.bind(py);
+    if bound.is_instance_of::<super::state::PyBlazenState>() {
+        return Ok(PreparedSet::BlazenState(value.clone_ref(py)));
+    }
+    if bound.is_instance_of::<pyo3::types::PyBytes>()
+        || bound.is_instance_of::<pyo3::types::PyByteArray>()
+    {
+        let b: Vec<u8> = bound.extract()?;
+        return Ok(PreparedSet::Bytes(b));
+    }
+    if let Ok(json) = crate::convert::try_py_to_json(py, bound) {
+        return Ok(PreparedSet::Json(json));
+    }
+    let pickle = py.import("pickle")?;
+    if let Ok(pickled) = pickle.call_method1("dumps", (bound,)) {
+        let bytes: Vec<u8> = pickled.extract()?;
+        return Ok(PreparedSet::Pickle(bytes));
+    }
+    Ok(PreparedSet::Live(Arc::new(value.clone_ref(py))))
+}
 
 /// Shared workflow context accessible by all steps.
 ///
@@ -47,6 +96,7 @@ pub struct PyContext {
     pub(crate) inner: blazen_core::Context,
 }
 
+#[py_async]
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyContext {
@@ -61,37 +111,24 @@ impl PyContext {
     /// Args:
     ///     key: The storage key.
     ///     value: Any Python value.
-    fn set(&self, py: Python<'_>, key: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        // BlazenState → per-field storage
-        if value.is_instance_of::<super::state::PyBlazenState>() {
-            return self.set_blazen_state(py, key, value);
-        }
-
-        let inner = self.inner.clone();
-        let key = key.to_string();
-
-        if value.is_instance_of::<pyo3::types::PyBytes>()
-            || value.is_instance_of::<pyo3::types::PyByteArray>()
-        {
-            // Tier 1: bytes/bytearray → Bytes variant
-            let bytes: Vec<u8> = value.extract()?;
-            block_on_context(async { inner.set_bytes(&key, bytes).await });
-        } else if let Ok(json_val) = crate::convert::try_py_to_json(py, value) {
-            // Tier 2: JSON-serializable → Json variant
-            block_on_context(async { inner.set(&key, json_val).await });
-        } else {
-            // Tier 3: try pickle → Native variant
-            let pickle = py.import("pickle")?;
-            if let Ok(pickled_obj) = pickle.call_method1("dumps", (value,)) {
-                let pickled: Vec<u8> = pickled_obj.extract()?;
-                let sv = blazen_core::StateValue::Native(blazen_core::BytesWrapper(pickled));
-                block_on_context(async { inner.set_value(&key, sv).await });
-            } else {
-                // Tier 4: unpicklable → store as live object in core.
-                // Wrap in Arc because Py<PyAny> isn't Clone (needs GIL),
-                // but Arc<Py<PyAny>> is Clone + Send + Sync + 'static.
-                let obj: Arc<Py<PyAny>> = Arc::new(value.clone().unbind());
-                block_on_context(async { inner.set_object(&key, obj).await });
+    async fn set(&self, key: String, value: Py<PyAny>) -> PyResult<()> {
+        let prepared = Python::attach(|py| classify_for_set(py, &value))?;
+        match prepared {
+            PreparedSet::BlazenState(val) => {
+                self.clone().set_blazen_state_async(key, val).await?;
+            }
+            PreparedSet::Bytes(b) => {
+                self.inner.clone().set_bytes(&key, b).await;
+            }
+            PreparedSet::Json(j) => {
+                self.inner.clone().set(&key, j).await;
+            }
+            PreparedSet::Pickle(b) => {
+                let sv = blazen_core::StateValue::Native(blazen_core::BytesWrapper(b));
+                self.inner.clone().set_value(&key, sv).await;
+            }
+            PreparedSet::Live(arc) => {
+                self.inner.clone().set_object(&key, arc).await;
             }
         }
         Ok(())
@@ -113,12 +150,15 @@ impl PyContext {
     /// Returns:
     ///     The stored value in its original type, or `default`.
     #[pyo3(signature = (key, default=None))]
-    fn get(&self, py: Python<'_>, key: &str, default: Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
-        let val = self.get_inner(py, key)?;
-        if val.bind(py).is_none() {
-            return Ok(default.unwrap_or_else(|| py.None()));
-        }
-        Ok(val)
+    async fn get(&self, key: String, default: Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
+        let value = self.clone().get_inner_async(key).await?;
+        Ok(Python::attach(|py| {
+            if value.bind(py).is_none() {
+                default.unwrap_or_else(|| py.None())
+            } else {
+                value
+            }
+        }))
     }
 
     /// Emit an event into the internal routing queue.
@@ -128,14 +168,13 @@ impl PyContext {
     ///
     /// Args:
     ///     event: The event to send.
-    fn send_event(&self, _py: Python<'_>, event: PyRef<'_, PyEvent>) {
-        let dynamic =
-            blazen_events::DynamicEvent::from_json(event.event_type.clone(), event.data.clone());
-        drop(event);
-        let inner = self.inner.clone();
-        block_on_context(async {
-            inner.send_event(dynamic).await;
+    async fn send_event(&self, event: Py<PyEvent>) -> PyResult<()> {
+        let dynamic = Python::attach(|py| {
+            let ev = event.borrow(py);
+            blazen_events::DynamicEvent::from_json(ev.event_type.clone(), ev.data.clone())
         });
+        self.inner.clone().send_event(dynamic).await;
+        Ok(())
     }
 
     /// Publish an event to the external broadcast stream.
@@ -146,14 +185,13 @@ impl PyContext {
     ///
     /// Args:
     ///     event: The event to publish to the stream.
-    fn write_event_to_stream(&self, _py: Python<'_>, event: PyRef<'_, PyEvent>) {
-        let dynamic =
-            blazen_events::DynamicEvent::from_json(event.event_type.clone(), event.data.clone());
-        drop(event);
-        let inner = self.inner.clone();
-        block_on_context(async {
-            inner.write_event_to_stream(dynamic).await;
+    async fn write_event_to_stream(&self, event: Py<PyEvent>) -> PyResult<()> {
+        let dynamic = Python::attach(|py| {
+            let ev = event.borrow(py);
+            blazen_events::DynamicEvent::from_json(ev.event_type.clone(), ev.data.clone())
         });
+        self.inner.clone().write_event_to_stream(dynamic).await;
+        Ok(())
     }
 
     /// Store raw binary data under the given key.
@@ -165,11 +203,9 @@ impl PyContext {
     ///     key: The storage key.
     ///     data: Raw bytes to store.
     #[gen_stub(skip)]
-    fn set_bytes(&self, _py: Python<'_>, key: &str, data: &[u8]) {
-        let inner = self.inner.clone();
-        let key = key.to_string();
-        let data = data.to_vec();
-        block_on_context(async { inner.set_bytes(&key, data).await });
+    async fn set_bytes(&self, key: String, data: Vec<u8>) -> PyResult<()> {
+        self.inner.clone().set_bytes(&key, data).await;
+        Ok(())
     }
 
     /// Retrieve raw binary data previously stored under the given key.
@@ -185,20 +221,16 @@ impl PyContext {
     /// Returns:
     ///     The stored bytes, or `default`.
     #[pyo3(signature = (key, default=None))]
-    fn get_bytes(&self, _py: Python<'_>, key: &str, default: Option<Vec<u8>>) -> Option<Vec<u8>> {
-        let inner = self.inner.clone();
-        let key = key.to_string();
-        block_on_context(async { inner.get_bytes(&key).await }).or(default)
+    async fn get_bytes(&self, key: String, default: Option<Vec<u8>>) -> PyResult<Option<Vec<u8>>> {
+        Ok(self.inner.clone().get_bytes(&key).await.or(default))
     }
 
     /// Get the workflow run ID.
     ///
     /// Returns:
     ///     The UUID string for this workflow run.
-    fn run_id(&self, _py: Python<'_>) -> String {
-        let inner = self.inner.clone();
-        let id = block_on_context(async { inner.run_id().await });
-        id.to_string()
+    async fn run_id(&self) -> PyResult<String> {
+        Ok(self.inner.clone().run_id().await.to_string())
     }
 
     /// Persistable workflow state. Survives `pause()` / `resume()`,
@@ -253,53 +285,54 @@ pub struct PyStateNamespace {
     inner: blazen_core::Context,
 }
 
+#[py_async]
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyStateNamespace {
     /// Store a value under the given key. See `Context.set` for the
     /// 4-tier dispatch order.
-    fn set(&self, py: Python<'_>, key: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
-        // Delegate through PyContext::set for the existing tier dispatch.
-        let ctx = PyContext::new(self.inner.clone());
-        ctx.set(py, key, value)
+    async fn set(&self, key: String, value: Py<PyAny>) -> PyResult<()> {
+        PyContext::new(self.inner.clone())
+            .set_body(key, value)
+            .await
     }
 
     /// Retrieve a value previously stored under the given key.
     /// If the key is missing, returns `default` (defaults to `None`).
     #[pyo3(signature = (key, default=None))]
-    fn get(&self, py: Python<'_>, key: &str, default: Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
-        let ctx = PyContext::new(self.inner.clone());
-        ctx.get(py, key, default)
+    async fn get(&self, key: String, default: Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
+        PyContext::new(self.inner.clone())
+            .get_body(key, default)
+            .await
     }
 
     /// Store raw binary data under the given key.
     #[gen_stub(skip)]
-    fn set_bytes(&self, py: Python<'_>, key: &str, data: &[u8]) {
-        let ctx = PyContext::new(self.inner.clone());
-        ctx.set_bytes(py, key, data);
+    async fn set_bytes(&self, key: String, data: Vec<u8>) -> PyResult<()> {
+        self.inner.clone().set_bytes(&key, data).await;
+        Ok(())
     }
 
     /// Retrieve raw binary data previously stored under the given key.
     /// If the key is missing, returns `default` (defaults to `None`).
     #[pyo3(signature = (key, default=None))]
-    fn get_bytes(&self, py: Python<'_>, key: &str, default: Option<Vec<u8>>) -> Option<Vec<u8>> {
-        let ctx = PyContext::new(self.inner.clone());
-        ctx.get_bytes(py, key, default)
+    async fn get_bytes(&self, key: String, default: Option<Vec<u8>>) -> PyResult<Option<Vec<u8>>> {
+        Ok(self.inner.clone().get_bytes(&key).await.or(default))
     }
 
-    fn __setitem__(&self, py: Python<'_>, key: &str, value: &Bound<'_, PyAny>) -> PyResult<()> {
+    fn __setitem__(&self, py: Python<'_>, key: String, value: Py<PyAny>) -> PyResult<()> {
         self.set(py, key, value)
     }
 
-    fn __getitem__(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
-        let val = self.get(py, key, None)?;
+    fn __getitem__(&self, py: Python<'_>, key: String) -> PyResult<Py<PyAny>> {
+        let val = self.get(py, key.clone(), None)?;
         if val.bind(py).is_none() {
-            return Err(pyo3::exceptions::PyKeyError::new_err(key.to_owned()));
+            return Err(pyo3::exceptions::PyKeyError::new_err(key));
         }
         Ok(val)
     }
 
-    fn __contains__(&self, py: Python<'_>, key: &str) -> PyResult<bool> {
+    fn __contains__(&self, py: Python<'_>, key: String) -> PyResult<bool> {
         let val = self.get(py, key, None)?;
         Ok(!val.bind(py).is_none())
     }
@@ -327,54 +360,55 @@ pub struct PySessionNamespace {
     inner: blazen_core::Context,
 }
 
+#[py_async]
 #[gen_stub_pymethods]
 #[pymethods]
 impl PySessionNamespace {
     /// Store a live reference under the given key. The value is *not*
     /// serialised; identity is preserved within this run.
-    fn set(&self, _py: Python<'_>, key: &str, value: &Bound<'_, PyAny>) {
-        let inner = self.inner.clone();
-        let key = key.to_string();
-        let obj: Arc<Py<PyAny>> = Arc::new(value.clone().unbind());
-        block_on_context(async { inner.set_object(&key, obj).await });
+    async fn set(&self, key: String, value: Py<PyAny>) -> PyResult<()> {
+        let obj: Arc<Py<PyAny>> = Arc::new(value);
+        self.inner.clone().set_object(&key, obj).await;
+        Ok(())
     }
 
     /// Retrieve a live reference previously stored under the given key.
     /// If the key is missing, returns `default` (defaults to `None`).
     #[pyo3(signature = (key, default=None))]
-    fn get(&self, py: Python<'_>, key: &str, default: Option<Py<PyAny>>) -> Option<Py<PyAny>> {
-        let inner = self.inner.clone();
-        let key_owned = key.to_string();
+    async fn get(&self, key: String, default: Option<Py<PyAny>>) -> PyResult<Py<PyAny>> {
         let obj: Option<Arc<Py<PyAny>>> =
-            block_on_context(async { inner.get_object::<Arc<Py<PyAny>>>(&key_owned).await });
-        obj.map(|o| o.clone_ref(py)).or(default)
+            self.inner.clone().get_object::<Arc<Py<PyAny>>>(&key).await;
+        Ok(Python::attach(|py| match obj {
+            Some(o) => o.clone_ref(py),
+            None => default.unwrap_or_else(|| py.None()),
+        }))
     }
 
     /// Remove a live reference stored under the given key.
-    fn remove(&self, _py: Python<'_>, key: &str) {
-        let inner = self.inner.clone();
-        let key = key.to_string();
-        block_on_context(async { inner.remove_object(&key).await });
+    async fn remove(&self, key: String) -> PyResult<()> {
+        self.inner.clone().remove_object(&key).await;
+        Ok(())
     }
 
     /// Check whether a live reference exists under the given key.
-    fn has(&self, _py: Python<'_>, key: &str) -> bool {
-        let inner = self.inner.clone();
-        let key = key.to_string();
-        block_on_context(async { inner.has_object(&key).await })
+    async fn has(&self, key: String) -> PyResult<bool> {
+        Ok(self.inner.clone().has_object(&key).await)
     }
 
-    fn __setitem__(&self, py: Python<'_>, key: &str, value: &Bound<'_, PyAny>) {
-        self.set(py, key, value);
+    fn __setitem__(&self, py: Python<'_>, key: String, value: Py<PyAny>) -> PyResult<()> {
+        self.set(py, key, value)
     }
 
-    fn __getitem__(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
-        self.get(py, key, None)
-            .ok_or_else(|| pyo3::exceptions::PyKeyError::new_err(key.to_owned()))
+    fn __getitem__(&self, py: Python<'_>, key: String) -> PyResult<Py<PyAny>> {
+        let val = self.get(py, key.clone(), None)?;
+        if val.bind(py).is_none() {
+            return Err(pyo3::exceptions::PyKeyError::new_err(key));
+        }
+        Ok(val)
     }
 
-    fn __contains__(&self, _py: Python<'_>, key: &str) -> bool {
-        self.has(_py, key)
+    fn __contains__(&self, py: Python<'_>, key: String) -> PyResult<bool> {
+        self.has(py, key)
     }
 
     fn __repr__(&self) -> String {
@@ -382,179 +416,332 @@ impl PySessionNamespace {
     }
 }
 
+// ---------------------------------------------------------------------------
+// Internal async helpers (not exposed to Python). Re-used by both the
+// sync and async wrappers via the `#[py_async]` macro expansion, and by
+// the BlazenState recursive store/load paths.
+// ---------------------------------------------------------------------------
+
 impl PyContext {
     /// Create a new `PyContext` wrapping a Rust `Context`.
     pub fn new(inner: blazen_core::Context) -> Self {
         Self { inner }
     }
 
-    // 4-tier dispatch helper. Returns `py.None()` on a complete miss;
-    // the public `get` substitutes the user-supplied default.
-    fn get_inner(&self, py: Python<'_>, key: &str) -> PyResult<Py<PyAny>> {
-        // Check for BlazenState per-field metadata.
-        {
-            let meta_key = format!("{key}.__blazen_meta__");
-            let inner = self.inner.clone();
-            if let Some(blazen_core::StateValue::Json(meta)) =
-                block_on_context(async { inner.get_value(&meta_key).await })
-            {
-                return self.get_blazen_state(py, key, &meta);
+    /// The async-only body of `set`. Public to this crate so namespaces
+    /// can delegate without going back through the `#[pymethods]`
+    /// wrapper.
+    pub(crate) async fn set_body(self, key: String, value: Py<PyAny>) -> PyResult<()> {
+        let prepared = Python::attach(|py| classify_for_set(py, &value))?;
+        match prepared {
+            PreparedSet::BlazenState(val) => {
+                Box::pin(self.set_blazen_state_async(key, val)).await?;
             }
+            PreparedSet::Bytes(b) => {
+                self.inner.set_bytes(&key, b).await;
+            }
+            PreparedSet::Json(j) => {
+                self.inner.set(&key, j).await;
+            }
+            PreparedSet::Pickle(b) => {
+                let sv = blazen_core::StateValue::Native(blazen_core::BytesWrapper(b));
+                self.inner.set_value(&key, sv).await;
+            }
+            PreparedSet::Live(arc) => {
+                self.inner.set_object(&key, arc).await;
+            }
+        }
+        Ok(())
+    }
+
+    /// The async-only body of `get`. Returns `py.None()` if the key is
+    /// missing (callers substitute the user-supplied default).
+    pub(crate) async fn get_body(
+        self,
+        key: String,
+        default: Option<Py<PyAny>>,
+    ) -> PyResult<Py<PyAny>> {
+        let value = self.get_inner_async(key).await?;
+        Ok(Python::attach(|py| {
+            if value.bind(py).is_none() {
+                default.unwrap_or_else(|| py.None())
+            } else {
+                value
+            }
+        }))
+    }
+
+    /// 4-tier dispatch helper. Returns `py.None()` on a complete miss.
+    pub(crate) async fn get_inner_async(self, key: String) -> PyResult<Py<PyAny>> {
+        // Check for BlazenState per-field metadata first.
+        let meta_key = format!("{key}.__blazen_meta__");
+        if let Some(blazen_core::StateValue::Json(meta)) = self.inner.get_value(&meta_key).await {
+            return Box::pin(self.get_blazen_state_async(key, meta)).await;
         }
 
         // Fall through to Rust core (tiers 1-3).
-        let inner = self.inner.clone();
-        let key_owned = key.to_string();
-        let val = block_on_context(async { inner.get_value(&key_owned).await });
+        let val = self.inner.get_value(&key).await;
         match val {
-            Some(blazen_core::StateValue::Json(v)) => crate::convert::json_to_py(py, &v),
-            Some(blazen_core::StateValue::Bytes(b)) => {
-                Ok(pyo3::types::PyBytes::new(py, &b.0).into_any().unbind())
+            Some(blazen_core::StateValue::Json(v)) => {
+                Python::attach(|py| crate::convert::json_to_py(py, &v))
             }
-            Some(blazen_core::StateValue::Native(b)) => {
+            Some(blazen_core::StateValue::Bytes(b)) => Ok(Python::attach(|py| {
+                pyo3::types::PyBytes::new(py, &b.0).into_any().unbind()
+            })),
+            Some(blazen_core::StateValue::Native(b)) => Python::attach(|py| {
                 let pickle = py.import("pickle")?;
                 let obj = pickle.call_method1("loads", (&b.0[..],))?;
                 Ok(obj.unbind())
-            }
+            }),
             None => {
-                // Check opaque object store (tier 4 values).
-                // Stored as Arc<Py<PyAny>> because Py<PyAny> isn't Clone.
-                let inner = self.inner.clone();
-                let key_owned = key.to_string();
-                if let Some(obj) =
-                    block_on_context(async { inner.get_object::<Arc<Py<PyAny>>>(&key_owned).await })
-                {
-                    return Ok(obj.clone_ref(py));
-                }
-                Ok(py.None())
+                // Tier 4: check the opaque object store. Single
+                // `Python::attach` handles both the hit (clone the
+                // existing handle) and the miss (`py.None()`); folding
+                // them into one match arm keeps the closure body
+                // non-trivial so clippy's `redundant_closure_for_method_calls`
+                // doesn't bait `Python::None` as a replacement (which
+                // fails to unify against the higher-ranked `Python<'_>`
+                // bound on `Python::attach`).
+                let obj = self.inner.get_object::<Arc<Py<PyAny>>>(&key).await;
+                Ok(Python::attach(|py| match obj {
+                    Some(o) => o.clone_ref(py),
+                    None => py.None(),
+                }))
             }
         }
     }
 
     /// Store a [`BlazenState`](super::state::PyBlazenState) per-field.
-    fn set_blazen_state(
-        &self,
-        py: Python<'_>,
-        key: &str,
-        value: &Bound<'_, PyAny>,
+    /// Recursive via `set_body` on each field.
+    pub(crate) async fn set_blazen_state_async(
+        self,
+        key: String,
+        value: Py<PyAny>,
     ) -> PyResult<()> {
-        let cls = value.get_type();
+        // Phase 1: classify each field under the GIL.
+        let (plans, meta_key, meta) =
+            Python::attach(|py| classify_blazen_state_fields(py, &key, &value))?;
 
-        // Read Meta.transient (set of field names to skip serialization for).
-        let transient: std::collections::HashSet<String> = cls
-            .getattr("Meta")
-            .ok()
-            .and_then(|meta| meta.getattr("transient").ok())
-            .and_then(|t| t.extract().ok())
-            .unwrap_or_default();
-
-        // Read Meta.store_by (dict of field name → FieldStore).
-        let store_by: Option<Bound<'_, pyo3::types::PyDict>> = cls
-            .getattr("Meta")
-            .ok()
-            .and_then(|meta| meta.getattr("store_by").ok())
-            .and_then(|sb| sb.cast_into().ok());
-
-        // Iterate __dict__ and store each field.
-        let dict = value
-            .getattr("__dict__")?
-            .cast_into::<pyo3::types::PyDict>()?;
-        let mut field_names: Vec<String> = Vec::new();
-
-        for (k, v) in dict.iter() {
-            let field_name: String = k.extract()?;
-            field_names.push(field_name.clone());
-            let field_key = format!("{key}.{field_name}");
-
-            // Check store_by first.
-            if let Some(ref sb) = store_by
-                && let Ok(Some(store)) = sb.get_item(&field_name)
-            {
-                // Call FieldStore.save(key, value, ctx)
-                let self_py = Py::new(py, self.clone())?;
-                store.call_method1("save", (&field_key, &v, self_py))?;
-                continue;
+        // Phase 2: execute each plan. Custom stores run synchronously
+        // under the GIL (FieldStore.save is a Python callable); normal
+        // fields recurse through `set_body`.
+        for plan in plans {
+            match plan.kind {
+                FieldKind::CustomStore { store, value } => {
+                    let self_clone = self.clone();
+                    Python::attach(|py| -> PyResult<()> {
+                        let self_py = Py::new(py, self_clone)?;
+                        let store_bound = store.bind(py);
+                        let value_bound = value.bind(py);
+                        store_bound.call_method1(
+                            "save",
+                            (plan.field_key.as_str(), value_bound, self_py),
+                        )?;
+                        Ok(())
+                    })?;
+                }
+                FieldKind::Normal(v) => {
+                    Box::pin(self.clone().set_body(plan.field_key, v)).await?;
+                }
             }
-
-            // Normal per-field storage via the 4-tier dispatch.
-            self.set(py, &field_key, &v)?;
         }
 
-        // Store metadata so get() can reconstruct.
-        let meta = serde_json::json!({
-            "class_module": cls.getattr("__module__")?.extract::<String>()?,
-            "class_name": cls.getattr("__qualname__")?.extract::<String>()?,
-            "fields": field_names,
-            "transient": transient.into_iter().collect::<Vec<_>>(),
-        });
-        let inner = self.inner.clone();
-        let meta_key = format!("{key}.__blazen_meta__");
-        block_on_context(async { inner.set(&meta_key, meta).await });
+        // Phase 3: write the metadata so `get_body` can reconstruct.
+        self.inner.set(&meta_key, meta).await;
         Ok(())
     }
 
     /// Reconstruct a [`BlazenState`](super::state::PyBlazenState) from per-field storage.
-    fn get_blazen_state(
-        &self,
-        py: Python<'_>,
-        key: &str,
-        meta: &serde_json::Value,
+    pub(crate) async fn get_blazen_state_async(
+        self,
+        key: String,
+        meta: serde_json::Value,
     ) -> PyResult<Py<PyAny>> {
-        let class_module = meta["class_module"]
-            .as_str()
-            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("missing class_module"))?;
-        let class_name = meta["class_name"]
-            .as_str()
-            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("missing class_name"))?;
-        let fields = meta["fields"]
-            .as_array()
-            .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("missing fields"))?;
+        let fields = parse_blazen_state_fields(&meta)?;
+        let (obj, plans, has_restore) =
+            Python::attach(|py| plan_blazen_state_load(py, &key, &fields, &meta))?;
 
-        // Import the class.
-        let module = py.import(class_module)?;
-        // Handle nested qualnames like "Outer.Inner" by traversing attrs.
-        let mut cls: Bound<'_, PyAny> = module.into_any();
-        for part in class_name.split('.') {
-            cls = cls.getattr(part)?;
-        }
-
-        // Create instance via __new__ (bypasses __init__).
-        let obj = cls.call_method1("__new__", (&cls,))?;
-
-        // Read Meta.store_by for custom loaders.
-        let store_by: Option<Bound<'_, pyo3::types::PyDict>> = cls
-            .getattr("Meta")
-            .ok()
-            .and_then(|meta| meta.getattr("store_by").ok())
-            .and_then(|sb| sb.cast_into().ok());
-
-        // Restore each field.
-        for field_val in fields {
-            let field_name = field_val
-                .as_str()
-                .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("bad field name"))?;
-            let field_key = format!("{key}.{field_name}");
-
-            // Check store_by first.
-            if let Some(ref sb) = store_by
-                && let Ok(Some(store)) = sb.get_item(field_name)
-            {
-                let self_py = Py::new(py, self.clone())?;
-                let value = store.call_method1("load", (&field_key, self_py))?;
-                obj.setattr(field_name, value)?;
-                continue;
+        for plan in plans {
+            match plan.kind {
+                LoadKind::CustomStore(store) => {
+                    let self_clone = self.clone();
+                    let field_name = plan.field_name.clone();
+                    let field_key = plan.field_key.clone();
+                    Python::attach(|py| -> PyResult<()> {
+                        let self_py = Py::new(py, self_clone)?;
+                        let store_bound = store.bind(py);
+                        let value =
+                            store_bound.call_method1("load", (field_key.as_str(), self_py))?;
+                        obj.bind(py).setattr(field_name.as_str(), value)?;
+                        Ok(())
+                    })?;
+                }
+                LoadKind::Normal => {
+                    let value =
+                        Box::pin(self.clone().get_inner_async(plan.field_key.clone())).await?;
+                    Python::attach(|py| obj.bind(py).setattr(plan.field_name.as_str(), value))?;
+                }
             }
-
-            // Normal get.
-            let value = self.get(py, &field_key, None)?;
-            obj.setattr(field_name, value)?;
         }
 
-        // Call restore() if defined.
-        if obj.hasattr("restore")? {
-            obj.call_method0("restore")?;
+        if has_restore {
+            Python::attach(|py| -> PyResult<()> {
+                obj.bind(py).call_method0("restore")?;
+                Ok(())
+            })?;
         }
 
-        Ok(obj.unbind())
+        Ok(obj)
     }
+}
+
+// ---------------------------------------------------------------------------
+// BlazenState helper types (private to this module)
+// ---------------------------------------------------------------------------
+
+struct FieldPlan {
+    field_key: String,
+    kind: FieldKind,
+}
+
+enum FieldKind {
+    /// Field has a custom `FieldStore` in `Meta.store_by`.
+    CustomStore { store: Py<PyAny>, value: Py<PyAny> },
+    /// Normal per-field storage (recurses through `set_body`).
+    Normal(Py<PyAny>),
+}
+
+struct LoadPlan {
+    field_name: String,
+    field_key: String,
+    kind: LoadKind,
+}
+
+enum LoadKind {
+    CustomStore(Py<PyAny>),
+    Normal,
+}
+
+/// GIL-bound classification step for `set_blazen_state_async`. Returns
+/// the per-field plans plus the meta blob to persist after the field
+/// writes complete.
+fn classify_blazen_state_fields(
+    py: Python<'_>,
+    key: &str,
+    value: &Py<PyAny>,
+) -> PyResult<(Vec<FieldPlan>, String, serde_json::Value)> {
+    let bound = value.bind(py);
+    let cls = bound.get_type();
+
+    let transient: std::collections::HashSet<String> = cls
+        .getattr("Meta")
+        .ok()
+        .and_then(|meta| meta.getattr("transient").ok())
+        .and_then(|t| t.extract().ok())
+        .unwrap_or_default();
+
+    let store_by: Option<Bound<'_, pyo3::types::PyDict>> = cls
+        .getattr("Meta")
+        .ok()
+        .and_then(|meta| meta.getattr("store_by").ok())
+        .and_then(|sb| sb.cast_into().ok());
+
+    let dict = bound
+        .getattr("__dict__")?
+        .cast_into::<pyo3::types::PyDict>()?;
+    let mut field_names: Vec<String> = Vec::new();
+    let mut plans: Vec<FieldPlan> = Vec::new();
+
+    for (k, v) in dict.iter() {
+        let field_name: String = k.extract()?;
+        field_names.push(field_name.clone());
+        let field_key = format!("{key}.{field_name}");
+
+        let kind = if let Some(ref sb) = store_by
+            && let Ok(Some(store)) = sb.get_item(&field_name)
+        {
+            FieldKind::CustomStore {
+                store: store.unbind(),
+                value: v.unbind(),
+            }
+        } else {
+            FieldKind::Normal(v.unbind())
+        };
+
+        plans.push(FieldPlan { field_key, kind });
+    }
+
+    let meta = serde_json::json!({
+        "class_module": cls.getattr("__module__")?.extract::<String>()?,
+        "class_name": cls.getattr("__qualname__")?.extract::<String>()?,
+        "fields": field_names,
+        "transient": transient.into_iter().collect::<Vec<_>>(),
+    });
+    let meta_key = format!("{key}.__blazen_meta__");
+
+    Ok((plans, meta_key, meta))
+}
+
+/// Extract the ordered `fields` list from a stored meta blob.
+fn parse_blazen_state_fields(meta: &serde_json::Value) -> PyResult<Vec<String>> {
+    meta["fields"]
+        .as_array()
+        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("missing fields"))?
+        .iter()
+        .map(|v| {
+            v.as_str()
+                .map(str::to_owned)
+                .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("bad field name"))
+        })
+        .collect()
+}
+
+/// GIL-bound class import + per-field load planning for
+/// `get_blazen_state_async`. Returns the fresh instance, the plans, and
+/// whether the class has a `restore()` method to call at the end.
+fn plan_blazen_state_load(
+    py: Python<'_>,
+    key: &str,
+    fields: &[String],
+    meta: &serde_json::Value,
+) -> PyResult<(Py<PyAny>, Vec<LoadPlan>, bool)> {
+    let class_module = meta["class_module"]
+        .as_str()
+        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("missing class_module"))?;
+    let class_name = meta["class_name"]
+        .as_str()
+        .ok_or_else(|| pyo3::exceptions::PyValueError::new_err("missing class_name"))?;
+
+    let module = py.import(class_module)?;
+    let mut cls: Bound<'_, PyAny> = module.into_any();
+    for part in class_name.split('.') {
+        cls = cls.getattr(part)?;
+    }
+    let obj = cls.call_method1("__new__", (&cls,))?;
+
+    let store_by: Option<Bound<'_, pyo3::types::PyDict>> = cls
+        .getattr("Meta")
+        .ok()
+        .and_then(|m| m.getattr("store_by").ok())
+        .and_then(|sb| sb.cast_into().ok());
+
+    let mut plans: Vec<LoadPlan> = Vec::new();
+    for field_name in fields {
+        let field_key = format!("{key}.{field_name}");
+        let kind = if let Some(ref sb) = store_by
+            && let Ok(Some(store)) = sb.get_item(field_name)
+        {
+            LoadKind::CustomStore(store.unbind())
+        } else {
+            LoadKind::Normal
+        };
+        plans.push(LoadPlan {
+            field_name: field_name.clone(),
+            field_key,
+            kind,
+        });
+    }
+
+    let has_restore = obj.hasattr("restore")?;
+    Ok((obj.unbind(), plans, has_restore))
 }

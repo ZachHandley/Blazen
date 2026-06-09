@@ -63,6 +63,7 @@ blazen-audio-music = { workspace = true, optional = true }
 blazen-audio-codec = { workspace = true, optional = true }
 blazen-audio = { workspace = true, optional = true }
 blazen-audio-vc = { workspace = true, optional = true }
+blazen-macros = { version = "0.0.0-dev", path = "../blazen-macros" }
 
 [features]
 default = ["local-all"]

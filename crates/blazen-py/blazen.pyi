@@ -534,8 +534,10 @@ class AgentConfig:
     [`run_agent`] with a fully-typed config rather than positional kwargs.
     
     Example:
-        >>> config = AgentConfig(max_iterations=20, system_prompt="be terse",
-        ...                      temperature=0.0, tool_concurrency=4)
+    ```text
+     >>> config = AgentConfig(max_iterations=20, system_prompt="be terse",
+     ...                      temperature=0.0, tool_concurrency=4)
+    ```
     """
     @property
     def max_iterations(self) -> builtins.int:
@@ -647,10 +649,12 @@ class AgentResult:
     Result of an agent run.
     
     Example:
-        >>> result = await run_agent(model, messages, tools=[tool])
-        >>> print(result.response.content)
-        >>> print(result.iterations)
-        >>> print(result.total_cost)
+    ```text
+     >>> result = await run_agent(model, messages, tools=[tool])
+     >>> print(result.response.content)
+     >>> print(result.iterations)
+     >>> print(result.total_cost)
+    ```
     """
     @property
     def response(self) -> ModelResponse:
@@ -683,9 +687,11 @@ class AnthropicProvider:
     Both surfaces wrap the same Rust provider; use whichever you prefer.
     
     Example:
-        >>> from blazen import AnthropicProvider, ProviderOptions, ChatMessage
-        >>> p = AnthropicProvider(options=ProviderOptions(api_key="sk-ant-..."))
-        >>> resp = await p.complete([ChatMessage.user("Hello!")])
+    ```text
+     >>> from blazen import AnthropicProvider, ProviderOptions, ChatMessage
+     >>> p = AnthropicProvider(options=ProviderOptions(api_key="sk-ant-..."))
+     >>> resp = await p.complete([ChatMessage.user("Hello!")])
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -804,11 +810,13 @@ class Artifact:
     fields. Fields not relevant to the variant return ``None``.
     
     Example:
-        >>> for art in response.artifacts:
-        ...     if art.kind == "svg":
-        ...         render_svg(art.content)
-        ...     elif art.kind == "code_block":
-        ...         print(f"{art.language}: {art.content}")
+    ```text
+     >>> for art in response.artifacts:
+     ...     if art.kind == "svg":
+     ...         render_svg(art.content)
+     ...     elif art.kind == "code_block":
+     ...         print(f"{art.language}: {art.content}")
+    ```
     """
     @property
     def kind(self) -> builtins.str:
@@ -1114,11 +1122,13 @@ class AzureOpenAiProvider:
     `resource_name` and `deployment_name` on [`AzureOptions`].
     
     Example:
-        >>> from blazen import AzureOpenAiProvider, AzureOptions
-        >>> p = AzureOpenAiProvider(options=AzureOptions(
-        ...     resource_name="my-resource",
-        ...     deployment_name="gpt-4o",
-        ... ))
+    ```text
+     >>> from blazen import AzureOpenAiProvider, AzureOptions
+     >>> p = AzureOpenAiProvider(options=AzureOptions(
+     ...     resource_name="my-resource",
+     ...     deployment_name="gpt-4o",
+     ... ))
+    ```
     """
     @property
     def model_id(self) -> builtins.str: ...
@@ -1269,9 +1279,11 @@ class BaseProvider:
     accessors delegate to ``metadata()`` by default.
     
     Example:
-        >>> class MyProvider(BaseProvider):
-        ...     def metadata(self):
-        ...         return ProviderMetadata("mine", CapabilityKind.Llm)
+    ```text
+     >>> class MyProvider(BaseProvider):
+     ...     def metadata(self):
+     ...         return ProviderMetadata("mine", CapabilityKind.Llm)
+    ```
     """
     def __new__(cls) -> BaseProvider: ...
     def metadata(self) -> ProviderMetadata:
@@ -1301,9 +1313,11 @@ class BaseProviderDefaults:
     may mutate it in place before downstream typed processing.
     
     Example:
-        >>> async def stamp(method, body):
-        ...     body["trace_id"] = "abc"
-        >>> base = BaseProviderDefaults(before_request=stamp)
+    ```text
+     >>> async def stamp(method, body):
+     ...     body["trace_id"] = "abc"
+     >>> base = BaseProviderDefaults(before_request=stamp)
+    ```
     """
     @property
     def before_request(self) -> typing.Optional[typing.Any]:
@@ -1333,8 +1347,10 @@ class BatchConfig:
             means unlimited.
     
     Example:
-        >>> config = BatchConfig(concurrency=4)
-        >>> result = await complete_batch(model, requests, config=config)
+    ```text
+     >>> config = BatchConfig(concurrency=4)
+     >>> result = await complete_batch(model, requests, config=config)
+    ```
     """
     @property
     def concurrency(self) -> builtins.int:
@@ -1360,12 +1376,14 @@ class BatchResult:
     in ``responses`` and an error string in ``errors``.
     
     Example:
-        >>> result = await complete_batch(model, [msgs1, msgs2], concurrency=4)
-        >>> for i, resp in enumerate(result.responses):
-        ...     if resp is not None:
-        ...         print(resp.content)
-        ...     else:
-        ...         print(f"Request {i} failed: {result.errors[i]}")
+    ```text
+     >>> result = await complete_batch(model, [msgs1, msgs2], concurrency=4)
+     >>> for i, resp in enumerate(result.responses):
+     ...     if resp is not None:
+     ...         print(resp.content)
+     ...     else:
+     ...         print(f"Request {i} failed: {result.errors[i]}")
+    ```
     """
     @property
     def responses(self) -> builtins.list[typing.Optional[ModelResponse]]:
@@ -1723,9 +1741,11 @@ class CachedModel:
     Streaming requests are never cached and always pass through.
     
     Example:
-        >>> base = Model.openai()
-        >>> model = CachedModel(base, CacheConfig(ttl_seconds=600))
-        >>> response = await model.complete([ChatMessage.user("Hi")])
+    ```text
+     >>> base = Model.openai()
+     >>> model = CachedModel(base, CacheConfig(ttl_seconds=600))
+     >>> response = await model.complete([ChatMessage.user("Hi")])
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -1793,9 +1813,11 @@ class CandleEmbedModel:
     engine. No API key is required.
     
     Example:
-        >>> opts = CandleEmbedOptions(model_id="BAAI/bge-small-en-v1.5")
-        >>> model = CandleEmbedModel(options=opts)
-        >>> response = await model.embed(["Hello", "world"])
+    ```text
+     >>> opts = CandleEmbedOptions(model_id="BAAI/bge-small-en-v1.5")
+     >>> model = CandleEmbedModel(options=opts)
+     >>> response = await model.embed(["Hello", "world"])
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -1808,6 +1830,15 @@ class CandleEmbedModel:
         Get the dimensionality of the produced embedding vectors.
         """
     def __new__(cls, *, options: typing.Optional[CandleEmbedOptions] = None) -> CandleEmbedModel:
+        r"""
+        Create a new candle embedding model.
+        
+        Args:
+            options: Optional :class:`CandleEmbedOptions` for model id,
+                device, revision, and cache directory.
+        """
+    @classmethod
+    def aopen(cls, *, options: typing.Optional[CandleEmbedOptions] = None) -> typing.Any:
         r"""
         Create a new candle embedding model.
         
@@ -1845,8 +1876,10 @@ class CandleEmbedOptions:
     Options for the local candle embedding backend.
     
     Example:
-        >>> opts = CandleEmbedOptions(model_id="BAAI/bge-small-en-v1.5")
-        >>> model = CandleEmbedModel(options=opts)
+    ```text
+     >>> opts = CandleEmbedOptions(model_id="BAAI/bge-small-en-v1.5")
+     >>> model = CandleEmbedModel(options=opts)
+    ```
     """
     @property
     def model_id(self) -> typing.Optional[builtins.str]: ...
@@ -1919,13 +1952,19 @@ class CandleLlmOptions:
     Options for the local candle LLM backend.
     
     Example:
-        >>> opts = CandleLlmOptions(model_id="meta-llama/Llama-3.2-1B")
-        >>> provider = CandleLlmProvider(options=opts)
+    ```text
+     >>> opts = CandleLlmOptions(model_id="meta-llama/Llama-3.2-1B")
+     >>> provider = CandleLlmProvider(options=opts)
+    ```
     """
     @property
     def model_id(self) -> typing.Optional[builtins.str]: ...
     @model_id.setter
     def model_id(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def tokenizer_repo(self) -> typing.Optional[builtins.str]: ...
+    @tokenizer_repo.setter
+    def tokenizer_repo(self, value: typing.Optional[builtins.str]) -> None: ...
     @property
     def device(self) -> typing.Optional[builtins.str]: ...
     @device.setter
@@ -1946,12 +1985,15 @@ class CandleLlmOptions:
     def cache_dir(self) -> typing.Optional[builtins.str]: ...
     @cache_dir.setter
     def cache_dir(self, value: typing.Optional[builtins.str]) -> None: ...
-    def __new__(cls, *, model_id: typing.Optional[builtins.str] = None, device: typing.Optional[builtins.str] = None, quantization: typing.Optional[builtins.str] = None, revision: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, cache_dir: typing.Optional[builtins.str] = None) -> CandleLlmOptions:
+    def __new__(cls, *, model_id: typing.Optional[builtins.str] = None, tokenizer_repo: typing.Optional[builtins.str] = None, device: typing.Optional[builtins.str] = None, quantization: typing.Optional[builtins.str] = None, revision: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, cache_dir: typing.Optional[builtins.str] = None) -> CandleLlmOptions:
         r"""
         Create a new CandleLlmOptions.
         
         Args:
             model_id: HuggingFace model ID or local path to weights.
+            tokenizer_repo: Optional separate HF repo for ``tokenizer.json``
+                — required for GGUF-only repos that don't redistribute
+                the tokenizer. Falls back to ``model_id``.
             device: Hardware device specifier (``"cpu"``, ``"cuda:0"``, ``"metal"``).
             quantization: Quantization format string (e.g. ``"q4_k_m"``).
             revision: Model revision / branch on HuggingFace.
@@ -1969,9 +2011,11 @@ class CandleLlmProvider:
     No API key is required.
     
     Example:
-        >>> opts = CandleLlmOptions(model_id="meta-llama/Llama-3.2-1B")
-        >>> provider = CandleLlmProvider(options=opts)
-        >>> response = await provider.complete([ChatMessage.user("Hello!")])
+    ```text
+     >>> opts = CandleLlmOptions(model_id="meta-llama/Llama-3.2-1B")
+     >>> provider = CandleLlmProvider(options=opts)
+     >>> response = await provider.complete([ChatMessage.user("Hello!")])
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -2021,9 +2065,11 @@ class ChatMessage:
     A single message in a chat conversation.
     
     Example:
-        >>> msg = ChatMessage(content="Hello, world!")
-        >>> msg = ChatMessage(role="system", content="You are a helpful assistant.")
-        >>> msg = ChatMessage.user("What is 2+2?")
+    ```text
+     >>> msg = ChatMessage(content="Hello, world!")
+     >>> msg = ChatMessage(role="system", content="You are a helpful assistant.")
+     >>> msg = ChatMessage.user("What is 2+2?")
+    ```
     """
     @property
     def role(self) -> builtins.str:
@@ -2194,11 +2240,13 @@ class ChatWindow:
     exceeds the configured budget.
     
     Example:
-        >>> window = ChatWindow(max_tokens=4096)
-        >>> window.add(ChatMessage.system("You are helpful."))
-        >>> window.add(ChatMessage.user("Hello!"))
-        >>> print(window.token_count())
-        >>> print(window.remaining_tokens())
+    ```text
+     >>> window = ChatWindow(max_tokens=4096)
+     >>> window.add(ChatMessage.system("You are helpful."))
+     >>> window.add(ChatMessage.user("Hello!"))
+     >>> print(window.token_count())
+     >>> print(window.remaining_tokens())
+    ```
     """
     def __new__(cls, max_tokens: builtins.int) -> ChatWindow:
         r"""
@@ -2258,11 +2306,13 @@ class CheckpointStore:
     Methods must be ``async``.
     
     Example:
-        >>> class PostgresCheckpointStore(CheckpointStore):
-        ...     async def save(self, checkpoint: WorkflowCheckpoint) -> None: ...
-        ...     async def load(self, run_id: str) -> WorkflowCheckpoint | None: ...
-        ...     async def list(self) -> list[WorkflowCheckpoint]: ...
-        ...     async def delete(self, run_id: str) -> None: ...
+    ```text
+     >>> class PostgresCheckpointStore(CheckpointStore):
+     ...     async def save(self, checkpoint: WorkflowCheckpoint) -> None: ...
+     ...     async def load(self, run_id: str) -> WorkflowCheckpoint | None: ...
+     ...     async def list(self) -> list[WorkflowCheckpoint]: ...
+     ...     async def delete(self, run_id: str) -> None: ...
+    ```
     """
     def __new__(cls) -> CheckpointStore: ...
     def save(self, _checkpoint: typing.Any) -> typing.Any:
@@ -2289,8 +2339,10 @@ class Citation:
     grounding, Anthropic web search, etc.).
     
     Example:
-        >>> for c in response.citations:
-        ...     print(c.url, c.title, c.snippet)
+    ```text
+     >>> for c in response.citations:
+     ...     print(c.url, c.title, c.snippet)
+    ```
     """
     @property
     def url(self) -> builtins.str:
@@ -2422,14 +2474,16 @@ class Compute:
     ``await_completion`` (or ``cancel``).
     
     Example:
-        >>> from blazen import Compute, FalProvider, FalOptions, ComputeRequest
-        >>> fal = FalProvider(options=FalOptions(api_key="fal-..."))
-        >>> compute = Compute.from_fal(fal)
-        >>> handle = await compute.submit(ComputeRequest(model="fal-ai/flux/dev",
-        ...                                              input={"prompt": "a cat"}))
-        >>> while (await compute.status(handle)) in ("queued", "running"):
-        ...     await asyncio.sleep(1)
-        >>> result = await compute.await_completion(handle)
+    ```text
+     >>> from blazen import Compute, FalProvider, FalOptions, ComputeRequest
+     >>> fal = FalProvider(options=FalOptions(api_key="fal-..."))
+     >>> compute = Compute.from_fal(fal)
+     >>> handle = await compute.submit(ComputeRequest(model="fal-ai/flux/dev",
+     ...                                              input={"prompt": "a cat"}))
+     >>> while (await compute.status(handle)) in ("queued", "running"):
+     ...     await asyncio.sleep(1)
+     >>> result = await compute.await_completion(handle)
+    ```
     """
     @staticmethod
     def from_fal(provider: FalProvider) -> Compute:
@@ -2462,7 +2516,9 @@ class ComputeRequest:
     Input for a raw compute job.
     
     Example:
-        >>> req = ComputeRequest(model="fal-ai/flux/dev", input={"prompt": "a cat"})
+    ```text
+     >>> req = ComputeRequest(model="fal-ai/flux/dev", input={"prompt": "a cat"})
+    ```
     """
     @property
     def model(self) -> builtins.str: ...
@@ -2514,11 +2570,13 @@ class ContentHandle:
     at `put` time and can be used for routing without dereferencing.
     
     Example:
-        >>> handle = await store.put(b"...", kind=ContentKind.Image)
-        >>> handle.id
-        'blazen_a1b2c3d4...'
-        >>> handle.kind
-        ContentKind.Image
+    ```text
+     >>> handle = await store.put(b"...", kind=ContentKind.Image)
+     >>> handle.id
+     'blazen_a1b2c3d4...'
+     >>> handle.kind
+     ContentKind.Image
+    ```
     """
     @property
     def id(self) -> builtins.str:
@@ -2607,48 +2665,56 @@ class ContentStore:
     All I/O methods return awaitables.
     
     Example (built-in factory):
-        >>> store = ContentStore.in_memory()
-        >>> handle = await store.put(b"hello", kind=ContentKind.Other)
-        >>> source = await store.resolve(handle)
-        >>> source["type"]
-        'base64'
+    ```text
+     >>> store = ContentStore.in_memory()
+     >>> handle = await store.put(b"hello", kind=ContentKind.Other)
+     >>> source = await store.resolve(handle)
+     >>> source["type"]
+     'base64'
+    ```
     
     Example (subclass):
-        >>> class S3ContentStore(ContentStore):
-        ...     def __init__(self, bucket: str):
-        ...         super().__init__()
-        ...         self.bucket = bucket
-        ...     async def put(self, body, hint): ...
-        ...     async def resolve(self, handle): ...
-        ...     async def fetch_bytes(self, handle): ...
+    ```text
+     >>> class S3ContentStore(ContentStore):
+     ...     def __init__(self, bucket: str):
+     ...         super().__init__()
+     ...         self.bucket = bucket
+     ...     async def put(self, body, hint): ...
+     ...     async def resolve(self, handle): ...
+     ...     async def fetch_bytes(self, handle): ...
+    ```
     
     Example (streaming subclass):
-        >>> class StreamingStore(ContentStore):
-        ...     async def put(self, body, hint):
-        ...         # `body` is a serde-tagged dict; the streaming variant
-        ...         # exposes an AsyncByteIter under body["stream"].
-        ...         if body["type"] == "stream":
-        ...             async for chunk in body["stream"]:
-        ...                 await self._sink.write(chunk)
-        ...         else:
-        ...             ...  # handle "bytes" / "url" / "local_path" / "provider_file"
-        ...         return ContentHandle(...)
-        ...     async def fetch_stream(self, handle):
-        ...         # Yield chunks from an async generator; the runtime
-        ...         # drives __anext__() and bridges into a Rust ByteStream.
-        ...         async def gen():
-        ...             async for chunk in self._source.iter(handle):
-        ...                 yield chunk
-        ...         return gen()
+    ```text
+     >>> class StreamingStore(ContentStore):
+     ...     async def put(self, body, hint):
+     ...         # `body` is a serde-tagged dict; the streaming variant
+     ...         # exposes an AsyncByteIter under body["stream"].
+     ...         if body["type"] == "stream":
+     ...             async for chunk in body["stream"]:
+     ...                 await self._sink.write(chunk)
+     ...         else:
+     ...             ...  # handle "bytes" / "url" / "local_path" / "provider_file"
+     ...         return ContentHandle(...)
+     ...     async def fetch_stream(self, handle):
+     ...         # Yield chunks from an async generator; the runtime
+     ...         # drives __anext__() and bridges into a Rust ByteStream.
+     ...         async def gen():
+     ...             async for chunk in self._source.iter(handle):
+     ...                 yield chunk
+     ...         return gen()
+    ```
     
     Example (callback factory):
-        >>> store = ContentStore.custom(
-        ...     put=async_put_fn,
-        ...     resolve=async_resolve_fn,
-        ...     fetch_bytes=async_fetch_fn,
-        ...     fetch_stream=async_fetch_stream_fn,  # may return bytes or AsyncIterator[bytes]
-        ...     name="my_s3_store",
-        ... )
+    ```text
+     >>> store = ContentStore.custom(
+     ...     put=async_put_fn,
+     ...     resolve=async_resolve_fn,
+     ...     fetch_bytes=async_fetch_fn,
+     ...     fetch_stream=async_fetch_stream_fn,  # may return bytes or AsyncIterator[bytes]
+     ...     name="my_s3_store",
+     ... )
+    ```
     """
     def __new__(cls) -> ContentStore:
         r"""
@@ -2777,12 +2843,14 @@ class Context:
     objects, or live references for unpicklable objects (DB connections, etc.).
     
     Example:
-        >>> def my_step(ctx: Context, ev: Event) -> Event:
-        ...     ctx.set("counter", 42)
-        ...     ctx.set("model", MyPydanticModel(name="foo"))
-        ...     ctx.set("db", sqlite3.connect(":memory:"))
-        ...     val = ctx.get("counter")  # returns 42
-        ...     db = ctx.get("db")        # returns the same connection
+    ```text
+     >>> def my_step(ctx: Context, ev: Event) -> Event:
+     ...     ctx.set("counter", 42)
+     ...     ctx.set("model", MyPydanticModel(name="foo"))
+     ...     ctx.set("db", sqlite3.connect(":memory:"))
+     ...     val = ctx.get("counter")  # returns 42
+     ...     db = ctx.get("db")        # returns the same connection
+    ```
     """
     @property
     def state(self) -> StateNamespace:
@@ -2821,7 +2889,39 @@ class Context:
             key: The storage key.
             value: Any Python value.
         """
+    def aset(self, key: builtins.str, value: typing.Any) -> typing.Any:
+        r"""
+        Store any value under the given key.
+        
+        Storage tiers (tried in order):
+        1. `bytes`/`bytearray` → raw binary (survives snapshots)
+        2. JSON-serializable (dict, list, str, int, float, bool, None) → JSON (survives snapshots)
+        3. Picklable objects (Pydantic, dataclasses, etc.) → pickled bytes (survives snapshots)
+        4. Unpicklable objects (DB connections, file handles) → live reference (same-process only)
+        
+        Args:
+            key: The storage key.
+            value: Any Python value.
+        """
     def get(self, key: builtins.str, default: typing.Optional[typing.Any] = None) -> typing.Any:
+        r"""
+        Retrieve a value previously stored under the given key.
+        
+        Returns the original Python type: JSON values as their Python
+        equivalents, binary data as `bytes`, pickled objects as their
+        original type, live references as-is. If the key is missing,
+        or the stored value would resolve to Python `None`, the
+        `default` argument is returned instead (default: `None`).
+        
+        Args:
+            key: The storage key.
+            default: Value to return when the key is missing. Defaults
+                to `None`.
+        
+        Returns:
+            The stored value in its original type, or `default`.
+        """
+    def aget(self, key: builtins.str, default: typing.Optional[typing.Any] = None) -> typing.Any:
         r"""
         Retrieve a value previously stored under the given key.
         
@@ -2849,7 +2949,28 @@ class Context:
         Args:
             event: The event to send.
         """
+    def asend_event(self, event: Event) -> typing.Any:
+        r"""
+        Emit an event into the internal routing queue.
+        
+        The event will be routed to any step whose `accepts` list includes
+        its event type.
+        
+        Args:
+            event: The event to send.
+        """
     def write_event_to_stream(self, event: Event) -> None:
+        r"""
+        Publish an event to the external broadcast stream.
+        
+        Consumers that subscribed via `WorkflowHandler.stream_events()` will
+        receive this event. Unlike `send_event`, this does NOT route the
+        event through the internal step registry.
+        
+        Args:
+            event: The event to publish to the stream.
+        """
+    def awrite_event_to_stream(self, event: Event) -> typing.Any:
         r"""
         Publish an event to the external broadcast stream.
         
@@ -2875,7 +2996,29 @@ class Context:
         Returns:
             The stored bytes, or `default`.
         """
+    def aget_bytes(self, key: builtins.str, default: typing.Optional[typing.Sequence[builtins.int]] = None) -> typing.Any:
+        r"""
+        Retrieve raw binary data previously stored under the given key.
+        
+        Returns `default` (which itself defaults to `None`) if the key
+        does not exist or the stored value is not binary data.
+        
+        Args:
+            key: The storage key.
+            default: Bytes to return when the key is missing. Defaults
+                to `None`.
+        
+        Returns:
+            The stored bytes, or `default`.
+        """
     def run_id(self) -> builtins.str:
+        r"""
+        Get the workflow run ID.
+        
+        Returns:
+            The UUID string for this workflow run.
+        """
+    def arun_id(self) -> typing.Any:
         r"""
         Get the workflow run ID.
         
@@ -3337,8 +3480,10 @@ class DiffusionOptions:
     Options for the local diffusion-rs image generation backend.
     
     Example:
-        >>> opts = DiffusionOptions(model_id="stabilityai/stable-diffusion-2-1", width=768, height=768)
-        >>> provider = DiffusionProvider(options=opts)
+    ```text
+     >>> opts = DiffusionOptions(model_id="stabilityai/stable-diffusion-2-1", width=768, height=768)
+     >>> provider = DiffusionProvider(options=opts)
+    ```
     """
     @property
     def model_id(self) -> typing.Optional[builtins.str]: ...
@@ -3401,8 +3546,10 @@ class DiffusionProvider:
     the pipeline wiring lands.
     
     Example:
-        >>> opts = DiffusionOptions(model_id="stabilityai/stable-diffusion-2-1")
-        >>> provider = DiffusionProvider(options=opts)
+    ```text
+     >>> opts = DiffusionOptions(model_id="stabilityai/stable-diffusion-2-1")
+     >>> provider = DiffusionProvider(options=opts)
+    ```
     """
     @property
     def width(self) -> builtins.int:
@@ -3550,8 +3697,10 @@ class EmbedOptions:
     Options for the local embedding backend.
     
     Example:
-        >>> opts = EmbedOptions(model_name="BGESmallENV15")
-        >>> model = EmbeddingModel.local(options=opts)
+    ```text
+     >>> opts = EmbedOptions(model_name="BGESmallENV15")
+     >>> model = EmbeddingModel.local(options=opts)
+    ```
     """
     @property
     def model_name(self) -> typing.Optional[builtins.str]: ...
@@ -3589,9 +3738,11 @@ class EmbeddingModel:
     provider, then call `embed()` to generate embeddings.
     
     Example:
-        >>> model = EmbeddingModel.openai(options=ProviderOptions(api_key="sk-..."))
-        >>> response = await model.embed(["Hello", "World"])
-        >>> print(response.embeddings)
+    ```text
+     >>> model = EmbeddingModel.openai(options=ProviderOptions(api_key="sk-..."))
+     >>> response = await model.embed(["Hello", "World"])
+     >>> print(response.embeddings)
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -3678,9 +3829,11 @@ class EmbeddingModel:
             An EmbeddingResponse with embeddings, model, usage, and cost.
         
         Example:
-            >>> response = await model.embed(["Hello", "World"])
-            >>> print(len(response.embeddings))  # 2
-            >>> print(len(response.embeddings[0]))  # dimensionality
+        ```text
+         >>> response = await model.embed(["Hello", "World"])
+         >>> print(len(response.embeddings))  # 2
+         >>> print(len(response.embeddings[0]))  # dimensionality
+        ```
         """
     def __repr__(self) -> builtins.str: ...
     @staticmethod
@@ -3692,8 +3845,10 @@ class EmbeddingModel:
             options: Optional typed ``EmbedOptions`` object.
         
         Example:
-            >>> model = EmbeddingModel.local()
-            >>> model = EmbeddingModel.local(options=EmbedOptions(model_name="BGESmallENV15"))
+        ```text
+         >>> model = EmbeddingModel.local()
+         >>> model = EmbeddingModel.local(options=EmbedOptions(model_name="BGESmallENV15"))
+        ```
         """
 
 class EmbeddingProvider:
@@ -3763,9 +3918,11 @@ class EmbeddingResponse:
     timing, and provider-specific metadata.
     
     Example:
-        >>> response = await model.embed(["Hello", "World"])
-        >>> print(response.model)
-        >>> print(len(response.embeddings))  # 2
+    ```text
+     >>> response = await model.embed(["Hello", "World"])
+     >>> print(response.model)
+     >>> print(len(response.embeddings))  # 2
+    ```
     """
     @property
     def embeddings(self) -> builtins.list[builtins.list[builtins.float]]:
@@ -3918,10 +4075,12 @@ class FalEmbeddingModel:
     Python. Constructed via [`FalProvider::embedding_model`].
     
     Example:
-        >>> fal = FalProvider(options=FalOptions(api_key="fal-..."))
-        >>> em = fal.embedding_model()
-        >>> resp = await em.embed(["hello", "world"])
-        >>> print(len(resp.embeddings))  # 2
+    ```text
+     >>> fal = FalProvider(options=FalOptions(api_key="fal-..."))
+     >>> em = fal.embedding_model()
+     >>> resp = await em.embed(["hello", "world"])
+     >>> print(len(resp.embeddings))  # 2
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -4009,9 +4168,11 @@ class FalProvider:
       ``openrouter/router/openai/v1/chat/completions`` -- ``OpenAiChat``)
     
     Example:
-        >>> fal = FalProvider(options=FalOptions(api_key="fal-key-..."))
-        >>> result = await fal.generate_image(ImageRequest(prompt="a cat in space"))
-        >>> response = await fal.complete([ChatMessage.user("Hello!")])
+    ```text
+     >>> fal = FalProvider(options=FalOptions(api_key="fal-key-..."))
+     >>> result = await fal.generate_image(ImageRequest(prompt="a cat in space"))
+     >>> response = await fal.complete([ChatMessage.user("Hello!")])
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -4250,10 +4411,12 @@ class FallbackModel:
     `Model.with_fallback(...)`.
     
     Example:
-        >>> primary = Model.openai()
-        >>> backup = Model.anthropic()
-        >>> model = FallbackModel(primary, backup)
-        >>> response = await model.complete([ChatMessage.user("Hi")])
+    ```text
+     >>> primary = Model.openai()
+     >>> backup = Model.anthropic()
+     >>> model = FallbackModel(primary, backup)
+     >>> response = await model.complete([ChatMessage.user("Hi")])
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -4296,9 +4459,11 @@ class FastEmbedModel:
     for callers that want explicit feature gating or per-instance options.
     
     Example:
-        >>> opts = FastEmbedOptions(model_name="BGESmallENV15")
-        >>> model = FastEmbedModel(options=opts)
-        >>> response = await model.embed(["hello", "world"])
+    ```text
+     >>> opts = FastEmbedOptions(model_name="BGESmallENV15")
+     >>> model = FastEmbedModel(options=opts)
+     >>> response = await model.embed(["hello", "world"])
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -4340,8 +4505,10 @@ class FastEmbedOptions:
     the Microsoft-prebuilt ONNX Runtime binaries can link.
     
     Example:
-        >>> opts = FastEmbedOptions(model_name="BGESmallENV15")
-        >>> model = FastEmbedModel(options=opts)
+    ```text
+     >>> opts = FastEmbedOptions(model_name="BGESmallENV15")
+     >>> model = FastEmbedModel(options=opts)
+    ```
     """
     @property
     def model_name(self) -> typing.Optional[builtins.str]: ...
@@ -4456,9 +4623,11 @@ class FinishReason:
     provider string.
     
     Example:
-        >>> normalized = response.finish_reason_normalized()
-        >>> if normalized is not None and normalized.kind == "tool_calls":
-        ...     handle_tool_calls(response.tool_calls)
+    ```text
+     >>> normalized = response.finish_reason_normalized()
+     >>> if normalized is not None and normalized.kind == "tool_calls":
+     ...     handle_tool_calls(response.tool_calls)
+    ```
     """
     @property
     def kind(self) -> builtins.str:
@@ -4560,9 +4729,11 @@ class GeminiProvider:
     This is the standalone class form of `Model.gemini(...)`.
     
     Example:
-        >>> from blazen import GeminiProvider, ProviderOptions, ChatMessage
-        >>> p = GeminiProvider(options=ProviderOptions(api_key="..."))
-        >>> resp = await p.complete([ChatMessage.user("Hello!")])
+    ```text
+     >>> from blazen import GeminiProvider, ProviderOptions, ChatMessage
+     >>> p = GeminiProvider(options=ProviderOptions(api_key="..."))
+     >>> resp = await p.complete([ChatMessage.user("Hello!")])
+    ```
     """
     @property
     def model_id(self) -> builtins.str: ...
@@ -4877,17 +5048,19 @@ class HttpClient:
     ``send_streaming`` returns an async iterator of ``bytes`` chunks.
     
     Example:
-        >>> class HttpxClient(HttpClient):
-        ...     async def send(self, request):
-        ...         resp = await self._client.request(
-        ...             request["method"], request["url"],
-        ...             headers=request["headers"], content=request.get("body"),
-        ...         )
-        ...         return {
-        ...             "status": resp.status_code,
-        ...             "headers": list(resp.headers.items()),
-        ...             "body": resp.content,
-        ...         }
+    ```text
+     >>> class HttpxClient(HttpClient):
+     ...     async def send(self, request):
+     ...         resp = await self._client.request(
+     ...             request["method"], request["url"],
+     ...             headers=request["headers"], content=request.get("body"),
+     ...         )
+     ...         return {
+     ...             "status": resp.status_code,
+     ...             "headers": list(resp.headers.items()),
+     ...             "body": resp.content,
+     ...         }
+    ```
     """
     def __new__(cls) -> HttpClient: ...
     async def send(self, request: typing.Any) -> dict[str, typing.Any]:
@@ -4919,8 +5092,10 @@ class HttpClientConfig:
     factory (no request / connect timeout).
     
     Example:
-        >>> cfg = HttpClientConfig(request_timeout=30.0, connect_timeout=5.0)
-        >>> unlimited = HttpClientConfig.unlimited()
+    ```text
+     >>> cfg = HttpClientConfig(request_timeout=30.0, connect_timeout=5.0)
+     >>> unlimited = HttpClientConfig.unlimited()
+    ```
     """
     @property
     def request_timeout(self) -> typing.Optional[builtins.float]:
@@ -5327,8 +5502,10 @@ class InMemoryBackend:
     Suitable for testing, prototyping, and short-lived processes.
     
     Example:
-        >>> backend = InMemoryBackend()
-        >>> memory = Memory(embedder, backend)
+    ```text
+     >>> backend = InMemoryBackend()
+     >>> memory = Memory(embedder, backend)
+    ```
     """
     def __new__(cls) -> InMemoryBackend:
         r"""
@@ -5588,8 +5765,10 @@ class JobHandle:
     A handle to a submitted compute job.
     
     Example:
-        >>> handle = await fal.submit(model="fal-ai/flux/dev", input={...})
-        >>> print(handle.id, handle.model)
+    ```text
+     >>> handle = await fal.submit(model="fal-ai/flux/dev", input={...})
+     >>> print(handle.id, handle.model)
+    ```
     """
     @property
     def id(self) -> builtins.str:
@@ -5626,9 +5805,11 @@ class JobStatus:
     ``cancelled()``) or via the legacy string constants.
     
     Example:
-        >>> JobStatus.queued()
-        >>> JobStatus.failed("rate limited")
-        >>> JobStatus.QUEUED    # legacy string constant -- "queued"
+    ```text
+     >>> JobStatus.queued()
+     >>> JobStatus.failed("rate limited")
+     >>> JobStatus.QUEUED    # legacy string constant -- "queued"
+    ```
     """
     QUEUED: builtins.str = 'queued'
     RUNNING: builtins.str = 'running'
@@ -5683,8 +5864,10 @@ class JsonlBackend:
     the file. Deletions trigger a full rewrite.
     
     Example:
-        >>> backend = await JsonlBackend.create("memories.jsonl")
-        >>> memory = Memory(embedder, backend)
+    ```text
+     >>> backend = await JsonlBackend.create("memories.jsonl")
+     >>> memory = Memory(embedder, backend)
+    ```
     """
     @staticmethod
     async def create(path: builtins.str) -> JsonlBackend:
@@ -5820,15 +6003,17 @@ class LangfuseConfig:
     Configuration for the Langfuse LLM observability exporter.
     
     Example:
-        >>> from blazen import LangfuseConfig, init_langfuse
-        >>> cfg = LangfuseConfig(
-        ...     public_key="pk-lf-...",
-        ...     secret_key="sk-lf-...",
-        ...     host="https://cloud.langfuse.com",
-        ...     batch_size=100,
-        ...     flush_interval_ms=5000,
-        ... )
-        >>> init_langfuse(cfg)
+    ```text
+     >>> from blazen import LangfuseConfig, init_langfuse
+     >>> cfg = LangfuseConfig(
+     ...     public_key="pk-lf-...",
+     ...     secret_key="sk-lf-...",
+     ...     host="https://cloud.langfuse.com",
+     ...     batch_size=100,
+     ...     flush_interval_ms=5000,
+     ... )
+     >>> init_langfuse(cfg)
+    ```
     """
     @property
     def public_key(self) -> builtins.str: ...
@@ -5994,13 +6179,19 @@ class LlamaCppOptions:
     Options for the local llama.cpp LLM backend.
     
     Example:
-        >>> opts = LlamaCppOptions(model_path="/models/llama-3.2-1b-q4_k_m.gguf")
-        >>> provider = LlamaCppProvider(options=opts)
+    ```text
+     >>> opts = LlamaCppOptions(model_path="/models/llama-3.2-1b-q4_k_m.gguf")
+     >>> provider = LlamaCppProvider(options=opts)
+    ```
     """
     @property
     def model_path(self) -> typing.Optional[builtins.str]: ...
     @model_path.setter
     def model_path(self, value: typing.Optional[builtins.str]) -> None: ...
+    @property
+    def tokenizer_repo(self) -> typing.Optional[builtins.str]: ...
+    @tokenizer_repo.setter
+    def tokenizer_repo(self, value: typing.Optional[builtins.str]) -> None: ...
     @property
     def device(self) -> typing.Optional[builtins.str]: ...
     @device.setter
@@ -6021,12 +6212,14 @@ class LlamaCppOptions:
     def cache_dir(self) -> typing.Optional[builtins.str]: ...
     @cache_dir.setter
     def cache_dir(self, value: typing.Optional[builtins.str]) -> None: ...
-    def __new__(cls, *, model_path: typing.Optional[builtins.str] = None, device: typing.Optional[builtins.str] = None, quantization: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, n_gpu_layers: typing.Optional[builtins.int] = None, cache_dir: typing.Optional[builtins.str] = None) -> LlamaCppOptions:
+    def __new__(cls, *, model_path: typing.Optional[builtins.str] = None, tokenizer_repo: typing.Optional[builtins.str] = None, device: typing.Optional[builtins.str] = None, quantization: typing.Optional[builtins.str] = None, context_length: typing.Optional[builtins.int] = None, n_gpu_layers: typing.Optional[builtins.int] = None, cache_dir: typing.Optional[builtins.str] = None) -> LlamaCppOptions:
         r"""
         Create a new LlamaCppOptions.
         
         Args:
             model_path: Path to a GGUF model file or HuggingFace model ID.
+            tokenizer_repo: Accepted for cross-backend parity but unused —
+                llama.cpp reads the tokenizer from inside the GGUF file.
             device: Hardware device specifier (``"cpu"``, ``"cuda:0"``, ``"metal"``).
             quantization: Quantization format string (e.g. ``"q4_k_m"``).
             context_length: Maximum context length in tokens.
@@ -6045,9 +6238,11 @@ class LlamaCppProvider:
     callers can pre-warm by awaiting :meth:`load`.
     
     Example:
-        >>> opts = LlamaCppOptions(model_path="/models/llama-3.2-1b-q4_k_m.gguf")
-        >>> provider = LlamaCppProvider(options=opts)
-        >>> response = await provider.complete([ChatMessage.user("Hello!")])
+    ```text
+     >>> opts = LlamaCppOptions(model_path="/models/llama-3.2-1b-q4_k_m.gguf")
+     >>> provider = LlamaCppProvider(options=opts)
+     >>> response = await provider.complete([ChatMessage.user("Hello!")])
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -6055,6 +6250,16 @@ class LlamaCppProvider:
         Get the model identifier (typically the GGUF path or HF model id).
         """
     def __new__(cls, *, options: typing.Optional[LlamaCppOptions] = None) -> LlamaCppProvider:
+        r"""
+        Create a new llama.cpp provider.
+        
+        Args:
+            options: Optional :class:`LlamaCppOptions` for model path,
+                device, quantization, context length, GPU layer count, and
+                cache directory.
+        """
+    @classmethod
+    def aopen(cls, *, options: typing.Optional[LlamaCppOptions] = None) -> typing.Any:
         r"""
         Create a new llama.cpp provider.
         
@@ -6190,13 +6395,15 @@ class LlmProviderDefaults:
     arrives in Phase B.
     
     Example:
-        >>> from blazen import LlmProviderDefaults, Model
-        >>> inner = Model.openai()
-        >>> provider = (
-        ...     LlmProviderDefaults(inner)
-        ...     .with_system_prompt("be terse")
-        ...     .with_response_format({"type": "json_object"})
-        ... )
+    ```text
+     >>> from blazen import LlmProviderDefaults, Model
+     >>> inner = Model.openai()
+     >>> provider = (
+     ...     LlmProviderDefaults(inner)
+     ...     .with_system_prompt("be terse")
+     ...     .with_response_format({"type": "json_object"})
+     ... )
+    ```
     """
     @property
     def defaults(self) -> ProviderDefaults:
@@ -6316,9 +6523,11 @@ class LoopDecision:
     
     Construct one of the three variants via the classmethod factories:
     
-        >>> LoopDecision.cont()           # run the inner stage again
-        >>> LoopDecision.done()           # stop cleanly; the loop succeeds
-        >>> LoopDecision.abort("reason")  # stop with an error
+    ```text
+    >>> LoopDecision.cont()           # run the inner stage again
+    >>> LoopDecision.done()           # stop cleanly; the loop succeeds
+    >>> LoopDecision.abort("reason")  # stop with an error
+    ```
     
     (`cont` is named without a trailing underscore so it reads as
     ``LoopDecision.cont()``; ``continue`` is a Python keyword.)
@@ -6368,17 +6577,19 @@ class LoopStage:
     returning a :class:`LoopDecision`.
     
     Example:
-        >>> def keep_going(state, rounds):
-        ...     if rounds >= 5:
-        ...         return LoopDecision.done()
-        ...     return LoopDecision.cont()
-        >>>
-        >>> refine = LoopStage(
-        ...     name="refine",
-        ...     max_iterations=10,
-        ...     inner=refine_stage,
-        ...     until=keep_going,
-        ... )
+    ```text
+     >>> def keep_going(state, rounds):
+     ...     if rounds >= 5:
+     ...         return LoopDecision.done()
+     ...     return LoopDecision.cont()
+     >>>
+     >>> refine = LoopStage(
+     ...     name="refine",
+     ...     max_iterations=10,
+     ...     inner=refine_stage,
+     ...     until=keep_going,
+     ... )
+    ```
     """
     @property
     def name(self) -> builtins.str:
@@ -6479,9 +6690,11 @@ class MediaType:
     Media type constants for identifying file formats.
     
     Example:
-        >>> MediaType.PNG   # "image/png"
-        >>> MediaType.MP4   # "video/mp4"
-        >>> MediaType.MP3   # "audio/mpeg"
+    ```text
+     >>> MediaType.PNG   # "image/png"
+     >>> MediaType.MP4   # "video/mp4"
+     >>> MediaType.MP3   # "audio/mpeg"
+    ```
     """
     PNG: builtins.str = 'image/png'
     JPEG: builtins.str = 'image/jpeg'
@@ -6520,11 +6733,13 @@ class Memory:
     ``search_local()`` is available -- no embedding model is required.
     
     Example:
-        >>> embedder = EmbeddingModel.openai(options=ProviderOptions(api_key=key))
-        >>> memory = Memory(embedder, InMemoryBackend())
-        >>> await memory.add("doc1", "Paris is the capital of France")
-        >>> results = await memory.search("France capital", limit=5)
-        >>> print(results[0].text)
+    ```text
+     >>> embedder = EmbeddingModel.openai(options=ProviderOptions(api_key=key))
+     >>> memory = Memory(embedder, InMemoryBackend())
+     >>> await memory.add("doc1", "Paris is the capital of France")
+     >>> results = await memory.search("France capital", limit=5)
+     >>> print(results[0].text)
+    ```
     """
     def __new__(cls, embedder: EmbeddingModel, backend: typing.Any) -> Memory:
         r"""
@@ -6637,13 +6852,15 @@ class MemoryBackend:
     (e.g. PostgreSQL, DynamoDB, SQLite).
     
     Example:
-        >>> class PostgresBackend(MemoryBackend):
-        ...     async def put(self, entry): ...
-        ...     async def get(self, id): ...
-        ...     async def delete(self, id): ...
-        ...     async def list(self): ...
-        ...     async def len(self): ...
-        ...     async def search_by_bands(self, bands, limit): ...
+    ```text
+     >>> class PostgresBackend(MemoryBackend):
+     ...     async def put(self, entry): ...
+     ...     async def get(self, id): ...
+     ...     async def delete(self, id): ...
+     ...     async def list(self): ...
+     ...     async def len(self): ...
+     ...     async def search_by_bands(self, bands, limit): ...
+    ```
     """
     def __new__(cls) -> MemoryBackend: ...
     def __init__(self) -> None:
@@ -6691,8 +6908,10 @@ class MemoryEntry:
             Python value).
     
     Example:
-        >>> entry = MemoryEntry(text="hello", id="my-id", metadata={"k": "v"})
-        >>> await memory.add_many([entry])
+    ```text
+     >>> entry = MemoryEntry(text="hello", id="my-id", metadata={"k": "v"})
+     >>> await memory.add_many([entry])
+    ```
     """
     @property
     def text(self) -> builtins.str:
@@ -6721,13 +6940,15 @@ class MemoryResult:
     A single search result from a Memory search.
     
     Example:
-        >>> results = await memory.search("France capital", limit=5)
-        >>> results[0].id
-        'doc1'
-        >>> results[0].text
-        'Paris is the capital of France'
-        >>> results[0].score
-        0.85
+    ```text
+     >>> results = await memory.search("France capital", limit=5)
+     >>> results[0].id
+     'doc1'
+     >>> results[0].text
+     'Paris is the capital of France'
+     >>> results[0].score
+     0.85
+    ```
     """
     @property
     def id(self) -> builtins.str:
@@ -6766,14 +6987,16 @@ class MemoryStore:
     ``NotImplementedError``.
     
     Example:
-        >>> class CachingStore(MemoryStore):
-        ...     def __init__(self, inner: Memory, cache: dict): ...
-        ...     async def add(self, entries): ...
-        ...     async def search(self, query, limit, metadata_filter=None): ...
-        ...     async def search_local(self, query, limit, metadata_filter=None): ...
-        ...     async def get(self, id): ...
-        ...     async def delete(self, id): ...
-        ...     async def len(self): ...
+    ```text
+     >>> class CachingStore(MemoryStore):
+     ...     def __init__(self, inner: Memory, cache: dict): ...
+     ...     async def add(self, entries): ...
+     ...     async def search(self, query, limit, metadata_filter=None): ...
+     ...     async def search_local(self, query, limit, metadata_filter=None): ...
+     ...     async def get(self, id): ...
+     ...     async def delete(self, id): ...
+     ...     async def len(self): ...
+    ```
     """
     def __new__(cls) -> MemoryStore: ...
     def add(self, entries: typing.Any) -> typing.Any:
@@ -6895,15 +7118,17 @@ class Middleware:
     before returning it.
     
     Example:
-        >>> class LoggingMiddleware(Middleware):
-        ...     async def apply(self, model, messages, options):
-        ...         print(f"calling {model.model_id}")
-        ...         response = await model.complete(messages, options)
-        ...         print(f"got {len(response.content or '')} chars")
-        ...         return response
-        >>>
-        >>> stack = MiddlewareStack().layer(LoggingMiddleware())
-        >>> wrapped = stack.apply(Model.openai())
+    ```text
+     >>> class LoggingMiddleware(Middleware):
+     ...     async def apply(self, model, messages, options):
+     ...         print(f"calling {model.model_id}")
+     ...         response = await model.complete(messages, options)
+     ...         print(f"got {len(response.content or '')} chars")
+     ...         return response
+     >>>
+     >>> stack = MiddlewareStack().layer(LoggingMiddleware())
+     >>> wrapped = stack.apply(Model.openai())
+    ```
     """
     def __new__(cls) -> Middleware: ...
     def apply(self, model: typing.Any, messages: typing.Any, options: typing.Optional[typing.Any] = None) -> typing.Any:
@@ -6935,10 +7160,12 @@ class MiddlewareStack:
     supplied model.
     
     Example:
-        >>> stack = (MiddlewareStack()
-        ...     .with_retry(RetryConfig(max_retries=5))
-        ...     .with_cache(CacheConfig(ttl_seconds=600)))
-        >>> wrapped = stack.apply(Model.openai())
+    ```text
+     >>> stack = (MiddlewareStack()
+     ...     .with_retry(RetryConfig(max_retries=5))
+     ...     .with_cache(CacheConfig(ttl_seconds=600)))
+     >>> wrapped = stack.apply(Model.openai())
+    ```
     """
     def __new__(cls) -> MiddlewareStack:
         r"""
@@ -7016,13 +7243,19 @@ class MistralRsOptions:
     path to a GGUF file). All other arguments are optional.
     
     Example:
-        >>> opts = MistralRsOptions("mistralai/Mistral-7B-Instruct-v0.3")
-        >>> model = Model.mistralrs(options=opts)
+    ```text
+     >>> opts = MistralRsOptions("mistralai/Mistral-7B-Instruct-v0.3")
+     >>> model = Model.mistralrs(options=opts)
+    ```
     """
     @property
-    def model_id(self) -> builtins.str: ...
+    def model_id(self) -> typing.Optional[builtins.str]: ...
     @model_id.setter
     def model_id(self, value: builtins.str) -> None: ...
+    @property
+    def tokenizer_repo(self) -> typing.Optional[builtins.str]: ...
+    @tokenizer_repo.setter
+    def tokenizer_repo(self, value: typing.Optional[builtins.str]) -> None: ...
     @property
     def quantization(self) -> typing.Optional[builtins.str]: ...
     @quantization.setter
@@ -7047,12 +7280,14 @@ class MistralRsOptions:
     def cache_dir(self) -> typing.Optional[builtins.str]: ...
     @cache_dir.setter
     def cache_dir(self, value: typing.Optional[builtins.str]) -> None: ...
-    def __new__(cls, model_id: builtins.str, *, quantization: typing.Optional[Quantization] = None, device: typing.Optional[Device] = None, context_length: typing.Optional[builtins.int] = None, max_batch_size: typing.Optional[builtins.int] = None, chat_template: typing.Optional[builtins.str] = None, cache_dir: typing.Optional[builtins.str] = None) -> MistralRsOptions:
+    def __new__(cls, model_id: builtins.str, *, tokenizer_repo: typing.Optional[builtins.str] = None, quantization: typing.Optional[Quantization] = None, device: typing.Optional[Device] = None, context_length: typing.Optional[builtins.int] = None, max_batch_size: typing.Optional[builtins.int] = None, chat_template: typing.Optional[builtins.str] = None, cache_dir: typing.Optional[builtins.str] = None) -> MistralRsOptions:
         r"""
         Create a new MistralRsOptions.
         
         Args:
             model_id: HuggingFace model ID or local GGUF path (required).
+            tokenizer_repo: Optional separate HF repo for tokenizer.json
+                (no-op for mistralrs — accepted for cross-backend parity).
             quantization: Quantization format enum value (e.g. ``Quantization.Q4KM``).
             device: Hardware device enum value (e.g. ``Device.Cuda``).
             context_length: Maximum context length in tokens.
@@ -7072,9 +7307,11 @@ class MistralRsProvider:
     No API key is required.
     
     Example:
-        >>> opts = MistralRsOptions("mistralai/Mistral-7B-Instruct-v0.3")
-        >>> provider = MistralRsProvider(options=opts)
-        >>> response = await provider.complete([ChatMessage.user("Hello!")])
+    ```text
+     >>> opts = MistralRsOptions("mistralai/Mistral-7B-Instruct-v0.3")
+     >>> provider = MistralRsProvider(options=opts)
+     >>> response = await provider.complete([ChatMessage.user("Hello!")])
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -7195,13 +7432,15 @@ class Model:
     provider, then call `complete()` to generate responses.
     
     Example:
-        >>> model = Model.openai()
-        >>> model = Model.anthropic()
-        >>> model = Model.openrouter()
-        >>>
-        >>> response = await model.complete([
-        ...     ChatMessage.user("What is 2+2?")
-        ... ])
+    ```text
+     >>> model = Model.openai()
+     >>> model = Model.anthropic()
+     >>> model = Model.openrouter()
+     >>>
+     >>> response = await model.complete([
+     ...     ChatMessage.user("What is 2+2?")
+     ... ])
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -7430,7 +7669,9 @@ class Model:
             A new Model with retry behaviour.
         
         Example:
-            >>> model = Model.openai(options=ProviderOptions(api_key="sk-...")).with_retry(RetryConfig(max_retries=5))
+        ```text
+         >>> model = Model.openai(options=ProviderOptions(api_key="sk-...")).with_retry(RetryConfig(max_retries=5))
+        ```
         """
     @staticmethod
     def with_fallback(models: typing.Sequence[Model]) -> Model:
@@ -7448,9 +7689,11 @@ class Model:
             A new Model that falls back through the providers.
         
         Example:
-            >>> primary = Model.openai(options=ProviderOptions(api_key="sk-..."))
-            >>> backup = Model.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
-            >>> model = Model.with_fallback([primary, backup])
+        ```text
+         >>> primary = Model.openai(options=ProviderOptions(api_key="sk-..."))
+         >>> backup = Model.anthropic(options=ProviderOptions(api_key="sk-ant-..."))
+         >>> model = Model.with_fallback([primary, backup])
+        ```
         """
     def with_cache(self, config: typing.Optional[CacheConfig] = None) -> Model:
         r"""
@@ -7468,7 +7711,9 @@ class Model:
             A new Model with caching enabled.
         
         Example:
-            >>> model = Model.openai(options=ProviderOptions(api_key="sk-...")).with_cache(CacheConfig(ttl_seconds=600))
+        ```text
+         >>> model = Model.openai(options=ProviderOptions(api_key="sk-...")).with_cache(CacheConfig(ttl_seconds=600))
+        ```
         """
     async def complete(self, messages: typing.Sequence[ChatMessage], options: typing.Optional[ModelOptions] = None) -> ModelResponse:
         r"""
@@ -7484,11 +7729,13 @@ class Model:
             and finish_reason attributes.
         
         Example:
-            >>> response = await model.complete([
-            ...     ChatMessage.system("You are helpful."),
-            ...     ChatMessage.user("What is 2+2?"),
-            ... ])
-            >>> print(response.content)
+        ```text
+         >>> response = await model.complete([
+         ...     ChatMessage.system("You are helpful."),
+         ...     ChatMessage.user("What is 2+2?"),
+         ... ])
+         >>> print(response.content)
+        ```
         """
     def stream(self, messages: typing.Sequence[ChatMessage], on_chunk: typing.Optional[typing.Any] = None, options: typing.Optional[ModelOptions] = None) -> typing.Any:
         r"""
@@ -7510,15 +7757,19 @@ class Model:
                 tools, and response format.
         
         Example (async iterator):
-            >>> async for chunk in model.stream([ChatMessage.user("Hi!")]):
-            ...     if chunk.delta:
-            ...         print(chunk.delta, end="")
+        ```text
+         >>> async for chunk in model.stream([ChatMessage.user("Hi!")]):
+         ...     if chunk.delta:
+         ...         print(chunk.delta, end="")
+        ```
         
         Example (callback):
-            >>> def handle_chunk(chunk):
-            ...     if chunk.delta:
-            ...         print(chunk.delta, end="")
-            >>> await model.stream([ChatMessage.user("Hi!")], handle_chunk)
+        ```text
+         >>> def handle_chunk(chunk):
+         ...     if chunk.delta:
+         ...         print(chunk.delta, end="")
+         >>> await model.stream([ChatMessage.user("Hi!")], handle_chunk)
+        ```
         """
     def __repr__(self) -> builtins.str: ...
     async def load(self) -> None:
@@ -7577,9 +7828,11 @@ class ModelCache:
     downloaded only once; subsequent calls return the cached path immediately.
     
     Example:
-        >>> cache = ModelCache()
-        >>> path = await cache.download("bert-base-uncased", "config.json")
-        >>> print(path)
+    ```text
+     >>> cache = ModelCache()
+     >>> path = await cache.download("bert-base-uncased", "config.json")
+     >>> print(path)
+    ```
     """
     def __new__(cls) -> ModelCache:
         r"""
@@ -8003,11 +8256,13 @@ class ModelManager:
     is unloaded first.
     
     Example:
-        >>> manager = ModelManager(cpu_ram_gb=64, gpu_vram_gb=24)
-        >>> await manager.register("llm", my_local_model)
-        >>> await manager.load("llm")
-        >>> await manager.is_loaded("llm")
-        True
+    ```text
+     >>> manager = ModelManager(cpu_ram_gb=64, gpu_vram_gb=24)
+     >>> await manager.register("llm", my_local_model)
+     >>> await manager.load("llm")
+     >>> await manager.is_loaded("llm")
+     True
+    ```
     """
     def __new__(cls, *, cpu_ram_gb: typing.Optional[builtins.float] = None, gpu_vram_gb: typing.Optional[builtins.float] = None, pool_budgets: typing.Optional[dict] = None) -> ModelManager:
         r"""
@@ -8264,8 +8519,10 @@ class ModelOptions:
     Options for a chat completion request.
     
     Example:
-        >>> opts = ModelOptions(temperature=0.7, max_tokens=1000)
-        >>> response = await model.complete(messages, opts)
+    ```text
+     >>> opts = ModelOptions(temperature=0.7, max_tokens=1000)
+     >>> response = await model.complete(messages, opts)
+    ```
     """
     @property
     def temperature(self) -> typing.Optional[builtins.float]:
@@ -8355,9 +8612,11 @@ class ModelPricing:
     Pricing information for a model.
     
     Example:
-        >>> pricing = ModelPricing(input_per_million=1.0, output_per_million=2.0)
-        >>> pricing.input_per_million
-        1.0
+    ```text
+     >>> pricing = ModelPricing(input_per_million=1.0, output_per_million=2.0)
+     >>> pricing.input_per_million
+     1.0
+    ```
     """
     @property
     def input_per_million(self) -> typing.Optional[builtins.float]:
@@ -8413,11 +8672,13 @@ class ModelRequest:
     inspect, serialize, or hand off the full request body explicitly.
     
     Example:
-        >>> req = ModelRequest(
-        ...     messages=[ChatMessage.user("hi")],
-        ...     temperature=0.0,
-        ...     max_tokens=100,
-        ... )
+    ```text
+     >>> req = ModelRequest(
+     ...     messages=[ChatMessage.user("hi")],
+     ...     temperature=0.0,
+     ...     max_tokens=100,
+     ... )
+    ```
     """
     @property
     def messages(self) -> builtins.list[ChatMessage]:
@@ -8472,8 +8733,10 @@ class ModelResponse:
     
     Supports both attribute access and dict-style access for backwards
     compatibility:
-        >>> response.content        # attribute
-        >>> response["content"]     # dict-style
+    ```text
+     >>> response.content        # attribute
+     >>> response["content"]     # dict-style
+    ```
     """
     @property
     def content(self) -> typing.Optional[builtins.str]: ...
@@ -8818,13 +9081,15 @@ class OpenAiCompatConfig:
     Configuration for a generic OpenAI-compatible provider.
     
     Example:
-        >>> cfg = OpenAiCompatConfig(
-        ...     provider_name="my-gateway",
-        ...     base_url="https://gateway.example.com/v1",
-        ...     api_key="secret",
-        ...     default_model="gpt-4o",
-        ... )
-        >>> p = OpenAiCompatProvider(config=cfg)
+    ```text
+     >>> cfg = OpenAiCompatConfig(
+     ...     provider_name="my-gateway",
+     ...     base_url="https://gateway.example.com/v1",
+     ...     api_key="secret",
+     ...     default_model="gpt-4o",
+     ... )
+     >>> p = OpenAiCompatProvider(config=cfg)
+    ```
     """
     @property
     def provider_name(self) -> builtins.str: ...
@@ -8858,13 +9123,15 @@ class OpenAiCompatEmbeddingModel:
     Exposed as a free-standing class for parity with other providers.
     
     Example:
-        >>> cfg = OpenAiCompatConfig(...)
-        >>> em = OpenAiCompatEmbeddingModel(
-        ...     config=cfg,
-        ...     model="text-embedding-3-small",
-        ...     dimensions=1536,
-        ... )
-        >>> resp = await em.embed(["hello"])
+    ```text
+     >>> cfg = OpenAiCompatConfig(...)
+     >>> em = OpenAiCompatEmbeddingModel(
+     ...     config=cfg,
+     ...     model="text-embedding-3-small",
+     ...     dimensions=1536,
+     ... )
+     >>> resp = await em.embed(["hello"])
+    ```
     """
     @property
     def model_id(self) -> builtins.str: ...
@@ -8895,14 +9162,16 @@ class OpenAiCompatProvider:
     prefer the dedicated wrapper which preconfigures the URL/auth.
     
     Example:
-        >>> cfg = OpenAiCompatConfig(
-        ...     provider_name="vllm-host",
-        ...     base_url="http://localhost:8000/v1",
-        ...     api_key="",
-        ...     default_model="meta-llama/Llama-3.1-8B-Instruct",
-        ... )
-        >>> p = OpenAiCompatProvider(config=cfg)
-        >>> resp = await p.complete([ChatMessage.user("Hi!")])
+    ```text
+     >>> cfg = OpenAiCompatConfig(
+     ...     provider_name="vllm-host",
+     ...     base_url="http://localhost:8000/v1",
+     ...     api_key="",
+     ...     default_model="meta-llama/Llama-3.1-8B-Instruct",
+     ... )
+     >>> p = OpenAiCompatProvider(config=cfg)
+     >>> resp = await p.complete([ChatMessage.user("Hi!")])
+    ```
     """
     @property
     def model_id(self) -> builtins.str: ...
@@ -8939,9 +9208,11 @@ class OpenAiEmbeddingModel:
     An OpenAI embedding model.
     
     Example:
-        >>> from blazen import OpenAiEmbeddingModel, ProviderOptions
-        >>> em = OpenAiEmbeddingModel(options=ProviderOptions(api_key="sk-..."))
-        >>> resp = await em.embed(["hello", "world"])
+    ```text
+     >>> from blazen import OpenAiEmbeddingModel, ProviderOptions
+     >>> em = OpenAiEmbeddingModel(options=ProviderOptions(api_key="sk-..."))
+     >>> resp = await em.embed(["hello", "world"])
+    ```
     """
     @property
     def model_id(self) -> builtins.str: ...
@@ -8980,22 +9251,28 @@ class OpenAiProvider:
     the same Rust provider; use whichever you prefer.
     
     Example:
-        >>> from blazen import OpenAiProvider, ProviderOptions, ChatMessage
-        >>> openai = OpenAiProvider(options=ProviderOptions(api_key="sk-..."))
-        >>> resp = await openai.complete([ChatMessage.user("Hello!")])
+    ```text
+     >>> from blazen import OpenAiProvider, ProviderOptions, ChatMessage
+     >>> openai = OpenAiProvider(options=ProviderOptions(api_key="sk-..."))
+     >>> resp = await openai.complete([ChatMessage.user("Hello!")])
+    ```
     
     It also exposes text-to-speech:
-        >>> from blazen import SpeechRequest
-        >>> result = await openai.text_to_speech(SpeechRequest(text="Hello, world!"))
+    ```text
+     >>> from blazen import SpeechRequest
+     >>> result = await openai.text_to_speech(SpeechRequest(text="Hello, world!"))
+    ```
     
     To target an OpenAI-compatible service (zvoice/VoxCPM2, etc.), set
     ``base_url`` on the options. With an empty ``api_key`` the ``Authorization``
     header is omitted:
-        >>> local = OpenAiProvider(options=ProviderOptions(
-        ...     api_key="",
-        ...     base_url="http://beastpc.lan:8900/v1",
-        ... ))
-        >>> result = await local.text_to_speech(SpeechRequest(text="Hello!"))
+    ```text
+     >>> local = OpenAiProvider(options=ProviderOptions(
+     ...     api_key="",
+     ...     base_url="http://beastpc.lan:8900/v1",
+     ... ))
+     >>> result = await local.text_to_speech(SpeechRequest(text="Hello!"))
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -9139,14 +9416,16 @@ class OtlpConfig:
     Configuration for the OpenTelemetry OTLP exporter.
     
     Example:
-        >>> from blazen import OtlpConfig, OtlpProtocol, init_otlp
-        >>> cfg = OtlpConfig(
-        ...     endpoint="https://otel.example.com/v1/traces",
-        ...     service_name="my-app",
-        ...     protocol=OtlpProtocol.HttpProto,
-        ...     headers={"Authorization": "Bearer xxx"},
-        ... )
-        >>> init_otlp(cfg)
+    ```text
+     >>> from blazen import OtlpConfig, OtlpProtocol, init_otlp
+     >>> cfg = OtlpConfig(
+     ...     endpoint="https://otel.example.com/v1/traces",
+     ...     service_name="my-app",
+     ...     protocol=OtlpProtocol.HttpProto,
+     ...     headers={"Authorization": "Bearer xxx"},
+     ... )
+     >>> init_otlp(cfg)
+    ```
     """
     @property
     def endpoint(self) -> builtins.str: ...
@@ -9189,11 +9468,13 @@ class ParallelStage:
     `join_strategy` determines how results are collected.
     
     Example:
-        >>> parallel = ParallelStage(
-        ...     name="fanout",
-        ...     branches=[stage_a, stage_b, stage_c],
-        ...     join_strategy=JoinStrategy.WaitAll,
-        ... )
+    ```text
+     >>> parallel = ParallelStage(
+     ...     name="fanout",
+     ...     branches=[stage_a, stage_b, stage_c],
+     ...     join_strategy=JoinStrategy.WaitAll,
+     ... )
+    ```
     """
     @property
     def name(self) -> builtins.str:
@@ -9228,13 +9509,15 @@ class ParallelSubWorkflowsStep:
     (`JoinStrategy.FirstCompletes`).
     
     Example:
-        >>> step = ParallelSubWorkflowsStep(
-        ...     name="enrich-fanout",
-        ...     accepts=["StartEvent"],
-        ...     emits=["enrich-fanout::output"],
-        ...     branches=[step_a, step_b, step_c],
-        ...     join_strategy=JoinStrategy.WaitAll,
-        ... )
+    ```text
+     >>> step = ParallelSubWorkflowsStep(
+     ...     name="enrich-fanout",
+     ...     accepts=["StartEvent"],
+     ...     emits=["enrich-fanout::output"],
+     ...     branches=[step_a, step_b, step_c],
+     ...     join_strategy=JoinStrategy.WaitAll,
+     ... )
+    ```
     """
     @property
     def name(self) -> builtins.str:
@@ -9356,9 +9639,11 @@ class PersistedEvent:
     for workflow event streams.
     
     Example:
-        >>> ev = PersistedEvent(event_type="blazen::StartEvent", data={"input": "hi"})
-        >>> ev.event_type
-        'blazen::StartEvent'
+    ```text
+     >>> ev = PersistedEvent(event_type="blazen::StartEvent", data={"input": "hi"})
+     >>> ev.event_type
+     'blazen::StartEvent'
+    ```
     """
     @property
     def event_type(self) -> builtins.str:
@@ -9447,15 +9732,17 @@ class PipelineBuilder:
     Fluent builder for constructing a [`Pipeline`].
     
     Example:
-        >>> ingest = Stage(name="ingest", workflow=ingest_wf)
-        >>> enrich = Stage(name="enrich", workflow=enrich_wf)
-        >>> pipeline = (
-        ...     PipelineBuilder("etl")
-        ...     .stage(ingest)
-        ...     .stage(enrich)
-        ...     .timeout_per_stage(60.0)
-        ...     .build()
-        ... )
+    ```text
+     >>> ingest = Stage(name="ingest", workflow=ingest_wf)
+     >>> enrich = Stage(name="enrich", workflow=enrich_wf)
+     >>> pipeline = (
+     ...     PipelineBuilder("etl")
+     ...     .stage(ingest)
+     ...     .stage(enrich)
+     ...     .timeout_per_stage(60.0)
+     ...     .build()
+     ... )
+    ```
     """
     def __new__(cls, name: builtins.str) -> PipelineBuilder:
         r"""
@@ -9873,10 +10160,12 @@ class ProgressCallback:
     type-checked callers a typed base to inherit from.
     
     Example:
-        >>> class Logger(ProgressCallback):
-        ...     def on_progress(self, downloaded: int, total: int | None) -> None:
-        ...         print(f"{downloaded}/{total}")
-        >>> await cache.download("bert-base-uncased", "config.json", Logger())
+    ```text
+     >>> class Logger(ProgressCallback):
+     ...     def on_progress(self, downloaded: int, total: int | None) -> None:
+     ...         print(f"{downloaded}/{total}")
+     >>> await cache.download("bert-base-uncased", "config.json", Logger())
+    ```
     """
     def __new__(cls) -> ProgressCallback: ...
     def on_progress(self, downloaded: builtins.int, total: typing.Optional[builtins.int] = None) -> None:
@@ -10231,14 +10520,16 @@ class ProviderDefaults:
     construction.
     
     Example:
-        >>> async def add_user(req):
-        ...     req["metadata"]["origin"] = "blazen-py"
-        >>> defaults = ProviderDefaults(
-        ...     system_prompt="be terse",
-        ...     tools=[my_tool],
-        ...     response_format={"type": "json_object"},
-        ...     before_model=add_user,
-        ... )
+    ```text
+     >>> async def add_user(req):
+     ...     req["metadata"]["origin"] = "blazen-py"
+     >>> defaults = ProviderDefaults(
+     ...     system_prompt="be terse",
+     ...     tools=[my_tool],
+     ...     response_format={"type": "json_object"},
+     ...     before_model=add_user,
+     ... )
+    ```
     """
     @property
     def base(self) -> BaseProviderDefaults:
@@ -10301,11 +10592,13 @@ class ProviderInfo:
     the default implementations raise ``NotImplementedError``.
     
     Example:
-        >>> class MyProviderInfo(ProviderInfo):
-        ...     def provider_name(self) -> str: return "my-provider"
-        ...     def base_url(self) -> str: return "https://api.example.com"
-        ...     def capabilities(self) -> ProviderCapabilities:
-        ...         return ProviderCapabilities(streaming=True, tool_calling=True)
+    ```text
+     >>> class MyProviderInfo(ProviderInfo):
+     ...     def provider_name(self) -> str: return "my-provider"
+     ...     def base_url(self) -> str: return "https://api.example.com"
+     ...     def capabilities(self) -> ProviderCapabilities:
+     ...         return ProviderCapabilities(streaming=True, tool_calling=True)
+    ```
     """
     def __new__(cls) -> ProviderInfo: ...
     def provider_name(self) -> builtins.str:
@@ -10331,8 +10624,10 @@ class ProviderMetadata:
     optional version pin (model id / weights revision).
     
     Example:
-        >>> meta = ProviderMetadata("openai", CapabilityKind.Llm,
-        ...                         display_name="OpenAI", version="gpt-4o")
+    ```text
+     >>> meta = ProviderMetadata("openai", CapabilityKind.Llm,
+     ...                         display_name="OpenAI", version="gpt-4o")
+    ```
     """
     @property
     def provider_id(self) -> builtins.str:
@@ -10428,9 +10723,11 @@ class ReasoningTrace:
     Gemini thoughts).
     
     Example:
-        >>> trace = response.reasoning
-        >>> if trace is not None:
-        ...     print(trace.text, trace.effort, trace.redacted)
+    ```text
+     >>> trace = response.reasoning
+     >>> if trace is not None:
+     ...     print(trace.text, trace.effort, trace.redacted)
+    ```
     """
     @property
     def text(self) -> builtins.str:
@@ -10468,9 +10765,11 @@ class RedbCheckpointStore:
     given path. The file is created if it does not exist.
     
     Example:
-        >>> store = RedbCheckpointStore("workflow.db")
-        >>> await store.save(checkpoint)
-        >>> loaded = await store.load(checkpoint.run_id)
+    ```text
+     >>> store = RedbCheckpointStore("workflow.db")
+     >>> await store.save(checkpoint)
+     >>> loaded = await store.load(checkpoint.run_id)
+    ```
     """
     def __new__(cls, path: builtins.str) -> RedbCheckpointStore:
         r"""
@@ -10703,8 +11002,10 @@ class ResponseFormat:
     JSON-Schema-validated structured output.
     
     Example:
-        >>> rf = ResponseFormat.json_schema("Person", {"type": "object", ...})
-        >>> options = ModelOptions(response_format=rf.to_dict())
+    ```text
+     >>> rf = ResponseFormat.json_schema("Person", {"type": "object", ...})
+     >>> options = ModelOptions(response_format=rf.to_dict())
+    ```
     """
     @property
     def kind(self) -> builtins.str:
@@ -10796,9 +11097,11 @@ class RetryEmbeddingModel:
     type to get rate-limit / timeout / 5xx retries with no extra plumbing.
     
     Example:
-        >>> base = EmbeddingModel.openai(options=ProviderOptions(api_key="sk-..."))
-        >>> model = RetryEmbeddingModel(base, RetryConfig(max_retries=5))
-        >>> resp = await model.embed(["hello", "world"])
+    ```text
+     >>> base = EmbeddingModel.openai(options=ProviderOptions(api_key="sk-..."))
+     >>> model = RetryEmbeddingModel(base, RetryConfig(max_retries=5))
+     >>> resp = await model.embed(["hello", "world"])
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -10857,9 +11160,11 @@ class RetryMemoryBackend:
     times when the underlying backend raises.
     
     Example:
-        >>> backend = InMemoryBackend()
-        >>> retried = RetryMemoryBackend(backend, RetryConfig(max_retries=5))
-        >>> memory = Memory(embedder, retried)
+    ```text
+     >>> backend = InMemoryBackend()
+     >>> retried = RetryMemoryBackend(backend, RetryConfig(max_retries=5))
+     >>> memory = Memory(embedder, retried)
+    ```
     """
     def __new__(cls, backend: typing.Any, config: typing.Optional[RetryConfig] = None) -> RetryMemoryBackend:
         r"""
@@ -10906,9 +11211,11 @@ class RetryModel:
     `complete()` / `stream()` surface.
     
     Example:
-        >>> base = Model.openai()
-        >>> model = RetryModel(base, RetryConfig(max_retries=5))
-        >>> response = await model.complete([ChatMessage.user("Hi")])
+    ```text
+     >>> base = Model.openai()
+     >>> model = RetryModel(base, RetryConfig(max_retries=5))
+     >>> response = await model.complete([ChatMessage.user("Hi")])
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -11003,8 +11310,10 @@ class Role:
     Role constants for chat messages.
     
     Example:
-        >>> ChatMessage(role=Role.USER, content="Hello!")
-        >>> ChatMessage(role=Role.SYSTEM, content="You are helpful.")
+    ```text
+     >>> ChatMessage(role=Role.USER, content="Hello!")
+     >>> ChatMessage(role=Role.SYSTEM, content="You are helpful.")
+    ```
     """
     SYSTEM: builtins.str = 'system'
     USER: builtins.str = 'user'
@@ -11060,7 +11369,17 @@ class SessionNamespace:
         Store a live reference under the given key. The value is *not*
         serialised; identity is preserved within this run.
         """
-    def get(self, key: builtins.str, default: typing.Optional[typing.Any] = None) -> typing.Optional[typing.Any]:
+    def aset(self, key: builtins.str, value: typing.Any) -> typing.Any:
+        r"""
+        Store a live reference under the given key. The value is *not*
+        serialised; identity is preserved within this run.
+        """
+    def get(self, key: builtins.str, default: typing.Optional[typing.Any] = None) -> typing.Any:
+        r"""
+        Retrieve a live reference previously stored under the given key.
+        If the key is missing, returns `default` (defaults to `None`).
+        """
+    def aget(self, key: builtins.str, default: typing.Optional[typing.Any] = None) -> typing.Any:
         r"""
         Retrieve a live reference previously stored under the given key.
         If the key is missing, returns `default` (defaults to `None`).
@@ -11069,7 +11388,15 @@ class SessionNamespace:
         r"""
         Remove a live reference stored under the given key.
         """
+    def aremove(self, key: builtins.str) -> typing.Any:
+        r"""
+        Remove a live reference stored under the given key.
+        """
     def has(self, key: builtins.str) -> builtins.bool:
+        r"""
+        Check whether a live reference exists under the given key.
+        """
+    def ahas(self, key: builtins.str) -> typing.Any:
         r"""
         Check whether a live reference exists under the given key.
         """
@@ -11098,7 +11425,15 @@ class SessionRefRegistry:
         r"""
         Number of currently live entries (main map).
         """
+    def alen(self) -> typing.Any:
+        r"""
+        Number of currently live entries (main map).
+        """
     def is_empty(self) -> builtins.bool:
+        r"""
+        Whether the registry has any live entries.
+        """
+    def ais_empty(self) -> typing.Any:
         r"""
         Whether the registry has any live entries.
         """
@@ -11106,11 +11441,24 @@ class SessionRefRegistry:
         r"""
         Snapshot every live key in the registry.
         """
+    def akeys(self) -> typing.Any:
+        r"""
+        Snapshot every live key in the registry.
+        """
     def lifetime_of(self, key: RegistryKey) -> typing.Optional[RefLifetime]:
         r"""
         Look up the [`RefLifetime`] policy for a key.
         """
+    def alifetime_of(self, key: RegistryKey) -> typing.Any:
+        r"""
+        Look up the [`RefLifetime`] policy for a key.
+        """
     def get_remote(self, key: RegistryKey) -> typing.Optional[RemoteRefDescriptor]:
+        r"""
+        Look up an in-process remote-ref descriptor by key, if the key is
+        stored in the remote-ref sidecar instead of the main map.
+        """
+    def aget_remote(self, key: RegistryKey) -> typing.Any:
         r"""
         Look up an in-process remote-ref descriptor by key, if the key is
         stored in the remote-ref sidecar instead of the main map.
@@ -11120,7 +11468,17 @@ class SessionRefRegistry:
         Whether `key` resolves to a remote-ref entry rather than a local
         live value.
         """
+    def ais_remote(self, key: RegistryKey) -> typing.Any:
+        r"""
+        Whether `key` resolves to a remote-ref entry rather than a local
+        live value.
+        """
     def remote_entries(self) -> builtins.list[tuple[RegistryKey, RemoteRefDescriptor]]:
+        r"""
+        Snapshot every `(key, descriptor)` pair currently in the
+        remote-ref sidecar.
+        """
+    def aremote_entries(self) -> typing.Any:
         r"""
         Snapshot every `(key, descriptor)` pair currently in the
         remote-ref sidecar.
@@ -11132,12 +11490,34 @@ class SessionRefRegistry:
         Also clears any matching serializable, lifetime, and remote-ref
         sidecar entries.
         """
+    def aremove(self, key: RegistryKey) -> typing.Any:
+        r"""
+        Remove a single entry. Returns `True` if the key was present.
+        
+        Also clears any matching serializable, lifetime, and remote-ref
+        sidecar entries.
+        """
     def drain(self) -> builtins.int:
         r"""
         Drain all entries (main map and every sidecar). Returns the
         number of entries removed from the main map.
         """
+    def adrain(self) -> typing.Any:
+        r"""
+        Drain all entries (main map and every sidecar). Returns the
+        number of entries removed from the main map.
+        """
     def clear_on_context_drop(self, owns_registry: builtins.bool) -> builtins.int:
+        r"""
+        Purge all refs whose [`RefLifetime`] policy says they should be
+        dropped when the owning `Context` is dropped. Returns the number
+        removed.
+        
+        Args:
+            owns_registry: Mirror of `Context::owns_registry` -- `True`
+                means the calling `Context` owns this registry.
+        """
+    def aclear_on_context_drop(self, owns_registry: builtins.bool) -> typing.Any:
         r"""
         Purge all refs whose [`RefLifetime`] policy says they should be
         dropped when the owning `Context` is dropped. Returns the number
@@ -11233,8 +11613,10 @@ class Stage:
     Wraps a `Workflow` with optional input mapping and conditional execution.
     
     Example:
-        >>> ingest = Workflow("ingest", [extract_step])
-        >>> stage = Stage(name="ingest", workflow=ingest)
+    ```text
+     >>> ingest = Workflow("ingest", [extract_step])
+     >>> stage = Stage(name="ingest", workflow=ingest)
+    ```
     """
     @property
     def name(self) -> builtins.str:
@@ -11328,12 +11710,27 @@ class StateNamespace:
         Store a value under the given key. See `Context.set` for the
         4-tier dispatch order.
         """
+    def aset(self, key: builtins.str, value: typing.Any) -> typing.Any:
+        r"""
+        Store a value under the given key. See `Context.set` for the
+        4-tier dispatch order.
+        """
     def get(self, key: builtins.str, default: typing.Optional[typing.Any] = None) -> typing.Any:
         r"""
         Retrieve a value previously stored under the given key.
         If the key is missing, returns `default` (defaults to `None`).
         """
+    def aget(self, key: builtins.str, default: typing.Optional[typing.Any] = None) -> typing.Any:
+        r"""
+        Retrieve a value previously stored under the given key.
+        If the key is missing, returns `default` (defaults to `None`).
+        """
     def get_bytes(self, key: builtins.str, default: typing.Optional[typing.Sequence[builtins.int]] = None) -> typing.Optional[builtins.list[builtins.int]]:
+        r"""
+        Retrieve raw binary data previously stored under the given key.
+        If the key is missing, returns `default` (defaults to `None`).
+        """
+    def aget_bytes(self, key: builtins.str, default: typing.Optional[typing.Sequence[builtins.int]] = None) -> typing.Any:
         r"""
         Retrieve raw binary data previously stored under the given key.
         If the key is missing, returns `default` (defaults to `None`).
@@ -11555,15 +11952,17 @@ class StoredEntry:
     receive and return these objects.
     
     Example:
-        >>> entry = StoredEntry(
-        ...     id="doc1",
-        ...     text="Paris is the capital of France",
-        ...     text_simhash=0xDEADBEEF,
-        ...     bands=["b0:0001", "b1:002a"],
-        ...     metadata={"category": "geo"},
-        ... )
-        >>> entry.id
-        'doc1'
+    ```text
+     >>> entry = StoredEntry(
+     ...     id="doc1",
+     ...     text="Paris is the capital of France",
+     ...     text_simhash=0xDEADBEEF,
+     ...     bands=["b0:0001", "b1:002a"],
+     ...     metadata={"category": "geo"},
+     ... )
+     >>> entry.id
+     'doc1'
+    ```
     """
     @property
     def id(self) -> builtins.str:
@@ -11866,9 +12265,11 @@ class SubExecutable:
     [`SubExecutable`] on the Rust side and do not go through this shim.
     
     Example:
-        >>> class DoubleRunner(SubExecutable):
-        ...     async def execute(self, input, ctx):
-        ...         return {"value": input["value"] * 2}
+    ```text
+     >>> class DoubleRunner(SubExecutable):
+     ...     async def execute(self, input, ctx):
+     ...         return {"value": input["value"] * 2}
+    ```
     """
     def __new__(cls) -> SubExecutable: ...
     def execute(self, input: typing.Any, ctx: Context) -> typing.Any:
@@ -11895,14 +12296,16 @@ class SubPipelineStep:
     the pipeline analogue of `SubWorkflowStep`.
     
     Example:
-        >>> child = Pipeline.builder("enrich").stage(stage).build()
-        >>> step = SubPipelineStep(
-        ...     name="enrich",
-        ...     accepts=["StartEvent"],
-        ...     emits=["enrich::output"],
-        ...     pipeline=child,
-        ... )
-        >>> wf = Workflow.builder("parent").add_subpipeline_step(step).build()
+    ```text
+     >>> child = Pipeline.builder("enrich").stage(stage).build()
+     >>> step = SubPipelineStep(
+     ...     name="enrich",
+     ...     accepts=["StartEvent"],
+     ...     emits=["enrich::output"],
+     ...     pipeline=child,
+     ... )
+     >>> wf = Workflow.builder("parent").add_subpipeline_step(step).build()
+    ```
     """
     @property
     def name(self) -> builtins.str:
@@ -12033,14 +12436,16 @@ class SubWorkflowStep:
     `"<step_name>::output"` for the parent.
     
     Example:
-        >>> child = Workflow("enrich", [enrich_step])
-        >>> step = SubWorkflowStep(
-        ...     name="enrich",
-        ...     accepts=["StartEvent"],
-        ...     emits=["enrich::output"],
-        ...     workflow=child,
-        ... )
-        >>> wf = Workflow.builder("parent").add_subworkflow_step(step).build()
+    ```text
+     >>> child = Workflow("enrich", [enrich_step])
+     >>> step = SubWorkflowStep(
+     ...     name="enrich",
+     ...     accepts=["StartEvent"],
+     ...     emits=["enrich::output"],
+     ...     workflow=child,
+     ... )
+     >>> wf = Workflow.builder("parent").add_subworkflow_step(step).build()
+    ```
     """
     @property
     def name(self) -> builtins.str:
@@ -12299,13 +12704,15 @@ class TokenCounter:
     implementations raise ``NotImplementedError``.
     
     Example:
-        >>> class MyCounter(TokenCounter):
-        ...     def count_tokens(self, text: str) -> int:
-        ...         return len(text) // 4
-        ...     def count_message_tokens(self, messages):
-        ...         return sum(self.count_tokens(m.content or "") for m in messages)
-        ...     def context_size(self) -> int:
-        ...         return 128_000
+    ```text
+     >>> class MyCounter(TokenCounter):
+     ...     def count_tokens(self, text: str) -> int:
+     ...         return len(text) // 4
+     ...     def count_message_tokens(self, messages):
+     ...         return sum(self.count_tokens(m.content or "") for m in messages)
+     ...     def context_size(self) -> int:
+     ...         return 128_000
+    ```
     """
     def __new__(cls) -> TokenCounter: ...
     def count_tokens(self, _text: builtins.str) -> builtins.int:
@@ -12331,9 +12738,11 @@ class TokenUsage:
     Token usage statistics for a completion request.
     
     Example:
-        >>> usage = response.usage
-        >>> if usage is not None:
-        ...     print(usage.prompt_tokens, usage.completion_tokens, usage.total_tokens)
+    ```text
+     >>> usage = response.usage
+     >>> if usage is not None:
+     ...     print(usage.prompt_tokens, usage.completion_tokens, usage.total_tokens)
+    ```
     """
     @property
     def prompt_tokens(self) -> builtins.int:
@@ -12422,8 +12831,10 @@ class ToolCall:
     Returned in ``ModelResponse.tool_calls`` and ``StreamChunk.tool_calls``.
     
     Example:
-        >>> for tc in response.tool_calls:
-        ...     print(tc.id, tc.name, tc.arguments)
+    ```text
+     >>> for tc in response.tool_calls:
+     ...     print(tc.id, tc.name, tc.arguments)
+    ```
     """
     @property
     def id(self) -> builtins.str:
@@ -12452,12 +12863,14 @@ class ToolDef:
     A tool definition for the agent.
     
     Example:
-        >>> tool = ToolDef(
-        ...     name="search",
-        ...     description="Search the web",
-        ...     parameters={"type": "object", "properties": {"query": {"type": "string"}}},
-        ...     handler=lambda args: {"results": []}
-        ... )
+    ```text
+     >>> tool = ToolDef(
+     ...     name="search",
+     ...     description="Search the web",
+     ...     parameters={"type": "object", "properties": {"query": {"type": "string"}}},
+     ...     handler=lambda args: {"results": []}
+     ... )
+    ```
     """
     @property
     def name(self) -> builtins.str:
@@ -12497,11 +12910,13 @@ class ToolDefinition:
     without binding a handler --- e.g. building a request body manually.
     
     Example:
-        >>> tool = ToolDefinition(
-        ...     name="search",
-        ...     description="Search the web",
-        ...     parameters={"type": "object", "properties": {"query": {"type": "string"}}},
-        ... )
+    ```text
+     >>> tool = ToolDefinition(
+     ...     name="search",
+     ...     description="Search the web",
+     ...     parameters={"type": "object", "properties": {"query": {"type": "string"}}},
+     ... )
+    ```
     """
     @property
     def name(self) -> builtins.str:
@@ -12578,8 +12993,10 @@ class TracingConfig:
     NOT recorded unless ``capture_messages`` is enabled.
     
     Example:
-        >>> cfg = TracingConfig(capture_messages=True)
-        >>> traced = wrap_with_tracing(model, "openai", config=cfg)
+    ```text
+     >>> cfg = TracingConfig(capture_messages=True)
+     >>> traced = wrap_with_tracing(model, "openai", config=cfg)
+    ```
     """
     @property
     def capture_messages(self) -> builtins.bool:
@@ -12615,9 +13032,11 @@ class TractEmbedModel:
     is unavailable for your target -- typically musl-libc Linux builds.
     
     Example:
-        >>> opts = TractOptions(model_name="BGESmallENV15")
-        >>> model = TractEmbedModel(options=opts)
-        >>> response = await model.embed(["hello", "world"])
+    ```text
+     >>> opts = TractOptions(model_name="BGESmallENV15")
+     >>> model = TractEmbedModel(options=opts)
+     >>> response = await model.embed(["hello", "world"])
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -12660,8 +13079,10 @@ class TractOptions:
     where fastembed's prebuilt ONNX Runtime binaries are unavailable.
     
     Example:
-        >>> opts = TractOptions(model_name="BGESmallENV15")
-        >>> model = TractEmbedModel(options=opts)
+    ```text
+     >>> opts = TractOptions(model_name="BGESmallENV15")
+     >>> model = TractEmbedModel(options=opts)
+    ```
     """
     @property
     def model_name(self) -> typing.Optional[builtins.str]: ...
@@ -12979,9 +13400,11 @@ class Transcription:
             ``language``, ``timing``, ``cost``, and ``metadata``.
         
         Example:
-            >>> req = TranscriptionRequest.from_file("/path/to/audio.wav")
-            >>> result = await transcriber.transcribe(req)
-            >>> print(result.text)
+        ```text
+         >>> req = TranscriptionRequest.from_file("/path/to/audio.wav")
+         >>> result = await transcriber.transcribe(req)
+         >>> print(result.text)
+        ```
         """
     def __repr__(self) -> builtins.str: ...
     @staticmethod
@@ -13003,11 +13426,40 @@ class Transcription:
                 device, language, and cache directory.
         
         Example:
-            >>> opts = WhisperOptions(model=WhisperModel.Base)
-            >>> transcriber = Transcription.whispercpp(options=opts)
-            >>> req = TranscriptionRequest.from_file("audio.wav")
-            >>> result = await transcriber.transcribe(req)
-            >>> print(result.text)
+        ```text
+         >>> opts = WhisperOptions(model=WhisperModel.Base)
+         >>> transcriber = Transcription.whispercpp(options=opts)
+         >>> req = TranscriptionRequest.from_file("audio.wav")
+         >>> result = await transcriber.transcribe(req)
+         >>> print(result.text)
+        ```
+        """
+    @staticmethod
+    def awhispercpp(*, options: typing.Optional[WhisperOptions] = None) -> typing.Any:
+        r"""
+        Create a local whisper.cpp transcription provider.
+        
+        Runs transcription entirely on-device using whisper.cpp. The first
+        call downloads the GGML model (tens to hundreds of MB depending on
+        the chosen variant) and caches it for subsequent runs. No API key
+        is required.
+        
+        whisper.cpp currently expects **16-bit PCM mono WAV at 16 kHz**.
+        URL audio sources are not supported -- use
+        :meth:`TranscriptionRequest.from_file` with a local path.
+        
+        Args:
+            options: Optional typed :class:`WhisperOptions` with model size,
+                device, language, and cache directory.
+        
+        Example:
+        ```text
+         >>> opts = WhisperOptions(model=WhisperModel.Base)
+         >>> transcriber = Transcription.whispercpp(options=opts)
+         >>> req = TranscriptionRequest.from_file("audio.wav")
+         >>> result = await transcriber.transcribe(req)
+         >>> print(result.text)
+        ```
         """
 
 class TranscriptionProviderDefaults:
@@ -13179,8 +13631,10 @@ class TtsOptions:
     Options for the local TTS backend (`any-tts`).
     
     Example:
-        >>> opts = TtsOptions(model="kokoro82m", voice="af_bella")
-        >>> provider = TtsProvider(options=opts)
+    ```text
+     >>> opts = TtsOptions(model="kokoro82m", voice="af_bella")
+     >>> provider = TtsProvider(options=opts)
+    ```
     """
     @property
     def model(self) -> typing.Optional[builtins.str]: ...
@@ -13224,8 +13678,10 @@ class TtsProvider:
     Synthesis runs fully on-device. No API key is required.
     
     Example:
-        >>> opts = TtsOptions(model="kokoro82m", voice="af_bella")
-        >>> provider = TtsProvider(options=opts)
+    ```text
+     >>> opts = TtsOptions(model="kokoro82m", voice="af_bella")
+     >>> provider = TtsProvider(options=opts)
+    ```
     """
     @property
     def model(self) -> builtins.str:
@@ -13276,19 +13732,21 @@ class TypedTool:
     any code that introspects a tool surface.
     
     Example:
-        >>> from pydantic import BaseModel
-        >>> class AddArgs(BaseModel):
-        ...     a: int
-        ...     b: int
-        >>> async def add(args: AddArgs) -> dict:
-        ...     return {"sum": args.a + args.b}
-        >>> tool = TypedTool(
-        ...     name="add",
-        ...     description="Add two numbers",
-        ...     args_model=AddArgs,
-        ...     handler=add,
-        ... )
-        >>> result = await run_agent(model, msgs, tools=[tool.as_tool_def()])
+    ```text
+     >>> from pydantic import BaseModel
+     >>> class AddArgs(BaseModel):
+     ...     a: int
+     ...     b: int
+     >>> async def add(args: AddArgs) -> dict:
+     ...     return {"sum": args.a + args.b}
+     >>> tool = TypedTool(
+     ...     name="add",
+     ...     description="Add two numbers",
+     ...     args_model=AddArgs,
+     ...     handler=add,
+     ... )
+     >>> result = await run_agent(model, msgs, tools=[tool.as_tool_def()])
+    ```
     """
     @property
     def is_exit(self) -> builtins.bool:
@@ -13351,7 +13809,9 @@ class UpstashBackend:
     targets this still works — it just uses HTTPS instead of raw TCP.
     
     Example:
-        >>> backend = UpstashBackend("https://us1-merry-cat-32242.upstash.io", "AYAg...")
+    ```text
+     >>> backend = UpstashBackend("https://us1-merry-cat-32242.upstash.io", "AYAg...")
+    ```
     """
     def __new__(cls, rest_url: builtins.str, rest_token: builtins.str, prefix: typing.Optional[builtins.str] = None) -> UpstashBackend:
         r"""
@@ -13377,11 +13837,13 @@ class UsageEmitter:
     implementation raises ``NotImplementedError``.
     
     Example:
-        >>> class CountingEmitter(UsageEmitter):
-        ...     def __init__(self):
-        ...         self.count = 0
-        ...     def emit(self, event: UsageEvent) -> None:
-        ...         self.count += 1
+    ```text
+     >>> class CountingEmitter(UsageEmitter):
+     ...     def __init__(self):
+     ...         self.count = 0
+     ...     def emit(self, event: UsageEvent) -> None:
+     ...         self.count += 1
+    ```
     """
     def __new__(cls) -> UsageEmitter: ...
     def __init__(self) -> None:
@@ -13475,8 +13937,10 @@ class UsageRecordingEmbeddingModel:
     Mirrors `blazen_llm::usage_recording::UsageRecordingEmbeddingModel`.
     
     Example:
-        >>> base = EmbeddingModel.openai()
-        >>> model = UsageRecordingEmbeddingModel(base, NoopUsageEmitter(), "openai")
+    ```text
+     >>> base = EmbeddingModel.openai()
+     >>> model = UsageRecordingEmbeddingModel(base, NoopUsageEmitter(), "openai")
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -13515,9 +13979,11 @@ class UsageRecordingModel:
     Mirrors `blazen_llm::usage_recording::UsageRecordingModel`.
     
     Example:
-        >>> base = Model.openai()
-        >>> emitter = NoopUsageEmitter()
-        >>> model = UsageRecordingModel(base, emitter, "openai")
+    ```text
+     >>> base = Model.openai()
+     >>> emitter = NoopUsageEmitter()
+     >>> model = UsageRecordingModel(base, emitter, "openai")
+    ```
     """
     @property
     def model_id(self) -> builtins.str:
@@ -13555,8 +14021,10 @@ class ValkeyBackend:
     Uses Redis-compatible commands for persistence and band-based search.
     
     Example:
-        >>> backend = ValkeyBackend("redis://localhost:6379")
-        >>> memory = Memory(embedder, backend)
+    ```text
+     >>> backend = ValkeyBackend("redis://localhost:6379")
+     >>> memory = Memory(embedder, backend)
+    ```
     """
     def __new__(cls, url: builtins.str, prefix: typing.Optional[builtins.str] = None) -> ValkeyBackend:
         r"""
@@ -13578,9 +14046,11 @@ class ValkeyCheckpointStore:
     after which keys auto-expire.
     
     Example:
-        >>> store = await ValkeyCheckpointStore.connect("redis://localhost:6379")
-        >>> # Or with a 24-hour TTL on saved checkpoints:
-        >>> store = await ValkeyCheckpointStore.connect("redis://localhost:6379", ttl_seconds=86400)
+    ```text
+     >>> store = await ValkeyCheckpointStore.connect("redis://localhost:6379")
+     >>> # Or with a 24-hour TTL on saved checkpoints:
+     >>> store = await ValkeyCheckpointStore.connect("redis://localhost:6379", ttl_seconds=86400)
+    ```
     """
     @staticmethod
     async def connect(url: builtins.str, ttl_seconds: typing.Optional[builtins.int] = None) -> ValkeyCheckpointStore:
@@ -13996,11 +14466,13 @@ class VoiceHandle:
     constructible from Python via ``from_py_object``.
     
     Example:
-        >>> handle = await provider.clone_voice(VoiceCloneRequest(
-        ...     name="rachel-clone",
-        ...     reference_urls=["https://example.com/rachel.wav"],
-        ... ))
-        >>> await provider.delete_voice(handle)
+    ```text
+     >>> handle = await provider.clone_voice(VoiceCloneRequest(
+     ...     name="rachel-clone",
+     ...     reference_urls=["https://example.com/rachel.wav"],
+     ... ))
+     >>> await provider.delete_voice(handle)
+    ```
     """
     @property
     def id(self) -> builtins.str:
@@ -14095,11 +14567,13 @@ class WhisperCppProvider:
     path.
     
     Example:
-        >>> opts = WhisperOptions(model=WhisperModel.Base)
-        >>> provider = WhisperCppProvider(options=opts)
-        >>> req = TranscriptionRequest.from_file("audio.wav")
-        >>> result = await provider.transcribe(req)
-        >>> print(result.text)
+    ```text
+     >>> opts = WhisperOptions(model=WhisperModel.Base)
+     >>> provider = WhisperCppProvider(options=opts)
+     >>> req = TranscriptionRequest.from_file("audio.wav")
+     >>> result = await provider.transcribe(req)
+     >>> print(result.text)
+    ```
     """
     @property
     def provider_id(self) -> builtins.str:
@@ -14112,6 +14586,15 @@ class WhisperCppProvider:
         Alias for :attr:`provider_id` to mirror :class:`Model`.
         """
     def __new__(cls, *, options: typing.Optional[WhisperOptions] = None) -> WhisperCppProvider:
+        r"""
+        Create a new whisper.cpp provider.
+        
+        Args:
+            options: Optional :class:`WhisperOptions` for model size,
+                device, language, and cache directory.
+        """
+    @classmethod
+    def aopen(cls, *, options: typing.Optional[WhisperOptions] = None) -> typing.Any:
         r"""
         Create a new whisper.cpp provider.
         
@@ -14156,9 +14639,11 @@ class WhisperOptions:
     will auto-detect the spoken language.
     
     Example:
-        >>> opts = WhisperOptions()
-        >>> opts = WhisperOptions(model=WhisperModel.Base, language="en")
-        >>> transcriber = Transcription.whispercpp(options=opts)
+    ```text
+     >>> opts = WhisperOptions()
+     >>> opts = WhisperOptions(model=WhisperModel.Base, language="en")
+     >>> transcriber = Transcription.whispercpp(options=opts)
+    ```
     """
     @property
     def device(self) -> typing.Optional[builtins.str]: ...
@@ -14226,13 +14711,15 @@ class Workflow:
     (created with the `@step` decorator).
     
     Example:
-        >>> @step
-        ... async def echo(ctx, ev):
-        ...     return StopEvent(result=ev.to_dict())
-        >>>
-        >>> wf = Workflow("echo-wf", [echo])
-        >>> handler = await wf.run({"message": "hello"})
-        >>> result = await handler.result()
+    ```text
+     >>> @step
+     ... async def echo(ctx, ev):
+     ...     return StopEvent(result=ev.to_dict())
+     >>>
+     >>> wf = Workflow("echo-wf", [echo])
+     >>> handler = await wf.run({"message": "hello"})
+     >>> result = await handler.result()
+    ```
     """
     def __new__(cls, name: builtins.str, steps: typing.Sequence[_StepWrapper], timeout: typing.Optional[builtins.float] = None, session_pause_policy: typing.Optional[SessionPausePolicy] = None, auto_publish_events: typing.Optional[builtins.bool] = None, retry_config: typing.Optional[RetryConfig] = None) -> Workflow:
         r"""
@@ -14263,8 +14750,10 @@ class Workflow:
             The :class:`WorkflowResult` produced by the workflow.
         
         Example:
-            >>> result = await wf.run(prompt="Hello!")
-            >>> print(result.result)
+        ```text
+         >>> result = await wf.run(prompt="Hello!")
+         >>> print(result.result)
+        ```
         
         Note:
             This awaits the workflow to completion and resolves directly to
@@ -14287,10 +14776,12 @@ class Workflow:
             A `WorkflowHandler` for awaiting results or streaming events.
         
         Example:
-            >>> handler = await wf.run_with_handler(prompt="Hello!")
-            >>> async for event in handler.stream_events():
-            ...     print(event.event_type)
-            >>> result = await handler.result()
+        ```text
+         >>> handler = await wf.run_with_handler(prompt="Hello!")
+         >>> async for event in handler.stream_events():
+         ...     print(event.event_type)
+         >>> result = await handler.result()
+        ```
         """
     @staticmethod
     async def resume(snapshot_json: builtins.str, steps: typing.Sequence[_StepWrapper], timeout: typing.Optional[builtins.float] = None) -> WorkflowHandler:
@@ -14311,8 +14802,10 @@ class Workflow:
             A new `WorkflowHandler` for the resumed workflow.
         
         Example:
-            >>> handler = await Workflow.resume(snapshot_json, [step1, step2])
-            >>> result = await handler.result()
+        ```text
+         >>> handler = await Workflow.resume(snapshot_json, [step1, step2])
+         >>> result = await handler.result()
+        ```
         """
     @staticmethod
     async def resume_with_session_refs(snapshot_json: builtins.str, steps: typing.Sequence[_StepWrapper], timeout: typing.Optional[builtins.float] = None) -> WorkflowHandler:
@@ -14350,16 +14843,18 @@ class Workflow:
             A new `WorkflowHandler` for the resumed workflow.
         
         Example:
-            >>> class Blob:
-            ...     def __init__(self, n: int) -> None:
-            ...         self.n = n
-            ...     def __blazen_serialize__(self) -> bytes:
-            ...         return self.n.to_bytes(4, "big")
-            ...     @classmethod
-            ...     def __blazen_deserialize__(cls, data: bytes) -> "Blob":
-            ...         return cls(int.from_bytes(data, "big"))
-            >>>
-            >>> handler = await Workflow.resume_with_session_refs(snap, [s])
+        ```text
+         >>> class Blob:
+         ...     def __init__(self, n: int) -> None:
+         ...         self.n = n
+         ...     def __blazen_serialize__(self) -> bytes:
+         ...         return self.n.to_bytes(4, "big")
+         ...     @classmethod
+         ...     def __blazen_deserialize__(cls, data: bytes) -> "Blob":
+         ...         return cls(int.from_bytes(data, "big"))
+         >>>
+         >>> handler = await Workflow.resume_with_session_refs(snap, [s])
+        ```
         """
     @staticmethod
     def builder(name: builtins.str) -> WorkflowBuilder:
@@ -14371,7 +14866,9 @@ class Workflow:
         to ``Workflow(...)`` directly.
         
         Example:
-            >>> wf = Workflow.builder("my-wf").step(my_step).timeout(60.0).build()
+        ```text
+         >>> wf = Workflow.builder("my-wf").step(my_step).timeout(60.0).build()
+        ```
         """
     def __repr__(self) -> builtins.str: ...
 
@@ -14384,11 +14881,13 @@ class WorkflowBuilder:
     Call ``build()`` to produce a ready-to-run [`Workflow`].
     
     Example:
-        >>> wf = (Workflow.builder("my-wf")
-        ...      .step(my_step)
-        ...      .timeout(60.0)
-        ...      .auto_publish_events(True)
-        ...      .build())
+    ```text
+     >>> wf = (Workflow.builder("my-wf")
+     ...      .step(my_step)
+     ...      .timeout(60.0)
+     ...      .auto_publish_events(True)
+     ...      .build())
+    ```
     """
     @property
     def name(self) -> builtins.str:
@@ -14493,16 +14992,18 @@ class WorkflowCheckpoint:
     these snapshots for crash recovery and pause/resume.
     
     Example:
-        >>> import uuid
-        >>> from datetime import datetime, timezone
-        >>> cp = WorkflowCheckpoint(
-        ...     workflow_name="demo",
-        ...     run_id=str(uuid.uuid4()),
-        ...     timestamp=datetime.now(timezone.utc).isoformat(),
-        ...     state={"counter": 1},
-        ...     pending_events=[],
-        ...     metadata={},
-        ... )
+    ```text
+     >>> import uuid
+     >>> from datetime import datetime, timezone
+     >>> cp = WorkflowCheckpoint(
+     ...     workflow_name="demo",
+     ...     run_id=str(uuid.uuid4()),
+     ...     timestamp=datetime.now(timezone.utc).isoformat(),
+     ...     state={"counter": 1},
+     ...     pending_events=[],
+     ...     metadata={},
+     ... )
+    ```
     """
     @property
     def workflow_name(self) -> builtins.str:
@@ -14557,9 +15058,11 @@ class WorkflowHandler:
     iterate over intermediate events published by steps.
     
     Example:
-        >>> handler = await wf.run(prompt="Hello")
-        >>> result = await handler.result()
-        >>> print(result.to_dict())
+    ```text
+     >>> handler = await wf.run(prompt="Hello")
+     >>> result = await handler.result()
+     >>> print(result.to_dict())
+    ```
     """
     async def result(self) -> WorkflowResult:
         r"""
@@ -14588,8 +15091,10 @@ class WorkflowHandler:
             An async iterator of Events.
         
         Example:
-            >>> async for event in handler.stream_events():
-            ...     print(event.event_type, event.to_dict())
+        ```text
+         >>> async for event in handler.stream_events():
+         ...     print(event.event_type, event.to_dict())
+        ```
         """
     async def pause(self) -> None:
         r"""
@@ -14669,11 +15174,13 @@ class WorkflowHistory:
     Append-only history of events for a single workflow run.
     
     Example:
-        >>> from blazen import WorkflowHistory, HistoryEventKind
-        >>> h = WorkflowHistory("00000000-0000-0000-0000-000000000000", "demo")
-        >>> h.push(HistoryEventKind.workflow_started({"q": "hi"}))
-        >>> h.push(HistoryEventKind.workflow_completed(duration_ms=42))
-        >>> assert len(h) == 2
+    ```text
+     >>> from blazen import WorkflowHistory, HistoryEventKind
+     >>> h = WorkflowHistory("00000000-0000-0000-0000-000000000000", "demo")
+     >>> h.push(HistoryEventKind.workflow_started({"q": "hi"}))
+     >>> h.push(HistoryEventKind.workflow_completed(duration_ms=42))
+     >>> assert len(h) == 2
+    ```
     """
     @property
     def run_id(self) -> builtins.str:
@@ -14951,9 +15458,11 @@ class _StepWrapper:
     the workflow engine.
     
     Example:
-        >>> @step
-        ... async def analyze(ctx: Context, ev: Event) -> Event:
-        ...     return Event("ResultEvent", answer=42)
+    ```text
+     >>> @step
+     ... async def analyze(ctx: Context, ev: Event) -> Event:
+     ...     return Event("ResultEvent", answer=42)
+    ```
     """
     @property
     def name(self) -> builtins.str:
@@ -15112,9 +15621,11 @@ class ContentKind(enum.Enum):
     declarations and [`ContentStore`](super::store::PyContentStore) routing.
     
     Example:
-        >>> ContentKind.Image
-        >>> ContentKind.from_str("image")
-        >>> ContentKind.from_mime("image/png")
+    ```text
+     >>> ContentKind.Image
+     >>> ContentKind.from_str("image")
+     >>> ContentKind.from_mime("image/png")
+    ```
     """
     Image = ...
     Audio = ...
@@ -15161,9 +15672,11 @@ class Device(enum.Enum):
     Hardware device selection for compute backends.
     
     Example:
-        >>> Device.Cpu
-        >>> Device.Metal
-        >>> Device.Cuda
+    ```text
+     >>> Device.Cpu
+     >>> Device.Metal
+     >>> Device.Cuda
+    ```
     """
     Cpu = ...
     Cuda = ...
@@ -15295,7 +15808,9 @@ class Quantization(enum.Enum):
     most popular GPU quantization schemes (GPTQ, AWQ).
     
     Example:
-        >>> opts = MistralRsOptions("my-org/model", quantization=Quantization.Q4KM)
+    ```text
+     >>> opts = MistralRsOptions("my-org/model", quantization=Quantization.Q4KM)
+    ```
     """
     F32 = ...
     F16 = ...
@@ -15419,8 +15934,10 @@ class WhisperModel(enum.Enum):
     | LargeV3   | 1.5B   | ~10GB |
     
     Example:
-        >>> WhisperModel.Base
-        >>> opts = WhisperOptions(model=WhisperModel.Base)
+    ```text
+     >>> WhisperModel.Base
+     >>> opts = WhisperOptions(model=WhisperModel.Base)
+    ```
     """
     Tiny = ...
     Base = ...
@@ -15459,15 +15976,17 @@ async def complete_batch(model: Model, requests: typing.Sequence[typing.Sequence
         A ``BatchResult`` with per-request responses and aggregated usage/cost.
     
     Example:
-        >>> model = Model.openai()
-        >>> conversations = [
-        ...     [ChatMessage.user("What is 2+2?")],
-        ...     [ChatMessage.user("What is 3+3?")],
-        ... ]
-        >>> result = await complete_batch(model, conversations, concurrency=4)
-        >>> for resp in result.responses:
-        ...     if resp is not None:
-        ...         print(resp.content)
+    ```text
+     >>> model = Model.openai()
+     >>> conversations = [
+     ...     [ChatMessage.user("What is 2+2?")],
+     ...     [ChatMessage.user("What is 3+3?")],
+     ... ]
+     >>> result = await complete_batch(model, conversations, concurrency=4)
+     >>> for resp in result.responses:
+     ...     if resp is not None:
+     ...         print(resp.content)
+    ```
     """
 
 def compute_audio_cost(model_id: builtins.str, seconds: builtins.float) -> typing.Optional[builtins.float]:
@@ -15582,11 +16101,13 @@ def count_message_tokens(messages: typing.Sequence[ChatMessage], context_size: b
         The estimated token count for the full message list.
     
     Example:
-        >>> tokens = count_message_tokens([
-        ...     ChatMessage.system("You are helpful."),
-        ...     ChatMessage.user("Hello!"),
-        ... ])
-        >>> print(tokens)
+    ```text
+     >>> tokens = count_message_tokens([
+     ...     ChatMessage.system("You are helpful."),
+     ...     ChatMessage.user("Hello!"),
+     ... ])
+     >>> print(tokens)
+    ```
     """
 
 def env_var_for_provider(provider: builtins.str) -> typing.Optional[builtins.str]:
@@ -15596,8 +16117,10 @@ def env_var_for_provider(provider: builtins.str) -> typing.Optional[builtins.str
     Returns ``None`` for unknown providers.
     
     Example:
-        >>> env_var_for_provider("openai")
-        'OPENAI_API_KEY'
+    ```text
+     >>> env_var_for_provider("openai")
+     'OPENAI_API_KEY'
+    ```
     """
 
 def estimate_tokens(text: builtins.str, context_size: builtins.int = 128000) -> builtins.int:
@@ -15615,8 +16138,10 @@ def estimate_tokens(text: builtins.str, context_size: builtins.int = 128000) -> 
         The estimated token count.
     
     Example:
-        >>> tokens = estimate_tokens("Hello, world!")
-        >>> print(tokens)  # 4
+    ```text
+     >>> tokens = estimate_tokens("Hello, world!")
+     >>> print(tokens)  # 4
+    ```
     """
 
 def extract_inline_artifacts(content: builtins.str) -> builtins.list[Artifact]:
@@ -15785,9 +16310,11 @@ def lookup_pricing(model_id: builtins.str) -> typing.Optional[ModelPricing]:
         Optional ``ModelPricing`` with input and output costs.
     
     Example:
-        >>> pricing = lookup_pricing("gpt-4o")
-        >>> if pricing:
-        ...     print(pricing.input_per_million)
+    ```text
+     >>> pricing = lookup_pricing("gpt-4o")
+     >>> if pricing:
+     ...     print(pricing.input_per_million)
+    ```
     """
 
 def lookup_step_builder(step_id: builtins.str) -> builtins.bool:
@@ -15834,8 +16361,10 @@ def refresh_pricing(url: typing.Optional[builtins.str] = None) -> typing.Any:
             ``https://blazen.dev/api/pricing.json``.
     
     Example:
-        >>> count = await refresh_pricing()
-        >>> print(f"loaded {count} pricing entries")
+    ```text
+     >>> count = await refresh_pricing()
+     >>> print(f"loaded {count} pricing entries")
+    ```
     """
 
 def register_event_deserializer(name: builtins.str, deserializer: typing.Any) -> None:
@@ -15892,7 +16421,9 @@ def register_pricing(model_id: builtins.str, pricing: ModelPricing) -> None:
             and ``output_per_million`` set.
     
     Example:
-        >>> register_pricing("my-model", ModelPricing(input_per_million=1.0, output_per_million=2.0))
+    ```text
+     >>> register_pricing("my-model", ModelPricing(input_per_million=1.0, output_per_million=2.0))
+    ```
     """
 
 def register_step_builder(_step_id: builtins.str, _builder: typing.Any) -> None:

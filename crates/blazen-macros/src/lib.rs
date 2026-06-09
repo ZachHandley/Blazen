@@ -1,7 +1,10 @@
 //! `Blazen` procedural macros.
 //!
 //! Provides derive macros and attribute macros for the `Blazen` framework,
-//! including `#[derive(Event)]` and `#[step]` attribute macros.
+//! including `#[derive(Event)]`, `#[step]`, and `#[py_async]` attribute
+//! macros.
+
+mod py_async;
 
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
@@ -11,6 +14,21 @@ use syn::{
     parse_macro_input,
     punctuated::Punctuated,
 };
+
+/// Generate sync + async Python wrapper pair from a single `async fn`.
+///
+/// Applied to a method (or, with `(factory)`, a constructor) inside a
+/// `#[pymethods] impl` block. Emits a sync method (`name`) that drives
+/// the future to completion via `block_on_context` (releasing the GIL)
+/// and an awaitable method (`a<name>`, or `aopen` for factories) via
+/// `pyo3_async_runtimes::tokio::future_into_py`.
+///
+/// See [`py_async`](crate::py_async::PyAsyncArgs) module-level docs for
+/// the constraints on the source method.
+#[proc_macro_attribute]
+pub fn py_async(attr: TokenStream, item: TokenStream) -> TokenStream {
+    py_async::py_async_impl(attr, item)
+}
 
 /// Derive macro that generates a `blazen_events::Event` trait implementation.
 ///

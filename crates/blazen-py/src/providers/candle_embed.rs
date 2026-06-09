@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use blazen_macros::py_async;
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pymethods};
 
@@ -33,6 +34,7 @@ pub struct PyCandleEmbedModel {
     inner: Arc<CandleEmbedModel>,
 }
 
+#[py_async]
 #[gen_stub_pymethods]
 #[pymethods]
 impl PyCandleEmbedModel {
@@ -41,15 +43,16 @@ impl PyCandleEmbedModel {
     /// Args:
     ///     options: Optional :class:`CandleEmbedOptions` for model id,
     ///         device, revision, and cache directory.
-    #[new]
+    #[py_async_factory]
     #[pyo3(signature = (*, options=None))]
-    fn new(options: Option<PyRef<'_, PyCandleEmbedOptions>>) -> PyResult<Self> {
-        let opts = options.map(|o| o.inner.clone()).unwrap_or_default();
-        // `CandleEmbedModel::from_options` is async — bridge to the sync
-        // PyO3 constructor via `block_on_context`. (Earlier sync-arm builds
-        // existed when the upstream `engine` feature was off; the M3 wave
-        // unified the signature to async across feature combinations.)
-        let model = crate::convert::block_on_context(CandleEmbedModel::from_options(opts))
+    async fn new(options: Option<Py<PyCandleEmbedOptions>>) -> PyResult<Self> {
+        let opts = Python::attach(|py| {
+            options
+                .map(|o| o.borrow(py).inner.clone())
+                .unwrap_or_default()
+        });
+        let model = CandleEmbedModel::from_options(opts)
+            .await
             .map_err(|e| CandleEmbedError::new_err(e.to_string()))?;
         Ok(Self {
             inner: Arc::new(model),

@@ -8247,6 +8247,12 @@ export interface JsCandleEmbedOptions {
 export interface JsCandleLlmOptions {
   /** `HuggingFace` model ID or local path to model weights. */
   modelId?: string
+  /**
+   * Optional separate `HuggingFace` repo for `tokenizer.json` —
+   * required for GGUF-only repos that don't redistribute the
+   * tokenizer (e.g. `TheBloke/*-GGUF`). Falls back to `modelId`.
+   */
+  tokenizerRepo?: string
   /** Hardware device specifier (e.g. `"cpu"`, `"cuda:0"`, `"metal"`). */
   device?: string
   /** Quantization format string (e.g. `"q4_k_m"` for GGUF). */

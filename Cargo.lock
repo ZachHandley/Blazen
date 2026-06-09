@@ -1527,6 +1527,7 @@ dependencies = [
  "blazen-events",
  "blazen-llm",
  "blazen-local-llm",
+ "blazen-macros",
  "blazen-manager",
  "blazen-memory",
  "blazen-memory-valkey",

@@ -8,12 +8,11 @@
 
 use std::sync::Arc;
 
+use blazen_macros::py_async;
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyclass_enum, gen_stub_pymethods};
 
 use blazen_core::session_ref::{RefLifetime, RegistryKey, RemoteRefDescriptor, SessionRefRegistry};
-
-use crate::convert::block_on_context;
 
 // ---------------------------------------------------------------------------
 // PyRefLifetime
@@ -210,11 +209,13 @@ impl From<RemoteRefDescriptor> for PyRemoteRefDescriptor {
 /// step bodies that already run inside a Tokio worker (where
 /// `block_in_place` is the right primitive).
 #[gen_stub_pyclass]
-#[pyclass(name = "SessionRefRegistry", frozen)]
+#[pyclass(name = "SessionRefRegistry", frozen, from_py_object)]
+#[derive(Clone)]
 pub struct PySessionRefRegistry {
     pub(crate) inner: Arc<SessionRefRegistry>,
 }
 
+#[py_async]
 #[gen_stub_pymethods]
 #[pymethods]
 impl PySessionRefRegistry {
@@ -227,71 +228,71 @@ impl PySessionRefRegistry {
     }
 
     /// Number of currently live entries (main map).
-    fn len(&self) -> usize {
+    async fn len(&self) -> PyResult<usize> {
         let r = Arc::clone(&self.inner);
-        block_on_context(async move { r.len().await })
+        Ok(r.len().await)
     }
 
     /// Whether the registry has any live entries.
-    fn is_empty(&self) -> bool {
+    async fn is_empty(&self) -> PyResult<bool> {
         let r = Arc::clone(&self.inner);
-        block_on_context(async move { r.is_empty().await })
+        Ok(r.is_empty().await)
     }
 
     /// Snapshot every live key in the registry.
-    fn keys(&self) -> Vec<PyRegistryKey> {
+    async fn keys(&self) -> PyResult<Vec<PyRegistryKey>> {
         let r = Arc::clone(&self.inner);
-        let raw: Vec<RegistryKey> = block_on_context(async move { r.keys().await });
-        raw.into_iter().map(PyRegistryKey::from).collect()
+        let raw: Vec<RegistryKey> = r.keys().await;
+        Ok(raw.into_iter().map(PyRegistryKey::from).collect())
     }
 
     /// Look up the [`RefLifetime`] policy for a key.
-    fn lifetime_of(&self, key: PyRegistryKey) -> Option<PyRefLifetime> {
+    async fn lifetime_of(&self, key: PyRegistryKey) -> PyResult<Option<PyRefLifetime>> {
         let r = Arc::clone(&self.inner);
-        let lt = block_on_context(async move { r.lifetime_of(key.inner).await });
-        lt.map(PyRefLifetime::from)
+        Ok(r.lifetime_of(key.inner).await.map(PyRefLifetime::from))
     }
 
     /// Look up an in-process remote-ref descriptor by key, if the key is
     /// stored in the remote-ref sidecar instead of the main map.
-    fn get_remote(&self, key: PyRegistryKey) -> Option<PyRemoteRefDescriptor> {
+    async fn get_remote(&self, key: PyRegistryKey) -> PyResult<Option<PyRemoteRefDescriptor>> {
         let r = Arc::clone(&self.inner);
-        let desc = block_on_context(async move { r.get_remote(key.inner).await });
-        desc.map(PyRemoteRefDescriptor::from)
+        Ok(r.get_remote(key.inner)
+            .await
+            .map(PyRemoteRefDescriptor::from))
     }
 
     /// Whether `key` resolves to a remote-ref entry rather than a local
     /// live value.
-    fn is_remote(&self, key: PyRegistryKey) -> bool {
+    async fn is_remote(&self, key: PyRegistryKey) -> PyResult<bool> {
         let r = Arc::clone(&self.inner);
-        block_on_context(async move { r.is_remote(key.inner).await })
+        Ok(r.is_remote(key.inner).await)
     }
 
     /// Snapshot every `(key, descriptor)` pair currently in the
     /// remote-ref sidecar.
-    fn remote_entries(&self) -> Vec<(PyRegistryKey, PyRemoteRefDescriptor)> {
+    async fn remote_entries(&self) -> PyResult<Vec<(PyRegistryKey, PyRemoteRefDescriptor)>> {
         let r = Arc::clone(&self.inner);
-        let entries = block_on_context(async move { r.remote_entries().await });
-        entries
+        let entries = r.remote_entries().await;
+        Ok(entries
             .into_iter()
             .map(|(k, v)| (PyRegistryKey::from(k), PyRemoteRefDescriptor::from(v)))
-            .collect()
+            .collect())
     }
 
     /// Remove a single entry. Returns `True` if the key was present.
     ///
     /// Also clears any matching serializable, lifetime, and remote-ref
     /// sidecar entries.
-    fn remove(&self, key: PyRegistryKey) -> bool {
+    async fn remove(&self, key: PyRegistryKey) -> PyResult<bool> {
         let r = Arc::clone(&self.inner);
-        block_on_context(async move { r.remove(key.inner).await }).is_some()
+        Ok(r.remove(key.inner).await.is_some())
     }
 
     /// Drain all entries (main map and every sidecar). Returns the
     /// number of entries removed from the main map.
-    fn drain(&self) -> usize {
+    async fn drain(&self) -> PyResult<usize> {
         let r = Arc::clone(&self.inner);
-        block_on_context(async move { r.drain().await })
+        Ok(r.drain().await)
     }
 
     /// Purge all refs whose [`RefLifetime`] policy says they should be
@@ -301,14 +302,14 @@ impl PySessionRefRegistry {
     /// Args:
     ///     owns_registry: Mirror of `Context::owns_registry` -- `True`
     ///         means the calling `Context` owns this registry.
-    fn clear_on_context_drop(&self, owns_registry: bool) -> usize {
+    async fn clear_on_context_drop(&self, owns_registry: bool) -> PyResult<usize> {
         let r = Arc::clone(&self.inner);
-        block_on_context(async move { r.clear_on_context_drop(owns_registry).await })
+        Ok(r.clear_on_context_drop(owns_registry).await)
     }
 
-    fn __repr__(&self) -> String {
+    fn __repr__(&self, py: Python<'_>) -> String {
         let r = Arc::clone(&self.inner);
-        let n = block_on_context(async move { r.len().await });
+        let n = crate::convert::block_on_context(py, async move { r.len().await });
         format!("SessionRefRegistry(len={n})")
     }
 }
