@@ -448,9 +448,11 @@ pub async fn run_agent_with_callback(
             ));
         }
 
-        // Execute each tool call and add results. Tool errors are fed back to
-        // the model as tool_result messages (not propagated), so this never
-        // fails the run.
+        // Execute each tool call and add results. Most tool errors are fed
+        // back to the model as tool_result messages (recoverable). The one
+        // exception is `BlazenError::CallerError` carrying a stashed caller
+        // exception instance — those short-circuit so the binding layer can
+        // re-raise the original Python/JS exception with its class intact.
         execute_tool_calls(
             &response.tool_calls,
             &all_tools,
@@ -459,7 +461,7 @@ pub async fn run_agent_with_callback(
             &on_event,
             config.tool_concurrency,
         )
-        .await;
+        .await?;
 
         on_event(AgentEvent::IterationComplete {
             iteration,
@@ -571,6 +573,15 @@ fn check_finish_tool(
 /// When `tool_concurrency` is `0`, all tool calls run in parallel with no limit.
 /// When it is a positive number, at most that many tool calls execute at once
 /// (bounded via a [`tokio::sync::Semaphore`]).
+///
+/// Tool errors are normally fed back to the model as a synthetic
+/// `tool_result` message so the run can recover (matches the Anthropic /
+/// `OpenAI` tool-use loop). The one exception is
+/// [`BlazenError::CallerError`] with a non-empty `source` — those carry a
+/// caller-stashed exception instance (Python `Py<PyAny>` or napi
+/// `napi::Error`) that the binding layer needs to re-raise verbatim so
+/// users can `except MySubclass` / `catch (E)` on the exact class they
+/// threw. Those errors short-circuit and propagate.
 async fn execute_tool_calls(
     tool_calls: &[ToolCall],
     all_tools: &[Arc<dyn Tool>],
@@ -578,7 +589,7 @@ async fn execute_tool_calls(
     iteration: u32,
     on_event: &(impl Fn(AgentEvent) + Send + Sync),
     tool_concurrency: usize,
-) {
+) -> Result<(), BlazenError> {
     // Fire ToolCalled events for every tool before we start execution.
     for tc in tool_calls {
         on_event(AgentEvent::ToolCalled {
@@ -648,6 +659,20 @@ async fn execute_tool_calls(
                     result: payload.clone(),
                     error: e.to_string(),
                 });
+                // Caller-stash errors (Py<PyAny> / napi::Error stashed by
+                // pyerr_to_caller_error / its napi sibling) MUST propagate
+                // so the binding can re-raise the original exception instance
+                // with its class identity intact. Any other error stays
+                // recoverable and gets fed back to the model.
+                if matches!(
+                    e,
+                    BlazenError::CallerError {
+                        source: Some(_),
+                        ..
+                    }
+                ) {
+                    return Err(e);
+                }
                 messages.push(ChatMessage::tool_result(
                     &tc.id,
                     &tc.name,
@@ -656,6 +681,7 @@ async fn execute_tool_calls(
             }
         }
     }
+    Ok(())
 }
 
 /// Comma-joined list of every registered tool's name, for error messages.

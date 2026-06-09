@@ -503,13 +503,18 @@ test("ModelManager · status() returns empty array when no models registered", a
   t.deepEqual(statuses, []);
 });
 
-test("ModelManager · register() throws for remote (non-local) models", async (t) => {
+test("ModelManager · register() accepts remote providers (unified registry)", async (t) => {
+  // v0.6.4 (commit b95f7c90) unified the local + remote model registry.
+  // `register(id, model)` now accepts any `Model`, routing chat-only
+  // providers (openai, anthropic, …) into `register_provider` for by-name
+  // dispatch via `manager.complete(id, …)`. The legacy
+  // "does not support local loading" throw was deliberately removed.
   const manager = new ModelManager({ cpuRamGb: 8 });
   const model = Model.openai({ apiKey: "fake-key" });
-  await t.throwsAsync(
-    () => manager.register("gpt-4", model),
-    { message: /does not support local loading/ }
-  );
+  await manager.register("gpt-4", model);
+  const statuses = await manager.status();
+  const entry = statuses.find((s) => s.id === "gpt-4");
+  t.truthy(entry, "registered remote provider should appear in status()");
 });
 
 // ---------------------------------------------------------------------------
@@ -684,19 +689,22 @@ test("registerLocalModel · propagates load() rejection", async (t) => {
   );
 });
 
-test("register (Model path) · still works", async (t) => {
-  // The legacy `register(id, model)` path requires a `JsModel`
-  // backed by an in-process local provider (mistral.rs / llama.cpp / candle).
-  // Constructing one of those without local model weights on disk isn't
-  // feasible in unit tests, so we exercise the negative path: a remote
-  // factory (`openai`) must still be rejected with the documented error.
-  // This confirms the legacy entrypoint is wired up and validating its
-  // input — registerLocalModel's addition didn't shadow or break it.
+test("register (Model path) · still works alongside registerLocalModel", async (t) => {
+  // Since v0.6.4 (b95f7c90, unified provider registry) the legacy
+  // `register(id, model)` entrypoint accepts any `Model` — chat-only
+  // remote providers (openai/anthropic/…) get routed into
+  // `register_provider` for by-name dispatch; local-backed models
+  // additionally get lifecycle hooks. This test confirms the legacy
+  // entrypoint is still wired up and routes through correctly, alongside
+  // the newer `registerLocalModel` JS-callback adapter.
   const manager = new ModelManager({ cpuRamGb: 8 });
   const model = Model.openai({ apiKey: "fake-key" });
-  await t.throwsAsync(() => manager.register("legacy-openai", model), {
-    message: /does not support local loading/,
-  });
+  await manager.register("legacy-openai", model);
+  const statuses = await manager.status();
+  t.truthy(
+    statuses.some((s) => s.id === "legacy-openai"),
+    "register(id, model) should populate the unified registry"
+  );
 });
 
 // ===========================================================================

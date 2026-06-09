@@ -10,7 +10,7 @@
  *    error-wrapping layer recognises).
  *  - The `ollama` static factory builds a usable `CustomProvider` with
  *    the expected `providerId`.
- *  - `BaseProvider.extract` parses a JSON-Schema-shaped completion when
+ *  - `LlmProviderDefaults.extract` parses a JSON-Schema-shaped completion when
  *    the subclass's `complete` returns a JSON string.
  *
  * No API keys / network calls required — every test stubs the backing
@@ -23,8 +23,8 @@
 import test from "ava";
 
 import {
-  BaseProvider,
   ChatMessage,
+  LlmProviderDefaults,
   Model,
   CustomProvider,
 } from "../../crates/blazen-node/index.js";
@@ -221,9 +221,9 @@ test("CustomProvider subclass · prototype walk skips napi-installed methods", a
 //
 // Stub `complete` on a CustomProvider subclass so it returns a JSON
 // payload matching the supplied schema. Wrap via `Model.custom`
-// so `BaseProvider.extract` has a concrete inner Model.
+// so `LlmProviderDefaults.extract` has a concrete inner Model.
 
-test("BaseProvider.extract · parses object via JSON Schema with subclass complete", async (t) => {
+test("LlmProviderDefaults.extract · parses object via JSON Schema with subclass complete", async (t) => {
   class StubLlm extends CustomProvider {
     constructor() {
       super({ providerId: "stub-extract" });
@@ -245,7 +245,7 @@ test("BaseProvider.extract · parses object via JSON Schema with subclass comple
 
   const stub = new StubLlm();
   const innerModel = Model.custom(stub, "stub-extract");
-  const provider = new BaseProvider(innerModel);
+  const provider = new LlmProviderDefaults(innerModel);
 
   const schema = {
     type: "object",
