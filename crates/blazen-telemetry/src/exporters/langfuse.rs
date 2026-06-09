@@ -30,7 +30,6 @@ use tracing_subscriber::layer::Context;
 use tracing_subscriber::registry::LookupSpan;
 use uuid::Uuid;
 
-#[cfg(not(target_os = "wasi"))]
 use crate::error::TelemetryError;
 
 #[cfg(not(target_os = "wasi"))]

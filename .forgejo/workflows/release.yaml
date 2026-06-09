@@ -20,8 +20,13 @@ on:
       - 'bindings/swift/v*'
 
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
+  # Version-keyed group so every cron re-dispatch for the same in-flight
+  # version shares one slot; `cancel-in-progress: true` then drops any
+  # queued/running stale run before starting the new one. Binding tag
+  # pushes (`bindings/go/v*`, `bindings/swift/v*`) still get their own
+  # group via the `github.ref` fallback so they never cancel each other.
+  group: release-${{ github.event.inputs.version || github.ref }}
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
@@ -313,6 +318,15 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p ~/.cargo
+          # setup-rust is invoked as a docker action by act, so it runs as
+          # root inside the container and leaves ~/.cargo/config.toml +
+          # credentials.toml root-owned on the host. This inline `run:`
+          # step executes on the host as the runner UID, so a plain
+          # `cat >` against either file would fail with EACCES. Clear the
+          # stale files first (sudo when available — falls back to plain
+          # rm when the runner image doesn't include sudo).
+          sudo rm -f ~/.cargo/config.toml ~/.cargo/credentials.toml 2>/dev/null \
+            || rm -f ~/.cargo/config.toml ~/.cargo/credentials.toml
           # Cargo 1.74+ rejects authenticated third-party registries unless an
           # explicit `credential-provider` is declared. The built-in
           # `cargo:token` provider reads the token from credentials.toml

@@ -301,6 +301,8 @@ dependencies = [
  "anyhow",
  "async-trait",
  "blazen-core",
+ "blazen-llm",
+ "blazen-local-llm",
  "blazen-peer",
  "blazen-resource-probe",
  "dashmap",
@@ -394,6 +396,7 @@ dependencies = [
  "async-trait",
  "base64 0.22.1",
  "blazen-events",
+ "blazen-local-llm",
  "bytes",
  "chrono",
  "futures-core",
@@ -418,6 +421,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "blazen-local-llm"
+version = "0.0.0-dev"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "blazen-macros"
 version = "0.0.0-dev"
 dependencies = [
@@ -433,6 +444,7 @@ version = "0.0.0-dev"
 dependencies = [
  "async-trait",
  "blazen-llm",
+ "blazen-local-llm",
  "futures-util",
  "tokio",
  "tracing",
@@ -1730,6 +1742,7 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tower-service",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -3212,11 +3225,15 @@ dependencies = [
  "mime",
  "percent-encoding",
  "pin-project-lite",
+ "quinn",
+ "rustls",
+ "rustls-pki-types",
  "serde",
  "serde_json",
  "serde_urlencoded",
  "sync_wrapper",
  "tokio",
+ "tokio-rustls",
  "tokio-util",
  "tower",
  "tower-http",
@@ -3226,6 +3243,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "wasm-streams 0.4.2",
  "web-sys",
+ "webpki-roots",
 ]
 
 [[package]]
@@ -3359,6 +3377,7 @@ dependencies = [
  "aws-lc-rs",
  "log",
  "once_cell",
+ "ring",
  "rustls-pki-types",
  "rustls-webpki",
  "subtle",
@@ -4881,6 +4900,15 @@ name = "webpki-root-certs"
 version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f31141ce3fc3e300ae89b78c0dd67f9708061d1d2eda54b8209346fd6be9a92c"
+dependencies = [
+ "rustls-pki-types",
+]
+
+[[package]]
+name = "webpki-roots"
+version = "1.0.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52f5ee44c96cf55f1b349600768e3ece3a8f26010c05265ab73f945bb1a2eb9d"
 dependencies = [
  "rustls-pki-types",
 ]

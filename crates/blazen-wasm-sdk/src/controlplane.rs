@@ -665,6 +665,7 @@ impl WasmControlPlaneClient {
                 deadline_ms: req.deadline_ms,
                 wait_for_worker: req.wait_for_worker.unwrap_or(false),
                 resource_hint: req.resource_hint.as_ref().map(Into::into),
+                place: None,
             };
             let url = join_url(&endpoint, "/v1/cp/submit");
             let resp = post_envelope(&http, url, token.as_deref(), &payload, "submit").await?;
@@ -901,6 +902,7 @@ impl WasmControlPlaneWorker {
                 labels: std::collections::BTreeMap::new(),
                 taints: Vec::new(),
                 descriptors: Vec::new(),
+                place: None,
             };
 
             let url = join_url(&endpoint, "/v1/cp/worker/register");
@@ -1291,13 +1293,17 @@ fn build_worker_message_closure(
             | ServerToWorker::Drain(_)
             | ServerToWorker::Welcome(_)
             | ServerToWorker::Offer(_)
-            | ServerToWorker::Reject { .. } => {
+            | ServerToWorker::Reject { .. }
+            | ServerToWorker::KeyResponse(_) => {
                 // Non-Assignment frames don't drive the handler;
                 // Welcome was already consumed by the server-side
                 // register flow. Cancel / Drain are advisory in v1
                 // of the WASM binding (browser workers run a single
                 // handler call at a time today). Future revisions
-                // can wire an `AbortController` here.
+                // can wire an `AbortController` here. KeyResponse is
+                // unreachable in v1 (this binding never issues
+                // `RequestKey`) but is matched explicitly so envelope
+                // v3 compiles cleanly.
             }
         }
     }) as Box<dyn FnMut(web_sys::MessageEvent)>)
