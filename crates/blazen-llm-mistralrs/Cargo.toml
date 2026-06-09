@@ -10,6 +10,7 @@ description = "Local LLM backend for Blazen using mistral.rs inference engine"
 
 [dependencies]
 blazen-model-cache = { workspace = true }
+blazen-local-llm = { workspace = true }
 async-trait.workspace = true
 tokio = { workspace = true }
 serde = { workspace = true }

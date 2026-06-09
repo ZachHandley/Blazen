@@ -213,12 +213,11 @@ struct RecordingLocalFactory {
 impl LocalModelFactory for RecordingLocalFactory {
     async fn build_local(
         &self,
-        provider: &str,
-        model: &str,
+        request: blazen_local_llm::LocalModelRequest,
     ) -> Result<Box<dyn Model>, BlazenError> {
         self.called.store(true, Ordering::SeqCst);
         Ok(Box::new(TaggedModel {
-            id: format!("local:{provider}:{model}"),
+            id: format!("local:{}:{}", request.provider, request.model),
         }))
     }
 }

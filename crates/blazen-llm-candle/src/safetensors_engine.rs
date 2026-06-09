@@ -261,25 +261,37 @@ fn is_sharded_safetensors(name: &str) -> bool {
         && total.bytes().all(|b| b.is_ascii_digit())
 }
 
-/// Download `config.json`, `tokenizer.json`, and every safetensors
-/// file listed in `layout.safetensors`, returning the local cache
-/// paths.
+/// Download `config.json` + weight files from `model_repo`, plus
+/// `tokenizer.json` from `tokenizer_repo` (separate so callers can split
+/// when the GGUF/safetensors repo doesn't redistribute the tokenizer).
+/// When `tokenizer_repo == model_repo` the two HF API handles are the
+/// same logical repo — just opened twice; `hf-hub` deduplicates the
+/// cache lookup so this is effectively free.
 async fn download_safetensors_assets(
-    repo_id: &str,
+    model_repo: &str,
+    tokenizer_repo: &str,
     revision: Option<&str>,
     layout: &RepoLayout,
 ) -> Result<(PathBuf, PathBuf, Vec<PathBuf>), CandleLlmError> {
-    let repo = open_repo(repo_id, revision)?;
+    let repo = open_repo(model_repo, revision)?;
 
     let config_path = repo
         .get("config.json")
         .await
         .map_err(|e| CandleLlmError::ModelLoad(format!("config.json download failed: {e}")))?;
 
-    let tokenizer_path = repo
-        .get("tokenizer.json")
-        .await
-        .map_err(|e| CandleLlmError::ModelLoad(format!("tokenizer.json download failed: {e}")))?;
+    let tokenizer_path = if tokenizer_repo == model_repo {
+        repo.get("tokenizer.json").await.map_err(|e| {
+            CandleLlmError::ModelLoad(format!("tokenizer.json download failed: {e}"))
+        })?
+    } else {
+        let tok_repo = open_repo(tokenizer_repo, revision)?;
+        tok_repo.get("tokenizer.json").await.map_err(|e| {
+            CandleLlmError::ModelLoad(format!(
+                "tokenizer.json download failed from {tokenizer_repo}: {e}"
+            ))
+        })?
+    };
 
     let mut weight_paths: Vec<PathBuf> = Vec::with_capacity(layout.safetensors.len());
     for name in &layout.safetensors {
@@ -373,7 +385,12 @@ fn parse_eos_token(config_path: &std::path::Path) -> Option<u32> {
 /// make sense; everything else falls back to `F16` (the canonical
 /// Llama2 weights dtype).
 fn resolve_dtype(opts: &CandleLlmOptions, device: &Device) -> DType {
-    match opts.quantization.as_deref().map(str::to_ascii_lowercase) {
+    match opts
+        .base
+        .quantization
+        .as_deref()
+        .map(str::to_ascii_lowercase)
+    {
         Some(ref q) if q == "f32" => DType::F32,
         Some(ref q) if q == "bf16" => DType::BF16,
         Some(ref q) if q == "f16" => DType::F16,
@@ -440,12 +457,12 @@ impl SafetensorsEngine {
         opts: &CandleLlmOptions,
         adapters: &[crate::lora::LoadedAdapter],
     ) -> Result<Self, CandleLlmError> {
-        let repo_id = opts.model_id.as_deref().ok_or_else(|| {
+        let repo_id = opts.base.model_id.as_deref().ok_or_else(|| {
             CandleLlmError::InvalidOptions("model_id is required for engine init".into())
         })?;
-        let revision = opts.revision.as_deref();
+        let revision = opts.base.revision.as_deref();
 
-        let device = resolve_device(opts.device.as_deref())?;
+        let device = resolve_device(opts.base.device.as_deref())?;
 
         let layout = probe_repo_layout(repo_id, revision).await?;
         if !layout.has_safetensors() {
@@ -454,8 +471,12 @@ impl SafetensorsEngine {
             )));
         }
 
+        // tokenizer_repo: when set, fetch tokenizer.json from this repo
+        // instead of the safetensors (model_id) repo — same rationale as
+        // the GGUF path. Falls back to model_id when unset.
+        let tokenizer_repo = opts.base.tokenizer_repo.as_deref().unwrap_or(repo_id);
         let (config_path, tokenizer_path, weight_paths) =
-            download_safetensors_assets(repo_id, revision, &layout).await?;
+            download_safetensors_assets(repo_id, tokenizer_repo, revision, &layout).await?;
 
         let tokenizer = Tokenizer::from_file(&tokenizer_path)
             .map_err(|e| CandleLlmError::ModelLoad(format!("failed to load tokenizer: {e}")))?;
@@ -536,6 +557,7 @@ impl SafetensorsEngine {
         .map_err(|e| CandleLlmError::ModelLoad(format!("blocking task failed: {e}")))??;
 
         let context_length = opts
+            .base
             .context_length
             .unwrap_or(max_position_embeddings.min(4096));
 
@@ -553,7 +575,7 @@ impl SafetensorsEngine {
         tracing::info!(
             repo = repo_id,
             context_length,
-            device = ?opts.device,
+            device = ?opts.base.device,
             dtype = ?dtype,
             adapters = adapters.len(),
             arch = ?arch,

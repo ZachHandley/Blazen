@@ -111,12 +111,16 @@ impl ManagerFactory {
 impl LocalModelFactory for ManagerFactory {
     async fn build_local(
         &self,
-        _provider: &str,
-        model: &str,
+        request: blazen_local_llm::LocalModelRequest,
     ) -> Result<Box<dyn Model>, BlazenError> {
+        // The bridge talks to the model manager over its own wire protocol
+        // and does not consume LocalLlmOptions / backend_extras directly —
+        // the manager owns construction config on its side. We carry the
+        // typed request through for downstream consumers, but here only the
+        // model id is forwarded.
         Ok(Box::new(ManagerBridgeModel {
             handle: Arc::clone(&self.handle),
-            model_id: model.to_owned(),
+            model_id: request.model,
         }))
     }
 }
@@ -456,7 +460,11 @@ mod tests {
         let handle = ConfigurableHandle::new(true);
         let factory = ManagerFactory::new(handle);
         let model = factory
-            .build_local("openai", "local-llama")
+            .build_local(blazen_local_llm::LocalModelRequest::new(
+                "openai",
+                "local-llama",
+                blazen_local_llm::LocalLlmOptions::default(),
+            ))
             .await
             .expect("build_local");
         assert_eq!(model.model_id(), "local-llama");
@@ -480,7 +488,14 @@ mod tests {
     async fn per_request_model_override_wins() {
         let handle = ConfigurableHandle::new(true);
         let factory = ManagerFactory::new(handle);
-        let model = factory.build_local("openai", "base").await.unwrap();
+        let model = factory
+            .build_local(blazen_local_llm::LocalModelRequest::new(
+                "openai",
+                "base",
+                blazen_local_llm::LocalLlmOptions::default(),
+            ))
+            .await
+            .unwrap();
         let request = ModelRequest::new(vec![ChatMessage::user("hi")]).with_model("override-model");
         let resp = model.complete(request).await.unwrap();
         assert_eq!(resp.model, "override-model");
@@ -490,7 +505,14 @@ mod tests {
     async fn stream_is_unsupported_not_a_stub() {
         let handle = ConfigurableHandle::new(true);
         let factory = ManagerFactory::new(handle);
-        let model = factory.build_local("openai", "local").await.unwrap();
+        let model = factory
+            .build_local(blazen_local_llm::LocalModelRequest::new(
+                "openai",
+                "local",
+                blazen_local_llm::LocalLlmOptions::default(),
+            ))
+            .await
+            .unwrap();
         let request = ModelRequest::new(vec![ChatMessage::user("hi")]);
         // The stream future resolves to `Err`; the Ok variant isn't `Debug`, so
         // match the result rather than calling `expect_err`.

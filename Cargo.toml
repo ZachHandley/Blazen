@@ -49,6 +49,7 @@ members = [
     "crates/blazen-3d-core",
     "crates/blazen-video-core",
     "crates/blazen-ggml-sys", "crates/blazen-resource-probe",
+    "crates/blazen-local-llm",
 ]
 # NOTE: The three -sys forks (blazen-whisper-sys, blazen-diffusion-sys,
 # blazen-llama-cpp-sys-2) are intentionally NOT workspace members.
@@ -158,6 +159,7 @@ blazen-pipeline = { version = "0.0.0-dev", path = "crates/blazen-pipeline", regi
 blazen-prompts = { version = "0.0.0-dev", path = "crates/blazen-prompts", registry = "forgejo" }
 blazen-telemetry = { version = "0.0.0-dev", path = "crates/blazen-telemetry", registry = "forgejo" }
 blazen-model-cache = { version = "0.0.0-dev", path = "crates/blazen-model-cache", registry = "forgejo" }
+blazen-local-llm = { version = "0.0.0-dev", path = "crates/blazen-local-llm", registry = "forgejo" }
 blazen-embed = { version = "0.0.0-dev", path = "crates/blazen-embed", registry = "forgejo" }
 blazen-embed-fastembed = { version = "0.0.0-dev", path = "crates/blazen-embed-fastembed", registry = "forgejo" }
 blazen-embed-tract = { version = "0.0.0-dev", path = "crates/blazen-embed-tract", registry = "forgejo" }

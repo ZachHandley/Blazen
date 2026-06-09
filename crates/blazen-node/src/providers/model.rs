@@ -83,18 +83,20 @@ pub struct JsMistralRsOptions {
 impl From<JsMistralRsOptions> for blazen_llm::MistralRsOptions {
     fn from(val: JsMistralRsOptions) -> Self {
         Self {
-            model_id: val.model_id,
-            quantization: val.quantization,
-            device: val.device,
-            context_length: val.context_length.map(|v| v as usize),
+            base: blazen_local_llm::LocalLlmOptions {
+                model_id: Some(val.model_id),
+                quantization: val.quantization,
+                device: val.device,
+                context_length: val.context_length.map(|v| v as usize),
+                cache_dir: val.cache_dir.map(std::path::PathBuf::from),
+                ..blazen_local_llm::LocalLlmOptions::default()
+            },
             max_batch_size: val.max_batch_size.map(|v| v as usize),
             chat_template: val.chat_template,
-            cache_dir: val.cache_dir.map(std::path::PathBuf::from),
             // Vision input is not yet surfaced through the Node binding.
             // Users must construct `MistralRsOptions` directly in Rust to
             // enable vision mode.
             vision: false,
-            initial_adapters: Vec::new(),
         }
     }
 }

@@ -942,6 +942,7 @@ dependencies = [
  "base64 0.22.1",
  "blazen-core",
  "blazen-llm",
+ "blazen-local-llm",
  "blazen-peer",
  "blazen-resource-probe",
  "dashmap",
@@ -1121,6 +1122,7 @@ dependencies = [
  "blazen-llm-ollama",
  "blazen-llm-tgi",
  "blazen-llm-vllm",
+ "blazen-local-llm",
  "bytes",
  "candle-core",
  "chrono",
@@ -1154,6 +1156,7 @@ dependencies = [
 name = "blazen-llm-candle"
 version = "0.0.0-dev"
 dependencies = [
+ "blazen-local-llm",
  "blazen-model-cache",
  "candle-core",
  "candle-nn",
@@ -1173,6 +1176,7 @@ dependencies = [
 name = "blazen-llm-llamacpp"
 version = "0.0.0-dev"
 dependencies = [
+ "blazen-local-llm",
  "blazen-model-cache",
  "encoding_rs",
  "futures-util",
@@ -1224,6 +1228,7 @@ dependencies = [
  "anyhow",
  "async-trait",
  "base64 0.22.1",
+ "blazen-local-llm",
  "blazen-model-cache",
  "futures-util",
  "image 0.25.10",
@@ -1282,6 +1287,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "blazen-local-llm"
+version = "0.0.0-dev"
+dependencies = [
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "blazen-macros"
 version = "0.0.0-dev"
 dependencies = [
@@ -1300,6 +1313,7 @@ dependencies = [
  "blazen-llm-candle",
  "blazen-llm-llamacpp",
  "blazen-llm-mistralrs",
+ "blazen-local-llm",
  "blazen-model-cache",
  "blazen-train",
  "candle-core",
@@ -1379,6 +1393,7 @@ dependencies = [
  "blazen-embed-tract",
  "blazen-events",
  "blazen-llm",
+ "blazen-local-llm",
  "blazen-manager",
  "blazen-memory",
  "blazen-memory-valkey",
@@ -1511,6 +1526,7 @@ dependencies = [
  "blazen-embed-tract",
  "blazen-events",
  "blazen-llm",
+ "blazen-local-llm",
  "blazen-manager",
  "blazen-memory",
  "blazen-memory-valkey",
@@ -1652,6 +1668,7 @@ dependencies = [
  "blazen-embed-tract",
  "blazen-events",
  "blazen-llm",
+ "blazen-local-llm",
  "blazen-manager",
  "blazen-memory",
  "blazen-memory-valkey",

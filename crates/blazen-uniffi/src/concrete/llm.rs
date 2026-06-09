@@ -1022,15 +1022,16 @@ impl MistralRsProvider {
         vision: bool,
     ) -> Result<Arc<Self>, BlazenError> {
         let opts = blazen_llm::MistralRsOptions {
-            model_id,
-            quantization,
-            device,
-            context_length: context_length.map(|c| c as usize),
+            base: blazen_local_llm::LocalLlmOptions {
+                model_id: Some(model_id),
+                quantization,
+                device,
+                context_length: context_length.map(|c| c as usize),
+                ..blazen_local_llm::LocalLlmOptions::default()
+            },
             max_batch_size: None,
             chat_template: None,
-            cache_dir: None,
             vision,
-            initial_adapters: Vec::new(),
         };
         let provider = blazen_llm::MistralRsProvider::from_options(opts).map_err(|e| {
             BlazenError::Provider {
@@ -1103,13 +1104,14 @@ impl LlamaCppProvider {
         n_gpu_layers: Option<u32>,
     ) -> Result<Arc<Self>, BlazenError> {
         let opts = blazen_llm::LlamaCppOptions {
-            model_path: Some(model_path),
-            device,
-            quantization,
-            context_length: context_length.map(|c| c as usize),
+            base: blazen_local_llm::LocalLlmOptions {
+                model_id: Some(model_path),
+                device,
+                quantization,
+                context_length: context_length.map(|c| c as usize),
+                ..blazen_local_llm::LocalLlmOptions::default()
+            },
             n_gpu_layers,
-            cache_dir: None,
-            initial_adapters: Vec::new(),
         };
         let provider = crate::runtime::runtime()
             .block_on(async { blazen_llm::LlamaCppProvider::from_options(opts).await })
@@ -1183,13 +1185,14 @@ impl CandleLlmProvider {
         context_length: Option<u32>,
     ) -> Result<Arc<Self>, BlazenError> {
         let opts = blazen_llm::CandleLlmOptions {
-            model_id: Some(model_id),
-            device,
-            quantization,
-            revision,
-            context_length: context_length.map(|c| c as usize),
-            cache_dir: None,
-            initial_adapters: Vec::new(),
+            base: blazen_local_llm::LocalLlmOptions {
+                model_id: Some(model_id),
+                device,
+                quantization,
+                revision,
+                context_length: context_length.map(|c| c as usize),
+                ..blazen_local_llm::LocalLlmOptions::default()
+            },
             force_safetensors: false,
         };
         let provider = blazen_llm::CandleLlmProvider::from_options(opts).map_err(|e| {

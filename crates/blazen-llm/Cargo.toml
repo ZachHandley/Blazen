@@ -150,6 +150,7 @@ embed-tract = ["dep:blazen-embed-tract"]
 
 [dependencies]
 blazen-events.workspace = true
+blazen-local-llm.workspace = true
 async-trait.workspace = true
 schemars.workspace = true
 serde.workspace = true

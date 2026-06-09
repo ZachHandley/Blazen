@@ -1,0 +1,16 @@
+[package]
+name = "blazen-local-llm"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+repository.workspace = true
+description = "Shared option + request types for Blazen local LLM backends (candle, mistralrs, llama.cpp) and the controlplane local-model factory seam"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+
+[lints]
+workspace = true

@@ -255,7 +255,18 @@ impl LlamaCppProvider {
     #[allow(clippy::unused_async)]
     pub async fn from_options(opts: LlamaCppOptions) -> Result<Self, LlamaCppError> {
         Self::validate_options(&opts)?;
-        let model_path = opts.model_path.clone();
+        let model_path = opts.base.model_id.clone();
+        if opts.base.tokenizer_repo.is_some() {
+            // llama.cpp reads the tokenizer straight out of the GGUF
+            // file, so a separate-tokenizer-repo override is meaningless
+            // here. Accept the field for cross-backend parity but warn so
+            // users aren't silently confused.
+            tracing::warn!(
+                tokenizer_repo = ?opts.base.tokenizer_repo,
+                "LlamaCppOptions.base.tokenizer_repo is ignored — llama.cpp \
+                 embeds the tokenizer in the GGUF file"
+            );
+        }
         Ok(Self {
             model_path,
             #[cfg(feature = "engine")]
@@ -270,15 +281,15 @@ impl LlamaCppProvider {
 
     /// Validate the options without loading the engine.
     fn validate_options(opts: &LlamaCppOptions) -> Result<(), LlamaCppError> {
-        if let Some(ref model_path) = opts.model_path
-            && model_path.is_empty()
+        if let Some(ref model_id) = opts.base.model_id
+            && model_id.is_empty()
         {
             return Err(LlamaCppError::InvalidOptions(
-                "model_path must not be empty when specified".into(),
+                "model_id must not be empty when specified".into(),
             ));
         }
 
-        if let Some(ref device) = opts.device
+        if let Some(ref device) = opts.base.device
             && device.is_empty()
         {
             return Err(LlamaCppError::InvalidOptions(
@@ -289,7 +300,10 @@ impl LlamaCppProvider {
         Ok(())
     }
 
-    /// The model path that was passed at construction time.
+    /// The model path (or HF `repo/file.gguf` reference) passed at
+    /// construction time. Kept under the legacy name `model_path` for
+    /// caller compatibility; mirrors
+    /// [`blazen_local_llm::LocalLlmOptions::model_id`] internally.
     #[must_use]
     pub fn model_path(&self) -> Option<&str> {
         self.model_path.as_deref()
@@ -311,7 +325,7 @@ impl LlamaCppProvider {
     /// `None` if no device was specified.
     #[must_use]
     pub fn device_str(&self) -> Option<&str> {
-        self.options.device.as_deref()
+        self.options.base.device.as_deref()
     }
 
     // -----------------------------------------------------------------------
@@ -640,8 +654,8 @@ impl LlamaCppProvider {
 
 #[cfg(feature = "engine")]
 async fn resolve_model_path(opts: &LlamaCppOptions) -> Result<std::path::PathBuf, LlamaCppError> {
-    let model_path = opts.model_path.as_deref().ok_or_else(|| {
-        LlamaCppError::InvalidOptions("model_path is required for llama.cpp inference".into())
+    let model_path = opts.base.model_id.as_deref().ok_or_else(|| {
+        LlamaCppError::InvalidOptions("model_id is required for llama.cpp inference".into())
     })?;
 
     let path = std::path::Path::new(model_path);
@@ -661,7 +675,7 @@ async fn resolve_model_path(opts: &LlamaCppOptions) -> Result<std::path::PathBuf
             (&model_path[..last_slash], &model_path[last_slash + 1..])
         } else {
             return Err(LlamaCppError::InvalidOptions(format!(
-                "model_path \"{model_path}\" looks like a HuggingFace repo ID \
+                "model_id \"{model_path}\" looks like a HuggingFace repo ID \
                  but no filename was specified. Use format: \
                  \"org/repo/model-file.gguf\""
             )));
@@ -673,7 +687,7 @@ async fn resolve_model_path(opts: &LlamaCppOptions) -> Result<std::path::PathBuf
             "downloading model from HuggingFace Hub"
         );
 
-        let cache = if let Some(ref cache_dir) = opts.cache_dir {
+        let cache = if let Some(ref cache_dir) = opts.base.cache_dir {
             blazen_model_cache::ModelCache::with_dir(cache_dir.clone())
         } else {
             blazen_model_cache::ModelCache::new()
@@ -711,7 +725,7 @@ async fn build_engine(opts: &LlamaCppOptions) -> Result<Engine, LlamaCppError> {
     );
 
     // Build engine on a blocking thread since model loading is CPU-heavy.
-    let context_length = opts.context_length;
+    let context_length = opts.base.context_length;
     let n_gpu_layers = opts.n_gpu_layers;
 
     let engine = tokio::task::spawn_blocking(move || -> Result<Engine, LlamaCppError> {
@@ -799,10 +813,10 @@ async fn bootstrap_initial_adapters_for(
         tokio::sync::RwLock<std::collections::HashMap<String, MountedAdapter>>,
     >,
 ) -> Result<(), LlamaCppError> {
-    if options.initial_adapters.is_empty() {
+    if options.base.initial_adapters.is_empty() {
         return Ok(());
     }
-    for path in &options.initial_adapters {
+    for path in &options.base.initial_adapters {
         if !path.exists() {
             return Err(LlamaCppError::AdapterFailed(format!(
                 "initial adapter path does not exist: {}",
@@ -1437,9 +1451,12 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn from_options_rejects_empty_model_path() {
+    async fn from_options_rejects_empty_model_id() {
         let opts = LlamaCppOptions {
-            model_path: Some(String::new()),
+            base: blazen_local_llm::LocalLlmOptions {
+                model_id: Some(String::new()),
+                ..blazen_local_llm::LocalLlmOptions::default()
+            },
             ..LlamaCppOptions::default()
         };
         let result = LlamaCppProvider::from_options(opts).await;
@@ -1449,7 +1466,10 @@ mod tests {
     #[tokio::test]
     async fn from_options_rejects_empty_device() {
         let opts = LlamaCppOptions {
-            device: Some(String::new()),
+            base: blazen_local_llm::LocalLlmOptions {
+                device: Some(String::new()),
+                ..blazen_local_llm::LocalLlmOptions::default()
+            },
             ..LlamaCppOptions::default()
         };
         let result = LlamaCppProvider::from_options(opts).await;
@@ -1459,7 +1479,7 @@ mod tests {
     #[tokio::test]
     async fn from_options_accepts_valid_device() {
         let opts = LlamaCppOptions {
-            device: Some("cuda:0".into()),
+            base: blazen_local_llm::LocalLlmOptions::new().with_device("cuda:0"),
             ..LlamaCppOptions::default()
         };
         let provider = LlamaCppProvider::from_options(opts)

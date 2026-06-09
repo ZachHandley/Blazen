@@ -279,14 +279,28 @@ impl MistralRsProvider {
     ///
     /// Returns [`MistralRsError::InvalidOptions`] if `model_id` is empty.
     pub fn from_options(opts: MistralRsOptions) -> Result<Self, MistralRsError> {
-        if opts.model_id.is_empty() {
+        let model_id = opts.base.model_id.as_deref().unwrap_or("");
+        if model_id.is_empty() {
             return Err(MistralRsError::InvalidOptions(
                 "model_id must not be empty".into(),
             ));
         }
+        if opts.base.tokenizer_repo.is_some() {
+            // mistral.rs's TextModelBuilder fetches the tokenizer from
+            // model_id internally; there's no override hook in the
+            // upstream API. Accept the field for cross-backend parity
+            // but warn so users aren't silently confused.
+            tracing::warn!(
+                tokenizer_repo = ?opts.base.tokenizer_repo,
+                "MistralRsOptions.tokenizer_repo is ignored — mistral.rs has no \
+                 separate-tokenizer-repo hook; switch to the candle backend if \
+                 you need it"
+            );
+        }
 
         #[cfg(feature = "engine")]
         let initial_mounted: Vec<MountedAdapter> = opts
+            .base
             .initial_adapters
             .iter()
             .map(|dir| MountedAdapter {
@@ -297,7 +311,7 @@ impl MistralRsProvider {
             .collect();
 
         Ok(Self {
-            model_id: opts.model_id.clone(),
+            model_id: model_id.to_owned(),
             #[cfg(feature = "engine")]
             engine: std::sync::Arc::new(tokio::sync::RwLock::new(None)),
             #[cfg(feature = "engine")]
@@ -649,8 +663,11 @@ async fn build_engine(
 ) -> Result<mistralrs::Model, MistralRsError> {
     use mistralrs::{LoraModelBuilder, MultimodalModelBuilder, TextModelBuilder};
 
+    let model_id = opts.base.model_id.as_deref().ok_or_else(|| {
+        MistralRsError::InvalidOptions("model_id is required for engine init".into())
+    })?;
     tracing::info!(
-        model_id = %opts.model_id,
+        model_id = %model_id,
         vision = opts.vision,
         adapter_count = adapters.len(),
         "loading mistral.rs model"
@@ -665,7 +682,7 @@ async fn build_engine(
     }
 
     if opts.vision {
-        let mut builder = MultimodalModelBuilder::new(&opts.model_id);
+        let mut builder = MultimodalModelBuilder::new(model_id);
         if let Some(ref tmpl) = opts.chat_template {
             builder = builder.with_chat_template(tmpl.clone());
         }
@@ -674,7 +691,7 @@ async fn build_engine(
             .await
             .map_err(|e| MistralRsError::Init(e.to_string()))
     } else {
-        let mut builder = TextModelBuilder::new(&opts.model_id);
+        let mut builder = TextModelBuilder::new(model_id);
         if let Some(ref tmpl) = opts.chat_template {
             builder = builder.with_chat_template(tmpl.clone());
         }
@@ -1043,8 +1060,10 @@ mod tests {
         // builds via `TextModelBuilder`, which needs a tokenizer.json that
         // GGUF-only repos don't ship.
         let opts = MistralRsOptions {
-            context_length: Some(2048),
-            ..MistralRsOptions::required("Qwen/Qwen2.5-0.5B-Instruct")
+            base: blazen_local_llm::LocalLlmOptions::new()
+                .with_model_id("Qwen/Qwen2.5-0.5B-Instruct")
+                .with_context_length(2048),
+            ..MistralRsOptions::default()
         };
         let provider = MistralRsProvider::from_options(opts).expect("options valid");
         provider.load().await.expect("model should load");

@@ -44,6 +44,11 @@ pub struct JsCandleLlmOptions {
     /// `HuggingFace` model ID or local path to model weights.
     #[napi(js_name = "modelId")]
     pub model_id: Option<String>,
+    /// Optional separate `HuggingFace` repo for `tokenizer.json` —
+    /// required for GGUF-only repos that don't redistribute the
+    /// tokenizer (e.g. `TheBloke/*-GGUF`). Falls back to `modelId`.
+    #[napi(js_name = "tokenizerRepo")]
+    pub tokenizer_repo: Option<String>,
     /// Hardware device specifier (e.g. `"cpu"`, `"cuda:0"`, `"metal"`).
     pub device: Option<String>,
     /// Quantization format string (e.g. `"q4_k_m"` for GGUF).
@@ -61,13 +66,16 @@ pub struct JsCandleLlmOptions {
 impl From<JsCandleLlmOptions> for CandleLlmOptions {
     fn from(val: JsCandleLlmOptions) -> Self {
         Self {
-            model_id: val.model_id,
-            device: val.device,
-            quantization: val.quantization,
-            revision: val.revision,
-            context_length: val.context_length.map(|v| v as usize),
-            cache_dir: val.cache_dir.map(std::path::PathBuf::from),
-            initial_adapters: Vec::new(),
+            base: blazen_local_llm::LocalLlmOptions {
+                model_id: val.model_id,
+                tokenizer_repo: val.tokenizer_repo,
+                device: val.device,
+                quantization: val.quantization,
+                revision: val.revision,
+                context_length: val.context_length.map(|v| v as usize),
+                cache_dir: val.cache_dir.map(std::path::PathBuf::from),
+                initial_adapters: Vec::new(),
+            },
             force_safetensors: false,
         }
     }

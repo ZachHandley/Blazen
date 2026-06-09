@@ -176,18 +176,23 @@ mod engine {
     impl CandleEngine {
         /// Load a quantized GGUF model from `HuggingFace` Hub.
         pub(crate) async fn load(opts: &CandleLlmOptions) -> Result<Self, CandleLlmError> {
-            let repo_id = opts.model_id.as_deref().ok_or_else(|| {
+            let repo_id = opts.base.model_id.as_deref().ok_or_else(|| {
                 CandleLlmError::InvalidOptions("model_id is required for engine init".into())
             })?;
 
-            let device = resolve_device(opts.device.as_deref())?;
-            let revision = opts.revision.as_deref();
-            let quantization = opts.quantization.as_deref();
+            let device = resolve_device(opts.base.device.as_deref())?;
+            let revision = opts.base.revision.as_deref();
+            let quantization = opts.base.quantization.as_deref();
+            // tokenizer_repo: when set, fetch tokenizer.json from this repo
+            // instead of the GGUF (model_id) repo — the common pattern for
+            // TheBloke / bartowski GGUF-only repos whose owners don't
+            // redistribute the tokenizer.
+            let tokenizer_repo = opts.base.tokenizer_repo.as_deref().unwrap_or(repo_id);
 
             // Download model and tokenizer in parallel.
             let (gguf_path, tokenizer) = tokio::try_join!(
                 download_gguf(repo_id, revision, quantization),
-                download_tokenizer(repo_id, revision),
+                download_tokenizer(tokenizer_repo, revision),
             )?;
 
             // Load the GGUF model (CPU-bound -- run on blocking thread).
@@ -206,18 +211,18 @@ mod engine {
             .await
             .map_err(|e| CandleLlmError::ModelLoad(format!("blocking task failed: {e}")))??;
 
-            let context_length = opts.context_length.unwrap_or(4096);
+            let context_length = opts.base.context_length.unwrap_or(4096);
 
             tracing::info!(
                 repo = repo_id,
                 context_length,
-                device = ?opts.device,
+                device = ?opts.base.device,
                 "candle LLM engine loaded"
             );
 
-            if !opts.initial_adapters.is_empty() {
+            if !opts.base.initial_adapters.is_empty() {
                 tracing::warn!(
-                    count = opts.initial_adapters.len(),
+                    count = opts.base.initial_adapters.len(),
                     "initial_adapters configured but candle backend's quantized_llama \
                      engine has no per-Linear hook; adapters will fail to mount until \
                      a per-architecture wrapper is implemented"
@@ -557,10 +562,10 @@ async fn load_with_autodetect(
     opts: &CandleLlmOptions,
     pre_registered_adapters: &[MountedAdapterRecord],
 ) -> Result<LoadedEngine, CandleLlmError> {
-    let repo_id = opts.model_id.as_deref().ok_or_else(|| {
+    let repo_id = opts.base.model_id.as_deref().ok_or_else(|| {
         CandleLlmError::InvalidOptions("model_id is required for engine init".into())
     })?;
-    let revision = opts.revision.as_deref();
+    let revision = opts.base.revision.as_deref();
 
     let layout = crate::safetensors_engine::probe_repo_layout(repo_id, revision).await?;
     let choice = choose_format(&layout, opts.force_safetensors, repo_id)?;
@@ -590,7 +595,7 @@ async fn load_with_autodetect(
         FormatChoice::Safetensors => {
             // Why: deltas must be precomputed on the engine's
             // ultimate device. Resolve once here and pass it through.
-            let device = resolve_device_for_initial_load(opts.device.as_deref())?;
+            let device = resolve_device_for_initial_load(opts.base.device.as_deref())?;
             let parsed = parse_adapters_on_device(pre_registered_adapters, &device)?;
             crate::safetensors_engine::SafetensorsEngine::load_with_adapters(opts, &parsed)
                 .await
@@ -726,7 +731,7 @@ impl CandleLlmProvider {
     /// Returns [`CandleLlmError::InvalidOptions`] if a specified string field
     /// is present but empty.
     pub fn from_options(opts: CandleLlmOptions) -> Result<Self, CandleLlmError> {
-        if let Some(ref model_id) = opts.model_id
+        if let Some(ref model_id) = opts.base.model_id
             && model_id.is_empty()
         {
             return Err(CandleLlmError::InvalidOptions(
@@ -734,7 +739,7 @@ impl CandleLlmProvider {
             ));
         }
 
-        if let Some(ref device) = opts.device
+        if let Some(ref device) = opts.base.device
             && device.is_empty()
         {
             return Err(CandleLlmError::InvalidOptions(
@@ -743,7 +748,7 @@ impl CandleLlmProvider {
         }
 
         Ok(Self {
-            model_id: opts.model_id.clone(),
+            model_id: opts.base.model_id.clone(),
             options: opts,
             #[cfg(feature = "engine")]
             engine: std::sync::Arc::new(tokio::sync::Mutex::new(None)),
@@ -764,7 +769,7 @@ impl CandleLlmProvider {
     /// `None` if no device was specified (which defaults to CPU at inference time).
     #[must_use]
     pub fn device_str(&self) -> Option<&str> {
-        self.options.device.as_deref()
+        self.options.base.device.as_deref()
     }
 
     /// Whether the engine feature is compiled in.
@@ -1347,6 +1352,7 @@ pub struct CandleInferenceResult {
 mod tests {
     use super::*;
     use crate::CandleLlmOptions;
+    use blazen_local_llm::LocalLlmOptions;
 
     #[test]
     fn from_options_with_defaults() {
@@ -1358,7 +1364,7 @@ mod tests {
     #[test]
     fn from_options_with_model_id() {
         let opts = CandleLlmOptions {
-            model_id: Some("meta-llama/Llama-3.2-1B".into()),
+            base: LocalLlmOptions::new().with_model_id("meta-llama/Llama-3.2-1B"),
             ..CandleLlmOptions::default()
         };
         let provider = CandleLlmProvider::from_options(opts).expect("should succeed");
@@ -1368,7 +1374,10 @@ mod tests {
     #[test]
     fn from_options_rejects_empty_model_id() {
         let opts = CandleLlmOptions {
-            model_id: Some(String::new()),
+            base: LocalLlmOptions {
+                model_id: Some(String::new()),
+                ..LocalLlmOptions::default()
+            },
             ..CandleLlmOptions::default()
         };
         let result = CandleLlmProvider::from_options(opts);
@@ -1378,7 +1387,10 @@ mod tests {
     #[test]
     fn from_options_rejects_empty_device() {
         let opts = CandleLlmOptions {
-            device: Some(String::new()),
+            base: LocalLlmOptions {
+                device: Some(String::new()),
+                ..LocalLlmOptions::default()
+            },
             ..CandleLlmOptions::default()
         };
         let result = CandleLlmProvider::from_options(opts);
@@ -1388,7 +1400,7 @@ mod tests {
     #[test]
     fn from_options_accepts_valid_device() {
         let opts = CandleLlmOptions {
-            device: Some("cuda:0".into()),
+            base: LocalLlmOptions::new().with_device("cuda:0"),
             ..CandleLlmOptions::default()
         };
         let provider = CandleLlmProvider::from_options(opts).expect("should succeed");
@@ -1433,10 +1445,15 @@ mod tests {
     #[tokio::test]
     #[ignore = "downloads a large model + needs network"]
     async fn test_candle_llm_inference() {
+        // TheBloke's *-GGUF repos ship the GGUF weights but NOT
+        // tokenizer.json. Point tokenizer_repo at the upstream
+        // TinyLlama repo for the tokenizer.
         let opts = CandleLlmOptions {
-            model_id: Some("TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF".into()),
-            quantization: Some("Q4_K_M".into()),
-            context_length: Some(2048),
+            base: LocalLlmOptions::new()
+                .with_model_id("TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF")
+                .with_tokenizer_repo("TinyLlama/TinyLlama-1.1B-Chat-v1.0")
+                .with_quantization("Q4_K_M")
+                .with_context_length(2048),
             ..CandleLlmOptions::default()
         };
 

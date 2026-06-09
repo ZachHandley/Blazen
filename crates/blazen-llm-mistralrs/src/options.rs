@@ -1,53 +1,42 @@
 //! Configuration options for the mistral.rs local LLM backend.
+//!
+//! `MistralRsOptions` embeds [`blazen_local_llm::LocalLlmOptions`] (the
+//! cross-backend base) in its `base` field for every option shared across
+//! candle / mistralrs / llama.cpp, and keeps mistralrs-specific knobs
+//! ([`Self::max_batch_size`], [`Self::chat_template`], [`Self::vision`]) at
+//! the outer level. mistral.rs's `TextModelBuilder` fetches the tokenizer
+//! from `model_id` internally — there's no override hook in the upstream
+//! API today, so [`blazen_local_llm::LocalLlmOptions::tokenizer_repo`] is
+//! accepted on the wire (for parity with the other backends) but ignored
+//! by the engine; setting it logs a warning at construction time.
 
-use std::path::PathBuf;
-
+use blazen_local_llm::LocalLlmOptions;
 use serde::{Deserialize, Serialize};
 
 /// Options for constructing a [`MistralRsProvider`](crate::MistralRsProvider).
 ///
-/// `model_id` is required -- all other fields have sensible defaults.
+/// `base.model_id` is required at engine-load time -- all other fields have
+/// sensible defaults.
 ///
 /// # Examples
 ///
 /// ```
 /// use blazen_llm_mistralrs::MistralRsOptions;
 ///
-/// let opts = MistralRsOptions {
-///     model_id: "mistralai/Mistral-7B-Instruct-v0.3".into(),
-///     ..MistralRsOptions::required("mistralai/Mistral-7B-Instruct-v0.3")
-/// };
-/// assert_eq!(opts.model_id, "mistralai/Mistral-7B-Instruct-v0.3");
+/// let opts = MistralRsOptions::required("mistralai/Mistral-7B-Instruct-v0.3");
+/// assert_eq!(
+///     opts.base.model_id.as_deref(),
+///     Some("mistralai/Mistral-7B-Instruct-v0.3"),
+/// );
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct MistralRsOptions {
-    /// `HuggingFace` model ID (e.g. `"mistralai/Mistral-7B-Instruct-v0.3"`)
-    /// or local path to a GGUF file.
-    pub model_id: String,
-
-    /// Quantization format string (e.g. `"q4_k_m"` for GGUF).
-    ///
-    /// Accepts the same format strings as `blazen_llm::Quantization::parse`:
-    /// `"f32"`, `"f16"`, `"bf16"`, `"q8_0"`, `"q6_k"`, `"q5_k_m"`,
-    /// `"q4_k_m"`, `"q4_k_s"`, `"q3_k_m"`, `"q2_k"`, `"gptq-4bit"`,
-    /// `"awq-4bit"`.
-    ///
-    /// When `None`, the backend will use the model's native precision or
-    /// auto-detect from the file format.
-    pub quantization: Option<String>,
-
-    /// Hardware device specifier string (e.g. `"cpu"`, `"cuda:0"`, `"metal"`).
-    ///
-    /// Accepts the same format strings as `blazen_llm::Device::parse`:
-    /// `"cpu"`, `"cuda"`, `"cuda:N"`, `"metal"`, `"vulkan:N"`, `"rocm:N"`.
-    ///
-    /// When `None`, defaults to `"cpu"`.
-    pub device: Option<String>,
-
-    /// Maximum context length in tokens.
-    ///
-    /// When `None`, the model's built-in context length is used.
-    pub context_length: Option<usize>,
+    /// Shared local-LLM options (`model_id`, `device`, `quantization`,
+    /// `revision`, `context_length`, `cache_dir`, `initial_adapters`,
+    /// `tokenizer_repo`). Flattened into the JSON shape so existing wire
+    /// formats keep working.
+    #[serde(flatten)]
+    pub base: LocalLlmOptions,
 
     /// Maximum batch size for concurrent requests.
     ///
@@ -59,12 +48,6 @@ pub struct MistralRsOptions {
     /// When `None`, the model's built-in chat template is used.
     pub chat_template: Option<String>,
 
-    /// Path to cache downloaded models.
-    ///
-    /// When `None`, falls back to `blazen-model-cache`'s default cache
-    /// directory (`$BLAZEN_CACHE_DIR` or `~/.cache/blazen/models`).
-    pub cache_dir: Option<PathBuf>,
-
     /// Whether this model should be loaded as a vision/multimodal model.
     ///
     /// When `true`, the provider builds the model via mistral.rs's
@@ -75,24 +58,10 @@ pub struct MistralRsOptions {
     ///
     /// Text-only models will fail to load with this flag set, and text-only
     /// builders will reject image inputs at inference time. Set this to
-    /// `true` exactly when the model you are pointing `model_id` at is a
-    /// vision-capable model.
+    /// `true` exactly when the model you are pointing `base.model_id` at is
+    /// a vision-capable model.
     #[serde(default)]
     pub vision: bool,
-
-    /// Adapter directories to mount via `mistralrs::LoraModelBuilder` when
-    /// the engine is first built. Each path must contain a PEFT canonical
-    /// layout (`adapter_model.safetensors` + `adapter_config.json`).
-    ///
-    /// Subsequent calls to [`MistralRsProvider::load_adapter`] add to this
-    /// set, and calls to [`MistralRsProvider::unload_adapter`] remove from
-    /// it; the field reflects the *boot-time* set only.
-    ///
-    /// `LoRA` mounting is incompatible with [`Self::vision`] (the upstream
-    /// `LoraModelBuilder` wraps `TextModelBuilder` only). Setting both
-    /// causes engine load to fail with `MistralRsError::InvalidOptions`.
-    #[serde(default)]
-    pub initial_adapters: Vec<PathBuf>,
 }
 
 impl MistralRsOptions {
@@ -103,25 +72,21 @@ impl MistralRsOptions {
     ///
     /// ```
     /// use blazen_llm_mistralrs::MistralRsOptions;
+    /// use blazen_local_llm::LocalLlmOptions;
     ///
     /// let opts = MistralRsOptions {
-    ///     device: Some("metal".into()),
-    ///     context_length: Some(8192),
-    ///     ..MistralRsOptions::required("TheBloke/Mistral-7B-Instruct-v0.2-GGUF")
+    ///     base: LocalLlmOptions::new()
+    ///         .with_model_id("TheBloke/Mistral-7B-Instruct-v0.2-GGUF")
+    ///         .with_device("metal")
+    ///         .with_context_length(8192),
+    ///     ..MistralRsOptions::default()
     /// };
     /// ```
     #[must_use]
     pub fn required(model_id: impl Into<String>) -> Self {
         Self {
-            model_id: model_id.into(),
-            quantization: None,
-            device: None,
-            context_length: None,
-            max_batch_size: None,
-            chat_template: None,
-            cache_dir: None,
-            vision: false,
-            initial_adapters: Vec::new(),
+            base: LocalLlmOptions::new().with_model_id(model_id),
+            ..Self::default()
         }
     }
 }
@@ -129,19 +94,20 @@ impl MistralRsOptions {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::path::PathBuf;
 
     #[test]
     fn required_sets_model_id() {
         let opts = MistralRsOptions::required("my-org/my-model");
-        assert_eq!(opts.model_id, "my-org/my-model");
-        assert!(opts.quantization.is_none());
-        assert!(opts.device.is_none());
-        assert!(opts.context_length.is_none());
+        assert_eq!(opts.base.model_id.as_deref(), Some("my-org/my-model"));
+        assert!(opts.base.quantization.is_none());
+        assert!(opts.base.device.is_none());
+        assert!(opts.base.context_length.is_none());
         assert!(opts.max_batch_size.is_none());
         assert!(opts.chat_template.is_none());
-        assert!(opts.cache_dir.is_none());
+        assert!(opts.base.cache_dir.is_none());
         assert!(!opts.vision);
-        assert!(opts.initial_adapters.is_empty());
+        assert!(opts.base.initial_adapters.is_empty());
     }
 
     #[test]
@@ -156,55 +122,65 @@ mod tests {
     #[test]
     fn struct_update_syntax_works() {
         let opts = MistralRsOptions {
-            context_length: Some(4096),
-            ..MistralRsOptions::required("test/model")
+            base: LocalLlmOptions::new()
+                .with_model_id("test/model")
+                .with_context_length(4096),
+            ..MistralRsOptions::default()
         };
-        assert_eq!(opts.model_id, "test/model");
-        assert_eq!(opts.context_length, Some(4096));
-        assert!(opts.quantization.is_none());
+        assert_eq!(opts.base.model_id.as_deref(), Some("test/model"));
+        assert_eq!(opts.base.context_length, Some(4096));
+        assert!(opts.base.quantization.is_none());
     }
 
     #[test]
     fn serde_roundtrip() {
         let opts = MistralRsOptions {
-            model_id: "test/model".into(),
-            quantization: Some("q4_k_m".into()),
-            device: Some("cpu".into()),
-            context_length: Some(8192),
+            base: LocalLlmOptions {
+                model_id: Some("test/model".into()),
+                quantization: Some("q4_k_m".into()),
+                device: Some("cpu".into()),
+                context_length: Some(8192),
+                cache_dir: Some(PathBuf::from("/tmp/cache")),
+                ..LocalLlmOptions::default()
+            },
             max_batch_size: Some(4),
             chat_template: Some("{{ bos_token }}".into()),
-            cache_dir: Some(PathBuf::from("/tmp/cache")),
             vision: true,
-            initial_adapters: vec![],
         };
         let json = serde_json::to_string(&opts).expect("serialize");
         let parsed: MistralRsOptions = serde_json::from_str(&json).expect("deserialize");
-        assert_eq!(parsed.model_id, opts.model_id);
-        assert_eq!(parsed.context_length, opts.context_length);
-        assert_eq!(parsed.quantization, Some("q4_k_m".into()));
-        assert_eq!(parsed.device, Some("cpu".into()));
+        assert_eq!(parsed.base.model_id.as_deref(), Some("test/model"));
+        assert_eq!(parsed.base.context_length, Some(8192));
+        assert_eq!(parsed.base.quantization.as_deref(), Some("q4_k_m"));
+        assert_eq!(parsed.base.device.as_deref(), Some("cpu"));
         assert!(parsed.vision);
     }
 
     #[test]
     fn initial_adapters_serde_roundtrip() {
         let opts = MistralRsOptions {
-            initial_adapters: vec![
-                PathBuf::from("/cache/lora-a"),
-                PathBuf::from("/cache/lora-b"),
-            ],
-            ..MistralRsOptions::required("test/model")
+            base: LocalLlmOptions {
+                initial_adapters: vec![
+                    PathBuf::from("/cache/lora-a"),
+                    PathBuf::from("/cache/lora-b"),
+                ],
+                ..LocalLlmOptions::new().with_model_id("test/model")
+            },
+            ..MistralRsOptions::default()
         };
         let json = serde_json::to_string(&opts).expect("serialize");
         let parsed: MistralRsOptions = serde_json::from_str(&json).expect("deserialize");
-        assert_eq!(parsed.initial_adapters.len(), 2);
-        assert_eq!(parsed.initial_adapters[0], PathBuf::from("/cache/lora-a"));
+        assert_eq!(parsed.base.initial_adapters.len(), 2);
+        assert_eq!(
+            parsed.base.initial_adapters[0],
+            PathBuf::from("/cache/lora-a")
+        );
     }
 
     #[test]
     fn initial_adapters_defaults_empty_when_missing_from_json() {
         let json = r#"{"model_id":"test/model"}"#;
         let parsed: MistralRsOptions = serde_json::from_str(json).expect("deserialize");
-        assert!(parsed.initial_adapters.is_empty());
+        assert!(parsed.base.initial_adapters.is_empty());
     }
 }

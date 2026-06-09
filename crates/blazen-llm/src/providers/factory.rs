@@ -91,16 +91,25 @@ pub trait LocalModelProbe: Send + Sync {
 /// Separated from [`LocalModelProbe`] so a caller can cheaply probe
 /// servability (hot path) without paying construction cost until the factory
 /// has actually decided to route local.
+///
+/// The request shape is the strongly-typed
+/// [`blazen_local_llm::LocalModelRequest`] — it carries the provider name,
+/// model identifier, and a full [`blazen_local_llm::LocalLlmOptions`] payload
+/// plus per-backend extras (encoded as `serde_json::Value`) so downstream
+/// implementations route to candle / mistralrs / llama.cpp without losing
+/// any of the caller's configuration.
 #[async_trait]
 pub trait LocalModelFactory: Send + Sync {
-    /// Construct a local [`Model`] for `provider` serving `model`.
+    /// Construct a local [`Model`] for the given [`LocalModelRequest`].
     ///
     /// # Errors
     ///
     /// Returns a [`BlazenError`] if the local model cannot be constructed
     /// (e.g. weights unavailable, device out of memory).
-    async fn build_local(&self, provider: &str, model: &str)
-    -> Result<Box<dyn Model>, BlazenError>;
+    async fn build_local(
+        &self,
+        request: blazen_local_llm::LocalModelRequest,
+    ) -> Result<Box<dyn Model>, BlazenError>;
 }
 
 /// The standalone default probe: no model is ever locally servable.
@@ -170,7 +179,15 @@ where
                     .await
             {
                 let model = opts.model.as_deref().unwrap_or(DEFAULT_LOCAL_MODEL);
-                local_factory.build_local(provider, model).await
+                // Build a typed LocalModelRequest from ProviderOptions: model
+                // gets pre-stamped onto the LocalLlmOptions.model_id field so
+                // the request is self-consistent at the seam.
+                let local_opts = blazen_local_llm::LocalLlmOptions {
+                    model_id: Some(model.to_string()),
+                    ..blazen_local_llm::LocalLlmOptions::default()
+                };
+                let request = blazen_local_llm::LocalModelRequest::new(provider, model, local_opts);
+                local_factory.build_local(request).await
             } else {
                 Err(err)
             }
@@ -258,12 +275,11 @@ mod tests {
     impl LocalModelFactory for RecordingLocalFactory {
         async fn build_local(
             &self,
-            provider: &str,
-            model: &str,
+            request: blazen_local_llm::LocalModelRequest,
         ) -> Result<Box<dyn Model>, BlazenError> {
             self.called.store(true, Ordering::SeqCst);
             Ok(Box::new(MockModel {
-                id: format!("local:{provider}:{model}"),
+                id: format!("local:{}:{}", request.provider, request.model),
             }))
         }
     }
@@ -275,8 +291,7 @@ mod tests {
     impl LocalModelFactory for NeverLocalFactory {
         async fn build_local(
             &self,
-            _provider: &str,
-            _model: &str,
+            _request: blazen_local_llm::LocalModelRequest,
         ) -> Result<Box<dyn Model>, BlazenError> {
             panic!("local factory must not be called");
         }

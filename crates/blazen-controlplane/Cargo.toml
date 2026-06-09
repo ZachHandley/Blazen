@@ -13,6 +13,7 @@ postcard = { workspace = true, features = ["alloc"] }
 blazen-core = { workspace = true, features = ["distributed"] }
 blazen-peer = { workspace = true }
 blazen-llm.workspace = true
+blazen-local-llm.workspace = true
 async-trait = { workspace = true }
 dashmap = { workspace = true }
 serde = { workspace = true }

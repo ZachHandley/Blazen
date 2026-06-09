@@ -1037,15 +1037,15 @@ async fn build_provider(
             #[cfg(feature = "mistralrs-provider")]
             {
                 let mr_opts = blazen_llm_mistralrs::MistralRsOptions {
-                    model_id: repo.to_string(),
-                    quantization: None,
-                    device: options.device.clone(),
-                    context_length: None,
+                    base: blazen_local_llm::LocalLlmOptions {
+                        model_id: Some(repo.to_string()),
+                        device: options.device.clone(),
+                        cache_dir: options.cache_dir.clone(),
+                        ..blazen_local_llm::LocalLlmOptions::default()
+                    },
                     max_batch_size: None,
                     chat_template: None,
-                    cache_dir: options.cache_dir.clone(),
                     vision: false,
-                    initial_adapters: Vec::new(),
                 };
                 let p = blazen_llm_mistralrs::MistralRsProvider::from_options(mr_opts)
                     .map_err(|e| BlazenError::internal(format!("mistralrs build: {e}")))?;
@@ -1065,13 +1065,13 @@ async fn build_provider(
                 let force_st =
                     !layout.gguf_files.is_empty() && !layout.safetensors_files.is_empty();
                 let c_opts = blazen_llm_candle::CandleLlmOptions {
-                    model_id: Some(repo.to_string()),
-                    device: options.device.clone(),
-                    quantization: None,
-                    revision: options.revision.clone(),
-                    context_length: None,
-                    cache_dir: options.cache_dir.clone(),
-                    initial_adapters: Vec::new(),
+                    base: blazen_local_llm::LocalLlmOptions {
+                        model_id: Some(repo.to_string()),
+                        device: options.device.clone(),
+                        revision: options.revision.clone(),
+                        cache_dir: options.cache_dir.clone(),
+                        ..blazen_local_llm::LocalLlmOptions::default()
+                    },
                     force_safetensors: force_st,
                 };
                 let p = blazen_llm_candle::CandleLlmProvider::from_options(c_opts)
@@ -1106,13 +1106,13 @@ async fn build_provider(
                     })?;
                 let model_path = format!("{repo}/{gguf}");
                 let l_opts = blazen_llm_llamacpp::LlamaCppOptions {
-                    model_path: Some(model_path),
-                    device: options.device.clone(),
-                    quantization: None,
-                    context_length: None,
+                    base: blazen_local_llm::LocalLlmOptions {
+                        model_id: Some(model_path),
+                        device: options.device.clone(),
+                        cache_dir: options.cache_dir.clone(),
+                        ..blazen_local_llm::LocalLlmOptions::default()
+                    },
                     n_gpu_layers: None,
-                    cache_dir: options.cache_dir.clone(),
-                    initial_adapters: Vec::new(),
                 };
                 let p = blazen_llm_llamacpp::LlamaCppProvider::from_options(l_opts)
                     .await

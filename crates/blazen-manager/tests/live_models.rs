@@ -81,10 +81,9 @@ async fn download_qwen_gguf() -> PathBuf {
 async fn live_mistralrs_load_infer_unload() {
     let gguf_path = download_qwen_gguf().await;
 
-    let provider = MistralRsProvider::from_options(MistralRsOptions {
-        model_id: gguf_path.to_string_lossy().into_owned(),
-        ..MistralRsOptions::required(gguf_path.to_string_lossy().into_owned())
-    })
+    let provider = MistralRsProvider::from_options(MistralRsOptions::required(
+        gguf_path.to_string_lossy().into_owned(),
+    ))
     .expect("construct mistralrs provider");
     let provider = Arc::new(provider);
 
@@ -122,9 +121,10 @@ async fn live_candle_load_infer_unload() {
     let gguf_path = download_qwen_gguf().await;
 
     let provider = CandleLlmProvider::from_options(CandleLlmOptions {
-        model_id: Some(gguf_path.to_string_lossy().into_owned()),
-        device: Some("cpu".into()),
-        quantization: Some("q4_k_m".into()),
+        base: blazen_local_llm::LocalLlmOptions::new()
+            .with_model_id(gguf_path.to_string_lossy().into_owned())
+            .with_device("cpu")
+            .with_quantization("q4_k_m"),
         ..CandleLlmOptions::default()
     })
     .expect("construct candle provider");
@@ -168,8 +168,9 @@ async fn live_llamacpp_load_infer_unload() {
     let gguf_path = download_qwen_gguf().await;
 
     let provider = LlamaCppProvider::from_options(LlamaCppOptions {
-        model_path: Some(gguf_path.to_string_lossy().into_owned()),
-        device: Some("cpu".into()),
+        base: blazen_local_llm::LocalLlmOptions::new()
+            .with_model_id(gguf_path.to_string_lossy().into_owned())
+            .with_device("cpu"),
         ..LlamaCppOptions::default()
     })
     .await
@@ -224,10 +225,9 @@ async fn live_mistralrs_load_adapter() {
 
     let gguf_path = download_qwen_gguf().await;
 
-    let provider = MistralRsProvider::from_options(MistralRsOptions {
-        model_id: gguf_path.to_string_lossy().into_owned(),
-        ..MistralRsOptions::required(gguf_path.to_string_lossy().into_owned())
-    })
+    let provider = MistralRsProvider::from_options(MistralRsOptions::required(
+        gguf_path.to_string_lossy().into_owned(),
+    ))
     .expect("construct mistralrs provider");
     let provider = Arc::new(provider);
 
@@ -414,8 +414,9 @@ async fn live_llamacpp_load_adapter() {
     let gguf_path = download_qwen_gguf().await;
 
     let provider = LlamaCppProvider::from_options(LlamaCppOptions {
-        model_path: Some(gguf_path.to_string_lossy().into_owned()),
-        device: Some("cpu".into()),
+        base: blazen_local_llm::LocalLlmOptions::new()
+            .with_model_id(gguf_path.to_string_lossy().into_owned())
+            .with_device("cpu"),
         ..LlamaCppOptions::default()
     })
     .await
@@ -506,8 +507,9 @@ async fn live_llamacpp_multi_adapter() {
     let gguf_path = download_qwen_gguf().await;
 
     let provider = LlamaCppProvider::from_options(LlamaCppOptions {
-        model_path: Some(gguf_path.to_string_lossy().into_owned()),
-        device: Some("cpu".into()),
+        base: blazen_local_llm::LocalLlmOptions::new()
+            .with_model_id(gguf_path.to_string_lossy().into_owned())
+            .with_device("cpu"),
         ..LlamaCppOptions::default()
     })
     .await
@@ -570,11 +572,13 @@ async fn live_candle_load_adapter_safetensors() {
     let adapter_dir = lora_dir();
 
     let provider = CandleLlmProvider::from_options(CandleLlmOptions {
-        model_id: Some(QWEN_SAFETENSORS_REPO.into()),
-        device: Some("cpu".into()),
-        cache_dir: Some(cache_dir()),
+        base: blazen_local_llm::LocalLlmOptions {
+            model_id: Some(QWEN_SAFETENSORS_REPO.into()),
+            device: Some("cpu".into()),
+            cache_dir: Some(cache_dir()),
+            ..blazen_local_llm::LocalLlmOptions::default()
+        },
         force_safetensors: true,
-        ..CandleLlmOptions::default()
     })
     .expect("construct candle provider");
     let provider = Arc::new(provider);
@@ -650,11 +654,13 @@ async fn live_candle_load_adapter_inference_delta() {
     let adapter_dir = lora_dir();
 
     let provider = CandleLlmProvider::from_options(CandleLlmOptions {
-        model_id: Some(QWEN_SAFETENSORS_REPO.into()),
-        device: Some("cpu".into()),
-        cache_dir: Some(cache_dir()),
+        base: blazen_local_llm::LocalLlmOptions {
+            model_id: Some(QWEN_SAFETENSORS_REPO.into()),
+            device: Some("cpu".into()),
+            cache_dir: Some(cache_dir()),
+            ..blazen_local_llm::LocalLlmOptions::default()
+        },
         force_safetensors: true,
-        ..CandleLlmOptions::default()
     })
     .expect("construct candle provider");
     let provider = Arc::new(provider);

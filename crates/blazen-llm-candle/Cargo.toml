@@ -15,6 +15,7 @@ candle-transformers = { workspace = true, optional = true }
 tokenizers = { workspace = true, optional = true }
 hf-hub = { workspace = true, optional = true, features = ["tokio"] }
 blazen-model-cache = { workspace = true }
+blazen-local-llm = { workspace = true }
 serde = { workspace = true }
 serde_json.workspace = true
 tokio = { workspace = true }

@@ -16,6 +16,7 @@ async-trait.workspace = true
 blazen-llm-mistralrs = { workspace = true, optional = true }
 blazen-llm-candle = { workspace = true, optional = true }
 blazen-llm-llamacpp = { workspace = true, optional = true }
+blazen-local-llm = { workspace = true }
 blazen-model-cache = { workspace = true, optional = true }
 hf-hub = { workspace = true, features = ["tokio"], optional = true }
 serde_json = { workspace = true, optional = true }

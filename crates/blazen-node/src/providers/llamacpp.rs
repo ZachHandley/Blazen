@@ -67,13 +67,15 @@ pub struct JsLlamaCppOptions {
 impl From<JsLlamaCppOptions> for LlamaCppOptions {
     fn from(val: JsLlamaCppOptions) -> Self {
         Self {
-            model_path: val.model_path,
-            device: val.device,
-            quantization: val.quantization,
-            context_length: val.context_length.map(|v| v as usize),
+            base: blazen_local_llm::LocalLlmOptions {
+                model_id: val.model_path,
+                device: val.device,
+                quantization: val.quantization,
+                context_length: val.context_length.map(|v| v as usize),
+                cache_dir: val.cache_dir.map(std::path::PathBuf::from),
+                ..blazen_local_llm::LocalLlmOptions::default()
+            },
             n_gpu_layers: val.n_gpu_layers,
-            cache_dir: val.cache_dir.map(std::path::PathBuf::from),
-            initial_adapters: Vec::new(),
         }
     }
 }

@@ -625,6 +625,8 @@ impl PyMistralRsOptions {
     ///
     /// Args:
     ///     model_id: HuggingFace model ID or local GGUF path (required).
+    ///     tokenizer_repo: Optional separate HF repo for tokenizer.json
+    ///         (no-op for mistralrs — accepted for cross-backend parity).
     ///     quantization: Quantization format enum value (e.g. ``Quantization.Q4KM``).
     ///     device: Hardware device enum value (e.g. ``Device.Cuda``).
     ///     context_length: Maximum context length in tokens.
@@ -632,9 +634,11 @@ impl PyMistralRsOptions {
     ///     chat_template: Jinja2 chat template override.
     ///     cache_dir: Path to cache downloaded models.
     #[new]
-    #[pyo3(signature = (model_id, *, quantization=None, device=None, context_length=None, max_batch_size=None, chat_template=None, cache_dir=None))]
+    #[pyo3(signature = (model_id, *, tokenizer_repo=None, quantization=None, device=None, context_length=None, max_batch_size=None, chat_template=None, cache_dir=None))]
+    #[allow(clippy::too_many_arguments)]
     fn new(
         model_id: String,
+        tokenizer_repo: Option<String>,
         quantization: Option<PyQuantization>,
         device: Option<PyDevice>,
         context_length: Option<usize>,
@@ -644,62 +648,74 @@ impl PyMistralRsOptions {
     ) -> Self {
         Self {
             inner: blazen_llm::MistralRsOptions {
-                model_id,
-                quantization: quantization.map(|q| {
-                    let core: blazen_llm::Quantization = q.into();
-                    core.as_gguf_str().to_owned()
-                }),
-                device: device.map(|d| {
-                    let core: blazen_llm::Device = d.into();
-                    core.to_string()
-                }),
-                context_length,
+                base: blazen_local_llm::LocalLlmOptions {
+                    model_id: Some(model_id),
+                    tokenizer_repo,
+                    quantization: quantization.map(|q| {
+                        let core: blazen_llm::Quantization = q.into();
+                        core.as_gguf_str().to_owned()
+                    }),
+                    device: device.map(|d| {
+                        let core: blazen_llm::Device = d.into();
+                        core.to_string()
+                    }),
+                    context_length,
+                    cache_dir: cache_dir.map(PathBuf::from),
+                    ..blazen_local_llm::LocalLlmOptions::default()
+                },
                 max_batch_size,
                 chat_template,
-                cache_dir: cache_dir.map(PathBuf::from),
                 // Vision input is not yet surfaced through the Python
                 // binding. Users must construct `MistralRsOptions`
                 // directly in Rust to enable vision mode.
                 vision: false,
-                initial_adapters: Vec::new(),
             },
         }
     }
 
     #[getter]
-    fn model_id(&self) -> &str {
-        &self.inner.model_id
+    fn model_id(&self) -> Option<String> {
+        self.inner.base.model_id.clone()
     }
     #[setter]
     fn set_model_id(&mut self, value: String) {
-        self.inner.model_id = value;
+        self.inner.base.model_id = Some(value);
+    }
+
+    #[getter]
+    fn tokenizer_repo(&self) -> Option<String> {
+        self.inner.base.tokenizer_repo.clone()
+    }
+    #[setter]
+    fn set_tokenizer_repo(&mut self, value: Option<String>) {
+        self.inner.base.tokenizer_repo = value;
     }
 
     #[getter]
     fn quantization(&self) -> Option<String> {
-        self.inner.quantization.clone()
+        self.inner.base.quantization.clone()
     }
     #[setter]
     fn set_quantization(&mut self, value: Option<String>) {
-        self.inner.quantization = value;
+        self.inner.base.quantization = value;
     }
 
     #[getter]
     fn device(&self) -> Option<String> {
-        self.inner.device.clone()
+        self.inner.base.device.clone()
     }
     #[setter]
     fn set_device(&mut self, value: Option<String>) {
-        self.inner.device = value;
+        self.inner.base.device = value;
     }
 
     #[getter]
     fn context_length(&self) -> Option<usize> {
-        self.inner.context_length
+        self.inner.base.context_length
     }
     #[setter]
     fn set_context_length(&mut self, value: Option<usize>) {
-        self.inner.context_length = value;
+        self.inner.base.context_length = value;
     }
 
     #[getter]
@@ -723,19 +739,20 @@ impl PyMistralRsOptions {
     #[getter]
     fn cache_dir(&self) -> Option<String> {
         self.inner
+            .base
             .cache_dir
             .as_ref()
             .map(|p: &PathBuf| p.display().to_string())
     }
     #[setter]
     fn set_cache_dir(&mut self, value: Option<String>) {
-        self.inner.cache_dir = value.map(PathBuf::from);
+        self.inner.base.cache_dir = value.map(PathBuf::from);
     }
 
     fn __repr__(&self) -> String {
         format!(
             "MistralRsOptions(model_id={:?}, quantization={:?}, device={:?})",
-            self.inner.model_id, self.inner.quantization, self.inner.device
+            self.inner.base.model_id, self.inner.base.quantization, self.inner.base.device
         )
     }
 }
@@ -922,15 +939,18 @@ impl PyLlamaCppOptions {
     ///
     /// Args:
     ///     model_path: Path to a GGUF model file or HuggingFace model ID.
+    ///     tokenizer_repo: Accepted for cross-backend parity but unused —
+    ///         llama.cpp reads the tokenizer from inside the GGUF file.
     ///     device: Hardware device specifier (``"cpu"``, ``"cuda:0"``, ``"metal"``).
     ///     quantization: Quantization format string (e.g. ``"q4_k_m"``).
     ///     context_length: Maximum context length in tokens.
     ///     n_gpu_layers: Number of layers to offload to GPU.
     ///     cache_dir: Path to cache downloaded models.
     #[new]
-    #[pyo3(signature = (*, model_path=None, device=None, quantization=None, context_length=None, n_gpu_layers=None, cache_dir=None))]
+    #[pyo3(signature = (*, model_path=None, tokenizer_repo=None, device=None, quantization=None, context_length=None, n_gpu_layers=None, cache_dir=None))]
     fn new(
         model_path: Option<String>,
+        tokenizer_repo: Option<String>,
         device: Option<String>,
         quantization: Option<String>,
         context_length: Option<usize>,
@@ -939,51 +959,63 @@ impl PyLlamaCppOptions {
     ) -> Self {
         Self {
             inner: blazen_llm::LlamaCppOptions {
-                model_path,
-                device,
-                quantization,
-                context_length,
+                base: blazen_local_llm::LocalLlmOptions {
+                    model_id: model_path,
+                    tokenizer_repo,
+                    device,
+                    quantization,
+                    context_length,
+                    cache_dir: cache_dir.map(PathBuf::from),
+                    ..blazen_local_llm::LocalLlmOptions::default()
+                },
                 n_gpu_layers,
-                cache_dir: cache_dir.map(PathBuf::from),
-                initial_adapters: Vec::new(),
             },
         }
     }
 
     #[getter]
     fn model_path(&self) -> Option<String> {
-        self.inner.model_path.clone()
+        self.inner.base.model_id.clone()
     }
     #[setter]
     fn set_model_path(&mut self, value: Option<String>) {
-        self.inner.model_path = value;
+        self.inner.base.model_id = value;
+    }
+
+    #[getter]
+    fn tokenizer_repo(&self) -> Option<String> {
+        self.inner.base.tokenizer_repo.clone()
+    }
+    #[setter]
+    fn set_tokenizer_repo(&mut self, value: Option<String>) {
+        self.inner.base.tokenizer_repo = value;
     }
 
     #[getter]
     fn device(&self) -> Option<String> {
-        self.inner.device.clone()
+        self.inner.base.device.clone()
     }
     #[setter]
     fn set_device(&mut self, value: Option<String>) {
-        self.inner.device = value;
+        self.inner.base.device = value;
     }
 
     #[getter]
     fn quantization(&self) -> Option<String> {
-        self.inner.quantization.clone()
+        self.inner.base.quantization.clone()
     }
     #[setter]
     fn set_quantization(&mut self, value: Option<String>) {
-        self.inner.quantization = value;
+        self.inner.base.quantization = value;
     }
 
     #[getter]
     fn context_length(&self) -> Option<usize> {
-        self.inner.context_length
+        self.inner.base.context_length
     }
     #[setter]
     fn set_context_length(&mut self, value: Option<usize>) {
-        self.inner.context_length = value;
+        self.inner.base.context_length = value;
     }
 
     #[getter]
@@ -998,19 +1030,20 @@ impl PyLlamaCppOptions {
     #[getter]
     fn cache_dir(&self) -> Option<String> {
         self.inner
+            .base
             .cache_dir
             .as_ref()
             .map(|p: &PathBuf| p.display().to_string())
     }
     #[setter]
     fn set_cache_dir(&mut self, value: Option<String>) {
-        self.inner.cache_dir = value.map(PathBuf::from);
+        self.inner.base.cache_dir = value.map(PathBuf::from);
     }
 
     fn __repr__(&self) -> String {
         format!(
             "LlamaCppOptions(model_path={:?}, device={:?})",
-            self.inner.model_path, self.inner.device
+            self.inner.base.model_id, self.inner.base.device
         )
     }
 }
@@ -1042,15 +1075,19 @@ impl PyCandleLlmOptions {
     ///
     /// Args:
     ///     model_id: HuggingFace model ID or local path to weights.
+    ///     tokenizer_repo: Optional separate HF repo for ``tokenizer.json``
+    ///         — required for GGUF-only repos that don't redistribute
+    ///         the tokenizer. Falls back to ``model_id``.
     ///     device: Hardware device specifier (``"cpu"``, ``"cuda:0"``, ``"metal"``).
     ///     quantization: Quantization format string (e.g. ``"q4_k_m"``).
     ///     revision: Model revision / branch on HuggingFace.
     ///     context_length: Maximum context length in tokens.
     ///     cache_dir: Path to cache downloaded models.
     #[new]
-    #[pyo3(signature = (*, model_id=None, device=None, quantization=None, revision=None, context_length=None, cache_dir=None))]
+    #[pyo3(signature = (*, model_id=None, tokenizer_repo=None, device=None, quantization=None, revision=None, context_length=None, cache_dir=None))]
     fn new(
         model_id: Option<String>,
+        tokenizer_repo: Option<String>,
         device: Option<String>,
         quantization: Option<String>,
         revision: Option<String>,
@@ -1059,13 +1096,16 @@ impl PyCandleLlmOptions {
     ) -> Self {
         Self {
             inner: blazen_llm::CandleLlmOptions {
-                model_id,
-                device,
-                quantization,
-                revision,
-                context_length,
-                cache_dir: cache_dir.map(PathBuf::from),
-                initial_adapters: Vec::new(),
+                base: blazen_local_llm::LocalLlmOptions {
+                    model_id,
+                    tokenizer_repo,
+                    device,
+                    quantization,
+                    revision,
+                    context_length,
+                    cache_dir: cache_dir.map(PathBuf::from),
+                    ..blazen_local_llm::LocalLlmOptions::default()
+                },
                 force_safetensors: false,
             },
         }
@@ -1073,65 +1113,75 @@ impl PyCandleLlmOptions {
 
     #[getter]
     fn model_id(&self) -> Option<String> {
-        self.inner.model_id.clone()
+        self.inner.base.model_id.clone()
     }
     #[setter]
     fn set_model_id(&mut self, value: Option<String>) {
-        self.inner.model_id = value;
+        self.inner.base.model_id = value;
+    }
+
+    #[getter]
+    fn tokenizer_repo(&self) -> Option<String> {
+        self.inner.base.tokenizer_repo.clone()
+    }
+    #[setter]
+    fn set_tokenizer_repo(&mut self, value: Option<String>) {
+        self.inner.base.tokenizer_repo = value;
     }
 
     #[getter]
     fn device(&self) -> Option<String> {
-        self.inner.device.clone()
+        self.inner.base.device.clone()
     }
     #[setter]
     fn set_device(&mut self, value: Option<String>) {
-        self.inner.device = value;
+        self.inner.base.device = value;
     }
 
     #[getter]
     fn quantization(&self) -> Option<String> {
-        self.inner.quantization.clone()
+        self.inner.base.quantization.clone()
     }
     #[setter]
     fn set_quantization(&mut self, value: Option<String>) {
-        self.inner.quantization = value;
+        self.inner.base.quantization = value;
     }
 
     #[getter]
     fn revision(&self) -> Option<String> {
-        self.inner.revision.clone()
+        self.inner.base.revision.clone()
     }
     #[setter]
     fn set_revision(&mut self, value: Option<String>) {
-        self.inner.revision = value;
+        self.inner.base.revision = value;
     }
 
     #[getter]
     fn context_length(&self) -> Option<usize> {
-        self.inner.context_length
+        self.inner.base.context_length
     }
     #[setter]
     fn set_context_length(&mut self, value: Option<usize>) {
-        self.inner.context_length = value;
+        self.inner.base.context_length = value;
     }
 
     #[getter]
     fn cache_dir(&self) -> Option<String> {
         self.inner
+            .base
             .cache_dir
             .as_ref()
             .map(|p: &PathBuf| p.display().to_string())
     }
     #[setter]
     fn set_cache_dir(&mut self, value: Option<String>) {
-        self.inner.cache_dir = value.map(PathBuf::from);
+        self.inner.base.cache_dir = value.map(PathBuf::from);
     }
 
     fn __repr__(&self) -> String {
         format!(
             "CandleLlmOptions(model_id={:?}, device={:?})",
-            self.inner.model_id, self.inner.device
+            self.inner.base.model_id, self.inner.base.device
         )
     }
 }

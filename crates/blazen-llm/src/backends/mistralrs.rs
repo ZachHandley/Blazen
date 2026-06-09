@@ -356,6 +356,7 @@ impl crate::traits::LocalModel for MistralRsProvider {
 
     fn device(&self) -> crate::device::Device {
         self.options()
+            .base
             .device
             .as_deref()
             .and_then(|s| crate::device::Device::parse(s).ok())
