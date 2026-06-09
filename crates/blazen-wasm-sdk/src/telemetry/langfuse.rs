@@ -18,8 +18,6 @@
 //! ```
 
 use blazen_telemetry::LangfuseConfig;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 use wasm_bindgen::prelude::*;
 
 /// Configuration for the Langfuse trace exporter.
@@ -131,10 +129,11 @@ impl WasmLangfuseConfig {
 /// or if a global subscriber has already been installed.
 #[wasm_bindgen(js_name = "initLangfuse")]
 pub fn init_langfuse(config: &WasmLangfuseConfig) -> Result<(), JsValue> {
-    let layer = blazen_telemetry::init_langfuse(config.inner.clone())
-        .map_err(|e| JsValue::from_str(&format!("[BlazenError] init_langfuse: {e}")))?;
-    tracing_subscriber::registry()
-        .with(layer)
-        .try_init()
+    // Builds the LangfuseLayer + dispatcher and swaps into Blazen's
+    // reload slot when present (the WASM SDK has no module-import hook
+    // installing one today, so the swap falls back to `try_init`
+    // internally). Never panics; calling twice on WASM no-ops the
+    // second swap silently.
+    blazen_telemetry::init_langfuse_global(config.inner.clone())
         .map_err(|e| JsValue::from_str(&format!("[BlazenError] init_langfuse: {e}")))
 }

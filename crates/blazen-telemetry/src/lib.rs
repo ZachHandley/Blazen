@@ -25,15 +25,17 @@ pub mod exporters;
 #[cfg(feature = "prometheus")]
 pub mod metrics;
 
-#[cfg(feature = "langfuse")]
 pub mod error;
+
+pub mod subscriber;
 
 // Re-exports
 #[cfg(feature = "spans")]
 pub use spans::{TracingConfig, TracingModel};
 
-#[cfg(feature = "langfuse")]
 pub use error::TelemetryError;
+
+pub use subscriber::{install_global_subscriber, swap_exporter_layer};
 
 #[cfg(feature = "history")]
 pub use history::{HistoryEvent, HistoryEventKind, PauseReason, WorkflowHistory};
@@ -45,7 +47,7 @@ pub use exporters::otlp::{OtlpConfig, OtlpProtocol, init_otlp};
 pub use exporters::otlp::init_otlp_http;
 
 #[cfg(feature = "langfuse")]
-pub use exporters::langfuse::{LangfuseConfig, LangfuseLayer, init_langfuse};
+pub use exporters::langfuse::{LangfuseConfig, LangfuseLayer, init_langfuse, init_langfuse_global};
 
 #[cfg(feature = "prometheus")]
 pub use exporters::prometheus::init_prometheus;

@@ -17,10 +17,8 @@
 
 use napi::bindgen_prelude::*;
 use napi_derive::napi;
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 
-use blazen_telemetry::{LangfuseConfig, init_langfuse as rust_init_langfuse};
+use blazen_telemetry::{LangfuseConfig, init_langfuse_global};
 
 /// Configuration for the Langfuse exporter.
 ///
@@ -110,13 +108,12 @@ impl JsLangfuseConfig {
 #[napi(js_name = "initLangfuse")]
 #[allow(clippy::missing_errors_doc)]
 pub fn init_langfuse(config: &JsLangfuseConfig) -> Result<()> {
-    let layer = rust_init_langfuse(config.inner.clone()).map_err(|e| {
+    // `init_langfuse_global` builds the LangfuseLayer (spawning the
+    // dispatcher) and either swaps it into Blazen's reload slot (the
+    // standard module-init path) or falls back to a `try_init`-based
+    // host stack. Never panics; idempotent.
+    init_langfuse_global(config.inner.clone()).map_err(|e| {
         napi::Error::new(napi::Status::GenericFailure, format!("[BlazenError] {e}"))
     })?;
-    // `try_init` returns Err if a global subscriber is already installed
-    // (e.g. by `module_init` in lib.rs). That is a benign no-op here -- we
-    // still want the call to succeed so JS callers can configure Langfuse
-    // unconditionally.
-    let _ = tracing_subscriber::registry().with(layer).try_init();
     Ok(())
 }

@@ -49,25 +49,20 @@ pub mod workflow;
 use napi::bindgen_prelude::{Env, Object};
 use napi_derive::napi;
 
-/// Initialize the Rust `tracing` subscriber once when the native `.node`
-/// module is first loaded into Node.js.
+/// Initialize Blazen's shared global tracing subscriber when the native
+/// `.node` module is first loaded into Node.js.
 ///
-/// Without this, every `tracing::debug!` / `info!` / `warn!` call made by
-/// the underlying Rust crates is silently dropped because no subscriber is
-/// listening — setting `RUST_LOG` has no effect. `try_init` is a no-op if a
-/// subscriber is already installed (e.g. by a host embedder), so this is
-/// safe to call unconditionally. The filter honors `RUST_LOG` and defaults
-/// to `warn` when unset. Output goes to stderr so `node:test` passes it
-/// through without mixing into captured stdout.
+/// This installs a registry-backed subscriber that already carries an
+/// empty reload-handle slot, so later `init_otlp` / `init_langfuse`
+/// calls can swap their exporter Layers in without a second
+/// `set_global_default` (which would panic).
+///
+/// Idempotent and panic-free: if a host embedder has already installed
+/// a subscriber, the installer returns Err and exporter calls fall back
+/// to their own host-friendly `try_init` paths.
 #[napi_derive::module_init]
 fn init() {
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
-        )
-        .with_writer(std::io::stderr)
-        .try_init();
+    let _ = blazen_telemetry::install_global_subscriber();
 
     // Install the native-event serializer hook so DynamicEvents lazily
     // materialize to JSON via the registered fallback. First registration

@@ -68,19 +68,19 @@ pub fn init_langfuse(
     secret_key: String,
     host: Option<String>,
 ) -> BlazenResult<()> {
-    use tracing_subscriber::layer::SubscriberExt;
-    use tracing_subscriber::util::SubscriberInitExt;
-
     let mut config = blazen_telemetry::LangfuseConfig::new(public_key, secret_key);
     if let Some(h) = host {
         config = config.with_host(h);
     }
 
-    let layer = blazen_telemetry::init_langfuse(config).map_err(|e| BlazenError::Internal {
+    // Builds + swaps via the reload-handle seam (the UniFFI runtime
+    // installer in `runtime::init` plants the slot). Never panics; safe
+    // to call repeatedly — the second swap replaces the first layer
+    // in-place. When the host owns the subscriber the global installer
+    // falls back to a `try_init`-based registry stack.
+    blazen_telemetry::init_langfuse_global(config).map_err(|e| BlazenError::Internal {
         message: format!("init_langfuse failed: {e}"),
     })?;
-
-    let _ = tracing_subscriber::registry().with(layer).try_init();
     Ok(())
 }
 

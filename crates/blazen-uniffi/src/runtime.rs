@@ -45,15 +45,13 @@ pub(crate) fn runtime() -> &'static Runtime {
 pub fn init() {
     let _ = runtime();
     TRACING_INIT.get_or_init(|| {
-        // Best-effort. If a subscriber is already set globally (e.g. by an
-        // embedding application), silently leave it in place rather than
-        // panicking — UniFFI bindings can be loaded into hosts that already
-        // configured tracing.
-        let _ = tracing_subscriber::fmt()
-            .with_env_filter(
-                tracing_subscriber::EnvFilter::try_from_default_env()
-                    .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
-            )
-            .try_init();
+        // Install Blazen's shared global subscriber with a reload-handle
+        // exporter slot. Later `init_otlp` / `init_langfuse` calls swap
+        // their Layers into the slot instead of installing a second
+        // global subscriber (which would panic). Idempotent + panic-free
+        // — if a host application already owns a subscriber the
+        // installer returns Err and exporter calls fall back to their
+        // host-friendly `try_init` paths.
+        let _ = blazen_telemetry::install_global_subscriber();
     });
 }

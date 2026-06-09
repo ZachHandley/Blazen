@@ -262,6 +262,15 @@ pub fn init_otlp_http(config: OtlpConfig) -> Result<(), Box<dyn std::error::Erro
 
 /// Wire a built `SpanExporter` into a global `SdkTracerProvider` and install
 /// the matching `tracing-subscriber` stack.
+///
+/// Calls [`crate::subscriber::swap_exporter_layer`] when Blazen owns the
+/// global subscriber (the standard binding path — Python / Node / `UniFFI`
+/// install the shared subscriber at module import). Falls back to a
+/// `try_init` on a registry-based stack when no reload handle is
+/// present, which covers the host-owns-subscriber case (e.g. WASM
+/// builds with no module-import hook). Either path is non-panicking and
+/// idempotent — repeated `init_otlp` calls in the same process never
+/// abort.
 #[cfg(any(feature = "otlp", feature = "otlp-http"))]
 fn install_provider(exporter: SpanExporter, service_name: String) {
     // Build the tracer provider with batch export and service.name resource.
@@ -277,16 +286,41 @@ fn install_provider(exporter: SpanExporter, service_name: String) {
     // Set the provider as the global tracer provider.
     global::set_tracer_provider(provider.clone());
 
-    // Create the tracing-opentelemetry layer using a tracer from the provider.
+    // Build the tracing-opentelemetry layer and erase its type so it can
+    // be swapped into the reload slot. The explicit type annotation on
+    // `otel_layer` pins `S = Registry` for inference (the
+    // `OpenTelemetryLayer<S, T>` `S` is a phantom; without it Rust
+    // can't pick it).
     let tracer = provider.tracer("blazen");
-    let otel_layer = OpenTelemetryLayer::new(tracer);
+    let otel_layer: OpenTelemetryLayer<tracing_subscriber::registry::Registry, _> =
+        OpenTelemetryLayer::new(tracer);
+    let boxed: Box<
+        dyn tracing_subscriber::Layer<tracing_subscriber::registry::Registry>
+            + Send
+            + Sync
+            + 'static,
+    > = Box::new(otel_layer);
 
-    // Compose with an env-filter and fmt layer, then install.
+    if crate::subscriber::has_reload_handle() {
+        let _ = crate::subscriber::swap_exporter_layer(boxed);
+        return;
+    }
+
+    // No reload slot — host owns the subscriber. Best-effort try_init
+    // on a fresh registry stack composed with the OTLP layer. If a
+    // foreign subscriber is already installed this silently no-ops
+    // (events keep flowing through that subscriber; OTLP doesn't
+    // export, and the caller's host should compose the layer
+    // themselves to recover). Never panics.
+    //
+    // The boxed layer sits *directly* on `registry()` so its `Layer<S>`
+    // implementation (which holds for `S = Registry` only) matches the
+    // inner subscriber type. Filters and fmt are layered on top.
     let env_filter = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
-    tracing_subscriber::registry()
+    let _ = tracing_subscriber::registry()
+        .with(boxed)
         .with(env_filter)
-        .with(otel_layer)
         .with(tracing_subscriber::fmt::layer())
-        .init();
+        .try_init();
 }

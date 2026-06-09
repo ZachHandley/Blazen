@@ -732,6 +732,75 @@ pub fn init_langfuse(config: LangfuseConfig) -> Result<LangfuseLayer, TelemetryE
 #[cfg(target_os = "wasi")]
 pub use super::wasi_langfuse_client::init_langfuse;
 
+/// Initialize the Langfuse exporter AND install it into Blazen's shared
+/// global subscriber via the reload-handle seam.
+///
+/// This is the binding-facing convenience entry point — it builds the
+/// [`LangfuseLayer`] via [`init_langfuse`], type-erases it as a boxed
+/// `Layer<Registry>`, and swaps it into the reload slot that the
+/// bindings install at module-load time via
+/// [`crate::subscriber::install_global_subscriber`]. When no reload
+/// slot is present (the host application owns the subscriber), it falls
+/// back to `tracing_subscriber::registry().with(layer).try_init()` —
+/// identical to what every binding did inline before this seam landed.
+/// Never panics; calling it twice in the same process is safe (the
+/// second swap replaces the first layer in-place).
+///
+/// # Errors
+///
+/// Propagates [`TelemetryError::Langfuse`] from the underlying
+/// [`init_langfuse`] (HTTP client construction, missing tokio runtime
+/// on native, etc.).
+#[cfg(not(target_os = "wasi"))]
+pub fn init_langfuse_global(config: LangfuseConfig) -> Result<(), TelemetryError> {
+    let layer = init_langfuse(config)?;
+    install_layer_into_global(layer);
+    Ok(())
+}
+
+/// Wasi flavor of [`init_langfuse_global`] (no reqwest dispatcher, no
+/// implicit HTTP client — wasi callers must register a host
+/// `Arc<dyn blazen_llm::http::HttpClient>` separately, same constraint
+/// as plain [`init_langfuse`]).
+#[cfg(target_os = "wasi")]
+pub fn init_langfuse_global(config: LangfuseConfig) -> Result<(), TelemetryError> {
+    let layer = init_langfuse(config)?;
+    install_layer_into_global(layer);
+    Ok(())
+}
+
+/// Shared swap-or-fallback helper for [`init_langfuse_global`].
+///
+/// Erases [`LangfuseLayer`] to `Box<dyn Layer<Registry>>` and either
+/// swaps into Blazen's reload slot (the binding path) or installs a
+/// host-friendly registry-backed subscriber via `try_init` (the
+/// embedded-in-foreign-host path). Never panics.
+fn install_layer_into_global(layer: LangfuseLayer) {
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+
+    let boxed: Box<
+        dyn tracing_subscriber::Layer<tracing_subscriber::registry::Registry>
+            + Send
+            + Sync
+            + 'static,
+    > = Box::new(layer);
+
+    if crate::subscriber::has_reload_handle() {
+        // Reload slot exists; swap the boxed layer in. modify() can
+        // only fail if the underlying handle has been dropped, which
+        // we don't do — but propagate Err -> () regardless (caller has
+        // no recovery path).
+        let _ = crate::subscriber::swap_exporter_layer(boxed);
+        return;
+    }
+
+    // No reload slot — host owns the subscriber. Best-effort try_init
+    // on a fresh registry composed with the langfuse layer. If a
+    // foreign subscriber is already installed, this silently no-ops.
+    let _ = tracing_subscriber::registry().with(boxed).try_init();
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------

@@ -2,10 +2,8 @@
 
 use pyo3::prelude::*;
 use pyo3_stub_gen::derive::{gen_stub_pyclass, gen_stub_pyfunction, gen_stub_pymethods};
-use tracing_subscriber::layer::SubscriberExt;
-use tracing_subscriber::util::SubscriberInitExt;
 
-use blazen_telemetry::{LangfuseConfig, init_langfuse as rust_init_langfuse};
+use blazen_telemetry::{LangfuseConfig, init_langfuse_global};
 
 use crate::error::BlazenPyError;
 
@@ -145,15 +143,14 @@ impl PyLangfuseConfig {
 #[gen_stub_pyfunction]
 #[pyfunction]
 pub fn init_langfuse(config: &PyLangfuseConfig) -> PyResult<()> {
-    let layer = rust_init_langfuse(config.inner.clone())
+    // Builds the LangfuseLayer (which spawns the background dispatcher)
+    // and either swaps it into Blazen's reload slot (the standard
+    // module-import path) or falls back to a `try_init` on a host stack
+    // (foreign-subscriber path). Never panics. Calling twice in the
+    // same process is safe — the second swap replaces the first layer
+    // in-place.
+    init_langfuse_global(config.inner.clone())
         .map_err(|e| BlazenPyError::Workflow(format!("init_langfuse failed: {e}")))?;
-
-    // `try_init` returns Err if a global subscriber is already installed; we
-    // treat that as a soft failure so binding callers can opportunistically
-    // enable Langfuse without crashing when another exporter (OTLP, fmt) won
-    // the race. The `LangfuseLayer` and its background dispatcher remain
-    // alive because they were constructed above.
-    let _ = tracing_subscriber::registry().with(layer).try_init();
 
     Ok(())
 }

@@ -78,18 +78,18 @@ pyo3_stub_gen::define_stub_info_gatherer!(stub_info);
 #[pymodule]
 #[allow(clippy::too_many_lines)]
 fn blazen(m: &Bound<'_, PyModule>) -> PyResult<()> {
-    // Initialize the Rust tracing subscriber once on module load. `try_init`
-    // is a no-op if a subscriber is already installed (e.g. the user supplied
-    // one before importing blazen). The filter honors `RUST_LOG` and defaults
-    // to WARN if the env var is unset. Output goes to stderr so pytest `-s`
-    // passes it through without mixing into captured stdout.
-    let _ = tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_default_env()
-                .unwrap_or_else(|_| tracing_subscriber::EnvFilter::new("warn")),
-        )
-        .with_writer(std::io::stderr)
-        .try_init();
+    // Install Blazen's shared global tracing subscriber. This is the
+    // reload-handle-aware variant: it carries an empty exporter slot
+    // that later `init_otlp` / `init_langfuse` calls swap their layers
+    // into. Without this seam the prior `fmt().try_init()` form would
+    // win the global-default install, then `init_otlp`'s second
+    // install would panic on a tokio worker thread and trip an
+    // uncatchable SIGABRT in Python.
+    //
+    // Idempotent + non-panicking. If the host already owns a
+    // subscriber, this returns Err — exporter calls then fall back to
+    // their own `try_init` paths and remain panic-free.
+    let _ = blazen_telemetry::install_global_subscriber();
 
     // Version
     m.add("__version__", env!("CARGO_PKG_VERSION"))?;
