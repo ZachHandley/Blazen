@@ -275,6 +275,14 @@ jobs:
     # neither blocks the other. create-release does NOT hard-depend on this job
     # (a zreg hiccup must not block cutting the release), exactly like the
     # crates.io publish-rust leg it mirrors.
+    env:
+      # The runner's default ~/.cargo (/var/lib/forgejo-runner/.cargo) is
+      # populated as root by the `setup-rust` docker action and refuses
+      # subsequent runner-uid writes (EACCES on config.toml even after a
+      # `sudo rm`, because the parent dir itself ends up locked down).
+      # Pin CARGO_HOME under the per-job workspace so every cargo + every
+      # action in this job reads/writes the same writable directory.
+      CARGO_HOME: ${{ github.workspace }}/.cargo-zreg
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -317,25 +325,16 @@ jobs:
           ZREG_TOKEN: ${{ steps.zregtoken.outputs.token }}
         run: |
           set -euo pipefail
-          mkdir -p ~/.cargo
-          # setup-rust is invoked as a docker action by act, so it runs as
-          # root inside the container and leaves ~/.cargo/config.toml +
-          # credentials.toml root-owned on the host. This inline `run:`
-          # step executes on the host as the runner UID, so a plain
-          # `cat >` against either file would fail with EACCES. Clear the
-          # stale files first (sudo when available — falls back to plain
-          # rm when the runner image doesn't include sudo).
-          sudo rm -f ~/.cargo/config.toml ~/.cargo/credentials.toml 2>/dev/null \
-            || rm -f ~/.cargo/config.toml ~/.cargo/credentials.toml
+          mkdir -p "${CARGO_HOME}"
           # Cargo 1.74+ rejects authenticated third-party registries unless an
           # explicit `credential-provider` is declared. The built-in
           # `cargo:token` provider reads the token from credentials.toml
           # verbatim and emits it as the Authorization header. ZRegistry's cargo
           # adapter wants the RAW ZAuth JWT — NO `Bearer ` prefix (Forgejo
-          # required one; ZRegistry must NOT have it). setup-rust may have
-          # rewritten ~/.cargo/config.toml, so define the zreg registry here
-          # too rather than relying solely on the repo .cargo/config.toml.
-          cat > ~/.cargo/config.toml <<EOF
+          # required one; ZRegistry must NOT have it). Write into the
+          # job-scoped CARGO_HOME (declared on the job env above) so we
+          # never touch the runner-default ~/.cargo whose perms vary.
+          cat > "${CARGO_HOME}/config.toml" <<EOF
           [registries.zreg]
           index = "sparse+https://registry.blackleafdigital.com/cargo/"
           credential-provider = "cargo:token"
@@ -343,11 +342,11 @@ jobs:
           [registry]
           global-credential-providers = ["cargo:token"]
           EOF
-          cat > ~/.cargo/credentials.toml <<EOF
+          cat > "${CARGO_HOME}/credentials.toml" <<EOF
           [registries.zreg]
           token = "${ZREG_TOKEN}"
           EOF
-          chmod 600 ~/.cargo/credentials.toml
+          chmod 600 "${CARGO_HOME}/credentials.toml"
 
       - name: Stamp version (re-point inter-crate deps forgejo -> zreg)
         if: steps.check.outputs.completed != 'true'
