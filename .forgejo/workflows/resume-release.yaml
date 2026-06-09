@@ -12,14 +12,26 @@ name: Resume Release (cron)
 # idempotent-SKIPS already-live crates, so a redundant dispatch is always safe.
 
 on:
+  # `push` is the live trigger — every new release cycle (or
+  # fast-forwarded fix into the temp branch) immediately dispatches
+  # release.yaml. The cron is just a slow safety-net for the rare case
+  # where a publish gets rate-limited mid-flight (crates.io's "1 new
+  # crate per 10 min after a burst of 5" — only bites when the workspace
+  # adds *new crate names*, which is rare). 5-hour cadence keeps the UI
+  # clean while still recovering a wedged publish within a workday.
   schedule:
-    - cron: '*/10 * * * *'
+    - cron: '0 */5 * * *'
+  push:
+    branches:
+      - 'temp/v*'
   workflow_dispatch: {}
 
-# One tick at a time — don't let overlapping cron fires stampede the dispatch.
+# One tick at a time. `cancel-in-progress: true` drops overlapping
+# push/dispatch fires — this workflow is a thin dispatcher, and the
+# newest tick always has the freshest in-flight version.
 concurrency:
   group: resume-release
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 jobs:
   resume:
