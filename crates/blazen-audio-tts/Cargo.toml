@@ -44,7 +44,7 @@ openai = ["dep:reqwest", "dep:base64"]
 # Back-compat alias: the previous (single-engine) feature name. Will be
 # removed one release after the multi-backend restructure ships.
 engine = ["anytts"]
-# `piper` activates the vendored piper-rs backend (tract-onnx inference +
+# `piper` activates the vendored piper-rs backend (ONNX Runtime inference +
 # subprocess espeak-ng phonemizer). See `backends/piper.rs`.
 piper = ["dep:blazen-audio-piper-vendored"]
 # Live, network-dependent tests that pull real Piper voices from Hugging

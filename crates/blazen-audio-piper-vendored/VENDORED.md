@@ -12,26 +12,43 @@ This crate is a vendored, patched fork of [`piper-rs`][upstream].
 
 ## Why we vendor
 
-1. **ONNX runtime mismatch.** Upstream depends on
-   `ort = 2.0.0-rc.11`. The Blazen workspace already standardises on
-   `tract-onnx = 0.21` (used by `blazen-embed-tract`), and shipping
-   both runtimes side-by-side bloats every artifact by ~60 MB and
-   forces consumers to pick which one the linker resolves.
-
-2. **GPL-3.0+ phonemizer.** Upstream's `espeak-rs` crate transitively
+1. **GPL-3.0+ phonemizer.** Upstream's `espeak-rs` crate transitively
    `cc`-compiles the entire eSpeak NG C source tree (~30 MB) into the
    resulting library. eSpeak NG is **GPL-3.0+** which is link-time
    incompatible with our MPL-2.0 license posture. Linking it would
    force every downstream Blazen consumer to inherit GPL obligations,
    which is unacceptable for a library framework.
 
+2. **Intel-mac target gating.** Upstream's `ort` dependency is
+   unconditional; `ort-sys` ships no `x86_64-apple-darwin` prebuilt, so
+   this fork target-gates `ort` out of that triple (mirroring
+   `blazen-audio-stt`'s `vad-ort` gate) and returns
+   `PiperError::Unsupported` from `Piper::new` there.
+
+### History: the tract experiment (reverted)
+
+An earlier revision of this fork swapped `ort` for the workspace's
+`tract-onnx` so the whole workspace would converge on one inference
+backend. That swap is **reverted**: tract cannot statically analyse
+Piper VITS graphs at all — analysis (`into_typed()`) fails before any
+plan (optimized or decluttered) can be built:
+
+- tract 0.22: the ONNX `Pad` inference rule demands 3 inputs; Piper
+  exports the legal 2-input form (`Wrong input number. Rules expect 3,
+  node has 2` on `/enc_p/encoder/attn_layers.0/Pad`).
+- tract 0.23: the attention layers' Reshape volume equality
+  `2b(2p²+p−1) == 2b(p+1)(2p−1)` is mathematically true but unprovable
+  by tract's symbolic-dim algebra (`Reshape volume mismatch` on
+  `/enc_p/encoder/attn_layers.0/Reshape_10`).
+
+`ort` 2.0.0-rc.12 was already in the workspace via `blazen-audio-stt`
+(`vad-ort`), so reverting adds no new runtime to the dependency tree.
+
 ## Patches applied
 
 | Subsystem | Upstream                              | Patched fork                                                    |
 |-----------|---------------------------------------|-----------------------------------------------------------------|
-| ONNX inference | `ort::session::Session` + `ort::value::Tensor` | `tract_onnx::prelude::SimplePlan` + `tract_ndarray` |
-| Model build   | `Session::builder().commit_from_file` | `tract_onnx::onnx().model_for_path().into_optimized().into_runnable()` |
-| Tensor build  | `Tensor::from_array(...)`             | `tract_ndarray::Array{1,2}::from(...).into_tensor()`            |
+| ONNX inference | `ort = 2.0.0-rc.11`, unconditional | `ort = 2.0.0-rc.12`, target-gated out of `x86_64-apple-darwin` (stub engine there) |
 | Phonemizer    | `espeak_rs::text_to_phonemes` (FFI)   | `std::process::Command::new("espeak-ng")` invocation            |
 | espeak data discovery | `espeak_Initialize` env-var probe | None — `espeak-ng` binary self-locates its data files          |
 
@@ -39,8 +56,8 @@ This crate is a vendored, patched fork of [`piper-rs`][upstream].
 
 ```
 src/
-├── lib.rs        — public `Piper` handle, `PiperError`, `Piper::new` / `with_voice` / `create`
-├── model.rs      — tract plan + tensor build + VITS forward pass; phoneme-id table
+├── lib.rs        — public `Piper` handle, `PiperError`, `Piper::new` / `from_session` / `create`
+├── model.rs      — voice config structs, phoneme-id table, ort engine (VITS forward pass) + Intel-mac stub
 └── phonemize.rs  — `espeak-ng` subprocess wrapper (locate + invoke)
 ```
 
@@ -51,11 +68,15 @@ shapes `Piper::new(model_path, config_path)` / `Piper::create(text,
 is_phonemes, speaker_id, length_scale, noise_scale, noise_w)` mirror
 upstream. We added:
 
-- `Piper::from_model(tract_plan, config)` (mirrors upstream's
-  `from_session` with the appropriate type swap)
+- `Piper::from_session(ort_session, config)` (mirrors upstream's
+  `from_session`; not available on `x86_64-apple-darwin`)
 - `Piper::sample_rate(&self) -> u32` (convenience)
 - `PiperError::EspeakNgMissing(String)` (new variant for the
   subprocess phonemizer)
+- `PiperError::Unsupported(String)` (new variant for the Intel-mac
+  stub engine)
+- `pub use ort;` re-export (so `from_session` callers can name the
+  exact `ort` version this crate links; gated like the dependency)
 
 Upstream's `compile-espeak-intonations` feature is dropped (it gated
 eSpeak NG source compilation; subprocess invocation makes it moot).
@@ -88,7 +109,8 @@ When `piper-rs` ships a new release:
    upstream changes will be additive (new helpers, new voice config
    fields) and apply cleanly.
 4. Re-apply the two architectural patches:
-   - Any new `ort::*` call → tract equivalent.
+   - Any new `ort::*` call → route through the target-gated engine in
+     `src/model.rs` (keep the `x86_64-apple-darwin` stub in sync).
    - Any new `espeak_rs::*` call → subprocess wrapper in
      `src/phonemize.rs`.
 5. Update the **Pinned version / Pinned commit** table at the top of

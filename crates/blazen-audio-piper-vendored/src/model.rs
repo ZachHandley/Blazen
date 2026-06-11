@@ -1,18 +1,21 @@
-//! Tract-backed inference for Piper voice models.
+//! ONNX Runtime-backed inference for Piper voice models.
 //!
-//! Patched from upstream `piper-rs::model` to swap `ort` for `tract-onnx`.
-//! The graph IO contract is unchanged: VITS-family Piper voices take
+//! Matches upstream `piper-rs::model` (which also runs on `ort`). The graph
+//! IO contract: VITS-family Piper voices take
 //! `[input_ids, input_lengths, scales[, sid]]` and emit a single
 //! `[batch, 1, samples]` float audio tensor.
+//!
+//! The engine is `ort` and not the workspace's `tract` because tract cannot
+//! statically analyse Piper VITS graphs at all — its ONNX `Pad` rule rejects
+//! the 2-input form Piper exports (tract 0.22), and its symbolic-dim algebra
+//! cannot prove the attention layers' Reshape volume equality
+//! `2b(2p²+p−1) == 2b(p+1)(2p−1)` (tract 0.23). Both fail during
+//! `into_typed()` analysis, so no tract chain (optimized or decluttered) can
+//! even load these graphs.
 
 use std::collections::HashMap;
 
 use serde::Deserialize;
-use tract_onnx::prelude::{
-    IntoTValue, IntoTensor, SimplePlan, Tensor, TypedFact, TypedModel, TypedOp, tract_ndarray, tvec,
-};
-
-use crate::{PiperError, PiperResult};
 
 /// Beginning-of-sequence phoneme marker (per upstream Piper convention).
 pub const BOS: char = '^';
@@ -20,12 +23,6 @@ pub const BOS: char = '^';
 pub const EOS: char = '$';
 /// Padding phoneme marker (inserted between every emitted id, also upstream).
 pub const PAD: char = '_';
-
-/// Type alias for a fully-built, runnable tract plan over a Piper graph.
-///
-/// Exposed so callers that want to load the ONNX graph through their own
-/// IO can hand the result to [`crate::Piper::from_model`].
-pub type TractPiperModel = SimplePlan<TypedFact, Box<dyn TypedOp>, TypedModel>;
 
 /// Audio block of a Piper voice config.
 #[derive(Debug, Deserialize)]
@@ -93,78 +90,130 @@ pub fn phonemes_to_ids(config: &ModelConfig, phonemes: &str) -> Vec<i64> {
     ids
 }
 
-/// Run one forward pass of a Piper VITS graph and return raw f32 PCM samples.
-///
-/// `model` is a tract plan already built from the voice's `.onnx` file.
-/// Returns the contents of the first output tensor (audio) flattened to `Vec<f32>`.
-///
-/// # Errors
-///
-/// [`PiperError::InferenceError`] on any tract failure (shape, dtype, run).
-#[allow(clippy::too_many_arguments)]
-pub fn infer(
-    model: &mut TractPiperModel,
-    config: &ModelConfig,
-    phonemes: &str,
-    noise_scale: f32,
-    length_scale: f32,
-    noise_w: f32,
-    speaker_id: i64,
-) -> PiperResult<Vec<f32>> {
-    let ids = phonemes_to_ids(config, phonemes);
-    let input_len = ids.len();
+// ---------------------------------------------------------------------------
+// Inference engine — ONNX Runtime everywhere it ships a prebuilt, an
+// `Unsupported` stub on `x86_64-apple-darwin` (see Cargo.toml target-gate).
+// ---------------------------------------------------------------------------
 
-    // Build tensors. tract uses ndarray shapes — `[1, input_len]` for
-    // ids, `[1]` for lengths, `[3]` for the scales triple, `[1]` for sid.
-    let ids_tensor = i64_tensor_2d(1, input_len, ids)?;
-    let lengths_tensor =
-        i64_tensor_1d(vec![i64::try_from(input_len).map_err(|e| {
-            PiperError::InferenceError(format!("input_len overflow: {e}"))
-        })?])?;
-    let scales_tensor = f32_tensor_1d(vec![noise_scale, length_scale, noise_w])?;
+#[cfg(not(all(target_arch = "x86_64", target_os = "macos")))]
+mod engine_impl {
+    use std::path::Path;
+    use std::sync::Mutex;
 
-    let inputs = if config.num_speakers > 1 {
-        let sid_tensor = i64_tensor_1d(vec![speaker_id])?;
-        tvec![
-            ids_tensor.into_tvalue(),
-            lengths_tensor.into_tvalue(),
-            scales_tensor.into_tvalue(),
-            sid_tensor.into_tvalue(),
-        ]
-    } else {
-        tvec![
-            ids_tensor.into_tvalue(),
-            lengths_tensor.into_tvalue(),
-            scales_tensor.into_tvalue(),
-        ]
-    };
+    use ort::session::Session;
+    use ort::value::Tensor;
 
-    let outputs = model
-        .run(inputs)
-        .map_err(|e| PiperError::InferenceError(format!("tract run failed: {e}")))?;
+    use super::{ModelConfig, phonemes_to_ids};
+    use crate::{PiperError, PiperResult};
 
-    let audio = outputs
-        .first()
-        .ok_or_else(|| PiperError::InferenceError("no outputs from graph".into()))?;
-    let view = audio
-        .to_array_view::<f32>()
-        .map_err(|e| PiperError::InferenceError(format!("output view failed: {e}")))?;
+    /// ONNX Runtime Piper engine. `Session::run` takes `&mut self`, so the
+    /// session sits behind a `Mutex` to keep [`crate::Piper::create`]
+    /// callable through `&self`.
+    pub struct Engine {
+        session: Mutex<Session>,
+    }
 
-    Ok(view.iter().copied().collect())
+    impl Engine {
+        pub(crate) fn load(model_path: &Path) -> PiperResult<Self> {
+            let session = Session::builder()
+                .map_err(|e| PiperError::InferenceError(format!("ort session builder: {e}")))?
+                .commit_from_file(model_path)
+                .map_err(|e| {
+                    PiperError::FailedToLoadResource(format!(
+                        "ort onnx load failed for `{}`: {e}",
+                        model_path.display()
+                    ))
+                })?;
+            Ok(Self {
+                session: Mutex::new(session),
+            })
+        }
+
+        pub(crate) fn from_session(session: Session) -> Self {
+            Self {
+                session: Mutex::new(session),
+            }
+        }
+
+        /// Run one forward pass of a Piper VITS graph and return raw f32
+        /// PCM samples (first output tensor, flattened).
+        pub(crate) fn infer(
+            &self,
+            config: &ModelConfig,
+            phonemes: &str,
+            noise_scale: f32,
+            length_scale: f32,
+            noise_w: f32,
+            speaker_id: i64,
+        ) -> PiperResult<Vec<f32>> {
+            let ids = phonemes_to_ids(config, phonemes);
+            let input_len = i64::try_from(ids.len())
+                .map_err(|e| PiperError::InferenceError(format!("input_len overflow: {e}")))?;
+
+            let input_t = Tensor::from_array((vec![1_i64, input_len], ids))
+                .map_err(|e| PiperError::InferenceError(format!("input tensor: {e}")))?;
+            let lengths_t = Tensor::from_array((vec![1_i64], vec![input_len]))
+                .map_err(|e| PiperError::InferenceError(format!("lengths tensor: {e}")))?;
+            let scales_t =
+                Tensor::from_array((vec![3_i64], vec![noise_scale, length_scale, noise_w]))
+                    .map_err(|e| PiperError::InferenceError(format!("scales tensor: {e}")))?;
+
+            let mut session = self
+                .session
+                .lock()
+                .map_err(|e| PiperError::InferenceError(format!("session mutex poisoned: {e}")))?;
+
+            // Positional inputs, same order as upstream piper-rs:
+            // [input, input_lengths, scales[, sid]].
+            let outputs = if config.num_speakers > 1 {
+                let sid_t = Tensor::from_array((vec![1_i64], vec![speaker_id]))
+                    .map_err(|e| PiperError::InferenceError(format!("sid tensor: {e}")))?;
+                session.run(ort::inputs![input_t, lengths_t, scales_t, sid_t])
+            } else {
+                session.run(ort::inputs![input_t, lengths_t, scales_t])
+            }
+            .map_err(|e| PiperError::InferenceError(format!("ort run failed: {e}")))?;
+
+            let (_, audio) = outputs[0]
+                .try_extract_tensor::<f32>()
+                .map_err(|e| PiperError::InferenceError(format!("output extract failed: {e}")))?;
+            Ok(audio.to_vec())
+        }
+    }
 }
 
-fn i64_tensor_2d(rows: usize, cols: usize, data: Vec<i64>) -> PiperResult<Tensor> {
-    let arr = tract_ndarray::Array2::from_shape_vec((rows, cols), data)
-        .map_err(|e| PiperError::InferenceError(format!("i64 reshape ({rows}x{cols}): {e}")))?;
-    Ok(arr.into_tensor())
+#[cfg(all(target_arch = "x86_64", target_os = "macos"))]
+mod engine_impl {
+    use std::path::Path;
+
+    use super::ModelConfig;
+    use crate::{PiperError, PiperResult};
+
+    const UNSUPPORTED: &str = "piper TTS has no inference engine on x86_64-apple-darwin: \
+         ONNX Runtime ships no Intel-mac prebuilt (ort-sys 2.0.0-rc.12) and tract \
+         cannot statically analyse Piper VITS graphs";
+
+    /// Stub engine for `x86_64-apple-darwin` — construction always fails,
+    /// so [`crate::Piper`] can never be built on this triple.
+    pub struct Engine;
+
+    impl Engine {
+        pub(crate) fn load(_model_path: &Path) -> PiperResult<Self> {
+            Err(PiperError::Unsupported(UNSUPPORTED.into()))
+        }
+
+        pub(crate) fn infer(
+            &self,
+            _config: &ModelConfig,
+            _phonemes: &str,
+            _noise_scale: f32,
+            _length_scale: f32,
+            _noise_w: f32,
+            _speaker_id: i64,
+        ) -> PiperResult<Vec<f32>> {
+            Err(PiperError::Unsupported(UNSUPPORTED.into()))
+        }
+    }
 }
 
-fn i64_tensor_1d(data: Vec<i64>) -> PiperResult<Tensor> {
-    let arr = tract_ndarray::Array1::from(data);
-    Ok(arr.into_tensor())
-}
-
-fn f32_tensor_1d(data: Vec<f32>) -> PiperResult<Tensor> {
-    let arr = tract_ndarray::Array1::from(data);
-    Ok(arr.into_tensor())
-}
+pub(crate) use engine_impl::Engine;

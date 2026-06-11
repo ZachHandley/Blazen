@@ -9,13 +9,21 @@ repository.workspace = true
 rust-version.workspace = true
 
 [dependencies]
-ndarray.workspace = true
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 thiserror.workspace = true
 tokio.workspace = true
 tracing.workspace = true
-tract-onnx.workspace = true
+
+# `ort` (ONNX Runtime) has no prebuilt `x86_64-apple-darwin` binary as of
+# `ort-sys` 2.0.0-rc.12 (pyke dropped Intel-mac from their distribution), so it
+# is target-gated OUT of that triple — mirrors `blazen-audio-stt`'s `vad-ort`
+# gate. There is no fallback engine on Intel mac: `tract` cannot statically
+# analyse Piper VITS graphs (2-input ONNX `Pad` rejected on 0.22, symbolic
+# Reshape volume equality unprovable on 0.23), so that triple ships a stub
+# that returns `PiperError::Unsupported` at load time.
+[target.'cfg(not(all(target_arch = "x86_64", target_os = "macos")))'.dependencies]
+ort = "2.0.0-rc.12"
 
 [lints]
 workspace = true

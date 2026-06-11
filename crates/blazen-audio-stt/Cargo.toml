@@ -70,8 +70,7 @@ ort = { version = "2.0.0-rc.12", optional = true }
 
 # On `x86_64-apple-darwin`, `vad-ort` cannot use ORT (gated out above), so the
 # VAD engine falls back to pure-Rust `tract`. Make `tract-onnx` available on
-# that triple regardless of the `vad-tract` feature (it is already in the
-# native build graph via blazen-audio-piper-vendored, so this adds no cost).
+# that triple regardless of the `vad-tract` feature.
 [target.'cfg(all(target_arch = "x86_64", target_os = "macos"))'.dependencies]
 tract-onnx = { workspace = true }
 

@@ -3,7 +3,7 @@
 //!
 //! Piper (<https://github.com/rhasspy/piper>) is a small, fast, fully
 //! local TTS engine built on VITS. This backend wraps the patched
-//! `piper-rs` (tract-onnx for inference, subprocess `espeak-ng` for
+//! `piper-rs` (ONNX Runtime for inference, subprocess `espeak-ng` for
 //! phonemization) behind the standard [`TtsBackend`] trait.
 //!
 //! # Runtime requirement
@@ -59,7 +59,7 @@ pub const PIPER_BACKEND_ID: &str = "piper:vendored";
 ///   working backend.
 #[cfg(feature = "piper")]
 pub struct PiperBackend {
-    /// Voice + tract plan, `None` when constructed via [`new`](Self::new).
+    /// Voice + ort session, `None` when constructed via [`new`](Self::new).
     voice: Option<std::sync::Arc<blazen_audio_piper_vendored::Piper>>,
     model_path: Option<PathBuf>,
     config_path: Option<PathBuf>,
@@ -208,7 +208,7 @@ impl TtsBackend for PiperBackend {
             .map(i64::from)
             .or(self.default_speaker_id);
 
-        // Synthesis is CPU-bound (tract + subprocess wait); hop to the
+        // Synthesis is CPU-bound (ort + subprocess wait); hop to the
         // blocking pool so we don't stall the async runtime.
         let (samples, sample_rate) = tokio::task::spawn_blocking(move || {
             voice.create(&text_owned, false, sid, None, None, None)

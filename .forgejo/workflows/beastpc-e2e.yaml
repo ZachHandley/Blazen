@@ -125,6 +125,31 @@ jobs:
         env:
           BLAZEN_HF_TOKEN: ${{ secrets.BLAZEN_HF_TOKEN }}
 
+      - name: Audio E2E — TTS (piper, live amy-low synth)
+        if: ${{ !cancelled() }}
+        # `live_synthesize_amy_low_voice` is feature-gated (`piper,live-models`),
+        # not `#[ignore]`d, so no `--run-ignored` here — filter by name instead.
+        # It needs the system `espeak-ng` binary; install it if the persistent
+        # runner lacks it, then HARD-require it. The test skips silently when
+        # espeak-ng is missing, and that silent skip is exactly how the
+        # tract-can't-load-piper regression shipped unnoticed — fail loudly
+        # here instead.
+        run: |
+          if ! command -v espeak-ng >/dev/null 2>&1; then
+            { command -v pacman  >/dev/null 2>&1 && pacman -S --noconfirm espeak-ng; } \
+              || { command -v apt-get >/dev/null 2>&1 && apt-get update && apt-get install -y espeak-ng; } \
+              || { command -v sudo >/dev/null 2>&1 && sudo -n pacman -S --noconfirm espeak-ng; } \
+              || true
+          fi
+          if ! command -v espeak-ng >/dev/null 2>&1; then
+            echo "::error::espeak-ng is not installed on this runner and auto-install failed — install it (pacman -S espeak-ng / apt install espeak-ng) so the piper live test cannot silently skip."
+            exit 1
+          fi
+          cargo nextest run -p blazen-audio-tts --features piper,live-models \
+            -E 'test(live_synthesize_amy_low_voice)' --test-threads=1 --no-fail-fast
+        env:
+          BLAZEN_HF_TOKEN: ${{ secrets.BLAZEN_HF_TOKEN }}
+
       - name: Audio E2E — voice conversion (rvc)
         if: ${{ !cancelled() }}
         run: cargo nextest run -p blazen-audio-vc --features rvc --run-ignored only --test-threads=1 --no-fail-fast
