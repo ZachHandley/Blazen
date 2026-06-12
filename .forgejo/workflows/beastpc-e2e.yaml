@@ -135,14 +135,22 @@ jobs:
         # tract-can't-load-piper regression shipped unnoticed — fail loudly
         # here instead.
         run: |
+          # BeastPC is Ubuntu 24.04 and the runner user is non-root: plain
+          # apt-get dies on the dpkg lock, so escalate via passwordless sudo
+          # first and only fall back to direct invocation (container runners).
           if ! command -v espeak-ng >/dev/null 2>&1; then
-            { command -v pacman  >/dev/null 2>&1 && pacman -S --noconfirm espeak-ng; } \
-              || { command -v apt-get >/dev/null 2>&1 && apt-get update && apt-get install -y espeak-ng; } \
-              || { command -v sudo >/dev/null 2>&1 && sudo -n pacman -S --noconfirm espeak-ng; } \
-              || true
+            if command -v apt-get >/dev/null 2>&1; then
+              sudo -n apt-get update && sudo -n apt-get install -y --no-install-recommends espeak-ng \
+                || { apt-get update && apt-get install -y --no-install-recommends espeak-ng; } \
+                || true
+            elif command -v pacman >/dev/null 2>&1; then
+              sudo -n pacman -S --noconfirm espeak-ng \
+                || pacman -S --noconfirm espeak-ng \
+                || true
+            fi
           fi
           if ! command -v espeak-ng >/dev/null 2>&1; then
-            echo "::error::espeak-ng is not installed on this runner and auto-install failed — install it (pacman -S espeak-ng / apt install espeak-ng) so the piper live test cannot silently skip."
+            echo "::error::espeak-ng is not installed on this runner and auto-install failed — install it on the runner host (apt install espeak-ng / pacman -S espeak-ng) so the piper live test cannot silently skip."
             exit 1
           fi
           cargo nextest run -p blazen-audio-tts --features piper,live-models \
