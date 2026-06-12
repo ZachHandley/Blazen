@@ -267,9 +267,6 @@ jobs:
   publish-rust-zreg:
     name: Publish Rust Crates (ZRegistry)
     runs-on: ubuntu-latest
-    enable-openid-connect: true
-    permissions:
-      id-token: write
     needs: version
     # Independent, rate-limit-free mirror of publish-rust. ZRegistry
     # (registry.blackleafdigital.com) has NO per-account publish rate limits,
@@ -301,13 +298,6 @@ jobs:
           owner: BlackLeafDigital
           auth: zachhandley:${{ secrets.FORGEJO_ACTIONS_TOKEN }}
 
-      - name: Mint ZRegistry token
-        id: zregtoken
-        if: steps.check.outputs.completed != 'true'
-        uses: https://forge.blackleafdigital.com/Public/actions/zregistry-token@main
-        with:
-          scope: packages.publish
-
       - name: Setup Rust
         if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/setup-rust@main
@@ -323,7 +313,7 @@ jobs:
       - name: Configure ZRegistry Cargo registry credentials
         if: steps.check.outputs.completed != 'true'
         env:
-          ZREG_TOKEN: ${{ steps.zregtoken.outputs.token }}
+          ZREG_TOKEN: ${{ secrets.ZREGISTRY_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p "${CARGO_HOME}"
@@ -364,7 +354,7 @@ jobs:
           version: ${{ needs.version.outputs.version }}
           registry: zreg
           sparse-index-url: https://registry.blackleafdigital.com/cargo
-          cargo-token: ${{ steps.zregtoken.outputs.token }}
+          cargo-token: ${{ secrets.ZREGISTRY_TOKEN }}
           # require-explicit-registry MUST stay false: Blazen crates carry no
           # `publish = [...]` field (publish=null), and the action aborts under
           # require-explicit-registry=true on any null-publish crate. `--registry
@@ -378,7 +368,7 @@ jobs:
           # Cargo prefers the env var over credentials.toml. ZRegistry's cargo
           # adapter wants the RAW ZAuth JWT — NO `Bearer ` prefix. Both the env
           # var and the on-disk credentials must agree.
-          CARGO_REGISTRIES_ZREG_TOKEN: ${{ steps.zregtoken.outputs.token }}
+          CARGO_REGISTRIES_ZREG_TOKEN: ${{ secrets.ZREGISTRY_TOKEN }}
 
       - name: Mark step complete
         if: steps.check.outputs.completed != 'true'
