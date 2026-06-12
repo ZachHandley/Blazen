@@ -1557,7 +1557,14 @@ jobs:
   mark-release-complete:
     name: Mark Release Complete
     runs-on: ubuntu-latest
-    needs: [version, cleanup-artifacts]
+    # publish-rust + publish-rust-zreg are deliberately NOT dependencies of
+    # create-release (a registry hiccup must not block cutting the release),
+    # but they MUST gate the release-complete marker: marking complete with a
+    # failed registry publish wedges the resume mechanism (resume-release
+    # no-ops on the marker), which is exactly how two zreg publishes were
+    # stranded. A failed publish leg now skips this job, the marker stays
+    # unset, and resume-release keeps re-dispatching until every leg lands.
+    needs: [version, cleanup-artifacts, publish-rust, publish-rust-zreg]
     steps:
       - name: Mark release complete
         uses: https://forge.blackleafdigital.com/Public/actions/ci-step-status@main
