@@ -267,6 +267,9 @@ jobs:
   publish-rust-zreg:
     name: Publish Rust Crates (ZRegistry)
     runs-on: ubuntu-latest
+    enable-openid-connect: true
+    permissions:
+      id-token: write
     needs: version
     # Independent, rate-limit-free mirror of publish-rust. ZRegistry
     # (registry.blackleafdigital.com) has NO per-account publish rate limits,
@@ -303,8 +306,6 @@ jobs:
         if: steps.check.outputs.completed != 'true'
         uses: https://forge.blackleafdigital.com/Public/actions/zregistry-token@main
         with:
-          client-id: ${{ secrets.ZREGISTRY_CLIENT_ID }}
-          client-secret: ${{ secrets.ZREGISTRY_CLIENT_SECRET }}
           scope: packages.publish
 
       - name: Setup Rust
