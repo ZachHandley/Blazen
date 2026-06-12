@@ -56,10 +56,10 @@ base64 = { workspace = true, optional = true }
 # `spawn_local` for the langfuse dispatcher. Excluded on wasi (no DOM /
 # wasm-bindgen ABI on wasi).
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dependencies]
-wasm-bindgen = { version = "=0.2.122", optional = true }
-wasm-bindgen-futures = { version = "=0.4.72", optional = true }
-js-sys = { version = "0.3.99", optional = true }
-web-sys = { version = "0.3.99", optional = true, features = [
+wasm-bindgen = { workspace = true, optional = true }
+wasm-bindgen-futures = { workspace = true, optional = true }
+js-sys = { workspace = true, optional = true }
+web-sys = { workspace = true, optional = true, features = [
     "Request",
     "RequestInit",
     "Response",

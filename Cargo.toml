@@ -232,6 +232,14 @@ dirs = "6"
 # Pure-Rust ONNX inference (for musl and other targets ORT doesn't ship)
 tract-onnx = "0.22"
 ndarray = "0.17"
+# wasm-bindgen family — caret FLOORS, never `=` exact pins. Exact pins in
+# published crates block every consumer from unifying the tightly-coupled
+# 0.2.x/0.3.x family (cargo must pick ONE version) and caused recurring
+# downstream resolution failures. Bump here, then `cargo update -p` the four.
+wasm-bindgen = "0.2.125"
+wasm-bindgen-futures = "0.4.75"
+js-sys = "0.3.102"
+web-sys = "0.3.102"
 
 # Testing
 tempfile = "3"

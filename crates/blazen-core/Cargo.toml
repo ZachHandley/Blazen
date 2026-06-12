@@ -57,9 +57,9 @@ web-time = "1"
 # `uuid["js"]` activates `getrandom`'s `js` shim which pulls wasm-bindgen,
 # so it has to live alongside the wasm-bindgen-using crates.
 [target.'cfg(all(target_arch = "wasm32", not(target_os = "wasi")))'.dependencies]
-wasm-bindgen = "=0.2.122"
-wasm-bindgen-futures = "=0.4.72"
-js-sys = "0.3.99"
+wasm-bindgen.workspace = true
+wasm-bindgen-futures.workspace = true
+js-sys.workspace = true
 uuid = { workspace = true, features = ["js"] }
 
 # WASIp2 has working tokio time/rt (see blazen-node's wasi cfg block); use
